@@ -45,6 +45,10 @@ bool fpu_supported() {
     return has_fpu();
 }
 
+bool fpu_available() {
+    return g_fpu_done;
+}
+
 void fpu_init() {
     if (g_fpu_done)
         return;

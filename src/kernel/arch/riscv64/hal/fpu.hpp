@@ -43,11 +43,30 @@ inline constexpr uint64_t FPU_FCSR_OFFSET = 256;
 
 /// @brief Probe F/D via sstatus.FS write test (MISA is M-mode-only).
 bool fpu_supported();
+/// @brief True once fpu_init succeeded (audit S3: the switch block
+///        gates on this so absent-HW configs never execute FP insns).
+bool fpu_available();
 /// @brief Enable FP (sstatus.FS=0b11) + loud log; idempotent.
 void fpu_init();
 /// @brief Save f0-f31 + fcsr into area (272 bytes).
 void fpu_save(void *area);
 /// @brief Restore f0-f31 + fcsr from area.
 void fpu_restore(const void *area);
+/// @brief Ensure FP is enabled for the following save/restore (issue
+///        #353 step 1b safety net): sret restores sstatus.FS from the
+///        task frame, so a stale FS=0 frame (synthetic/old) would fault
+///        the next fsd — set FS=11b unconditionally (idempotent, keeps
+///        the dirty state the switch path expects).
+inline void fpu_ensure_enabled() {
+    asm volatile("csrs sstatus, %0" : : "r"(3ULL << 13) : "memory");
+}
+/// @brief Eager switch helper (issue #353 step 1b): save current regs to
+///        old_area, then restore next regs from new_area, back-to-back.
+///        Pure memory operation (no TCB dependency — the caller owns
+///        gating, generation, and used-flag updates).
+inline void fpu_switch_area(void *old_area, const void *new_area) {
+    fpu_save(old_area);
+    fpu_restore(new_area);
+}
 
 } // namespace arch

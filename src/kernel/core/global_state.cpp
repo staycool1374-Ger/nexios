@@ -27,6 +27,11 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/gdt.hpp>
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/fpu.hpp>
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/fpu.hpp>
+#endif
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_errors.hpp>
@@ -271,6 +276,36 @@ extern "C" void scheduler_on_context_switch() noexcept {
         return;
 
     auto *t = kernel::Scheduler::find_task(id);
+
+#if !defined(CONFIG_ARCH_X86_64)
+    // Issue #353: eager FP switch (non-x86; x86 keeps lazy #NM).  The
+    // epilogue already switched stacks/tables; FP regs still hold the
+    // outgoing task's live state (handlers emit no FP use — verified by
+    // build scan), so save-first here preserves everything via memory.
+    // Kernel↔kernel switches skip (kernel never uses FP); a null current
+    // with a user target still restores (never leaks stale regs).
+    auto *old_fp = kernel::Scheduler::current_task();
+    const bool fp_old_user = (old_fp != nullptr) && old_fp->is_user_;
+    const bool fp_new_user = (t != nullptr) && t->is_user_;
+    const bool fp_old_valid =
+        (old_fp != nullptr) &&
+        (old_fp->magic == kernel::TaskControlBlock::TCB_MAGIC);
+    const bool fp_new_valid =
+        (t != nullptr) && (t->magic == kernel::TaskControlBlock::TCB_MAGIC);
+    // Audit S3: skip entirely when FP is absent (degraded path) — the
+    // save/restore instructions would fault where FS can never set.
+    const bool fp_hw = arch::fpu_available();
+    if (fp_hw && (fp_old_user || fp_new_user) && fp_old_valid &&
+        fp_new_valid) {
+        arch::fpu_ensure_enabled();
+        arch::fpu_switch_area(old_fp->fpu_state, t->fpu_state);
+        old_fp->fpu_used = true;
+        ++old_fp->fpu_state_gen;
+    } else if (fp_hw && fp_new_user && fp_new_valid) {
+        arch::fpu_ensure_enabled();
+        arch::fpu_restore(t->fpu_state);
+    }
+#endif
 
     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
 

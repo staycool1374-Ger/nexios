@@ -1445,7 +1445,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     __builtin_memset(stack, 0, 37 * 8);
     stack[1] = user_rsp;                           // X2/SP = user stack
     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
-    stack[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
+    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: user FP must
+    // be enabled from first dispatch — sret restores FS from this frame,
+    // so FS=0 here would switch FP off at the first trap return and fault
+    // the next fpu_save).
+    stack[32] = (1ULL << 5) | (3ULL << 13);
     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
 #endif
 

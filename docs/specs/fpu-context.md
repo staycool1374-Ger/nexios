@@ -143,3 +143,27 @@ Validation: selftest, debug/release all, test-history rows.
 
 - XSAVE/XSAVEC compact layouts, AVX-512 state — revisit when a workload
   needs it; FXSAVE keeps the area size frozen at 512 B today.
+
+## 7. Per-arch model: aarch64/riscv64 eager switch (issue #353)
+
+x86 stays lazy (#NM + `fpu_owner` protocol, §0-§5 unchanged). aarch64
+(NEON) and riscv64 (F/D) use EAGER save/restore at task switch:
+
+| Item | aarch64 (NEON) | riscv64 (F/D) |
+|---|---|---|
+| Area | 528 B: Q0-Q31 (512) + FPCR/FPSR (8) + reserved (8) | 272 B: f0-f31 (256) + fcsr (4) + reserved (12) |
+| Detect | `ID_AA64PFR0_EL1` FP+AdvSIMD (`has_fpu`) | sstatus.FS write test (MISA is M-mode-only) |
+| Enable | CPACR_EL1.FPEN=11b | sstatus.FS=11b |
+| Switch | `fpu_switch_area` in `scheduler_on_context_switch` (save old, restore new) iff either side is a user task | same |
+| Trap | EC=0x07 fires only when disabled/absent → terminate path (no resume surgery; enable is sticky-global) | illegal-insn with FS=0 → same |
+
+Soundness basis: the kernel image contains no FP/SIMD instructions
+outside `fpu_save/restore` (verified by objdump scan), so handler code
+cannot clobber live user FP state between trap entry and the switch;
+save-first ordering then preserves everything via memory. If a future
+toolchain emits kernel FP, revisit (either `-mgeneral-regs-only` for
+that arch or entry/exit save/restore).
+
+Degraded contract: `fpu_supported()==false` → loud dmesg + `fpu_init`
+no-op; user FP faults terminate via existing fault paths; QE
+registers zero `task_fpu` tests with the loud message (never silent).

@@ -1183,8 +1183,8 @@ JARVIS_TEST(riscv64_exec_slots, "PRE: none | POST: none") {
         JARVIS_ASSERT_FMT(ok, "exec_into_current failed");
         JARVIS_ASSERT_FMT(regs[31] == 0x41000000ULL, "SEPC slot: 0x%lx",
                           regs[31]);
-        JARVIS_ASSERT_FMT(regs[32] == (1ULL << 5), "SSTATUS slot: 0x%lx",
-                          regs[32]);
+        JARVIS_ASSERT_FMT(regs[32] == ((1ULL << 5) | (3ULL << 13)),
+                          "SSTATUS slot: 0x%lx", regs[32]);
         JARVIS_ASSERT_FMT(regs[9] == 0ULL, "A0 slot not zero: 0x%lx", regs[9]);
         // SP slot: setup_user_stack returns post-argc SP (not page-aligned
         // by construction) — verify it was overwritten into the new user

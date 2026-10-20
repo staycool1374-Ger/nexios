@@ -52,6 +52,10 @@ bool fpu_supported() {
     return ((back >> 13) & 3ULL) == 3ULL;
 }
 
+bool fpu_available() {
+    return g_fpu_done;
+}
+
 void fpu_init() {
     if (g_fpu_done)
         return;

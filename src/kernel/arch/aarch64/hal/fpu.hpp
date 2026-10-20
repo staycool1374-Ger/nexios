@@ -47,11 +47,28 @@ inline constexpr uint64_t FPU_FPSR_OFFSET = 516;
 
 /// @brief Probe FP+SIMD via ID_AA64PFR0_EL1 (mirrors has_fpu).
 bool fpu_supported();
+/// @brief True once fpu_init succeeded (audit S3: the switch block
+///        gates on this so absent-HW configs never execute FP insns).
+bool fpu_available();
 /// @brief Enable FP/SIMD (CPACR.FPEN) + loud log; idempotent.
 void fpu_init();
 /// @brief Save Q0-Q31 + FPCR/FPSR into area (528 bytes).
 void fpu_save(void *area);
 /// @brief Restore Q0-Q31 + FPCR/FPSR from area.
 void fpu_restore(const void *area);
+/// @brief Ensure FP is enabled for the following save/restore (issue
+///        #353 step 1b safety net for stale frames).  No-op on aarch64:
+///        CPACR_EL1.FPEN is global and never restored per-task, so once
+///        fpu_init runs it stays enabled.
+inline void fpu_ensure_enabled() {}
+/// @brief Eager switch helper (issue #353 step 1b): save current regs to
+///        old_area, then restore next regs from new_area, back-to-back.
+///        Pure memory operation (no TCB dependency — the caller owns
+///        gating, generation, and used-flag updates).  Save-first order
+///        preserves compiler temporaries via memory.
+inline void fpu_switch_area(void *old_area, const void *new_area) {
+    fpu_save(old_area);
+    fpu_restore(new_area);
+}
 
 } // namespace arch

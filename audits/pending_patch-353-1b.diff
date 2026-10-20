@@ -1,0 +1,701 @@
+diff --git a/audits/pending_patch-353-1b.diff b/audits/pending_patch-353-1b.diff
+new file mode 100644
+index 000000000..6ce28a76c
+--- /dev/null
++++ b/audits/pending_patch-353-1b.diff
+@@ -0,0 +1,418 @@
++diff --git a/audits/pending_patch-353-1b.diff b/audits/pending_patch-353-1b.diff
++new file mode 100644
++index 000000000..e72f29e3c
++--- /dev/null
+++++ b/audits/pending_patch-353-1b.diff
++@@ -0,0 +1,206 @@
+++diff --git a/docs/specs/fpu-context.md b/docs/specs/fpu-context.md
+++index b19139002..9ae522c2f 100644
+++--- a/docs/specs/fpu-context.md
++++++ b/docs/specs/fpu-context.md
+++@@ -143,3 +143,27 @@ Validation: selftest, debug/release all, test-history rows.
+++ 
+++ - XSAVE/XSAVEC compact layouts, AVX-512 state — revisit when a workload
+++   needs it; FXSAVE keeps the area size frozen at 512 B today.
++++
++++## 7. Per-arch model: aarch64/riscv64 eager switch (issue #353)
++++
++++x86 stays lazy (#NM + `fpu_owner` protocol, §0-§5 unchanged). aarch64
++++(NEON) and riscv64 (F/D) use EAGER save/restore at task switch:
++++
++++| Item | aarch64 (NEON) | riscv64 (F/D) |
++++|---|---|---|
++++| Area | 528 B: Q0-Q31 (512) + FPCR/FPSR (8) | 272 B: f0-f31 (256) + fcsr (4) |
++++| Detect | `ID_AA64PFR0_EL1` FP+AdvSIMD (`has_fpu`) | sstatus.FS write test (MISA is M-mode-only) |
++++| Enable | CPACR_EL1.FPEN=11b | sstatus.FS=11b |
++++| Switch | `fpu_switch_area` in `scheduler_on_context_switch` (save old, restore new) iff either side is a user task | same |
++++| Trap | EC=0x07 fires only when disabled/absent → terminate path (no resume surgery; enable is sticky-global) | illegal-insn with FS=0 → same |
++++
++++Soundness basis: the kernel image contains no FP/SIMD instructions
++++outside `fpu_save/restore` (verified by objdump scan), so handler code
++++cannot clobber live user FP state between trap entry and the switch;
++++save-first ordering then preserves everything via memory. If a future
++++toolchain emits kernel FP, revisit (either `-mgeneral-regs-only` for
++++that arch or entry/exit save/restore).
++++
++++Degraded contract: `fpu_supported()==false` → loud dmesg + `fpu_init`
++++no-op; user FP faults terminate via existing fault paths; QE
++++registers zero `task_fpu` tests with the loud message (never silent).
+++diff --git a/src/kernel/arch/aarch64/hal/fpu.hpp b/src/kernel/arch/aarch64/hal/fpu.hpp
+++index 3729ba21a..311172929 100644
+++--- a/src/kernel/arch/aarch64/hal/fpu.hpp
++++++ b/src/kernel/arch/aarch64/hal/fpu.hpp
+++@@ -53,5 +53,19 @@ void fpu_init();
+++ void fpu_save(void *area);
+++ /// @brief Restore Q0-Q31 + FPCR/FPSR from area.
+++ void fpu_restore(const void *area);
++++/// @brief Ensure FP is enabled for the following save/restore (issue
++++///        #353 step 1b safety net for stale frames).  No-op on aarch64:
++++///        CPACR_EL1.FPEN is global and never restored per-task, so once
++++///        fpu_init runs it stays enabled.
++++inline void fpu_ensure_enabled() {}
++++/// @brief Eager switch helper (issue #353 step 1b): save current regs to
++++///        old_area, then restore next regs from new_area, back-to-back.
++++///        Pure memory operation (no TCB dependency — the caller owns
++++///        gating, generation, and used-flag updates).  Save-first order
++++///        preserves compiler temporaries via memory.
++++inline void fpu_switch_area(void *old_area, const void *new_area) {
++++    fpu_save(old_area);
++++    fpu_restore(new_area);
++++}
+++ 
+++ } // namespace arch
+++diff --git a/src/kernel/arch/riscv64/hal/fpu.hpp b/src/kernel/arch/riscv64/hal/fpu.hpp
+++index a44a4e9bd..7ccfaa756 100644
+++--- a/src/kernel/arch/riscv64/hal/fpu.hpp
++++++ b/src/kernel/arch/riscv64/hal/fpu.hpp
+++@@ -49,5 +49,21 @@ void fpu_init();
+++ void fpu_save(void *area);
+++ /// @brief Restore f0-f31 + fcsr from area.
+++ void fpu_restore(const void *area);
++++/// @brief Ensure FP is enabled for the following save/restore (issue
++++///        #353 step 1b safety net): sret restores sstatus.FS from the
++++///        task frame, so a stale FS=0 frame (synthetic/old) would fault
++++///        the next fsd — set FS=11b unconditionally (idempotent, keeps
++++///        the dirty state the switch path expects).
++++inline void fpu_ensure_enabled() {
++++    asm volatile("csrs sstatus, %0" : : "r"(3ULL << 13) : "memory");
++++}
++++/// @brief Eager switch helper (issue #353 step 1b): save current regs to
++++///        old_area, then restore next regs from new_area, back-to-back.
++++///        Pure memory operation (no TCB dependency — the caller owns
++++///        gating, generation, and used-flag updates).
++++inline void fpu_switch_area(void *old_area, const void *new_area) {
++++    fpu_save(old_area);
++++    fpu_restore(new_area);
++++}
+++ 
+++ } // namespace arch
+++diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
+++index ad478311c..0ef4b8af4 100644
+++--- a/src/kernel/arch/riscv64/test_riscv64.cpp
++++++ b/src/kernel/arch/riscv64/test_riscv64.cpp
+++@@ -1183,8 +1183,8 @@ JARVIS_TEST(riscv64_exec_slots, "PRE: none | POST: none") {
+++         JARVIS_ASSERT_FMT(ok, "exec_into_current failed");
+++         JARVIS_ASSERT_FMT(regs[31] == 0x41000000ULL, "SEPC slot: 0x%lx",
+++                           regs[31]);
+++-        JARVIS_ASSERT_FMT(regs[32] == (1ULL << 5), "SSTATUS slot: 0x%lx",
+++-                          regs[32]);
++++        JARVIS_ASSERT_FMT(regs[32] == ((1ULL << 5) | (3ULL << 13)),
++++                          "SSTATUS slot: 0x%lx", regs[32]);
+++         JARVIS_ASSERT_FMT(regs[9] == 0ULL, "A0 slot not zero: 0x%lx", regs[9]);
+++         // SP slot: setup_user_stack returns post-argc SP (not page-aligned
+++         // by construction) — verify it was overwritten into the new user
+++diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+++index 0f6d88774..90c911b3d 100644
+++--- a/src/kernel/core/global_state.cpp
++++++ b/src/kernel/core/global_state.cpp
+++@@ -27,6 +27,11 @@
+++ #include <kernel/core/global_state.hpp>
+++ #include <kernel/arch/timer.hpp>
+++ #include <kernel/arch/gdt.hpp>
++++#if defined(CONFIG_ARCH_AARCH64)
++++#include <kernel/arch/aarch64/hal/fpu.hpp>
++++#elif defined(CONFIG_ARCH_RISCV64)
++++#include <kernel/arch/riscv64/hal/fpu.hpp>
++++#endif
+++ #include <kernel/task/task.hpp>
+++ #include <kernel/task/scheduler.hpp>
+++ #include <kernel/task/scheduler_errors.hpp>
+++@@ -272,6 +277,32 @@ extern "C" void scheduler_on_context_switch() noexcept {
+++ 
+++     auto *t = kernel::Scheduler::find_task(id);
+++ 
++++#if !defined(CONFIG_ARCH_X86_64)
++++    // Issue #353: eager FP switch (non-x86; x86 keeps lazy #NM).  The
++++    // epilogue already switched stacks/tables; FP regs still hold the
++++    // outgoing task's live state (handlers emit no FP use — verified by
++++    // build scan), so save-first here preserves everything via memory.
++++    // Kernel↔kernel switches skip (kernel never uses FP); a null current
++++    // with a user target still restores (never leaks stale regs).
++++    auto *old_fp = kernel::Scheduler::current_task();
++++    const bool fp_old_user = (old_fp != nullptr) && old_fp->is_user_;
++++    const bool fp_new_user = (t != nullptr) && t->is_user_;
++++    const bool fp_old_valid =
++++        (old_fp != nullptr) &&
++++        (old_fp->magic == kernel::TaskControlBlock::TCB_MAGIC);
++++    const bool fp_new_valid =
++++        (t != nullptr) && (t->magic == kernel::TaskControlBlock::TCB_MAGIC);
++++    if ((fp_old_user || fp_new_user) && fp_old_valid && fp_new_valid) {
++++        arch::fpu_ensure_enabled();
++++        arch::fpu_switch_area(old_fp->fpu_state, t->fpu_state);
++++        old_fp->fpu_used = true;
++++        ++old_fp->fpu_state_gen;
++++    } else if (fp_new_user && fp_new_valid) {
++++        arch::fpu_ensure_enabled();
++++        arch::fpu_restore(t->fpu_state);
++++    }
++++#endif
++++
+++     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
+++ 
+++         kernel::Scheduler::set_current_task(t);
+++diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+++index 1ac9dc876..9c85bd4c5 100644
+++--- a/src/kernel/elf/elf.cpp
++++++ b/src/kernel/elf/elf.cpp
+++@@ -671,7 +671,10 @@ bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
+++     __builtin_memset(stack, 0, 37 * 8);
+++     stack[1] = user_rsp;              // OFF_SP (X2)
+++     stack[31] = hdr->entry;           // OFF_SEPC
+++-    stack[32] = (1ULL << 5);          // SSTATUS: SPIE=1, SPP=0 (U-mode)
++++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: loaded
++++    // images may use FP from the first instruction; sret restores FS
++++    // from this slot).
++++    stack[32] = (1ULL << 5) | (3ULL << 13);
+++     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
+++ #endif
+++ 
+++@@ -905,7 +908,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+++     // Issue #206 M2: rewrite the live trap frame slots (syscall_entry.S
+++     // OFF_*: SP=idx1, SEPC=idx31, SSTATUS=idx32, A0=idx9).
+++     regs[31] = hdr->entry;  // SEPC
+++-    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
++++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: the exec'd
++++    // image may use FP from its first instruction, and sret restores FS
++++    // from this slot — FS=0 would fault it immediately).
++++    regs[32] = (1ULL << 5) | (3ULL << 13);
+++     regs[1] = user_rsp;     // OFF_SP
+++     regs[9] = 0;            // A0 = 0 (child/exec return value)
+++ #endif
+++diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+++index 6b453ee4f..5b24b8012 100644
+++--- a/src/kernel/task/task.cpp
++++++ b/src/kernel/task/task.cpp
+++@@ -1445,7 +1445,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+++     __builtin_memset(stack, 0, 37 * 8);
+++     stack[1] = user_rsp;                           // X2/SP = user stack
+++     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
+++-    stack[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
++++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: user FP must
++++    // be enabled from first dispatch — sret restores FS from this frame,
++++    // so FS=0 here would switch FP off at the first trap return and fault
++++    // the next fpu_save).
++++    stack[32] = (1ULL << 5) | (3ULL << 13);
+++     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
+++ #endif
+++ 
+++diff --git a/test-history.txt b/test-history.txt
+++index 4fe8083d8..75932542c 100644
+++--- a/test-history.txt
++++++ b/test-history.txt
+++@@ -4231,3 +4231,10 @@ SUMMARY: total=26 ok=25 fail=1
+++ 2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 1838ms STATUS: #352-2ciii-x86_64-gate
+++ 2026-10-20 10:30:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1053ms STATUS: #353-1a-a64-gate
+++ 2026-10-20 10:30:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 950ms STATUS: #353-1a-rv64-gate-known-5QE+#387
++++2026-10-20 10:40:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1058ms STATUS: #353-1b-aarch64-gate
++++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 916ms STATUS: #353-1b-aarch64-gate
++++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 1025ms STATUS: #353-1b-riscv64-gate
++++2026-10-20 10:40:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 943ms STATUS: #353-1b-riscv64-gate
++++2026-10-20 10:40:00 elf_loader PASSED: 25 FAILED: 0 TIME: 2478ms STATUS: #353-1b-x86_64-gate
++++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 1842ms STATUS: #353-1b-x86_64-gate
++++2026-10-20 10:40:00 selftest PASSED: 148 FAILED: 0 TIME: 12509ms STATUS: #353-1b-x86_64-gate
++diff --git a/docs/specs/fpu-context.md b/docs/specs/fpu-context.md
++index b19139002..9ae522c2f 100644
++--- a/docs/specs/fpu-context.md
+++++ b/docs/specs/fpu-context.md
++@@ -143,3 +143,27 @@ Validation: selftest, debug/release all, test-history rows.
++ 
++ - XSAVE/XSAVEC compact layouts, AVX-512 state — revisit when a workload
++   needs it; FXSAVE keeps the area size frozen at 512 B today.
+++
+++## 7. Per-arch model: aarch64/riscv64 eager switch (issue #353)
+++
+++x86 stays lazy (#NM + `fpu_owner` protocol, §0-§5 unchanged). aarch64
+++(NEON) and riscv64 (F/D) use EAGER save/restore at task switch:
+++
+++| Item | aarch64 (NEON) | riscv64 (F/D) |
+++|---|---|---|
+++| Area | 528 B: Q0-Q31 (512) + FPCR/FPSR (8) | 272 B: f0-f31 (256) + fcsr (4) |
+++| Detect | `ID_AA64PFR0_EL1` FP+AdvSIMD (`has_fpu`) | sstatus.FS write test (MISA is M-mode-only) |
+++| Enable | CPACR_EL1.FPEN=11b | sstatus.FS=11b |
+++| Switch | `fpu_switch_area` in `scheduler_on_context_switch` (save old, restore new) iff either side is a user task | same |
+++| Trap | EC=0x07 fires only when disabled/absent → terminate path (no resume surgery; enable is sticky-global) | illegal-insn with FS=0 → same |
+++
+++Soundness basis: the kernel image contains no FP/SIMD instructions
+++outside `fpu_save/restore` (verified by objdump scan), so handler code
+++cannot clobber live user FP state between trap entry and the switch;
+++save-first ordering then preserves everything via memory. If a future
+++toolchain emits kernel FP, revisit (either `-mgeneral-regs-only` for
+++that arch or entry/exit save/restore).
+++
+++Degraded contract: `fpu_supported()==false` → loud dmesg + `fpu_init`
+++no-op; user FP faults terminate via existing fault paths; QE
+++registers zero `task_fpu` tests with the loud message (never silent).
++diff --git a/src/kernel/arch/aarch64/hal/fpu.hpp b/src/kernel/arch/aarch64/hal/fpu.hpp
++index 3729ba21a..311172929 100644
++--- a/src/kernel/arch/aarch64/hal/fpu.hpp
+++++ b/src/kernel/arch/aarch64/hal/fpu.hpp
++@@ -53,5 +53,19 @@ void fpu_init();
++ void fpu_save(void *area);
++ /// @brief Restore Q0-Q31 + FPCR/FPSR from area.
++ void fpu_restore(const void *area);
+++/// @brief Ensure FP is enabled for the following save/restore (issue
+++///        #353 step 1b safety net for stale frames).  No-op on aarch64:
+++///        CPACR_EL1.FPEN is global and never restored per-task, so once
+++///        fpu_init runs it stays enabled.
+++inline void fpu_ensure_enabled() {}
+++/// @brief Eager switch helper (issue #353 step 1b): save current regs to
+++///        old_area, then restore next regs from new_area, back-to-back.
+++///        Pure memory operation (no TCB dependency — the caller owns
+++///        gating, generation, and used-flag updates).  Save-first order
+++///        preserves compiler temporaries via memory.
+++inline void fpu_switch_area(void *old_area, const void *new_area) {
+++    fpu_save(old_area);
+++    fpu_restore(new_area);
+++}
++ 
++ } // namespace arch
++diff --git a/src/kernel/arch/riscv64/hal/fpu.hpp b/src/kernel/arch/riscv64/hal/fpu.hpp
++index a44a4e9bd..7ccfaa756 100644
++--- a/src/kernel/arch/riscv64/hal/fpu.hpp
+++++ b/src/kernel/arch/riscv64/hal/fpu.hpp
++@@ -49,5 +49,21 @@ void fpu_init();
++ void fpu_save(void *area);
++ /// @brief Restore f0-f31 + fcsr from area.
++ void fpu_restore(const void *area);
+++/// @brief Ensure FP is enabled for the following save/restore (issue
+++///        #353 step 1b safety net): sret restores sstatus.FS from the
+++///        task frame, so a stale FS=0 frame (synthetic/old) would fault
+++///        the next fsd — set FS=11b unconditionally (idempotent, keeps
+++///        the dirty state the switch path expects).
+++inline void fpu_ensure_enabled() {
+++    asm volatile("csrs sstatus, %0" : : "r"(3ULL << 13) : "memory");
+++}
+++/// @brief Eager switch helper (issue #353 step 1b): save current regs to
+++///        old_area, then restore next regs from new_area, back-to-back.
+++///        Pure memory operation (no TCB dependency — the caller owns
+++///        gating, generation, and used-flag updates).
+++inline void fpu_switch_area(void *old_area, const void *new_area) {
+++    fpu_save(old_area);
+++    fpu_restore(new_area);
+++}
++ 
++ } // namespace arch
++diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
++index ad478311c..0ef4b8af4 100644
++--- a/src/kernel/arch/riscv64/test_riscv64.cpp
+++++ b/src/kernel/arch/riscv64/test_riscv64.cpp
++@@ -1183,8 +1183,8 @@ JARVIS_TEST(riscv64_exec_slots, "PRE: none | POST: none") {
++         JARVIS_ASSERT_FMT(ok, "exec_into_current failed");
++         JARVIS_ASSERT_FMT(regs[31] == 0x41000000ULL, "SEPC slot: 0x%lx",
++                           regs[31]);
++-        JARVIS_ASSERT_FMT(regs[32] == (1ULL << 5), "SSTATUS slot: 0x%lx",
++-                          regs[32]);
+++        JARVIS_ASSERT_FMT(regs[32] == ((1ULL << 5) | (3ULL << 13)),
+++                          "SSTATUS slot: 0x%lx", regs[32]);
++         JARVIS_ASSERT_FMT(regs[9] == 0ULL, "A0 slot not zero: 0x%lx", regs[9]);
++         // SP slot: setup_user_stack returns post-argc SP (not page-aligned
++         // by construction) — verify it was overwritten into the new user
++diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
++index 0f6d88774..90c911b3d 100644
++--- a/src/kernel/core/global_state.cpp
+++++ b/src/kernel/core/global_state.cpp
++@@ -27,6 +27,11 @@
++ #include <kernel/core/global_state.hpp>
++ #include <kernel/arch/timer.hpp>
++ #include <kernel/arch/gdt.hpp>
+++#if defined(CONFIG_ARCH_AARCH64)
+++#include <kernel/arch/aarch64/hal/fpu.hpp>
+++#elif defined(CONFIG_ARCH_RISCV64)
+++#include <kernel/arch/riscv64/hal/fpu.hpp>
+++#endif
++ #include <kernel/task/task.hpp>
++ #include <kernel/task/scheduler.hpp>
++ #include <kernel/task/scheduler_errors.hpp>
++@@ -272,6 +277,32 @@ extern "C" void scheduler_on_context_switch() noexcept {
++ 
++     auto *t = kernel::Scheduler::find_task(id);
++ 
+++#if !defined(CONFIG_ARCH_X86_64)
+++    // Issue #353: eager FP switch (non-x86; x86 keeps lazy #NM).  The
+++    // epilogue already switched stacks/tables; FP regs still hold the
+++    // outgoing task's live state (handlers emit no FP use — verified by
+++    // build scan), so save-first here preserves everything via memory.
+++    // Kernel↔kernel switches skip (kernel never uses FP); a null current
+++    // with a user target still restores (never leaks stale regs).
+++    auto *old_fp = kernel::Scheduler::current_task();
+++    const bool fp_old_user = (old_fp != nullptr) && old_fp->is_user_;
+++    const bool fp_new_user = (t != nullptr) && t->is_user_;
+++    const bool fp_old_valid =
+++        (old_fp != nullptr) &&
+++        (old_fp->magic == kernel::TaskControlBlock::TCB_MAGIC);
+++    const bool fp_new_valid =
+++        (t != nullptr) && (t->magic == kernel::TaskControlBlock::TCB_MAGIC);
+++    if ((fp_old_user || fp_new_user) && fp_old_valid && fp_new_valid) {
+++        arch::fpu_ensure_enabled();
+++        arch::fpu_switch_area(old_fp->fpu_state, t->fpu_state);
+++        old_fp->fpu_used = true;
+++        ++old_fp->fpu_state_gen;
+++    } else if (fp_new_user && fp_new_valid) {
+++        arch::fpu_ensure_enabled();
+++        arch::fpu_restore(t->fpu_state);
+++    }
+++#endif
+++
++     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
++ 
++         kernel::Scheduler::set_current_task(t);
++diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
++index 1ac9dc876..9c85bd4c5 100644
++--- a/src/kernel/elf/elf.cpp
+++++ b/src/kernel/elf/elf.cpp
++@@ -671,7 +671,10 @@ bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
++     __builtin_memset(stack, 0, 37 * 8);
++     stack[1] = user_rsp;              // OFF_SP (X2)
++     stack[31] = hdr->entry;           // OFF_SEPC
++-    stack[32] = (1ULL << 5);          // SSTATUS: SPIE=1, SPP=0 (U-mode)
+++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: loaded
+++    // images may use FP from the first instruction; sret restores FS
+++    // from this slot).
+++    stack[32] = (1ULL << 5) | (3ULL << 13);
++     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
++ #endif
++ 
++@@ -905,7 +908,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
++     // Issue #206 M2: rewrite the live trap frame slots (syscall_entry.S
++     // OFF_*: SP=idx1, SEPC=idx31, SSTATUS=idx32, A0=idx9).
++     regs[31] = hdr->entry;  // SEPC
++-    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
+++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: the exec'd
+++    // image may use FP from its first instruction, and sret restores FS
+++    // from this slot — FS=0 would fault it immediately).
+++    regs[32] = (1ULL << 5) | (3ULL << 13);
++     regs[1] = user_rsp;     // OFF_SP
++     regs[9] = 0;            // A0 = 0 (child/exec return value)
++ #endif
++diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
++index 6b453ee4f..5b24b8012 100644
++--- a/src/kernel/task/task.cpp
+++++ b/src/kernel/task/task.cpp
++@@ -1445,7 +1445,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
++     __builtin_memset(stack, 0, 37 * 8);
++     stack[1] = user_rsp;                           // X2/SP = user stack
++     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
++-    stack[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
+++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: user FP must
+++    // be enabled from first dispatch — sret restores FS from this frame,
+++    // so FS=0 here would switch FP off at the first trap return and fault
+++    // the next fpu_save).
+++    stack[32] = (1ULL << 5) | (3ULL << 13);
++     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
++ #endif
++ 
++diff --git a/test-history.txt b/test-history.txt
++index 4fe8083d8..75932542c 100644
++--- a/test-history.txt
+++++ b/test-history.txt
++@@ -4231,3 +4231,10 @@ SUMMARY: total=26 ok=25 fail=1
++ 2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 1838ms STATUS: #352-2ciii-x86_64-gate
++ 2026-10-20 10:30:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1053ms STATUS: #353-1a-a64-gate
++ 2026-10-20 10:30:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 950ms STATUS: #353-1a-rv64-gate-known-5QE+#387
+++2026-10-20 10:40:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1058ms STATUS: #353-1b-aarch64-gate
+++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 916ms STATUS: #353-1b-aarch64-gate
+++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 1025ms STATUS: #353-1b-riscv64-gate
+++2026-10-20 10:40:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 943ms STATUS: #353-1b-riscv64-gate
+++2026-10-20 10:40:00 elf_loader PASSED: 25 FAILED: 0 TIME: 2478ms STATUS: #353-1b-x86_64-gate
+++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 1842ms STATUS: #353-1b-x86_64-gate
+++2026-10-20 10:40:00 selftest PASSED: 148 FAILED: 0 TIME: 12509ms STATUS: #353-1b-x86_64-gate
+diff --git a/docs/specs/fpu-context.md b/docs/specs/fpu-context.md
+index b19139002..2301de4cd 100644
+--- a/docs/specs/fpu-context.md
++++ b/docs/specs/fpu-context.md
+@@ -143,3 +143,27 @@ Validation: selftest, debug/release all, test-history rows.
+ 
+ - XSAVE/XSAVEC compact layouts, AVX-512 state — revisit when a workload
+   needs it; FXSAVE keeps the area size frozen at 512 B today.
++
++## 7. Per-arch model: aarch64/riscv64 eager switch (issue #353)
++
++x86 stays lazy (#NM + `fpu_owner` protocol, §0-§5 unchanged). aarch64
++(NEON) and riscv64 (F/D) use EAGER save/restore at task switch:
++
++| Item | aarch64 (NEON) | riscv64 (F/D) |
++|---|---|---|
++| Area | 528 B: Q0-Q31 (512) + FPCR/FPSR (8) + reserved (8) | 272 B: f0-f31 (256) + fcsr (4) + reserved (12) |
++| Detect | `ID_AA64PFR0_EL1` FP+AdvSIMD (`has_fpu`) | sstatus.FS write test (MISA is M-mode-only) |
++| Enable | CPACR_EL1.FPEN=11b | sstatus.FS=11b |
++| Switch | `fpu_switch_area` in `scheduler_on_context_switch` (save old, restore new) iff either side is a user task | same |
++| Trap | EC=0x07 fires only when disabled/absent → terminate path (no resume surgery; enable is sticky-global) | illegal-insn with FS=0 → same |
++
++Soundness basis: the kernel image contains no FP/SIMD instructions
++outside `fpu_save/restore` (verified by objdump scan), so handler code
++cannot clobber live user FP state between trap entry and the switch;
++save-first ordering then preserves everything via memory. If a future
++toolchain emits kernel FP, revisit (either `-mgeneral-regs-only` for
++that arch or entry/exit save/restore).
++
++Degraded contract: `fpu_supported()==false` → loud dmesg + `fpu_init`
++no-op; user FP faults terminate via existing fault paths; QE
++registers zero `task_fpu` tests with the loud message (never silent).
+diff --git a/prompts/STATE.md b/prompts/STATE.md
+index 2ae32784b..a6dc64990 100644
+--- a/prompts/STATE.md
++++ b/prompts/STATE.md
+@@ -5,7 +5,8 @@
+ 
+ ## Active Summary
+ ### Objective
+-- **ACTIVE (2026-10-20):** #352 MMU/VMM/TLB parity — KERNEL TRACK COMPLETE (`3a1dc2804`, APPROVED): 2c-iii leaf_flags + x86 va_asid + shootdown hook (+#389 SMP follow-up); dead decl removed. Remaining: QE test ports (pml4_clone/pt_merge, proc_elf EM, shootdown-hook invocation) + known riscv reds. Next in batch: #353 FPU.
++- **ACTIVE (2026-10-20):** #353 FPU/SIMD parity — step 1a LANDED (`c6336c2f6`, APPROVED): NEON/F-D primitives + save areas + TCB resize + init wiring (dormant); post-approval lwu micro-fix folded into 1b audit scope. Next: step 1b (eager switch + traps + docs).
++- **OPEN (2026-10-20):** #352 MMU/VMM/TLB parity — KERNEL TRACK COMPLETE (APPROVED): remaining QE test ports (pml4_clone/pt_merge, proc_elf EM, shootdown-hook invocation) + known riscv reds (#387, #388 test-side).
+ - **DONE (2026-10-19):** #385 HHDM-rot + exec_slots hang CLOSED (audited APPROVED, pending QE + #387): riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch + abort, x86 mirror) — stale arm to recycled memory no longer resumes foreign context with stale current (U-fault killed init → hang). Gates: arch_riscv64 24/30 + no hang ×3 (5 fails = QE fixture/PLIC updates, 1 = #387 fork follow-up), x86 elf_loader/selftest green, 3-arch link green. H1 (image-range creep) + tests 6/7 (M-vs-S skew, OpenSBI M-threshold=7 boot state) convicted as QE test updates. FEEDBACK entry in LEARNINGS.
+ - **DONE (2026-10-19):** #349 IRQ + timer parity CLOSED (audited APPROVED): GICv2 full init (PIDR2 version, 8 enable banks, EOI ownership, spurious no-EOI, storm limiter) + CVAL/SBI absolute deadlines with coarse-tick units + CTL-gated remaining + PLIC S-context + IDT 64→256 + docs §6 + gotcha #20. Gates: aarch64 6 classes green, riscv64 5+1 (known QE test-side), x86 all green + selftest 148/148, x86_64 bit-identical. arch_riscv64 HHDM rot filed as #385 (out of scope). FEEDBACK entry in LEARNINGS.
+ - **DONE (2026-10-19):** #384 per-arch wall-time truth CLOSED (docs-only, no kernel stubs found): P0' survey (Timer HAL complete x3, riscv64 remaining_ns hard-0 is HW constraint) + TCG smoke (x86 hrt 6/6 + timing 19/19; aarch64/riscv64 hrt 5/6 ungated-bound fails +28%/+27.6%; timing panics ELR/sepc=0 → #356) + P1' bare-metal-only policy + QE missing-tests handoff. Real sil3_auditor re-audit APPROVED zero findings (`audits/report-2026-10-18T22-05-51Z.md`). FEEDBACK entry in LEARNINGS.
+diff --git a/src/kernel/arch/aarch64/hal/fpu.cpp b/src/kernel/arch/aarch64/hal/fpu.cpp
+index 4b860dfda..97a608107 100644
+--- a/src/kernel/arch/aarch64/hal/fpu.cpp
++++ b/src/kernel/arch/aarch64/hal/fpu.cpp
+@@ -45,6 +45,10 @@ bool fpu_supported() {
+     return has_fpu();
+ }
+ 
++bool fpu_available() {
++    return g_fpu_done;
++}
++
+ void fpu_init() {
+     if (g_fpu_done)
+         return;
+diff --git a/src/kernel/arch/aarch64/hal/fpu.hpp b/src/kernel/arch/aarch64/hal/fpu.hpp
+index 3729ba21a..b1ce4d7e7 100644
+--- a/src/kernel/arch/aarch64/hal/fpu.hpp
++++ b/src/kernel/arch/aarch64/hal/fpu.hpp
+@@ -47,11 +47,28 @@ inline constexpr uint64_t FPU_FPSR_OFFSET = 516;
+ 
+ /// @brief Probe FP+SIMD via ID_AA64PFR0_EL1 (mirrors has_fpu).
+ bool fpu_supported();
++/// @brief True once fpu_init succeeded (audit S3: the switch block
++///        gates on this so absent-HW configs never execute FP insns).
++bool fpu_available();
+ /// @brief Enable FP/SIMD (CPACR.FPEN) + loud log; idempotent.
+ void fpu_init();
+ /// @brief Save Q0-Q31 + FPCR/FPSR into area (528 bytes).
+ void fpu_save(void *area);
+ /// @brief Restore Q0-Q31 + FPCR/FPSR from area.
+ void fpu_restore(const void *area);
++/// @brief Ensure FP is enabled for the following save/restore (issue
++///        #353 step 1b safety net for stale frames).  No-op on aarch64:
++///        CPACR_EL1.FPEN is global and never restored per-task, so once
++///        fpu_init runs it stays enabled.
++inline void fpu_ensure_enabled() {}
++/// @brief Eager switch helper (issue #353 step 1b): save current regs to
++///        old_area, then restore next regs from new_area, back-to-back.
++///        Pure memory operation (no TCB dependency — the caller owns
++///        gating, generation, and used-flag updates).  Save-first order
++///        preserves compiler temporaries via memory.
++inline void fpu_switch_area(void *old_area, const void *new_area) {
++    fpu_save(old_area);
++    fpu_restore(new_area);
++}
+ 
+ } // namespace arch
+diff --git a/src/kernel/arch/riscv64/hal/fpu.cpp b/src/kernel/arch/riscv64/hal/fpu.cpp
+index d8d8aeaa4..a39dd4937 100644
+--- a/src/kernel/arch/riscv64/hal/fpu.cpp
++++ b/src/kernel/arch/riscv64/hal/fpu.cpp
+@@ -52,6 +52,10 @@ bool fpu_supported() {
+     return ((back >> 13) & 3ULL) == 3ULL;
+ }
+ 
++bool fpu_available() {
++    return g_fpu_done;
++}
++
+ void fpu_init() {
+     if (g_fpu_done)
+         return;
+diff --git a/src/kernel/arch/riscv64/hal/fpu.hpp b/src/kernel/arch/riscv64/hal/fpu.hpp
+index a44a4e9bd..04632fc73 100644
+--- a/src/kernel/arch/riscv64/hal/fpu.hpp
++++ b/src/kernel/arch/riscv64/hal/fpu.hpp
+@@ -43,11 +43,30 @@ inline constexpr uint64_t FPU_FCSR_OFFSET = 256;
+ 
+ /// @brief Probe F/D via sstatus.FS write test (MISA is M-mode-only).
+ bool fpu_supported();
++/// @brief True once fpu_init succeeded (audit S3: the switch block
++///        gates on this so absent-HW configs never execute FP insns).
++bool fpu_available();
+ /// @brief Enable FP (sstatus.FS=0b11) + loud log; idempotent.
+ void fpu_init();
+ /// @brief Save f0-f31 + fcsr into area (272 bytes).
+ void fpu_save(void *area);
+ /// @brief Restore f0-f31 + fcsr from area.
+ void fpu_restore(const void *area);
++/// @brief Ensure FP is enabled for the following save/restore (issue
++///        #353 step 1b safety net): sret restores sstatus.FS from the
++///        task frame, so a stale FS=0 frame (synthetic/old) would fault
++///        the next fsd — set FS=11b unconditionally (idempotent, keeps
++///        the dirty state the switch path expects).
++inline void fpu_ensure_enabled() {
++    asm volatile("csrs sstatus, %0" : : "r"(3ULL << 13) : "memory");
++}
++/// @brief Eager switch helper (issue #353 step 1b): save current regs to
++///        old_area, then restore next regs from new_area, back-to-back.
++///        Pure memory operation (no TCB dependency — the caller owns
++///        gating, generation, and used-flag updates).
++inline void fpu_switch_area(void *old_area, const void *new_area) {
++    fpu_save(old_area);
++    fpu_restore(new_area);
++}
+ 
+ } // namespace arch
+diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
+index ad478311c..0ef4b8af4 100644
+--- a/src/kernel/arch/riscv64/test_riscv64.cpp
++++ b/src/kernel/arch/riscv64/test_riscv64.cpp
+@@ -1183,8 +1183,8 @@ JARVIS_TEST(riscv64_exec_slots, "PRE: none | POST: none") {
+         JARVIS_ASSERT_FMT(ok, "exec_into_current failed");
+         JARVIS_ASSERT_FMT(regs[31] == 0x41000000ULL, "SEPC slot: 0x%lx",
+                           regs[31]);
+-        JARVIS_ASSERT_FMT(regs[32] == (1ULL << 5), "SSTATUS slot: 0x%lx",
+-                          regs[32]);
++        JARVIS_ASSERT_FMT(regs[32] == ((1ULL << 5) | (3ULL << 13)),
++                          "SSTATUS slot: 0x%lx", regs[32]);
+         JARVIS_ASSERT_FMT(regs[9] == 0ULL, "A0 slot not zero: 0x%lx", regs[9]);
+         // SP slot: setup_user_stack returns post-argc SP (not page-aligned
+         // by construction) — verify it was overwritten into the new user
+diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+index 0f6d88774..760d59431 100644
+--- a/src/kernel/core/global_state.cpp
++++ b/src/kernel/core/global_state.cpp
+@@ -27,6 +27,11 @@
+ #include <kernel/core/global_state.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/gdt.hpp>
++#if defined(CONFIG_ARCH_AARCH64)
++#include <kernel/arch/aarch64/hal/fpu.hpp>
++#elif defined(CONFIG_ARCH_RISCV64)
++#include <kernel/arch/riscv64/hal/fpu.hpp>
++#endif
+ #include <kernel/task/task.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/scheduler_errors.hpp>
+@@ -272,6 +277,36 @@ extern "C" void scheduler_on_context_switch() noexcept {
+ 
+     auto *t = kernel::Scheduler::find_task(id);
+ 
++#if !defined(CONFIG_ARCH_X86_64)
++    // Issue #353: eager FP switch (non-x86; x86 keeps lazy #NM).  The
++    // epilogue already switched stacks/tables; FP regs still hold the
++    // outgoing task's live state (handlers emit no FP use — verified by
++    // build scan), so save-first here preserves everything via memory.
++    // Kernel↔kernel switches skip (kernel never uses FP); a null current
++    // with a user target still restores (never leaks stale regs).
++    auto *old_fp = kernel::Scheduler::current_task();
++    const bool fp_old_user = (old_fp != nullptr) && old_fp->is_user_;
++    const bool fp_new_user = (t != nullptr) && t->is_user_;
++    const bool fp_old_valid =
++        (old_fp != nullptr) &&
++        (old_fp->magic == kernel::TaskControlBlock::TCB_MAGIC);
++    const bool fp_new_valid =
++        (t != nullptr) && (t->magic == kernel::TaskControlBlock::TCB_MAGIC);
++    // Audit S3: skip entirely when FP is absent (degraded path) — the
++    // save/restore instructions would fault where FS can never set.
++    const bool fp_hw = arch::fpu_available();
++    if (fp_hw && (fp_old_user || fp_new_user) && fp_old_valid &&
++        fp_new_valid) {
++        arch::fpu_ensure_enabled();
++        arch::fpu_switch_area(old_fp->fpu_state, t->fpu_state);
++        old_fp->fpu_used = true;
++        ++old_fp->fpu_state_gen;
++    } else if (fp_hw && fp_new_user && fp_new_valid) {
++        arch::fpu_ensure_enabled();
++        arch::fpu_restore(t->fpu_state);
++    }
++#endif
++
+     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
+ 
+         kernel::Scheduler::set_current_task(t);
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 1ac9dc876..9c85bd4c5 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -671,7 +671,10 @@ bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
+     __builtin_memset(stack, 0, 37 * 8);
+     stack[1] = user_rsp;              // OFF_SP (X2)
+     stack[31] = hdr->entry;           // OFF_SEPC
+-    stack[32] = (1ULL << 5);          // SSTATUS: SPIE=1, SPP=0 (U-mode)
++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: loaded
++    // images may use FP from the first instruction; sret restores FS
++    // from this slot).
++    stack[32] = (1ULL << 5) | (3ULL << 13);
+     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
+ #endif
+ 
+@@ -905,7 +908,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     // Issue #206 M2: rewrite the live trap frame slots (syscall_entry.S
+     // OFF_*: SP=idx1, SEPC=idx31, SSTATUS=idx32, A0=idx9).
+     regs[31] = hdr->entry;  // SEPC
+-    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: the exec'd
++    // image may use FP from its first instruction, and sret restores FS
++    // from this slot — FS=0 would fault it immediately).
++    regs[32] = (1ULL << 5) | (3ULL << 13);
+     regs[1] = user_rsp;     // OFF_SP
+     regs[9] = 0;            // A0 = 0 (child/exec return value)
+ #endif
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 6b453ee4f..5b24b8012 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -1445,7 +1445,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+     __builtin_memset(stack, 0, 37 * 8);
+     stack[1] = user_rsp;                           // X2/SP = user stack
+     stack[31] = reinterpret_cast<uint64_t>(entry); // SEPC = entry point
+-    stack[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
++    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: user FP must
++    // be enabled from first dispatch — sret restores FS from this frame,
++    // so FS=0 here would switch FP off at the first trap return and fault
++    // the next fpu_save).
++    stack[32] = (1ULL << 5) | (3ULL << 13);
+     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
+ #endif
+ 
+diff --git a/test-history.txt b/test-history.txt
+index 4fe8083d8..f44737376 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4231,3 +4231,15 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 10:15:00 timing_core PASSED: 19 FAILED: 0 TIME: 1838ms STATUS: #352-2ciii-x86_64-gate
+ 2026-10-20 10:30:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1053ms STATUS: #353-1a-a64-gate
+ 2026-10-20 10:30:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 950ms STATUS: #353-1a-rv64-gate-known-5QE+#387
++2026-10-20 10:40:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1058ms STATUS: #353-1b-aarch64-gate
++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 916ms STATUS: #353-1b-aarch64-gate
++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 1025ms STATUS: #353-1b-riscv64-gate
++2026-10-20 10:40:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 943ms STATUS: #353-1b-riscv64-gate
++2026-10-20 10:40:00 elf_loader PASSED: 25 FAILED: 0 TIME: 2478ms STATUS: #353-1b-x86_64-gate
++2026-10-20 10:40:00 timing_core PASSED: 19 FAILED: 0 TIME: 1842ms STATUS: #353-1b-x86_64-gate
++2026-10-20 10:40:00 selftest PASSED: 148 FAILED: 0 TIME: 12509ms STATUS: #353-1b-x86_64-gate
++2026-10-20 10:55:00 timing_core PASSED: 19 FAILED: 0 TIME: 916ms STATUS: #353-s3c-aarch64-gate
++2026-10-20 10:55:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1058ms STATUS: #353-s3c-aarch64-gate
++2026-10-20 10:55:00 timing_core PASSED: 19 FAILED: 0 TIME: 979ms STATUS: #353-s3c-riscv64-gate
++2026-10-20 10:55:00 timing_core PASSED: 19 FAILED: 0 TIME: 1857ms STATUS: #353-s3c-x86_64-gate
++2026-10-20 10:55:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 953ms STATUS: #353-s3c-riscv64-gate-known-5QE+#387
