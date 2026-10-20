@@ -65,6 +65,11 @@ struct VirtioNetDevice {
     arch::VirtqDesc *tx_desc;
     arch::VirtqAvail *tx_avail;
     arch::VirtqUsed *tx_used;
+#if !defined(CONFIG_ARCH_X86_64)
+    // Issue #350 (MMIO legacy v1): per-queue contiguous chunks
+    // (desc = chunk base; avail/used are byte offsets into it).
+    bool legacy_queue_chunks_ = false;
+#endif
 
     // DMA buffers for RX
     uint8_t *rx_bufs[16];

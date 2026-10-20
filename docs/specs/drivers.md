@@ -114,6 +114,35 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 
 ## 5. Virtio-blk (`virtio_blk.cpp`)
 
+### 5.1 Transport selection (issue #350)
+
+- x86_64: virtio-PCI modern (`0x1040` + type) via ECAM/MSI-X, plus AHCI
+  (x86-only HW — QEMU `virt` has no AHCI; virtio-blk is the `virt`
+  storage contract).
+- aarch64/riscv64: virtio-MMIO v2 discovery from the DTB
+  (`compatible = "virtio,mmio"`), with an architected slot-table
+  fallback (aarch64: the `-kernel` path passes no DTB — GDB-proven
+  `x0 == 0` at `higherhalf_entry` and no FDT magic in RAM). Slot
+  tables: aarch64 32 slots at PA `0x0A000000` + slot·`0x200`
+  (GIC INTID 48 + slot); riscv64 8 slots at `0x10001000` + slot·`0x1000`
+  (PLIC IRQ 1 + slot). Both windows are boot-mapped leaves; every
+  candidate is validated (MagicValue `0x74726976`, version, device ID)
+  before the transport fills — unpopulated slots read zero and skip.
+- QEMU `virt` exposes the legacy (v1) interface (Version reads 1):
+  queue setup uses GuestPageSize/QueueNum/QueueAlign/QueuePFN with one
+  contiguous 2-page chunk per queue (desc at +0, avail immediately
+  after, used at the single-sourced `virtio_legacy_used_off`), instead
+  of the v2 per-ring addresses + Ready bit. Submit/notify/completion
+  paths are version-independent and shared.
+- ISR: `InterruptStatus` read + per-pass used-ring drain +
+  `InterruptACK` write + bounded re-check (max 4 passes — the GIC SPI
+  is edge-triggered, so a completion landing between drain and ACK
+  raises no new edge); no allocation/blocking; wake outside
+  `compl_lock_`; teardown is mask → ACK → drain (error-wake) → clear
+  handler → free rings. Fail-closed poll fallback throughout.
+- TCG-coherent only; real-HW cache maintenance (aarch64 `dc civac`,
+  riscv `fence`) is a follow-up.
+
 - `probe()`: `virtio_find_device(0x1042)` → `init()`: status
   RESET→ACK→DRIVER → negotiate `VIRTIO_F_VERSION_1` → queue_size=16 → 4 PMM
   pages (desc/avail/used/dma_buf) → `virtio_setup_queue` → DRIVER_OK →
@@ -209,19 +238,23 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
    in-tree, so wheel-blocking has no waker; RX is poll-model by design),
    ATA-PIO (legacy, no IRQ/DMA by hardware contract; `ATA_POLL_TIMEOUT`
    + false-propagation), and boot/pre-ISR bring-up (no task to BLOCK).
-3. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
+3. **MMIO access rules (issue #350).** Device-config reads on MMIO use
+   at most 4-byte accesses (the 64-bit `virtio-blk.capacity` is split
+   into two 32-bit reads); the MMIO ISR path drains before ACK with a
+   bounded (≤ 4) re-check and keeps the poll fallback fail-closed.
+4. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
    AHCI port command state) needs a `SpinLock` via `IrqSpinLockGuard`;
    callbacks invoked only after release, from stack-captured locals; no
    allocation/blocking while holding a lock in IRQ context.
-4. **`GHC_IE` ordering.** AHCI global interrupt-enable must not be set until a
+5. **`GHC_IE` ordering.** AHCI global interrupt-enable must not be set until a
    real ISR is wired (FLAW-04); teardown clears GHC_IE/PORT_IE and takes port
    locks before freeing CL/RFIS/CT/data memory.
-5. **UART FIFO drain.** 16550 FIFO = 16 bytes; `Serial::putchar` polls THRE per
+6. **UART FIFO drain.** 16550 FIFO = 16 bytes; `Serial::putchar` polls THRE per
    char and must drain between bursts to avoid overflow (perturbs timing).
-6. **Memory ordering for DMA.** `kernel::atomic_fence()` precedes issuing
+7. **Memory ordering for DMA.** `kernel::atomic_fence()` precedes issuing
    commands (AHCI `PORT_CI` write, virtio avail idx increment + kick) so
    descriptor writes are visible before the doorbell.
-7. **Nesting depth ≤ 2**; deeper = corruption (switch skipped).
+8. **Nesting depth ≤ 2**; deeper = corruption (switch skipped).
 
 ## 8. Open Flaw Ledger
 

@@ -1469,8 +1469,9 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         }
     }
 
-    // Probe virtio-net NIC and initialize network stack
-#if defined(CONFIG_ARCH_X86_64)
+    // Probe virtio-net NIC and initialize network stack.
+    // Issue #350: ungated — the MMIO finder serves aarch64/riscv64
+    // (QEMU virtio-net-device); the PCI finder serves x86_64.
     {
         static net::Nic g_boot_nic{};
         if (kernel::net::virtio_net_probe(g_boot_nic)) {
@@ -1483,7 +1484,6 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] No virtio-net NIC found\n");
         }
     }
-#endif
     boot_mark(kernel::BootStage::DRIVER_PROBE);
 
     // Initialize sampling profiler (must be before Timer::init() so record_sample is safe)

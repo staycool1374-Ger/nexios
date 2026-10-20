@@ -94,11 +94,12 @@ Full production boot paths (#28 aarch64, #29 riscv64), DTB plumbing
 (#183), teardown validation (#199). `kernel.cpp` keeps its own staged
 calls; `early_irq_init()` codifies the same order for tests and
 bring-up reuse. Out of scope for #349: x86-only remainders (GDT/IDT
-gates, PIC, APIC/LAPIC/IOAPIC, HPET, MSI/MSI-X, SMP/IPI), virtio-MMIO
-transport/IRQ consumers (#350, drivers keep polling), interrupt-driven
-UART RX (#245/#247), SMP per-hart contexts (#351), GICv3 HW validation
-(QEMU cortex-a72 exercises GICv2 only), riscv release (#207), TCG wall
-accuracy (#359/#384), QE test authorship/counts/release-subset.
+gates, PIC, APIC/LAPIC/IOAPIC, HPET, MSI/MSI-X, SMP/IPI),
+interrupt-driven UART RX (#245/#247), SMP per-hart contexts (#351),
+GICv3 HW validation (QEMU cortex-a72 exercises GICv2 only), riscv
+release (#207), TCG wall accuracy (#359/#384), QE test
+authorship/counts/release-subset. Virtio-MMIO transport/IRQ consumers
+landed in #350 (drivers keep the poll fallback fail-closed).
 
 ## 6. Per-arch IRQ routing + timer parity (issue #349)
 
@@ -107,6 +108,10 @@ QEMU-virt INTID map (aarch64): UART0 = 33, RTC = 34, PCIe INTx =
 index 80). QEMU-virt PLIC map (riscv64, S-mode context 1): virtio-mmio
 = 1–8, UART = 10, RTC = 11, PCIe INTx = 32–35; S-context addresses are
 `0x0C002080` (enable), `0x0C201000` (threshold), `+4` (claim/complete).
+Virtio-mmio transport consumers (issue #350) register raw IDT handlers
+at INTID 48 + slot (GIC) / IRQ 1 + slot (PLIC), unmask the source, and
+ACK `InterruptStatus` after draining (drain-before-ACK, bounded
+re-check); teardown masks first.
 
 GICv2 programming order: CTLR=0 → disable all banks → IGROUPR=0
 (Group 0) → IPRIORITY = 0xA0 → ITARGETSR = CPU0 for SPIs (reset
