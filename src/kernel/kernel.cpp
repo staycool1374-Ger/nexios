@@ -80,8 +80,10 @@
 #include <kernel/vfs/ramdisk_fs.hpp>
 #if defined(CONFIG_ARCH_AARCH64)
 #include <kernel/arch/aarch64/hal/asid.hpp>
+#include <kernel/arch/aarch64/hal/fpu.hpp>
 #elif defined(CONFIG_ARCH_RISCV64)
 #include <kernel/arch/riscv64/hal/asid.hpp>
+#include <kernel/arch/riscv64/hal/fpu.hpp>
 #endif
 #include <initrd/initrd.hpp>
 #include <services/terminal/framebuffer.hpp>
@@ -1497,6 +1499,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // above; early_irq_init() repeats it idempotently for test paths.
 #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
     arch::asid_init();
+#endif
+    // Issue #353: enable FP/SIMD early so user tasks can execute FP
+    // from first dispatch (aarch64 NEON / riscv64 F/D; loud degraded
+    // log when absent).  x86 keeps lazy #NM (no eager enable).
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    arch::fpu_init();
 #endif
 
     // Issue #25 (Phase B3): wake + park APs.  Single-CPU runs are a silent

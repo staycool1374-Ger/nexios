@@ -1603,11 +1603,13 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 #else
     (void)parent;
 #endif
-    // Copy FPU state to child
+    // Copy FPU state to child (full arch area, not hardcoded 512 —
+    // issue #353: NEON needs 528, riscv F/D 272).
     tcb->fpu_used = parent->fpu_used;
     tcb->fpu_state_gen = parent->fpu_state_gen;
     if (parent->fpu_used) {
-        __builtin_memcpy(tcb->fpu_state, parent->fpu_state, 512);
+        __builtin_memcpy(tcb->fpu_state, parent->fpu_state,
+                         sizeof(tcb->fpu_state));
     }
 
     // Allocate and set up kernel stack

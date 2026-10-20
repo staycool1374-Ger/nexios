@@ -1,17 +1,26 @@
-diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
---- a/src/kernel/arch/riscv64/hal/io_impl.hpp
-+++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
-@@ -171,9 +171,11 @@
- /// @brief TLB flush for one address space (issue #352).
- ///        `sfence.vma x0, asid`: rs1==x0 selects ASID-only invalidation.
-+///        NOTE: scope selects on the rs1 REGISTER (x0), not on a zero
-+///        value — a value-zero word in any other register fences VA 0x0 only.
- /// @param[in] asid Address-space ID to invalidate (nonzero user ID).
- inline void sfence_vma_asid(uint16_t asid) {
--    asm volatile("sfence.vma %0, %1"
-+    asm volatile("sfence.vma x0, %0"
+diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+index 007104e2b..a3f1c9d4e 100644
+--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+@@ -211,17 +211,18 @@ inline void tlbi_vae1(uint64_t vaddr) {
+     asm volatile("tlbi vae1, %0" : : "r"(vaddr) : "memory");
+ }
+ /// @brief TLB invalidate by ASID (EL1, issue #352).  Drops every entry
+-///        tagged with @p asid (raw value in Xt[15:0]; 8-bit IDs always
+-///        fit).  Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
++///        tagged with @p asid.  ASID occupies Xt[63:48] (DDI0601 TLBI
++///        ASIDE1 fieldset; low 48 bits RES0), so the raw ID is shifted.
++///        Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
+ /// @param[in] asid Address-space ID to invalidate (0 invalidates nothing
+ ///        specific; callers pass nonzero user IDs).
+ inline void tlbi_aside1(uint16_t asid) {
+     asm volatile("dmb sy; tlbi aside1, %0; dmb sy; isb"
                   :
--                 : "r"(0ULL), "r"(static_cast<uint64_t>(asid))
-+                 : "r"(static_cast<uint64_t>(asid))
+-                 : "r"(static_cast<uint64_t>(asid))
++                 : "r"(static_cast<uint64_t>(asid) << 48)
                   : "memory");
+ }
+ /// @brief TLB invalidate all (EL1).
+ inline void tlbi_alle1() {
+     asm volatile("dmb sy; tlbi vmalle1; dmb sy; isb" : : : "memory");
  }

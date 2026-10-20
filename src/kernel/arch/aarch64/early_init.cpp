@@ -32,6 +32,7 @@
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/aarch64/hal/asid.hpp>
+#include <kernel/arch/aarch64/hal/fpu.hpp>
 
 namespace arch {
 
@@ -94,6 +95,9 @@ arch::EarlyIrqResult arch::early_irq_init(uint32_t frequency_hz) {
     // Issue #352: activate ASID tagging (allocator flag only — no HW
     // touch; task create/teardown and switch publish pick up IDs).
     arch::asid_init();
+    // Issue #353: enable FP/SIMD for test paths that bring up IRQ
+    // without the full boot flow (idempotent with kernel.cpp).
+    arch::fpu_init();
     if (!arch::gic_redist_ready()) {
         return arch::EarlyIrqResult::CTRL_TIMEOUT;
     }

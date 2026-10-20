@@ -26,6 +26,11 @@
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/nexios_config.h>
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/fpu.hpp>
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/fpu.hpp>
+#endif
 #include <kernel/task/task_errors.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/sync/notify.hpp>
@@ -503,17 +508,23 @@ struct TaskControlBlock {
     ///        bit CANARY_SEGMENTS set when the kernel-stack canary is armed.
     uint8_t canary_installed;
 
-    /// @brief FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes).  64-byte aligned
-    ///        (issue #93; FXSAVE requires 16, 64 avoids split-line stores and
-    ///        matches docs/specs/fpu-context.md §3.3).  Zeroed on task
-    ///        creation; populated lazily via #NM handler.  INV-FPU1: this is
-    ///        the ONLY FPU save location — never allocated at IRQ time.
+    /// @brief FPU save area (issue #353): x86 FXSAVE/FXRSTOR 512 bytes;
+    ///        aarch64 NEON (Q0-Q31 + FPCR/FPSR) or riscv64 F/D (f0-f31 +
+    ///        fcsr) via arch::FPU_STATE_AREA_SIZE.  64-byte aligned (issue
+    ///        #93; avoids split-line stores; matches docs/specs/fpu-context.md
+    ///        §3.3).  Zeroed on task creation; populated lazily (x86 #NM)
+    ///        or eagerly (non-x86 switch).  INV-FPU1: this is the ONLY FPU
+    ///        save location — never allocated at IRQ time.
     bool fpu_used;
     /// @brief Debug/invariant generation counter, bumped on every fxsave of
     ///        this task's state (issue #93).  0 = never saved.  Unconditional
     ///        (not CONFIG_DEBUG-gated) to preserve debug/release symmetry.
     uint32_t fpu_state_gen;
+#if defined(CONFIG_ARCH_X86_64)
     alignas(64) uint8_t fpu_state[512];
+#else
+    alignas(64) uint8_t fpu_state[arch::FPU_STATE_AREA_SIZE];
+#endif
 
     uint64_t program_break;
     uint64_t program_break_start;
@@ -1083,6 +1094,19 @@ struct TaskControlBlock {
     /// @brief Finds a child by PID.
     TaskControlBlock *find_child(uint64_t pid) noexcept;
 };
+
+// Issue #353: FPU save area must exactly fit the arch save layout and
+// stay 64-byte aligned (the switch asm stores 16-byte vectors).
+#if defined(CONFIG_ARCH_X86_64)
+static_assert(sizeof(((TaskControlBlock *)nullptr)->fpu_state) == 512,
+              "x86 FPU area must stay 512 (FXSAVE)");
+#else
+static_assert(sizeof(((TaskControlBlock *)nullptr)->fpu_state) ==
+                  arch::FPU_STATE_AREA_SIZE,
+              "FPU area must equal the arch save layout");
+#endif
+// Note: 64-byte alignment of fpu_state is enforced by its alignas(64)
+// member specifier (offsetof is unavailable: TCB is non-standard-layout).
 
 /// @brief Total snapshot bytes for the kernel-stack window state
 ///        (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping.
