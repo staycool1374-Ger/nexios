@@ -141,6 +141,10 @@ class ArchPageTable {
     static constexpr uint64_t L1_SHIFT = 21;
     static constexpr uint64_t L2_SHIFT = 12;
     static constexpr uint64_t TABLE_MASK = 0x1FF;
+    // User half: L0 indices 0-255 (VA < 256 GiB).  Block splits below
+    // apply to user-range leaves only; kernel-half blocks stay
+    // fail-closed (get_table refuses them as today).
+    static constexpr uint64_t USER_VA_LIMIT = 0x4000000000ULL;
     /// @brief Page-table descriptor: valid bit.
     static constexpr uint64_t DESC_VALID = 1ULL << 0;
     /// @brief Page-table descriptor: table pointer (points to next level).
@@ -179,6 +183,11 @@ class ArchPageTable {
     static uint64_t attr_from_flags(uint64_t flags);
     /// @brief Walk L0 table (bits 38:30) and return the L1 table pointer.
     static uint64_t *walk_l0(uint64_t l0_base, size_t l0_idx, bool create);
+    /// @brief Split a user-range L0 1 GiB block into an L1 table of 2 MiB
+    ///        leaves (issue #352).  Preserves the Sv39 flag bits + sets
+    ///        A|D; fences after the link store.
+    /// @return False on table-page OOM.
+    static bool split_l0_block(uint64_t *l0, size_t idx);
     /// @brief Walk L1 table (bits 29:21) and return the L2 table pointer.
     static uint64_t *walk_l1(uint64_t l1_base, size_t l1_idx, bool create);
     /// @brief Walk L2 table (bits 20:12) and return the page entry.
@@ -251,6 +260,26 @@ inline uint64_t *ArchPageTable::walk_l0(uint64_t l0_base, size_t l0_idx,
     return get_table(l0_base, l0_idx, create);
 }
 
+inline bool ArchPageTable::split_l0_block(uint64_t *l0, size_t idx) {
+    const uint64_t block = l0[idx];
+    const uint64_t base = ((block >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    // Audit S3 cure (issue #352): preserve the Sv39 flag bits AND the
+    // high reserved bits [63:54] (future PBMT/NAPOT/custom) — dropping
+    // them would silently lose extension state on the split leaves.
+    const uint64_t preserved =
+        block & (0x3FFULL | (0x3FFULL << 54));
+    uint64_t split_phys = kernel::PMM::alloc_page_table();
+    if (!split_phys)
+        return false;
+    auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + split_phys);
+    for (size_t i = 0; i < 512; ++i)
+        l1[i] = (((base + i * 0x200000ULL) >> 12) << 10) | preserved |
+                DESC_A | DESC_D;
+    l0[idx] = ((split_phys >> 12) << 10) | DESC_VALID;
+    asm volatile("sfence.vma" ::: "memory");
+    return true;
+}
+
 /// @brief Walk L1 (bits 29:21) to get or create the L2 table.
 /// @param l1_base Physical address of the L1 table.
 /// @param l1_idx  L1 index.
@@ -286,6 +315,14 @@ ArchPageTable::map_page(uint64_t virt, uint64_t phys, uint64_t flags) {
     // HHDM-aliased pointers; entries encode (PPN << 10), not raw phys.
     uint64_t l0_phys = current();
     uint64_t *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l0_phys);
+    // Issue #352: split a user-range L0 1 GiB block so deeper levels can
+    // be installed.  Kernel-half blocks stay fail-closed (walk_l0
+    // refuses them as before when this guard does not fire).
+    if (virt < USER_VA_LIMIT && (l0[l0_idx] & DESC_VALID) &&
+        (l0[l0_idx] & (DESC_R | DESC_W | DESC_X))) {
+        if (!split_l0_block(l0, l0_idx))
+            return kernel::Error::OOM;
+    }
     uint64_t *l1 = walk_l0(l0_phys, l0_idx, true);
     if (!l1)
         return kernel::Error::OOM;

@@ -4205,3 +4205,17 @@ SUMMARY: total=26 ok=25 fail=1
 2026-10-20 09:45:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 331ms STATUS: #352-2ci3-aarch64-S1fix2-gate
 2026-10-20 09:45:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 415ms STATUS: #352-2ci3-aarch64-S1fix2-gate
 2026-10-20 09:45:00 timing_core PASSED: 19 FAILED: 0 TIME: 976ms STATUS: #352-2ci3-aarch64-S1fix2-gate
+2026-10-20 09:55:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 332ms STATUS: #352-2cii-aarch64-gate
+2026-10-20 09:55:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 415ms STATUS: #352-2cii-aarch64-gate
+2026-10-20 09:55:00 timing_core PASSED: 19 FAILED: 0 TIME: 910ms STATUS: #352-2cii-aarch64-gate
+2026-10-20 09:55:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1050ms STATUS: #352-2cii-aarch64-gate
+2026-10-20 09:55:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 339ms STATUS: #352-2cii-riscv64-gate
+2026-10-20 09:55:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 456ms STATUS: #352-2cii-riscv64-gate
+2026-10-20 09:55:00 timing_core PASSED: 19 FAILED: 0 TIME: 981ms STATUS: #352-2cii-riscv64-gate
+2026-10-20 09:55:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 972ms STATUS: #352-2cii-riscv64-gate-known-5QE+#387
+2026-10-20 10:05:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 328ms STATUS: #352-s3c-aarch64-gate
+2026-10-20 10:05:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 414ms STATUS: #352-s3c-aarch64-gate
+2026-10-20 10:05:00 timing_core PASSED: 19 FAILED: 0 TIME: 927ms STATUS: #352-s3c-aarch64-gate
+2026-10-20 10:05:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 340ms STATUS: #352-s3c-riscv64-gate
+2026-10-20 10:05:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 447ms STATUS: #352-s3c-riscv64-gate
+2026-10-20 10:05:00 timing_core PASSED: 19 FAILED: 0 TIME: 958ms STATUS: #352-s3c-riscv64-gate
