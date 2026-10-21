@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **CLOSED (2026-10-21):** #304 post_code + checkpoints, APPROVED, hal_serial_logic 7/7 + QEMU proof both ISOs; commit cd1336e51 (closes). Next in debugd order: #305.
 - **CLOSED (2026-10-21):** #383 budget-fork flake fixed (in-task mask + BudgetHold), APPROVED, deadline 147/147 x4; commit 8179dbfec (closes); off-x86 panics stash-proven pre-existing, QE handoff posted.
 - **CLOSED (2026-10-21):** #387 fork + folded PLIC/HHDM fixed, APPROVED, arch_riscv64 30/30; commits a495e6157 + 21dba21dd (closes); QE handoff posted (two-flavour fixture, sv39 warn, aarch64 no-hardcode sweep).
 - **ACTIVE (2026-10-21):** #394 framebuffer backend completed, kernel track APPROVED, issue open for QE test work.
