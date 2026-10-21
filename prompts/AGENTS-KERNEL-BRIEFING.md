@@ -104,7 +104,7 @@ make execute-test x86 release selftest    # CI gate
 - `Terminal::write()` → `serial_putchar()` FIRST, THEN framebuffer rendering
 - STATUS_BAR_ROWS=2, `rows_ = (height / FONT_HEIGHT) - 2`
 - **Avoid pixel-by-pixel framebuffer loops in performance-critical paths**
-- Framebuffer gap contract (issue #357): `Framebuffer::backend_name()` is `"multiboot2"` on x86_64, `"none"` elsewhere; `available()==false` off-x86 with one WARN at boot (follow-up: #394 virtio-gpu/ramfb). Tests must branch on `available()` and assert the gap — never silently skip.
+- Framebuffer backend contract (issue #394, replaces the #357 gap): `Framebuffer::backend_name()` is runtime-selected — `"multiboot2"` on x86_64, else virtio-gpu → ramfb → `"none"`. `available()==false` + exactly one WARN only when no backend claims the init; 1280×800×32 PMM backing (boot-time, pre-baseline) with dirty-row `present()` flushes. Gap runs (`QEMU_FB_GPU= QEMU_FB_RAMFB=`) keep the #357 contract: tests branch on `available()` and assert the gap — never silently skip.
 
 ## 8. Task TCB (TaskControlBlock)
 - Fields: id, parent_id, state, priority, base_priority, period_ticks, deadline_ticks, remaining_ticks

@@ -218,6 +218,58 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   on both arches' QEMU flags so BAR parsing + MSI-X capability
   discovery exercise real config space; no in-tree PCI driver binds it.
 
+### 5.3 Framebuffer backends (issue #394)
+
+- Selection chain at `Framebuffer::init()` (BOOT_ONLY latched): virtio-gpu
+  → ramfb → documented gap. Success logs one INFO (`[FB] <backend>
+  <w>x<h>`) + `DRIVER+13`; total failure logs one WARN + `DRIVER+11`,
+  `available()` stays false, `backend_name()` stays `"none"` — never a
+  panic. `backend_name()` is runtime state (`"multiboot2"` x86_64,
+  `"virtio-gpu"` / `"ramfb"` / `"none"`); `version` prints it.
+- virtio-gpu: legacy-v1 virtio-mmio control queue (device id 16,
+  `virtio,mmio` + DeviceID-register filter — the DTB has no gpu node).
+  Command sequence per presentable frame: `GET_DISPLAY_INFO` (mode
+  validation against the 1280×800×32 bound) → `RESOURCE_CREATE_2D` (id
+  1, `B8G8R8X8_UNORM`) → `RESOURCE_ATTACH_BACKING` (page entries from
+  the PMM backing below) → `SET_SCANOUT` (output 0, full rect); per
+  dirty band: `TRANSFER_TO_HOST_2D` (rect + offset) + `RESOURCE_FLUSH`.
+  Single in-flight command, bounded poll with `arch::pause()`, used-ring
+  id match, `DRIVER_OK` after queue setup. No ISR is registered for the
+  device (polled by design); the lock is a plain `SpinLock` (never taken
+  in IRQ context).
+- Backing store: PMM-contiguous at boot (`backing_init`), HHDM-aliased
+  for CPU drawing, physical pages attached via `VMM::virt_to_phys_err`
+  (page-aligned staging only — `virt_to_phys_err` rejects sub-page
+  addresses). No VMM Device/UC remap exists or is needed (scanout is
+  guest RAM, not a BAR). A 4 MiB static BSS backing trips the riscv64
+  boot fail-stop (`kernel_phys_end < 0x80C00000` for the fixed
+  `.boot_stack_rv` + PMM metadata) — boot-time PMM is pre-baseline, so
+  the ResourceTracker delta stays zero (same discipline as virtio-blk
+  queue pages).
+- Dirty tracking: `put_pixel` narrows `[dirty_y0_, dirty_y1_)`; direct
+  `memcpy`/`memset` paths (Terminal clear/scroll) call `invalidate()`
+  first; `present()` transfers + flushes on newline/scroll/status-bar/
+  cursor/splash (no-ops for multiboot2/ramfb and when unavailable).
+- ramfb fallback: `fw_cfg` MMIO (`0x09020000` aarch64,
+  `0x10100000` riscv64 — per-machine DTB addresses, the riscv one inside
+  the UART 2 MB Device leaf) with big-endian selector/data/DMA. File
+  directory scan (≤128 files) finds `etc/ramfb`; the 28 B BE config
+  (phys + fourcc `0x34325258` + flags + w/h/stride) is DMA-written with
+  the file index in control[31:16] (SELECT bit set — a zero index would
+  target the read-only signature file and ERROR out). `present()` is a
+  no-op (host reads guest RAM directly).
+- Failure contract: GPU probe fails closed per step (best-effort
+  `RESOURCE_UNREF` after CREATE); ramfb fails closed per step (probe /
+  file / backing / DMA); only `fb=virtio-gpu` draws through the control
+  queue. QEMU flags: `-device virtio-gpu-device` + `-device ramfb`
+  appended after storage (slot/IRQ mapping preserved);
+  `QEMU_FB_GPU=` selects ramfb-only, `QEMU_FB_GPU= QEMU_FB_RAMFB=`
+  selects the gap path (`fb=none`, `available()==false`).
+- Real-hardware caveat: neither path does cache maintenance on the
+  scanout (x86_64/QEMU-virt are coherent). Non-coherent silicon would
+  need clean-before-present/invalidate-after over the backing range —
+  tracked with #307 (same residual as the DMA contract, §2.3).
+
 ## 6. Interrupt Layer (x86_64)
 
 ```

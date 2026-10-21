@@ -4376,3 +4376,7 @@ SUMMARY: total=24 ok=24 fail=0
 2026-10-21 13:13:18 logging_dmesg PASSED: 21 FAILED: 0 TIME: 20s STATUS: sliceB-aarch64
 2026-10-21 13:13:18 logging_dmesg PASSED: 21 FAILED: 0 TIME: 23s STATUS: sliceB-riscv64
 2026-10-21 13:13:18 ui PASSED: 74 FAILED: 0 TIME: 36s STATUS: sliceB-x86_64
+2026-10-21 13:47:08 selftest PASSED: 150 FAILED: 0 TIME: 26s STATUS: sliceC-aarch64
+2026-10-21 13:47:08 selftest PASSED: 65 FAILED: 0 TIME: 28s STATUS: sliceC-riscv64
+2026-10-21 13:47:08 configuration_build PASSED: 5 FAILED: 0 TIME: 20s STATUS: sliceC-aarch64
+2026-10-21 13:47:08 configuration_build PASSED: 5 FAILED: 0 TIME: 23s STATUS: sliceC-riscv64
