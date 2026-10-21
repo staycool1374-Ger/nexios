@@ -1,21 +1,15 @@
-diff --git a/src/kernel/memory/vmm_aarch64.cpp b/src/kernel/memory/vmm_aarch64.cpp
---- a/src/kernel/memory/vmm_aarch64.cpp
-+++ b/src/kernel/memory/vmm_aarch64.cpp
-@@ -117,9 +117,15 @@ uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
-     return leaf & ~(PAGE_UXN | PAGE_PXN);
- }
-
- bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
--    bool ro = (leaf & (PAGE_AP_USER | PAGE_AP_RO)) ==
--              (PAGE_AP_USER | PAGE_AP_RO);
-+    // Issue #376 boot-text W^X: AP[1] (PAGE_AP_RO) alone selects
-+    // read-only on ARMv8 (AP=10 is EL1-RO, AP=11 is EL1+EL0-RO).
-+    // Requiring AP_USER as well misreports EL1-only RO kernel leaves
-+    // (hardened text/rodata, AP=10) as writable, failing the
-+    // kernel_half_boot_wx_pins text/rodata asserts on aarch64 despite
-+    // correct hardware state. User RO leaves (AP=11) still read true;
-+    // user/kernel RW leaves (AP=00/01) still read false.
-+    bool ro = (leaf & PAGE_AP_RO) != 0;
-     if (executable_out != nullptr)
-         *executable_out = (leaf & PAGE_UXN) == 0;
-     return ro;
+diff --git a/tools/trim_dtb.py b/tools/trim_dtb.py
+--- a/tools/trim_dtb.py
++++ b/tools/trim_dtb.py
+@@ -20,7 +20,10 @@ def main() -> None:
+     if blob[:4] != b"\xd0\x0d\xfe\xed":
+         raise SystemExit("not a device-tree blob: %s" % src)
+     off_struct, off_strings = struct.unpack(">II", blob[8:16])
+-    size_struct, size_strings = struct.unpack(">II", blob[32:40])
++    # FDT header order (src/lib/fdt/fdt.h:30-31): size_dt_strings at +32,
++    # size_dt_struct at +36. Unpack names must match, else the trim point
++    # (off_strings + size_strings) lands on the wrong block end.
++    size_strings, size_struct = struct.unpack(">II", blob[32:40])
+     version = struct.unpack(">I", blob[20:24])[0]
+     if version < 16:
+         raise SystemExit("unsupported FDT version %d" % version)
