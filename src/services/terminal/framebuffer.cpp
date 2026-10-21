@@ -22,6 +22,7 @@
 #include <kernel/multiboot2.hpp>
 #else
 #include <kernel/driver/fb_backing.hpp>
+#include <kernel/driver/ramfb.hpp>
 #include <kernel/driver/virtio_gpu.hpp>
 #endif
 #include <kernel/build_info.hpp>
@@ -177,6 +178,35 @@ bool Framebuffer::init() {
         }
     }
     // Slice B inserts the ramfb probe here (before the gap fallthrough).
+    // ramfb reuses the same PMM backing contract (backing_init inside
+    // ramfb_probe); success looks identical to the GPU path above.
+    if (kernel::ramfb::ramfb_probe(w, h) && w != 0 && h != 0) {
+        uint64_t span = static_cast<uint64_t>(w) * h * 4;
+        if (span != 0 && span <= kernel::fb::backing_bytes() &&
+            kernel::fb::backing_ptr() != nullptr) {
+            info_.addr = reinterpret_cast<uint64_t>(
+                kernel::fb::backing_ptr());
+            info_.pitch = w * 4;
+            info_.width = w;
+            info_.height = h;
+            info_.bpp = 32;
+            backend_name_ = "ramfb";
+            backend_kind_ = kernel::gpu::FbBackend::Ramfb;
+            initialized_ = true;
+            init_result = true;
+            invalidate();
+            clear(0x000000);
+            kernel::Logger::info("[FB] ramfb %dx%d",
+                                 static_cast<uint64_t>(w),
+                                 static_cast<uint64_t>(h));
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::DRIVER,
+                kernel::log::kDmesgBase_DRIVER + 13,
+                kernel::log::LogSeverity::INFO,
+                "Framebuffer backend ready", 0);
+            return true;
+        }
+    }
     // Documented gap (issue #357, follow-up #394): no backend on this
     // arch — loud once, never silent, never a panic.
     if (!gap_logged) {

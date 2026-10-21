@@ -1,0 +1,599 @@
+diff --git a/Makefile b/Makefile
+index efbfe882a..094371a46 100644
+--- a/Makefile
++++ b/Makefile
+@@ -412,6 +412,10 @@ QEMU_PCI_TEST_DEV := -device virtio-rng-pci,disable-legacy=on
+ # land; delivery stays MMIO). Append-only after storage (slot/IRQ mapping
+ # preserved); `QEMU_FB_GPU=` disables the device for ramfb/gap runs.
+ QEMU_FB_GPU ?= -device virtio-gpu-device
++# Issue #394 Slice B: ramfb fallback (fw_cfg). Present even when the GPU
++# wins, so ramfb-only runs need only `QEMU_FB_GPU=`; `QEMU_FB_RAMFB=` runs
++# the gap path (backend "none").
++QEMU_FB_RAMFB ?= -device ramfb
+ 
+ # For aarch64, load kernel directly instead of via ISO/GRUB
+ ifeq ($(ARCH),aarch64)
+@@ -425,7 +429,7 @@ ifeq ($(ARCH),aarch64)
+ VIRT_DTB          := build/virt.dtb
+ VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
+ QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
+-                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
++                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) $(QEMU_FB_RAMFB) \
+                 -machine virt -cpu cortex-a72 -display none -no-reboot \
+                 -dtb $(VIRT_DTB) \
+                 -semihosting-config enable=on,target=native
+@@ -450,7 +454,7 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
+ 	$(OBJCOPY) -O binary $< $@
+ 
+ QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
+-                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
++                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) $(QEMU_FB_RAMFB) \
+                 -machine virt -bios default -display none -no-reboot
+ endif
+ 
+diff --git a/src/kernel/arch/riscv64/boot.S b/src/kernel/arch/riscv64/boot.S
+index 738bf3070..ff34fde68 100644
+--- a/src/kernel/arch/riscv64/boot.S
++++ b/src/kernel/arch/riscv64/boot.S
+@@ -134,6 +134,10 @@ _start:
+     slli t1, t1, 10
+     or t1, t1, t4
+     sd t1, 1024(t2)           /* 128 * 8 = 1024 */
++    /* NOTE (issue #394): riscv64 fw_cfg lives at 0x10100000 (DTB-proven
++     * `fw-cfg@10100000`), inside this UART 2MB Device leaf — no extra
++     * boot leaf needed (an earlier L2[72] leaf mapped the aarch64
++     * address 0x09000000, which faults on riscv; removed). */
+ 
+     /* L2_page[0] -> _boot_pt_l3_rtc (4 KiB Goldfish RTC page, issue #355).
+      * One 4 KiB leaf for PA 0x101000 — NOT a 2 MiB leaf: a 2 MiB leaf at
+diff --git a/src/kernel/driver/fw_cfg.cpp b/src/kernel/driver/fw_cfg.cpp
+new file mode 100644
+index 000000000..b0dc2dc10
+--- /dev/null
++++ b/src/kernel/driver/fw_cfg.cpp
+@@ -0,0 +1,213 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file fw_cfg.cpp
++/// @brief Minimal QEMU fw_cfg MMIO driver (issue #394 Slice B). Boot-time,
++/// polled, bounded: no interrupts, no allocation, no scheduler interaction.
++
++#include <kernel/driver/fw_cfg.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++#include <kernel/memory/vmm.hpp>
++#include <kernel/memory/vmm_errors.hpp>
++#include <lib/atomic.hpp>
++#include <string.hpp>
++
++namespace kernel::fwcfg {
++
++namespace {
++
++// --- Register access (volatile, exact widths) ---
++
++inline volatile uint8_t *data_reg() {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    return reinterpret_cast<volatile uint8_t *>(arch::fw_cfg_virt() +
++                                                arch::FW_CFG_DATA);
++}
++
++inline volatile uint16_t *selector_reg() {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    return reinterpret_cast<volatile uint16_t *>(arch::fw_cfg_virt() +
++                                                 arch::FW_CFG_SELECTOR);
++}
++
++inline volatile uint64_t *dma_reg() {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    return reinterpret_cast<volatile uint64_t *>(arch::fw_cfg_virt() +
++                                                 arch::FW_CFG_DMA);
++}
++
++inline void select(uint16_t selector) {
++    *selector_reg() = arch::fw_cfg_be16(selector);
++    kernel::atomic_fence();
++}
++
++inline uint8_t read_byte() {
++    uint8_t v = *data_reg();
++    kernel::atomic_fence();
++    return v;
++}
++
++inline void read_bytes(void *dst, uint32_t len) {
++    auto *out = static_cast<uint8_t *>(dst);
++    for (uint32_t i = 0; i < len; ++i) {
++        out[i] = read_byte();
++    }
++}
++
++inline uint32_t read_be32() {
++    uint32_t v = 0;
++    uint8_t *p = reinterpret_cast<uint8_t *>(&v);
++    for (uint32_t i = 0; i < 4; ++i) {
++        p[i] = read_byte();
++    }
++    uint32_t host = 0;
++    __builtin_memcpy(&host, p, sizeof(host));
++    // Bytes arrived big-endian; host is little-endian.
++    return __builtin_bswap32(host);
++}
++
++// --- fw_cfg DMA (spec: 16-byte aligned Access struct, BE fields) ---
++//
++// One page holds the Access struct (+0) and the payload staging area
++// (+64).  Staging is required: VMM::virt_to_phys_err only translates
++// page-aligned addresses, but DMA payloads (e.g. a stack ramfb config)
++// are arbitrarily aligned — the physical address is base + offset,
++// computed manually, never translated per-byte.
++
++struct FwCfgDmaAccess {
++    uint32_t control;
++    uint32_t length;
++    uint64_t address;
++} __attribute__((packed, aligned(16)));
++static_assert(sizeof(FwCfgDmaAccess) == 16, "fw_cfg DMA access is 16 B");
++
++alignas(4096) uint8_t g_dma_page[4096] = {};
++constexpr uint32_t kDmaPayloadOff = 64;
++
++/// @brief Physical address helper (fail-closed 0).
++uint64_t phys_of(const void *p) {
++    if (!p)
++        return 0;
++    uint64_t phys = 0;
++    if (VMM::virt_to_phys_err(reinterpret_cast<uint64_t>(p), phys) !=
++        errors::VMM_ERR_OK) {
++        return 0;
++    }
++    return phys;
++}
++
++} // namespace
++
++bool fw_cfg_probe() {
++    if (arch::fw_cfg_virt() == 0)
++        return false;
++    select(arch::FW_CFG_SIG);
++    char sig[5] = {};
++    read_bytes(sig, 4);
++    // "QEMU" — exact order (audit trap: transposed magic passes review,
++    // fails only live).
++    return sig[0] == 'Q' && sig[1] == 'E' && sig[2] == 'M' &&
++           sig[3] == 'U';
++}
++
++bool fw_cfg_find_file(const char *name, uint16_t &selector) {
++    selector = 0;
++    if (!name || !*name)
++        return false;
++    size_t want = 0;
++    while (want < 56 && name[want] != '\0') {
++        ++want;
++    }
++    if (want == 0 || want >= 56 || name[want] != '\0')
++        return false;
++    select(arch::FW_CFG_FILE_DIR);
++    uint32_t count = read_be32();
++    if (count == 0 || count > arch::FW_CFG_MAX_DIR_FILES)
++        return false;
++    // Bounded directory scan: count * 64 B, static scratch (8 KiB).
++    struct DirEntry {
++        uint32_t size;
++        uint16_t select;
++        uint16_t reserved;
++        char filename[56];
++    } __attribute__((packed));
++    static_assert(sizeof(DirEntry) == 64, "fw_cfg dir entry is 64 B");
++    alignas(8) static uint8_t dir_buf[128 * 64] = {};
++    read_bytes(dir_buf, count * sizeof(DirEntry));
++    for (uint32_t i = 0; i < count; ++i) {
++        DirEntry e{};
++        __builtin_memcpy(&e, dir_buf + i * sizeof(e), sizeof(e));
++        if (__builtin_bswap16(e.select) == 0)
++            continue; // unused slot
++        size_t j = 0;
++        while (j < want && e.filename[j] == name[j]) {
++            ++j;
++        }
++        if (j == want && e.filename[j] == '\0') {
++            selector = __builtin_bswap16(e.select);
++            return true;
++        }
++    }
++    return false;
++}
++
++bool fw_cfg_dma_write(uint16_t selector, const void *src, uint32_t len) {
++    if (selector == 0 || !src || len == 0 || len > sizeof(g_dma_page) - kDmaPayloadOff)
++        return false;
++    uint64_t page_phys = phys_of(g_dma_page);
++    if (!page_phys)
++        return false;
++    memcpy(g_dma_page + kDmaPayloadOff, src, len);
++    auto *acc = reinterpret_cast<FwCfgDmaAccess *>(g_dma_page);
++    // Control bit 3 (SELECT) takes the file index from the UPPER 16 bits
++    // — the selector-register write above is NOT enough (spec: SELECT
++    // overrides it with control[31:16]). A zero index targets file 0
++    // ("QEMU", 4 B, read-only) and the 28 B write is rejected with ERROR.
++    acc->control = arch::fw_cfg_be32(arch::FW_CFG_DMA_SELECT |
++                                     arch::FW_CFG_DMA_WRITE |
++                                     (static_cast<uint32_t>(selector) << 16));
++    acc->length = arch::fw_cfg_be32(len);
++    acc->address = arch::fw_cfg_be64(page_phys + kDmaPayloadOff);
++    kernel::atomic_fence();
++    select(selector);
++    *dma_reg() = arch::fw_cfg_be64(page_phys);
++    kernel::atomic_fence();
++    int timeout = arch::FW_CFG_DMA_TIMEOUT_ITERS;
++    uint32_t ctrl = 0;
++    // Volatile read: the device writes control asynchronously — a plain
++    // load could be hoisted out of the loop by the compiler.
++    volatile uint32_t *ctrl_reg =
++        reinterpret_cast<volatile uint32_t *>(&acc->control);
++    do {
++        ctrl = __builtin_bswap32(*ctrl_reg);
++        kernel::atomic_fence();
++        --timeout;
++        // Fast-fail on device ERROR (a set ERROR bit never clears to 0 —
++        // without this the loop always runs to timeout on rejection).
++    } while (ctrl != 0 && (ctrl & arch::FW_CFG_DMA_ERROR) == 0 &&
++             timeout > 0);
++    if (timeout <= 0)
++        return false;
++    return (ctrl & arch::FW_CFG_DMA_ERROR) == 0;
++}
++
++} // namespace kernel::fwcfg
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/driver/fw_cfg.hpp b/src/kernel/driver/fw_cfg.hpp
+new file mode 100644
+index 000000000..006967b51
+--- /dev/null
++++ b/src/kernel/driver/fw_cfg.hpp
+@@ -0,0 +1,103 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file fw_cfg.hpp
++/// @brief Minimal QEMU fw_cfg MMIO driver (issue #394 Slice B). Register
++/// file only: no interrupts, no allocation, bounded polls. Wire order is
++/// big-endian throughout (selector, DMA control/length/address, file
++/// payloads); the helpers byte-swap from host order explicitly.
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++#include <kernel/memory/address.hpp>
++
++namespace arch {
++
++// QEMU virt fw_cfg MMIO base: per-arch (DTB-proven — the aarch64 and
++// riscv64 virt machines place it differently).
++// aarch64 `virt`: fw-cfg@9020000. riscv64 `virt`: fw-cfg@10100000,
++// inside the UART's 2MB Device leaf (no extra boot leaf needed).
++#if defined(CONFIG_ARCH_AARCH64)
++inline constexpr uint64_t FW_CFG_MMIO_BASE = 0x09020000ULL;
++#else
++inline constexpr uint64_t FW_CFG_MMIO_BASE = 0x10100000ULL;
++#endif
++// Register offsets (MMIO layout).
++inline constexpr uint64_t FW_CFG_DATA = 0x00;     // u8 PIO data (advances)
++inline constexpr uint64_t FW_CFG_SELECTOR = 0x08; // u16 BE file selector
++inline constexpr uint64_t FW_CFG_DMA = 0x10;      // u64 BE DMA address
++// Well-known selectors.
++inline constexpr uint16_t FW_CFG_SIG = 0x0000;      // "QEMU" (4 bytes)
++inline constexpr uint16_t FW_CFG_FILE_DIR = 0x0019; // file directory
++// DMA control bits.
++inline constexpr uint32_t FW_CFG_DMA_ERROR = 1U << 0;
++inline constexpr uint32_t FW_CFG_DMA_SELECT = 1U << 3;
++inline constexpr uint32_t FW_CFG_DMA_WRITE = 1U << 4;
++// Bounds.
++inline constexpr uint32_t FW_CFG_MAX_DIR_FILES = 128;
++inline constexpr int FW_CFG_DMA_TIMEOUT_ITERS = 1000000;
++
++/// @brief fw_cfg MMIO virtual base (HHDM alias / identity, same convention
++/// as virtio_mmio_virt()).
++inline uint64_t fw_cfg_virt() {
++#if defined(CONFIG_ARCH_AARCH64)
++    return kernel::HHDM_OFFSET + FW_CFG_MMIO_BASE;
++#elif defined(CONFIG_ARCH_RISCV64)
++    return FW_CFG_MMIO_BASE; // identity L0[0] window covers MMIO
++#else
++    return 0;
++#endif
++}
++
++/// @brief Byte-swap helpers to big-endian wire order (constexpr-safe).
++inline constexpr uint16_t fw_cfg_be16(uint16_t v) {
++    return static_cast<uint16_t>(((v & 0xFFU) << 8) | ((v >> 8) & 0xFFU));
++}
++inline constexpr uint32_t fw_cfg_be32(uint32_t v) {
++    return __builtin_bswap32(v);
++}
++inline constexpr uint64_t fw_cfg_be64(uint64_t v) {
++    return __builtin_bswap64(v);
++}
++
++} // namespace arch
++
++namespace kernel::fwcfg {
++
++/// @brief Probe for QEMU fw_cfg ("QEMU" signature read-back).
++/// @return true when the device answers.
++bool fw_cfg_probe();
++
++/// @brief Find a file in the fw_cfg directory by exact name.
++/// @param name NUL-terminated file name (matched exactly, bounded).
++/// @param selector Receives the file selector on success.
++/// @return true on success.
++bool fw_cfg_find_file(const char *name, uint16_t &selector);
++
++/// @brief DMA-write @p len bytes from @p src into file @p selector.
++/// @return true on completion without the ERROR bit.
++bool fw_cfg_dma_write(uint16_t selector, const void *src, uint32_t len);
++
++} // namespace kernel::fwcfg
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/driver/ramfb.cpp b/src/kernel/driver/ramfb.cpp
+new file mode 100644
+index 000000000..efa5566a5
+--- /dev/null
++++ b/src/kernel/driver/ramfb.cpp
+@@ -0,0 +1,71 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file ramfb.cpp
++/// @brief QEMU ramfb fallback backend (issue #394 Slice B).
++
++#include <kernel/driver/ramfb.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++#include <kernel/driver/fb_backing.hpp>
++#include <kernel/driver/fw_cfg.hpp>
++#include <logger.hpp>
++
++namespace kernel::ramfb {
++
++bool ramfb_probe(uint32_t &w, uint32_t &h) {
++    w = 0;
++    h = 0;
++    if (!fwcfg::fw_cfg_probe()) {
++        return false;
++    }
++    uint16_t selector = 0;
++    if (!fwcfg::fw_cfg_find_file("etc/ramfb", selector)) {
++        return false;
++    }
++    // The GPU path runs first and releases (or never claims) the backing
++    // on failure, so ramfb claims it here. backing_init is idempotent —
++    // a leftover init is reused, never double-allocated.
++    if (!kernel::fb::backing_init(kernel::fb::FB_MAX_WIDTH,
++                                  kernel::fb::FB_MAX_HEIGHT)) {
++        return false;
++    }
++    uint64_t phys = 0;
++    if (!kernel::fb::backing_phys(0, phys) || phys == 0) {
++        return false;
++    }
++    uint32_t width = kernel::fb::FB_MAX_WIDTH;
++    uint32_t height = kernel::fb::FB_MAX_HEIGHT;
++    uint64_t span = static_cast<uint64_t>(width) * height * 4;
++    if (span > kernel::fb::backing_bytes()) {
++        return false;
++    }
++    RamfbConfig cfg = make_ramfb_config(phys, width, height);
++    if (!fwcfg::fw_cfg_dma_write(selector, &cfg, sizeof(cfg))) {
++        Logger::error("ramfb: etc/ramfb write failed");
++        return false;
++    }
++    w = width;
++    h = height;
++    return true;
++}
++
++} // namespace kernel::ramfb
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/driver/ramfb.hpp b/src/kernel/driver/ramfb.hpp
+new file mode 100644
+index 000000000..3eadf9a09
+--- /dev/null
++++ b/src/kernel/driver/ramfb.hpp
+@@ -0,0 +1,73 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file ramfb.hpp
++/// @brief QEMU ramfb fallback backend (issue #394 Slice B). `etc/ramfb`
++/// config written via fw_cfg DMA; points the host scanout at the same
++/// PMM backing the virtio-gpu path uses. Present is a no-op (the host
++/// reads guest RAM directly).
++
++#include <types.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++namespace kernel::ramfb {
++
++// DRM XRGB8888 fourcc ("XR24").
++inline constexpr uint32_t RAMFB_FOURCC_XRGB8888 = 0x34325258;
++
++/// @brief `etc/ramfb` config (28 B, big-endian wire order).
++struct RamfbConfig {
++    uint64_t addr_be;
++    uint32_t fourcc_be;
++    uint32_t flags_be;
++    uint32_t width_be;
++    uint32_t height_be;
++    uint32_t stride_be;
++} __attribute__((packed));
++static_assert(sizeof(RamfbConfig) == 28, "ramfb config is 28 B");
++
++/// @brief Encode an `etc/ramfb` config (pure, QE-testable).
++/// Wire order is big-endian; the swaps below run at compile time.
++/// @param phys Guest-physical backing address (page-aligned, validated).
++/// @param width Width in pixels; @param height Height in pixels (validated: fit in u32
++/// when multiplied by 4 — the caller upholds the FB_MAX bound).
++/// @return Big-endian wire encoding.
++constexpr RamfbConfig make_ramfb_config(uint64_t phys, uint32_t width,
++                                        uint32_t height) {
++    RamfbConfig cfg{};
++    cfg.addr_be = __builtin_bswap64(phys);
++    cfg.fourcc_be = __builtin_bswap32(RAMFB_FOURCC_XRGB8888);
++    cfg.flags_be = 0;
++    cfg.width_be = __builtin_bswap32(width);
++    cfg.height_be = __builtin_bswap32(height);
++    cfg.stride_be = __builtin_bswap32(width * 4);
++    return cfg;
++}
++
++/// @brief Probe ramfb: fw_cfg → `etc/ramfb` → point at the fb backing.
++/// @param w Receives the width on success.
++/// @param h Receives the height on success.
++/// @return true when ramfb accepted the config.
++bool ramfb_probe(uint32_t &w, uint32_t &h);
++
++} // namespace kernel::ramfb
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/services/terminal/framebuffer.cpp b/src/services/terminal/framebuffer.cpp
+index aa6a6490e..a57191e74 100644
+--- a/src/services/terminal/framebuffer.cpp
++++ b/src/services/terminal/framebuffer.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/multiboot2.hpp>
+ #else
+ #include <kernel/driver/fb_backing.hpp>
++#include <kernel/driver/ramfb.hpp>
+ #include <kernel/driver/virtio_gpu.hpp>
+ #endif
+ #include <kernel/build_info.hpp>
+@@ -177,6 +178,35 @@ bool Framebuffer::init() {
+         }
+     }
+     // Slice B inserts the ramfb probe here (before the gap fallthrough).
++    // ramfb reuses the same PMM backing contract (backing_init inside
++    // ramfb_probe); success looks identical to the GPU path above.
++    if (kernel::ramfb::ramfb_probe(w, h) && w != 0 && h != 0) {
++        uint64_t span = static_cast<uint64_t>(w) * h * 4;
++        if (span != 0 && span <= kernel::fb::backing_bytes() &&
++            kernel::fb::backing_ptr() != nullptr) {
++            info_.addr = reinterpret_cast<uint64_t>(
++                kernel::fb::backing_ptr());
++            info_.pitch = w * 4;
++            info_.width = w;
++            info_.height = h;
++            info_.bpp = 32;
++            backend_name_ = "ramfb";
++            backend_kind_ = kernel::gpu::FbBackend::Ramfb;
++            initialized_ = true;
++            init_result = true;
++            invalidate();
++            clear(0x000000);
++            kernel::Logger::info("[FB] ramfb %dx%d",
++                                 static_cast<uint64_t>(w),
++                                 static_cast<uint64_t>(h));
++            kernel::log::dmesg_push_sev(
++                kernel::log::ErrorSubsystem::DRIVER,
++                kernel::log::kDmesgBase_DRIVER + 13,
++                kernel::log::LogSeverity::INFO,
++                "Framebuffer backend ready", 0);
++            return true;
++        }
++    }
+     // Documented gap (issue #357, follow-up #394): no backend on this
+     // arch — loud once, never silent, never a panic.
+     if (!gap_logged) {
+diff --git a/test-history.txt b/test-history.txt
+index b3debc34b..7648bef25 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4365,3 +4365,14 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 14s STATUS: sliceA-aarch64
+ 2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 17s STATUS: sliceA-riscv64
+ 2026-10-21 11:55:12 ui PASSED: 53 FAILED: 1 TIME: 22s STATUS: sliceA-aarch64-postS3-known-cpuinfo
++2026-10-21 13:13:18 ui PASSED: 53 FAILED: 1 TIME: 23s STATUS: sliceB-aarch64-ramfb-known-cpuinfo
++2026-10-21 13:13:18 ui PASSED: 53 FAILED: 1 TIME: 25s STATUS: sliceB-riscv64-ramfb-known-cpuinfo
++2026-10-21 13:13:18 ui PASSED: 20 FAILED: 34 TIME: 21s STATUS: sliceB-aarch64-gap-baseline-identical
++2026-10-21 13:13:18 ui PASSED: 20 FAILED: 34 TIME: 24s STATUS: sliceB-riscv64-gap-baseline-identical
++2026-10-21 13:13:18 drivers PASSED: 57 FAILED: 1 TIME: 22s STATUS: sliceB-aarch64-known-#391
++2026-10-21 13:13:18 drivers PASSED: 57 FAILED: 1 TIME: 25s STATUS: sliceB-riscv64-known-#391
++2026-10-21 13:13:18 storage PASSED: 166 FAILED: 1 TIME: 40s STATUS: sliceB-aarch64-known-#392
++2026-10-21 13:13:18 storage PASSED: 166 FAILED: 1 TIME: 42s STATUS: sliceB-riscv64-known-#392
++2026-10-21 13:13:18 logging_dmesg PASSED: 21 FAILED: 0 TIME: 20s STATUS: sliceB-aarch64
++2026-10-21 13:13:18 logging_dmesg PASSED: 21 FAILED: 0 TIME: 23s STATUS: sliceB-riscv64
++2026-10-21 13:13:18 ui PASSED: 74 FAILED: 0 TIME: 36s STATUS: sliceB-x86_64

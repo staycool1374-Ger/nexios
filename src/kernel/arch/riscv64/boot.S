@@ -134,6 +134,10 @@ _start:
     slli t1, t1, 10
     or t1, t1, t4
     sd t1, 1024(t2)           /* 128 * 8 = 1024 */
+    /* NOTE (issue #394): riscv64 fw_cfg lives at 0x10100000 (DTB-proven
+     * `fw-cfg@10100000`), inside this UART 2MB Device leaf — no extra
+     * boot leaf needed (an earlier L2[72] leaf mapped the aarch64
+     * address 0x09000000, which faults on riscv; removed). */
 
     /* L2_page[0] -> _boot_pt_l3_rtc (4 KiB Goldfish RTC page, issue #355).
      * One 4 KiB leaf for PA 0x101000 — NOT a 2 MiB leaf: a 2 MiB leaf at

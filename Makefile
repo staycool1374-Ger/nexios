@@ -412,6 +412,10 @@ QEMU_PCI_TEST_DEV := -device virtio-rng-pci,disable-legacy=on
 # land; delivery stays MMIO). Append-only after storage (slot/IRQ mapping
 # preserved); `QEMU_FB_GPU=` disables the device for ramfb/gap runs.
 QEMU_FB_GPU ?= -device virtio-gpu-device
+# Issue #394 Slice B: ramfb fallback (fw_cfg). Present even when the GPU
+# wins, so ramfb-only runs need only `QEMU_FB_GPU=`; `QEMU_FB_RAMFB=` runs
+# the gap path (backend "none").
+QEMU_FB_RAMFB ?= -device ramfb
 
 # For aarch64, load kernel directly instead of via ISO/GRUB
 ifeq ($(ARCH),aarch64)
@@ -425,7 +429,7 @@ ifeq ($(ARCH),aarch64)
 VIRT_DTB          := build/virt.dtb
 VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
 QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
-                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
+                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) $(QEMU_FB_RAMFB) \
                 -machine virt -cpu cortex-a72 -display none -no-reboot \
                 -dtb $(VIRT_DTB) \
                 -semihosting-config enable=on,target=native
@@ -450,7 +454,7 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
 	$(OBJCOPY) -O binary $< $@
 
 QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
-                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
+                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) $(QEMU_FB_RAMFB) \
                 -machine virt -bios default -display none -no-reboot
 endif
 

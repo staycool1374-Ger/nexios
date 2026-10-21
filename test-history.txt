@@ -4365,3 +4365,14 @@ SUMMARY: total=24 ok=24 fail=0
 2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 14s STATUS: sliceA-aarch64
 2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 17s STATUS: sliceA-riscv64
 2026-10-21 11:55:12 ui PASSED: 53 FAILED: 1 TIME: 22s STATUS: sliceA-aarch64-postS3-known-cpuinfo
+2026-10-21 13:13:18 ui PASSED: 53 FAILED: 1 TIME: 23s STATUS: sliceB-aarch64-ramfb-known-cpuinfo
+2026-10-21 13:13:18 ui PASSED: 53 FAILED: 1 TIME: 25s STATUS: sliceB-riscv64-ramfb-known-cpuinfo
+2026-10-21 13:13:18 ui PASSED: 20 FAILED: 34 TIME: 21s STATUS: sliceB-aarch64-gap-baseline-identical
+2026-10-21 13:13:18 ui PASSED: 20 FAILED: 34 TIME: 24s STATUS: sliceB-riscv64-gap-baseline-identical
+2026-10-21 13:13:18 drivers PASSED: 57 FAILED: 1 TIME: 22s STATUS: sliceB-aarch64-known-#391
+2026-10-21 13:13:18 drivers PASSED: 57 FAILED: 1 TIME: 25s STATUS: sliceB-riscv64-known-#391
+2026-10-21 13:13:18 storage PASSED: 166 FAILED: 1 TIME: 40s STATUS: sliceB-aarch64-known-#392
+2026-10-21 13:13:18 storage PASSED: 166 FAILED: 1 TIME: 42s STATUS: sliceB-riscv64-known-#392
+2026-10-21 13:13:18 logging_dmesg PASSED: 21 FAILED: 0 TIME: 20s STATUS: sliceB-aarch64
+2026-10-21 13:13:18 logging_dmesg PASSED: 21 FAILED: 0 TIME: 23s STATUS: sliceB-riscv64
+2026-10-21 13:13:18 ui PASSED: 74 FAILED: 0 TIME: 36s STATUS: sliceB-x86_64
