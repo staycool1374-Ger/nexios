@@ -4395,3 +4395,19 @@ SUMMARY: total=24 ok=24 fail=0
 2026-10-21 15:40:55 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1029ms
 2026-10-21 15:47:19 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 903ms STATUS: post-S3-cure
 2026-10-21 15:48:21 arch_riscv64 PASSED: 30 FAILED: 0 TIME: 940ms STATUS: post-S3-cure
+2026-10-21 17:14:21 deadline PASSED: 146 FAILED: 1 TIME: measured STATUS: hunt-383-r1-mode2-line356
+2026-10-21 17:15:06 deadline PASSED: 147 FAILED: 0 TIME: 31156ms STATUS: hunt-383-r2-green
+2026-10-21 17:15:52 deadline PASSED: 146 FAILED: 1 TIME: measured STATUS: hunt-383-r3-FAIL
+2026-10-21 17:18:13 sched_admission PASSED: 10 FAILED: 0 TIME: 702ms
+2026-10-21 17:21:05 deadline PASSED: 147 FAILED: 0 TIME: 30905ms STATUS: fix-383-r1-loaded
+2026-10-21 17:21:50 deadline PASSED: 147 FAILED: 0 TIME: 30862ms STATUS: fix-383-r2-loaded
+2026-10-21 17:22:37 deadline PASSED: 147 FAILED: 0 TIME: 34471ms STATUS: fix-383-r3-loaded
+2026-10-21 17:23:38 deadline PASSED: 147 FAILED: 0 TIME: 34410ms STATUS: fix-383-unloaded
+2026-10-21 17:26:03 sched_admission PASSED: 10 FAILED: 0 TIME: 701ms STATUS: fix-383-loaded
+2026-10-21 17:26:22 sched_admission PASSED: 10 FAILED: 0 TIME: 706ms STATUS: fix-383-loaded
+2026-10-21 17:26:41 sched_admission PASSED: 10 FAILED: 0 TIME: 713ms STATUS: fix-383-loaded
+2026-10-21 17:28:10 deadline PASSED: 0 FAILED: 0 TIME: 1ms STATUS: release-subset-empty-compile-ok
+2026-10-21 17:28:54 selftest PASSED: 148 FAILED: 0 TIME: 11896ms
+2026-10-21 17:34:53 sched_admission PASSED: 0 FAILED: 0 TIME: 0ms STATUS: aarch64-EL1-sync-fault-PREEXISTING-stash-proven
+2026-10-21 17:49:16 sched_admission PASSED: 0 FAILED: 0 TIME: 0ms STATUS: riscv64-unhandled-exc-PREEXISTING-stash-proven
+2026-10-21 17:53:36 sched_admission PASSED: 10 FAILED: 0 TIME: 708ms STATUS: post-S3-cleanup
