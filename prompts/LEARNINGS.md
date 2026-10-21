@@ -1436,3 +1436,8 @@
 - **Learned:** (1) POST the work-begun retrieval comment BEFORE implementing — iter-1 REJECT was procedural check-7 with zero code findings; the comment is part of the deliverable, not ceremony. (2) `mb2_find_tag` bounds the walk but NOT the found tag's own size — consumers must clamp by info-remaining. (3) PMM sizes to `max(base+size)` over BootInfo regions — per-entry overflow rejection is load-bearing, not hygiene. (4) `init` is not a class name (`task_init` is) — check test_registry.cpp:718 mapping before running. Rebuild-after-arch-switch can trip the 120s stall guard — not a guest hang.
 - **Adapted:** pure `mb2_mmap_validated_count` (QE-unit-testable); gs getter satisfies the global_state_api style gate (raw `multiboot_info_ptr` is E2).
 - **Style re-face:** retrieval comment first, always.
+
+### #306 — aarch64/riscv64 dump_cpu_regs captures (CLOSED 2026-10-21, SIL3 APPROVED)
+- **Learned:** (1) Single-asm stack-save capture is mandatory for GPR dumps — multi-block `mov` output regs can clobber unread GPRs. (2) pkv2 unused-function -Werror on riscv: all de-guarded helpers must be consumed by every arm. (3) `exc_table` is x86-only (weak 0-test stub off-x86) — never cite it as off-arch evidence. (4) Release selftest 0/0 on aa64/rv64 proves link+boot only — label rows link-boot, not coverage. (5) `spsr 0x60000345` (EL1h) in the wild confirms sane capture.
+- **Adapted:** stp/sd stack-save shapes; IrqGuard-before-CSR discipline; serial-expect markers (x0/elr/spsr/far/ttbr; x1/x31/sp/sepc/stval/satp).
+- **Style re-face:** de-guarded helpers need all-arm consumers; array symmetry may leave a documented dead slot (auditor S3, harmless).
