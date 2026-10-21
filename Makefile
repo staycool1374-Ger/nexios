@@ -406,10 +406,30 @@ QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
 
 # For aarch64, load kernel directly instead of via ISO/GRUB
 ifeq ($(ARCH),aarch64)
+# Issue #354 (Q3): QEMU -kernel passes no DTB in x0 — feed QEMU's own virt
+# DTB explicitly so boot_info().dtb_ptr is live (riscv64 gets it via OpenSBI).
+# build/virt.dtb is QEMU-generated (dumpdtb rule below), never hand-written.
+# The trimmed blob is embedded into the image (virt_dtb.S) and used by boot.S
+# only when x0==0; a real bootloader DTB always wins. Dumped with the same
+# -m as runs, but the kernel ignores the embedded memory node by design
+# (dump-time -m goes stale; RAM sizing stays on the fallback).
+VIRT_DTB          := build/virt.dtb
+VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
 QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
                 $(QEMU_STORAGE_MMIO) \
                 -machine virt -cpu cortex-a72 -display none -no-reboot \
+                -dtb $(VIRT_DTB) \
                 -semihosting-config enable=on,target=native
+
+$(VIRT_DTB):
+	qemu-system-aarch64 -machine virt,dumpdtb=$(VIRT_DTB) -cpu cortex-a72 -m 256M
+
+$(VIRT_DTB_TRIMMED): $(VIRT_DTB)
+	python3 tools/trim_dtb.py $(VIRT_DTB) $(VIRT_DTB_TRIMMED)
+
+# Rebuild the embed object when the trimmed blob changes (the generic .S
+# rule has no header-dep on it).
+build/kernel/arch/aarch64/virt_dtb.o: $(VIRT_DTB_TRIMMED)
 endif
 
 # For riscv64, QEMU 11+ has a fw_dynamic bug where ELF entry point is not

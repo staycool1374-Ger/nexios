@@ -5,6 +5,16 @@
 _start:
     // Save DTB address (x0 from bootloader) in x20
     mov     x20, x0
+    // Issue #354 (Q3): QEMU -kernel is a generic ELF, so no DTB arrives in
+    // x0 — fall back to the embedded virt DTB (virt_dtb.S). A bootloader
+    // DTB in x0 always wins (cbnz skips). Pre-MMU: pass the PHYSICAL address
+    // (link VA minus the HHDM slide); dtb_from_boot_info() re-adds HHDM.
+    cbnz    x0, 9f
+    ldr     x1, =_binary_virt_dtb_start
+    ldr     x2, =0xFFFF800000000000
+    sub     x1, x1, x2
+    mov     x20, x1
+9:
 
     // Drop to EL1 from whichever EL we boot at
     mrs     x0, CurrentEl

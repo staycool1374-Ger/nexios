@@ -919,6 +919,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::gs::boot_info() = BootInfo();
     [[maybe_unused]] kernel::gs::WriteContext ctx{
         kernel::gs::StatePhase::BOOT, 0};
+    // Issue #354 (Q3): true when the DTB came from the bootloader/firmware
+    // (aarch64 x0, riscv64 OpenSBI a1). The aarch64 embedded fallback DTB
+    // (boot.S, x0 == 0) is device-discovery-only: its memory node is ignored
+    // by design (dump-time -m goes stale), RAM sizing stays on the fallback.
+    [[maybe_unused]] bool dtb_from_bootloader = false;
 
 #if defined(CONFIG_ARCH_X86_64)
     kernel::gs::try_set_multiboot(magic, mb_info, ctx);
@@ -940,11 +945,32 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #elif defined(CONFIG_ARCH_AARCH64)
     g_dtb_ptr = reinterpret_cast<void *>(magic);
     kernel::gs::boot_info().dtb_ptr = magic;
+    // The boot.S fallback (x0 == 0) substitutes the embedded DTB's PHYSICAL
+    // address, which is nonzero — (magic != 0) alone cannot discriminate and
+    // is identically true on this arch. Compare against the embedded blob's
+    // phys range (link VA minus the HHDM slide, mirroring boot.S) so the
+    // embedded memory node stays device-discovery-only by design. Plain
+    // extern (no linkage-spec: nested extern "C" is ill-formed); the
+    // declarations inherit C linkage from higherhalf_entry's extern "C",
+    // same as the kernel_stack_top precedent above.
+    extern const uint8_t _binary_virt_dtb_start[];
+    extern const uint8_t _binary_virt_dtb_end[];
+    {
+        const uint64_t emb_start =
+            reinterpret_cast<uint64_t>(&_binary_virt_dtb_start) -
+            arch::HHDM_OFFSET;
+        const uint64_t emb_end =
+            reinterpret_cast<uint64_t>(&_binary_virt_dtb_end) -
+            arch::HHDM_OFFSET;
+        dtb_from_bootloader =
+            (magic != 0) && (magic < emb_start || magic >= emb_end);
+    }
     (void)mb_info;
     arch::fp_enable();
 #elif defined(CONFIG_ARCH_RISCV64)
     kernel::gs::boot_info().hart_id = static_cast<int>(magic);
     kernel::gs::boot_info().dtb_ptr = mb_info;
+    dtb_from_bootloader = (mb_info != 0);
     arch::fp_enable();
 
 #endif
@@ -1112,12 +1138,15 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
         void *dtb = reinterpret_cast<void *>(dtb_phys);
         if (dtb && fdt_check_header(dtb) == 0) {
+            // Issue #354 (Q3): the memory node is honored only for a
+            // bootloader/firmware DTB. The embedded fallback's memory node
+            // reflects the dump-time -m and must never size RAM.
             int offset = fdt_node_offset_by_prop_value(dtb, -1, "device_type",
                                                        "memory", 7);
             if (offset < 0) {
                 offset = fdt_subnode_offset_namelen(dtb, 0, "memory", 6);
             }
-            if (offset >= 0) {
+            if (offset >= 0 && dtb_from_bootloader) {
                 int len{};
                 const uint32_t *reg = static_cast<const uint32_t *>(
                     fdt_getprop_namelen(dtb, offset, "reg", &len));
