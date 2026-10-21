@@ -33,6 +33,9 @@
 #include <kernel/arch/cpuid.hpp>
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/riscv64/hal/plic.hpp>
+#include <kernel/arch/riscv64/hal/uart.hpp>
+#include <kernel/arch/riscv64/hal/memmap.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -308,7 +311,7 @@ JARVIS_TEST(riscv64_plic_init) {
     arch::ArchInterruptController::init();
 
     volatile uint32_t *threshold =
-        reinterpret_cast<volatile uint32_t *>(0x0C200000ULL);
+        reinterpret_cast<volatile uint32_t *>(arch::PLIC_THRESHOLD_S);
     uint32_t thresh_val = *threshold;
     JARVIS_ASSERT_FMT(thresh_val == 0, "PLIC threshold not 0: 0x%x",
                       thresh_val);
@@ -318,7 +321,7 @@ JARVIS_TEST(riscv64_plic_init) {
     // enable-path assertion below tests the mask/unmask registers.
     arch::ArchInterruptController::unmask(10);
     volatile uint32_t *enable =
-        reinterpret_cast<volatile uint32_t *>(0x0C002000ULL);
+        reinterpret_cast<volatile uint32_t *>(arch::PLIC_ENABLE_S);
     uint32_t enable_val = enable[0];
     JARVIS_ASSERT_FMT(enable_val != 0, "No PLIC interrupt sources enabled");
 
@@ -330,7 +333,7 @@ JARVIS_TEST(riscv64_plic_mask_unmask) {
     arch::ArchInterruptController::mask(10);
 
     volatile uint32_t *enable =
-        reinterpret_cast<volatile uint32_t *>(0x0C002000ULL);
+        reinterpret_cast<volatile uint32_t *>(arch::PLIC_ENABLE_S);
     uint32_t en = enable[0];
     JARVIS_ASSERT_FMT((en & (1U << 10)) == 0, "IRQ 10 not masked: enable=0x%x",
                       en);
@@ -348,7 +351,7 @@ JARVIS_TEST(riscv64_plic_claim_complete) {
     arch::ArchInterruptController::eoi(10);
 
     volatile uint32_t *claim =
-        reinterpret_cast<volatile uint32_t *>(0x0C200004ULL);
+        reinterpret_cast<volatile uint32_t *>(arch::PLIC_CLAIM_S);
     uint32_t pending = *claim;
     JARVIS_ASSERT_FMT(pending == 0, "PLIC claim non-zero after EOI: %u",
                       pending);
@@ -441,9 +444,10 @@ JARVIS_TEST(riscv64_fpu_extension_detection) {
 JARVIS_TEST(riscv64_sbi_console_putchar) {
     arch::Serial::putchar('R');
 
-    volatile uint8_t *lsr = reinterpret_cast<volatile uint8_t *>(0x10000005ULL);
+    volatile uint8_t *lsr = reinterpret_cast<volatile uint8_t *>(
+        arch::UART0_BASE + arch::UART_LSR_OFF);
     uint8_t lsr_val = *lsr;
-    JARVIS_ASSERT_FMT(lsr_val & (1 << 6),
+    JARVIS_ASSERT_FMT(lsr_val & arch::UART_LSR_TEMT,
                       "TEMT not set after putchar: LSR=0x%x", lsr_val);
 
     for (char c = 0x20; c <= 0x7E; ++c) {
@@ -451,7 +455,7 @@ JARVIS_TEST(riscv64_sbi_console_putchar) {
     }
 
     lsr_val = *lsr;
-    JARVIS_ASSERT_FMT(lsr_val & (1 << 6),
+    JARVIS_ASSERT_FMT(lsr_val & arch::UART_LSR_TEMT,
                       "TEMT not set after bulk puts: LSR=0x%x", lsr_val);
 
     JARVIS_TEST_PASS();
@@ -487,9 +491,9 @@ JARVIS_TEST(riscv64_uart_poll_idle_false) {
 // Expect: false/true('Q')/false sequence; MCR restored; bounded.
 // Depends: arch::Serial, arch::mmio_read8, arch::mmio_write8
 JARVIS_TEST(riscv64_uart_poll_loopback, "PRE: iocd | POST: none") {
-    constexpr uint64_t uart_base = 0x10000000ULL;
-    constexpr uint64_t uart_mcr_off = 4;
-    constexpr uint8_t uart_mcr_loopback = 0x10;
+    constexpr uint64_t uart_base = arch::UART0_BASE;
+    constexpr uint64_t uart_mcr_off = arch::UART_MCR_OFF;
+    constexpr uint8_t uart_mcr_loopback = arch::UART_MCR_LOOPBACK;
     arch::Serial::init();
     volatile void *mcr_ptr =
         reinterpret_cast<volatile void *>(uart_base + uart_mcr_off);
@@ -999,13 +1003,21 @@ JARVIS_TEST(riscv64_hhdm_take_semantics, "PRE: none | POST: none") {
     JARVIS_ASSERT(!VMM::take_identity_modified());
     JARVIS_ASSERT(!VMM::hhdm_was_modified());
     // Scratch HHDM VA inside a live 2MB block leaf. Indices derive from
-    // the full VA (never the offset alone).
-    constexpr uint64_t kScratch = 0xFFFFFFC080000000ULL + 0x400000ULL;
-    constexpr size_t kIdx = (static_cast<size_t>(kScratch) >> 21) & 0x1FF;
+    // the full VA (never the offset alone). Issue #387: L1[8] (PA
+    // 0x81000000) — L1[1..5] are split by #376 harden, L1[6..7] are
+    // boot-reserved; L1[8+] verified block leaves at test time.
+    constexpr uint64_t kScratch = arch::RISCV_HHDM_RAM_BASE +
+                                  8 * arch::RISCV_L1_BLOCK_SIZE;
+    constexpr size_t kIdx =
+        (static_cast<size_t>(kScratch) >> arch::RISCV_L1_BLOCK_SHIFT) &
+        arch::RISCV_TABLE_INDEX_MASK;
     // L0 slot of the scratch VA itself (self-consistent: the save/restore
-    // backend covers this slot; asserted 258, the HHDM RAM window).
-    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch) >> 30) & 0x1FF;
-    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
+    // backend covers this slot — arch::RISCV_HHDM_RAM_L0, pinned in memmap).
+    constexpr size_t kHhdmL0 =
+        (static_cast<size_t>(kScratch) >> arch::RISCV_L0_SHIFT) &
+        arch::RISCV_TABLE_INDEX_MASK;
+    static_assert(kHhdmL0 == arch::RISCV_HHDM_RAM_L0,
+                  "scratch VA left the HHDM RAM window");
     uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
     JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
     JARVIS_ASSERT_FMT((l1[kIdx] & 1ULL) && (l1[kIdx] & 0xEULL),
@@ -1047,10 +1059,16 @@ JARVIS_TEST(riscv64_hhdm_take_semantics, "PRE: none | POST: none") {
 // split L2 is pool-tracked and check-neutral (BlockGuard precedent), and
 // the backend frees it before the pool slice is overwritten.
 JARVIS_TEST(riscv64_hhdm_split_restored, "PRE: none | POST: none") {
-    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
-    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
-    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
-    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
+    constexpr uint64_t kScratch2 = arch::RISCV_HHDM_RAM_BASE +
+                                   9 * arch::RISCV_L1_BLOCK_SIZE;
+    constexpr size_t kIdx2 =
+        (static_cast<size_t>(kScratch2) >> arch::RISCV_L1_BLOCK_SHIFT) &
+        arch::RISCV_TABLE_INDEX_MASK;
+    constexpr size_t kHhdmL0 =
+        (static_cast<size_t>(kScratch2) >> arch::RISCV_L0_SHIFT) &
+        arch::RISCV_TABLE_INDEX_MASK;
+    static_assert(kHhdmL0 == arch::RISCV_HHDM_RAM_L0,
+                  "scratch VA left the HHDM RAM window");
     uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
     JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
     JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),
@@ -1072,10 +1090,16 @@ JARVIS_TEST(riscv64_hhdm_split_restored, "PRE: none | POST: none") {
 // Issue #152: second half of the split/restore pair — must run directly
 // after riscv64_hhdm_split_restored with no test in between.
 JARVIS_TEST(riscv64_hhdm_split_verify, "PRE: none | POST: none") {
-    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
-    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
-    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
-    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
+    constexpr uint64_t kScratch2 = arch::RISCV_HHDM_RAM_BASE +
+                                   9 * arch::RISCV_L1_BLOCK_SIZE;
+    constexpr size_t kIdx2 =
+        (static_cast<size_t>(kScratch2) >> arch::RISCV_L1_BLOCK_SHIFT) &
+        arch::RISCV_TABLE_INDEX_MASK;
+    constexpr size_t kHhdmL0 =
+        (static_cast<size_t>(kScratch2) >> arch::RISCV_L0_SHIFT) &
+        arch::RISCV_TABLE_INDEX_MASK;
+    static_assert(kHhdmL0 == arch::RISCV_HHDM_RAM_L0,
+                  "scratch VA left the HHDM RAM window");
     uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
     JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
     JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),

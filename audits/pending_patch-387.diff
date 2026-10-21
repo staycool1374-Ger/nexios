@@ -1,0 +1,457 @@
+diff --git a/src/kernel/arch/riscv64/hal/memmap.hpp b/src/kernel/arch/riscv64/hal/memmap.hpp
+new file mode 100644
+index 000000000..5fdf78356
+--- /dev/null
++++ b/src/kernel/arch/riscv64/hal/memmap.hpp
+@@ -0,0 +1,34 @@
++#pragma once
++
++#include <types.hpp>
++#include <constants.hpp>
++
++/// @brief RISC-V 64 QEMU virt memory-map literals (issue #387: single
++/// arch-owned source — the kernel and the arch tests share these,
++/// never raw address literals).
++/// @note QEMU virt: RAM starts at 0x80000000. The HHDM RAM window maps
++///       PA 0x80000000-0x8FFFFFFF as 128 x 2 MiB block leaves under one
++///       L0 slot (boot.S). Kernel image + initrd + boot reservations
++///       split L0-slot blocks L1[1..5] at boot (#376 harden); L1[6]
++///       (boot stack slack) and L1[7] (boot stack) are boot-reserved —
++///       scratch windows must live at L1[8] and above.
++namespace arch {
++
++/// @brief QEMU virt DRAM base (physical).
++inline constexpr uint64_t RISCV_DRAM_BASE = 0x80000000ULL;
++/// @brief Sv39 L1 block size (2 MiB) — the HHDM window granularity.
++inline constexpr uint64_t RISCV_L1_BLOCK_SIZE = 0x200000ULL;
++/// @brief Sv39 L1 block index shift (log2 of the block size).
++inline constexpr unsigned RISCV_L1_BLOCK_SHIFT = 21;
++/// @brief Page-table index geometry: 512 entries per level (L0 shift 30).
++inline constexpr unsigned RISCV_L0_SHIFT = 30;
++inline constexpr uint64_t RISCV_TABLE_INDEX_MASK = 0x1FFULL;
++/// @brief Base virtual address of the HHDM RAM window.
++inline constexpr uint64_t RISCV_HHDM_RAM_BASE = HHDM_OFFSET + RISCV_DRAM_BASE;
++/// @brief L0 slot covering the HHDM RAM window (derivation pinned: any
++///        HHDM/DRAM move breaks the assert here, not in a test).
++inline constexpr size_t RISCV_HHDM_RAM_L0 =
++    static_cast<size_t>((RISCV_HHDM_RAM_BASE >> 30) & 0x1FF);
++static_assert(RISCV_HHDM_RAM_L0 == 258, "HHDM RAM window L0 slot moved");
++
++} // namespace arch
+diff --git a/src/kernel/arch/riscv64/hal/uart.hpp b/src/kernel/arch/riscv64/hal/uart.hpp
+new file mode 100644
+index 000000000..0f43ee275
+--- /dev/null
++++ b/src/kernel/arch/riscv64/hal/uart.hpp
+@@ -0,0 +1,27 @@
++#pragma once
++
++#include <types.hpp>
++
++/// @brief RISC-V 64 QEMU virt 16550A UART register literals (issue #387:
++///        single arch-owned source — the driver and the arch tests share
++///        these, never raw address literals).
++/// @note Raw physical address, directly dereferenceable in S-mode (riscv64
++///       low half is identity-mapped — same precedent as the PLIC
++///       accessors).  Divisor pre-initialized by OpenSBI/QEMU (issue #247).
++namespace arch {
++
++/// @brief UART0 MMIO base (QEMU virt machine).
++inline constexpr uint64_t UART0_BASE = 0x10000000ULL;
++/// @brief 16550A register offsets from UART0_BASE.
++inline constexpr uint64_t UART_RBR_OFF = 0; // RX buffer (read)
++inline constexpr uint64_t UART_IER_OFF = 1; // interrupt enable
++inline constexpr uint64_t UART_LCR_OFF = 3; // line control
++inline constexpr uint64_t UART_MCR_OFF = 4; // modem control
++inline constexpr uint64_t UART_LSR_OFF = 5; // line status
++/// @brief Line-status bits.
++inline constexpr uint8_t UART_LSR_DATA_READY = 0x01; // RX data available
++inline constexpr uint8_t UART_LSR_TEMT = 0x40;      // TX holding reg empty
++/// @brief Modem-control loopback bit (test-only loopback control).
++inline constexpr uint8_t UART_MCR_LOOPBACK = 0x10;
++
++} // namespace arch
+diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
+index ca96a53eb..7e69d9739 100644
+--- a/src/kernel/arch/riscv64/serial.cpp
++++ b/src/kernel/arch/riscv64/serial.cpp
+@@ -21,21 +21,21 @@
+ 
+ #include <kernel/arch/serial.hpp>
+ #include <kernel/arch/hal/io.hpp>
++#include <kernel/arch/riscv64/hal/uart.hpp>
+ #include <types.hpp>
+ 
+ namespace arch {
+ 
+-/// @brief QEMU virt 16550A UART base (issue #247): raw physical address,
+-///        directly dereferenceable in S-mode (riscv64 low half is
+-///        identity-mapped — same precedent as the PLIC accessors and the
+-///        LSR probe in test_riscv64.cpp).
+-static constexpr uint64_t RISCV_UART_BASE = 0x10000000ULL;
+-static constexpr uint64_t RISCV_UART_RBR_OFF = 0;
+-static constexpr uint64_t RISCV_UART_IER_OFF = 1;
+-static constexpr uint64_t RISCV_UART_LCR_OFF = 3;
+-static constexpr uint64_t RISCV_UART_MCR_OFF = 4;
+-static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
+-static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
++/// @brief UART register literals live in hal/uart.hpp (issue #387: single
++///        arch-owned source shared with the arch tests).  Aliases below
++///        keep this TU's call sites untouched.
++static constexpr uint64_t RISCV_UART_BASE = UART0_BASE;
++static constexpr uint64_t RISCV_UART_RBR_OFF = UART_RBR_OFF;
++static constexpr uint64_t RISCV_UART_IER_OFF = UART_IER_OFF;
++static constexpr uint64_t RISCV_UART_LCR_OFF = UART_LCR_OFF;
++static constexpr uint64_t RISCV_UART_MCR_OFF = UART_MCR_OFF;
++static constexpr uint64_t RISCV_UART_LSR_OFF = UART_LSR_OFF;
++static constexpr uint8_t RISCV_UART_LSR_DATA_READY = UART_LSR_DATA_READY;
+ static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
+ 
+ /// @brief Number of characters written to the console since boot.
+diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
+index e69b1c5e4..6f97423c1 100644
+--- a/src/kernel/arch/riscv64/test_riscv64.cpp
++++ b/src/kernel/arch/riscv64/test_riscv64.cpp
+@@ -33,6 +33,9 @@
+ #include <kernel/arch/cpuid.hpp>
+ #include <kernel/arch/pci.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/riscv64/hal/plic.hpp>
++#include <kernel/arch/riscv64/hal/uart.hpp>
++#include <kernel/arch/riscv64/hal/memmap.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/syscall/syscall.hpp>
+ #include <kernel/task/scheduler.hpp>
+@@ -308,7 +311,7 @@ JARVIS_TEST(riscv64_plic_init) {
+     arch::ArchInterruptController::init();
+ 
+     volatile uint32_t *threshold =
+-        reinterpret_cast<volatile uint32_t *>(0x0C200000ULL);
++        reinterpret_cast<volatile uint32_t *>(arch::PLIC_THRESHOLD_S);
+     uint32_t thresh_val = *threshold;
+     JARVIS_ASSERT_FMT(thresh_val == 0, "PLIC threshold not 0: 0x%x",
+                       thresh_val);
+@@ -318,7 +321,7 @@ JARVIS_TEST(riscv64_plic_init) {
+     // enable-path assertion below tests the mask/unmask registers.
+     arch::ArchInterruptController::unmask(10);
+     volatile uint32_t *enable =
+-        reinterpret_cast<volatile uint32_t *>(0x0C002000ULL);
++        reinterpret_cast<volatile uint32_t *>(arch::PLIC_ENABLE_S);
+     uint32_t enable_val = enable[0];
+     JARVIS_ASSERT_FMT(enable_val != 0, "No PLIC interrupt sources enabled");
+ 
+@@ -330,7 +333,7 @@ JARVIS_TEST(riscv64_plic_mask_unmask) {
+     arch::ArchInterruptController::mask(10);
+ 
+     volatile uint32_t *enable =
+-        reinterpret_cast<volatile uint32_t *>(0x0C002000ULL);
++        reinterpret_cast<volatile uint32_t *>(arch::PLIC_ENABLE_S);
+     uint32_t en = enable[0];
+     JARVIS_ASSERT_FMT((en & (1U << 10)) == 0, "IRQ 10 not masked: enable=0x%x",
+                       en);
+@@ -348,7 +351,7 @@ JARVIS_TEST(riscv64_plic_claim_complete) {
+     arch::ArchInterruptController::eoi(10);
+ 
+     volatile uint32_t *claim =
+-        reinterpret_cast<volatile uint32_t *>(0x0C200004ULL);
++        reinterpret_cast<volatile uint32_t *>(arch::PLIC_CLAIM_S);
+     uint32_t pending = *claim;
+     JARVIS_ASSERT_FMT(pending == 0, "PLIC claim non-zero after EOI: %u",
+                       pending);
+@@ -441,9 +444,10 @@ JARVIS_TEST(riscv64_fpu_extension_detection) {
+ JARVIS_TEST(riscv64_sbi_console_putchar) {
+     arch::Serial::putchar('R');
+ 
+-    volatile uint8_t *lsr = reinterpret_cast<volatile uint8_t *>(0x10000005ULL);
++    volatile uint8_t *lsr = reinterpret_cast<volatile uint8_t *>(
++        arch::UART0_BASE + arch::UART_LSR_OFF);
+     uint8_t lsr_val = *lsr;
+-    JARVIS_ASSERT_FMT(lsr_val & (1 << 6),
++    JARVIS_ASSERT_FMT(lsr_val & arch::UART_LSR_TEMT,
+                       "TEMT not set after putchar: LSR=0x%x", lsr_val);
+ 
+     for (char c = 0x20; c <= 0x7E; ++c) {
+@@ -451,7 +455,7 @@ JARVIS_TEST(riscv64_sbi_console_putchar) {
+     }
+ 
+     lsr_val = *lsr;
+-    JARVIS_ASSERT_FMT(lsr_val & (1 << 6),
++    JARVIS_ASSERT_FMT(lsr_val & arch::UART_LSR_TEMT,
+                       "TEMT not set after bulk puts: LSR=0x%x", lsr_val);
+ 
+     JARVIS_TEST_PASS();
+@@ -487,9 +491,9 @@ JARVIS_TEST(riscv64_uart_poll_idle_false) {
+ // Expect: false/true('Q')/false sequence; MCR restored; bounded.
+ // Depends: arch::Serial, arch::mmio_read8, arch::mmio_write8
+ JARVIS_TEST(riscv64_uart_poll_loopback, "PRE: iocd | POST: none") {
+-    constexpr uint64_t uart_base = 0x10000000ULL;
+-    constexpr uint64_t uart_mcr_off = 4;
+-    constexpr uint8_t uart_mcr_loopback = 0x10;
++    constexpr uint64_t uart_base = arch::UART0_BASE;
++    constexpr uint64_t uart_mcr_off = arch::UART_MCR_OFF;
++    constexpr uint8_t uart_mcr_loopback = arch::UART_MCR_LOOPBACK;
+     arch::Serial::init();
+     volatile void *mcr_ptr =
+         reinterpret_cast<volatile void *>(uart_base + uart_mcr_off);
+@@ -999,13 +1003,21 @@ JARVIS_TEST(riscv64_hhdm_take_semantics, "PRE: none | POST: none") {
+     JARVIS_ASSERT(!VMM::take_identity_modified());
+     JARVIS_ASSERT(!VMM::hhdm_was_modified());
+     // Scratch HHDM VA inside a live 2MB block leaf. Indices derive from
+-    // the full VA (never the offset alone).
+-    constexpr uint64_t kScratch = 0xFFFFFFC080000000ULL + 0x400000ULL;
+-    constexpr size_t kIdx = (static_cast<size_t>(kScratch) >> 21) & 0x1FF;
++    // the full VA (never the offset alone). Issue #387: L1[8] (PA
++    // 0x81000000) — L1[1..5] are split by #376 harden, L1[6..7] are
++    // boot-reserved; L1[8+] verified block leaves at test time.
++    constexpr uint64_t kScratch = arch::RISCV_HHDM_RAM_BASE +
++                                  8 * arch::RISCV_L1_BLOCK_SIZE;
++    constexpr size_t kIdx =
++        (static_cast<size_t>(kScratch) >> arch::RISCV_L1_BLOCK_SHIFT) &
++        arch::RISCV_TABLE_INDEX_MASK;
+     // L0 slot of the scratch VA itself (self-consistent: the save/restore
+-    // backend covers this slot; asserted 258, the HHDM RAM window).
+-    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch) >> 30) & 0x1FF;
+-    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
++    // backend covers this slot — arch::RISCV_HHDM_RAM_L0, pinned in memmap).
++    constexpr size_t kHhdmL0 =
++        (static_cast<size_t>(kScratch) >> arch::RISCV_L0_SHIFT) &
++        arch::RISCV_TABLE_INDEX_MASK;
++    static_assert(kHhdmL0 == arch::RISCV_HHDM_RAM_L0,
++                  "scratch VA left the HHDM RAM window");
+     uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
+     JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
+     JARVIS_ASSERT_FMT((l1[kIdx] & 1ULL) && (l1[kIdx] & 0xEULL),
+@@ -1047,10 +1059,16 @@ JARVIS_TEST(riscv64_hhdm_take_semantics, "PRE: none | POST: none") {
+ // split L2 is pool-tracked and check-neutral (BlockGuard precedent), and
+ // the backend frees it before the pool slice is overwritten.
+ JARVIS_TEST(riscv64_hhdm_split_restored, "PRE: none | POST: none") {
+-    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
+-    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
+-    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
+-    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
++    constexpr uint64_t kScratch2 = arch::RISCV_HHDM_RAM_BASE +
++                                   9 * arch::RISCV_L1_BLOCK_SIZE;
++    constexpr size_t kIdx2 =
++        (static_cast<size_t>(kScratch2) >> arch::RISCV_L1_BLOCK_SHIFT) &
++        arch::RISCV_TABLE_INDEX_MASK;
++    constexpr size_t kHhdmL0 =
++        (static_cast<size_t>(kScratch2) >> arch::RISCV_L0_SHIFT) &
++        arch::RISCV_TABLE_INDEX_MASK;
++    static_assert(kHhdmL0 == arch::RISCV_HHDM_RAM_L0,
++                  "scratch VA left the HHDM RAM window");
+     uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
+     JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
+     JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),
+@@ -1072,10 +1090,16 @@ JARVIS_TEST(riscv64_hhdm_split_restored, "PRE: none | POST: none") {
+ // Issue #152: second half of the split/restore pair — must run directly
+ // after riscv64_hhdm_split_restored with no test in between.
+ JARVIS_TEST(riscv64_hhdm_split_verify, "PRE: none | POST: none") {
+-    constexpr uint64_t kScratch2 = 0xFFFFFFC080000000ULL + 0x600000ULL;
+-    constexpr size_t kIdx2 = (static_cast<size_t>(kScratch2) >> 21) & 0x1FF;
+-    constexpr size_t kHhdmL0 = (static_cast<size_t>(kScratch2) >> 30) & 0x1FF;
+-    static_assert(kHhdmL0 == 258, "scratch VA left the HHDM RAM window");
++    constexpr uint64_t kScratch2 = arch::RISCV_HHDM_RAM_BASE +
++                                   9 * arch::RISCV_L1_BLOCK_SIZE;
++    constexpr size_t kIdx2 =
++        (static_cast<size_t>(kScratch2) >> arch::RISCV_L1_BLOCK_SHIFT) &
++        arch::RISCV_TABLE_INDEX_MASK;
++    constexpr size_t kHhdmL0 =
++        (static_cast<size_t>(kScratch2) >> arch::RISCV_L0_SHIFT) &
++        arch::RISCV_TABLE_INDEX_MASK;
++    static_assert(kHhdmL0 == arch::RISCV_HHDM_RAM_L0,
++                  "scratch VA left the HHDM RAM window");
+     uint64_t *l1 = riscv_snapshot_l1(kHhdmL0);
+     JARVIS_ASSERT_FMT(l1 != nullptr, "HHDM L1 missing");
+     JARVIS_ASSERT_FMT((l1[kIdx2] & 1ULL) && (l1[kIdx2] & 0xEULL),
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index a209cf4af..33d0db822 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -375,15 +375,20 @@ class VMM {
+     /// check) — v0.4.0 MP-7: no task shares another's user entries, so
+     /// this is always the full teardown of a private address space.
+     /// @param pml4_phys Physical address of the user PML4.
++    static bool vmm_leaf_is_user_owned(uint64_t entry,
++                                             uint64_t frame) noexcept;
+     /// @brief Deep-copy user-space page tables from src_pml4 to dst_pml4.
+     ///        Allocates new PDPT/PD/PT pages and copies data page content.
+     /// @param src_pml4 Physical address of source PML4.
+     /// @param dst_pml4 Physical address of destination PML4 (must already
+     ///        have kernel entries populated).
+-    /// @return true on success, false on OOM or on a user-range huge/block
++    /// @return true on success, false on OOM or on a user-OWNED huge/block
+     ///         entry (issue #325-E: by-value copy would alias one writable
+-    ///         page parent/child — fail closed instead).  Partial state
+-    ///         may remain on false, but every installed table and data
++    ///         page parent/child — fail closed instead; issue #387:
++    ///         kernel-owned blocks reachable in the user index range —
++    ///         riscv64 L0[0] low-half MMIO/identity from clone_kernel_pml4 —
++    ///         are inherited BY VALUE, never a fork failure, U=0 kept).
++    ///         Partial state may remain on false, but every installed table and data
+     ///         page is USER-owned, so the caller MUST destroy the child
+     ///         (TaskControlBlock::destroy → cleanup → free_user_pages
+     ///         reclaims all partials — task.cpp documents this invariant).
+@@ -906,6 +911,15 @@ class VMM {
+     ///        x86_64 clears NX; aarch64 clears UXN+PXN; riscv64 sets X.
+     static uint64_t vmm_arch_kernel_text_exec(uint64_t leaf);
+     static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
++    /// @brief Ownership test for a huge/block entry hit during fork
++    ///        deep-copy (issue #387): true iff the block is user-owned —
++    ///        the entry's USER bit is set OR the frame came from a user
++    ///        page allocation (PMM::is_user_page).  Kernel-owned blocks
++    ///        reachable in the user index range (riscv64 L0[0] low-half
++    ///        MMIO/identity inherited from clone_kernel_pml4) are NOT
++    ///        user-owned: the copy inherits them by value instead of
++    ///        failing the fork.  No new privilege (U=0 preserved).
++    /// @note Lock: none. Context: any. SMP: N/A (pre-publish window).
+     /// @brief Extract the flag bits of a 4 KiB leaf entry (issue #352):
+     ///        everything except the frame address (x86/aarch64: complement
+     ///        of the frame mask; riscv: low-10 flag bits plus high
+diff --git a/src/kernel/memory/vmm_teardown.cpp b/src/kernel/memory/vmm_teardown.cpp
+index a36f33138..80f72affd 100644
+--- a/src/kernel/memory/vmm_teardown.cpp
++++ b/src/kernel/memory/vmm_teardown.cpp
+@@ -190,6 +190,14 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+     // TLB flush is the caller's responsibility (via CR3 reload)
+ }
+ 
++/// @brief Ownership test for a huge/block entry hit during fork
++///        deep-copy (issue #387): user-owned (USER bit or USER frame)
++///        fails the fork closed (#325-E aliasing); kernel-owned blocks in
++///        the user index range inherit by value (U=0 preserved).
++bool VMM::vmm_leaf_is_user_owned(uint64_t entry, uint64_t frame) noexcept {
++    return (entry & PAGE_USER) != 0 || PMM::is_user_page(frame);
++}
++
+ /// @brief Deep-copy user-space page tables from src_pml4 to dst_pml4.
+ ///        Allocates new PDPT/PD/PT pages and copies data page content.
+ ///        dst_pml4 must already have kernel entries populated.
+@@ -226,14 +234,20 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+             if (!(src_pdpt[pdpt_idx] & PAGE_PRESENT))
+                 continue;
+ 
+-            // 1 GiB huge/block entry in the USER range — fail closed
+-            // (issue #325-E): copying by value would share one writable
+-            // page between parent and child (silent aliasing).  No kernel
+-            // path creates user huge entries (every map splits to 4 KiB),
+-            // so this is unreachable in practice; the caller destroys the
+-            // partial child on false.  Arch leaf test via is_table_entry.
++            // 1 GiB huge/block entry in the USER range — fail closed only
++            // when user-owned (issue #325-E: copying a writable user page
++            // by value would alias it parent/child).  Kernel-owned blocks
++            // reachable here inherit by value (issue #387: U=0 preserved,
++            // no new privilege).  Arch leaf test via is_table_entry.
+             if (!is_table_entry(src_pdpt[pdpt_idx], 1)) {
+-                return false;
++                if (vmm_leaf_is_user_owned(
++                        src_pdpt[pdpt_idx],
++                        vmm_arch_block_base(src_pdpt[pdpt_idx],
++                                            /*huge=*/true))) {
++                    return false;
++                }
++                dst_pdpt[pdpt_idx] = src_pdpt[pdpt_idx];
++                continue;
+             }
+ 
+             uint64_t src_pd_phys = src_pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
+@@ -253,9 +267,18 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                     continue;
+ 
+                 // 2 MiB huge/block entry in the USER range — fail closed
+-                // (issue #325-E, same aliasing rationale as above).
++                // only when user-owned (issue #325-E, same aliasing
++                // rationale as above); kernel-owned inherits by value
++                // (issue #387).
+                 if (!is_table_entry(src_pd[pd_idx], 2)) {
+-                    return false;
++                    if (vmm_leaf_is_user_owned(
++                            src_pd[pd_idx],
++                            vmm_arch_block_base(src_pd[pd_idx],
++                                                /*huge=*/false))) {
++                        return false;
++                    }
++                    dst_pd[pd_idx] = src_pd[pd_idx];
++                    continue;
+                 }
+ 
+                 uint64_t src_pt_phys = src_pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
+@@ -320,9 +343,18 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+         }
+ 
+         if ((src[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-            // 1 GiB block in the USER range — fail closed (issue #325-E:
+-            // by-value copy would alias one writable page parent/child).
+-            return false;
++            // 1 GiB block in the USER range — fail closed only when
++            // user-owned (issue #325-E aliasing).  Kernel-owned blocks
++            // (riscv64 L0[0] low-half MMIO/identity from clone_kernel_pml4)
++            // inherit by value (issue #387: U=0 preserved, never a fork
++            // failure).
++            if (vmm_leaf_is_user_owned(
++                    src[l0_idx],
++                    vmm_arch_block_base(src[l0_idx], /*huge=*/true))) {
++                return false;
++            }
++            dst[l0_idx] = src[l0_idx];
++            continue;
+         }
+ 
+         uint64_t src_l1_phys = VMM::sv39_pte_phys(src[l0_idx]);
+@@ -341,9 +373,17 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                 continue;
+ 
+             if ((src_l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
+-                // 2 MiB block in the USER range — fail closed (issue #325-E,
+-                // same aliasing rationale as above).
+-                return false;
++                // 2 MiB block in the USER range — fail closed only when
++                // user-owned (issue #325-E, same aliasing rationale as
++                // above); kernel-owned inherits by value (issue #387).
++                if (vmm_leaf_is_user_owned(
++                        src_l1[l1_idx],
++                        vmm_arch_block_base(src_l1[l1_idx],
++                                            /*huge=*/false))) {
++                    return false;
++                }
++                dst_l1[l1_idx] = src_l1[l1_idx];
++                continue;
+             }
+ 
+             uint64_t src_l2_phys = VMM::sv39_pte_phys(src_l1[l1_idx]);
+diff --git a/src/kernel/test/test_pml4_clone.cpp b/src/kernel/test/test_pml4_clone.cpp
+index 9e4394691..5539afd8f 100644
+--- a/src/kernel/test/test_pml4_clone.cpp
++++ b/src/kernel/test/test_pml4_clone.cpp
+@@ -867,7 +867,10 @@ JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
+     // free_user_pages cannot reach it once the PD holds the huge leaf).
+     const uint64_t orphan_pt = parent_pd[pd_idx] & ~0xFFFULL;
+     parent_pd[pd_idx] =
+-        (huge_phys & ~0x1FFFFFULL) | 0x3ULL | kX86HugeBit; // P+W+huge
++        (huge_phys & ~0x1FFFFFULL) | 0x7ULL | kX86HugeBit; // P+W+U+huge
++    // Issue #387: the USER bit is load-bearing — a production user huge
++    // PTE carries U=1 (the throwaway map above was user); U=0 + user frame
++    // is a hand-made corner the fork copy inherits by value.
+     arch::ArchPageTable::tlb_flush(HUGE_VA);
+ 
+     JARVIS_ASSERT(!VMM::deep_copy_user_pages(parent_pml4, child_pml4));
+diff --git a/test-history.txt b/test-history.txt
+index 2f3ea3a42..b0e3ebf2c 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4380,3 +4380,16 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 13:47:08 selftest PASSED: 65 FAILED: 0 TIME: 28s STATUS: sliceC-riscv64
+ 2026-10-21 13:47:08 configuration_build PASSED: 5 FAILED: 0 TIME: 20s STATUS: sliceC-aarch64
+ 2026-10-21 13:47:08 configuration_build PASSED: 5 FAILED: 0 TIME: 23s STATUS: sliceC-riscv64
++2026-10-21 14:28:22 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 1s STATUS: reproduces-#387-test30-FORK-FAILED
++2026-10-21 14:31:08 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 1s STATUS: probe-confirms-#387-lvl1-l0-0-l1-96-u0
++2026-10-21 14:59:15 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 918ms
++2026-10-21 15:00:21 arch_riscv64 PASSED: 25 FAILED: 5 TIME: 1s STATUS: test30-fixed-remaining-6-7-23-24-25
++2026-10-21 15:26:37 arch_riscv64 PASSED: 27 FAILED: 3 TIME: 1s STATUS: plic-fixed-remaining-hhdm-23-24-25
++2026-10-21 15:34:47 arch_riscv64 PASSED: 30 FAILED: 0 TIME: 934ms
++2026-10-21 15:37:19 elf_loader PASSED: 25 FAILED: 0 TIME: 2365ms
++2026-10-21 15:37:50 selftest PASSED: 148 FAILED: 0 TIME: 12096ms
++2026-10-21 15:38:14 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 921ms
++2026-10-21 15:39:10 proc_elf PASSED: 131 FAILED: 0 TIME: 41367ms
++2026-10-21 15:39:44 core_memory PASSED: 120 FAILED: 0 TIME: 12574ms
++2026-10-21 15:40:08 cap_mmio_user PASSED: 9 FAILED: 0 TIME: 619ms
++2026-10-21 15:40:55 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1029ms

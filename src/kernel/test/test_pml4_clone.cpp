@@ -867,7 +867,10 @@ JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
     // free_user_pages cannot reach it once the PD holds the huge leaf).
     const uint64_t orphan_pt = parent_pd[pd_idx] & ~0xFFFULL;
     parent_pd[pd_idx] =
-        (huge_phys & ~0x1FFFFFULL) | 0x3ULL | kX86HugeBit; // P+W+huge
+        (huge_phys & ~0x1FFFFFULL) | 0x7ULL | kX86HugeBit; // P+W+U+huge
+    // Issue #387: the USER bit is load-bearing — a production user huge
+    // PTE carries U=1 (the throwaway map above was user); U=0 + user frame
+    // is a hand-made corner the fork copy inherits by value.
     arch::ArchPageTable::tlb_flush(HUGE_VA);
 
     JARVIS_ASSERT(!VMM::deep_copy_user_pages(parent_pml4, child_pml4));
