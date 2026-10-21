@@ -33,8 +33,11 @@ namespace debug {
 /// globals).
 void dump_scheduler_info();
 
-/// @brief Dump all CPU general-purpose registers + CR0/CR2/CR3/CR4.
-/// @note x86_64 only; other architectures print a stub.
+/// @brief Dump all CPU general-purpose registers + control state.
+///        x86_64: GPRs + CR0/CR2/CR3/CR4. aarch64: x0-x30 + SP + ELR/SPSR/FAR
+///        + TTBR0/1. riscv64: x1-x31 + sp + sepc/stval/satp.
+/// @note Values are the dump frame's register state (IRQs masked), not the
+///       faulting frame.
 void dump_cpu_regs();
 
 /// @brief Dump all fields of a single task identified by ID.

@@ -73,8 +73,8 @@ static void pkd(const char *key, uint64_t v) {
     L::raw_write("\n");
 }
 
-/// @brief Print two hex key-value pairs.
-#if defined(CONFIG_ARCH_X86_64)
+/// @brief Print two hex key-value pairs (arch-neutral: consumed by all
+///        three dump_cpu_regs() arms).
 static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
     L::raw_write("[DUMP]   ");
     L::raw_write(k1);
@@ -86,7 +86,6 @@ static void pkv2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
     L::print_hex(v2);
     L::raw_write("\n");
 }
-#endif // CONFIG_ARCH_X86_64
 
 /// @brief Print two decimal key-value pairs.
 static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
@@ -101,8 +100,8 @@ static void pkd2(const char *k1, uint64_t v1, const char *k2, uint64_t v2) {
     L::raw_write("\n");
 }
 
-/// @brief Print three hex key-value pairs.
-#if defined(CONFIG_ARCH_X86_64)
+/// @brief Print three hex key-value pairs (arch-neutral: consumed by all
+///        three dump_cpu_regs() arms).
 static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
                  const char *k3, uint64_t v3) {
     L::raw_write("[DUMP]   ");
@@ -119,7 +118,6 @@ static void pkv3(const char *k1, uint64_t v1, const char *k2, uint64_t v2,
     L::print_hex(v3);
     L::raw_write("\n");
 }
-#endif // CONFIG_ARCH_X86_64
 
 /// @brief Dump scheduler indices, counts, flags, and deferred-switch globals.
 void dump_scheduler_info() {
@@ -245,8 +243,68 @@ void dump_cpu_regs() {
 
 void dump_cpu_regs() {
     arch::IrqGuard irq_guard{};
+
+    // Sysregs first: a nested trap would overwrite ELR/SPSR/FAR, so the
+    // guard above precedes every mrs read.
+    uint64_t elr_el1{};
+    asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
+    uint64_t spsr_el1{};
+    asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
+    uint64_t far_el1{};
+    asm volatile("mrs %0, far_el1" : "=r"(far_el1));
+    uint64_t ttbr0 = arch::read_ttbr0_el1();
+    uint64_t ttbr1 = arch::read_ttbr1_el1();
+
+    // Single-asm capture: all GPRs are stacked before any compiler-chosen
+    // scratch write (a multi-block mov split could corrupt unread regs).
+    // Slots 0..30 = x0..x30, slot 31 = entry SP. Only caller-saved scratch
+    // (x10/x11/x13/x14/x15) is written; SP is restored by the loop.
+    uint64_t gpr_values[32]{};
+    asm volatile(
+        "stp x30, xzr, [sp, #-16]!\n"
+        "stp x28, x29, [sp, #-16]!\n"
+        "stp x26, x27, [sp, #-16]!\n"
+        "stp x24, x25, [sp, #-16]!\n"
+        "stp x22, x23, [sp, #-16]!\n"
+        "stp x20, x21, [sp, #-16]!\n"
+        "stp x18, x19, [sp, #-16]!\n"
+        "stp x16, x17, [sp, #-16]!\n"
+        "stp x14, x15, [sp, #-16]!\n"
+        "stp x12, x13, [sp, #-16]!\n"
+        "stp x10, x11, [sp, #-16]!\n"
+        "stp x8,  x9,  [sp, #-16]!\n"
+        "stp x6,  x7,  [sp, #-16]!\n"
+        "stp x4,  x5,  [sp, #-16]!\n"
+        "stp x2,  x3,  [sp, #-16]!\n"
+        "stp x0,  x1,  [sp, #-16]!\n"
+        "mov x13, %0\n"
+        "add x14, sp, #256\n"
+        "mov x15, #16\n"
+        "1:\n"
+        "    ldp x10, x11, [sp], #16\n"
+        "    stp x10, x11, [x13], #16\n"
+        "    subs x15, x15, #1\n"
+        "    b.ne 1b\n"
+        "sub x13, x13, #256\n"
+        "str x14, [x13, #248]\n"
+        :
+        : "r"(gpr_values)
+        : "x10", "x11", "x13", "x14", "x15", "memory");
+
     L::raw_write("[DUMP] === cpu regs ===\n");
-    L::raw_write("[DUMP]   (aarch64 dump not yet implemented)\n");
+    pkv3("x0", gpr_values[0], "x1", gpr_values[1], "x2", gpr_values[2]);
+    pkv3("x3", gpr_values[3], "x4", gpr_values[4], "x5", gpr_values[5]);
+    pkv3("x6", gpr_values[6], "x7", gpr_values[7], "x8", gpr_values[8]);
+    pkv3("x9", gpr_values[9], "x10", gpr_values[10], "x11", gpr_values[11]);
+    pkv3("x12", gpr_values[12], "x13", gpr_values[13], "x14", gpr_values[14]);
+    pkv3("x15", gpr_values[15], "x16", gpr_values[16], "x17", gpr_values[17]);
+    pkv3("x18", gpr_values[18], "x19", gpr_values[19], "x20", gpr_values[20]);
+    pkv3("x21", gpr_values[21], "x22", gpr_values[22], "x23", gpr_values[23]);
+    pkv3("x24", gpr_values[24], "x25", gpr_values[25], "x26", gpr_values[26]);
+    pkv3("x27", gpr_values[27], "x28", gpr_values[28], "x29", gpr_values[29]);
+    pkv2("x30", gpr_values[30], "sp", gpr_values[31]);
+    pkv3("elr", elr_el1, "spsr", spsr_el1, "far", far_el1);
+    pkv2("ttbr0", ttbr0, "ttbr1", ttbr1);
     L::raw_write("[DUMP] === end cpu regs ===\n");
 }
 
@@ -254,8 +312,85 @@ void dump_cpu_regs() {
 
 void dump_cpu_regs() {
     arch::IrqGuard irq_guard{};
+
+    // Sysregs first: a nested trap would overwrite sepc/stval, so the
+    // guard above precedes every csrr read.
+    uint64_t sepc{};
+    asm volatile("csrr %0, sepc" : "=r"(sepc));
+    uint64_t stval{};
+    asm volatile("csrr %0, stval" : "=r"(stval));
+    uint64_t satp = arch::read_satp();
+
+    // Single-asm capture: all GPRs are stored before any compiler-chosen
+    // scratch write. Slots 0..30 = x1..x31, slot 1 (x2) is fixed up to the
+    // entry SP. Only caller-saved scratch (t0-t2) is written; SP is
+    // restored by the loop. x0 is hardwired zero and omitted.
+    uint64_t gpr_values[32]{};
+    asm volatile(
+        "addi sp, sp, -256\n"
+        "sd x1,   0(sp)\n"
+        "sd x2,   8(sp)\n"
+        "sd x3,  16(sp)\n"
+        "sd x4,  24(sp)\n"
+        "sd x5,  32(sp)\n"
+        "sd x6,  40(sp)\n"
+        "sd x7,  48(sp)\n"
+        "sd x8,  56(sp)\n"
+        "sd x9,  64(sp)\n"
+        "sd x10, 72(sp)\n"
+        "sd x11, 80(sp)\n"
+        "sd x12, 88(sp)\n"
+        "sd x13, 96(sp)\n"
+        "sd x14,104(sp)\n"
+        "sd x15,112(sp)\n"
+        "sd x16,120(sp)\n"
+        "sd x17,128(sp)\n"
+        "sd x18,136(sp)\n"
+        "sd x19,144(sp)\n"
+        "sd x20,152(sp)\n"
+        "sd x21,160(sp)\n"
+        "sd x22,168(sp)\n"
+        "sd x23,176(sp)\n"
+        "sd x24,184(sp)\n"
+        "sd x25,192(sp)\n"
+        "sd x26,200(sp)\n"
+        "sd x27,208(sp)\n"
+        "sd x28,216(sp)\n"
+        "sd x29,224(sp)\n"
+        "sd x30,232(sp)\n"
+        "sd x31,240(sp)\n"
+        "addi t0, sp, 256\n"
+        "sd t0, 8(sp)\n"
+        "mv t2, %0\n"
+        "li t0, 0\n"
+        "1:\n"
+        "    ld t1, 0(sp)\n"
+        "    sd t1, 0(t2)\n"
+        "    addi sp, sp, 8\n"
+        "    addi t2, t2, 8\n"
+        "    addi t0, t0, 8\n"
+        "    li t1, 256\n"
+        "    blt t0, t1, 1b\n"
+        "addi t2, t2, -256\n"
+        "sd sp, 8(t2)\n"
+        :
+        : "r"(gpr_values)
+        : "t0", "t1", "t2", "memory");
+
     L::raw_write("[DUMP] === cpu regs ===\n");
-    L::raw_write("[DUMP]   (riscv64 dump not yet implemented)\n");
+    pkv3("x1", gpr_values[0], "x2", gpr_values[1], "x3", gpr_values[2]);
+    pkv3("x4", gpr_values[3], "x5", gpr_values[4], "x6", gpr_values[5]);
+    pkv3("x7", gpr_values[6], "x8", gpr_values[7], "x9", gpr_values[8]);
+    pkv3("x10", gpr_values[9], "x11", gpr_values[10], "x12", gpr_values[11]);
+    pkv3("x13", gpr_values[12], "x14", gpr_values[13], "x15", gpr_values[14]);
+    pkv3("x16", gpr_values[15], "x17", gpr_values[16], "x18", gpr_values[17]);
+    pkv3("x19", gpr_values[18], "x20", gpr_values[19], "x21", gpr_values[20]);
+    pkv3("x22", gpr_values[21], "x23", gpr_values[22], "x24", gpr_values[23]);
+    pkv3("x25", gpr_values[24], "x26", gpr_values[25], "x27", gpr_values[26]);
+    pkv3("x28", gpr_values[27], "x29", gpr_values[28], "x30", gpr_values[29]);
+    // sp duplicates x2 by contract (issue #306); x0 omitted (hardwired zero).
+    pkv2("x31", gpr_values[30], "sp", gpr_values[1]);
+    pkv3("sepc", sepc, "stval", stval, "satp", satp);
     L::raw_write("[DUMP] === end cpu regs ===\n");
 }
 
