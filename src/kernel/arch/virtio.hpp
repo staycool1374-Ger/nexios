@@ -36,10 +36,12 @@ constexpr uint16_t VIRTIO_PCI_VENDOR = 0x1AF4;
 /// Virtio PCI device IDs (modern = 0x1040 + type)
 constexpr uint16_t VIRTIO_DEVICE_BLOCK = 0x1042; // modern virtio-blk
 constexpr uint16_t VIRTIO_DEVICE_NET = 0x1041;   // modern virtio-net
+constexpr uint16_t VIRTIO_DEVICE_GPU = 0x1050;   // modern virtio-gpu (issue #394)
 
 /// Legacy device IDs
 constexpr uint16_t VIRTIO_DEVICE_BLOCK_LEGACY = 0x1001;
 constexpr uint16_t VIRTIO_DEVICE_NET_LEGACY = 0x1000;
+constexpr uint16_t VIRTIO_DEVICE_GPU_LEGACY = 0x1010;
 
 /// Virtio PCI capability types (cfg_type in virtio_pci_cap)
 enum VirtioCfgType : uint8_t {
@@ -213,6 +215,7 @@ constexpr uint32_t VIRTIO_MMIO_VERSION_LEGACY = 1;
 constexpr uint32_t VIRTIO_MMIO_REGION_SIZE = 0x200;
 constexpr uint32_t VIRTIO_MMIO_DEVICE_NET = 1;
 constexpr uint32_t VIRTIO_MMIO_DEVICE_BLOCK = 2;
+constexpr uint32_t VIRTIO_MMIO_DEVICE_GPU = 16; // issue #394
 constexpr uint16_t VIRTIO_MMIO_REG_NONE = 0xFFFF;
 
 /// Legacy (v1) queue chunk geometry (issue #350): one contiguous chunk
@@ -302,6 +305,8 @@ constexpr uint16_t virtio_mmio_device_id(uint16_t pci_id) {
         return VIRTIO_MMIO_DEVICE_NET;
     if (pci_id == VIRTIO_DEVICE_BLOCK || pci_id == VIRTIO_DEVICE_BLOCK_LEGACY)
         return VIRTIO_MMIO_DEVICE_BLOCK;
+    if (pci_id == VIRTIO_DEVICE_GPU || pci_id == VIRTIO_DEVICE_GPU_LEGACY)
+        return VIRTIO_MMIO_DEVICE_GPU;
     return 0;
 }
 

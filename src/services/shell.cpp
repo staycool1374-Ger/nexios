@@ -1814,7 +1814,7 @@ void Shell::cmd_version(int, const char**) {
     Terminal::write(" (");
     print_uint(kernel::build_info::bits);
     Terminal::write("-bit, fb=");
-    Terminal::write(kernel::build_info::fb_backend);
+    Terminal::write(service::Framebuffer::backend_name());
     Terminal::write(")\nType:   ");
     Terminal::write(kernel::build_info::build_type);
     Terminal::write("\n");

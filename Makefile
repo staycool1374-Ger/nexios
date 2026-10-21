@@ -408,6 +408,10 @@ QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
 # capability discovery exercise real config space on both arches.
 # virtio-rng-pci: no in-tree PCI driver binds it (delivery stays MMIO).
 QEMU_PCI_TEST_DEV := -device virtio-rng-pci,disable-legacy=on
+# Issue #394 Slice A: virtio-gpu backend (non-bound until Slice C drivers
+# land; delivery stays MMIO). Append-only after storage (slot/IRQ mapping
+# preserved); `QEMU_FB_GPU=` disables the device for ramfb/gap runs.
+QEMU_FB_GPU ?= -device virtio-gpu-device
 
 # For aarch64, load kernel directly instead of via ISO/GRUB
 ifeq ($(ARCH),aarch64)
@@ -421,7 +425,7 @@ ifeq ($(ARCH),aarch64)
 VIRT_DTB          := build/virt.dtb
 VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
 QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
-                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
+                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
                 -machine virt -cpu cortex-a72 -display none -no-reboot \
                 -dtb $(VIRT_DTB) \
                 -semihosting-config enable=on,target=native
@@ -446,7 +450,7 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
 	$(OBJCOPY) -O binary $< $@
 
 QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
-                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
+                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
                 -machine virt -bios default -display none -no-reboot
 endif
 

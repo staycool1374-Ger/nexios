@@ -79,6 +79,9 @@ void Terminal::putchar(char c) {
     switch (c) {
     case '\n':
         instance_->newline();
+        // Flush the completed row band to the host scanout (issue #394;
+        // no-op unless a presenting backend is active).
+        Framebuffer::present();
         break;
     case '\r':
         instance_->cursor_x_ = 0;
@@ -218,6 +221,10 @@ void Terminal::clear() {
     memset(fb, 0, static_cast<size_t>(pitch) * text_h);
     instance_->cursor_x_ = 0;
     instance_->cursor_y_ = 0;
+    // Direct framebuffer write bypassed put_pixel: mark dirty + flush
+    // (issue #394; no-ops unless a presenting backend is active).
+    Framebuffer::invalidate();
+    Framebuffer::present();
 }
 
 void Terminal::scroll() {
@@ -242,6 +249,9 @@ void Terminal::scroll() {
     if (instance_->cursor_y_ > 0) {
         instance_->cursor_y_--;
     }
+    // Direct framebuffer writes bypassed put_pixel (issue #394).
+    Framebuffer::invalidate();
+    Framebuffer::present();
 }
 
 void Terminal::newline() {
@@ -314,6 +324,8 @@ void Terminal::draw_status_bar(const char* left, const char* right)
             right_x += FONT_WIDTH;
         }
     }
+    // Status bar is drawn via put_pixel paths: flush it (issue #394).
+    Framebuffer::present();
 }
 
 void Terminal::set_cursor_visible(bool visible) {
@@ -324,6 +336,8 @@ void Terminal::set_cursor_visible(bool visible) {
         instance_->cursor_x_ * FONT_WIDTH,
         instance_->cursor_y_ * FONT_HEIGHT,
         FONT_WIDTH, FONT_HEIGHT, color);
+    // Cursor cell redrawn via put_pixel: flush it (issue #394).
+    Framebuffer::present();
 }
 
 void Terminal::capture_begin(char* buf, size_t size) {
@@ -403,6 +417,8 @@ void Terminal::show_splash() {
         Framebuffer::draw_char(hint_x, hint_y, *p, 0x606060, 0x0A0A10);
         hint_x += FONT_WIDTH;
     }
+    // Splash drawn via put_pixel paths: flush it (issue #394).
+    Framebuffer::present();
 }
 
 } // namespace service

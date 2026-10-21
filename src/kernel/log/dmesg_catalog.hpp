@@ -162,6 +162,8 @@ constexpr DmesgRecord kDmesgCatalog_DRIVER[] = {
      "Framebuffer backend unavailable (documented gap)"},
     {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 12, LogSeverity::WARN,
      "PCI ECAM DT mismatch — board constant kept"},
+    {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 13, LogSeverity::INFO,
+     "Framebuffer backend ready"},
 };
 
 /// @brief Init records (canonical base kDmesgBase_INIT): init-rc, fstab,

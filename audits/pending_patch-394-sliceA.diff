@@ -1,0 +1,2192 @@
+diff --git a/Makefile b/Makefile
+index 2680fa9d7..efbfe882a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -408,6 +408,10 @@ QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
+ # capability discovery exercise real config space on both arches.
+ # virtio-rng-pci: no in-tree PCI driver binds it (delivery stays MMIO).
+ QEMU_PCI_TEST_DEV := -device virtio-rng-pci,disable-legacy=on
++# Issue #394 Slice A: virtio-gpu backend (non-bound until Slice C drivers
++# land; delivery stays MMIO). Append-only after storage (slot/IRQ mapping
++# preserved); `QEMU_FB_GPU=` disables the device for ramfb/gap runs.
++QEMU_FB_GPU ?= -device virtio-gpu-device
+ 
+ # For aarch64, load kernel directly instead of via ISO/GRUB
+ ifeq ($(ARCH),aarch64)
+@@ -421,7 +425,7 @@ ifeq ($(ARCH),aarch64)
+ VIRT_DTB          := build/virt.dtb
+ VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
+ QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
+-                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
++                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
+                 -machine virt -cpu cortex-a72 -display none -no-reboot \
+                 -dtb $(VIRT_DTB) \
+                 -semihosting-config enable=on,target=native
+@@ -446,7 +450,7 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
+ 	$(OBJCOPY) -O binary $< $@
+ 
+ QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
+-                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
++                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
+                 -machine virt -bios default -display none -no-reboot
+ endif
+ 
+diff --git a/audits/pending_patch-394-sliceA.diff b/audits/pending_patch-394-sliceA.diff
+new file mode 100644
+index 000000000..e1e1a7afe
+--- /dev/null
++++ b/audits/pending_patch-394-sliceA.diff
+@@ -0,0 +1,1086 @@
++diff --git a/Makefile b/Makefile
++index 2680fa9d7..efbfe882a 100644
++--- a/Makefile
+++++ b/Makefile
++@@ -408,6 +408,10 @@ QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
++ # capability discovery exercise real config space on both arches.
++ # virtio-rng-pci: no in-tree PCI driver binds it (delivery stays MMIO).
++ QEMU_PCI_TEST_DEV := -device virtio-rng-pci,disable-legacy=on
+++# Issue #394 Slice A: virtio-gpu backend (non-bound until Slice C drivers
+++# land; delivery stays MMIO). Append-only after storage (slot/IRQ mapping
+++# preserved); `QEMU_FB_GPU=` disables the device for ramfb/gap runs.
+++QEMU_FB_GPU ?= -device virtio-gpu-device
++ 
++ # For aarch64, load kernel directly instead of via ISO/GRUB
++ ifeq ($(ARCH),aarch64)
++@@ -421,7 +425,7 @@ ifeq ($(ARCH),aarch64)
++ VIRT_DTB          := build/virt.dtb
++ VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
++ QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
++-                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
+++                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
++                 -machine virt -cpu cortex-a72 -display none -no-reboot \
++                 -dtb $(VIRT_DTB) \
++                 -semihosting-config enable=on,target=native
++@@ -446,7 +450,7 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
++ 	$(OBJCOPY) -O binary $< $@
++ 
++ QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
++-                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
+++                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) $(QEMU_FB_GPU) \
++                 -machine virt -bios default -display none -no-reboot
++ endif
++ 
++diff --git a/src/kernel/arch/virtio.hpp b/src/kernel/arch/virtio.hpp
++index 7e53fbfaa..4c1ad5aff 100644
++--- a/src/kernel/arch/virtio.hpp
+++++ b/src/kernel/arch/virtio.hpp
++@@ -36,10 +36,12 @@ constexpr uint16_t VIRTIO_PCI_VENDOR = 0x1AF4;
++ /// Virtio PCI device IDs (modern = 0x1040 + type)
++ constexpr uint16_t VIRTIO_DEVICE_BLOCK = 0x1042; // modern virtio-blk
++ constexpr uint16_t VIRTIO_DEVICE_NET = 0x1041;   // modern virtio-net
+++constexpr uint16_t VIRTIO_DEVICE_GPU = 0x1050;   // modern virtio-gpu (issue #394)
++ 
++ /// Legacy device IDs
++ constexpr uint16_t VIRTIO_DEVICE_BLOCK_LEGACY = 0x1001;
++ constexpr uint16_t VIRTIO_DEVICE_NET_LEGACY = 0x1000;
+++constexpr uint16_t VIRTIO_DEVICE_GPU_LEGACY = 0x1010;
++ 
++ /// Virtio PCI capability types (cfg_type in virtio_pci_cap)
++ enum VirtioCfgType : uint8_t {
++@@ -213,6 +215,7 @@ constexpr uint32_t VIRTIO_MMIO_VERSION_LEGACY = 1;
++ constexpr uint32_t VIRTIO_MMIO_REGION_SIZE = 0x200;
++ constexpr uint32_t VIRTIO_MMIO_DEVICE_NET = 1;
++ constexpr uint32_t VIRTIO_MMIO_DEVICE_BLOCK = 2;
+++constexpr uint32_t VIRTIO_MMIO_DEVICE_GPU = 16; // issue #394
++ constexpr uint16_t VIRTIO_MMIO_REG_NONE = 0xFFFF;
++ 
++ /// Legacy (v1) queue chunk geometry (issue #350): one contiguous chunk
++@@ -302,6 +305,8 @@ constexpr uint16_t virtio_mmio_device_id(uint16_t pci_id) {
++         return VIRTIO_MMIO_DEVICE_NET;
++     if (pci_id == VIRTIO_DEVICE_BLOCK || pci_id == VIRTIO_DEVICE_BLOCK_LEGACY)
++         return VIRTIO_MMIO_DEVICE_BLOCK;
+++    if (pci_id == VIRTIO_DEVICE_GPU || pci_id == VIRTIO_DEVICE_GPU_LEGACY)
+++        return VIRTIO_MMIO_DEVICE_GPU;
++     return 0;
++ }
++ 
++diff --git a/src/kernel/driver/fb_backing.cpp b/src/kernel/driver/fb_backing.cpp
++new file mode 100644
++index 000000000..a82d74267
++--- /dev/null
+++++ b/src/kernel/driver/fb_backing.cpp
++@@ -0,0 +1,104 @@
+++/*
+++ * NexIOS RTOS — Development Roadmap / Kernel Core
+++ * Copyright (C) 2026 Arnold Hasshold
+++ *
+++ * This program is free software: you can redistribute it and/or modify
+++ * it under the terms of the GNU General Public License as published by
+++ * the Free Software Foundation, either version 3 of the License, or
+++ * (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+++ */
+++
+++/// @file fb_backing.cpp
+++/// @brief Boot-time PMM-backed framebuffer store (issue #394).
+++
+++#include <kernel/driver/fb_backing.hpp>
+++
+++#if !defined(CONFIG_ARCH_X86_64)
+++
+++#include <kernel/arch/io.hpp>
+++#include <kernel/memory/pmm.hpp>
+++#include <constants.hpp>
+++#include <string.hpp>
+++
+++namespace kernel::fb {
+++
+++namespace {
+++
+++uint64_t g_backing_phys = 0;
+++uint64_t g_backing_virt = 0;
+++uint32_t g_backing_pages = 0;
+++
+++} // namespace
+++
+++bool backing_init(uint32_t width, uint32_t height) {
+++    if (g_backing_phys != 0) {
+++        return g_backing_virt != 0;
+++    }
+++    if (width == 0 || height == 0 || width > FB_MAX_WIDTH ||
+++        height > FB_MAX_HEIGHT) {
+++        return false;
+++    }
+++    uint64_t span = static_cast<uint64_t>(width) * height * 4;
+++    if (span == 0 || span > FB_MAX_BYTES) {
+++        return false;
+++    }
+++    uint32_t pages = static_cast<uint32_t>((span + 4095) / 4096);
+++    if (pages == 0 || pages > FB_MAX_PAGES) {
+++        return false;
+++    }
+++    uint64_t phys = PMM::alloc_contiguous(pages);
+++    if (!phys) {
+++        return false;
+++    }
+++    g_backing_phys = phys;
+++    g_backing_virt = arch::HHDM_OFFSET + phys;
+++    g_backing_pages = pages;
+++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+++    memset(reinterpret_cast<void *>(g_backing_virt), 0,
+++           static_cast<size_t>(pages) * 4096);
+++    return true;
+++}
+++
+++void backing_release() {
+++    if (g_backing_phys == 0)
+++        return;
+++    for (uint32_t i = 0; i < g_backing_pages; ++i) {
+++        PMM::free_page(g_backing_phys + static_cast<uint64_t>(i) * 4096);
+++    }
+++    g_backing_phys = 0;
+++    g_backing_virt = 0;
+++    g_backing_pages = 0;
+++}
+++
+++uint8_t *backing_ptr() {
+++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+++    return reinterpret_cast<uint8_t *>(g_backing_virt);
+++}
+++
+++uint32_t backing_bytes() {
+++    return g_backing_pages * 4096;
+++}
+++
+++bool backing_phys(uint32_t page_idx, uint64_t &out_phys) {
+++    out_phys = 0;
+++    if (g_backing_phys == 0 || page_idx >= g_backing_pages)
+++        return false;
+++    out_phys = g_backing_phys + static_cast<uint64_t>(page_idx) * 4096;
+++    return true;
+++}
+++
+++uint32_t backing_pages() {
+++    return g_backing_pages;
+++}
+++
+++} // namespace kernel::fb
+++
+++#endif // !CONFIG_ARCH_X86_64
++diff --git a/src/kernel/driver/fb_backing.hpp b/src/kernel/driver/fb_backing.hpp
++new file mode 100644
++index 000000000..b04250ccd
++--- /dev/null
+++++ b/src/kernel/driver/fb_backing.hpp
++@@ -0,0 +1,74 @@
+++#pragma once
+++
+++/*
+++ * NexIOS RTOS — Development Roadmap / Kernel Core
+++ * Copyright (C) 2026 Arnold Hasshold
+++ *
+++ * This program is free software: you can redistribute it and/or modify
+++ * it under the terms of the GNU General Public License as published by
+++ * the Free Software Foundation, either version 3 of the License, or
+++ * (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+++ */
+++
+++/// @file fb_backing.hpp
+++/// @brief Boot-time framebuffer backing store for non-x86 virtio-gpu/ramfb
+++/// backends (issue #394).  Guest-RAM scanout: the device reads pixels from
+++/// this buffer, so no VMM Device/UC remap is needed.
+++/// @note PMM-backed, NOT static BSS: a 4 MiB static backing trips the riscv64
+++/// boot.S fail-stop (`kernel_phys_end` must stay below 0x80C00000 for the
+++/// fixed .boot_stack_rv + PMM metadata slack).  PMM pages allocated during
+++/// boot precede the test-isolation baseline, so the ResourceTracker delta
+++/// stays zero — same discipline as virtio-blk queue pages.
+++
+++#include <types.hpp>
+++
+++#if !defined(CONFIG_ARCH_X86_64)
+++
+++namespace kernel::fb {
+++
+++/// Backing geometry bound (QEMU std VGA 1280x800x32; device modes above are
+++/// rejected before any resource is created).
+++constexpr uint32_t FB_MAX_WIDTH = 1280;
+++constexpr uint32_t FB_MAX_HEIGHT = 800;
+++constexpr uint32_t FB_MAX_BPP = 32;
+++constexpr uint32_t FB_MAX_BYTES = FB_MAX_WIDTH * FB_MAX_HEIGHT * (FB_MAX_BPP / 8);
+++constexpr uint32_t FB_MAX_PAGES = FB_MAX_BYTES / 4096;
+++static_assert(FB_MAX_BYTES % 4096 == 0, "backing must be page-multiple");
+++static_assert(FB_MAX_BYTES == 4096000, "1280x800x32 backing size");
+++
+++/// @brief Allocate the backing store for a validated mode (BOOT_ONLY).
+++/// PMM-contiguous, zeroed, readable via backing_ptr() (HHDM alias).
+++/// @param width,height Validated mode geometry.
+++/// @return true on success (backing_ptr()/backing_phys() live until reboot).
+++bool backing_init(uint32_t width, uint32_t height);
+++
+++/// @brief Release the backing store (failure paths only; success pins it).
+++void backing_release();
+++
+++/// @brief Backing virtual address (HHDM alias, zeroed) or nullptr.
+++/// @return VA of the backing store.
+++uint8_t *backing_ptr();
+++
+++/// @brief Backing size in bytes (page-rounded mode span) or 0.
+++uint32_t backing_bytes();
+++
+++/// @brief Physical address of backing page @p page_idx (0-based).
+++/// @param page_idx Page index (< page count).
+++/// @param out_phys Receives the page phys on success.
+++/// @return true on success (fails closed on bounds errors).
+++bool backing_phys(uint32_t page_idx, uint64_t &out_phys);
+++
+++/// @brief Allocated page count (0 when uninitialised).
+++uint32_t backing_pages();
+++
+++} // namespace kernel::fb
+++
+++#endif // !CONFIG_ARCH_X86_64
++diff --git a/src/kernel/driver/virtio_gpu.cpp b/src/kernel/driver/virtio_gpu.cpp
++new file mode 100644
++index 000000000..93a88c5be
++--- /dev/null
+++++ b/src/kernel/driver/virtio_gpu.cpp
++@@ -0,0 +1,375 @@
+++/*
+++ * NexIOS RTOS — Development Roadmap / Kernel Core
+++ * Copyright (C) 2026 Arnold Hasshold
+++ *
+++ * This program is free software: you can redistribute it and/or modify
+++ * it under the terms of the GNU General Public License as published by
+++ * the Free Software Foundation, either version 3 of the License, or
+++ * (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+++ */
+++
+++/// @file virtio_gpu.cpp
+++/// @brief virtio-gpu control-queue driver over legacy-v1 virtio-MMIO
+++/// (issue #394 Slice A).  Boot-time, single-hart, no ISR: one in-flight
+++/// command, bounded polls, static storage only.
+++
+++#include <kernel/driver/virtio_gpu.hpp>
+++
+++#if !defined(CONFIG_ARCH_X86_64)
+++
+++#include <kernel/arch/virtio.hpp>
+++#include <kernel/driver/fb_backing.hpp>
+++#include <kernel/memory/vmm.hpp>
+++#include <kernel/memory/vmm_errors.hpp>
+++#include <kernel/sync/spinlock.hpp>
+++#include <kernel/sync/spinlock_guard.hpp>
+++#include <lib/atomic.hpp>
+++#include <logger.hpp>
+++#include <string.hpp>
+++
+++namespace kernel::gpu {
+++
+++namespace {
+++
+++// --- Static driver state (BSS only, no PMM/MemPool) ---
+++
+++arch::VirtioTransport g_transport{};
+++alignas(4096) uint8_t g_queue_chunk[8192] = {};
+++// Page-aligned staging: VMM::virt_to_phys_err rejects sub-page addresses,
+++// so commands/responses live here (copied in), never on the stack or in
+++// 16 B-aligned BSS.  Sizes cover the largest command (ATTACH_BACKING with
+++// FB_MAX_PAGES entries: 32 + 1000*16 = 16032) and response (display info).
+++alignas(4096) uint8_t g_cmd_buf[16384] = {};
+++alignas(4096) uint8_t g_resp_buf[4096] = {};
+++sync::SpinLock g_gpu_lock{};
+++arch::VirtqDesc *g_desc = nullptr;
+++arch::VirtqAvail *g_avail = nullptr;
+++arch::VirtqUsed *g_used = nullptr;
+++uint32_t g_width = 0;
+++uint32_t g_height = 0;
+++uint16_t g_avail_idx = 0;
+++bool g_ready = false;
+++bool g_attempted = false;
+++
+++/// @brief Physical address of a driver-owned VA (fail-closed 0).
+++uint64_t phys_of(const void *p) {
+++    uint64_t phys = 0;
+++    if (!p)
+++        return 0;
+++    if (VMM::virt_to_phys_err(reinterpret_cast<uint64_t>(p), phys) !=
+++        errors::VMM_ERR_OK) {
+++        return 0;
+++    }
+++    return phys;
+++}
+++
+++/// @brief Submit the command already staged in g_cmd_buf (see submit()).
+++/// @return true on transport success with the expected response type.
+++/// The response (if any) lands in g_resp_buf — read it via
+++/// virtio_gpu_resp() before the next submit().
+++bool submit_staged(uint32_t req_len, uint32_t resp_len,
+++                   uint32_t expected_type) {
+++    if (req_len < sizeof(GpuCtrlHdr) || req_len > sizeof(g_cmd_buf) ||
+++        resp_len < 4 || resp_len > sizeof(g_resp_buf)) {
+++        return false;
+++    }
+++    uint64_t req_phys = phys_of(g_cmd_buf);
+++    uint64_t resp_phys = phys_of(g_resp_buf);
+++    if (!req_phys || !resp_phys) {
+++        return false;
+++    }
+++    memset(g_resp_buf, 0, sizeof(g_resp_buf));
+++
+++    // Single flight on the fixed desc[0]/desc[1] pair (polled completion —
+++    // every command finishes before the next starts, so reuse is safe).
+++    g_desc[0].addr = req_phys;
+++    g_desc[0].len = req_len;
+++    g_desc[0].flags = arch::VIRTIO_DESC_F_NEXT;
+++    g_desc[0].next = 1;
+++    g_desc[1].addr = resp_phys;
+++    g_desc[1].len = resp_len;
+++    g_desc[1].flags = arch::VIRTIO_DESC_F_WRITE;
+++    g_desc[1].next = 0;
+++
+++    // Snapshot the used index BEFORE the avail push + notify (a completion
+++    // observed after notify races the push — blk H-3 pattern).
+++    uint16_t used_before = g_used->idx;
+++    g_avail->ring[g_avail_idx % GPU_QUEUE_SIZE] = 0;
+++    kernel::atomic_fence();
+++    g_avail->idx = static_cast<uint16_t>(g_avail_idx + 1);
+++    kernel::atomic_fence();
+++    arch::virtio_notify(g_transport, 0);
+++    ++g_avail_idx;
+++
+++    int timeout = GPU_CMD_TIMEOUT_ITERS;
+++    while (g_used->idx == used_before && --timeout > 0) {
+++        kernel::atomic_fence();
+++        arch::pause();
+++    }
+++    if (timeout <= 0) {
+++        Logger::error("virtio-gpu: command timeout");
+++        return false;
+++    }
+++    uint16_t used_now = g_used->idx;
+++    uint32_t echo =
+++        g_used->ring[(used_now - 1) % GPU_QUEUE_SIZE].id;
+++    if (echo != 0) {
+++        Logger::error("virtio-gpu: completion id mismatch");
+++        return false;
+++    }
+++    uint32_t type = 0;
+++    __builtin_memcpy(&type, g_resp_buf, sizeof(type));
+++    return type == expected_type;
+++}
+++
+++} // namespace
+++
+++/// @brief Response staging buffer (valid until the next submit).
+++const void *virtio_gpu_resp() {
+++    return g_resp_buf;
+++}
+++
+++namespace {
+++// submit() lives here (internal linkage): the ring helpers above are in the
+++// same TU-unique namespace, so this block shares them.
+++bool submit(const void *req, uint32_t req_len, uint32_t resp_len,
+++            uint32_t expected_type) {
+++    if (!req) {
+++        return false;
+++    }
+++    if (req != g_cmd_buf) {
+++        if (req_len > sizeof(g_cmd_buf)) {
+++            return false;
+++        }
+++        memcpy(g_cmd_buf, req, req_len);
+++    }
+++    return submit_staged(req_len, resp_len, expected_type);
+++}
+++
+++} // namespace
+++
+++bool virtio_gpu_probe(uint32_t &w, uint32_t &h) {
+++    w = 0;
+++    h = 0;
+++    if (g_attempted) {
+++        if (g_ready) {
+++            w = g_width;
+++            h = g_height;
+++            return true;
+++        }
+++        return false;
+++    }
+++    g_attempted = true;
+++
+++    // DTB-primary discovery (issue #350 helpers): DeviceID register
+++    // filter selects the GPU transport (MMIO id 16).
+++    if (!arch::virtio_find_device(arch::VIRTIO_DEVICE_GPU, g_transport)) {
+++        return false;
+++    }
+++    if (!arch::virtio_init_transport(g_transport)) {
+++        Logger::error("virtio-gpu: transport init failed");
+++        return false;
+++    }
+++    if (!arch::virtio_negotiate_features(g_transport,
+++                                         arch::VIRTIO_F_VERSION_1)) {
+++        Logger::error("virtio-gpu: feature negotiation failed");
+++        return false;
+++    }
+++
+++    // Legacy-v1 queue: one contiguous chunk (planner A8 geometry) —
+++    // desc at +0, avail right after, used at the single-sourced offset.
+++    uint64_t chunk_phys = phys_of(g_queue_chunk);
+++    if (!chunk_phys) {
+++        Logger::error("virtio-gpu: queue chunk unmapped");
+++        return false;
+++    }
+++    uint64_t avail_phys =
+++        chunk_phys + static_cast<uint64_t>(GPU_QUEUE_SIZE) * 16;
+++    uint64_t used_phys =
+++        chunk_phys + arch::virtio_legacy_used_off(GPU_QUEUE_SIZE);
+++    if (used_phys + 8 + GPU_QUEUE_SIZE * 8 > chunk_phys + sizeof(g_queue_chunk)) {
+++        Logger::error("virtio-gpu: queue geometry overflows chunk");
+++        return false;
+++    }
+++    g_desc = reinterpret_cast<arch::VirtqDesc *>(g_queue_chunk);
+++    g_avail = reinterpret_cast<arch::VirtqAvail *>(g_queue_chunk +
+++                                                  GPU_QUEUE_SIZE * 16);
+++    g_used = reinterpret_cast<arch::VirtqUsed *>(
+++        g_queue_chunk + arch::virtio_legacy_used_off(GPU_QUEUE_SIZE));
+++    memset(g_queue_chunk, 0, sizeof(g_queue_chunk));
+++    if (!arch::virtio_setup_queue(g_transport, 0, GPU_QUEUE_SIZE, chunk_phys,
+++                                  avail_phys, used_phys)) {
+++        Logger::error("virtio-gpu: queue setup failed");
+++        return false;
+++    }
+++    uint8_t status = arch::virtio_read_status(g_transport);
+++    arch::virtio_write_status(g_transport, status | arch::VIRTIO_STATUS_DRIVER_OK);
+++
+++    SpinLockGuard<sync::SpinLock> guard(g_gpu_lock);
+++
+++    // GET_DISPLAY_INFO → preferred mode from output 0.
+++    GpuCtrlHdr get{};
+++    get.type = GPU_CMD_GET_DISPLAY_INFO;
+++    if (!submit(&get, sizeof(get), sizeof(GpuDisplayInfo),
+++                GPU_RESP_OK_DISPLAY_INFO)) {
+++        Logger::error("virtio-gpu: GET_DISPLAY_INFO failed");
+++        return false;
+++    }
+++    const auto *info =
+++        reinterpret_cast<const GpuDisplayInfo *>(virtio_gpu_resp());
+++    if (!info->pmodes[0].enabled || info->pmodes[0].rect.width == 0 ||
+++        info->pmodes[0].rect.height == 0 ||
+++        info->pmodes[0].rect.width > kernel::fb::FB_MAX_WIDTH ||
+++        info->pmodes[0].rect.height > kernel::fb::FB_MAX_HEIGHT) {
+++        Logger::error("virtio-gpu: display mode rejected");
+++        return false;
+++    }
+++    uint32_t width = info->pmodes[0].rect.width;
+++    uint32_t height = info->pmodes[0].rect.height;
+++    uint64_t span = static_cast<uint64_t>(width) * height * 4;
+++    if (span == 0 || span > kernel::fb::FB_MAX_BYTES) {
+++        Logger::error("virtio-gpu: span out of bounds");
+++        return false;
+++    }
+++    uint32_t pages = static_cast<uint32_t>((span + 4095) / 4096);
+++    if (pages == 0 || pages > kernel::fb::FB_MAX_PAGES) {
+++        Logger::error("virtio-gpu: page count out of bounds");
+++        return false;
+++    }
+++    // Backing store: PMM-contiguous at boot (pre-baseline, zero
+++    // ResourceTracker delta). Static BSS cannot be used — a 4 MiB backing
+++    // trips the riscv64 boot.S fail-stop (kernel_phys_end < 0x80C00000).
+++    if (!kernel::fb::backing_init(width, height)) {
+++        Logger::error("virtio-gpu: backing alloc failed");
+++        return false;
+++    }
+++
+++    // RESOURCE_CREATE_2D (id 1, XRGB8888).
+++    GpuCreate2d create{};
+++    create.hdr.type = GPU_CMD_RESOURCE_CREATE_2D;
+++    create.resource_id = GPU_RESOURCE_ID;
+++    create.format = GPU_FORMAT_B8G8R8X8_UNORM;
+++    create.width = width;
+++    create.height = height;
+++    if (!submit(&create, sizeof(create), sizeof(GpuCtrlHdr),
+++                GPU_RESP_OK_NODATA)) {
+++        kernel::fb::backing_release();
+++        Logger::error("virtio-gpu: CREATE_2D failed");
+++        return false;
+++    }
+++
+++    // RESOURCE_ATTACH_BACKING (id 1, one entry per backing page).
+++    uint32_t attach_len =
+++        static_cast<uint32_t>(sizeof(GpuAttachBacking) +
+++                              pages * sizeof(GpuMemEntry));
+++    if (attach_len > sizeof(g_cmd_buf)) {
+++        kernel::fb::backing_release();
+++        Logger::error("virtio-gpu: attach overflows cmd buffer");
+++        return false;
+++    }
+++    auto *attach = reinterpret_cast<GpuAttachBacking *>(g_cmd_buf);
+++    attach->hdr.type = GPU_CMD_RESOURCE_ATTACH_BACKING;
+++    attach->hdr.flags = 0;
+++    attach->hdr.fence_id = 0;
+++    attach->hdr.ctx_id = 0;
+++    attach->hdr.padding = 0;
+++    attach->resource_id = GPU_RESOURCE_ID;
+++    attach->nr_entries = pages;
+++    auto *entries = reinterpret_cast<GpuMemEntry *>(g_cmd_buf + sizeof(*attach));
+++    for (uint32_t i = 0; i < pages; ++i) {
+++        uint64_t p = 0;
+++        if (!kernel::fb::backing_phys(i, p)) {
+++            kernel::fb::backing_release();
+++            Logger::error("virtio-gpu: backing page unmapped");
+++            return false;
+++        }
+++        entries[i].addr = p;
+++        entries[i].length = 4096;
+++        entries[i].padding = 0;
+++    }
+++    if (!submit_staged(attach_len, sizeof(GpuCtrlHdr),
+++                       GPU_RESP_OK_NODATA)) {
+++        GpuUnref unref{};
+++        unref.hdr.type = GPU_CMD_RESOURCE_UNREF;
+++        unref.resource_id = GPU_RESOURCE_ID;
+++        submit(&unref, sizeof(unref), sizeof(GpuCtrlHdr),
+++               GPU_RESP_OK_NODATA);
+++        kernel::fb::backing_release();
+++        Logger::error("virtio-gpu: ATTACH_BACKING failed");
+++        return false;
+++    }
+++
+++    // SET_SCANOUT (output 0, full rect) + initial full present.
+++    GpuSetScanout scan{};
+++    scan.hdr.type = GPU_CMD_SET_SCANOUT;
+++    scan.rect.x = 0;
+++    scan.rect.y = 0;
+++    scan.rect.width = width;
+++    scan.rect.height = height;
+++    scan.scanout_id = 0;
+++    scan.resource_id = GPU_RESOURCE_ID;
+++    if (!submit(&scan, sizeof(scan), sizeof(GpuCtrlHdr),
+++                GPU_RESP_OK_NODATA)) {
+++        GpuUnref unref{};
+++        unref.hdr.type = GPU_CMD_RESOURCE_UNREF;
+++        unref.resource_id = GPU_RESOURCE_ID;
+++        submit(&unref, sizeof(unref), sizeof(GpuCtrlHdr),
+++               GPU_RESP_OK_NODATA);
+++        kernel::fb::backing_release();
+++        Logger::error("virtio-gpu: SET_SCANOUT failed");
+++        return false;
+++    }
+++
+++    g_width = width;
+++    g_height = height;
+++    g_ready = true;
+++    w = width;
+++    h = height;
+++    return true;
+++}
+++
+++bool virtio_gpu_present(uint32_t y0, uint32_t y1) {
+++    if (!g_ready)
+++        return false;
+++    if (y0 >= y1 || y0 >= g_height)
+++        return y0 == y1; // empty band: nothing to do
+++    if (y1 > g_height)
+++        y1 = g_height;
+++    SpinLockGuard<sync::SpinLock> guard(g_gpu_lock);
+++
+++    uint32_t pitch = g_width * 4;
+++    GpuTransfer xfer{};
+++    xfer.hdr.type = GPU_CMD_TRANSFER_TO_HOST_2D;
+++    xfer.rect.x = 0;
+++    xfer.rect.y = y0;
+++    xfer.rect.width = g_width;
+++    xfer.rect.height = y1 - y0;
+++    xfer.offset = static_cast<uint64_t>(y0) * pitch;
+++    xfer.resource_id = GPU_RESOURCE_ID;
+++    if (!submit(&xfer, sizeof(xfer), sizeof(GpuCtrlHdr),
+++                GPU_RESP_OK_NODATA)) {
+++        return false;
+++    }
+++    GpuFlush flush{};
+++    flush.hdr.type = GPU_CMD_RESOURCE_FLUSH;
+++    flush.rect = xfer.rect;
+++    flush.resource_id = GPU_RESOURCE_ID;
+++    return submit(&flush, sizeof(flush), sizeof(GpuCtrlHdr),
+++                  GPU_RESP_OK_NODATA);
+++}
+++
+++bool virtio_gpu_ready() {
+++    return g_ready;
+++}
+++
+++} // namespace kernel::gpu
+++
+++#endif // !CONFIG_ARCH_X86_64
++diff --git a/src/kernel/driver/virtio_gpu.hpp b/src/kernel/driver/virtio_gpu.hpp
++new file mode 100644
++index 000000000..9aa125a96
++--- /dev/null
+++++ b/src/kernel/driver/virtio_gpu.hpp
++@@ -0,0 +1,179 @@
+++#pragma once
+++
+++/*
+++ * NexIOS RTOS — Development Roadmap / Kernel Core
+++ * Copyright (C) 2026 Arnold Hasshold
+++ *
+++ * This program is free software: you can redistribute it and/or modify
+++ * it under the terms of the GNU General Public License as published by
+++ * the Free Software Foundation, either version 3 of the License, or
+++ * (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+++ */
+++
+++/// @file virtio_gpu.hpp
+++/// @brief virtio-gpu control-queue driver over legacy-v1 virtio-MMIO
+++/// (issue #394 Slice A).  Guest-RAM 2D scanout: no BAR, no VMM remap —
+++/// the device reads pixels from the static fb_backing buffer (phys via
+++/// VMM::virt_to_phys_err).  Device IDs: 0x1050 modern / 0x1010 legacy
+++/// (MMIO DeviceID 16).  Command wire formats follow Virtio 1.2 §5.7.
+++
+++#include <types.hpp>
+++
+++#if !defined(CONFIG_ARCH_X86_64)
+++
+++namespace kernel::gpu {
+++
+++// --- Wire protocol (Virtio 1.2 §5.7.6) ---
+++
+++constexpr uint32_t GPU_CMD_GET_DISPLAY_INFO = 0x0100;
+++constexpr uint32_t GPU_CMD_RESOURCE_CREATE_2D = 0x0101;
+++constexpr uint32_t GPU_CMD_RESOURCE_UNREF = 0x0102;
+++constexpr uint32_t GPU_CMD_SET_SCANOUT = 0x0103;
+++constexpr uint32_t GPU_CMD_RESOURCE_FLUSH = 0x0104;
+++constexpr uint32_t GPU_CMD_TRANSFER_TO_HOST_2D = 0x0105;
+++constexpr uint32_t GPU_CMD_RESOURCE_ATTACH_BACKING = 0x0106;
+++constexpr uint32_t GPU_RESP_OK_NODATA = 0x1100;
+++constexpr uint32_t GPU_RESP_OK_DISPLAY_INFO = 0x1101;
+++constexpr uint32_t GPU_RESP_ERR_UNSPEC = 0x1200;
+++
+++constexpr uint32_t GPU_FORMAT_B8G8R8X8_UNORM = 2;
+++
+++constexpr uint16_t GPU_QUEUE_SIZE = 8;
+++constexpr uint32_t GPU_RESOURCE_ID = 1;
+++constexpr int GPU_CMD_TIMEOUT_ITERS = 1000000;
+++
+++/// Backend selected by the framebuffer init chain (GPU preferred).
+++enum class FbBackend : uint8_t {
+++    None = 0,
+++    VirtioGpu = 1,
+++    Ramfb = 2,
+++};
+++
+++/// @brief Pure backend-selection policy (QE-testable, no hardware).
+++/// @return VirtioGpu when the GPU probed (ramfb ignored), Ramfb when only
+++/// ramfb probed, None when neither did.
+++constexpr FbBackend select_backend(bool gpu_ok, bool ramfb_ok) {
+++    if (gpu_ok)
+++        return FbBackend::VirtioGpu;
+++    if (ramfb_ok)
+++        return FbBackend::Ramfb;
+++    return FbBackend::None;
+++}
+++
+++// --- Wire structs (packed; static_asserted sizes guard the layout) ---
+++
+++struct GpuCtrlHdr {
+++    uint32_t type;
+++    uint32_t flags;
+++    uint64_t fence_id;
+++    uint32_t ctx_id;
+++    uint32_t padding;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuCtrlHdr) == 24, "gpu ctrl hdr is 24 B");
+++
+++struct GpuRect {
+++    uint32_t x;
+++    uint32_t y;
+++    uint32_t width;
+++    uint32_t height;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuRect) == 16, "gpu rect is 16 B");
+++
+++struct GpuDisplayOne {
+++    GpuRect rect;
+++    uint32_t enabled;
+++    uint32_t flags;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuDisplayOne) == 24, "gpu display-one is 24 B");
+++
+++struct GpuDisplayInfo {
+++    GpuCtrlHdr hdr;
+++    GpuDisplayOne pmodes[16];
+++} __attribute__((packed));
+++static_assert(sizeof(GpuDisplayInfo) == 24 + 16 * 24,
+++              "gpu display-info fits the 512 B response");
+++
+++struct GpuCreate2d {
+++    GpuCtrlHdr hdr;
+++    uint32_t resource_id;
+++    uint32_t format;
+++    uint32_t width;
+++    uint32_t height;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuCreate2d) == 40, "gpu create-2d is 40 B");
+++
+++struct GpuAttachBacking {
+++    GpuCtrlHdr hdr;
+++    uint32_t resource_id;
+++    uint32_t nr_entries;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuAttachBacking) == 32, "gpu attach is 32 B");
+++
+++struct GpuMemEntry {
+++    uint64_t addr;
+++    uint32_t length;
+++    uint32_t padding;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuMemEntry) == 16, "gpu mem entry is 16 B");
+++
+++struct GpuSetScanout {
+++    GpuCtrlHdr hdr;
+++    GpuRect rect;
+++    uint32_t scanout_id;
+++    uint32_t resource_id;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuSetScanout) == 48, "gpu set-scanout is 48 B");
+++
+++struct GpuTransfer {
+++    GpuCtrlHdr hdr;
+++    GpuRect rect;
+++    uint64_t offset;
+++    uint32_t resource_id;
+++    uint32_t padding;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuTransfer) == 56, "gpu transfer is 56 B");
+++
+++struct GpuFlush {
+++    GpuCtrlHdr hdr;
+++    GpuRect rect;
+++    uint32_t resource_id;
+++    uint32_t padding;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuFlush) == 48, "gpu flush is 48 B");
+++
+++struct GpuUnref {
+++    GpuCtrlHdr hdr;
+++    uint32_t resource_id;
+++    uint32_t padding;
+++} __attribute__((packed));
+++static_assert(sizeof(GpuUnref) == 32, "gpu unref is 32 B");
+++
+++// --- Driver API (boot-time, single-hart, no ISR registered) ---
+++
+++/// @brief Probe the virtio-gpu device, create the 2D resource + scanout.
+++/// @param w Receives the display width on success.
+++/// @param h Receives the display height on success.
+++/// @return true when the GPU path is live (idempotent latch inside).
+++bool virtio_gpu_probe(uint32_t &w, uint32_t &h);
+++
+++/// @brief Flush the dirty row band [y0, y1) to the host scanout.
+++/// @return true when the transfer+flush completed (false = keep dirty).
+++bool virtio_gpu_present(uint32_t y0, uint32_t y1);
+++
+++/// @brief Response staging buffer (valid until the next submit).
+++const void *virtio_gpu_resp();
+++
+++/// @brief True when the GPU path completed probe successfully.
+++bool virtio_gpu_ready();
+++
+++} // namespace kernel::gpu
+++
+++#endif // !CONFIG_ARCH_X86_64
++diff --git a/src/kernel/log/dmesg_catalog.hpp b/src/kernel/log/dmesg_catalog.hpp
++index 19bd34c51..620905c21 100644
++--- a/src/kernel/log/dmesg_catalog.hpp
+++++ b/src/kernel/log/dmesg_catalog.hpp
++@@ -162,6 +162,8 @@ constexpr DmesgRecord kDmesgCatalog_DRIVER[] = {
++      "Framebuffer backend unavailable (documented gap)"},
++     {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 12, LogSeverity::WARN,
++      "PCI ECAM DT mismatch — board constant kept"},
+++    {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 13, LogSeverity::INFO,
+++     "Framebuffer backend ready"},
++ };
++ 
++ /// @brief Init records (canonical base kDmesgBase_INIT): init-rc, fstab,
++diff --git a/src/services/shell.cpp b/src/services/shell.cpp
++index ab7153b12..e6c2cb35d 100644
++--- a/src/services/shell.cpp
+++++ b/src/services/shell.cpp
++@@ -1814,7 +1814,7 @@ void Shell::cmd_version(int, const char**) {
++     Terminal::write(" (");
++     print_uint(kernel::build_info::bits);
++     Terminal::write("-bit, fb=");
++-    Terminal::write(kernel::build_info::fb_backend);
+++    Terminal::write(service::Framebuffer::backend_name());
++     Terminal::write(")\nType:   ");
++     Terminal::write(kernel::build_info::build_type);
++     Terminal::write("\n");
++diff --git a/src/services/terminal/framebuffer.cpp b/src/services/terminal/framebuffer.cpp
++index 7fc0c2e0f..b972b9d69 100644
++--- a/src/services/terminal/framebuffer.cpp
+++++ b/src/services/terminal/framebuffer.cpp
++@@ -20,6 +20,9 @@
++ #include <services/terminal/font.hpp>
++ #if defined(CONFIG_ARCH_X86_64)
++ #include <kernel/multiboot2.hpp>
+++#else
+++#include <kernel/driver/fb_backing.hpp>
+++#include <kernel/driver/virtio_gpu.hpp>
++ #endif
++ #include <kernel/build_info.hpp>
++ #include <kernel/memory/vmm.hpp>
++@@ -36,10 +39,45 @@ bool Framebuffer::initialized_ = false;
++ #if !defined(CONFIG_ARCH_X86_64)
++ // One-shot gap line (issue #357): boot path only, pre-scheduler.
++ static bool gap_logged = false;
+++// Issue #394: runtime backend selection (Slice A: virtio-gpu; Slice B
+++// appends ramfb before the gap fallthrough).
+++static const char *backend_name_ = kernel::build_info::fb_backend;
+++static kernel::gpu::FbBackend backend_kind_ =
+++    kernel::gpu::FbBackend::None;
+++static bool init_attempted = false;
+++static bool init_result = false;
+++static uint32_t dirty_y0_ = 0;
+++static uint32_t dirty_y1_ = 0;
++ #endif
++ 
++ const char *Framebuffer::backend_name() {
+++#if defined(CONFIG_ARCH_X86_64)
++     return kernel::build_info::fb_backend;
+++#else
+++    return backend_name_;
+++#endif
+++}
+++
+++void Framebuffer::present() {
+++#if !defined(CONFIG_ARCH_X86_64)
+++    if (!initialized_ || dirty_y1_ <= dirty_y0_)
+++        return;
+++    // Only virtio-gpu needs host presentation (multiboot2/ramfb scanouts
+++    // are directly visible memory). Slice B keeps this arm first.
+++    if (backend_kind_ == kernel::gpu::FbBackend::VirtioGpu) {
+++        if (kernel::gpu::virtio_gpu_present(dirty_y0_, dirty_y1_)) {
+++            dirty_y0_ = 0;
+++            dirty_y1_ = 0;
+++        }
+++    }
+++#endif
+++}
+++
+++void Framebuffer::invalidate() {
+++#if !defined(CONFIG_ARCH_X86_64)
+++    dirty_y0_ = 0;
+++    dirty_y1_ = info_.height;
+++#endif
++ }
++ 
++ bool Framebuffer::init() {
++@@ -101,6 +139,40 @@ bool Framebuffer::init() {
++     clear(0x000000);
++     return true;
++ #else
+++    // Runtime backend chain (issue #394): virtio-gpu → ramfb (Slice B) →
+++    // documented gap.  Latched: the second call returns the first result
+++    // without touching devices.
+++    if (init_attempted)
+++        return init_result;
+++    init_attempted = true;
+++
+++    uint32_t w = 0;
+++    uint32_t h = 0;
+++    if (kernel::gpu::virtio_gpu_probe(w, h) && w != 0 && h != 0) {
+++        uint64_t span = static_cast<uint64_t>(w) * h * 4;
+++        if (span <= kernel::fb::backing_bytes()) {
+++            info_.addr = reinterpret_cast<uint64_t>(
+++                kernel::fb::backing_ptr());
+++            info_.pitch = w * 4;
+++            info_.width = w;
+++            info_.height = h;
+++            info_.bpp = 32;
+++            backend_name_ = "virtio-gpu";
+++            backend_kind_ = kernel::gpu::FbBackend::VirtioGpu;
+++            initialized_ = true;
+++            init_result = true;
+++            invalidate();
+++            clear(0x000000);
+++            kernel::Logger::info("[FB] virtio-gpu %dx%d", w, h);
+++            kernel::log::dmesg_push_sev(
+++                kernel::log::ErrorSubsystem::DRIVER,
+++                kernel::log::kDmesgBase_DRIVER + 13,
+++                kernel::log::LogSeverity::INFO,
+++                "Framebuffer backend ready", 0);
+++            return true;
+++        }
+++    }
+++    // Slice B inserts the ramfb probe here (before the gap fallthrough).
++     // Documented gap (issue #357, follow-up #394): no backend on this
++     // arch — loud once, never silent, never a panic.
++     if (!gap_logged) {
++@@ -133,6 +205,9 @@ void Framebuffer::clear(uint32_t color) {
++             if (bpp_bytes > 3) fb[offset + 3] = 0xFF;
++         }
++     }
+++    // Full-frame write: flush the whole band (present checks the backend).
+++    invalidate();
+++    present();
++ }
++ 
++ void Framebuffer::draw_pixel(uint32_t x, uint32_t y, uint32_t color) {
++@@ -180,6 +255,15 @@ void Framebuffer::put_pixel(uint32_t x, uint32_t y, uint32_t color)
++     fb[offset + 1] = (color >> 8) & 0xFF;
++     fb[offset + 2] = (color >> 16) & 0xFF;
++     if (bpp_bytes > 3) fb[offset + 3] = 0xFF;
+++#if !defined(CONFIG_ARCH_X86_64)
+++    // Dirty-row tracking for host presentation (issue #394); draw_pixel
+++    // bounds-checks, direct callers must stay in bounds (terminal paths
+++    // clip via width()/height()).
+++    if (y < dirty_y0_)
+++        dirty_y0_ = y;
+++    if (y + 1 > dirty_y1_)
+++        dirty_y1_ = y + 1;
+++#endif
++ }
++ 
++ // NOLINTBEGIN(bugprone-easily-swappable-parameters)
++diff --git a/src/services/terminal/framebuffer.hpp b/src/services/terminal/framebuffer.hpp
++index d724986b9..7879bf2e6 100644
++--- a/src/services/terminal/framebuffer.hpp
+++++ b/src/services/terminal/framebuffer.hpp
++@@ -80,11 +80,20 @@ public:
++     /// @brief Returns whether the framebuffer was successfully initialised.
++     /// @return True if available.
++     static bool available() { return initialized_; }
++-    /// @brief Compiled-in backend name (issue #357 documented gap).
++-    /// Reports the backend, not runtime success: "multiboot2" on
++-    /// x86_64, "none" where no backend exists.
++-    /// @return Static backend name string.
+++    /// @brief Backend name (issue #394: runtime-selected, was
+++    /// compile-time-only in #357). "multiboot2" on x86_64; on other arches
+++    /// the init chain selects "virtio-gpu" then "ramfb", else "none".
+++    /// @return Backend name string (stable pointer, never null).
++     static const char *backend_name();
+++    /// @brief Flushes dirty rows to the host scanout (issue #394).
+++    /// No-op for backends without host presentation (multiboot2 writes
+++    /// real RAM directly; ramfb points the host at guest RAM directly).
+++    /// Safe to call when unavailable (returns immediately).
+++    static void present();
+++    /// @brief Marks the whole framebuffer dirty (issue #394).
+++    /// Call after direct framebuffer writes that bypass put_pixel
+++    /// (Terminal clear/scroll fast paths) and before the next present().
+++    static void invalidate();
++     /// @brief Reads one pixel back (issue #269 test oracle).
++     /// @return 0x000000 when unavailable or out of bounds.
++     static uint32_t get_pixel(uint32_t x, uint32_t y);
++diff --git a/src/services/terminal/terminal.cpp b/src/services/terminal/terminal.cpp
++index 29246025f..1bb7c327e 100644
++--- a/src/services/terminal/terminal.cpp
+++++ b/src/services/terminal/terminal.cpp
++@@ -79,6 +79,9 @@ void Terminal::putchar(char c) {
++     switch (c) {
++     case '\n':
++         instance_->newline();
+++        // Flush the completed row band to the host scanout (issue #394;
+++        // no-op unless a presenting backend is active).
+++        Framebuffer::present();
++         break;
++     case '\r':
++         instance_->cursor_x_ = 0;
++@@ -218,6 +221,10 @@ void Terminal::clear() {
++     memset(fb, 0, static_cast<size_t>(pitch) * text_h);
++     instance_->cursor_x_ = 0;
++     instance_->cursor_y_ = 0;
+++    // Direct framebuffer write bypassed put_pixel: mark dirty + flush
+++    // (issue #394; no-ops unless a presenting backend is active).
+++    Framebuffer::invalidate();
+++    Framebuffer::present();
++ }
++ 
++ void Terminal::scroll() {
++@@ -242,6 +249,9 @@ void Terminal::scroll() {
++     if (instance_->cursor_y_ > 0) {
++         instance_->cursor_y_--;
++     }
+++    // Direct framebuffer writes bypassed put_pixel (issue #394).
+++    Framebuffer::invalidate();
+++    Framebuffer::present();
++ }
++ 
++ void Terminal::newline() {
++@@ -314,6 +324,8 @@ void Terminal::draw_status_bar(const char* left, const char* right)
++             right_x += FONT_WIDTH;
++         }
++     }
+++    // Status bar is drawn via put_pixel paths: flush it (issue #394).
+++    Framebuffer::present();
++ }
++ 
++ void Terminal::set_cursor_visible(bool visible) {
++@@ -324,6 +336,8 @@ void Terminal::set_cursor_visible(bool visible) {
++         instance_->cursor_x_ * FONT_WIDTH,
++         instance_->cursor_y_ * FONT_HEIGHT,
++         FONT_WIDTH, FONT_HEIGHT, color);
+++    // Cursor cell redrawn via put_pixel: flush it (issue #394).
+++    Framebuffer::present();
++ }
++ 
++ void Terminal::capture_begin(char* buf, size_t size) {
++@@ -403,6 +417,8 @@ void Terminal::show_splash() {
++         Framebuffer::draw_char(hint_x, hint_y, *p, 0x606060, 0x0A0A10);
++         hint_x += FONT_WIDTH;
++     }
+++    // Splash drawn via put_pixel paths: flush it (issue #394).
+++    Framebuffer::present();
++ }
++ 
++ } // namespace service
++diff --git a/test-history.txt b/test-history.txt
++index 52e438c43..60f61a4a6 100644
++--- a/test-history.txt
+++++ b/test-history.txt
++@@ -4353,3 +4353,14 @@ SUMMARY: total=24 ok=24 fail=0
++ 2026-10-21 10:30:52 drivers PASSED: 57 FAILED: 1 TIME: 23s STATUS: sliceC-aarch64-known-#391
++ 2026-10-21 10:30:52 logging_debug PASSED: 36 FAILED: 0 TIME: 21s STATUS: sliceC-aarch64
++ 2026-10-21 10:30:52 drivers PASSED: 56 FAILED: 2 TIME: 28s STATUS: sliceC-riscv64-known-#391x2
+++2026-10-21 11:32:58 ui PASSED: 53 FAILED: 1 TIME: 26s STATUS: sliceA-aarch64-known-cpuinfo
+++2026-10-21 11:32:58 ui PASSED: 53 FAILED: 1 TIME: 25s STATUS: sliceA-riscv64-known-cpuinfo
+++2026-10-21 11:32:58 ui PASSED: 74 FAILED: 0 TIME: 36s STATUS: sliceA-x86_64
+++2026-10-21 11:32:58 drivers PASSED: 57 FAILED: 1 TIME: 22s STATUS: sliceA-aarch64-known-#391
+++2026-10-21 11:32:58 drivers PASSED: 56 FAILED: 2 TIME: 24s STATUS: sliceA-riscv64-known-#391x2
+++2026-10-21 11:32:58 storage PASSED: 166 FAILED: 1 TIME: 44s STATUS: sliceA-aarch64-known-#392
+++2026-10-21 11:32:58 storage PASSED: 166 FAILED: 1 TIME: 44s STATUS: sliceA-riscv64-known-#392
+++2026-10-21 11:32:58 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 20s STATUS: sliceA-aarch64
+++2026-10-21 11:32:58 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 23s STATUS: sliceA-riscv64-known
+++2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 14s STATUS: sliceA-aarch64
+++2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 17s STATUS: sliceA-riscv64
+diff --git a/src/kernel/arch/virtio.hpp b/src/kernel/arch/virtio.hpp
+index 7e53fbfaa..4c1ad5aff 100644
+--- a/src/kernel/arch/virtio.hpp
++++ b/src/kernel/arch/virtio.hpp
+@@ -36,10 +36,12 @@ constexpr uint16_t VIRTIO_PCI_VENDOR = 0x1AF4;
+ /// Virtio PCI device IDs (modern = 0x1040 + type)
+ constexpr uint16_t VIRTIO_DEVICE_BLOCK = 0x1042; // modern virtio-blk
+ constexpr uint16_t VIRTIO_DEVICE_NET = 0x1041;   // modern virtio-net
++constexpr uint16_t VIRTIO_DEVICE_GPU = 0x1050;   // modern virtio-gpu (issue #394)
+ 
+ /// Legacy device IDs
+ constexpr uint16_t VIRTIO_DEVICE_BLOCK_LEGACY = 0x1001;
+ constexpr uint16_t VIRTIO_DEVICE_NET_LEGACY = 0x1000;
++constexpr uint16_t VIRTIO_DEVICE_GPU_LEGACY = 0x1010;
+ 
+ /// Virtio PCI capability types (cfg_type in virtio_pci_cap)
+ enum VirtioCfgType : uint8_t {
+@@ -213,6 +215,7 @@ constexpr uint32_t VIRTIO_MMIO_VERSION_LEGACY = 1;
+ constexpr uint32_t VIRTIO_MMIO_REGION_SIZE = 0x200;
+ constexpr uint32_t VIRTIO_MMIO_DEVICE_NET = 1;
+ constexpr uint32_t VIRTIO_MMIO_DEVICE_BLOCK = 2;
++constexpr uint32_t VIRTIO_MMIO_DEVICE_GPU = 16; // issue #394
+ constexpr uint16_t VIRTIO_MMIO_REG_NONE = 0xFFFF;
+ 
+ /// Legacy (v1) queue chunk geometry (issue #350): one contiguous chunk
+@@ -302,6 +305,8 @@ constexpr uint16_t virtio_mmio_device_id(uint16_t pci_id) {
+         return VIRTIO_MMIO_DEVICE_NET;
+     if (pci_id == VIRTIO_DEVICE_BLOCK || pci_id == VIRTIO_DEVICE_BLOCK_LEGACY)
+         return VIRTIO_MMIO_DEVICE_BLOCK;
++    if (pci_id == VIRTIO_DEVICE_GPU || pci_id == VIRTIO_DEVICE_GPU_LEGACY)
++        return VIRTIO_MMIO_DEVICE_GPU;
+     return 0;
+ }
+ 
+diff --git a/src/kernel/driver/fb_backing.cpp b/src/kernel/driver/fb_backing.cpp
+new file mode 100644
+index 000000000..a82d74267
+--- /dev/null
++++ b/src/kernel/driver/fb_backing.cpp
+@@ -0,0 +1,104 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file fb_backing.cpp
++/// @brief Boot-time PMM-backed framebuffer store (issue #394).
++
++#include <kernel/driver/fb_backing.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++#include <kernel/arch/io.hpp>
++#include <kernel/memory/pmm.hpp>
++#include <constants.hpp>
++#include <string.hpp>
++
++namespace kernel::fb {
++
++namespace {
++
++uint64_t g_backing_phys = 0;
++uint64_t g_backing_virt = 0;
++uint32_t g_backing_pages = 0;
++
++} // namespace
++
++bool backing_init(uint32_t width, uint32_t height) {
++    if (g_backing_phys != 0) {
++        return g_backing_virt != 0;
++    }
++    if (width == 0 || height == 0 || width > FB_MAX_WIDTH ||
++        height > FB_MAX_HEIGHT) {
++        return false;
++    }
++    uint64_t span = static_cast<uint64_t>(width) * height * 4;
++    if (span == 0 || span > FB_MAX_BYTES) {
++        return false;
++    }
++    uint32_t pages = static_cast<uint32_t>((span + 4095) / 4096);
++    if (pages == 0 || pages > FB_MAX_PAGES) {
++        return false;
++    }
++    uint64_t phys = PMM::alloc_contiguous(pages);
++    if (!phys) {
++        return false;
++    }
++    g_backing_phys = phys;
++    g_backing_virt = arch::HHDM_OFFSET + phys;
++    g_backing_pages = pages;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    memset(reinterpret_cast<void *>(g_backing_virt), 0,
++           static_cast<size_t>(pages) * 4096);
++    return true;
++}
++
++void backing_release() {
++    if (g_backing_phys == 0)
++        return;
++    for (uint32_t i = 0; i < g_backing_pages; ++i) {
++        PMM::free_page(g_backing_phys + static_cast<uint64_t>(i) * 4096);
++    }
++    g_backing_phys = 0;
++    g_backing_virt = 0;
++    g_backing_pages = 0;
++}
++
++uint8_t *backing_ptr() {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    return reinterpret_cast<uint8_t *>(g_backing_virt);
++}
++
++uint32_t backing_bytes() {
++    return g_backing_pages * 4096;
++}
++
++bool backing_phys(uint32_t page_idx, uint64_t &out_phys) {
++    out_phys = 0;
++    if (g_backing_phys == 0 || page_idx >= g_backing_pages)
++        return false;
++    out_phys = g_backing_phys + static_cast<uint64_t>(page_idx) * 4096;
++    return true;
++}
++
++uint32_t backing_pages() {
++    return g_backing_pages;
++}
++
++} // namespace kernel::fb
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/driver/fb_backing.hpp b/src/kernel/driver/fb_backing.hpp
+new file mode 100644
+index 000000000..b04250ccd
+--- /dev/null
++++ b/src/kernel/driver/fb_backing.hpp
+@@ -0,0 +1,74 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file fb_backing.hpp
++/// @brief Boot-time framebuffer backing store for non-x86 virtio-gpu/ramfb
++/// backends (issue #394).  Guest-RAM scanout: the device reads pixels from
++/// this buffer, so no VMM Device/UC remap is needed.
++/// @note PMM-backed, NOT static BSS: a 4 MiB static backing trips the riscv64
++/// boot.S fail-stop (`kernel_phys_end` must stay below 0x80C00000 for the
++/// fixed .boot_stack_rv + PMM metadata slack).  PMM pages allocated during
++/// boot precede the test-isolation baseline, so the ResourceTracker delta
++/// stays zero — same discipline as virtio-blk queue pages.
++
++#include <types.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++namespace kernel::fb {
++
++/// Backing geometry bound (QEMU std VGA 1280x800x32; device modes above are
++/// rejected before any resource is created).
++constexpr uint32_t FB_MAX_WIDTH = 1280;
++constexpr uint32_t FB_MAX_HEIGHT = 800;
++constexpr uint32_t FB_MAX_BPP = 32;
++constexpr uint32_t FB_MAX_BYTES = FB_MAX_WIDTH * FB_MAX_HEIGHT * (FB_MAX_BPP / 8);
++constexpr uint32_t FB_MAX_PAGES = FB_MAX_BYTES / 4096;
++static_assert(FB_MAX_BYTES % 4096 == 0, "backing must be page-multiple");
++static_assert(FB_MAX_BYTES == 4096000, "1280x800x32 backing size");
++
++/// @brief Allocate the backing store for a validated mode (BOOT_ONLY).
++/// PMM-contiguous, zeroed, readable via backing_ptr() (HHDM alias).
++/// @param width,height Validated mode geometry.
++/// @return true on success (backing_ptr()/backing_phys() live until reboot).
++bool backing_init(uint32_t width, uint32_t height);
++
++/// @brief Release the backing store (failure paths only; success pins it).
++void backing_release();
++
++/// @brief Backing virtual address (HHDM alias, zeroed) or nullptr.
++/// @return VA of the backing store.
++uint8_t *backing_ptr();
++
++/// @brief Backing size in bytes (page-rounded mode span) or 0.
++uint32_t backing_bytes();
++
++/// @brief Physical address of backing page @p page_idx (0-based).
++/// @param page_idx Page index (< page count).
++/// @param out_phys Receives the page phys on success.
++/// @return true on success (fails closed on bounds errors).
++bool backing_phys(uint32_t page_idx, uint64_t &out_phys);
++
++/// @brief Allocated page count (0 when uninitialised).
++uint32_t backing_pages();
++
++} // namespace kernel::fb
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/driver/virtio_gpu.cpp b/src/kernel/driver/virtio_gpu.cpp
+new file mode 100644
+index 000000000..671f2d1fd
+--- /dev/null
++++ b/src/kernel/driver/virtio_gpu.cpp
+@@ -0,0 +1,384 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file virtio_gpu.cpp
++/// @brief virtio-gpu control-queue driver over legacy-v1 virtio-MMIO
++/// (issue #394 Slice A).  Boot-time, single-hart, no ISR: one in-flight
++/// command, bounded polls, static storage only.
++
++#include <kernel/driver/virtio_gpu.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++#include <kernel/arch/virtio.hpp>
++#include <kernel/driver/fb_backing.hpp>
++#include <kernel/memory/vmm.hpp>
++#include <kernel/memory/vmm_errors.hpp>
++#include <kernel/sync/spinlock.hpp>
++#include <kernel/sync/spinlock_guard.hpp>
++#include <lib/atomic.hpp>
++#include <logger.hpp>
++#include <string.hpp>
++
++namespace kernel::gpu {
++
++namespace {
++
++// --- Static driver state (BSS only, no PMM/MemPool) ---
++
++arch::VirtioTransport g_transport{};
++alignas(4096) uint8_t g_queue_chunk[8192] = {};
++// Page-aligned staging: VMM::virt_to_phys_err rejects sub-page addresses,
++// so commands/responses live here (copied in), never on the stack or in
++// 16 B-aligned BSS.  Sizes cover the largest command (ATTACH_BACKING with
++// FB_MAX_PAGES entries: 32 + 1000*16 = 16032) and response (display info).
++alignas(4096) uint8_t g_cmd_buf[16384] = {};
++alignas(4096) uint8_t g_resp_buf[4096] = {};
++sync::SpinLock g_gpu_lock{};
++arch::VirtqDesc *g_desc = nullptr;
++arch::VirtqAvail *g_avail = nullptr;
++arch::VirtqUsed *g_used = nullptr;
++uint32_t g_width = 0;
++uint32_t g_height = 0;
++uint16_t g_avail_idx = 0;
++bool g_ready = false;
++bool g_attempted = false;
++
++/// @brief Physical address of a driver-owned VA (fail-closed 0).
++uint64_t phys_of(const void *p) {
++    uint64_t phys = 0;
++    if (!p)
++        return 0;
++    if (VMM::virt_to_phys_err(reinterpret_cast<uint64_t>(p), phys) !=
++        errors::VMM_ERR_OK) {
++        return 0;
++    }
++    return phys;
++}
++
++/// @brief Submit the command already staged in g_cmd_buf (see submit()).
++/// @return true on transport success with the expected response type.
++/// The response (if any) lands in g_resp_buf — read it via
++/// virtio_gpu_resp() before the next submit().
++bool submit_staged(uint32_t req_len, uint32_t resp_len,
++                   uint32_t expected_type) {
++    if (req_len < sizeof(GpuCtrlHdr) || req_len > sizeof(g_cmd_buf) ||
++        resp_len < 4 || resp_len > sizeof(g_resp_buf)) {
++        return false;
++    }
++    uint64_t req_phys = phys_of(g_cmd_buf);
++    uint64_t resp_phys = phys_of(g_resp_buf);
++    if (!req_phys || !resp_phys) {
++        return false;
++    }
++    memset(g_resp_buf, 0, sizeof(g_resp_buf));
++
++    // Single flight on the fixed desc[0]/desc[1] pair (polled completion —
++    // every command finishes before the next starts, so reuse is safe).
++    g_desc[0].addr = req_phys;
++    g_desc[0].len = req_len;
++    g_desc[0].flags = arch::VIRTIO_DESC_F_NEXT;
++    g_desc[0].next = 1;
++    g_desc[1].addr = resp_phys;
++    g_desc[1].len = resp_len;
++    g_desc[1].flags = arch::VIRTIO_DESC_F_WRITE;
++    g_desc[1].next = 0;
++
++    // Snapshot the used index BEFORE the avail push + notify (a completion
++    // observed after notify races the push — blk H-3 pattern).
++    uint16_t used_before = g_used->idx;
++    g_avail->ring[g_avail_idx % GPU_QUEUE_SIZE] = 0;
++    kernel::atomic_fence();
++    g_avail->idx = static_cast<uint16_t>(g_avail_idx + 1);
++    kernel::atomic_fence();
++    arch::virtio_notify(g_transport, 0);
++    ++g_avail_idx;
++
++    int timeout = GPU_CMD_TIMEOUT_ITERS;
++    while (g_used->idx == used_before && --timeout > 0) {
++        kernel::atomic_fence();
++        arch::pause();
++    }
++    if (timeout <= 0) {
++        Logger::error("virtio-gpu: command timeout");
++        return false;
++    }
++    uint16_t used_now = g_used->idx;
++    // Unsigned wrap: used_now == 0 after 64k submits must index ring[7],
++    // not ring[-1] via signed promotion (audit S3, blk shares the idiom).
++    uint32_t echo =
++        g_used->ring[(static_cast<uint32_t>(used_now) + GPU_QUEUE_SIZE - 1u) %
++                     GPU_QUEUE_SIZE]
++            .id;
++    if (echo != 0) {
++        Logger::error("virtio-gpu: completion id mismatch");
++        return false;
++    }
++    uint32_t type = 0;
++    __builtin_memcpy(&type, g_resp_buf, sizeof(type));
++    return type == expected_type;
++}
++
++} // namespace
++
++/// @brief Response staging buffer (valid until the next submit).
++const void *virtio_gpu_resp() {
++    return g_resp_buf;
++}
++
++namespace {
++// submit() lives here (internal linkage): the ring helpers above are in the
++// same TU-unique namespace, so this block shares them.
++bool submit(const void *req, uint32_t req_len, uint32_t resp_len,
++            uint32_t expected_type) {
++    if (!req) {
++        return false;
++    }
++    if (req != g_cmd_buf) {
++        if (req_len > sizeof(g_cmd_buf)) {
++            return false;
++        }
++        memcpy(g_cmd_buf, req, req_len);
++    }
++    return submit_staged(req_len, resp_len, expected_type);
++}
++
++} // namespace
++
++bool virtio_gpu_probe(uint32_t &w, uint32_t &h) {
++    w = 0;
++    h = 0;
++    if (g_attempted) {
++        if (g_ready) {
++            w = g_width;
++            h = g_height;
++            return true;
++        }
++        return false;
++    }
++    g_attempted = true;
++
++    // DTB-primary discovery (issue #350 helpers): DeviceID register
++    // filter selects the GPU transport (MMIO id 16).
++    if (!arch::virtio_find_device(arch::VIRTIO_DEVICE_GPU, g_transport)) {
++        return false;
++    }
++    if (!arch::virtio_init_transport(g_transport)) {
++        Logger::error("virtio-gpu: transport init failed");
++        return false;
++    }
++    if (!arch::virtio_negotiate_features(g_transport,
++                                         arch::VIRTIO_F_VERSION_1)) {
++        Logger::error("virtio-gpu: feature negotiation failed");
++        return false;
++    }
++
++    // Legacy-v1 queue: one contiguous chunk (planner A8 geometry) —
++    // desc at +0, avail right after, used at the single-sourced offset.
++    uint64_t chunk_phys = phys_of(g_queue_chunk);
++    if (!chunk_phys) {
++        Logger::error("virtio-gpu: queue chunk unmapped");
++        return false;
++    }
++    uint64_t avail_phys =
++        chunk_phys + static_cast<uint64_t>(GPU_QUEUE_SIZE) * 16;
++    uint64_t used_phys =
++        chunk_phys + arch::virtio_legacy_used_off(GPU_QUEUE_SIZE);
++    if (used_phys + 8 + GPU_QUEUE_SIZE * 8 > chunk_phys + sizeof(g_queue_chunk)) {
++        Logger::error("virtio-gpu: queue geometry overflows chunk");
++        return false;
++    }
++    g_desc = reinterpret_cast<arch::VirtqDesc *>(g_queue_chunk);
++    g_avail = reinterpret_cast<arch::VirtqAvail *>(g_queue_chunk +
++                                                  GPU_QUEUE_SIZE * 16);
++    g_used = reinterpret_cast<arch::VirtqUsed *>(
++        g_queue_chunk + arch::virtio_legacy_used_off(GPU_QUEUE_SIZE));
++    memset(g_queue_chunk, 0, sizeof(g_queue_chunk));
++    if (!arch::virtio_setup_queue(g_transport, 0, GPU_QUEUE_SIZE, chunk_phys,
++                                  avail_phys, used_phys)) {
++        Logger::error("virtio-gpu: queue setup failed");
++        return false;
++    }
++    uint8_t status = arch::virtio_read_status(g_transport);
++    arch::virtio_write_status(g_transport, status | arch::VIRTIO_STATUS_DRIVER_OK);
++
++    SpinLockGuard<sync::SpinLock> guard(g_gpu_lock);
++
++    // GET_DISPLAY_INFO → preferred mode from output 0.
++    GpuCtrlHdr get{};
++    get.type = GPU_CMD_GET_DISPLAY_INFO;
++    if (!submit(&get, sizeof(get), sizeof(GpuDisplayInfo),
++                GPU_RESP_OK_DISPLAY_INFO)) {
++        Logger::error("virtio-gpu: GET_DISPLAY_INFO failed");
++        return false;
++    }
++    const auto *info =
++        reinterpret_cast<const GpuDisplayInfo *>(virtio_gpu_resp());
++    if (!info->pmodes[0].enabled || info->pmodes[0].rect.width == 0 ||
++        info->pmodes[0].rect.height == 0 ||
++        info->pmodes[0].rect.width > kernel::fb::FB_MAX_WIDTH ||
++        info->pmodes[0].rect.height > kernel::fb::FB_MAX_HEIGHT) {
++        Logger::error("virtio-gpu: display mode rejected");
++        return false;
++    }
++    uint32_t width = info->pmodes[0].rect.width;
++    uint32_t height = info->pmodes[0].rect.height;
++    uint64_t span = static_cast<uint64_t>(width) * height * 4;
++    if (span == 0 || span > kernel::fb::FB_MAX_BYTES) {
++        Logger::error("virtio-gpu: span out of bounds");
++        return false;
++    }
++    uint32_t pages = static_cast<uint32_t>((span + 4095) / 4096);
++    if (pages == 0 || pages > kernel::fb::FB_MAX_PAGES) {
++        Logger::error("virtio-gpu: page count out of bounds");
++        return false;
++    }
++    // Backing store: PMM-contiguous at boot (pre-baseline, zero
++    // ResourceTracker delta). Static BSS cannot be used — a 4 MiB backing
++    // trips the riscv64 boot.S fail-stop (kernel_phys_end < 0x80C00000).
++    if (!kernel::fb::backing_init(width, height)) {
++        Logger::error("virtio-gpu: backing alloc failed");
++        return false;
++    }
++
++    // RESOURCE_CREATE_2D (id 1, XRGB8888).
++    GpuCreate2d create{};
++    create.hdr.type = GPU_CMD_RESOURCE_CREATE_2D;
++    create.resource_id = GPU_RESOURCE_ID;
++    create.format = GPU_FORMAT_B8G8R8X8_UNORM;
++    create.width = width;
++    create.height = height;
++    if (!submit(&create, sizeof(create), sizeof(GpuCtrlHdr),
++                GPU_RESP_OK_NODATA)) {
++        GpuUnref unref{};
++        unref.hdr.type = GPU_CMD_RESOURCE_UNREF;
++        unref.resource_id = GPU_RESOURCE_ID;
++        submit(&unref, sizeof(unref), sizeof(GpuCtrlHdr),
++               GPU_RESP_OK_NODATA);
++        kernel::fb::backing_release();
++        Logger::error("virtio-gpu: CREATE_2D failed");
++        return false;
++    }
++
++    // RESOURCE_ATTACH_BACKING (id 1, one entry per backing page).
++    uint32_t attach_len =
++        static_cast<uint32_t>(sizeof(GpuAttachBacking) +
++                              pages * sizeof(GpuMemEntry));
++    if (attach_len > sizeof(g_cmd_buf)) {
++        kernel::fb::backing_release();
++        Logger::error("virtio-gpu: attach overflows cmd buffer");
++        return false;
++    }
++    auto *attach = reinterpret_cast<GpuAttachBacking *>(g_cmd_buf);
++    attach->hdr.type = GPU_CMD_RESOURCE_ATTACH_BACKING;
++    attach->hdr.flags = 0;
++    attach->hdr.fence_id = 0;
++    attach->hdr.ctx_id = 0;
++    attach->hdr.padding = 0;
++    attach->resource_id = GPU_RESOURCE_ID;
++    attach->nr_entries = pages;
++    auto *entries = reinterpret_cast<GpuMemEntry *>(g_cmd_buf + sizeof(*attach));
++    for (uint32_t i = 0; i < pages; ++i) {
++        uint64_t p = 0;
++        if (!kernel::fb::backing_phys(i, p)) {
++            kernel::fb::backing_release();
++            Logger::error("virtio-gpu: backing page unmapped");
++            return false;
++        }
++        entries[i].addr = p;
++        entries[i].length = 4096;
++        entries[i].padding = 0;
++    }
++    if (!submit_staged(attach_len, sizeof(GpuCtrlHdr),
++                       GPU_RESP_OK_NODATA)) {
++        GpuUnref unref{};
++        unref.hdr.type = GPU_CMD_RESOURCE_UNREF;
++        unref.resource_id = GPU_RESOURCE_ID;
++        submit(&unref, sizeof(unref), sizeof(GpuCtrlHdr),
++               GPU_RESP_OK_NODATA);
++        kernel::fb::backing_release();
++        Logger::error("virtio-gpu: ATTACH_BACKING failed");
++        return false;
++    }
++
++    // SET_SCANOUT (output 0, full rect) + initial full present.
++    GpuSetScanout scan{};
++    scan.hdr.type = GPU_CMD_SET_SCANOUT;
++    scan.rect.x = 0;
++    scan.rect.y = 0;
++    scan.rect.width = width;
++    scan.rect.height = height;
++    scan.scanout_id = 0;
++    scan.resource_id = GPU_RESOURCE_ID;
++    if (!submit(&scan, sizeof(scan), sizeof(GpuCtrlHdr),
++                GPU_RESP_OK_NODATA)) {
++        GpuUnref unref{};
++        unref.hdr.type = GPU_CMD_RESOURCE_UNREF;
++        unref.resource_id = GPU_RESOURCE_ID;
++        submit(&unref, sizeof(unref), sizeof(GpuCtrlHdr),
++               GPU_RESP_OK_NODATA);
++        kernel::fb::backing_release();
++        Logger::error("virtio-gpu: SET_SCANOUT failed");
++        return false;
++    }
++
++    g_width = width;
++    g_height = height;
++    g_ready = true;
++    w = width;
++    h = height;
++    return true;
++}
++
++bool virtio_gpu_present(uint32_t y0, uint32_t y1) {
++    if (!g_ready)
++        return false;
++    if (y0 >= y1 || y0 >= g_height)
++        return y0 == y1; // empty band: nothing to do
++    if (y1 > g_height)
++        y1 = g_height;
++    SpinLockGuard<sync::SpinLock> guard(g_gpu_lock);
++
++    uint32_t pitch = g_width * 4;
++    GpuTransfer xfer{};
++    xfer.hdr.type = GPU_CMD_TRANSFER_TO_HOST_2D;
++    xfer.rect.x = 0;
++    xfer.rect.y = y0;
++    xfer.rect.width = g_width;
++    xfer.rect.height = y1 - y0;
++    xfer.offset = static_cast<uint64_t>(y0) * pitch;
++    xfer.resource_id = GPU_RESOURCE_ID;
++    if (!submit(&xfer, sizeof(xfer), sizeof(GpuCtrlHdr),
++                GPU_RESP_OK_NODATA)) {
++        return false;
++    }
++    GpuFlush flush{};
++    flush.hdr.type = GPU_CMD_RESOURCE_FLUSH;
++    flush.rect = xfer.rect;
++    flush.resource_id = GPU_RESOURCE_ID;
++    return submit(&flush, sizeof(flush), sizeof(GpuCtrlHdr),
++                  GPU_RESP_OK_NODATA);
++}
++
++bool virtio_gpu_ready() {
++    return g_ready;
++}
++
++} // namespace kernel::gpu
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/driver/virtio_gpu.hpp b/src/kernel/driver/virtio_gpu.hpp
+new file mode 100644
+index 000000000..9aa125a96
+--- /dev/null
++++ b/src/kernel/driver/virtio_gpu.hpp
+@@ -0,0 +1,179 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file virtio_gpu.hpp
++/// @brief virtio-gpu control-queue driver over legacy-v1 virtio-MMIO
++/// (issue #394 Slice A).  Guest-RAM 2D scanout: no BAR, no VMM remap —
++/// the device reads pixels from the static fb_backing buffer (phys via
++/// VMM::virt_to_phys_err).  Device IDs: 0x1050 modern / 0x1010 legacy
++/// (MMIO DeviceID 16).  Command wire formats follow Virtio 1.2 §5.7.
++
++#include <types.hpp>
++
++#if !defined(CONFIG_ARCH_X86_64)
++
++namespace kernel::gpu {
++
++// --- Wire protocol (Virtio 1.2 §5.7.6) ---
++
++constexpr uint32_t GPU_CMD_GET_DISPLAY_INFO = 0x0100;
++constexpr uint32_t GPU_CMD_RESOURCE_CREATE_2D = 0x0101;
++constexpr uint32_t GPU_CMD_RESOURCE_UNREF = 0x0102;
++constexpr uint32_t GPU_CMD_SET_SCANOUT = 0x0103;
++constexpr uint32_t GPU_CMD_RESOURCE_FLUSH = 0x0104;
++constexpr uint32_t GPU_CMD_TRANSFER_TO_HOST_2D = 0x0105;
++constexpr uint32_t GPU_CMD_RESOURCE_ATTACH_BACKING = 0x0106;
++constexpr uint32_t GPU_RESP_OK_NODATA = 0x1100;
++constexpr uint32_t GPU_RESP_OK_DISPLAY_INFO = 0x1101;
++constexpr uint32_t GPU_RESP_ERR_UNSPEC = 0x1200;
++
++constexpr uint32_t GPU_FORMAT_B8G8R8X8_UNORM = 2;
++
++constexpr uint16_t GPU_QUEUE_SIZE = 8;
++constexpr uint32_t GPU_RESOURCE_ID = 1;
++constexpr int GPU_CMD_TIMEOUT_ITERS = 1000000;
++
++/// Backend selected by the framebuffer init chain (GPU preferred).
++enum class FbBackend : uint8_t {
++    None = 0,
++    VirtioGpu = 1,
++    Ramfb = 2,
++};
++
++/// @brief Pure backend-selection policy (QE-testable, no hardware).
++/// @return VirtioGpu when the GPU probed (ramfb ignored), Ramfb when only
++/// ramfb probed, None when neither did.
++constexpr FbBackend select_backend(bool gpu_ok, bool ramfb_ok) {
++    if (gpu_ok)
++        return FbBackend::VirtioGpu;
++    if (ramfb_ok)
++        return FbBackend::Ramfb;
++    return FbBackend::None;
++}
++
++// --- Wire structs (packed; static_asserted sizes guard the layout) ---
++
++struct GpuCtrlHdr {
++    uint32_t type;
++    uint32_t flags;
++    uint64_t fence_id;
++    uint32_t ctx_id;
++    uint32_t padding;
++} __attribute__((packed));
++static_assert(sizeof(GpuCtrlHdr) == 24, "gpu ctrl hdr is 24 B");
++
++struct GpuRect {
++    uint32_t x;
++    uint32_t y;
++    uint32_t width;
++    uint32_t height;
++} __attribute__((packed));
++static_assert(sizeof(GpuRect) == 16, "gpu rect is 16 B");
++
++struct GpuDisplayOne {
++    GpuRect rect;
++    uint32_t enabled;
++    uint32_t flags;
++} __attribute__((packed));
++static_assert(sizeof(GpuDisplayOne) == 24, "gpu display-one is 24 B");
++
++struct GpuDisplayInfo {
++    GpuCtrlHdr hdr;
++    GpuDisplayOne pmodes[16];
++} __attribute__((packed));
++static_assert(sizeof(GpuDisplayInfo) == 24 + 16 * 24,
++              "gpu display-info fits the 512 B response");
++
++struct GpuCreate2d {
++    GpuCtrlHdr hdr;
++    uint32_t resource_id;
++    uint32_t format;
++    uint32_t width;
++    uint32_t height;
++} __attribute__((packed));
++static_assert(sizeof(GpuCreate2d) == 40, "gpu create-2d is 40 B");
++
++struct GpuAttachBacking {
++    GpuCtrlHdr hdr;
++    uint32_t resource_id;
++    uint32_t nr_entries;
++} __attribute__((packed));
++static_assert(sizeof(GpuAttachBacking) == 32, "gpu attach is 32 B");
++
++struct GpuMemEntry {
++    uint64_t addr;
++    uint32_t length;
++    uint32_t padding;
++} __attribute__((packed));
++static_assert(sizeof(GpuMemEntry) == 16, "gpu mem entry is 16 B");
++
++struct GpuSetScanout {
++    GpuCtrlHdr hdr;
++    GpuRect rect;
++    uint32_t scanout_id;
++    uint32_t resource_id;
++} __attribute__((packed));
++static_assert(sizeof(GpuSetScanout) == 48, "gpu set-scanout is 48 B");
++
++struct GpuTransfer {
++    GpuCtrlHdr hdr;
++    GpuRect rect;
++    uint64_t offset;
++    uint32_t resource_id;
++    uint32_t padding;
++} __attribute__((packed));
++static_assert(sizeof(GpuTransfer) == 56, "gpu transfer is 56 B");
++
++struct GpuFlush {
++    GpuCtrlHdr hdr;
++    GpuRect rect;
++    uint32_t resource_id;
++    uint32_t padding;
++} __attribute__((packed));
++static_assert(sizeof(GpuFlush) == 48, "gpu flush is 48 B");
++
++struct GpuUnref {
++    GpuCtrlHdr hdr;
++    uint32_t resource_id;
++    uint32_t padding;
++} __attribute__((packed));
++static_assert(sizeof(GpuUnref) == 32, "gpu unref is 32 B");
++
++// --- Driver API (boot-time, single-hart, no ISR registered) ---
++
++/// @brief Probe the virtio-gpu device, create the 2D resource + scanout.
++/// @param w Receives the display width on success.
++/// @param h Receives the display height on success.
++/// @return true when the GPU path is live (idempotent latch inside).
++bool virtio_gpu_probe(uint32_t &w, uint32_t &h);
++
++/// @brief Flush the dirty row band [y0, y1) to the host scanout.
++/// @return true when the transfer+flush completed (false = keep dirty).
++bool virtio_gpu_present(uint32_t y0, uint32_t y1);
++
++/// @brief Response staging buffer (valid until the next submit).
++const void *virtio_gpu_resp();
++
++/// @brief True when the GPU path completed probe successfully.
++bool virtio_gpu_ready();
++
++} // namespace kernel::gpu
++
++#endif // !CONFIG_ARCH_X86_64
+diff --git a/src/kernel/log/dmesg_catalog.hpp b/src/kernel/log/dmesg_catalog.hpp
+index 19bd34c51..620905c21 100644
+--- a/src/kernel/log/dmesg_catalog.hpp
++++ b/src/kernel/log/dmesg_catalog.hpp
+@@ -162,6 +162,8 @@ constexpr DmesgRecord kDmesgCatalog_DRIVER[] = {
+      "Framebuffer backend unavailable (documented gap)"},
+     {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 12, LogSeverity::WARN,
+      "PCI ECAM DT mismatch — board constant kept"},
++    {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 13, LogSeverity::INFO,
++     "Framebuffer backend ready"},
+ };
+ 
+ /// @brief Init records (canonical base kDmesgBase_INIT): init-rc, fstab,
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index ab7153b12..e6c2cb35d 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -1814,7 +1814,7 @@ void Shell::cmd_version(int, const char**) {
+     Terminal::write(" (");
+     print_uint(kernel::build_info::bits);
+     Terminal::write("-bit, fb=");
+-    Terminal::write(kernel::build_info::fb_backend);
++    Terminal::write(service::Framebuffer::backend_name());
+     Terminal::write(")\nType:   ");
+     Terminal::write(kernel::build_info::build_type);
+     Terminal::write("\n");
+diff --git a/src/services/terminal/framebuffer.cpp b/src/services/terminal/framebuffer.cpp
+index 7fc0c2e0f..aa6a6490e 100644
+--- a/src/services/terminal/framebuffer.cpp
++++ b/src/services/terminal/framebuffer.cpp
+@@ -20,6 +20,9 @@
+ #include <services/terminal/font.hpp>
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <kernel/multiboot2.hpp>
++#else
++#include <kernel/driver/fb_backing.hpp>
++#include <kernel/driver/virtio_gpu.hpp>
+ #endif
+ #include <kernel/build_info.hpp>
+ #include <kernel/memory/vmm.hpp>
+@@ -36,10 +39,45 @@ bool Framebuffer::initialized_ = false;
+ #if !defined(CONFIG_ARCH_X86_64)
+ // One-shot gap line (issue #357): boot path only, pre-scheduler.
+ static bool gap_logged = false;
++// Issue #394: runtime backend selection (Slice A: virtio-gpu; Slice B
++// appends ramfb before the gap fallthrough).
++static const char *backend_name_ = kernel::build_info::fb_backend;
++static kernel::gpu::FbBackend backend_kind_ =
++    kernel::gpu::FbBackend::None;
++static bool init_attempted = false;
++static bool init_result = false;
++static uint32_t dirty_y0_ = 0;
++static uint32_t dirty_y1_ = 0;
+ #endif
+ 
+ const char *Framebuffer::backend_name() {
++#if defined(CONFIG_ARCH_X86_64)
+     return kernel::build_info::fb_backend;
++#else
++    return backend_name_;
++#endif
++}
++
++void Framebuffer::present() {
++#if !defined(CONFIG_ARCH_X86_64)
++    if (!initialized_ || dirty_y1_ <= dirty_y0_)
++        return;
++    // Only virtio-gpu needs host presentation (multiboot2/ramfb scanouts
++    // are directly visible memory). Slice B keeps this arm first.
++    if (backend_kind_ == kernel::gpu::FbBackend::VirtioGpu) {
++        if (kernel::gpu::virtio_gpu_present(dirty_y0_, dirty_y1_)) {
++            dirty_y0_ = 0;
++            dirty_y1_ = 0;
++        }
++    }
++#endif
++}
++
++void Framebuffer::invalidate() {
++#if !defined(CONFIG_ARCH_X86_64)
++    dirty_y0_ = 0;
++    dirty_y1_ = info_.height;
++#endif
+ }
+ 
+ bool Framebuffer::init() {
+@@ -101,6 +139,44 @@ bool Framebuffer::init() {
+     clear(0x000000);
+     return true;
+ #else
++    // Runtime backend chain (issue #394): virtio-gpu → ramfb (Slice B) →
++    // documented gap.  Latched: the second call returns the first result
++    // without touching devices.
++    if (init_attempted)
++        return init_result;
++    init_attempted = true;
++
++    uint32_t w = 0;
++    uint32_t h = 0;
++    if (kernel::gpu::virtio_gpu_probe(w, h) && w != 0 && h != 0) {
++        uint64_t span = static_cast<uint64_t>(w) * h * 4;
++        if (span <= kernel::fb::backing_bytes()) {
++            info_.addr = reinterpret_cast<uint64_t>(
++                kernel::fb::backing_ptr());
++            info_.pitch = w * 4;
++            info_.width = w;
++            info_.height = h;
++            info_.bpp = 32;
++            backend_name_ = "virtio-gpu";
++            backend_kind_ = kernel::gpu::FbBackend::VirtioGpu;
++            initialized_ = true;
++            init_result = true;
++            invalidate();
++            clear(0x000000);
++            // Logger %d reads uint64_t (vprint) — cast narrow args
++            // explicitly (audit S3, LEARNINGS %lx gotcha family).
++            kernel::Logger::info("[FB] virtio-gpu %dx%d",
++                                 static_cast<uint64_t>(w),
++                                 static_cast<uint64_t>(h));
++            kernel::log::dmesg_push_sev(
++                kernel::log::ErrorSubsystem::DRIVER,
++                kernel::log::kDmesgBase_DRIVER + 13,
++                kernel::log::LogSeverity::INFO,
++                "Framebuffer backend ready", 0);
++            return true;
++        }
++    }
++    // Slice B inserts the ramfb probe here (before the gap fallthrough).
+     // Documented gap (issue #357, follow-up #394): no backend on this
+     // arch — loud once, never silent, never a panic.
+     if (!gap_logged) {
+@@ -133,6 +209,9 @@ void Framebuffer::clear(uint32_t color) {
+             if (bpp_bytes > 3) fb[offset + 3] = 0xFF;
+         }
+     }
++    // Full-frame write: flush the whole band (present checks the backend).
++    invalidate();
++    present();
+ }
+ 
+ void Framebuffer::draw_pixel(uint32_t x, uint32_t y, uint32_t color) {
+@@ -180,6 +259,15 @@ void Framebuffer::put_pixel(uint32_t x, uint32_t y, uint32_t color)
+     fb[offset + 1] = (color >> 8) & 0xFF;
+     fb[offset + 2] = (color >> 16) & 0xFF;
+     if (bpp_bytes > 3) fb[offset + 3] = 0xFF;
++#if !defined(CONFIG_ARCH_X86_64)
++    // Dirty-row tracking for host presentation (issue #394); draw_pixel
++    // bounds-checks, direct callers must stay in bounds (terminal paths
++    // clip via width()/height()).
++    if (y < dirty_y0_)
++        dirty_y0_ = y;
++    if (y + 1 > dirty_y1_)
++        dirty_y1_ = y + 1;
++#endif
+ }
+ 
+ // NOLINTBEGIN(bugprone-easily-swappable-parameters)
+diff --git a/src/services/terminal/framebuffer.hpp b/src/services/terminal/framebuffer.hpp
+index d724986b9..7879bf2e6 100644
+--- a/src/services/terminal/framebuffer.hpp
++++ b/src/services/terminal/framebuffer.hpp
+@@ -80,11 +80,20 @@ public:
+     /// @brief Returns whether the framebuffer was successfully initialised.
+     /// @return True if available.
+     static bool available() { return initialized_; }
+-    /// @brief Compiled-in backend name (issue #357 documented gap).
+-    /// Reports the backend, not runtime success: "multiboot2" on
+-    /// x86_64, "none" where no backend exists.
+-    /// @return Static backend name string.
++    /// @brief Backend name (issue #394: runtime-selected, was
++    /// compile-time-only in #357). "multiboot2" on x86_64; on other arches
++    /// the init chain selects "virtio-gpu" then "ramfb", else "none".
++    /// @return Backend name string (stable pointer, never null).
+     static const char *backend_name();
++    /// @brief Flushes dirty rows to the host scanout (issue #394).
++    /// No-op for backends without host presentation (multiboot2 writes
++    /// real RAM directly; ramfb points the host at guest RAM directly).
++    /// Safe to call when unavailable (returns immediately).
++    static void present();
++    /// @brief Marks the whole framebuffer dirty (issue #394).
++    /// Call after direct framebuffer writes that bypass put_pixel
++    /// (Terminal clear/scroll fast paths) and before the next present().
++    static void invalidate();
+     /// @brief Reads one pixel back (issue #269 test oracle).
+     /// @return 0x000000 when unavailable or out of bounds.
+     static uint32_t get_pixel(uint32_t x, uint32_t y);
+diff --git a/src/services/terminal/terminal.cpp b/src/services/terminal/terminal.cpp
+index 29246025f..1bb7c327e 100644
+--- a/src/services/terminal/terminal.cpp
++++ b/src/services/terminal/terminal.cpp
+@@ -79,6 +79,9 @@ void Terminal::putchar(char c) {
+     switch (c) {
+     case '\n':
+         instance_->newline();
++        // Flush the completed row band to the host scanout (issue #394;
++        // no-op unless a presenting backend is active).
++        Framebuffer::present();
+         break;
+     case '\r':
+         instance_->cursor_x_ = 0;
+@@ -218,6 +221,10 @@ void Terminal::clear() {
+     memset(fb, 0, static_cast<size_t>(pitch) * text_h);
+     instance_->cursor_x_ = 0;
+     instance_->cursor_y_ = 0;
++    // Direct framebuffer write bypassed put_pixel: mark dirty + flush
++    // (issue #394; no-ops unless a presenting backend is active).
++    Framebuffer::invalidate();
++    Framebuffer::present();
+ }
+ 
+ void Terminal::scroll() {
+@@ -242,6 +249,9 @@ void Terminal::scroll() {
+     if (instance_->cursor_y_ > 0) {
+         instance_->cursor_y_--;
+     }
++    // Direct framebuffer writes bypassed put_pixel (issue #394).
++    Framebuffer::invalidate();
++    Framebuffer::present();
+ }
+ 
+ void Terminal::newline() {
+@@ -314,6 +324,8 @@ void Terminal::draw_status_bar(const char* left, const char* right)
+             right_x += FONT_WIDTH;
+         }
+     }
++    // Status bar is drawn via put_pixel paths: flush it (issue #394).
++    Framebuffer::present();
+ }
+ 
+ void Terminal::set_cursor_visible(bool visible) {
+@@ -324,6 +336,8 @@ void Terminal::set_cursor_visible(bool visible) {
+         instance_->cursor_x_ * FONT_WIDTH,
+         instance_->cursor_y_ * FONT_HEIGHT,
+         FONT_WIDTH, FONT_HEIGHT, color);
++    // Cursor cell redrawn via put_pixel: flush it (issue #394).
++    Framebuffer::present();
+ }
+ 
+ void Terminal::capture_begin(char* buf, size_t size) {
+@@ -403,6 +417,8 @@ void Terminal::show_splash() {
+         Framebuffer::draw_char(hint_x, hint_y, *p, 0x606060, 0x0A0A10);
+         hint_x += FONT_WIDTH;
+     }
++    // Splash drawn via put_pixel paths: flush it (issue #394).
++    Framebuffer::present();
+ }
+ 
+ } // namespace service
+diff --git a/test-history.txt b/test-history.txt
+index 52e438c43..b3debc34b 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4353,3 +4353,15 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 10:30:52 drivers PASSED: 57 FAILED: 1 TIME: 23s STATUS: sliceC-aarch64-known-#391
+ 2026-10-21 10:30:52 logging_debug PASSED: 36 FAILED: 0 TIME: 21s STATUS: sliceC-aarch64
+ 2026-10-21 10:30:52 drivers PASSED: 56 FAILED: 2 TIME: 28s STATUS: sliceC-riscv64-known-#391x2
++2026-10-21 11:32:58 ui PASSED: 53 FAILED: 1 TIME: 26s STATUS: sliceA-aarch64-known-cpuinfo
++2026-10-21 11:32:58 ui PASSED: 53 FAILED: 1 TIME: 25s STATUS: sliceA-riscv64-known-cpuinfo
++2026-10-21 11:32:58 ui PASSED: 74 FAILED: 0 TIME: 36s STATUS: sliceA-x86_64
++2026-10-21 11:32:58 drivers PASSED: 57 FAILED: 1 TIME: 22s STATUS: sliceA-aarch64-known-#391
++2026-10-21 11:32:58 drivers PASSED: 56 FAILED: 2 TIME: 24s STATUS: sliceA-riscv64-known-#391x2
++2026-10-21 11:32:58 storage PASSED: 166 FAILED: 1 TIME: 44s STATUS: sliceA-aarch64-known-#392
++2026-10-21 11:32:58 storage PASSED: 166 FAILED: 1 TIME: 44s STATUS: sliceA-riscv64-known-#392
++2026-10-21 11:32:58 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 20s STATUS: sliceA-aarch64
++2026-10-21 11:32:58 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 23s STATUS: sliceA-riscv64-known
++2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 14s STATUS: sliceA-aarch64
++2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 17s STATUS: sliceA-riscv64
++2026-10-21 11:55:12 ui PASSED: 53 FAILED: 1 TIME: 22s STATUS: sliceA-aarch64-postS3-known-cpuinfo

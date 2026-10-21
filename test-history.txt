@@ -4353,3 +4353,15 @@ SUMMARY: total=24 ok=24 fail=0
 2026-10-21 10:30:52 drivers PASSED: 57 FAILED: 1 TIME: 23s STATUS: sliceC-aarch64-known-#391
 2026-10-21 10:30:52 logging_debug PASSED: 36 FAILED: 0 TIME: 21s STATUS: sliceC-aarch64
 2026-10-21 10:30:52 drivers PASSED: 56 FAILED: 2 TIME: 28s STATUS: sliceC-riscv64-known-#391x2
+2026-10-21 11:32:58 ui PASSED: 53 FAILED: 1 TIME: 26s STATUS: sliceA-aarch64-known-cpuinfo
+2026-10-21 11:32:58 ui PASSED: 53 FAILED: 1 TIME: 25s STATUS: sliceA-riscv64-known-cpuinfo
+2026-10-21 11:32:58 ui PASSED: 74 FAILED: 0 TIME: 36s STATUS: sliceA-x86_64
+2026-10-21 11:32:58 drivers PASSED: 57 FAILED: 1 TIME: 22s STATUS: sliceA-aarch64-known-#391
+2026-10-21 11:32:58 drivers PASSED: 56 FAILED: 2 TIME: 24s STATUS: sliceA-riscv64-known-#391x2
+2026-10-21 11:32:58 storage PASSED: 166 FAILED: 1 TIME: 44s STATUS: sliceA-aarch64-known-#392
+2026-10-21 11:32:58 storage PASSED: 166 FAILED: 1 TIME: 44s STATUS: sliceA-riscv64-known-#392
+2026-10-21 11:32:58 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 20s STATUS: sliceA-aarch64
+2026-10-21 11:32:58 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 23s STATUS: sliceA-riscv64-known
+2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 14s STATUS: sliceA-aarch64
+2026-10-21 11:32:58 logging_dmesg PASSED: 21 FAILED: 0 TIME: 17s STATUS: sliceA-riscv64
+2026-10-21 11:55:12 ui PASSED: 53 FAILED: 1 TIME: 22s STATUS: sliceA-aarch64-postS3-known-cpuinfo
