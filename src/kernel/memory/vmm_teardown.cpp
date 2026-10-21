@@ -190,6 +190,14 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
     // TLB flush is the caller's responsibility (via CR3 reload)
 }
 
+/// @brief Ownership test for a huge/block entry hit during fork
+///        deep-copy (issue #387): user-owned (USER bit or USER frame)
+///        fails the fork closed (#325-E aliasing); kernel-owned blocks in
+///        the user index range inherit by value (U=0 preserved).
+bool VMM::vmm_leaf_is_user_owned(uint64_t entry, uint64_t frame) noexcept {
+    return (entry & PAGE_USER) != 0 || PMM::is_user_page(frame);
+}
+
 /// @brief Deep-copy user-space page tables from src_pml4 to dst_pml4.
 ///        Allocates new PDPT/PD/PT pages and copies data page content.
 ///        dst_pml4 must already have kernel entries populated.
@@ -226,14 +234,22 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
             if (!(src_pdpt[pdpt_idx] & PAGE_PRESENT))
                 continue;
 
-            // 1 GiB huge/block entry in the USER range — fail closed
-            // (issue #325-E): copying by value would share one writable
-            // page between parent and child (silent aliasing).  No kernel
-            // path creates user huge entries (every map splits to 4 KiB),
-            // so this is unreachable in practice; the caller destroys the
-            // partial child on false.  Arch leaf test via is_table_entry.
+            // 1 GiB huge/block entry in the USER range — fail closed only
+            // when user-owned (issue #325-E: copying a writable user page
+            // by value would alias it parent/child).  Kernel-owned blocks
+            // reachable here inherit by value (issue #387: U=0 preserved,
+            // no new privilege).  Arch leaf test via is_table_entry.
             if (!is_table_entry(src_pdpt[pdpt_idx], 1)) {
-                return false;
+                // huge=true (2 MiB mask) ≡ kPdptBlockBaseMask (1 GiB mask)
+                // for aligned entries — same 4 KiB owner page either way.
+                if (vmm_leaf_is_user_owned(
+                        src_pdpt[pdpt_idx],
+                        vmm_arch_block_base(src_pdpt[pdpt_idx],
+                                            /*huge=*/true))) {
+                    return false;
+                }
+                dst_pdpt[pdpt_idx] = src_pdpt[pdpt_idx];
+                continue;
             }
 
             uint64_t src_pd_phys = src_pdpt[pdpt_idx] & PAGE_TABLE_ADDR_MASK;
@@ -253,9 +269,21 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                     continue;
 
                 // 2 MiB huge/block entry in the USER range — fail closed
-                // (issue #325-E, same aliasing rationale as above).
+                // only when user-owned (issue #325-E, same aliasing
+                // rationale as above); kernel-owned inherits by value
+                // (issue #387).
                 if (!is_table_entry(src_pd[pd_idx], 2)) {
-                    return false;
+                    // huge=true (2 MiB mask) matches the free_user_pages
+                    // decode: identical page for aligned entries, which all
+                    // block entries are by construction.
+                    if (vmm_leaf_is_user_owned(
+                            src_pd[pd_idx],
+                            vmm_arch_block_base(src_pd[pd_idx],
+                                                /*huge=*/true))) {
+                        return false;
+                    }
+                    dst_pd[pd_idx] = src_pd[pd_idx];
+                    continue;
                 }
 
                 uint64_t src_pt_phys = src_pd[pd_idx] & PAGE_TABLE_ADDR_MASK;
@@ -320,9 +348,18 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
         }
 
         if ((src[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-            // 1 GiB block in the USER range — fail closed (issue #325-E:
-            // by-value copy would alias one writable page parent/child).
-            return false;
+            // 1 GiB block in the USER range — fail closed only when
+            // user-owned (issue #325-E aliasing).  Kernel-owned blocks
+            // (riscv64 L0[0] low-half MMIO/identity from clone_kernel_pml4)
+            // inherit by value (issue #387: U=0 preserved, never a fork
+            // failure).
+            if (vmm_leaf_is_user_owned(
+                    src[l0_idx],
+                    vmm_arch_block_base(src[l0_idx], /*huge=*/true))) {
+                return false;
+            }
+            dst[l0_idx] = src[l0_idx];
+            continue;
         }
 
         uint64_t src_l1_phys = VMM::sv39_pte_phys(src[l0_idx]);
@@ -341,9 +378,17 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 continue;
 
             if ((src_l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                // 2 MiB block in the USER range — fail closed (issue #325-E,
-                // same aliasing rationale as above).
-                return false;
+                // 2 MiB block in the USER range — fail closed only when
+                // user-owned (issue #325-E, same aliasing rationale as
+                // above); kernel-owned inherits by value (issue #387).
+                if (vmm_leaf_is_user_owned(
+                        src_l1[l1_idx],
+                        vmm_arch_block_base(src_l1[l1_idx],
+                                            /*huge=*/false))) {
+                    return false;
+                }
+                dst_l1[l1_idx] = src_l1[l1_idx];
+                continue;
             }
 
             uint64_t src_l2_phys = VMM::sv39_pte_phys(src_l1[l1_idx]);

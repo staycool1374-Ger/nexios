@@ -380,11 +380,16 @@ class VMM {
     /// @param src_pml4 Physical address of source PML4.
     /// @param dst_pml4 Physical address of destination PML4 (must already
     ///        have kernel entries populated).
-    /// @return true on success, false on OOM or on a user-range huge/block
+    /// @return true on success, false on OOM or on a user-OWNED huge/block
     ///         entry (issue #325-E: by-value copy would alias one writable
-    ///         page parent/child — fail closed instead).  Partial state
-    ///         may remain on false, but every installed table and data
-    ///         page is USER-owned, so the caller MUST destroy the child
+    ///         page parent/child — fail closed instead; issue #387:
+    ///         kernel-owned blocks reachable in the user index range —
+    ///         riscv64 L0[0] low-half MMIO/identity from clone_kernel_pml4 —
+    ///         are inherited BY VALUE, never a fork failure, U=0 kept).
+    ///         Partial state may remain on false, but every installed TABLE
+    ///         page is USER-owned and every inherited BLOCK is kernel-owned
+    ///         U=0 (skipped by every free_user_pages block site on all
+    ///         arches), so the caller MUST destroy the child
     ///         (TaskControlBlock::destroy → cleanup → free_user_pages
     ///         reclaims all partials — task.cpp documents this invariant).
     ///         Leaf flags (USER/write/dirty/accessed/NX) copy verbatim;
@@ -906,6 +911,17 @@ class VMM {
     ///        x86_64 clears NX; aarch64 clears UXN+PXN; riscv64 sets X.
     static uint64_t vmm_arch_kernel_text_exec(uint64_t leaf);
     static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
+    /// @brief Ownership test for a huge/block entry hit during fork
+    ///        deep-copy (issue #387): true iff the block is user-owned —
+    ///        the entry's USER bit is set OR the frame came from a user
+    ///        page allocation (PMM::is_user_page).  Kernel-owned blocks
+    ///        reachable in the user index range (riscv64 L0[0] low-half
+    ///        MMIO/identity inherited from clone_kernel_pml4) are NOT
+    ///        user-owned: the copy inherits them by value instead of
+    ///        failing the fork.  No new privilege (U=0 preserved).
+    /// @note Lock: none. Context: any. SMP: N/A (pre-publish window).
+    [[nodiscard]] static bool vmm_leaf_is_user_owned(uint64_t entry,
+                                                     uint64_t frame) noexcept;
     /// @brief Extract the flag bits of a 4 KiB leaf entry (issue #352):
     ///        everything except the frame address (x86/aarch64: complement
     ///        of the frame mask; riscv: low-10 flag bits plus high

@@ -21,21 +21,21 @@
 
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/hal/io.hpp>
+#include <kernel/arch/riscv64/hal/uart.hpp>
 #include <types.hpp>
 
 namespace arch {
 
-/// @brief QEMU virt 16550A UART base (issue #247): raw physical address,
-///        directly dereferenceable in S-mode (riscv64 low half is
-///        identity-mapped — same precedent as the PLIC accessors and the
-///        LSR probe in test_riscv64.cpp).
-static constexpr uint64_t RISCV_UART_BASE = 0x10000000ULL;
-static constexpr uint64_t RISCV_UART_RBR_OFF = 0;
-static constexpr uint64_t RISCV_UART_IER_OFF = 1;
-static constexpr uint64_t RISCV_UART_LCR_OFF = 3;
-static constexpr uint64_t RISCV_UART_MCR_OFF = 4;
-static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
-static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
+/// @brief UART register literals live in hal/uart.hpp (issue #387: single
+///        arch-owned source shared with the arch tests).  Aliases below
+///        keep this TU's call sites untouched.
+static constexpr uint64_t RISCV_UART_BASE = UART0_BASE;
+static constexpr uint64_t RISCV_UART_RBR_OFF = UART_RBR_OFF;
+static constexpr uint64_t RISCV_UART_IER_OFF = UART_IER_OFF;
+static constexpr uint64_t RISCV_UART_LCR_OFF = UART_LCR_OFF;
+static constexpr uint64_t RISCV_UART_MCR_OFF = UART_MCR_OFF;
+static constexpr uint64_t RISCV_UART_LSR_OFF = UART_LSR_OFF;
+static constexpr uint8_t RISCV_UART_LSR_DATA_READY = UART_LSR_DATA_READY;
 static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
 
 /// @brief Number of characters written to the console since boot.
