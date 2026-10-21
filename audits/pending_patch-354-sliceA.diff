@@ -1,0 +1,381 @@
+diff --git a/Makefile b/Makefile
+index 9c7910767..2680fa9d7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -404,6 +404,11 @@ HRT_TRACE_FLAGS   := -trace events=tools/qemu/trace_events.txt
+ QEMU_ICOUNT       ?= $(if $(HRT_ICOUNT),$(HRT_ICOUNT_FLAGS),)
+ QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
+ 
++# Issue #354 (Q2): one non-bound PCI device so BAR parsing + MSI-X
++# capability discovery exercise real config space on both arches.
++# virtio-rng-pci: no in-tree PCI driver binds it (delivery stays MMIO).
++QEMU_PCI_TEST_DEV := -device virtio-rng-pci,disable-legacy=on
++
+ # For aarch64, load kernel directly instead of via ISO/GRUB
+ ifeq ($(ARCH),aarch64)
+ # Issue #354 (Q3): QEMU -kernel passes no DTB in x0 — feed QEMU's own virt
+@@ -416,7 +421,7 @@ ifeq ($(ARCH),aarch64)
+ VIRT_DTB          := build/virt.dtb
+ VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
+ QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
+-                $(QEMU_STORAGE_MMIO) \
++                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
+                 -machine virt -cpu cortex-a72 -display none -no-reboot \
+                 -dtb $(VIRT_DTB) \
+                 -semihosting-config enable=on,target=native
+@@ -441,7 +446,7 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
+ 	$(OBJCOPY) -O binary $< $@
+ 
+ QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
+-                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) \
++                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
+                 -machine virt -bios default -display none -no-reboot
+ endif
+ 
+diff --git a/docs/specs/drivers.md b/docs/specs/drivers.md
+index a1fdfaab1..a19b16ef7 100644
+--- a/docs/specs/drivers.md
++++ b/docs/specs/drivers.md
+@@ -168,6 +168,34 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+   Without MSI-X/MSI (or with no task context / wheel-arm failure) the
+   bounded 1M poll is preserved bit-identically.
+ 
++### 5.2 PCIe ECAM discovery (issue #354)
++
++- Discovery is DTB-first, board-constant-always: `pci_ecam_discover()`
++  (BOOT_ONLY latch, called once from `higherhalf_entry`) resolves the
++  `pci-host-ecam-generic` node via `dtb_find_compatible_nodes` +
++  `dtb_node_reg` and accepts it only when the reg base equals the
++  boot-mapped `CONFIG_PCI_ECAM_BASE` with size >= `PCI_ECAM_WINDOW_SIZE`
++  (256 MiB). A missing/invalid DTB or a disagreeing base fails closed to
++  the board constant (`PciEcamSource::BOARD_CONSTANT`, `dt_mismatch` set,
++  WARN + dmesg) — the effective base never redirects away from the
++  boot-mapped window (aarch64 `0x4010000000` HHDM-aliased, issue #216;
++  riscv64 `0x30000000` identity-mapped, issue #29).
++- aarch64 DTB source is the embedded trimmed dump (Q3: QEMU `-kernel`
++  passes no DTB in x0 for a generic ELF — GDB-proven; boot.S substitutes
++  the embedded phys only when x0==0, a bootloader DTB always wins). The
++  kernel ignores the embedded memory node by design (dump-time `-m`
++  goes stale); riscv64 uses the OpenSBI DTB for both discovery and
++  memory sizing.
++- MSI/MSI-X programming is fail-closed off-x86 (`pci_msi_supported()`
++  false: GICv2 has no ITS, PLIC has no MSI endpoint — documented gap,
++  Q1): `pci_enable_msi/msix` return 0, `pci_msix_table_info` returns
++  false, and `pci_scan_all()` skips the MSI-X premap (scan stays
++  allocation-free). INTx pin (`0x3D`) is captured per device for
++  platform-line routing (Slice B).
++- Test topology (Q2): one non-bound `virtio-rng-pci,disable-legacy=on`
++  on both arches' QEMU flags so BAR parsing + MSI-X capability
++  discovery exercise real config space; no in-tree PCI driver binds it.
++
+ ## 6. Interrupt Layer (x86_64)
+ 
+ ```
+diff --git a/src/kernel/arch/hal/pci.hpp b/src/kernel/arch/hal/pci.hpp
+index 13db7f0d2..70952faee 100644
+--- a/src/kernel/arch/hal/pci.hpp
++++ b/src/kernel/arch/hal/pci.hpp
+@@ -45,7 +45,10 @@ struct PciBdf {
+ // ---------------------------------------------------------------------------
+ // Architecture-specific PCI config space access
+ //   x86_64: CF8/CFC port I/O (0xCF8 / 0xCFC)
+-//   aarch64 / riscv64: ECAM memory-mapped (QEMU virt aarch64 at 0x3f000000)
++//   aarch64: ECAM memory-mapped (QEMU virt pcie-ecam at 0x4010000000,
++//            issue #216)
++//   riscv64: ECAM memory-mapped (QEMU virt pcie-ecam at 0x30000000,
++//            issue #29)
+ //
+ // All access functions work on dword-aligned addresses internally, matching
+ // the x86 CF8/CFC semantics where bits [1:0] of the register offset select
+@@ -53,6 +56,18 @@ struct PciBdf {
+ // all architectures.
+ // ---------------------------------------------------------------------------
+ 
++/// @brief True when the platform programs MSI/MSI-X into PCI devices.
++/// @return x86_64 only. aarch64 (GICv2, no ITS) and riscv64 (PLIC, no MSI
++/// endpoint) fail MSI programming closed and deliver via INTx/platform
++/// lines (documented gap, issue #354 Q1).
++inline constexpr bool pci_msi_supported() {
++#if defined(CONFIG_ARCH_X86_64)
++    return true;
++#else
++    return false;
++#endif
++}
++
+ #if defined(CONFIG_ARCH_X86_64)
+ 
+ #include <kernel/arch/hal/io.hpp>
+@@ -153,6 +168,10 @@ namespace arch {
+ /// @brief ECAM base address for memory-mapped PCI config space.
+ constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
+ 
++/// @brief ECAM window size (256 buses x 32 dev x 8 fn x 4 KiB).
++/// QEMU virt maps one 256 MiB pcie-ecam region per arch.
++constexpr uint64_t PCI_ECAM_WINDOW_SIZE = 0x10000000ULL;
++
+ /// @brief Build a PCI configuration address from BDF and register offset (ECAM
+ /// format).
+ /// Issue #216: on aarch64 the result is an HHDM-aliased VA (raw phys is
+diff --git a/src/kernel/arch/pci.cpp b/src/kernel/arch/pci.cpp
+index be1e79476..e05319792 100644
+--- a/src/kernel/arch/pci.cpp
++++ b/src/kernel/arch/pci.cpp
+@@ -21,6 +21,7 @@
+ /// access).
+ 
+ #include <kernel/arch/pci.hpp>
++#include <kernel/boot/dtb.hpp>
+ #include <kernel/log/dmesg.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
+@@ -42,6 +43,13 @@ static uint64_t msix_page_align_up(uint64_t x) {
+ arch::PciDeviceInfo g_devices[arch::PCI_MAX_DEVICES_FOUND];
+ size_t g_device_count = 0;
+ 
++/// ECAM discovery state (issue #354): BOOT_ONLY latch, TU-local (internal
++/// linkage — never function-local, no thread-safe statics on RT paths).
++/// Latched on first call; the effective base is always the boot-mapped
++/// board constant (discovery validates, never redirects).
++arch::PciEcamInfo g_ecam_info{};
++bool g_ecam_done = false;
++
+ /// Write decimal uint64 to buffer, returns bytes written (excluding null).
+ static size_t fmt_dec(char *buf, size_t size, uint64_t n) {
+     if (size == 0)
+@@ -312,6 +320,67 @@ static const char *pci_subclass_name(uint8_t class_code, uint8_t subclass) {
+ 
+ namespace arch {
+ 
++const PciEcamInfo &pci_ecam_info() {
++    return g_ecam_info;
++}
++
++void pci_ecam_discover() {
++#if defined(CONFIG_ARCH_X86_64)
++    // CF8/CFC port I/O — no ECAM window exists.
++    g_ecam_info = PciEcamInfo{};
++    g_ecam_done = true;
++    return;
++#else
++    if (g_ecam_done)
++        return;
++    g_ecam_done = true;
++    // Fail-closed default: the boot-mapped board constant.
++    g_ecam_info.phys_base = PCI_ECAM_BASE;
++    g_ecam_info.size = PCI_ECAM_WINDOW_SIZE;
++    g_ecam_info.source = PciEcamSource::BOARD_CONSTANT;
++    const void *fdt = kernel::boot::dtb_from_boot_info();
++    if (!fdt) {
++        Logger::info("PCI: no validated DTB — ECAM base %lx (board)",
++                     PCI_ECAM_BASE);
++        return;
++    }
++    int nodes[kernel::boot::DTB_MAX_MATCHES];
++    int found = kernel::boot::dtb_find_compatible_nodes(
++        fdt, "pci-host-ecam-generic", nodes, kernel::boot::DTB_MAX_MATCHES);
++    if (found <= 0) {
++        Logger::info("PCI: no pcie-ecam-generic node — ECAM base %lx "
++                     "(board)",
++                     PCI_ECAM_BASE);
++        return;
++    }
++    uint64_t base = 0;
++    uint64_t size = 0;
++    if (!kernel::boot::dtb_node_reg(fdt, nodes[0], base, size)) {
++        Logger::info("PCI: pcie-ecam-generic reg unreadable — ECAM base "
++                     "%lx (board)",
++                     PCI_ECAM_BASE);
++        return;
++    }
++    g_ecam_info.dt_found = true;
++    g_ecam_info.dt_phys_base = base;
++    if (base != PCI_ECAM_BASE || size < PCI_ECAM_WINDOW_SIZE) {
++        // Fail closed: keep the boot-mapped window, record the mismatch.
++        g_ecam_info.dt_mismatch = true;
++        Logger::warn("PCI: ECAM DT mismatch (dt=%lx) — keeping board %lx",
++                     base, PCI_ECAM_BASE);
++        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
++                                    kernel::log::kDmesgBase_DRIVER + 11,
++                                    kernel::log::LogSeverity::WARN,
++                                    "PCI ECAM DT mismatch",
++                                    base);
++        return;
++    }
++    g_ecam_info.source = PciEcamSource::DEVICE_TREE;
++    Logger::info("PCI: ECAM base %lx validated by DT (size %lx)",
++                 PCI_ECAM_BASE, size);
++#endif
++}
++
+ size_t pci_scan_all() {
+     g_device_count = 0;
+     probe_bus(0);
+@@ -320,7 +389,10 @@ size_t pci_scan_all() {
+     // (before the test-isolation baseline) — a test-time MsixCap::create
+     // reuses the cached KVA instead of allocating fresh PT pages per test
+     // (ResourceTracker-clean, iommu probe-once pattern, issue #10).
+-    pci_msix_premap_all();
++    // Issue #354: no MSI target exists off-x86 (documented gap) — keep the
++    // scan allocation-free there by skipping the premap entirely.
++    if (pci_msi_supported())
++        pci_msix_premap_all();
+ #ifdef CONFIG_DEBUG
+     pci_dump_tree();
+ #endif
+@@ -527,6 +599,9 @@ PciDeviceInfo pci_read_device_info(PciBdf bdf) {
+     info.subclass = pci_config_readb(addr_base + PCI_SUBCLASS);
+     info.class_code = pci_config_readb(addr_base + PCI_CLASS);
+     info.header_type = pci_config_readb(addr_base + PCI_HEADER_TYPE);
++    // INTx pin (0 = none, 1-4 = INTA-D); stored for platform-line routing.
++    info.intx_pin =
++        static_cast<uint8_t>(pci_config_readb(addr_base + PCI_INT_PIN) & 0x0F);
+     pci_parse_bars(info);
+     return info;
+ }
+@@ -612,6 +687,12 @@ uint8_t pci_find_capability(PciBdf bdf, uint8_t cap_id) {
+ // --- MSI enable ---
+ 
+ uint8_t pci_enable_msi(PciBdf bdf, uint8_t apic_id) {
++    // Issue #354 (Q1 documented gap): GICv2 has no ITS and the PLIC has no
++    // MSI endpoint — there is no target for MSI writes off-x86. Fail closed.
++    if (!pci_msi_supported()) {
++        Logger::info("MSI: unsupported on this platform (INTx delivery)");
++        return 0;
++    }
+     uint8_t cap = pci_find_capability(bdf, PCI_CAP_ID_MSI);
+     if (cap == 0)
+         return 0;
+@@ -705,6 +786,10 @@ void pci_msix_premap_all() {
+ 
+ bool pci_msix_table_info(PciBdf bdf, PciMsixTableInfo &out) {
+     out = PciMsixTableInfo{};
++    // Issue #354 (Q1 documented gap): no MSI-X target off-x86 — fail closed
++    // before the capability walk (keeps callers allocation-free).
++    if (!pci_msi_supported())
++        return false;
+     // Reuse the boot-time cached mapping when present (probe-once).
+     const arch::PciMsixTableInfo *cached = msix_cache_lookup(bdf);
+     if (cached) {
+@@ -817,6 +902,11 @@ bool pci_msix_entry_masked(const PciMsixTableInfo &tbl, uint16_t entry) {
+ }
+ 
+ uint8_t pci_enable_msix(PciBdf bdf, uint16_t entry, uint8_t apic_id) {
++    // Issue #354 (Q1 documented gap): no MSI-X target off-x86 — fail closed.
++    if (!pci_msi_supported()) {
++        Logger::info("MSI-X: unsupported on this platform (INTx delivery)");
++        return 0;
++    }
+     uint8_t cap = pci_find_capability(bdf, PCI_CAP_ID_MSIX);
+     if (cap == 0)
+         return 0;
+diff --git a/src/kernel/arch/pci.hpp b/src/kernel/arch/pci.hpp
+index 1c660157e..7e720766c 100644
+--- a/src/kernel/arch/pci.hpp
++++ b/src/kernel/arch/pci.hpp
+@@ -55,6 +55,7 @@ enum PciRegister : uint8_t {
+     PCI_BAR4 = 0x20,
+     PCI_BAR5 = 0x24,
+     PCI_SECONDARY_BUS = 0x19,
++    PCI_INT_PIN = 0x3D,
+ };
+ 
+ /// PCI status register bits
+@@ -148,10 +149,43 @@ struct PciDeviceInfo {
+     uint8_t prog_if;
+     uint8_t revision;
+     uint8_t header_type;
++    uint8_t intx_pin; ///< INTx pin (0 = none, 1-4 = INTA-D; config 0x3D)
+     PciBar bars[6];
+     uint8_t bar_count;
+ };
+ 
++// --- ECAM discovery (issue #354) ---
++
++/// @brief Where the effective ECAM base came from.
++enum class PciEcamSource : uint8_t {
++    NONE = 0,       ///< x86_64 (CF8/CFC, no ECAM) or undiscovered.
++    ///< NOTE (audit S3): on x86_64 discover() latches NONE explicitly, and
++    ///< any unread latch is zero-init == NONE by construction — never
++    ///< mistake it for a pending discovery.
++    DEVICE_TREE,    ///< validated DTB pcie-ecam-generic node matches board
++    BOARD_CONSTANT, ///< no/invalid DTB or DTB mismatch — boot-mapped constant
++};
++
++/// @brief ECAM discovery result (BOOT_ONLY latch, written once at boot).
++struct PciEcamInfo {
++    uint64_t phys_base = 0; ///< effective ECAM base (== CONFIG base always)
++    uint64_t size = 0;      ///< window size (PCI_ECAM_WINDOW_SIZE when live)
++    uint64_t dt_phys_base = 0; ///< DTB pcie-ecam-generic reg base (0 if none)
++    bool dt_found = false;     ///< DTB node present and reg parsed
++    bool dt_mismatch = false;  ///< DT node disagrees with the boot mapping
++    PciEcamSource source = PciEcamSource::NONE;
++};
++
++/// @brief Read the latched ECAM discovery result.
++const PciEcamInfo &pci_ecam_info();
++
++/// @brief Resolve + validate the ECAM base once at boot (BOOT_ONLY).
++/// DTB-first: the `pci-host-ecam-generic` reg must equal the boot-mapped
++/// CONFIG base with size >= PCI_ECAM_WINDOW_SIZE, else fail closed to the
++/// board constant with dt_mismatch set (dmesg DOCUMENT). Latched — a second
++/// call is a no-op. Safe to call on x86_64 (latches NONE).
++void pci_ecam_discover();
++
+ // --- Unified (arch-independent) config space access wrappers ---
+ 
+ /// Read vendor ID (return 0xFFFF if no device)
+diff --git a/src/kernel/arch/riscv64/hal/pci_impl.hpp b/src/kernel/arch/riscv64/hal/pci_impl.hpp
+index f86673cef..38e953528 100644
+--- a/src/kernel/arch/riscv64/hal/pci_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/pci_impl.hpp
+@@ -35,7 +35,7 @@
+ /// boot.S identity-maps 0x30000000-0x3FFFFFFF (L2_page[384..511)),
+ /// following the in-tree PLIC/UART precedent.
+ #ifndef CONFIG_PCI_ECAM_BASE
+-#define CONFIG_PCI_ECAM_BASE 0x100000000ULL // 4GB default
++#define CONFIG_PCI_ECAM_BASE 0x30000000ULL // == hal/pci.hpp live base (issue #354)
+ #endif
+ 
+ /// @brief Base physical address of the PCI ECAM region.
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 050b89d6c..329149a73 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -28,6 +28,7 @@
+ #include <kernel/arch/interrupt_controller.hpp>
+ #include <kernel/arch/rtc.hpp>
+ #include <kernel/arch/io.hpp>
++#include <kernel/arch/pci.hpp>
+ #include <kernel/arch/keyboard.hpp>
+ #include <kernel/arch/qemu_debugcon.hpp>
+ #include <kernel/arch/serial.hpp>
+@@ -1209,6 +1210,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+ #endif
+ 
+     }
++#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
++    // Issue #354 Slice A: resolve + validate the ECAM base once at boot.
++    // (Planner step A6 named early_init, but early_irq_init runs only on
++    // test paths — production boot reaches here, with DTB + HHDM live.)
++    // Placed AFTER the fallback region is recorded: dtb_from_boot_info
++    // requires the blob inside a usable region, and with the embedded DTB
++    // the memory-node block is skipped by design, so no region exists yet
++    // at the DTB-parse site.
++    arch::pci_ecam_discover();
++#endif
+     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
+ #if defined(CONFIG_ARCH_RISCV64)
+     // Issue #29: pin the 64KB boot stack (linker .boot_stack_rv at
+diff --git a/test-history.txt b/test-history.txt
+index d1fb9f23a..aca3205f0 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4339,3 +4339,7 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 08:33:13 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 16s
+ 2026-10-21 09:21:45 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 22s
+ 2026-10-21 09:24:50 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 16s
++2026-10-21 09:46:49 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 23s
++2026-10-21 09:46:49 drivers PASSED: 57 FAILED: 1 TIME: 18s STATUS: sliceA-aarch64-known-#391
++2026-10-21 09:46:49 drivers PASSED: 56 FAILED: 2 TIME: 27s STATUS: sliceA-riscv64-known-#391x2
++2026-10-21 09:46:49 drivers PASSED: 107 FAILED: 0 TIME: 36s

@@ -404,6 +404,11 @@ HRT_TRACE_FLAGS   := -trace events=tools/qemu/trace_events.txt
 QEMU_ICOUNT       ?= $(if $(HRT_ICOUNT),$(HRT_ICOUNT_FLAGS),)
 QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
 
+# Issue #354 (Q2): one non-bound PCI device so BAR parsing + MSI-X
+# capability discovery exercise real config space on both arches.
+# virtio-rng-pci: no in-tree PCI driver binds it (delivery stays MMIO).
+QEMU_PCI_TEST_DEV := -device virtio-rng-pci,disable-legacy=on
+
 # For aarch64, load kernel directly instead of via ISO/GRUB
 ifeq ($(ARCH),aarch64)
 # Issue #354 (Q3): QEMU -kernel passes no DTB in x0 — feed QEMU's own virt
@@ -416,7 +421,7 @@ ifeq ($(ARCH),aarch64)
 VIRT_DTB          := build/virt.dtb
 VIRT_DTB_TRIMMED  := build/virt.trimmed.dtb
 QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
-                $(QEMU_STORAGE_MMIO) \
+                $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
                 -machine virt -cpu cortex-a72 -display none -no-reboot \
                 -dtb $(VIRT_DTB) \
                 -semihosting-config enable=on,target=native
@@ -441,7 +446,7 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
 	$(OBJCOPY) -O binary $< $@
 
 QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
-                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) \
+                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) $(QEMU_PCI_TEST_DEV) \
                 -machine virt -bios default -display none -no-reboot
 endif
 

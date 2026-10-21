@@ -28,6 +28,7 @@
 #include <kernel/arch/interrupt_controller.hpp>
 #include <kernel/arch/rtc.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/pci.hpp>
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/arch/qemu_debugcon.hpp>
 #include <kernel/arch/serial.hpp>
@@ -1209,6 +1210,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
 
     }
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    // Issue #354 Slice A: resolve + validate the ECAM base once at boot.
+    // (Planner step A6 named early_init, but early_irq_init runs only on
+    // test paths — production boot reaches here, with DTB + HHDM live.)
+    // Placed AFTER the fallback region is recorded: dtb_from_boot_info
+    // requires the blob inside a usable region, and with the embedded DTB
+    // the memory-node block is skipped by design, so no region exists yet
+    // at the DTB-parse site.
+    arch::pci_ecam_discover();
+#endif
     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
 #if defined(CONFIG_ARCH_RISCV64)
     // Issue #29: pin the 64KB boot stack (linker .boot_stack_rv at

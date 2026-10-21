@@ -21,6 +21,7 @@
 /// access).
 
 #include <kernel/arch/pci.hpp>
+#include <kernel/boot/dtb.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
@@ -41,6 +42,13 @@ static uint64_t msix_page_align_up(uint64_t x) {
 /// Fixed-size buffer for discovered devices.
 arch::PciDeviceInfo g_devices[arch::PCI_MAX_DEVICES_FOUND];
 size_t g_device_count = 0;
+
+/// ECAM discovery state (issue #354): BOOT_ONLY latch, TU-local (internal
+/// linkage — never function-local, no thread-safe statics on RT paths).
+/// Latched on first call; the effective base is always the boot-mapped
+/// board constant (discovery validates, never redirects).
+arch::PciEcamInfo g_ecam_info{};
+bool g_ecam_done = false;
 
 /// Write decimal uint64 to buffer, returns bytes written (excluding null).
 static size_t fmt_dec(char *buf, size_t size, uint64_t n) {
@@ -312,6 +320,67 @@ static const char *pci_subclass_name(uint8_t class_code, uint8_t subclass) {
 
 namespace arch {
 
+const PciEcamInfo &pci_ecam_info() {
+    return g_ecam_info;
+}
+
+void pci_ecam_discover() {
+#if defined(CONFIG_ARCH_X86_64)
+    // CF8/CFC port I/O — no ECAM window exists.
+    g_ecam_info = PciEcamInfo{};
+    g_ecam_done = true;
+    return;
+#else
+    if (g_ecam_done)
+        return;
+    g_ecam_done = true;
+    // Fail-closed default: the boot-mapped board constant.
+    g_ecam_info.phys_base = PCI_ECAM_BASE;
+    g_ecam_info.size = PCI_ECAM_WINDOW_SIZE;
+    g_ecam_info.source = PciEcamSource::BOARD_CONSTANT;
+    const void *fdt = kernel::boot::dtb_from_boot_info();
+    if (!fdt) {
+        Logger::info("PCI: no validated DTB — ECAM base %lx (board)",
+                     PCI_ECAM_BASE);
+        return;
+    }
+    int nodes[kernel::boot::DTB_MAX_MATCHES];
+    int found = kernel::boot::dtb_find_compatible_nodes(
+        fdt, "pci-host-ecam-generic", nodes, kernel::boot::DTB_MAX_MATCHES);
+    if (found <= 0) {
+        Logger::info("PCI: no pcie-ecam-generic node — ECAM base %lx "
+                     "(board)",
+                     PCI_ECAM_BASE);
+        return;
+    }
+    uint64_t base = 0;
+    uint64_t size = 0;
+    if (!kernel::boot::dtb_node_reg(fdt, nodes[0], base, size)) {
+        Logger::info("PCI: pcie-ecam-generic reg unreadable — ECAM base "
+                     "%lx (board)",
+                     PCI_ECAM_BASE);
+        return;
+    }
+    g_ecam_info.dt_found = true;
+    g_ecam_info.dt_phys_base = base;
+    if (base != PCI_ECAM_BASE || size < PCI_ECAM_WINDOW_SIZE) {
+        // Fail closed: keep the boot-mapped window, record the mismatch.
+        g_ecam_info.dt_mismatch = true;
+        Logger::warn("PCI: ECAM DT mismatch (dt=%lx) — keeping board %lx",
+                     base, PCI_ECAM_BASE);
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 11,
+                                    kernel::log::LogSeverity::WARN,
+                                    "PCI ECAM DT mismatch",
+                                    base);
+        return;
+    }
+    g_ecam_info.source = PciEcamSource::DEVICE_TREE;
+    Logger::info("PCI: ECAM base %lx validated by DT (size %lx)",
+                 PCI_ECAM_BASE, size);
+#endif
+}
+
 size_t pci_scan_all() {
     g_device_count = 0;
     probe_bus(0);
@@ -320,7 +389,10 @@ size_t pci_scan_all() {
     // (before the test-isolation baseline) — a test-time MsixCap::create
     // reuses the cached KVA instead of allocating fresh PT pages per test
     // (ResourceTracker-clean, iommu probe-once pattern, issue #10).
-    pci_msix_premap_all();
+    // Issue #354: no MSI target exists off-x86 (documented gap) — keep the
+    // scan allocation-free there by skipping the premap entirely.
+    if (pci_msi_supported())
+        pci_msix_premap_all();
 #ifdef CONFIG_DEBUG
     pci_dump_tree();
 #endif
@@ -527,6 +599,9 @@ PciDeviceInfo pci_read_device_info(PciBdf bdf) {
     info.subclass = pci_config_readb(addr_base + PCI_SUBCLASS);
     info.class_code = pci_config_readb(addr_base + PCI_CLASS);
     info.header_type = pci_config_readb(addr_base + PCI_HEADER_TYPE);
+    // INTx pin (0 = none, 1-4 = INTA-D); stored for platform-line routing.
+    info.intx_pin =
+        static_cast<uint8_t>(pci_config_readb(addr_base + PCI_INT_PIN) & 0x0F);
     pci_parse_bars(info);
     return info;
 }
@@ -612,6 +687,12 @@ uint8_t pci_find_capability(PciBdf bdf, uint8_t cap_id) {
 // --- MSI enable ---
 
 uint8_t pci_enable_msi(PciBdf bdf, uint8_t apic_id) {
+    // Issue #354 (Q1 documented gap): GICv2 has no ITS and the PLIC has no
+    // MSI endpoint — there is no target for MSI writes off-x86. Fail closed.
+    if (!pci_msi_supported()) {
+        Logger::info("MSI: unsupported on this platform (INTx delivery)");
+        return 0;
+    }
     uint8_t cap = pci_find_capability(bdf, PCI_CAP_ID_MSI);
     if (cap == 0)
         return 0;
@@ -705,6 +786,10 @@ void pci_msix_premap_all() {
 
 bool pci_msix_table_info(PciBdf bdf, PciMsixTableInfo &out) {
     out = PciMsixTableInfo{};
+    // Issue #354 (Q1 documented gap): no MSI-X target off-x86 — fail closed
+    // before the capability walk (keeps callers allocation-free).
+    if (!pci_msi_supported())
+        return false;
     // Reuse the boot-time cached mapping when present (probe-once).
     const arch::PciMsixTableInfo *cached = msix_cache_lookup(bdf);
     if (cached) {
@@ -817,6 +902,11 @@ bool pci_msix_entry_masked(const PciMsixTableInfo &tbl, uint16_t entry) {
 }
 
 uint8_t pci_enable_msix(PciBdf bdf, uint16_t entry, uint8_t apic_id) {
+    // Issue #354 (Q1 documented gap): no MSI-X target off-x86 — fail closed.
+    if (!pci_msi_supported()) {
+        Logger::info("MSI-X: unsupported on this platform (INTx delivery)");
+        return 0;
+    }
     uint8_t cap = pci_find_capability(bdf, PCI_CAP_ID_MSIX);
     if (cap == 0)
         return 0;

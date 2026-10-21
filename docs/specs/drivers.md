@@ -168,6 +168,34 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   Without MSI-X/MSI (or with no task context / wheel-arm failure) the
   bounded 1M poll is preserved bit-identically.
 
+### 5.2 PCIe ECAM discovery (issue #354)
+
+- Discovery is DTB-first, board-constant-always: `pci_ecam_discover()`
+  (BOOT_ONLY latch, called once from `higherhalf_entry`) resolves the
+  `pci-host-ecam-generic` node via `dtb_find_compatible_nodes` +
+  `dtb_node_reg` and accepts it only when the reg base equals the
+  boot-mapped `CONFIG_PCI_ECAM_BASE` with size >= `PCI_ECAM_WINDOW_SIZE`
+  (256 MiB). A missing/invalid DTB or a disagreeing base fails closed to
+  the board constant (`PciEcamSource::BOARD_CONSTANT`, `dt_mismatch` set,
+  WARN + dmesg) — the effective base never redirects away from the
+  boot-mapped window (aarch64 `0x4010000000` HHDM-aliased, issue #216;
+  riscv64 `0x30000000` identity-mapped, issue #29).
+- aarch64 DTB source is the embedded trimmed dump (Q3: QEMU `-kernel`
+  passes no DTB in x0 for a generic ELF — GDB-proven; boot.S substitutes
+  the embedded phys only when x0==0, a bootloader DTB always wins). The
+  kernel ignores the embedded memory node by design (dump-time `-m`
+  goes stale); riscv64 uses the OpenSBI DTB for both discovery and
+  memory sizing.
+- MSI/MSI-X programming is fail-closed off-x86 (`pci_msi_supported()`
+  false: GICv2 has no ITS, PLIC has no MSI endpoint — documented gap,
+  Q1): `pci_enable_msi/msix` return 0, `pci_msix_table_info` returns
+  false, and `pci_scan_all()` skips the MSI-X premap (scan stays
+  allocation-free). INTx pin (`0x3D`) is captured per device for
+  platform-line routing (Slice B).
+- Test topology (Q2): one non-bound `virtio-rng-pci,disable-legacy=on`
+  on both arches' QEMU flags so BAR parsing + MSI-X capability
+  discovery exercise real config space; no in-tree PCI driver binds it.
+
 ## 6. Interrupt Layer (x86_64)
 
 ```
