@@ -68,6 +68,16 @@ struct PrdTable {
     size_t count;
 };
 
+/// @brief BMDMA PRD address limit (issue #307): the 32-bit PRDTPR register
+///        cannot represent a table base >= 4 GiB — fail closed, never
+///        truncate. Public + header-inline so QE can unit-test the predicate.
+inline constexpr uint64_t DMA_BM_PRD_ADDR_LIMIT = 0x100000000ULL;
+/// @brief True iff a PRD table base fits the controller's address register.
+/// @param prd_phys Physical address of the PRD table.
+inline bool bm_prd_addr_ok(uint64_t prd_phys) {
+    return prd_phys != 0 && prd_phys < DMA_BM_PRD_ADDR_LIMIT;
+}
+
 // --- DMA Buffer ---
 
 /// A physically contiguous DMA buffer.
@@ -89,7 +99,10 @@ struct DmaBuffer {
 /// cleans the PRD table itself at start(); the table lives in caller
 /// memory and stays valid until completion.  x86_64 and QEMU virt are
 /// DMA-coherent so the helpers are exact there; non-coherent silicon
-/// stays a #307 residual.
+/// stays a #307 residual.  There is no DMA_ATTR_NONCACHEABLE/attribute word
+/// in the VMM map API (map_page* take virt/phys/user/executable only), so
+/// explicit maintenance is the sole mechanism; a future non-cacheable
+/// attribute must assert this contract before rings are published.
 DmaBuffer alloc_buffer(size_t size);
 
 /// Free a previously allocated DMA buffer.
@@ -168,7 +181,10 @@ class DmaChannel {
     /// Start a DMA transfer.
     /// @param prd  PRD table (must remain valid until transfer completes).
     /// @param dir  Transfer direction.
-    /// @return true if the transfer was started.
+    /// @return true if the transfer was started. Implementations must fail
+    ///         closed (return false) when the table base is not
+    ///         representable in the controller's address register; never
+    ///         truncate (BMDMA: 32-bit PRDTPR, issue #307).
     virtual bool start(PrdTable &prd, Direction dir) = 0;
 
     /// Poll whether the channel is busy.

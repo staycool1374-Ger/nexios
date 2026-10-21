@@ -25,6 +25,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/hal/idt.hpp>
+#include <kernel/arch/hal/cache.hpp>
 #include <kernel/arch/hal/interrupt_controller.hpp>
 #if defined(CONFIG_ARCH_AARCH64)
 #include <kernel/arch/aarch64/hal/gic.hpp>
@@ -169,6 +170,18 @@ bool VirtioBlkDriver::init() {
     memset(used_, 0, PAGE_SIZE);
     memset(dma_buf_, 0, PAGE_SIZE);
 
+    // Cache contract (issue #307): publish the rings before the device
+    // learns about them. Descs/avail are CPU-written (clean); used/dma are
+    // device-owned after publication (clean+invalidate drops CPU-dirtied
+    // zero lines that could otherwise evict over device data).
+    arch::cache_clean(desc_, sizeof(arch::VirtqDesc) * queue_size_);
+    arch::cache_clean(avail_,
+                      sizeof(arch::VirtqAvail) + sizeof(uint16_t) * queue_size_);
+    arch::cache_clean_invalidate(
+        used_, sizeof(arch::VirtqUsed) +
+                   sizeof(arch::VirtqUsedElem) * queue_size_);
+    arch::cache_clean_invalidate(dma_buf_, PAGE_SIZE);
+
     if (!arch::virtio_setup_queue(transport_, 0, queue_size_, desc_phys_,
                                   avail_phys_, used_phys_)) {
         Logger::error("virtio-blk: queue setup failed");
@@ -263,19 +276,27 @@ bool VirtioBlkDriver::wait_request_poll(uint16_t used_snapshot) {
 
 bool VirtioBlkDriver::finish_request(bool is_read, uint8_t *data) {
     // Check status
-    auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
-        dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
-    if (*status_ptr != VIRTIO_BLK_S_OK) {
-        Logger::error("virtio-blk: request failed (status=%d)", *status_ptr);
+    // Cache contract (issue #307): the status byte is device-written —
+    // invalidate before the load and latch once. A stale cached 0 reads
+    // as VIRTIO_BLK_S_OK, so read→invalidate→read is forbidden.
+    uint8_t *status_addr =
+        dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
+    arch::cache_invalidate(status_addr, sizeof(uint8_t));
+    auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
+    uint8_t status = *status_ptr;
+    if (status != VIRTIO_BLK_S_OK) {
+        Logger::error("virtio-blk: request failed (status=%d)", status);
         kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
                                     kernel::log::kDmesgBase_DRIVER + 5,
                                     kernel::log::LogSeverity::ERROR,
-                                    "virtio-blk request", *status_ptr);
+                                    "virtio-blk request", status);
         return false;
     }
 
     // Copy data back for reads
     if (is_read) {
+        arch::cache_invalidate(dma_buf_ + sizeof(VirtioBlkReqHdr),
+                               BLOCK_SIZE);
         memcpy(data, dma_buf_ + sizeof(VirtioBlkReqHdr), BLOCK_SIZE);
     }
     return true;
@@ -410,6 +431,10 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
     if (!is_read) {
         memcpy(data_area, data, BLOCK_SIZE);
     }
+    // Cache contract (issue #307): flush header + data + status placeholder
+    // before the device reads them (one bounded call covers reads too).
+    arch::cache_clean(dma_buf_,
+                      sizeof(VirtioBlkReqHdr) + BLOCK_SIZE + sizeof(uint8_t));
 
     // Build descriptor chain:
     // desc[0]: request header (driver write → device read)
@@ -436,6 +461,13 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
     desc_[status_idx].flags = VIRTIO_DESC_F_WRITE;
     desc_[status_idx].next = 0;
 
+    // Cache contract (issue #307): clean exactly the three touched
+    // descriptors (correct across the % queue_size_ wrap; never the whole
+    // ring) so the device reads flushed bytes after notify.
+    arch::cache_clean(&desc_[idx], sizeof(arch::VirtqDesc));
+    arch::cache_clean(&desc_[data_idx], sizeof(arch::VirtqDesc));
+    arch::cache_clean(&desc_[status_idx], sizeof(arch::VirtqDesc));
+
     // H-3 (FLAW-03 pattern): snapshot the used index BEFORE the avail push and
     // virtio_notify — reading it after notify races fast completions (the
     // device may have already advanced used_->idx by the time we sample it).
@@ -443,8 +475,14 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
 
     // Place in available ring
     avail_->ring[avail_->idx % queue_size_] = idx;
+    // Cache contract (issue #307): fixed store→clean per field — cleaning
+    // the idx before the slot, or notifying before the idx clean, exposes
+    // unflushed descriptor bytes on non-coherent silicon.
+    arch::cache_clean(&avail_->ring[avail_->idx % queue_size_],
+                      sizeof(uint16_t));
     kernel::atomic_fence();
     avail_->idx = static_cast<uint16_t>(avail_->idx + 1);
+    arch::cache_clean(&avail_->idx, sizeof(uint16_t));
     kernel::atomic_fence();
 
     // Kick the device
@@ -536,8 +574,14 @@ bool VirtioBlkDriver::drain_used_ring_mmio(TaskControlBlock *&wake_task,
         if (!done)
             continue;
         compl_.done = true;
-        auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
-            dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+        // Cache contract (issue #307): invalidate before the load and latch
+        // once — the ISR snapshot feeds the failure decision and a stale
+        // OK would retire a failed request as success. Address derived
+        // from dma_buf_ (volatile→const cast is forbidden).
+        uint8_t *status_addr =
+            dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
+        arch::cache_invalidate(status_addr, sizeof(uint8_t));
+        auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
         compl_.status = *status_ptr;
         wake_task = compl_.waiter;
         wake_gen = compl_.waiter_gen;
@@ -610,8 +654,15 @@ bool VirtioBlkDriver::handle_irq() {
             if (!done)
                 continue;
             compl_.done = true;
-            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
-                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+            // Cache contract (issue #307): invalidate before the load and latch
+            // once - same contract as drain_used_ring_mmio and finish_request.
+            // A stale cached 0 reads as VIRTIO_BLK_S_OK and would retire a
+            // failed request as success. Address derived from dma_buf_
+            // (volatile-to-const cast is forbidden).
+            uint8_t *status_addr =
+                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
+            arch::cache_invalidate(status_addr, sizeof(uint8_t));
+            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
             compl_.status = *status_ptr;
             wake_task = compl_.waiter;
             wake_gen = compl_.waiter_gen;

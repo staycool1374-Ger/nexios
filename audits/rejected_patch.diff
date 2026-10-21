@@ -1,26 +1,27 @@
-diff --git a/src/kernel/driver/fw_cfg.cpp b/src/kernel/driver/fw_cfg.cpp
---- a/src/kernel/driver/fw_cfg.cpp
-+++ b/src/kernel/driver/fw_cfg.cpp
-@@ -168,9 +168,9 @@
-     return false;
- }
- 
- bool fw_cfg_dma_write(uint16_t selector, const void *src, uint32_t len) {
--    if (!src || len == 0 || len > sizeof(g_dma_page) - kDmaPayloadOff)
-+    if (selector == 0 || !src || len == 0 || len > sizeof(g_dma_page) - kDmaPayloadOff)
-         return false;
-     uint64_t page_phys = phys_of(g_dma_page);
-     if (!page_phys)
-         return false;
-diff --git a/src/kernel/driver/ramfb.hpp b/src/kernel/driver/ramfb.hpp
---- a/src/kernel/driver/ramfb.hpp
-+++ b/src/kernel/driver/ramfb.hpp
-@@ -47,7 +47,7 @@
- /// @brief Encode an `etc/ramfb` config (pure, QE-testable).
- /// Wire order is big-endian; the swaps below run at compile time.
- /// @param phys Guest-physical backing address (page-aligned, validated).
--/// @param width Height in pixels; height in pixels (validated: fit in u32
-+/// @param width Width in pixels; @param height Height in pixels (validated: fit in u32
- /// when multiplied by 4 — the caller upholds the FB_MAX bound).
- /// @return Big-endian wire encoding.
- constexpr RamfbConfig make_ramfb_config(uint64_t phys, uint32_t width,
+diff --git a/src/kernel/driver/virtio_blk.cpp b/src/kernel/driver/virtio_blk.cpp
+--- a/src/kernel/driver/virtio_blk.cpp
++++ b/src/kernel/driver/virtio_blk.cpp
+@@ -651,13 +651,20 @@ bool VirtioBlkDriver::handle_irq() {
+             bool done = false;
+             match_completion(pos, static_cast<uint16_t>(pos + 1), entry_id,
+                              compl_.head_idx, &done);
+             if (!done)
+                 continue;
+             compl_.done = true;
+-            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+-                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+-            compl_.status = *status_ptr;
++            // Cache contract (issue #307): invalidate before the load and latch
++            // once - same contract as drain_used_ring_mmio and finish_request.
++            // A stale cached 0 reads as VIRTIO_BLK_S_OK and would retire a
++            // failed request as success. Address derived from dma_buf_
++            // (volatile-to-const cast is forbidden).
++            uint8_t *status_addr =
++                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
++            arch::cache_invalidate(status_addr, sizeof(uint8_t));
++            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
++            compl_.status = *status_ptr;
+             wake_task = compl_.waiter;
+             wake_gen = compl_.waiter_gen;
+             compl_.waiter = nullptr;
+             compl_.waiter_gen = 0;

@@ -237,8 +237,15 @@ bool BmDmaChannel::start(PrdTable &prd, Direction dir) {
     if (!prd_phys)
         return false;
 
+    // Fail closed (issue #307): the 32-bit PRDTPR cannot address a table
+    // at/above 4 GiB — no controller state is touched before this check.
+    if (!bm_prd_addr_ok(prd_phys)) {
+        Logger::error("dma: BmDmaChannel start PRD table above 4 GiB");
+        return false;
+    }
+
     arch::outl(static_cast<uint16_t>(bm_io_base_ + 4),
-               static_cast<uint32_t>(prd_phys & 0xFFFFFFFF));
+               static_cast<uint32_t>(prd_phys));
 
     uint8_t cmd = BMCMD_START;
     if (dir == Direction::READ) {
@@ -246,8 +253,7 @@ bool BmDmaChannel::start(PrdTable &prd, Direction dir) {
     }
     arch::outb(static_cast<uint16_t>(bm_io_base_ + 0), cmd);
 
-    Logger::info("dma: BmDmaChannel start prd_phys=0x%x dir=%s",
-                 static_cast<unsigned>(prd_phys),
+    Logger::info("dma: BmDmaChannel start prd_phys=%lx dir=%s", prd_phys,
                  dir == Direction::READ ? "READ" : "WRITE");
     return true;
 }

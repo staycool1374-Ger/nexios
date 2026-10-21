@@ -53,17 +53,32 @@ then invoke the callback **outside** the critical section.
 an in-flight DMA target can be handed to the producer.  Same fix pattern;
 `prepare_buf`/`xfer_buf` return the resolved pointer while holding the lock.
 
-### 2.3 PRD fail-closed + cache contract (issue #354 Slice C)
+### 2.3 PRD fail-closed + cache contract (issue #354 Slice C, #307)
 - `prd_from_sg()` rejects (returns 0, table zeroed): phys > 32 bits,
   empty, > 64 KiB, odd (2-byte align), or 4 KiB-spanning entries — never
   truncated. `PingPongDma::start_next()` treats 0 as failure before the
   index swap. Callers treat 0 as failure.
+- BMDMA PRD base is 32-bit: `BmDmaChannel::start` rejects a table base
+  >= 4 GiB via `bm_prd_addr_ok()` before any port write (issue #307) —
+  no truncation; also fixes the `%x` log truncation to `%lx`.
 - Cache points (`arch/hal/cache.hpp`): `alloc_buffer` zero-range
   clean+invalidate; `free_buffer` invalidate-before-release;
   `BmDmaChannel::start` cleans the used PRD entries (the device reads
   the table). Transfer DATA ranges are caller-owned: clean the SG range
   before a device-read (`Direction::READ`), invalidate after a
   device-write (`Direction::WRITE`) before CPU reads.
+  AHCI (issue #307): `start_cmd` cleans CFIS region + PRDTL=1 entry +
+  32 B command header before the CI doorbell; `read_sector` invalidates
+  the data buffer after wait; `write_sector` cleans it after staging;
+  IDENTIFY parse invalidates first. Exact consumed-byte cleans only —
+  never whole tables/rings on hot paths.
+  virtio-blk (issue #307): ring publication cleans (descs + avail +
+  used + dma area) before queue setup; submit cleans header/data/status
+  + touched descs + avail slot/idx in store→clean order before notify;
+  `finish_request` and both ISR drains invalidate the status byte before
+  the single latched load; data buffer invalidated on reads before
+  memcpy. Spin/fast-path `used->idx` reads stay fence-only (timing —
+  see #391 guard).
 - aarch64: DC CVAC/IVAC/CIVAC over the CTR_EL0 line size + dsb/isb.
   riscv64: Zicbom `cbo.*` when the toolchain defines `__riscv_zicbom`
   (today it does not: `-march=rv64imafdc` → fence-only documented
@@ -116,6 +131,12 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   (32-bit).  The old layout put attrs at DW0-high (= PRDTL position, so
   reads always transferred zero bytes) and a split PRDBC.  `start_cmd`
   sets `opts = CFL(5) | WRITE`, `prdtl = 1`.
+- **DMA cache points (#307):** `start_cmd` cleans the CFIS region (20 B),
+  the PRDTL=1 entry (16 B) and the 32 B command header before the CI
+  doorbell; `read_sector` invalidates the data buffer after `wait_cmd`
+  before memcpy; `write_sector` cleans it after staging; the IDENTIFY
+  parse invalidates first. AHCI is x86-only (coherent) — the points are
+  contract-uniformity, exact on silicon.
 - **Teardown:** `disable_msi_irq()` first — `GHC_IE` off, then per-port
   `PORT_IE = 0` + ack + waiter drain (error wake) under the port locks,
   then IDT unregister + vector free — so no in-flight ISR can touch freed
@@ -162,8 +183,15 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   raises no new edge); no allocation/blocking; wake outside
   `compl_lock_`; teardown is mask → ACK → drain (error-wake) → clear
   handler → free rings. Fail-closed poll fallback throughout.
-- TCG-coherent only; real-HW cache maintenance (aarch64 `dc civac`,
-  riscv `fence`) is a follow-up.
+- TCG-coherent only; real-HW cache maintenance is implemented per site
+  (issue #307): ring publication cleans (descs + avail + used + dma area)
+  before queue setup; submit cleans header/data/status + touched descs +
+  avail slot/idx in store→clean order before notify; `finish_request`
+  and both ISR drains invalidate the status byte before the single
+  latched load; data buffer invalidated on reads. Spin/fast-path
+  `used->idx` reads stay fence-only. Non-coherent silicon + the absent
+  NONCACHEABLE map attribute remain #307 residuals; maintenance ops are
+  the mechanism.
 
 - `probe()`: `virtio_find_device(0x1042)` → `init()`: status
   RESET→ACK→DRIVER → negotiate `VIRTIO_F_VERSION_1` → queue_size=16 → 4 PMM

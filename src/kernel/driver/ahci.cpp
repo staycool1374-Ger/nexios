@@ -29,6 +29,7 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/idt.hpp>
+#include <kernel/arch/hal/cache.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
@@ -474,6 +475,14 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
     ch->ctbau =
         static_cast<uint32_t>((ct_phys_[port][slot] >> 32) & 0xFFFFFFFF);
 
+    // Cache contract (issue #307): command-table and header writes must
+    // reach the HBA before the CI doorbell. Clean exactly the consumed
+    // bytes (CFIS region + PRDTL=1 entry + 32 B header) — never the whole
+    // 4224 B table (WCET inflation on a hot path).
+    arch::cache_clean(&ct->cfis, sizeof(ahci::CmdFIS));
+    arch::cache_clean(&ct->prd[0], sizeof(ahci::PrdHbaEntry));
+    arch::cache_clean(ch, sizeof(ahci::CmdHeader));
+
     // Fence: command-table writes must be visible to the HBA before the
     // CI doorbell — otherwise it DMAs stale descriptors.
     kernel::atomic_fence();
@@ -830,6 +839,11 @@ bool AhciDriver::read_sector(uint64_t lba, uint8_t *buffer) {
     }
 
     // Copy from DMA buffer to caller
+    // Cache contract (issue #307): the HBA wrote this buffer — invalidate
+    // before the CPU reads it.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    arch::cache_invalidate(reinterpret_cast<const void *>(dbuf.virt_addr),
+                           BLOCK_SIZE);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     memcpy(buffer, reinterpret_cast<void *>(dbuf.virt_addr), BLOCK_SIZE);
     cmd_lock_[active_port_].unlock();
@@ -861,6 +875,11 @@ bool AhciDriver::write_sector(uint64_t lba, const uint8_t *buffer) {
     // Copy data to DMA buffer first
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     memcpy(reinterpret_cast<void *>(dbuf.virt_addr), buffer, BLOCK_SIZE);
+    // Cache contract (issue #307): flush the staged data before start_cmd
+    // publishes it to the HBA.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    arch::cache_clean(reinterpret_cast<const void *>(dbuf.virt_addr),
+                      BLOCK_SIZE);
 
     uint8_t ata_cmd =
         ncq_supported_ ? ATA_CMD_WRITE_FPDMA_QUEUED : ATA_CMD_WRITE_DMA_EXT;
@@ -988,6 +1007,12 @@ bool AhciDriver::init() {
                         // Parse IDENTIFY data to get sector count
                         // IDENTIFY data words 60-61 = 28-bit LBA sectors
                         // words 100-103 = 48-bit LBA sectors
+                        // Cache contract (issue #307): the HBA wrote the
+                        // identify block — invalidate before the CPU parse.
+                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                        arch::cache_invalidate(
+                            reinterpret_cast<const void *>(dbuf.virt_addr),
+                            BLOCK_SIZE);
                         // NOLINTNEXTLINE(performance-no-int-to-ptr)
                         auto *id_data =
                             reinterpret_cast<uint16_t *>(dbuf.virt_addr);

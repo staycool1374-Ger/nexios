@@ -1,0 +1,372 @@
+diff --git a/docs/specs/drivers.md b/docs/specs/drivers.md
+index 17c7dea9b..49630e544 100644
+--- a/docs/specs/drivers.md
++++ b/docs/specs/drivers.md
+@@ -53,17 +53,32 @@ then invoke the callback **outside** the critical section.
+ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+ `prepare_buf`/`xfer_buf` return the resolved pointer while holding the lock.
+ 
+-### 2.3 PRD fail-closed + cache contract (issue #354 Slice C)
++### 2.3 PRD fail-closed + cache contract (issue #354 Slice C, #307)
+ - `prd_from_sg()` rejects (returns 0, table zeroed): phys > 32 bits,
+   empty, > 64 KiB, odd (2-byte align), or 4 KiB-spanning entries — never
+   truncated. `PingPongDma::start_next()` treats 0 as failure before the
+   index swap. Callers treat 0 as failure.
++- BMDMA PRD base is 32-bit: `BmDmaChannel::start` rejects a table base
++  >= 4 GiB via `bm_prd_addr_ok()` before any port write (issue #307) —
++  no truncation; also fixes the `%x` log truncation to `%lx`.
+ - Cache points (`arch/hal/cache.hpp`): `alloc_buffer` zero-range
+   clean+invalidate; `free_buffer` invalidate-before-release;
+   `BmDmaChannel::start` cleans the used PRD entries (the device reads
+   the table). Transfer DATA ranges are caller-owned: clean the SG range
+   before a device-read (`Direction::READ`), invalidate after a
+   device-write (`Direction::WRITE`) before CPU reads.
++  AHCI (issue #307): `start_cmd` cleans CFIS region + PRDTL=1 entry +
++  32 B command header before the CI doorbell; `read_sector` invalidates
++  the data buffer after wait; `write_sector` cleans it after staging;
++  IDENTIFY parse invalidates first. Exact consumed-byte cleans only —
++  never whole tables/rings on hot paths.
++  virtio-blk (issue #307): ring publication cleans (descs + avail +
++  used + dma area) before queue setup; submit cleans header/data/status
++  + touched descs + avail slot/idx in store→clean order before notify;
++  `finish_request` and both ISR drains invalidate the status byte before
++  the single latched load; data buffer invalidated on reads before
++  memcpy. Spin/fast-path `used->idx` reads stay fence-only (timing —
++  see #391 guard).
+ - aarch64: DC CVAC/IVAC/CIVAC over the CTR_EL0 line size + dsb/isb.
+   riscv64: Zicbom `cbo.*` when the toolchain defines `__riscv_zicbom`
+   (today it does not: `-march=rv64imafdc` → fence-only documented
+@@ -116,6 +131,12 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+   (32-bit).  The old layout put attrs at DW0-high (= PRDTL position, so
+   reads always transferred zero bytes) and a split PRDBC.  `start_cmd`
+   sets `opts = CFL(5) | WRITE`, `prdtl = 1`.
++- **DMA cache points (#307):** `start_cmd` cleans the CFIS region (20 B),
++  the PRDTL=1 entry (16 B) and the 32 B command header before the CI
++  doorbell; `read_sector` invalidates the data buffer after `wait_cmd`
++  before memcpy; `write_sector` cleans it after staging; the IDENTIFY
++  parse invalidates first. AHCI is x86-only (coherent) — the points are
++  contract-uniformity, exact on silicon.
+ - **Teardown:** `disable_msi_irq()` first — `GHC_IE` off, then per-port
+   `PORT_IE = 0` + ack + waiter drain (error wake) under the port locks,
+   then IDT unregister + vector free — so no in-flight ISR can touch freed
+@@ -162,8 +183,15 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+   raises no new edge); no allocation/blocking; wake outside
+   `compl_lock_`; teardown is mask → ACK → drain (error-wake) → clear
+   handler → free rings. Fail-closed poll fallback throughout.
+-- TCG-coherent only; real-HW cache maintenance (aarch64 `dc civac`,
+-  riscv `fence`) is a follow-up.
++- TCG-coherent only; real-HW cache maintenance is implemented per site
++  (issue #307): ring publication cleans (descs + avail + used + dma area)
++  before queue setup; submit cleans header/data/status + touched descs +
++  avail slot/idx in store→clean order before notify; `finish_request`
++  and both ISR drains invalidate the status byte before the single
++  latched load; data buffer invalidated on reads. Spin/fast-path
++  `used->idx` reads stay fence-only. Non-coherent silicon + the absent
++  NONCACHEABLE map attribute remain #307 residuals; maintenance ops are
++  the mechanism.
+ 
+ - `probe()`: `virtio_find_device(0x1042)` → `init()`: status
+   RESET→ACK→DRIVER → negotiate `VIRTIO_F_VERSION_1` → queue_size=16 → 4 PMM
+diff --git a/src/kernel/driver/ahci.cpp b/src/kernel/driver/ahci.cpp
+index cc7b3c66c..8beca6589 100644
+--- a/src/kernel/driver/ahci.cpp
++++ b/src/kernel/driver/ahci.cpp
+@@ -29,6 +29,7 @@
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/hal/idt.hpp>
++#include <kernel/arch/hal/cache.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
+@@ -474,6 +475,14 @@ bool AhciDriver::start_cmd(uint8_t port, uint8_t slot, uint8_t ata_cmd,
+     ch->ctbau =
+         static_cast<uint32_t>((ct_phys_[port][slot] >> 32) & 0xFFFFFFFF);
+ 
++    // Cache contract (issue #307): command-table and header writes must
++    // reach the HBA before the CI doorbell. Clean exactly the consumed
++    // bytes (CFIS region + PRDTL=1 entry + 32 B header) — never the whole
++    // 4224 B table (WCET inflation on a hot path).
++    arch::cache_clean(&ct->cfis, sizeof(ahci::CmdFIS));
++    arch::cache_clean(&ct->prd[0], sizeof(ahci::PrdHbaEntry));
++    arch::cache_clean(ch, sizeof(ahci::CmdHeader));
++
+     // Fence: command-table writes must be visible to the HBA before the
+     // CI doorbell — otherwise it DMAs stale descriptors.
+     kernel::atomic_fence();
+@@ -830,6 +839,11 @@ bool AhciDriver::read_sector(uint64_t lba, uint8_t *buffer) {
+     }
+ 
+     // Copy from DMA buffer to caller
++    // Cache contract (issue #307): the HBA wrote this buffer — invalidate
++    // before the CPU reads it.
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    arch::cache_invalidate(reinterpret_cast<const void *>(dbuf.virt_addr),
++                           BLOCK_SIZE);
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     memcpy(buffer, reinterpret_cast<void *>(dbuf.virt_addr), BLOCK_SIZE);
+     cmd_lock_[active_port_].unlock();
+@@ -861,6 +875,11 @@ bool AhciDriver::write_sector(uint64_t lba, const uint8_t *buffer) {
+     // Copy data to DMA buffer first
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     memcpy(reinterpret_cast<void *>(dbuf.virt_addr), buffer, BLOCK_SIZE);
++    // Cache contract (issue #307): flush the staged data before start_cmd
++    // publishes it to the HBA.
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    arch::cache_clean(reinterpret_cast<const void *>(dbuf.virt_addr),
++                      BLOCK_SIZE);
+ 
+     uint8_t ata_cmd =
+         ncq_supported_ ? ATA_CMD_WRITE_FPDMA_QUEUED : ATA_CMD_WRITE_DMA_EXT;
+@@ -988,6 +1007,12 @@ bool AhciDriver::init() {
+                         // Parse IDENTIFY data to get sector count
+                         // IDENTIFY data words 60-61 = 28-bit LBA sectors
+                         // words 100-103 = 48-bit LBA sectors
++                        // Cache contract (issue #307): the HBA wrote the
++                        // identify block — invalidate before the CPU parse.
++                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++                        arch::cache_invalidate(
++                            reinterpret_cast<const void *>(dbuf.virt_addr),
++                            BLOCK_SIZE);
+                         // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                         auto *id_data =
+                             reinterpret_cast<uint16_t *>(dbuf.virt_addr);
+diff --git a/src/kernel/driver/dma.cpp b/src/kernel/driver/dma.cpp
+index f2a8b4313..b3969cd40 100644
+--- a/src/kernel/driver/dma.cpp
++++ b/src/kernel/driver/dma.cpp
+@@ -237,8 +237,15 @@ bool BmDmaChannel::start(PrdTable &prd, Direction dir) {
+     if (!prd_phys)
+         return false;
+ 
++    // Fail closed (issue #307): the 32-bit PRDTPR cannot address a table
++    // at/above 4 GiB — no controller state is touched before this check.
++    if (!bm_prd_addr_ok(prd_phys)) {
++        Logger::error("dma: BmDmaChannel start PRD table above 4 GiB");
++        return false;
++    }
++
+     arch::outl(static_cast<uint16_t>(bm_io_base_ + 4),
+-               static_cast<uint32_t>(prd_phys & 0xFFFFFFFF));
++               static_cast<uint32_t>(prd_phys));
+ 
+     uint8_t cmd = BMCMD_START;
+     if (dir == Direction::READ) {
+@@ -246,8 +253,7 @@ bool BmDmaChannel::start(PrdTable &prd, Direction dir) {
+     }
+     arch::outb(static_cast<uint16_t>(bm_io_base_ + 0), cmd);
+ 
+-    Logger::info("dma: BmDmaChannel start prd_phys=0x%x dir=%s",
+-                 static_cast<unsigned>(prd_phys),
++    Logger::info("dma: BmDmaChannel start prd_phys=%lx dir=%s", prd_phys,
+                  dir == Direction::READ ? "READ" : "WRITE");
+     return true;
+ }
+diff --git a/src/kernel/driver/dma.hpp b/src/kernel/driver/dma.hpp
+index e1e5158e1..f6fb8cd33 100644
+--- a/src/kernel/driver/dma.hpp
++++ b/src/kernel/driver/dma.hpp
+@@ -68,6 +68,16 @@ struct PrdTable {
+     size_t count;
+ };
+ 
++/// @brief BMDMA PRD address limit (issue #307): the 32-bit PRDTPR register
++///        cannot represent a table base >= 4 GiB — fail closed, never
++///        truncate. Public + header-inline so QE can unit-test the predicate.
++inline constexpr uint64_t DMA_BM_PRD_ADDR_LIMIT = 0x100000000ULL;
++/// @brief True iff a PRD table base fits the controller's address register.
++/// @param prd_phys Physical address of the PRD table.
++inline bool bm_prd_addr_ok(uint64_t prd_phys) {
++    return prd_phys != 0 && prd_phys < DMA_BM_PRD_ADDR_LIMIT;
++}
++
+ // --- DMA Buffer ---
+ 
+ /// A physically contiguous DMA buffer.
+@@ -89,7 +99,10 @@ struct DmaBuffer {
+ /// cleans the PRD table itself at start(); the table lives in caller
+ /// memory and stays valid until completion.  x86_64 and QEMU virt are
+ /// DMA-coherent so the helpers are exact there; non-coherent silicon
+-/// stays a #307 residual.
++/// stays a #307 residual.  There is no DMA_ATTR_NONCACHEABLE/attribute word
++/// in the VMM map API (map_page* take virt/phys/user/executable only), so
++/// explicit maintenance is the sole mechanism; a future non-cacheable
++/// attribute must assert this contract before rings are published.
+ DmaBuffer alloc_buffer(size_t size);
+ 
+ /// Free a previously allocated DMA buffer.
+@@ -168,7 +181,10 @@ class DmaChannel {
+     /// Start a DMA transfer.
+     /// @param prd  PRD table (must remain valid until transfer completes).
+     /// @param dir  Transfer direction.
+-    /// @return true if the transfer was started.
++    /// @return true if the transfer was started. Implementations must fail
++    ///         closed (return false) when the table base is not
++    ///         representable in the controller's address register; never
++    ///         truncate (BMDMA: 32-bit PRDTPR, issue #307).
+     virtual bool start(PrdTable &prd, Direction dir) = 0;
+ 
+     /// Poll whether the channel is busy.
+diff --git a/src/kernel/driver/virtio_blk.cpp b/src/kernel/driver/virtio_blk.cpp
+index c0b40a5ab..51e7d9c49 100644
+--- a/src/kernel/driver/virtio_blk.cpp
++++ b/src/kernel/driver/virtio_blk.cpp
+@@ -25,6 +25,7 @@
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/arch/pci.hpp>
+ #include <kernel/arch/hal/idt.hpp>
++#include <kernel/arch/hal/cache.hpp>
+ #include <kernel/arch/hal/interrupt_controller.hpp>
+ #if defined(CONFIG_ARCH_AARCH64)
+ #include <kernel/arch/aarch64/hal/gic.hpp>
+@@ -169,6 +170,18 @@ bool VirtioBlkDriver::init() {
+     memset(used_, 0, PAGE_SIZE);
+     memset(dma_buf_, 0, PAGE_SIZE);
+ 
++    // Cache contract (issue #307): publish the rings before the device
++    // learns about them. Descs/avail are CPU-written (clean); used/dma are
++    // device-owned after publication (clean+invalidate drops CPU-dirtied
++    // zero lines that could otherwise evict over device data).
++    arch::cache_clean(desc_, sizeof(arch::VirtqDesc) * queue_size_);
++    arch::cache_clean(avail_,
++                      sizeof(arch::VirtqAvail) + sizeof(uint16_t) * queue_size_);
++    arch::cache_clean_invalidate(
++        used_, sizeof(arch::VirtqUsed) +
++                   sizeof(arch::VirtqUsedElem) * queue_size_);
++    arch::cache_clean_invalidate(dma_buf_, PAGE_SIZE);
++
+     if (!arch::virtio_setup_queue(transport_, 0, queue_size_, desc_phys_,
+                                   avail_phys_, used_phys_)) {
+         Logger::error("virtio-blk: queue setup failed");
+@@ -263,19 +276,27 @@ bool VirtioBlkDriver::wait_request_poll(uint16_t used_snapshot) {
+ 
+ bool VirtioBlkDriver::finish_request(bool is_read, uint8_t *data) {
+     // Check status
+-    auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+-        dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+-    if (*status_ptr != VIRTIO_BLK_S_OK) {
+-        Logger::error("virtio-blk: request failed (status=%d)", *status_ptr);
++    // Cache contract (issue #307): the status byte is device-written —
++    // invalidate before the load and latch once. A stale cached 0 reads
++    // as VIRTIO_BLK_S_OK, so read→invalidate→read is forbidden.
++    uint8_t *status_addr =
++        dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
++    arch::cache_invalidate(status_addr, sizeof(uint8_t));
++    auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
++    uint8_t status = *status_ptr;
++    if (status != VIRTIO_BLK_S_OK) {
++        Logger::error("virtio-blk: request failed (status=%d)", status);
+         kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                     kernel::log::kDmesgBase_DRIVER + 5,
+                                     kernel::log::LogSeverity::ERROR,
+-                                    "virtio-blk request", *status_ptr);
++                                    "virtio-blk request", status);
+         return false;
+     }
+ 
+     // Copy data back for reads
+     if (is_read) {
++        arch::cache_invalidate(dma_buf_ + sizeof(VirtioBlkReqHdr),
++                               BLOCK_SIZE);
+         memcpy(data, dma_buf_ + sizeof(VirtioBlkReqHdr), BLOCK_SIZE);
+     }
+     return true;
+@@ -410,6 +431,10 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
+     if (!is_read) {
+         memcpy(data_area, data, BLOCK_SIZE);
+     }
++    // Cache contract (issue #307): flush header + data + status placeholder
++    // before the device reads them (one bounded call covers reads too).
++    arch::cache_clean(dma_buf_,
++                      sizeof(VirtioBlkReqHdr) + BLOCK_SIZE + sizeof(uint8_t));
+ 
+     // Build descriptor chain:
+     // desc[0]: request header (driver write → device read)
+@@ -436,6 +461,13 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
+     desc_[status_idx].flags = VIRTIO_DESC_F_WRITE;
+     desc_[status_idx].next = 0;
+ 
++    // Cache contract (issue #307): clean exactly the three touched
++    // descriptors (correct across the % queue_size_ wrap; never the whole
++    // ring) so the device reads flushed bytes after notify.
++    arch::cache_clean(&desc_[idx], sizeof(arch::VirtqDesc));
++    arch::cache_clean(&desc_[data_idx], sizeof(arch::VirtqDesc));
++    arch::cache_clean(&desc_[status_idx], sizeof(arch::VirtqDesc));
++
+     // H-3 (FLAW-03 pattern): snapshot the used index BEFORE the avail push and
+     // virtio_notify — reading it after notify races fast completions (the
+     // device may have already advanced used_->idx by the time we sample it).
+@@ -443,8 +475,14 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
+ 
+     // Place in available ring
+     avail_->ring[avail_->idx % queue_size_] = idx;
++    // Cache contract (issue #307): fixed store→clean per field — cleaning
++    // the idx before the slot, or notifying before the idx clean, exposes
++    // unflushed descriptor bytes on non-coherent silicon.
++    arch::cache_clean(&avail_->ring[avail_->idx % queue_size_],
++                      sizeof(uint16_t));
+     kernel::atomic_fence();
+     avail_->idx = static_cast<uint16_t>(avail_->idx + 1);
++    arch::cache_clean(&avail_->idx, sizeof(uint16_t));
+     kernel::atomic_fence();
+ 
+     // Kick the device
+@@ -536,8 +574,14 @@ bool VirtioBlkDriver::drain_used_ring_mmio(TaskControlBlock *&wake_task,
+         if (!done)
+             continue;
+         compl_.done = true;
+-        auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+-            dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
++        // Cache contract (issue #307): invalidate before the load and latch
++        // once — the ISR snapshot feeds the failure decision and a stale
++        // OK would retire a failed request as success. Address derived
++        // from dma_buf_ (volatile→const cast is forbidden).
++        uint8_t *status_addr =
++            dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
++        arch::cache_invalidate(status_addr, sizeof(uint8_t));
++        auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
+         compl_.status = *status_ptr;
+         wake_task = compl_.waiter;
+         wake_gen = compl_.waiter_gen;
+@@ -610,8 +654,15 @@ bool VirtioBlkDriver::handle_irq() {
+             if (!done)
+                 continue;
+             compl_.done = true;
+-            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+-                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
++            // Cache contract (issue #307): invalidate before the load and latch
++            // once - same contract as drain_used_ring_mmio and finish_request.
++            // A stale cached 0 reads as VIRTIO_BLK_S_OK and would retire a
++            // failed request as success. Address derived from dma_buf_
++            // (volatile-to-const cast is forbidden).
++            uint8_t *status_addr =
++                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
++            arch::cache_invalidate(status_addr, sizeof(uint8_t));
++            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
+             compl_.status = *status_ptr;
+             wake_task = compl_.waiter;
+             wake_gen = compl_.waiter_gen;
+diff --git a/test-history.txt b/test-history.txt
+index a000ac46f..3c27f40f0 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4445,3 +4445,19 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 19:41:47 debug_dump PASSED: 8 FAILED: 0 TIME: 256ms STATUS: riscv64
+ 2026-10-21 19:44:38 debug_dump PASSED: 8 FAILED: 0 TIME: 597ms STATUS: post-counts
+ 2026-10-21 20:15:42 debug_dump PASSED: 8 FAILED: 0 TIME: 558ms STATUS: post-S3-cure
++2026-10-21 20:17:11 drivers PASSED: 56 FAILED: 2 TIME: measured STATUS: 391-triage-same-2-known
++2026-10-21 20:28:11 drivers_dma PASSED: 19 FAILED: 0 TIME: 1314ms
++2026-10-21 20:28:37 drivers_dma PASSED: 19 FAILED: 0 TIME: 1303ms STATUS: run2
++2026-10-21 20:29:06 drivers_virtio_blk_req PASSED: 13 FAILED: 0 TIME: 1341ms
++2026-10-21 20:29:32 drivers_block PASSED: 12 FAILED: 0 TIME: 817ms
++2026-10-21 20:29:57 drivers_ahci_deep PASSED: 10 FAILED: 0 TIME: 661ms
++2026-10-21 20:30:26 cap_iommu PASSED: 12 FAILED: 0 TIME: 921ms
++2026-10-21 20:30:56 drivers PASSED: 107 FAILED: 0 TIME: 7729ms
++2026-10-21 20:31:22 ahci_live PASSED: 5 FAILED: 0 TIME: 6718ms
++2026-10-21 20:31:48 iommu_live PASSED: 6 FAILED: 0 TIME: 69ms
++2026-10-21 20:32:23 selftest PASSED: 148 FAILED: 0 TIME: 12376ms
++2026-10-21 20:33:03 drivers PASSED: 57 FAILED: 1 TIME: 80s STATUS: 307-guard-aa64-r1-known-only-dma261
++2026-10-21 20:33:20 drivers PASSED: 57 FAILED: 1 TIME: 17s STATUS: 307-guard-aa64-r2-known-only-dma261
++2026-10-21 20:34:53 drivers PASSED: 56 FAILED: 2 TIME: 27s STATUS: 307-guard-rv64-r1-known-2
++2026-10-21 20:34:53 drivers PASSED: 56 FAILED: 2 TIME: 20s STATUS: 307-guard-rv64-r2-known-2
++2026-10-21 20:39:07 drivers_virtio_blk_req PASSED: 13 FAILED: 0 TIME: 1225ms STATUS: post-rejected-patch
