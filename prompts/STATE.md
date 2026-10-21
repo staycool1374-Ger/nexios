@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **CLOSED (2026-10-21):** #308 first-chance dump+halt, APPROVED, full 3-arch battery green; commit 6e0933f5c (closes). Unblocked by #306. Next: #391 triage.
 - **CLOSED (2026-10-21):** #306 reg dumps, APPROVED, debug_dump 4/4 x3 arches; commit 39b9aee86 (closes). Unblocks #308. Next: #308.
 - **CLOSED (2026-10-21):** #305 tag6 validation, APPROVED iter-2 (iter-1 procedural check-7), selftest 148/148; commit b900bcfa1 (closes). Next: #306.
 - **CLOSED (2026-10-21):** #304 post_code + checkpoints, APPROVED, hal_serial_logic 7/7 + QEMU proof both ISOs; commit cd1336e51 (closes). Next in debugd order: #305.
