@@ -53,6 +53,28 @@ then invoke the callback **outside** the critical section.
 an in-flight DMA target can be handed to the producer.  Same fix pattern;
 `prepare_buf`/`xfer_buf` return the resolved pointer while holding the lock.
 
+### 2.3 PRD fail-closed + cache contract (issue #354 Slice C)
+- `prd_from_sg()` rejects (returns 0, table zeroed): phys > 32 bits,
+  empty, > 64 KiB, odd (2-byte align), or 4 KiB-spanning entries — never
+  truncated. `PingPongDma::start_next()` treats 0 as failure before the
+  index swap. Callers treat 0 as failure.
+- Cache points (`arch/hal/cache.hpp`): `alloc_buffer` zero-range
+  clean+invalidate; `free_buffer` invalidate-before-release;
+  `BmDmaChannel::start` cleans the used PRD entries (the device reads
+  the table). Transfer DATA ranges are caller-owned: clean the SG range
+  before a device-read (`Direction::READ`), invalidate after a
+  device-write (`Direction::WRITE`) before CPU reads.
+- aarch64: DC CVAC/IVAC/CIVAC over the CTR_EL0 line size + dsb/isb.
+  riscv64: Zicbom `cbo.*` when the toolchain defines `__riscv_zicbom`
+  (today it does not: `-march=rv64imafdc` → fence-only documented
+  no-op, exact under QEMU virt coherence). x86_64: clflush/64 B + mfence
+  (coherent, still correct). Non-coherent silicon stays a #307 residual
+  (this issue consumes only the QEMU-observable contract).
+- BMDMA port I/O is x86_64-only hardware, but the channel API stays
+  arch-neutral: test_dma drives a mock base through it off-x86 (engine
+  state-machine harness). No real device can bind off-x86 (MSI
+  programming fails closed, §5.2).
+
 ## 3. AHCI (`ahci.cpp`)
 
 - **Init:** PCI find (class 01/06) → ABAR = BAR5 (validate

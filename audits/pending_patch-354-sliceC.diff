@@ -1,0 +1,362 @@
+diff --git a/docs/specs/drivers.md b/docs/specs/drivers.md
+index a19b16ef7..c84d709d9 100644
+--- a/docs/specs/drivers.md
++++ b/docs/specs/drivers.md
+@@ -53,6 +53,28 @@ then invoke the callback **outside** the critical section.
+ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+ `prepare_buf`/`xfer_buf` return the resolved pointer while holding the lock.
+ 
++### 2.3 PRD fail-closed + cache contract (issue #354 Slice C)
++- `prd_from_sg()` rejects (returns 0, table zeroed): phys > 32 bits,
++  empty, > 64 KiB, odd (2-byte align), or 4 KiB-spanning entries — never
++  truncated. `PingPongDma::start_next()` treats 0 as failure before the
++  index swap. Callers treat 0 as failure.
++- Cache points (`arch/hal/cache.hpp`): `alloc_buffer` zero-range
++  clean+invalidate; `free_buffer` invalidate-before-release;
++  `BmDmaChannel::start` cleans the used PRD entries (the device reads
++  the table). Transfer DATA ranges are caller-owned: clean the SG range
++  before a device-read (`Direction::READ`), invalidate after a
++  device-write (`Direction::WRITE`) before CPU reads.
++- aarch64: DC CVAC/IVAC/CIVAC over the CTR_EL0 line size + dsb/isb.
++  riscv64: Zicbom `cbo.*` when the toolchain defines `__riscv_zicbom`
++  (today it does not: `-march=rv64imafdc` → fence-only documented
++  no-op, exact under QEMU virt coherence). x86_64: clflush/64 B + mfence
++  (coherent, still correct). Non-coherent silicon stays a #307 residual
++  (this issue consumes only the QEMU-observable contract).
++- BMDMA port I/O is x86_64-only hardware, but the channel API stays
++  arch-neutral: test_dma drives a mock base through it off-x86 (engine
++  state-machine harness). No real device can bind off-x86 (MSI
++  programming fails closed, §5.2).
++
+ ## 3. AHCI (`ahci.cpp`)
+ 
+ - **Init:** PCI find (class 01/06) → ABAR = BAR5 (validate
+diff --git a/src/kernel/arch/hal/cache.hpp b/src/kernel/arch/hal/cache.hpp
+new file mode 100644
+index 000000000..a5fc7b269
+--- /dev/null
++++ b/src/kernel/arch/hal/cache.hpp
+@@ -0,0 +1,146 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file cache.hpp
++/// @brief Data-cache maintenance for DMA (issue #354 Slice C).
++/// Clean (write-back) before a device reads memory, invalidate after a
++/// device writes memory and before the CPU reads it (see dma.hpp contract).
++/// x86_64 is cache-coherent with DMA but the helpers are still correct
++/// there; QEMU virt is coherent on both non-x86 arches, so the riscv64
++/// fence-only fallback is exact under emulation (#307 retains the
++/// non-coherent-silicon residual).
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++namespace arch {
++
++// NOLINTBEGIN(readability-identifier-length)
++inline void cache_clean(const void *addr, size_t len) {
++    if (!addr || !len)
++        return;
++#if defined(CONFIG_ARCH_AARCH64)
++    uint64_t ctr = 0;
++    asm volatile("mrs %0, ctr_el0" : "=r"(ctr));
++    uint64_t line = 4ULL << ((ctr >> 16) & 0xFU);
++    uint64_t start = reinterpret_cast<uint64_t>(addr) & ~(line - 1);
++    uint64_t end = reinterpret_cast<uint64_t>(addr) + len;
++    for (uint64_t p = start; p < end; p += line) {
++        asm volatile("dc cvac, %0" : : "r"(p) : "memory");
++    }
++    asm volatile("dsb sy" : : : "memory");
++    asm volatile("isb");
++#elif defined(CONFIG_ARCH_RISCV64)
++#if defined(__riscv_zicbom)
++    // Block size comes from the DTB (riscv,cbom-block-size); the kernel
++    // build does not enable Zicbom today, so this arm is forward-proofing.
++    uint64_t start = reinterpret_cast<uint64_t>(addr);
++    uint64_t end = start + len;
++    for (uint64_t p = start; p < end; p += 64) {
++        asm volatile("cbo.clean 0(%0)" : : "r"(p) : "memory");
++    }
++    asm volatile("fence iorw, iorw" : : : "memory");
++#else
++    // No Zicbom in the build (-march=rv64imafdc): no cache-maintenance
++    // instruction exists — fence orders the (coherent-under-QEMU) accesses.
++    // Non-coherent silicon stays a #307 residual, documented in dma.hpp.
++    (void)addr;
++    (void)len;
++    asm volatile("fence iorw, iorw" : : : "memory");
++#endif
++#else
++    // x86_64: clflush per 64 B line (de-facto line size; stepping 64 hits
++    // every line of any power-of-2 size <= 64 at least once), mfence after.
++    uint64_t start = reinterpret_cast<uint64_t>(addr) & ~63ULL;
++    uint64_t end = reinterpret_cast<uint64_t>(addr) + len;
++    for (uint64_t p = start; p < end; p += 64) {
++        asm volatile("clflush (%0)" : : "r"(p) : "memory");
++    }
++    asm volatile("mfence" : : : "memory");
++#endif
++}
++
++inline void cache_invalidate(const void *addr, size_t len) {
++    if (!addr || !len)
++        return;
++#if defined(CONFIG_ARCH_AARCH64)
++    uint64_t ctr = 0;
++    asm volatile("mrs %0, ctr_el0" : "=r"(ctr));
++    uint64_t line = 4ULL << ((ctr >> 16) & 0xFU);
++    uint64_t start = reinterpret_cast<uint64_t>(addr) & ~(line - 1);
++    uint64_t end = reinterpret_cast<uint64_t>(addr) + len;
++    for (uint64_t p = start; p < end; p += line) {
++        asm volatile("dc ivac, %0" : : "r"(p) : "memory");
++    }
++    asm volatile("dsb sy" : : : "memory");
++    asm volatile("isb");
++#elif defined(CONFIG_ARCH_RISCV64)
++#if defined(__riscv_zicbom)
++    uint64_t start = reinterpret_cast<uint64_t>(addr);
++    uint64_t end = start + len;
++    for (uint64_t p = start; p < end; p += 64) {
++        asm volatile("cbo.inval 0(%0)" : : "r"(p) : "memory");
++    }
++    asm volatile("fence iorw, iorw" : : : "memory");
++#else
++    (void)addr;
++    (void)len;
++    asm volatile("fence iorw, iorw" : : : "memory");
++#endif
++#else
++    // x86_64 is DMA-coherent; clflush doubles as the invalidate path.
++    cache_clean(addr, len);
++#endif
++}
++
++inline void cache_clean_invalidate(const void *addr, size_t len) {
++    if (!addr || !len)
++        return;
++#if defined(CONFIG_ARCH_AARCH64)
++    uint64_t ctr = 0;
++    asm volatile("mrs %0, ctr_el0" : "=r"(ctr));
++    uint64_t line = 4ULL << ((ctr >> 16) & 0xFU);
++    uint64_t start = reinterpret_cast<uint64_t>(addr) & ~(line - 1);
++    uint64_t end = reinterpret_cast<uint64_t>(addr) + len;
++    for (uint64_t p = start; p < end; p += line) {
++        asm volatile("dc civac, %0" : : "r"(p) : "memory");
++    }
++    asm volatile("dsb sy" : : : "memory");
++    asm volatile("isb");
++#elif defined(CONFIG_ARCH_RISCV64)
++#if defined(__riscv_zicbom)
++    uint64_t start = reinterpret_cast<uint64_t>(addr);
++    uint64_t end = start + len;
++    for (uint64_t p = start; p < end; p += 64) {
++        asm volatile("cbo.flush 0(%0)" : : "r"(p) : "memory");
++    }
++    asm volatile("fence iorw, iorw" : : : "memory");
++#else
++    (void)addr;
++    (void)len;
++    asm volatile("fence iorw, iorw" : : : "memory");
++#endif
++#else
++    cache_clean(addr, len);
++#endif
++}
++// NOLINTEND(readability-identifier-length)
++
++} // namespace arch
+diff --git a/src/kernel/arch/pci.cpp b/src/kernel/arch/pci.cpp
+index e05319792..353255371 100644
+--- a/src/kernel/arch/pci.cpp
++++ b/src/kernel/arch/pci.cpp
+@@ -369,7 +369,7 @@ void pci_ecam_discover() {
+         Logger::warn("PCI: ECAM DT mismatch (dt=%lx) — keeping board %lx",
+                      base, PCI_ECAM_BASE);
+         kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+-                                    kernel::log::kDmesgBase_DRIVER + 11,
++                                    kernel::log::kDmesgBase_DRIVER + 12,
+                                     kernel::log::LogSeverity::WARN,
+                                     "PCI ECAM DT mismatch",
+                                     base);
+diff --git a/src/kernel/driver/dma.cpp b/src/kernel/driver/dma.cpp
+index 1c8c44686..f2a8b4313 100644
+--- a/src/kernel/driver/dma.cpp
++++ b/src/kernel/driver/dma.cpp
+@@ -20,6 +20,7 @@
+ /// @brief DMA driver implementation.
+ 
+ #include <kernel/driver/dma.hpp>
++#include <kernel/arch/hal/cache.hpp>
+ #include <kernel/log/dmesg.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/vmm.hpp>
+@@ -71,12 +72,21 @@ DmaBuffer alloc_buffer(size_t size) {
+ 
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     memset(reinterpret_cast<void *>(buf.virt_addr), 0, buf.size);
++    // Cache contract (issue #354): the zeroed range is clean+invalidated so
++    // a later device read sees zeros and no stale line survives.
++    arch::cache_clean_invalidate(reinterpret_cast<const void *>(buf.virt_addr),
++                                 buf.size);
+     return buf;
+ }
+ 
+ void free_buffer(DmaBuffer &buf) {
+     if (!buf.owned || !buf.phys_addr)
+         return;
++    // Cache contract (issue #354): invalidate before release so a stale
++    // device-written line is never read through a recycled mapping.
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    arch::cache_invalidate(reinterpret_cast<const void *>(buf.virt_addr),
++                           buf.size);
+     size_t page_count = buf.size / PAGE_SIZE;
+     for (size_t i = 0; i < page_count; ++i) {
+         // Issue #366 Q2b: log-and-continue on holes (free must complete);
+@@ -152,11 +162,20 @@ void sg_reset(SgList &sg) {
+ size_t prd_from_sg(PrdTable &prd, const SgList &sg, bool eot) {
+     prd.count = 0;
+     for (size_t i = 0; i < sg.count && prd.count < DMA_MAX_PRD_ENTRIES; ++i) {
++        uint64_t phys = sg.entries[i].phys_addr;
++        uint64_t length = sg.entries[i].length;
++        // Fail closed (issue #354): the ATA PRD entry is 32-bit phys +
++        // 16-bit (count − 1) + 16-bit flags.  Reject anything that does not
++        // fit instead of truncating — a truncated entry DMA-writes the wrong
++        // physical address (memory corruption, silent on coherent fabrics).
++        if (phys > 0xFFFFFFFFULL || length == 0 || length > 0x10000 ||
++            (phys & 1) != 0 || ((phys & 0xFFFULL) + length) > 0x1000) {
++            prd.count = 0;
++            return 0;
++        }
+         auto &entry = prd.entries[prd.count];
+-        entry.phys_addr =
+-            static_cast<uint32_t>(sg.entries[i].phys_addr & 0xFFFFFFFF);
+-        entry.byte_count =
+-            static_cast<uint16_t>((sg.entries[i].length - 1) & 0xFFFF);
++        entry.phys_addr = static_cast<uint32_t>(phys);
++        entry.byte_count = static_cast<uint16_t>(length - 1);
+         entry.flags = 0;
+         ++prd.count;
+     }
+@@ -206,6 +225,14 @@ bool BmDmaChannel::start(PrdTable &prd, Direction dir) {
+     if (!bm_io_base_ || prd.count == 0)
+         return false;
+ 
++    // Cache contract (issue #354): the device reads the PRD table — clean
++    // the used entries before programming the controller.  Port I/O itself
++    // is x86-only hardware, but the channel API doubles as the DMA engine's
++    // mock-port test harness off-x86 (test_dma drives 0xFF00 through it),
++    // so the paths stay arch-neutral — no real device can bind here
++    // off-x86 (MSI programming fails closed, Slice A).
++    arch::cache_clean(&prd, prd.count * sizeof(PrdEntry));
++
+     uint64_t prd_phys = VMM::virt_to_phys(reinterpret_cast<uint64_t>(&prd));
+     if (!prd_phys)
+         return false;
+@@ -376,7 +403,11 @@ bool PingPongDma::start_next(Direction dir, ChainCallback cb, uint64_t ctx) {
+         return false;
+ 
+     PrdTable prd{};
+-    prd_from_sg(prd, sg, true);
++    // Fail-closed PRD (issue #354): 0 means a reject (over-4G, oversize,
++    // unaligned or 4K-spanning entry) — never hand an empty table to the
++    // engine (its start would fail after the index swap below).
++    if (prd_from_sg(prd, sg, true) == 0)
++        return false;
+ 
+     // Swap indices: what was being prepared becomes the transfer buffer
+     uint8_t tmp = prepare_idx_;
+diff --git a/src/kernel/driver/dma.hpp b/src/kernel/driver/dma.hpp
+index 4e4cae3db..e1e5158e1 100644
+--- a/src/kernel/driver/dma.hpp
++++ b/src/kernel/driver/dma.hpp
+@@ -81,6 +81,15 @@ struct DmaBuffer {
+ /// Allocate a physically contiguous DMA buffer.
+ /// @param size  Size in bytes (will be rounded up to PAGE_SIZE).
+ /// @return DmaBuffer (phys_addr=0 on failure).
++/// Cache contract (issue #354): the zeroed range is clean+invalidated on
++/// return; `free_buffer` invalidates before release.  Transfer DATA ranges
++/// are caller-owned: clean the SG range before a device-read (Direction::
++/// READ) and invalidate after a device-write (Direction::WRITE) before the
++/// CPU reads it, via arch::cache_* (arch/hal/cache.hpp).  The channel
++/// cleans the PRD table itself at start(); the table lives in caller
++/// memory and stays valid until completion.  x86_64 and QEMU virt are
++/// DMA-coherent so the helpers are exact there; non-coherent silicon
++/// stays a #307 residual.
+ DmaBuffer alloc_buffer(size_t size);
+ 
+ /// Free a previously allocated DMA buffer.
+@@ -105,11 +114,17 @@ void sg_reset(SgList &sg);
+ /// Build a PRD table from a scatter-gather list.
+ /// ATA bus master PRD format: 32-bit phys addr, 16-bit byte count-1, 16-bit
+ /// flags. The table is suitable for programming a PCI bus master controller.
++///
++/// Fail-closed contract (issue #354): each entry must be 32-bit addressable
++/// (phys <= 0xFFFFFFFF), non-empty, <= 64 KiB, 2-byte aligned, and must not
++/// cross a 4 KiB boundary — a violating entry zeroes the table count and
++/// returns 0 (callers treat 0 as failure; a truncated entry would DMA-write
++/// the wrong physical address).  See docs/specs/drivers.md §2.
+ /// @param prd   Output PRD table (must have backing memory accessible by
+ /// device).
+ /// @param sg    Input scatter-gather list.
+ /// @param eot   If true, sets the EOT flag on the last entry.
+-/// @return Number of PRD entries written.
++/// @return Number of PRD entries written (0 = rejected, fail closed).
+ size_t prd_from_sg(PrdTable &prd, const SgList &sg, bool eot = true);
+ 
+ /// Reset a PRD table.
+@@ -169,7 +184,10 @@ class DmaChannel {
+ };
+ 
+ /// BMDMA channel implementation via PCI port I/O (kernel mode).
+-/// Accesses the BMDMA controller registers at the given I/O base.
++/// Accesses the BMDMA controller registers at the given I/O base.  The
++/// channel API doubles as the DMA engine's mock-port test harness off-x86
++/// (test_dma drives a mock base through it); no real device can bind here
++/// off-x86 (PCI MSI programming fails closed, issue #354 Slice A).
+ class BmDmaChannel final : public DmaChannel {
+   public:
+     explicit BmDmaChannel(uint16_t bm_io_base);
+diff --git a/src/kernel/log/dmesg_catalog.hpp b/src/kernel/log/dmesg_catalog.hpp
+index 3da3a0c82..19bd34c51 100644
+--- a/src/kernel/log/dmesg_catalog.hpp
++++ b/src/kernel/log/dmesg_catalog.hpp
+@@ -160,6 +160,8 @@ constexpr DmesgRecord kDmesgCatalog_DRIVER[] = {
+      "Driver scan truncated: table full"},
+     {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 11, LogSeverity::WARN,
+      "Framebuffer backend unavailable (documented gap)"},
++    {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 12, LogSeverity::WARN,
++     "PCI ECAM DT mismatch — board constant kept"},
+ };
+ 
+ /// @brief Init records (canonical base kDmesgBase_INIT): init-rc, fstab,
+diff --git a/test-history.txt b/test-history.txt
+index 92821e827..52e438c43 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4348,3 +4348,8 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 10:02:08 hal PASSED: 57 FAILED: 0 TIME: 16s STATUS: sliceB-aarch64
+ 2026-10-21 10:02:08 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 27s STATUS: sliceB-riscv64-known-#385x5-#387
+ 2026-10-21 10:02:08 hal PASSED: 56 FAILED: 1 TIME: 19s STATUS: sliceB-riscv64-known-#388
++2026-10-21 10:30:52 drivers PASSED: 107 FAILED: 0 TIME: 36s STATUS: sliceC-x86_64
++2026-10-21 10:30:52 logging_debug PASSED: 36 FAILED: 0 TIME: 20s STATUS: sliceC-x86_64
++2026-10-21 10:30:52 drivers PASSED: 57 FAILED: 1 TIME: 23s STATUS: sliceC-aarch64-known-#391
++2026-10-21 10:30:52 logging_debug PASSED: 36 FAILED: 0 TIME: 21s STATUS: sliceC-aarch64
++2026-10-21 10:30:52 drivers PASSED: 56 FAILED: 2 TIME: 28s STATUS: sliceC-riscv64-known-#391x2

@@ -369,7 +369,7 @@ void pci_ecam_discover() {
         Logger::warn("PCI: ECAM DT mismatch (dt=%lx) — keeping board %lx",
                      base, PCI_ECAM_BASE);
         kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
-                                    kernel::log::kDmesgBase_DRIVER + 11,
+                                    kernel::log::kDmesgBase_DRIVER + 12,
                                     kernel::log::LogSeverity::WARN,
                                     "PCI ECAM DT mismatch",
                                     base);

@@ -160,6 +160,8 @@ constexpr DmesgRecord kDmesgCatalog_DRIVER[] = {
      "Driver scan truncated: table full"},
     {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 11, LogSeverity::WARN,
      "Framebuffer backend unavailable (documented gap)"},
+    {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 12, LogSeverity::WARN,
+     "PCI ECAM DT mismatch — board constant kept"},
 };
 
 /// @brief Init records (canonical base kDmesgBase_INIT): init-rc, fstab,

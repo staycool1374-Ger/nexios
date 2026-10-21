@@ -81,6 +81,15 @@ struct DmaBuffer {
 /// Allocate a physically contiguous DMA buffer.
 /// @param size  Size in bytes (will be rounded up to PAGE_SIZE).
 /// @return DmaBuffer (phys_addr=0 on failure).
+/// Cache contract (issue #354): the zeroed range is clean+invalidated on
+/// return; `free_buffer` invalidates before release.  Transfer DATA ranges
+/// are caller-owned: clean the SG range before a device-read (Direction::
+/// READ) and invalidate after a device-write (Direction::WRITE) before the
+/// CPU reads it, via arch::cache_* (arch/hal/cache.hpp).  The channel
+/// cleans the PRD table itself at start(); the table lives in caller
+/// memory and stays valid until completion.  x86_64 and QEMU virt are
+/// DMA-coherent so the helpers are exact there; non-coherent silicon
+/// stays a #307 residual.
 DmaBuffer alloc_buffer(size_t size);
 
 /// Free a previously allocated DMA buffer.
@@ -105,11 +114,17 @@ void sg_reset(SgList &sg);
 /// Build a PRD table from a scatter-gather list.
 /// ATA bus master PRD format: 32-bit phys addr, 16-bit byte count-1, 16-bit
 /// flags. The table is suitable for programming a PCI bus master controller.
+///
+/// Fail-closed contract (issue #354): each entry must be 32-bit addressable
+/// (phys <= 0xFFFFFFFF), non-empty, <= 64 KiB, 2-byte aligned, and must not
+/// cross a 4 KiB boundary — a violating entry zeroes the table count and
+/// returns 0 (callers treat 0 as failure; a truncated entry would DMA-write
+/// the wrong physical address).  See docs/specs/drivers.md §2.
 /// @param prd   Output PRD table (must have backing memory accessible by
 /// device).
 /// @param sg    Input scatter-gather list.
 /// @param eot   If true, sets the EOT flag on the last entry.
-/// @return Number of PRD entries written.
+/// @return Number of PRD entries written (0 = rejected, fail closed).
 size_t prd_from_sg(PrdTable &prd, const SgList &sg, bool eot = true);
 
 /// Reset a PRD table.
@@ -169,7 +184,10 @@ class DmaChannel {
 };
 
 /// BMDMA channel implementation via PCI port I/O (kernel mode).
-/// Accesses the BMDMA controller registers at the given I/O base.
+/// Accesses the BMDMA controller registers at the given I/O base.  The
+/// channel API doubles as the DMA engine's mock-port test harness off-x86
+/// (test_dma drives a mock base through it); no real device can bind here
+/// off-x86 (PCI MSI programming fails closed, issue #354 Slice A).
 class BmDmaChannel final : public DmaChannel {
   public:
     explicit BmDmaChannel(uint16_t bm_io_base);
