@@ -1430,3 +1430,8 @@
 - **Learned:** (1) UEFI-only El Torito ISOs need OVMF pflash on manual QEMU runs (SeaBIOS hangs silently — mirror the harness flags, don't hand-roll). (2) isa-debugcon chardevs give byte-exact host-side proof for write-only ports (0x300 exactly `a1a2a3`; 0x80 by non-zero tail — io_wait floods 0x00, SeaBIOS pre-handoff codes ignored). (3) File-backed chardevs flush only on guest exit — never SIGKILL proof runs; use isa-debug-exit self-exit (release shell ISO has none — capture bytes then kill). (4) LSP "undeclared identifier" on arch asm primitives in HAL headers is wrong-arch evaluation noise — the build is truth.
 - **Adapted:** `arch::post_code(u8)` + BootPost 0xA1/0xA2/0xA3; debugd.md §8 implementation note with capture recipe.
 - **Style re-face:** history rows must match the `<class> PASSED/FAILED/TIME` schema (auditor S3) — no free-form proof rows.
+
+### #305 — multiboot2 tag6 fail-closed validation (CLOSED 2026-10-21, SIL3 APPROVED iter-2)
+- **Learned:** (1) POST the work-begun retrieval comment BEFORE implementing — iter-1 REJECT was procedural check-7 with zero code findings; the comment is part of the deliverable, not ceremony. (2) `mb2_find_tag` bounds the walk but NOT the found tag's own size — consumers must clamp by info-remaining. (3) PMM sizes to `max(base+size)` over BootInfo regions — per-entry overflow rejection is load-bearing, not hygiene. (4) `init` is not a class name (`task_init` is) — check test_registry.cpp:718 mapping before running. Rebuild-after-arch-switch can trip the 120s stall guard — not a guest hang.
+- **Adapted:** pure `mb2_mmap_validated_count` (QE-unit-testable); gs getter satisfies the global_state_api style gate (raw `multiboot_info_ptr` is E2).
+- **Style re-face:** retrieval comment first, always.
