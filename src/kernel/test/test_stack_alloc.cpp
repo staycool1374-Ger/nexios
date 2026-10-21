@@ -26,6 +26,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/test/test_isolate.hpp>
+#include <kernel/debug/crash_dump.hpp>
 
 using namespace kernel;
 
@@ -107,29 +108,32 @@ JARVIS_TEST(stack_alloc_multiple_tasks_distinct_stacks,
 }
 
 // v0.4.0 MP-6.2: strong test override of the weak stack_overflow_hook.  In
-// test-active mode it records the faulting task and returns (the #PF handler
-// then resumes via the rewritten iret frame); outside tests it panics exactly
-// like the weak production default.  is_test_active() gates recovery so a
-// real production overflow can never be swallowed.
+// test-active mode it records the faulting task and returns true (the #PF
+// handler then resumes via the rewritten iret frame); outside tests it
+// returns false exactly like the weak production default (caller raw-dumps
+// + halts).  is_test_active() gates recovery so a real production overflow
+// can never be swallowed.  New bool contract (issue #308).
 static uint64_t g_hook_task_id = 0;
 static uint64_t g_hook_rip = 0;
 
-void stack_overflow_hook(kernel::TaskControlBlock *task) {
-    if (!task)
-        return;
-    g_hook_task_id = task->id;
+bool stack_overflow_hook(kernel::TaskControlBlock &task,
+                         const kernel::debug::FirstChanceFrame &frame) {
+    (void)frame;
+    g_hook_task_id = task.id;
     g_hook_rip = 0xDEAD0000BEEFULL;
     if (kernel::Scheduler::is_test_active()) {
         // Synthetic-drive recovery: nothing to recover (we are not inside the
-        // #PF handler) — just latch and return.
-        return;
+        // #PF handler) — just latch and report recovered.
+        return true;
     }
-    panic("kernel stack overflow");
+    return false;
 }
 
 JARVIS_TEST(stack_alloc_overflow_hook_weak_symbol,
             "PRE: none | POST: none") {
-    extern void stack_overflow_hook(kernel::TaskControlBlock *task);
+    extern bool stack_overflow_hook(
+        kernel::TaskControlBlock &task,
+        const kernel::debug::FirstChanceFrame &frame);
     // v0.4.0 MP-6.2: the weak default is now DEFINED in kernel.cpp, so the
     // symbol must resolve to the strong test override here (never null).
     JARVIS_ASSERT(stack_overflow_hook != nullptr);
@@ -187,8 +191,10 @@ JARVIS_TEST(kstack_guard_base_unmapped, "PRE: none | POST: none") {
 // no syscall dereferences the guard VA in kernel mode), so the hook is
 // driven synthetically here.
 // Input: create_user() (kstack_slot_va_ set); call stack_overflow_hook(t).
-// Expect: g_hook_task_id == t->id; g_hook_rip != 0.
-// Depends: kernel.cpp weak default + test strong override
+// Expect: g_hook_task_id == t->id; g_hook_rip != 0; returns the test-active
+// contract (true only when the scheduler is test-active).
+// Depends: kernel.cpp weak default + test strong override (bool contract,
+// issue #308)
 JARVIS_TEST(kstack_overflow_invokes_hook, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
@@ -199,10 +205,14 @@ JARVIS_TEST(kstack_overflow_invokes_hook, "PRE: none | POST: none") {
     g_hook_task_id = 0;
     g_hook_rip = 0;
 
-    stack_overflow_hook(t);
+    auto frame = kernel::debug::first_chance_frame_here(
+        kernel::debug::FirstChanceCause::STACK_OVERFLOW);
+    bool recovered = stack_overflow_hook(*t, frame);
 
     JARVIS_ASSERT(g_hook_task_id == t->id);
     JARVIS_ASSERT(g_hook_rip != 0);
+    JARVIS_ASSERT(recovered ==
+                  kernel::Scheduler::is_test_active());
     JARVIS_TEST_PASS();
 }
 

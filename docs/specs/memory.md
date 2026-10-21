@@ -77,7 +77,7 @@ data pages).  `page_table_shared_ = false`.  COW deferred to a later version.
  slot_base = KERNEL_STACK_BASE + i*SLOT_SIZE
    [slot_base]              guard  (unmapped 4 KiB)
    [slot_base + PAGE_SIZE]  stack  (grows down)
-   #PF on cr2 ∈ window  →  find_task_by_kstack_slot → panic("kernel stack overflow")
+    #PF on cr2 ∈ window  →  find_task_by_kstack_slot → stack_overflow_hook → raw-dump + halt (issue #308)
 ```
 Size tiers `CONFIG_STACK_SIZE_TABLE { 4096, 4096, 16384, 16384, 32768, 32768, 65536, 65536 }`.
 The guard-page approach was adopted; software canaries are a secondary layer

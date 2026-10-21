@@ -35,6 +35,7 @@
 #include <kernel/driver/iocd.hpp>
 #include <kernel/irq_thread.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/arch/page_table.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
@@ -951,6 +952,11 @@ void snapshot_restore(const char *test_name) {
     // RAII-guard teardown already disarm; this is the abort backstop).
     // Unconditional call — release def is a no-op.
     VMM::test_table_alloc_fail_snapshot_reset();
+#if CONFIG_DEBUG
+    // Reset the first-chance halt seam (issue #308) so an armed seam can
+    // never leak into the next cycle.
+    kernel::debug::test_reset_crash_halt();
+#endif
     // Reset the POSIX timer/timerfd registries + clock anchor (issue #76)
     // so timer slots, waiter registrations, and the REALTIME latch never
     // leak across snapshot cycles (wheel reset above already disarmed all

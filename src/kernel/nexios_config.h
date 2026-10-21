@@ -890,9 +890,10 @@
 #define CONFIG_TICK_HOOK 0
 #endif
 
-/// If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock*).
-/// v0.4.0 MP-6.2: enabled — the hook is invoked on a kernel-stack guard-page
-/// #PF before the fatal panic (belt-and-braces; tests override it strongly).
+/// If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock&,
+/// FirstChanceFrame) returning bool (issue #308). v0.4.0 MP-6.2: enabled —
+/// the hook is invoked on a kernel-stack guard-page #PF before the raw-dump
+/// + halt (belt-and-braces; tests override it strongly).
 #ifndef CONFIG_STACK_OVERFLOW_HOOK
 #define CONFIG_STACK_OVERFLOW_HOOK 1
 #endif

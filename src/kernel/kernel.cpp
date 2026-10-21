@@ -100,6 +100,7 @@
 #include <constants.hpp>
 #include <signal.hpp>
 #include <kernel/debug/dump.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <fdt/libfdt.h>
 #include <fdt/libfdt_internal.h>
@@ -1782,7 +1783,9 @@ extern "C" void panic(const char *msg) {
 }
 
 #if CONFIG_ARCH_X86_64
-static void dump_regs(uint64_t *regs) {
+// Only caller is the CONFIG_USER_FAULT_VERBOSE user-fault path below;
+// unused-function would otherwise fire -Werror in default configs.
+__attribute__((unused)) static void dump_regs(uint64_t *regs) {
     if (!regs)
         return;
 
@@ -1879,9 +1882,9 @@ static void dump_regs(uint64_t *regs) {
     }
 #elif defined(CONFIG_ARCH_AARCH64)
     L::raw_write("  ELR: ");
-    L::print_hex(regs[31]);
-    L::raw_write("  SPSR: ");
     L::print_hex(regs[32]);
+    L::raw_write("  SPSR: ");
+    L::print_hex(regs[33]);
     L::raw_write("\n  Stack trace:\n");
     uint64_t *fp = reinterpret_cast<uint64_t *>(regs[29]);
     // MP-4 (PAN): only walk a KERNEL frame chain; a user FP deref would be a
@@ -1904,12 +1907,16 @@ static void dump_regs(uint64_t *regs) {
 #endif // CONFIG_ARCH_X86_64
 
 #if CONFIG_STACK_OVERFLOW_HOOK
-// v0.4.0 MP-6.2: weak default stack-overflow hook — production panics.  A
-// strong override (test suites) may instead recover the faulting task; see
-// the guard-page #PF handler in handle_interrupt_c.
-__attribute__((weak)) void stack_overflow_hook(kernel::TaskControlBlock *task) {
+// v0.4.0 MP-6.2 (bool contract, issue #308): weak default returns false
+// with no logging — the caller raw-dumps + halts.  A strong override
+// (test suites) returns true only when it recovers the faulting task;
+// see the guard-page #PF handler in handle_interrupt_c.
+__attribute__((weak)) bool stack_overflow_hook(
+    kernel::TaskControlBlock &task,
+    const kernel::debug::FirstChanceFrame &frame) {
     (void)task;
-    panic("kernel stack overflow");
+    (void)frame;
+    return false;
 }
 #endif // CONFIG_STACK_OVERFLOW_HOOK
 
@@ -2489,23 +2496,19 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             uint64_t cr2 = read_cr2();
             if (cr2 >= t->kstack_slot_va_ &&
                 cr2 < t->kstack_slot_va_ + arch::PAGE_SIZE) {
-                kernel::Logger::fatal(
-                    "STACK OVERFLOW: task '%s' (ID=%u) overflowed "
-                    "kernel stack (CR2=0x%lx slot_va=0x%lx top=0x%lx)",
-                    t->name, t->id, cr2,
-                    t->kstack_slot_va_,
-                    t->kernel_stack_top);
-                dump_regs(regs);
 #if CONFIG_STACK_OVERFLOW_HOOK
-                // v0.4.0 MP-6.2: invoke the overflow hook.  The weak default
-                // panics internally — production behaviour is unchanged.  A
-                // strong override (test suite) may recover the faulting task
-                // (rewrite the iret frame + TERMINATE), in which case we
-                // return instead of panicking (mirrors the
-                // g_user_access_recover_ip recovery).  The weak symbol always
-                // resolves (to the default or the override), so no null
-                // check is needed.
-                stack_overflow_hook(t);
+                // Issue #308: hook first — a recovering override returns
+                // true (test-only, gated inside the override); otherwise
+                // raw-dump + halt with no Logger formatting.
+                auto frame = kernel::debug::make_x86_frame(
+                    vector, error_code, rip,
+                    kernel::debug::x86_fault_sp(regs), read_cr2(),
+                    read_cr3());
+                frame.cause =
+                    kernel::debug::FirstChanceCause::STACK_OVERFLOW;
+                if (stack_overflow_hook(*t, frame))
+                    return;
+                kernel::debug::first_chance_halt(frame);
                 return;
 #else
                 panic("kernel stack overflow");
@@ -2513,25 +2516,14 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             }
         }
 
-        kernel::Logger::fatal("CPU EXCEPTION: %s (vector=%x err=%x rip=%x)",
-                              exception_name(vector), vector, error_code, rip);
-        dump_regs(regs);
-
-        // ---- Full diagnostic dump before panic ----
-        kernel::debug::dump_all_tasks();
-        kernel::debug::dump_scheduler_info();
-
-        if (t) {
-            kernel::Logger::raw_write("  Task: id=");
-            kernel::Logger::print_hex(t->id);
-            kernel::Logger::raw_write(" prio=");
-            kernel::Logger::print_dec(t->priority);
-            kernel::Logger::raw_write(" state=");
-            kernel::Logger::print_hex(static_cast<uint64_t>(t->state));
-            kernel::Logger::raw_write("\n");
-        }
-
-        panic("CPU EXCEPTION");
+        // Issue #308: first-chance raw dump + halt. No Logger formatting
+        // (Logger may be the casualty), no task/scheduler dumps, no
+        // recovery — raw registers to UART, then cli/hlt. GDB
+        // (make debug-test) is the post-mortem path.
+        auto frame = kernel::debug::make_x86_frame(
+            vector, error_code, rip,
+            kernel::debug::x86_fault_sp(regs), read_cr2(), read_cr3());
+        kernel::debug::first_chance_halt(frame);
         return;
     }
 #elif defined(CONFIG_ARCH_AARCH64)
@@ -2550,12 +2542,15 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             }
             return;
         }
-        kernel::Logger::fatal("CPU EXCEPTION: %s (vector=%x err=%x elr=%x)",
-                              exception_name(vector), vector, error_code, rip);
-        kernel::debug::dump_all_tasks();
-        kernel::debug::dump_scheduler_info();
-        kernel::debug::dump_cpu_regs();
-        panic("CPU EXCEPTION");
+        // Issue #308: first-chance path (consistency with the live
+        // vectors.S site): raw registers, no Logger, halt. save_all
+        // layout: regs[31]=SP, regs[32]=ELR, regs[33]=SPSR.
+        auto frame = kernel::debug::make_aarch64_frame(
+            vector, error_code, regs[32], regs[31], arch::read_ttbr0_el1(),
+            arch::read_ttbr1_el1());
+        (void)rip;
+        kernel::debug::first_chance_halt(frame);
+        return;
     }
 #endif
 

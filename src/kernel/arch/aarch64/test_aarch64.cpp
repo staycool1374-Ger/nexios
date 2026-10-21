@@ -40,6 +40,7 @@
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/debug/debug_regs.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/elf/elf_loader.hpp>
@@ -1240,7 +1241,7 @@ JARVIS_TEST(aarch64_clone_frame_readback, "PRE: none | POST: none") {
 
 /// @brief Register all AArch64 architecture test cases.
 extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
-                                                 uint64_t elr);
+                                                uint64_t elr, uint64_t sp);
 
 // Runmode: kernel
 // Testidea: v0.5.x issue #214 — EL1 sync faults must reach the fail-stop
@@ -1289,8 +1290,8 @@ JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
     asm volatile("mrs %0, elr_el1" : "=r"(saved_elr));
     kernel::gs::user_access_recover_ip() = 0xA11CEULL;
     const uint64_t ret = aarch64_el1_unexpected_fault(0x2000000ULL,
-                                                     0x400000ULL,
-                                                     saved_elr);
+                                                      0x400000ULL,
+                                                      saved_elr, 0);
     JARVIS_ASSERT_FMT(ret == 0, "recovery path returned %lx, want 0", ret);
     JARVIS_ASSERT_FMT(kernel::gs::user_access_recover_ip() == 0,
                       "recovery left armed: 0x%lx",
@@ -1303,6 +1304,40 @@ JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
     asm volatile("isb");
     JARVIS_TEST_PASS();
 }
+
+// Runmode: kernel
+// Testidea: issue #308 — the non-recovery EL1 fault path emits a raw
+// first-chance frame (FAR/ELR/SP/TTBR) and reaches the halt seam exactly
+// once, with no Logger/dmesg traffic. Recovery stays disarmed; the
+// CONFIG_DEBUG seam returns instead of halting.
+// Input: synthetic (esr, far, elr, sp) with recovery disarmed + armed seam.
+// Expect: halt count 1; last frame carries FAR/ELR/SP/TTBR0/1 verbatim.
+// Depends: aarch64_el1_unexpected_fault, crash_dump seam (issue #308)
+// CONFIG_DEBUG-only: arms the debug halt seam.
+#if CONFIG_DEBUG
+JARVIS_TEST(aarch64_el1_failstop_raw_frame) {
+    kernel::gs::user_access_recover_ip() = 0;
+    kernel::debug::test_reset_crash_halt();
+    kernel::debug::test_arm_crash_halt();
+    const uint64_t ret = aarch64_el1_unexpected_fault(
+        0x96000010ULL, 0x40008000ULL, 0xFFFF000040000000ULL,
+        0xFFFF000041000000ULL);
+    JARVIS_ASSERT_FMT(ret == 1, "non-recovery path returned %lx, want 1",
+                      ret);
+    JARVIS_ASSERT_FMT(kernel::debug::test_crash_halt_count() == 1,
+                      "halt count %lx, want 1",
+                      kernel::debug::test_crash_halt_count());
+    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
+    JARVIS_ASSERT_FMT(
+        f.addr == 0x40008000ULL && f.pc == 0xFFFF000040000000ULL &&
+            f.sp == 0xFFFF000041000000ULL &&
+            f.pgtbl0 == arch::read_ttbr0_el1() &&
+            f.pgtbl1 == arch::read_ttbr1_el1(),
+        "frame mismatch: FAR/ELR/SP/TTBR not echoed");
+    kernel::debug::test_reset_crash_halt();
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_DEBUG (first-chance seam test)
 
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
@@ -1340,6 +1375,9 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
     JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
     JARVIS_REGISTER_TEST(aarch64_el1_sync_unexpected_failstop_routing);
+#if CONFIG_DEBUG
+    JARVIS_REGISTER_TEST(aarch64_el1_failstop_raw_frame);  // issue #308
+#endif
 }
 
 #endif

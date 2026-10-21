@@ -8,6 +8,7 @@
 #include <kernel/kernel.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/debug/debug_stop.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <signal.hpp>
 
 #include <kernel/arch/hal/irq_storm.hpp>
@@ -360,42 +361,23 @@ extern "C" uint64_t aarch64_last_el0_esr() { return g_last_el0_esr; }
 ///        kernel.cpp:1664): while a guarded copy runs, ANY EL1 fault
 ///        redirects ELR_EL1 to the recovery label so the copy returns
 ///        false instead of panicking.  Returns 0 when recovery was
-///        applied (asm stub restores + erets WITHOUT the legacy skip),
-///        1 otherwise.  Any other EL1 sync fault is a kernel bug — the
-///        old skip-and-eret behavior masked them (issue #209).  Dumps
-///        ESR/FAR/ELR over the lock-free UART path (bounded poll,
-///        byte-drop; no Logger format strings — %lx hangs) and panics
-///        in debug builds.  In release builds returns 1 and the asm stub
-///        resumes with the legacy skip.  Runs with interrupts masked
-///        (vector entry); must not re-enable IRQs or touch the
-///        scheduler.  Recovery resume is safe: the guarded copy's
-///        recovery label needs no caller-saved state (same contract the
-///        x86/riscv recovery paths rely on).
+///        applied (asm stub restores + erets).  Any other EL1 sync fault
+///        is a kernel bug — issue #308: raw first-chance frame over the
+///        lock-free UART path, then halt in ALL builds (the old release
+///        ELR+=4 skip silently continued after kernel faults).  Runs with
+///        interrupts masked (vector entry); must not re-enable IRQs or
+///        touch the scheduler.
 extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
-                                                 uint64_t elr) {
+                                                uint64_t elr, uint64_t sp) {
     uint64_t recover = kernel::g_user_access_recover_ip;
     if (recover != 0) {
         kernel::g_user_access_recover_ip = 0;
         asm volatile("msr elr_el1, %0" ::"r"(recover));
         return 0;
     }
-    arch::Serial::puts("\nEL1 sync fault: ESR=0x");
-    for (int i = 60; i >= 0; i -= 4)
-        arch::Serial::putchar("0123456789ABCDEF"[(esr >> i) & 0xF]);
-    arch::Serial::puts(" FAR=0x");
-    for (int i = 60; i >= 0; i -= 4)
-        arch::Serial::putchar("0123456789ABCDEF"[(far >> i) & 0xF]);
-    arch::Serial::puts(" ELR=0x");
-    for (int i = 60; i >= 0; i -= 4)
-        arch::Serial::putchar("0123456789ABCDEF"[(elr >> i) & 0xF]);
-    arch::Serial::puts("\n");
-#ifdef CONFIG_DEBUG
-    panic("EL1 sync fault");
-#else
-    (void)esr;
-    (void)far;
-    (void)elr;
-#endif
+    auto frame = kernel::debug::make_aarch64_frame(
+        esr, far, elr, sp, arch::read_ttbr0_el1(), arch::read_ttbr1_el1());
+    kernel::debug::first_chance_halt(frame);
     return 1;
 }
 

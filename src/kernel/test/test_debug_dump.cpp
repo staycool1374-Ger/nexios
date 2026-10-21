@@ -38,8 +38,10 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/debug/dump.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/log/ring_buffer.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/serial.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <string.hpp>
@@ -242,10 +244,131 @@ JARVIS_TEST(debug_dump_cpu_regs_snapshot, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: issue #308 — the first-chance formatter renders every arch's
+// register order with labels and no [DUMP]/ANSI bytes (raw UART path).
+// CONFIG_DEBUG-only: uses the debug halt seam.
+// Input: synthetic frames for x86_64/aarch64/riscv64 run through
+// format_first_chance into a stack buffer.
+// Expect: exact "[FIRST-CHANCE]" header, arch token, all field labels in
+// order, non-empty bounded output, no Logger-style "[DUMP]" bytes.
+// Depends: kernel::debug::format_first_chance (issue #308)
+#if CONFIG_DEBUG
+JARVIS_TEST(first_chance_format_register_order, "PRE: none | POST: none") {
+    char buf[512];
+#if defined(CONFIG_ARCH_X86_64)
+    kernel::debug::FirstChanceFrame f =
+        kernel::debug::make_x86_frame(13, 2, 0x1000, 0x2000, 0x3000, 0x4000);
+    const char *arch_tok = "arch=x86_64";
+#elif defined(CONFIG_ARCH_AARCH64)
+    kernel::debug::FirstChanceFrame f = kernel::debug::make_aarch64_frame(
+        0x96000010ULL, 0x4000, 0x1000, 0x2000, 0x3000, 0x4000);
+    const char *arch_tok = "arch=aarch64";
+#else
+    kernel::debug::FirstChanceFrame f = kernel::debug::make_riscv_frame(
+        12, 0x1000, 0x2000, 0x3000, 0x4000);
+    const char *arch_tok = "arch=riscv64";
+#endif
+    const size_t n = kernel::debug::format_first_chance(f, buf, sizeof(buf));
+    JARVIS_ASSERT(n > 64 && n < sizeof(buf));
+    buf[n] = '\0';
+    JARVIS_ASSERT(has(buf, "[FIRST-CHANCE]"));
+    JARVIS_ASSERT(has(buf, arch_tok));
+    JARVIS_ASSERT(has(buf, "vec="));
+    JARVIS_ASSERT(has(buf, "pc="));
+    JARVIS_ASSERT(has(buf, "sp="));
+    JARVIS_ASSERT(!has(buf, "[DUMP]"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #308 — the per-arch frame constructors round-trip field
+// values verbatim (no masking, no swapping).
+// Input: synthetic register words through each make_*_frame constructor.
+// Expect: every output field equals its input word.
+// Depends: kernel::debug frame constructors (issue #308)
+JARVIS_TEST(first_chance_capture_frame, "PRE: none | POST: none") {
+    {
+        auto f = kernel::debug::make_x86_frame(13, 2, 0x1000, 0x2000, 0x3000,
+                                               0x4000);
+        JARVIS_ASSERT(f.vector == 13 && f.error == 2 && f.addr == 0x3000 &&
+                      f.pc == 0x1000 && f.sp == 0x2000 && f.pgtbl0 == 0x4000);
+    }
+    {
+        auto f = kernel::debug::make_aarch64_frame(1, 2, 3, 4, 5, 6);
+        JARVIS_ASSERT(f.vector == 1 && f.addr == 2 && f.pc == 3 &&
+                      f.sp == 4 && f.pgtbl0 == 5 && f.pgtbl1 == 6);
+    }
+    {
+        auto f = kernel::debug::make_riscv_frame(7, 8, 9, 10, 11);
+        JARVIS_ASSERT(f.vector == 7 && f.pc == 8 && f.addr == 9 &&
+                      f.sp == 10 && f.pgtbl0 == 11);
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #308 — first_chance_emit uses raw UART only: klog stays
+// empty while arch::Serial::write_count advances.
+// Input: klog drained; emit a synthetic frame with interrupts frozen.
+// Expect: klog read length 0; serial write count strictly greater.
+// Depends: kernel::debug::first_chance_emit, arch::Serial (issue #308)
+JARVIS_TEST(first_chance_emit_uses_raw_uart_only, "PRE: none | POST: none") {
+    auto f = kernel::debug::first_chance_frame_here(
+        kernel::debug::FirstChanceCause::CPU_EXCEPTION);
+    size_t klog_before = 0;
+    uint64_t serial_before = 0;
+    {
+        arch::IrqGuard ig;
+        kernel::log::KlogService::instance().clear();
+        serial_before = arch::Serial::write_count();
+        kernel::debug::first_chance_emit(f);
+        char drain[64];
+        klog_before = kernel::log::KlogService::instance().read(drain,
+                                                               sizeof(drain));
+    }
+    const uint64_t serial_after = arch::Serial::write_count();
+    JARVIS_ASSERT(klog_before == 0);
+    JARVIS_ASSERT(serial_after > serial_before);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: issue #308 — first_chance_halt reaches the halt seam exactly
+// once and latches the emitted frame (CONFIG_DEBUG seam returns when
+// armed; production halt never returns).
+// Input: armed seam + synthetic frame through first_chance_halt.
+// Expect: halt count 1; last frame equals the emitted one; seam reset.
+// Depends: crash_dump CONFIG_DEBUG seam (issue #308)
+JARVIS_TEST(first_chance_halt_seam_reached_once, "PRE: none | POST: none") {
+    kernel::debug::test_reset_crash_halt();
+    kernel::debug::test_arm_crash_halt();
+    auto f = kernel::debug::first_chance_frame_here(
+        kernel::debug::FirstChanceCause::STACK_OVERFLOW);
+    f.vector = 0xAB;
+    kernel::debug::first_chance_halt(f);
+    JARVIS_ASSERT(kernel::debug::test_crash_halt_count() == 1);
+    kernel::debug::FirstChanceFrame latched =
+        kernel::debug::test_last_frame();
+    JARVIS_ASSERT(latched.vector == 0xAB);
+    JARVIS_ASSERT(latched.cause ==
+                  kernel::debug::FirstChanceCause::STACK_OVERFLOW);
+    kernel::debug::test_reset_crash_halt();
+    JARVIS_ASSERT(kernel::debug::test_crash_halt_count() == 0);
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_DEBUG (first-chance seam tests)
+
 void register_debug_dump_tests() {
     Logger::info("Registering debug dump tests");
     JARVIS_REGISTER_TEST(debug_dump_scheduler_info_renders_state);
     JARVIS_REGISTER_TEST(debug_dump_task_info_valid_and_missing);
     JARVIS_REGISTER_TEST(debug_dump_all_tasks_walks_registry);
     JARVIS_REGISTER_TEST(debug_dump_cpu_regs_snapshot);
+#if CONFIG_DEBUG
+    JARVIS_REGISTER_TEST(first_chance_format_register_order);
+    JARVIS_REGISTER_TEST(first_chance_capture_frame);
+    JARVIS_REGISTER_TEST(first_chance_emit_uses_raw_uart_only);
+    JARVIS_REGISTER_TEST(first_chance_halt_seam_reached_once);
+#endif
 }

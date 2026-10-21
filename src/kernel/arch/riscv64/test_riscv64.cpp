@@ -36,6 +36,7 @@
 #include <kernel/arch/riscv64/hal/plic.hpp>
 #include <kernel/arch/riscv64/hal/uart.hpp>
 #include <kernel/arch/riscv64/hal/memmap.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -1356,6 +1357,39 @@ JARVIS_TEST(riscv64_elf_ecall_smoke, "PRE: none | POST: none") {
 }
 
 /// @brief Register all riscv64 architecture tests.
+/// @brief S-mode kernel-fault entry (interrupt_controller.cpp), 4-arg
+///        first-chance form (issue #308).
+extern "C" void handle_kernel_exception(uint64_t sepc, uint64_t scause,
+                                        uint64_t stval, uint64_t sp);
+
+#if CONFIG_DEBUG
+// Runmode: kernel
+// Testidea: issue #308 — the S-mode kernel-fault path emits a raw
+// first-chance frame (STVAL/SATP/SEPC/SP) and reaches the halt seam
+// exactly once, with no Logger/dmesg traffic. CONFIG_DEBUG seam returns
+// instead of halting.
+// Input: synthetic (sepc, scause, stval, sp) + armed seam.
+// Expect: halt count 1; last frame carries STVAL/SATP/SEPC/SP verbatim.
+// Depends: handle_kernel_exception, crash_dump seam (issue #308)
+JARVIS_TEST(riscv64_kernel_exception_raw_frame, "PRE: none | POST: none") {
+    kernel::debug::test_reset_crash_halt();
+    kernel::debug::test_arm_crash_halt();
+    handle_kernel_exception(0xFFFFFFC080001000ULL, 12, 0xDEADULL,
+                            0xFFFFFFC081000000ULL);
+    JARVIS_ASSERT_FMT(kernel::debug::test_crash_halt_count() == 1,
+                      "halt count %lx, want 1",
+                      kernel::debug::test_crash_halt_count());
+    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
+    JARVIS_ASSERT_FMT(f.pc == 0xFFFFFFC080001000ULL && f.vector == 12 &&
+                          f.addr == 0xDEADULL &&
+                          f.sp == 0xFFFFFFC081000000ULL &&
+                          f.pgtbl0 == arch::read_satp(),
+                      "frame mismatch: STVAL/SATP/SEPC/SP not echoed");
+    kernel::debug::test_reset_crash_halt();
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_DEBUG (first-chance seam test)
+
 void register_riscv64_tests() {
     Logger::info("Registering riscv64 architecture tests");
 
@@ -1403,6 +1437,9 @@ void register_riscv64_tests() {
     JARVIS_REGISTER_TEST(riscv64_exec_slots);            // issue #206 M2
     JARVIS_REGISTER_TEST(riscv64_u_fault_terminates);    // issue #206 M2
     JARVIS_REGISTER_TEST(riscv64_elf_ecall_smoke);       // issue #206 M2
+#if CONFIG_DEBUG
+    JARVIS_REGISTER_TEST(riscv64_kernel_exception_raw_frame);  // issue #308
+#endif
 }
 
 #endif

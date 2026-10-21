@@ -206,7 +206,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
     {"hal_bits",             14,    0,       0      },  // bit-manipulation utilities
     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
-    {"exc_table",             4,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131)
+    {"exc_table",             5,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131) + first-chance raw ordering (#308)
     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
     {"irq_early_std",         7,    0,       0      },  // early IRQ+timer init conformance (issue #198)
     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
@@ -227,7 +227,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"shell_interaction",    20,    0,       0      },  // shell commands (+ tasks memory columns) + P2 key-delivery seam test (#303 item 3)
     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
     {"shell_textutils",       1,    0,       0      },  // text utilities
-    {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
+    {"debug_dump",            8,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers + 4 first-chance raw tests (#308)
     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
     {"kernel_top",            22, 0,       0      },  // Top-level kernel (#131): histogram + random + IrqThread (#144, unknown-vec/sync-ack/guard) + datetime + global_state accessors (#136)
     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
@@ -258,10 +258,10 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   33,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214)
+    {"arch_aarch64",          0,   34,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214) + 1 EL1 fail-stop raw frame (#308)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
-    {"arch_riscv64",          0,    0,      30      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) — row was stale at 24 while 28 registered, corrected to 30
+    {"arch_riscv64",          0,    0,      31      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) + 1 kernel-exception raw frame (#308) — row was stale at 24 while 28 registered, corrected to 30
 #endif
 
     // bench
@@ -309,11 +309,11 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"storage",             167,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333) + 1 readdir mount overlay (#346)
     {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
     {"drivers",             107,  0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342)
-    {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
+    {"hal",                 123,    0,       0      },  // hal_* + exc_table(5, +1 exception_name #131 +1 first-chance raw ordering #308) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
     {"deadline",            147,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 validate-id-range-gate (#374) + 1 pre-existing aggregate drift at HEAD
-    {"ui",                  74,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
+    {"ui",                  78,    0,       0      },  // shell_* + framebuffer + debug_dump(+4 first-chance raw #308) + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
     {"bench",               28,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303) + 1 path_tracer overhead (#347-E)

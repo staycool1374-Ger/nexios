@@ -283,7 +283,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
  handle_interrupt_c(vec, err, rip, regs, tsc)        [kernel.cpp]
    ├─ v==7        lazy FPU/SSE (fpu_owner, fxsave/fxrstor)
    ├─ user-recover g_user_access_recover_ip redirect
-   ├─ v<32        user: deliver_signal / kernel: guard-page check → panic
+    ├─ v<32        user: deliver_signal / kernel: guard-page check → raw-dump + halt (issue #308)
    ├─ v==0x80     syscall_handler → signals → reschedule
    ├─ THREADED_IRQS: IrqThread::for_vector(v) → isr_entry (ack+Notify) → task
    ├─ else        IDT::handle_interrupt → handlers_[v]
