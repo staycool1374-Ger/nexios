@@ -125,3 +125,32 @@ ticks; `remaining()` returns ceil coarse ticks (0 disarmed/expired);
 `remaining_ns()` the sub-tick remainder. riscv64 `remaining*` are hard
 0 (S-mode cannot read mtimecmp) — enforcement tests must assert the
 contract, never wall time.
+
+## 7. User IRQ delivery on platform lines (issue #354 Slice B)
+
+- Cap windows (`arch/hal/irq_vectors.hpp`): x86_64 33–47 (PIC IRQ1–15),
+  aarch64 GIC SPI 32–255 (SGI/PPI incl. timer PPI 30 never claimable),
+  riscv64 PLIC 1–95. `IrqSlotKind::PLATFORM` owns the controller line
+  for the arm lifetime (mask ownership: table unmasks at arm, restores
+  pre-arm state at release/drain; the storm limiter may mask
+  independently).
+- `claim_slot()` validates the window, then rejects per-arch SYSCALL /
+  TIMER (riscv64 SYSCALL = 2 lies inside the PLIC window, so the check
+  is load-bearing there and stays unconditional), kernel-handler
+  vectors (`IDT::has_handler`, non-x86 only — x86 entries_ are always
+  populated), threaded-IRQ overlap, and duplicates; non-x86 claims are
+  always PLATFORM kind (MSI unsupported — no MSIX kind exists).
+- ISR path: GIC `handle_gic_irq` / PLIC `handle_plic_trap` call
+  `IrqDelivery::isr_entry()` before the generic `IDT::handle_interrupt`;
+  EOI (`g_last_acked` + EOIR) / claim-complete stays single-choked at
+  the existing tail — `isr_entry`'s own EOI is x86-only.
+- Locking: `arm` / `release_slot_idx` / `drain_task` take `IrqGuard`
+  before the slot `SpinLock` on non-x86 (GIC/PLIC permit
+  higher-priority preemption, so an unmasked line's ISR could spin on
+  the held lock on the same CPU). x86 keeps its exact prior ordering
+  (lock only — ISRs run with interrupts disabled, no same-CPU reentry).
+- MSI documented gap (Q1): GICv2 has no ITS, the PLIC has no MSI
+  endpoint — `pci_enable_msi/msix` fail closed (return 0),
+  `pci_msix_table_info` returns false, delivery goes via INTx/platform
+  lines; expanding to GICv3+ITS / RISC-V AIA is milestone-sized and out
+  of scope.

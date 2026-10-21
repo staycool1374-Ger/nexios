@@ -1,0 +1,596 @@
+diff --git a/docs/specs/irq-early-init.md b/docs/specs/irq-early-init.md
+index 90f7af169..ae436cf7e 100644
+--- a/docs/specs/irq-early-init.md
++++ b/docs/specs/irq-early-init.md
+@@ -125,3 +125,32 @@ ticks; `remaining()` returns ceil coarse ticks (0 disarmed/expired);
+ `remaining_ns()` the sub-tick remainder. riscv64 `remaining*` are hard
+ 0 (S-mode cannot read mtimecmp) — enforcement tests must assert the
+ contract, never wall time.
++
++## 7. User IRQ delivery on platform lines (issue #354 Slice B)
++
++- Cap windows (`arch/hal/irq_vectors.hpp`): x86_64 33–47 (PIC IRQ1–15),
++  aarch64 GIC SPI 32–255 (SGI/PPI incl. timer PPI 30 never claimable),
++  riscv64 PLIC 1–95. `IrqSlotKind::PLATFORM` owns the controller line
++  for the arm lifetime (mask ownership: table unmasks at arm, restores
++  pre-arm state at release/drain; the storm limiter may mask
++  independently).
++- `claim_slot()` validates the window, then rejects per-arch SYSCALL /
++  TIMER (riscv64 SYSCALL = 2 lies inside the PLIC window, so the check
++  is load-bearing there and stays unconditional), kernel-handler
++  vectors (`IDT::has_handler`, non-x86 only — x86 entries_ are always
++  populated), threaded-IRQ overlap, and duplicates; non-x86 claims are
++  always PLATFORM kind (MSI unsupported — no MSIX kind exists).
++- ISR path: GIC `handle_gic_irq` / PLIC `handle_plic_trap` call
++  `IrqDelivery::isr_entry()` before the generic `IDT::handle_interrupt`;
++  EOI (`g_last_acked` + EOIR) / claim-complete stays single-choked at
++  the existing tail — `isr_entry`'s own EOI is x86-only.
++- Locking: `arm` / `release_slot_idx` / `drain_task` take `IrqGuard`
++  before the slot `SpinLock` on non-x86 (GIC/PLIC permit
++  higher-priority preemption, so an unmasked line's ISR could spin on
++  the held lock on the same CPU). x86 keeps its exact prior ordering
++  (lock only — ISRs run with interrupts disabled, no same-CPU reentry).
++- MSI documented gap (Q1): GICv2 has no ITS, the PLIC has no MSI
++  endpoint — `pci_enable_msi/msix` fail closed (return 0),
++  `pci_msix_table_info` returns false, delivery goes via INTx/platform
++  lines; expanding to GICv3+ITS / RISC-V AIA is milestone-sized and out
++  of scope.
+diff --git a/src/kernel/arch/aarch64/idt.cpp b/src/kernel/arch/aarch64/idt.cpp
+index d7bfae8d1..49b51e631 100644
+--- a/src/kernel/arch/aarch64/idt.cpp
++++ b/src/kernel/arch/aarch64/idt.cpp
+@@ -73,4 +73,13 @@ void IDT::handle_interrupt(uint64_t vector, uint64_t error_code, uint64_t pc) {
+     }
+ }
+ 
++/// @brief Check whether a handler is registered for a vector.
++/// @param[in] vec Vector index (bounds-checked; out-of-range is false).
++/// @return true when a non-null handler is registered.
++bool IDT::has_handler(size_t vec) {
++    if (vec >= NUM_ENTRIES)
++        return false;
++    return handlers_[vec] != nullptr;
++}
++
+ } // namespace arch
+diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
+index 33ccd5be3..e28df814a 100644
+--- a/src/kernel/arch/aarch64/interrupt_controller.cpp
++++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
+@@ -1,4 +1,5 @@
+ #include <kernel/arch/interrupt_controller.hpp>
++#include <kernel/irq_delivery.hpp>
+ #include <kernel/arch/hal/io.hpp>
+ #include <kernel/arch/serial.hpp>
+ #include <kernel/arch/idt.hpp>
+@@ -200,6 +201,22 @@ IrqState ArchInterruptController::snapshot() {
+     return s;
+ }
+ 
++uint16_t ArchInterruptController::max_vector() {
++    // Same clamp as init(): ITLinesNumber+1 banks, max 256 INTIDs.
++    volatile uint32_t *d = gicd_reg(0);
++    uint32_t it_lines = (d[GICD_TYPER / 4] & 0x1FU) + 1;
++    uint32_t window = it_lines * 32;
++    if (window > GIC_MAX_INTID) {
++        window = GIC_MAX_INTID;
++    }
++    return static_cast<uint16_t>(window - 1);
++}
++
++bool ArchInterruptController::line_enabled(uint8_t irq) {
++    // uint8_t is always < GIC_MAX_INTID (256) by construction.
++    return (gicd_reg(GICD_ISENABLER)[irq / 32] & (1U << (irq % 32))) != 0;
++}
++
+ void ArchInterruptController::restore(const IrqState &state) {
+     for (uint32_t w = 0; w < 8; ++w) {
+         gicd_reg(GICD_ICENABLER)[w] = 0xFFFFFFFF;
+@@ -245,7 +262,11 @@ extern "C" void handle_gic_irq(void) {
+         } else {
+             uint64_t elr{};
+             asm volatile("mrs %0, elr_el1" : "=r"(elr));
+-            IDT::handle_interrupt(intid, 0, elr);
++            // User-space delivery (issue #354): a consumed vector skips the
++            // generic handler; EOI stays single-choked at the tail below.
++            if (!kernel::IrqDelivery::isr_entry(static_cast<uint8_t>(intid))) {
++                IDT::handle_interrupt(intid, 0, elr);
++            }
+         }
+     }
+     // INTIDs >= 256 cannot occur (uint8_t dispatch window); ignore.
+diff --git a/src/kernel/arch/hal/idt.hpp b/src/kernel/arch/hal/idt.hpp
+index e69520f60..876076104 100644
+--- a/src/kernel/arch/hal/idt.hpp
++++ b/src/kernel/arch/hal/idt.hpp
+@@ -152,6 +152,10 @@ class IDT {
+     static void register_handler_raw(uint8_t vec, ISRHandler handler);
+     static void handle_interrupt(uint64_t vector, uint64_t error_code,
+                                  uint64_t rip);
++    /// @brief Check whether a handler is registered for a vector.
++    /// @param vec Vector index (bounds-checked; out-of-range is false).
++    /// @return true when a non-null handler is registered.
++    static bool has_handler(size_t vec);
+ 
+   private:
+     static constexpr size_t NUM_ENTRIES = 256;
+diff --git a/src/kernel/arch/hal/interrupt_controller.hpp b/src/kernel/arch/hal/interrupt_controller.hpp
+index 1659b4fbb..8498dfd25 100644
+--- a/src/kernel/arch/hal/interrupt_controller.hpp
++++ b/src/kernel/arch/hal/interrupt_controller.hpp
+@@ -91,6 +91,21 @@ class ArchInterruptController {
+         return s;
+     }
+ 
++    /// @brief Highest user-observable vector (PIC window, issue #354).
++    /// @return 47 (vectors 33–47 are IRQ1–15; MSI-X handled separately).
++    static inline uint16_t max_vector() {
++        return 47;
++    }
++
++    /// @brief True when PIC line @p irq (0–15) is currently unmasked.
++    /// @param irq IRQ line number (out-of-range reads false).
++    static inline bool line_enabled(uint8_t irq) {
++        if (irq >= 16)
++            return false;
++        uint16_t port = (irq < 8) ? arch::PIC1_DATA : arch::PIC2_DATA;
++        return (inb(port) & static_cast<uint8_t>(1u << (irq & 7u))) == 0;
++    }
++
+     /// @brief Restore a previously saved PIC mask state.
+     /// @param state The IrqState to restore.
+     static inline void restore(const IrqState &state) {
+@@ -118,6 +133,10 @@ class ArchInterruptController {
+     static void unmask(uint8_t irq);
+     static IrqState snapshot();
+     static void restore(const IrqState &state);
++    /// @brief Highest programmed INTID (TYPER-clamped window − 1, ≤ 255).
++    static uint16_t max_vector();
++    /// @brief True when INTID @p irq is currently enabled (ISENABLER bit).
++    static bool line_enabled(uint8_t irq);
+ };
+ 
+ /// @brief Redistributor wake state (issue #198): true when the GICv3
+@@ -146,6 +165,10 @@ class ArchInterruptController {
+     static void unmask(uint8_t irq);
+     static IrqState snapshot();
+     static void restore(const IrqState &state);
++    /// @brief Highest PLIC source (PLIC_MAX_SOURCES − 1).
++    static uint16_t max_vector();
++    /// @brief True when PLIC source @p irq is enabled in S-context.
++    static bool line_enabled(uint8_t irq);
+ };
+ 
+ /// @cond
+diff --git a/src/kernel/arch/hal/irq_vectors.hpp b/src/kernel/arch/hal/irq_vectors.hpp
+new file mode 100644
+index 000000000..f1ebdef97
+--- /dev/null
++++ b/src/kernel/arch/hal/irq_vectors.hpp
+@@ -0,0 +1,68 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Capability-Based Access Control (CSpace)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file irq_vectors.hpp
++/// @brief Per-arch user-IRQ capability windows (issue #354 Slice B).
++/// IrqCap wraps platform IRQ lines (not MSI-X vectors — those belong to
++/// MsixCap on x86_64 only): x86_64 PIC IRQ1–15 (vectors 33–47; 32 is the
++/// scheduler tick), aarch64 GIC SPI window (INTIDs 32–255; SGI/PPI incl.
++/// the timer PPI 30 are never user-claimable), riscv64 PLIC sources
++/// (1–95; 0 is the never-signalled source).
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++#if defined(CONFIG_ARCH_RISCV64)
++#include <kernel/arch/riscv64/hal/plic.hpp>
++#elif defined(CONFIG_ARCH_AARCH64)
++#include <kernel/arch/aarch64/hal/gic.hpp>
++#endif
++
++namespace arch {
++
++/// @brief Lowest user-claimable IRQ vector (inclusive).
++inline constexpr uint16_t irq_cap_vector_min() {
++#if defined(CONFIG_ARCH_X86_64)
++    return 33;
++#elif defined(CONFIG_ARCH_AARCH64)
++    return 32;
++#else
++    return 1;
++#endif
++}
++
++/// @brief Highest user-claimable IRQ vector (inclusive).
++inline constexpr uint16_t irq_cap_vector_max() {
++#if defined(CONFIG_ARCH_X86_64)
++    return 47;
++#elif defined(CONFIG_ARCH_AARCH64)
++    return GIC_MAX_INTID - 1;
++#else
++    return PLIC_MAX_SOURCES - 1;
++#endif
++}
++
++/// @brief True when @p vector lies in the user-claimable window.
++/// @param vector Raw vector (widened to catch > 255 without truncation).
++inline constexpr bool irq_cap_vector_valid(uint16_t vector) {
++    return vector >= irq_cap_vector_min() && vector <= irq_cap_vector_max();
++}
++
++} // namespace arch
+diff --git a/src/kernel/arch/riscv64/idt.cpp b/src/kernel/arch/riscv64/idt.cpp
+index 2c2242046..22f7fab14 100644
+--- a/src/kernel/arch/riscv64/idt.cpp
++++ b/src/kernel/arch/riscv64/idt.cpp
+@@ -73,4 +73,13 @@ void IDT::handle_interrupt(uint64_t vector, uint64_t error_code, uint64_t pc) {
+     }
+ }
+ 
++/// @brief Check whether a handler is registered for a vector.
++/// @param vec Vector index (bounds-checked; out-of-range is false).
++/// @return true when a non-null handler is registered.
++bool IDT::has_handler(size_t vec) {
++    if (vec >= NUM_ENTRIES)
++        return false;
++    return handlers_[vec] != nullptr;
++}
++
+ } // namespace arch
+diff --git a/src/kernel/arch/riscv64/interrupt_controller.cpp b/src/kernel/arch/riscv64/interrupt_controller.cpp
+index b7063526a..a3bfffe53 100644
+--- a/src/kernel/arch/riscv64/interrupt_controller.cpp
++++ b/src/kernel/arch/riscv64/interrupt_controller.cpp
+@@ -1,4 +1,5 @@
+ #include <kernel/arch/interrupt_controller.hpp>
++#include <kernel/irq_delivery.hpp>
+ #include <kernel/arch/hal/io.hpp>
+ #include <kernel/arch/idt.hpp>
+ #include <kernel/arch/riscv64/hal/plic.hpp>
+@@ -99,6 +100,18 @@ void ArchInterruptController::restore(const IrqState &state) {
+     asm volatile("fence iorw, iorw" : : : "memory");
+ }
+ 
++uint16_t ArchInterruptController::max_vector() {
++    return static_cast<uint16_t>(PLIC_MAX_SOURCES - 1);
++}
++
++bool ArchInterruptController::line_enabled(uint8_t irq) {
++    if (irq == 0 || irq >= PLIC_MAX_IRQ) {
++        return false;
++    }
++    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
++    return (enable[irq / 32] & (1U << (irq % 32))) != 0;
++}
++
+ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
+                                  uint64_t *regs) {
+     (void)regs;
+@@ -130,7 +143,13 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
+                     kernel::log::LogSeverity::ERROR,
+                     "irq storm masked", intid);
+             } else {
+-                IDT::handle_interrupt(intid, 0, sepc);
++                // User-space delivery (issue #354): a consumed vector skips
++                // the generic handler; plic_complete_s stays single-choked
++                // at the tail below.
++                if (!kernel::IrqDelivery::isr_entry(
++                        static_cast<uint8_t>(intid))) {
++                    IDT::handle_interrupt(intid, 0, sepc);
++                }
+             }
+             g_last_acked = intid;
+             plic_complete_s(intid);
+diff --git a/src/kernel/cap/irq.cpp b/src/kernel/cap/irq.cpp
+index 681217e59..f68dd8d90 100644
+--- a/src/kernel/cap/irq.cpp
++++ b/src/kernel/cap/irq.cpp
+@@ -23,6 +23,7 @@
+ /// at create() time (single-owner per vector) and released at dispose/revoke.
+ 
+ #include <kernel/cap/irq.hpp>
++#include <kernel/arch/hal/irq_vectors.hpp>
+ #include <kernel/irq_delivery.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/test/resource_tracker.hpp>
+@@ -39,12 +40,12 @@ namespace kernel::cap {
+ static uint32_t g_live_irqs = 0;
+ 
+ IrqCap *IrqCap::create(uint8_t vector) {
+-    // IrqCap wraps legacy PIC vectors ONLY (issue #2): vectors 48-255 are the
+-    // MSI-X window claimed by MsixCap (issue #10).  claim_slot() now accepts
+-    // both windows (PIC + MSI-X share the single-owner delivery table), so
+-    // the PIC-window contract is enforced here — an IrqCap must never wrap an
+-    // MSI-X vector.
+-    if (vector < 33 || vector > 47)
++    // IrqCap wraps platform IRQ lines (issue #2 on x86: legacy PIC lines
++    // 33–47; issue #354: GIC SPI 32–255 / PLIC 1–95). Vectors outside the
++    // cap window belong to MsixCap on x86_64 (issue #10) or are rejected —
++    // claim_slot() enforces the same window plus single-owner, threaded-IRQ
++    // overlap and handler checks, so this is the fast-path reject.
++    if (!arch::irq_cap_vector_valid(vector))
+         return nullptr;
+ 
+     if (__atomic_load_n(&g_live_irqs, __ATOMIC_RELAXED) >=
+diff --git a/src/kernel/irq_delivery.cpp b/src/kernel/irq_delivery.cpp
+index 8a8ec08dd..0a68fdc93 100644
+--- a/src/kernel/irq_delivery.cpp
++++ b/src/kernel/irq_delivery.cpp
+@@ -28,6 +28,7 @@
+ /// driver execution).  The mode is read/written only under the slot lock.
+ 
+ #include <kernel/irq_delivery.hpp>
++#include <kernel/arch/hal/irq_vectors.hpp>
+ #include <kernel/cap/irq.hpp>
+ #include <kernel/cap/msix.hpp>
+ #include <kernel/task/task.hpp>
+@@ -77,17 +78,24 @@ IrqRegistration *IrqDelivery::slot(int16_t idx) {
+ ///        left delivering).  Mirrors the caller holding the slot lock.
+ ///        PIC-kind only (issue #10): a MSI-X vector must never run the
+ ///        `vector - 32` line arithmetic — it would mask a wrong PIC line.
++///        PLATFORM-kind only on non-x86 (issue #354): masks the controller
++///        line directly.
+ static void restore_line_mask(IrqRegistration &r, bool force_mask) {
+-    if (r.kind != IrqSlotKind::PIC)
++    if (r.kind == IrqSlotKind::MSIX)
+         return;
+ #if defined(CONFIG_ARCH_X86_64)
++    if (r.kind != IrqSlotKind::PIC)
++        return;
+     uint8_t irq_line = static_cast<uint8_t>(r.vector - 32U);
+     if (force_mask || r.line_was_masked) {
+         arch::ArchInterruptController::mask(irq_line);
+     }
+ #else
+-    (void)r;
+-    (void)force_mask;
++    if (r.kind != IrqSlotKind::PLATFORM)
++        return;
++    if (force_mask || r.line_was_masked) {
++        arch::ArchInterruptController::mask(r.vector);
++    }
+ #endif
+ }
+ 
+@@ -106,15 +114,25 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
+     // uniprocessor an IrqGuard is sufficient to make the find->claim window
+     // un-interleavable (same discipline as drain_zombie_list).
+     arch::IrqGuard irq_guard{};
++#if defined(CONFIG_ARCH_X86_64)
+     // Vector window (fail closed): PIC lines (33–47 = IRQ1–15) and MSI-X
+     // vectors (48–255 minus §1 reservations), issue #10.
+     if (vector < IRQ_VECTOR_MIN)
+         return -1;
+-    if (vector == static_cast<uint8_t>(arch::InterruptVector::SYSCALL))
+-        return -1; // 0x80 — §1 sole live gate, never an IRQ source
+     if (vector > MSIX_VECTOR_MAX)
+         return -1;
+-    // Timer vector must never be claimed (§1 scheduler tick, vector 32).
++#else
++    // Platform window (fail closed, issue #354): the cap window is the
++    // whole claim window off-x86 (MSI unsupported — no MSIX kind exists).
++    if (!arch::irq_cap_vector_valid(vector))
++        return -1;
++#endif
++    // SYSCALL/TIMER rejections use per-arch values and stay unconditional:
++    // riscv64 SYSCALL (= 2) lies INSIDE the PLIC window, so the check is
++    // load-bearing off-x86 (gating it x86-only would open vector 2).
++    if (vector == static_cast<uint8_t>(arch::InterruptVector::SYSCALL))
++        return -1; // §1 sole live gate, never an IRQ source
++    // Timer vector must never be claimed (scheduler tick).
+     if (vector == static_cast<uint8_t>(arch::InterruptVector::TIMER))
+         return -1;
+ #if defined(CONFIG_ARCH_X86_64)
+@@ -126,8 +144,15 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
+     if (vector == static_cast<uint8_t>(arch::APIC::APIC_TIMER_VECTOR) ||
+         vector == 0xFF) // arch::APIC::SPURIOUS_VECTOR (private member)
+         return -1;
++#else
++    // A vector with a live kernel handler is never claimable (single-owner).
++    // Non-x86 only: x86 entries_ are always populated (hardware IDT), so
++    // the probe is meaningless there — x86 keeps its explicit window +
++    // reservation checks above.
++    if (arch::IDT::has_handler(vector))
++        return -1;
+ #endif
+-    // Reject vectors claimed by the threaded-IRQ path (single-owner).
++    // Reject vectors claimed by the threaded-IRQ handler (single-owner).
+     if (IrqThread::for_vector(vector) != nullptr)
+         return -1;
+ 
+@@ -140,8 +165,12 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
+         IrqRegistration &r = g_irq_regs[i];
+         if (!r.occupied) {
+             r.vector = vector;
++#if defined(CONFIG_ARCH_X86_64)
+             r.kind = (vector <= IRQ_VECTOR_MAX) ? IrqSlotKind::PIC
+                                                 : IrqSlotKind::MSIX;
++#else
++            r.kind = IrqSlotKind::PLATFORM;
++#endif
+             r.occupied = true;
+             r.armed = false;
+             r.line_was_masked = true;
+@@ -174,6 +203,15 @@ bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
+     IrqRegistration *r = slot(reg_idx);
+     if (!r)
+         return false;
++#if !defined(CONFIG_ARCH_X86_64)
++    // IrqGuard BEFORE the slot lock (issue #354): unmasking a platform line
++    // while holding the slot lock would let this same line's ISR spin on
++    // that lock on the same CPU (GIC/PLIC permit higher-priority
++    // preemption). x86 keeps its exact prior ordering (lock only): x86 ISRs
++    // run with interrupts disabled, so no same-CPU reentry is possible
++    // there — widening its mask window would only add latency.
++    arch::IrqGuard irq_guard{};
++#endif
+     // All IRQ-state transitions serialize on the per-slot lock (header
+     // contract): re-validate occupied/armed AND ownership under the lock so a
+     // concurrent revoke/dispose/drain + slot reuse cannot arm a FOREIGN cap's
+@@ -210,6 +248,15 @@ bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
+         auto *msix = static_cast<cap::MsixCap *>(&owner);
+         msix->set_entry_masked(false);
+     }
++#else
++    // PLATFORM (issue #354): unmask the controller line.  MSIX-kind slots
++    // cannot exist off-x86 (MSI programming fails closed), so any other
++    // kind here is a state violation — fail closed.
++    if (r->kind != IrqSlotKind::PLATFORM)
++        return false;
++    r->line_was_masked =
++        !arch::ArchInterruptController::line_enabled(r->vector);
++    arch::ArchInterruptController::unmask(r->vector);
+ #endif
+     return true;
+ }
+@@ -282,6 +329,10 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
+     IrqRegistration *r = slot(reg_idx);
+     if (!r)
+         return false;
++#if !defined(CONFIG_ARCH_X86_64)
++    // Same IrqGuard-before-lock discipline as arm() (issue #354).
++    arch::IrqGuard irq_guard{};
++#endif
+     SpinLockGuard<sync::SpinLock> guard(r->lock_);
+     // Atomic ownership revalidation (issue #2): a slot drained at task death
+     // and REUSED for another cap/vector between an outer check and this call
+@@ -332,6 +383,11 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
+ }
+ 
+ void IrqDelivery::drain_task(TaskControlBlock &tcb) {
++#if !defined(CONFIG_ARCH_X86_64)
++    // Same IrqGuard-before-lock discipline as arm() (issue #354).  Bounded:
++    // CONFIG_CAP_MAX_IRQ iterations of lock-only work, no blocking.
++    arch::IrqGuard irq_guard{};
++#endif
+     for (size_t i = 0; i < static_cast<size_t>(CONFIG_CAP_MAX_IRQ); ++i) {
+         IrqRegistration &r = g_irq_regs[i];
+         SpinLockGuard<sync::SpinLock> guard(r.lock_);
+diff --git a/src/kernel/irq_delivery.hpp b/src/kernel/irq_delivery.hpp
+index 04116dc2a..7411d9bab 100644
+--- a/src/kernel/irq_delivery.hpp
++++ b/src/kernel/irq_delivery.hpp
+@@ -56,16 +56,23 @@ enum class IrqDeliveryMode : uint8_t {
+ /// (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore
+ /// state; MSI-X vectors (48–255) mask/unmask their table entry instead.  All
+ /// mask logic is gated on this kind — a MSI-X vector must never run the
+-/// PIC `vector - 32` line arithmetic (would mask the wrong IRQ line).
++/// `vector - 32` line arithmetic (it would mask a wrong IRQ line).  Issue
++/// #354 adds PLATFORM: off-x86 (GIC SPI / PLIC source) vectors mask/unmask
++/// the controller line directly (mask ownership: the delivery table owns the
++/// line for the arm lifetime; the storm limiter may mask independently and
++/// the table re-unmasks on release only when it unmasked at arm).
+ enum class IrqSlotKind : uint8_t {
+-    PIC = 0,  ///< legacy PIC line (vectors 33–47)
+-    MSIX = 1  ///< MSI-X table entry (vectors 48–255, != 0x80)
++    PIC = 0,    ///< legacy PIC line (vectors 33–47)
++    MSIX = 1,   ///< MSI-X table entry (vectors 48–255, != 0x80)
++    PLATFORM = 2 ///< GIC/PLIC line (aarch64 32–255, riscv64 1–95)
+ };
+ 
+ /// @brief One armed IRQ delivery registration.
+ struct IrqRegistration {
+-    uint8_t vector = 0;        ///< hardware vector (PIC 33–47 or MSI-X 48–255)
+-    IrqSlotKind kind = IrqSlotKind::PIC; ///< PIC vs MSI-X (kind-gated masks)
++    uint8_t vector = 0;        ///< hardware vector (PIC 33–47, MSI-X 48–255,
++                               ///< or PLATFORM: GIC 32–255 / PLIC 1–95)
++    IrqSlotKind kind = IrqSlotKind::PIC; ///< PIC vs MSI-X vs PLATFORM
++                                         ///< (kind-gated masks)
+     bool occupied = false;     ///< slot in use
+     bool armed = false;        ///< vector unmasked + delivering to recipient
+     bool line_was_masked = true; ///< PIC mask state of this line before arm
+diff --git a/src/kernel/syscall/syscall_handlers_irq.cpp b/src/kernel/syscall/syscall_handlers_irq.cpp
+index e2f26c569..e28392530 100644
+--- a/src/kernel/syscall/syscall_handlers_irq.cpp
++++ b/src/kernel/syscall/syscall_handlers_irq.cpp
+@@ -26,7 +26,8 @@
+ /// slots armed in NOTIFY mode (the driver must use sys_notify_wait instead).
+ /// All dereferences through a capability slot validated by cap::lookup.  Both
+ /// returns are -1 on any validation failure (reachable states, never ENSURE).
+-/// Non-x86_64 builds return -1 (no user-deliverable PIC vectors).
++/// Off-x86_64 the same machinery delivers GIC/PLIC platform lines via
++/// IrqSlotKind::PLATFORM (issue #354); MSI-X paths fail closed there.
+ 
+ #include <kernel/syscall/syscall.hpp>
+ #include <kernel/syscall/syscall_errors.hpp>
+@@ -46,8 +47,6 @@ cap::CNode *current_cspace();
+ 
+ namespace {
+ 
+-#if defined(CONFIG_ARCH_X86_64)
+-
+ /// @brief Looks up an IrqCap OR MsixCap in @p src (issue #10).  Both wrap a
+ ///        hardware vector that the delivery table can arm for user-space
+ ///        delivery via the same SYS_IRQ_REGISTER/SYS_IRQ_WAIT machinery.  No
+@@ -87,13 +86,10 @@ bool irq_like_fields(KernelObject *obj, bool is_msix, int16_t &reg_idx,
+     return reg_idx >= 0;
+ }
+ 
+-#endif // CONFIG_ARCH_X86_64
+-
+ } // namespace
+ 
+ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
+                                    uint64_t, uint64_t, uint64_t *) {
+-#if defined(CONFIG_ARCH_X86_64)
+     cap::CNode *src = current_cspace();
+     if (!src)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+@@ -141,16 +137,10 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
+ 
+     obj->release();
+     return static_cast<uint64_t>(errors::SYS_ERR_OK);
+-#else
+-    (void)cap_handle;
+-    (void)arg1;
+-    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+-#endif
+ }
+ 
+ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
+                                uint64_t, uint64_t *) {
+-#if defined(CONFIG_ARCH_X86_64)
+     cap::CNode *src = current_cspace();
+     if (!src)
+         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+@@ -264,10 +254,6 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
+     }
+     obj->release();
+     return result;
+-#else
+-    (void)cap_handle;
+-    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+-#endif
+ }
+ 
+ } // namespace kernel
+diff --git a/test-history.txt b/test-history.txt
+index aca3205f0..92821e827 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4343,3 +4343,8 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 09:46:49 drivers PASSED: 57 FAILED: 1 TIME: 18s STATUS: sliceA-aarch64-known-#391
+ 2026-10-21 09:46:49 drivers PASSED: 56 FAILED: 2 TIME: 27s STATUS: sliceA-riscv64-known-#391x2
+ 2026-10-21 09:46:49 drivers PASSED: 107 FAILED: 0 TIME: 36s
++2026-10-21 10:02:08 capability PASSED: 155 FAILED: 0 TIME: 39s STATUS: sliceB-x86_64
++2026-10-21 10:02:08 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 24s STATUS: sliceB-aarch64
++2026-10-21 10:02:08 hal PASSED: 57 FAILED: 0 TIME: 16s STATUS: sliceB-aarch64
++2026-10-21 10:02:08 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 27s STATUS: sliceB-riscv64-known-#385x5-#387
++2026-10-21 10:02:08 hal PASSED: 56 FAILED: 1 TIME: 19s STATUS: sliceB-riscv64-known-#388

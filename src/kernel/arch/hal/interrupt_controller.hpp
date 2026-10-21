@@ -91,6 +91,21 @@ class ArchInterruptController {
         return s;
     }
 
+    /// @brief Highest user-observable vector (PIC window, issue #354).
+    /// @return 47 (vectors 33–47 are IRQ1–15; MSI-X handled separately).
+    static inline uint16_t max_vector() {
+        return 47;
+    }
+
+    /// @brief True when PIC line @p irq (0–15) is currently unmasked.
+    /// @param irq IRQ line number (out-of-range reads false).
+    static inline bool line_enabled(uint8_t irq) {
+        if (irq >= 16)
+            return false;
+        uint16_t port = (irq < 8) ? arch::PIC1_DATA : arch::PIC2_DATA;
+        return (inb(port) & static_cast<uint8_t>(1u << (irq & 7u))) == 0;
+    }
+
     /// @brief Restore a previously saved PIC mask state.
     /// @param state The IrqState to restore.
     static inline void restore(const IrqState &state) {
@@ -118,6 +133,10 @@ class ArchInterruptController {
     static void unmask(uint8_t irq);
     static IrqState snapshot();
     static void restore(const IrqState &state);
+    /// @brief Highest programmed INTID (TYPER-clamped window − 1, ≤ 255).
+    static uint16_t max_vector();
+    /// @brief True when INTID @p irq is currently enabled (ISENABLER bit).
+    static bool line_enabled(uint8_t irq);
 };
 
 /// @brief Redistributor wake state (issue #198): true when the GICv3
@@ -146,6 +165,10 @@ class ArchInterruptController {
     static void unmask(uint8_t irq);
     static IrqState snapshot();
     static void restore(const IrqState &state);
+    /// @brief Highest PLIC source (PLIC_MAX_SOURCES − 1).
+    static uint16_t max_vector();
+    /// @brief True when PLIC source @p irq is enabled in S-context.
+    static bool line_enabled(uint8_t irq);
 };
 
 /// @cond

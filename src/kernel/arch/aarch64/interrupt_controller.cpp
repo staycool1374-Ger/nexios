@@ -1,4 +1,5 @@
 #include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/irq_delivery.hpp>
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/idt.hpp>
@@ -200,6 +201,22 @@ IrqState ArchInterruptController::snapshot() {
     return s;
 }
 
+uint16_t ArchInterruptController::max_vector() {
+    // Same clamp as init(): ITLinesNumber+1 banks, max 256 INTIDs.
+    volatile uint32_t *d = gicd_reg(0);
+    uint32_t it_lines = (d[GICD_TYPER / 4] & 0x1FU) + 1;
+    uint32_t window = it_lines * 32;
+    if (window > GIC_MAX_INTID) {
+        window = GIC_MAX_INTID;
+    }
+    return static_cast<uint16_t>(window - 1);
+}
+
+bool ArchInterruptController::line_enabled(uint8_t irq) {
+    // uint8_t is always < GIC_MAX_INTID (256) by construction.
+    return (gicd_reg(GICD_ISENABLER)[irq / 32] & (1U << (irq % 32))) != 0;
+}
+
 void ArchInterruptController::restore(const IrqState &state) {
     for (uint32_t w = 0; w < 8; ++w) {
         gicd_reg(GICD_ICENABLER)[w] = 0xFFFFFFFF;
@@ -245,7 +262,11 @@ extern "C" void handle_gic_irq(void) {
         } else {
             uint64_t elr{};
             asm volatile("mrs %0, elr_el1" : "=r"(elr));
-            IDT::handle_interrupt(intid, 0, elr);
+            // User-space delivery (issue #354): a consumed vector skips the
+            // generic handler; EOI stays single-choked at the tail below.
+            if (!kernel::IrqDelivery::isr_entry(static_cast<uint8_t>(intid))) {
+                IDT::handle_interrupt(intid, 0, elr);
+            }
         }
     }
     // INTIDs >= 256 cannot occur (uint8_t dispatch window); ignore.

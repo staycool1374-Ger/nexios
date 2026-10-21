@@ -23,6 +23,7 @@
 /// at create() time (single-owner per vector) and released at dispose/revoke.
 
 #include <kernel/cap/irq.hpp>
+#include <kernel/arch/hal/irq_vectors.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/test/resource_tracker.hpp>
@@ -39,12 +40,12 @@ namespace kernel::cap {
 static uint32_t g_live_irqs = 0;
 
 IrqCap *IrqCap::create(uint8_t vector) {
-    // IrqCap wraps legacy PIC vectors ONLY (issue #2): vectors 48-255 are the
-    // MSI-X window claimed by MsixCap (issue #10).  claim_slot() now accepts
-    // both windows (PIC + MSI-X share the single-owner delivery table), so
-    // the PIC-window contract is enforced here — an IrqCap must never wrap an
-    // MSI-X vector.
-    if (vector < 33 || vector > 47)
+    // IrqCap wraps platform IRQ lines (issue #2 on x86: legacy PIC lines
+    // 33–47; issue #354: GIC SPI 32–255 / PLIC 1–95). Vectors outside the
+    // cap window belong to MsixCap on x86_64 (issue #10) or are rejected —
+    // claim_slot() enforces the same window plus single-owner, threaded-IRQ
+    // overlap and handler checks, so this is the fast-path reject.
+    if (!arch::irq_cap_vector_valid(vector))
         return nullptr;
 
     if (__atomic_load_n(&g_live_irqs, __ATOMIC_RELAXED) >=

@@ -1,4 +1,5 @@
 #include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/irq_delivery.hpp>
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/riscv64/hal/plic.hpp>
@@ -99,6 +100,18 @@ void ArchInterruptController::restore(const IrqState &state) {
     asm volatile("fence iorw, iorw" : : : "memory");
 }
 
+uint16_t ArchInterruptController::max_vector() {
+    return static_cast<uint16_t>(PLIC_MAX_SOURCES - 1);
+}
+
+bool ArchInterruptController::line_enabled(uint8_t irq) {
+    if (irq == 0 || irq >= PLIC_MAX_IRQ) {
+        return false;
+    }
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
+    return (enable[irq / 32] & (1U << (irq % 32))) != 0;
+}
+
 extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
                                  uint64_t *regs) {
     (void)regs;
@@ -130,7 +143,13 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
                     kernel::log::LogSeverity::ERROR,
                     "irq storm masked", intid);
             } else {
-                IDT::handle_interrupt(intid, 0, sepc);
+                // User-space delivery (issue #354): a consumed vector skips
+                // the generic handler; plic_complete_s stays single-choked
+                // at the tail below.
+                if (!kernel::IrqDelivery::isr_entry(
+                        static_cast<uint8_t>(intid))) {
+                    IDT::handle_interrupt(intid, 0, sepc);
+                }
             }
             g_last_acked = intid;
             plic_complete_s(intid);

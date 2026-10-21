@@ -73,4 +73,13 @@ void IDT::handle_interrupt(uint64_t vector, uint64_t error_code, uint64_t pc) {
     }
 }
 
+/// @brief Check whether a handler is registered for a vector.
+/// @param vec Vector index (bounds-checked; out-of-range is false).
+/// @return true when a non-null handler is registered.
+bool IDT::has_handler(size_t vec) {
+    if (vec >= NUM_ENTRIES)
+        return false;
+    return handlers_[vec] != nullptr;
+}
+
 } // namespace arch
