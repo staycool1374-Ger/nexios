@@ -76,12 +76,11 @@ default_exception:
     ldp     x0, x1, [sp], #16
     eret
 
-// EL1 sync unexpected-fault handler (issue #214).  The old behavior routed
-// these slots through default_exception, which silently skipped the faulting
-// instruction (ELR+=4, no log) — masking kernel bugs (issue #209: 36 faulting
-// frame-build stores became no-ops with zero output).  Now: record
-// ESR/FAR/ELR, call the C handler (dumps + panics in debug builds), and on
-// return (release builds) fall through to the legacy skip epilogue.
+// EL1 sync unexpected-fault handler (issue #214, first-chance path issue
+// #308).  Records ESR/FAR/ELR, then calls the C handler with (esr, far,
+// elr, sp).  On non-recovery the handler halts; a nonzero return used to
+// take the legacy ELR+=4 skip (now removed: silent continuation after a
+// kernel fault is a correctness violation).  Any return here parks.
 .type el1_sync_unexpected, @function
 el1_sync_unexpected:
     stp     x0, x1, [sp, #-16]!
@@ -96,22 +95,24 @@ el1_sync_unexpected:
     mrs     x2, elr_el1
     adrp    x3, g_debug_elr
     str     x2, [x3, #:lo12:g_debug_elr]
-    // Marshal (esr, far, elr) into x0-x2 for the C handler.
+    // Marshal (esr, far, elr, sp) into x0-x3 for the C handler. The three
+    // pushes above consumed 40 bytes, so the faulting SP is sp+40 (issue
+    // #308: clobbers x3 only after x2/x3 were saved).
     mrs     x0, esr_el1
     mrs     x1, far_el1
     mrs     x2, elr_el1
+    mov     x3, sp
+    add     x3, x3, #40
     bl      aarch64_el1_unexpected_fault
     // x0 == 0: fault recovery applied (ELR_EL1 already redirected by the
     // C handler, issue #235) — restore and eret WITHOUT the legacy skip.
     cbz     x0, .Lel1_recovered
-    // Release return path (debug panics, never returns): restore and skip.
-    ldr     x30, [sp], #16
-    ldp     x2, x3, [sp], #16
-    mrs     x0, elr_el1
-    add     x0, x0, #4
-    msr     elr_el1, x0
-    ldp     x0, x1, [sp], #16
-    eret
+    // Non-recovery return (the C handler halts in production; this parks
+    // the test seam): DAIF-set + wfi loop, never the ELR+=4 skip.
+    msr     daifset, #2
+1:
+    wfi
+    b       1b
 .Lel1_recovered:
     ldr     x30, [sp], #16
     ldp     x2, x3, [sp], #16

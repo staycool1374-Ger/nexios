@@ -30,6 +30,8 @@
 #include <kernel/elf/elf.hpp>
 #include <initrd/initrd.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/debug/crash_dump.hpp>
+#include <kernel/log/ring_buffer.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -256,6 +258,43 @@ JARVIS_TEST(exception_name_reserved_lookup, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: issue #308 — the x86 kernel-fault tail emits the raw
+// first-chance frame BEFORE any Logger use: drive handle_interrupt_c with
+// a synthetic #GP(13) in kernel mode (probe override disarmed), seam
+// armed, klog drained.
+// Input: vector 13, kernel CS, synthetic RIP; seam armed.
+// Expect: halt seam reached exactly once; frame pc == RIP, sp == 0
+// (kernel CS: no pushed RSP); klog read length 0 (no Logger formatting
+// before the raw dump).
+// Depends: handle_interrupt_c generic tail, crash_dump seam (issue #308)
+// CONFIG_DEBUG-only: arms the debug halt seam.
+#if CONFIG_DEBUG
+JARVIS_TEST(first_chance_kernel_fault_ordering, "PRE: none | POST: none") {
+    uint64_t regs[22] = {};
+    regs[17] = 0x1234ULL; // RIP
+    regs[18] = 0x8;       // CS (kernel)
+    g_probe_armed = false;
+    kernel::debug::test_reset_crash_halt();
+    kernel::debug::test_arm_crash_halt();
+    size_t klog_len = 0;
+    {
+        arch::IrqGuard guard;
+        kernel::log::KlogService::instance().clear();
+        handle_interrupt_c(13, 0xCCULL, regs[17], regs, 0);
+        char drain[64];
+        klog_len = kernel::log::KlogService::instance().read(drain,
+                                                             sizeof(drain));
+    }
+    JARVIS_ASSERT(kernel::debug::test_crash_halt_count() == 1);
+    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
+    JARVIS_ASSERT(f.pc == 0x1234ULL && f.sp == 0);
+    JARVIS_ASSERT(klog_len == 0);
+    kernel::debug::test_reset_crash_halt();
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_DEBUG (first-chance seam test)
+
 void register_exc_table_tests() {
     Logger::info("Registering exception-table tests");
 
@@ -263,5 +302,8 @@ void register_exc_table_tests() {
     JARVIS_REGISTER_TEST(ve_cp_frame_layout);
     JARVIS_REGISTER_TEST(reserved_vec_panics);
     JARVIS_REGISTER_TEST(exception_name_reserved_lookup);
+#if CONFIG_DEBUG
+    JARVIS_REGISTER_TEST(first_chance_kernel_fault_ordering);
+#endif
 }
 #endif // CONFIG_ARCH_X86_64

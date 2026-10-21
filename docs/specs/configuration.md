@@ -42,6 +42,7 @@ each defining the shared tunables plus arch-specific ones.  Categories:
 | `CONFIG_HAS_FPU` | 1 | 1 | 1 |
 | `CONFIG_HAS_*` | RDRAND, APIC | GIC | PLIC, SBI |
 | `CONFIG_HAS_MPU` / `CONFIG_HAS_HPET` | 0 | 0 | 0 |
+| `CONFIG_TCG_BARRIERS` (issue #309b) | n/a | 1 = TCG-safe dmb sy (default); 0 = silicon dsb sy, flip gated on #397 | n/a |
 
 **Rule (check-config enforces):** exactly one `CONFIG_ARCH_*` is active per
 build; `CONFIG_PAGE_SIZE`/`CONFIG_HHDM_OFFSET`/`CONFIG_USER_SPACE_LIMIT` must
@@ -191,6 +192,8 @@ Other actions must pass the class normally.  Kills leftover QEMU between runs.
 5. `CONFIG_IPC_MAX_MSG_SIZE` ≥ `sizeof(vfsd::Msg)` (64, fixed).
 6. `CONFIG_SYSCALL_COUNT` consistent with the enabled `CONFIG_INCLUDE_SYS_*`.
 7. `CONFIG_THREADED_IRQS` ⇒ `CONFIG_MAX_THREADED_IRQS` ≥ active vectors.
+8. `CONFIG_TCG_BARRIERS` ∈ {0,1} (only aarch64 consumes it; the value is
+   inert elsewhere).
 
 ## 4. Matrix Semantics (what each dimension changes at runtime)
 

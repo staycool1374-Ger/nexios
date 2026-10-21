@@ -21,18 +21,21 @@
 
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/hal/io.hpp>
+#include <kernel/arch/riscv64/hal/uart.hpp>
 #include <types.hpp>
 
 namespace arch {
 
-/// @brief QEMU virt 16550A UART base (issue #247): raw physical address,
-///        directly dereferenceable in S-mode (riscv64 low half is
-///        identity-mapped — same precedent as the PLIC accessors and the
-///        LSR probe in test_riscv64.cpp).
-static constexpr uint64_t RISCV_UART_BASE = 0x10000000ULL;
-static constexpr uint64_t RISCV_UART_RBR_OFF = 0;
-static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
-static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
+/// @brief UART register literals live in hal/uart.hpp (issue #387: single
+///        arch-owned source shared with the arch tests).  Aliases below
+///        keep this TU's call sites untouched.
+static constexpr uint64_t RISCV_UART_BASE = UART0_BASE;
+static constexpr uint64_t RISCV_UART_RBR_OFF = UART_RBR_OFF;
+static constexpr uint64_t RISCV_UART_IER_OFF = UART_IER_OFF;
+static constexpr uint64_t RISCV_UART_LCR_OFF = UART_LCR_OFF;
+static constexpr uint64_t RISCV_UART_MCR_OFF = UART_MCR_OFF;
+static constexpr uint64_t RISCV_UART_LSR_OFF = UART_LSR_OFF;
+static constexpr uint8_t RISCV_UART_LSR_DATA_READY = UART_LSR_DATA_READY;
 static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
 
 /// @brief Number of characters written to the console since boot.
@@ -43,7 +46,8 @@ static volatile uint64_t s_serial_write_count = 0;
 /// @brief Initialize the serial port (no-op on RISC-V64).
 /// The virt 16550A divisor is pre-initialized by OpenSBI/QEMU;
 /// reprogramming it risks breaking the S-mode SBI TX path, so RX-only
-/// polling attaches to the live configuration (issue #247).
+/// polling attaches to the live configuration (issue #247). The kernel
+/// never writes IER — RX is polled, never interrupt-driven.
 void Serial::init() {
 }
 
@@ -115,6 +119,54 @@ bool Serial::poll_getchar(char &c) {
 void Serial::puts(const char *s) {
     while (*s)
         putchar(*s++);
+}
+
+/// @brief 16550A register snapshot for init-state assertions (issue #355).
+/// Read-only: four MMIO byte reads, no writes, no side effects.
+Serial::Uart16550Snapshot Serial::uart_snapshot() {
+    Uart16550Snapshot snap{};
+    const volatile void *ier_addr = reinterpret_cast<const volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_IER_OFF);
+    const volatile void *lcr_addr = reinterpret_cast<const volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_LCR_OFF);
+    const volatile void *mcr_addr = reinterpret_cast<const volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_MCR_OFF);
+    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
+    snap.ier = arch::mmio_read8(ier_addr);
+    snap.lcr = arch::mmio_read8(lcr_addr);
+    snap.mcr = arch::mmio_read8(mcr_addr);
+    snap.lsr = arch::mmio_read8(lsr_addr);
+    return snap;
+}
+
+/// @brief Raw MCR read (loopback setup observes the pre-test value).
+uint8_t Serial::uart_mcr() {
+    const volatile void *mcr_addr = reinterpret_cast<const volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_MCR_OFF);
+    return arch::mmio_read8(mcr_addr);
+}
+
+/// @brief Raw MCR write (test-only loopback control; production never
+///        calls it — TX stays on the SBI path).
+void Serial::uart_mcr_set(uint8_t value) {
+    volatile void *mcr_addr = reinterpret_cast<volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_MCR_OFF);
+    arch::mmio_write8(mcr_addr, value);
+}
+
+/// @brief Drain the RX FIFO (bounded 16 reads — the 16550 FIFO depth).
+void Serial::uart_drain_rx() {
+    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
+    const volatile void *rbr_addr = reinterpret_cast<const volatile void *>(
+        RISCV_UART_BASE + RISCV_UART_RBR_OFF);
+    for (int idx = 0; idx < 16; ++idx) {
+        if ((arch::mmio_read8(lsr_addr) & RISCV_UART_LSR_DATA_READY) == 0)
+            break;
+        (void)arch::mmio_read8(rbr_addr);
+        arch::pause();
+    }
 }
 
 } // namespace arch

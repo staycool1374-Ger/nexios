@@ -1,0 +1,92 @@
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index fb849db99..332ef8026 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -1123,14 +1123,37 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     {
+         uint64_t tag_addr = mb2_find_tag(6);
+         if (tag_addr) {
++            // Issue #305: fail-closed tag6 validation. The tag's own size
++            // is untrusted (entry_size 0 = div-by-zero, size below the
++            // header = underflow, entries overrunning into adjacent tags),
++            // and each region is untrusted (base+length wraparound would
++            // corrupt the max-end PMM sizing below). Rejects skip without
++            // adding — never truncate, never clamp a region to fit.
++            auto *info = reinterpret_cast<Multiboot2Info *>(
++                kernel::gs::get_multiboot_info_ptr());
++            uint64_t info_end =
++                kernel::gs::get_multiboot_info_ptr() + info->total_size;
++            uint64_t avail =
++                (info_end > tag_addr) ? (info_end - tag_addr) : 0;
+             // NOLINTNEXTLINE(performance-no-int-to-ptr)
+             auto *mem_tag = reinterpret_cast<MemoryMapTag *>(tag_addr);
+-            uint64_t entries =
+-                (mem_tag->size - sizeof(MemoryMapTag)) / mem_tag->entry_size;
++            uint64_t entries = mb2_mmap_validated_count(mem_tag, avail);
++            if (entries == 0) {
++                debug_write("[BOOT] tag6 has no usable entries "
++                            "(malformed or empty)\n");
++            }
+             for (uint64_t i = 0; i < entries; ++i) {
+                 auto &entry = mem_tag->entries[i];
++                if (entry.length == 0) {
++                    debug_write("[BOOT] tag6 entry skipped (zero length)\n");
++                    continue;
++                }
++                if (entry.base_addr + entry.length < entry.base_addr) {
++                    debug_write("[BOOT] tag6 entry skipped (overflow)\n");
++                    continue;
++                }
+                 kernel::gs::boot_info().add_region(entry.base_addr, entry.length,
+-                                       entry.type);
++                                        entry.type);
+             }
+         }
+     }
+diff --git a/src/kernel/multiboot2.hpp b/src/kernel/multiboot2.hpp
+index 46284e5fc..9f5154acd 100644
+--- a/src/kernel/multiboot2.hpp
++++ b/src/kernel/multiboot2.hpp
+@@ -117,3 +117,30 @@ inline uint64_t mb2_find_tag(uint32_t type) {
+     }
+     return 0;
+ }
++
++/// @brief Validated tag6 (memory map) entry count (issue #305): fail-closed
++///        descriptor validation. Returns 0 (= reject the whole tag) when the
++///        tag cannot be strided safely: entry_size 0 (div-by-zero), size
++///        smaller than the header (underflow), entry_size not equal to the
++///        spec 24-byte entry, or no room for one entry inside the multiboot
++///        info structure. Otherwise returns the entry count clamped by BOTH
++///        the tag's own size and the info-remaining bytes, so entries never
++///        overrun into adjacent tags. Pure (no kernel deps) — QE-unit-testable.
++/// @param tag Tag header (already located by mb2_find_tag).
++/// @param bytes_available Info-remaining bytes at the tag (0 at/over end).
++/// @return Usable entry count, or 0 to reject the tag.
++inline uint64_t mb2_mmap_validated_count(const MemoryMapTag *tag,
++                                         uint64_t bytes_available) {
++    if (tag->entry_size != sizeof(MemoryMapEntry))
++        return 0;
++    if (tag->size < sizeof(MemoryMapTag))
++        return 0;
++    if (bytes_available <= sizeof(MemoryMapTag))
++        return 0;
++    uint64_t by_size = (tag->size - sizeof(MemoryMapTag)) / tag->entry_size;
++    uint64_t room = bytes_available;
++    if (room > tag->size)
++        room = tag->size;
++    uint64_t by_avail = (room - sizeof(MemoryMapTag)) / tag->entry_size;
++    return (by_size < by_avail) ? by_size : by_avail;
++}
+diff --git a/test-history.txt b/test-history.txt
+index 58299de39..2671b16ff 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4414,3 +4414,7 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 18:17:33 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 657ms
+ 2026-10-21 18:18:07 selftest PASSED: 148 FAILED: 0 TIME: 11878ms
+ 2026-10-21 18:24:34 selftest PASSED: 87 FAILED: 0 TIME: 3155ms STATUS: release
++2026-10-21 18:43:48 selftest PASSED: 148 FAILED: 0 TIME: 11653ms
++2026-10-21 18:43:48 init PASSED: 0 FAILED: 0 TIME: 0ms STATUS: invalid-class-name-use-task_init
++2026-10-21 18:44:13 task_init PASSED: 5 FAILED: 0 TIME: 333ms
++2026-10-21 18:47:20 task_init PASSED: 5 FAILED: 0 TIME: 331ms STATUS: post-S3-reword

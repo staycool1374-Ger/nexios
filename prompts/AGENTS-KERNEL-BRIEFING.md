@@ -78,6 +78,7 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
 - Incremental: x86_64 release interactive reuses existing ISO if present (skip rebuild)
 - Arch switching via `make run-*-mode <new-arch>` triggers `make clean` automatically via `check-arch` stamp
 - Positional arguments consumed by match-all `%:: @true` at end of Makefile
+- Per-arch gates (issue #357): the Makefile owns `TEST_FULL_CLASSES_<arch>` / `SELFTEST_CLASSES_<arch>` (measured-only green lists); `make test-full` consumes them via `NEXIOS_TEST_CLASSES` (loud error when missing); `selftest` boots one class per `SELFTEST_CLASSES` entry off-x86 (`safe` on x86); baked release configs live at `build/.baked-test-config-<arch>` and are asserted before QEMU (never boot a stale suite).
 
 **Examples:**
 ```
@@ -103,6 +104,7 @@ make execute-test x86 release selftest    # CI gate
 - `Terminal::write()` → `serial_putchar()` FIRST, THEN framebuffer rendering
 - STATUS_BAR_ROWS=2, `rows_ = (height / FONT_HEIGHT) - 2`
 - **Avoid pixel-by-pixel framebuffer loops in performance-critical paths**
+- Framebuffer backend contract (issue #394, replaces the #357 gap): `Framebuffer::backend_name()` is runtime-selected — `"multiboot2"` on x86_64, else virtio-gpu → ramfb → `"none"`. `available()==false` + exactly one WARN only when no backend claims the init; 1280×800×32 PMM backing (boot-time, pre-baseline) with dirty-row `present()` flushes. Gap runs (`QEMU_FB_GPU= QEMU_FB_RAMFB=`) keep the #357 contract: tests branch on `available()` and assert the gap — never silently skip.
 
 ## 8. Task TCB (TaskControlBlock)
 - Fields: id, parent_id, state, priority, base_priority, period_ticks, deadline_ticks, remaining_ticks
@@ -172,6 +174,8 @@ make execute-test x86 release selftest    # CI gate
 18. **riscv64 SPP is stale for nested traps** — it records trapped-from, so a nested S-tick inside a U-handler takes the U path over the live frame. `csrci sstatus, 2` as the first trap insn (needs no scratch) forbids nesting, making SPP provably fresh; `sret` restores SIE from SPIE so U-ticks survive (issue #206, closes #219 entry aspect; return-window aspect still open).
 19. **TCG wall-clock variance is a known limitation, not a kernel bug** — under QEMU TCG the PIT/APIC/bus/TSC virtual clocks diverge from each other and from host wall (ns up to ~4x fast, ticks ~0.8x wall, cal 250–670 MHz across boots; issue #359, decided DOCUMENT): no boot scalar or tick-servo can be wall-true for all regimes (no sub-second in-guest wall reference; workload-dependent TSC rate). Kernel timeouts are self-consistent (single-domain). Accuracy gate is KVM/HW; TCG `hrt_wall_accuracy_bound` warn-skips on hypervisor. `OVERALL_CAP_S` stays 3600 (not re-tightened without proof). Suite summaries carry `TSC_CYCLES` (TSC never rewinds, unlike snapshot-rewound `ticks_`) for host-side analysis. Per-arch (#384, 2026-10-19): aarch64 (cntpct_el0 @ 62.5 MHz) and riscv64 (rdtime @ 10 MHz) show the same TCG unenforceability (wall bound +28%/+27.6% over, strict assert fails where x86 warn-skips — no CPUID hypervisor equivalent off-x86, QE-owned skip design); bare metal is the only quality gate on all arches, no TCG accuracy enforcement anywhere. `timing_core` off-x86 is blocked by the #356 task-spawn fault (ELR/sepc=0 at first test-task spawn, daemons degraded).
 20. **Off-x86 IRQ/timer contracts (issue #349)** — PLIC S-mode context is 1 (`0x0C002080` enable / `0x0C201000` threshold; M-context 0 belongs to OpenSBI, never program it); GICv2 SPIs need ITARGETSR=CPU0 (reset targets are not CPU0) and ICFGR edge only for virtio-mmio (48–79); version from GICD_PIDR2, never TYPER[15:11]. Timer `oneshot`/`periodic` args are coarse ticks at `BootParams::timer_hz` (absolute CVAL/SBI deadlines internally); `remaining()` is coarse ceil gated on the enable bit; riscv64 `remaining*` are hard 0 by S-mode hardware constraint.
+21. **Console/RTC/input parity (issue #355)** — riscv RTC is goldfish (`google,goldfish-rtc`) when the DTB provides it, mtime uptime fallback (epoch 1970) otherwise — check `RTC::source_name()`; `L0[0]` on riscv is explicit leaves plus one 4 KiB RTC page, **not** a blanket identity map (VA 0 still faults); console input on aarch64/riscv flows decoder-first (`Keyboard::pump_serial` + ring) then raw Serial; PL011 has no loopback mode (riscv MCR bit 4 only, debug-only, restore unconditionally).
+22. **aarch64 barriers are build-gated (issue #309b)** — `CONFIG_TCG_BARRIERS=1` (default) makes `arch::system_barrier()` emit `dmb sy` for QEMU; `=0` emits `dsb sy` for silicon (proof: #397). `dsb_sy()` is unconditional `dsb sy` and was never substituted. Never flip the default without #397's RPi4 evidence; the macro is rejected unless 0/1.
 
 ## 13. Enforcement Rules (MANDATORY — violations halt and require human input)
 

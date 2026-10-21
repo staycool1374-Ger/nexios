@@ -671,7 +671,10 @@ bool finalize_user_tcb_tail(TaskControlBlock *tcb, const ELF64Header *hdr,
     __builtin_memset(stack, 0, 37 * 8);
     stack[1] = user_rsp;              // OFF_SP (X2)
     stack[31] = hdr->entry;           // OFF_SEPC
-    stack[32] = (1ULL << 5);          // SSTATUS: SPIE=1, SPP=0 (U-mode)
+    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: loaded
+    // images may use FP from the first instruction; sret restores FS
+    // from this slot).
+    stack[32] = (1ULL << 5) | (3ULL << 13);
     tcb->context.sp = reinterpret_cast<uint64_t>(stack);
 #endif
 
@@ -905,7 +908,10 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // Issue #206 M2: rewrite the live trap frame slots (syscall_entry.S
     // OFF_*: SP=idx1, SEPC=idx31, SSTATUS=idx32, A0=idx9).
     regs[31] = hdr->entry;  // SEPC
-    regs[32] = (1ULL << 5); // SSTATUS: SPIE=1, SPP=0 (U-mode)
+    // SSTATUS: SPIE=1, SPP=0 (U-mode) + FS=11b (issue #353: the exec'd
+    // image may use FP from its first instruction, and sret restores FS
+    // from this slot — FS=0 would fault it immediately).
+    regs[32] = (1ULL << 5) | (3ULL << 13);
     regs[1] = user_rsp;     // OFF_SP
     regs[9] = 0;            // A0 = 0 (child/exec return value)
 #endif

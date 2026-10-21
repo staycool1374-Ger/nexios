@@ -45,13 +45,28 @@ struct PciBdf {
 // ---------------------------------------------------------------------------
 // Architecture-specific PCI config space access
 //   x86_64: CF8/CFC port I/O (0xCF8 / 0xCFC)
-//   aarch64 / riscv64: ECAM memory-mapped (QEMU virt aarch64 at 0x3f000000)
+//   aarch64: ECAM memory-mapped (QEMU virt pcie-ecam at 0x4010000000,
+//            issue #216)
+//   riscv64: ECAM memory-mapped (QEMU virt pcie-ecam at 0x30000000,
+//            issue #29)
 //
 // All access functions work on dword-aligned addresses internally, matching
 // the x86 CF8/CFC semantics where bits [1:0] of the register offset select
 // the byte/word within the dword.  This ensures identical behavior across
 // all architectures.
 // ---------------------------------------------------------------------------
+
+/// @brief True when the platform programs MSI/MSI-X into PCI devices.
+/// @return x86_64 only. aarch64 (GICv2, no ITS) and riscv64 (PLIC, no MSI
+/// endpoint) fail MSI programming closed and deliver via INTx/platform
+/// lines (documented gap, issue #354 Q1).
+inline constexpr bool pci_msi_supported() {
+#if defined(CONFIG_ARCH_X86_64)
+    return true;
+#else
+    return false;
+#endif
+}
 
 #if defined(CONFIG_ARCH_X86_64)
 
@@ -152,6 +167,10 @@ namespace arch {
 #endif
 /// @brief ECAM base address for memory-mapped PCI config space.
 constexpr uint64_t PCI_ECAM_BASE = CONFIG_PCI_ECAM_BASE;
+
+/// @brief ECAM window size (256 buses x 32 dev x 8 fn x 4 KiB).
+/// QEMU virt maps one 256 MiB pcie-ecam region per arch.
+constexpr uint64_t PCI_ECAM_WINDOW_SIZE = 0x10000000ULL;
 
 /// @brief Build a PCI configuration address from BDF and register offset (ECAM
 /// format).

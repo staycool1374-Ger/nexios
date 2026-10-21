@@ -1,4 +1,5 @@
 #include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/irq_delivery.hpp>
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/riscv64/hal/plic.hpp>
@@ -8,6 +9,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/debug/debug_stop.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <signal.hpp>
 
@@ -99,6 +101,18 @@ void ArchInterruptController::restore(const IrqState &state) {
     asm volatile("fence iorw, iorw" : : : "memory");
 }
 
+uint16_t ArchInterruptController::max_vector() {
+    return static_cast<uint16_t>(PLIC_MAX_SOURCES - 1);
+}
+
+bool ArchInterruptController::line_enabled(uint8_t irq) {
+    if (irq == 0 || irq >= PLIC_MAX_IRQ) {
+        return false;
+    }
+    auto *enable = reinterpret_cast<volatile uint32_t *>(PLIC_ENABLE_S);
+    return (enable[irq / 32] & (1U << (irq % 32))) != 0;
+}
+
 extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
                                  uint64_t *regs) {
     (void)regs;
@@ -130,7 +144,13 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
                     kernel::log::LogSeverity::ERROR,
                     "irq storm masked", intid);
             } else {
-                IDT::handle_interrupt(intid, 0, sepc);
+                // User-space delivery (issue #354): a consumed vector skips
+                // the generic handler; plic_complete_s stays single-choked
+                // at the tail below.
+                if (!kernel::IrqDelivery::isr_entry(
+                        static_cast<uint8_t>(intid))) {
+                    IDT::handle_interrupt(intid, 0, sepc);
+                }
             }
             g_last_acked = intid;
             plic_complete_s(intid);
@@ -138,71 +158,16 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
     }
 }
 
+/// @brief S-mode kernel-fault handler (issue #308 first-chance path):
+///        raw register frame over SBI console transport, then halt - no
+///        Logger formatting (Logger may be the casualty), no recovery, no
+///        SBI shutdown (preserves post-mortem). Transport stays raw SBI
+///        console_putchar (a7=1), extended with SP + SATP.
 extern "C" void handle_kernel_exception(uint64_t sepc, uint64_t scause,
-                                        uint64_t stval) {
-    const char msg[] = {'[', 'E', 'X', 'C', ']', ' ', 's',
-                        'c', 'a', 'u', 's', 'e', '=', 0};
-    for (const char *p = msg; *p; ++p) {
-        uint64_t ch = (unsigned char)*p;
-        asm volatile("mv a0, %0; li a7, 1; ecall"
-                     :
-                     : "r"(ch)
-                     : "a0", "a7", "memory");
-    }
-    uint64_t v = scause;
-    for (int i = 60; i >= 0; i -= 4) {
-        uint64_t nibble = (v >> i) & 0xF;
-        char c = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
-        uint64_t ch = (unsigned char)c;
-        asm volatile("mv a0, %0; li a7, 1; ecall"
-                     :
-                     : "r"(ch)
-                     : "a0", "a7", "memory");
-    }
-    const char msg2[] = {' ', 's', 'e', 'p', 'c', '=', 0};
-    for (const char *p = msg2; *p; ++p) {
-        uint64_t ch = (unsigned char)*p;
-        asm volatile("mv a0, %0; li a7, 1; ecall"
-                     :
-                     : "r"(ch)
-                     : "a0", "a7", "memory");
-    }
-    v = sepc;
-    for (int i = 60; i >= 0; i -= 4) {
-        uint64_t nibble = (v >> i) & 0xF;
-        char c = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
-        uint64_t ch = (unsigned char)c;
-        asm volatile("mv a0, %0; li a7, 1; ecall"
-                     :
-                     : "r"(ch)
-                     : "a0", "a7", "memory");
-    }
-    const char msg3[] = {' ', 's', 't', 'v', 'a', 'l', '=', 0};
-    for (const char *p = msg3; *p; ++p) {
-        uint64_t ch = (unsigned char)*p;
-        asm volatile("mv a0, %0; li a7, 1; ecall"
-                     :
-                     : "r"(ch)
-                     : "a0", "a7", "memory");
-    }
-    v = stval;
-    for (int i = 60; i >= 0; i -= 4) {
-        uint64_t nibble = (v >> i) & 0xF;
-        char c = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
-        uint64_t ch = (unsigned char)c;
-        asm volatile("mv a0, %0; li a7, 1; ecall"
-                     :
-                     : "r"(ch)
-                     : "a0", "a7", "memory");
-    }
-    {
-        uint64_t ch = (unsigned char)'\n';
-        asm volatile("mv a0, %0; li a7, 1; ecall"
-                     :
-                     : "r"(ch)
-                     : "a0", "a7", "memory");
-    }
-    panic("riscv64: unhandled exception");
+                                        uint64_t stval, uint64_t sp) {
+    auto frame = kernel::debug::make_riscv_frame(scause, sepc, stval, sp,
+                                                 arch::read_satp());
+    kernel::debug::first_chance_halt(frame);
 }
 
 /// @brief Latched last U-mode fault CSRs for test readback.
@@ -289,7 +254,7 @@ extern "C" void riscv64_exception_dispatch(uint64_t *frame, uint64_t sstatus) {
         riscv64_u_fault_handler(frame);
         return;
     }
-    handle_kernel_exception(frame[31], frame[33], frame[34]);
+    handle_kernel_exception(frame[31], frame[33], frame[34], frame[1]);
 }
 
 } // namespace arch

@@ -35,7 +35,7 @@
 /// boot.S identity-maps 0x30000000-0x3FFFFFFF (L2_page[384..511)),
 /// following the in-tree PLIC/UART precedent.
 #ifndef CONFIG_PCI_ECAM_BASE
-#define CONFIG_PCI_ECAM_BASE 0x100000000ULL // 4GB default
+#define CONFIG_PCI_ECAM_BASE 0x30000000ULL // == hal/pci.hpp live base (issue #354)
 #endif
 
 /// @brief Base physical address of the PCI ECAM region.

@@ -152,6 +152,10 @@ class IDT {
     static void register_handler_raw(uint8_t vec, ISRHandler handler);
     static void handle_interrupt(uint64_t vector, uint64_t error_code,
                                  uint64_t rip);
+    /// @brief Check whether a handler is registered for a vector.
+    /// @param vec Vector index (bounds-checked; out-of-range is false).
+    /// @return true when a non-null handler is registered.
+    static bool has_handler(size_t vec);
 
   private:
     static constexpr size_t NUM_ENTRIES = 256;

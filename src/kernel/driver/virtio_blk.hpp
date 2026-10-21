@@ -154,6 +154,17 @@ class VirtioBlkDriver final : public BlockDevice {
     static void isr_entry(uint64_t vector, uint64_t error_code, uint64_t rip);
     // ISR status byte read-and-ack (null-guarded for unmapped windows).
     uint8_t read_isr_status() const;
+#if !defined(CONFIG_ARCH_X86_64)
+    // Issue #350 (MMIO): InterruptStatus is NOT read-to-clear — the
+    // driver ACKs explicitly after draining (drain-before-ACK, bounded
+    // re-check). Contract-coupled with handle_irq()'s MMIO branch: any
+    // change to the drain core must update both together.
+    void ack_isr_status(uint8_t status) const;
+    // MMIO used-ring drain core (collect-under-lock only; the caller
+    // ACKs and wakes). Shares the x86 drain contract field-for-field.
+    bool drain_used_ring_mmio(TaskControlBlock *&wake_task,
+                              uint32_t &wake_gen);
+#endif
 
     arch::VirtioTransport transport_;
     uint64_t sector_count_ = 0;
@@ -162,6 +173,13 @@ class VirtioBlkDriver final : public BlockDevice {
     uint64_t desc_phys_ = 0;
     uint64_t avail_phys_ = 0;
     uint64_t used_phys_ = 0;
+#if !defined(CONFIG_ARCH_X86_64)
+    // Issue #350 (MMIO legacy v1): the queue lives in ONE contiguous
+    // chunk (desc_phys_ = chunk base); avail/used are byte offsets into
+    // it, not separate pages. The destructor frees the chunk, never the
+    // offsets.
+    bool legacy_queue_chunk_ = false;
+#endif
 
     // Virtual addresses for queue memory
     arch::VirtqDesc *desc_ = nullptr;

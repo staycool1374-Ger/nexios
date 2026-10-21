@@ -26,6 +26,8 @@
 #include <kernel/arch/interrupt_controller.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/riscv64/hal/asid.hpp>
+#include <kernel/arch/riscv64/hal/fpu.hpp>
 
 namespace arch {
 
@@ -44,6 +46,12 @@ EarlyIrqResult early_irq_init(uint32_t frequency_hz) {
     IDT::init();
     IDT::load();
     ArchInterruptController::init();
+    // Issue #352: activate ASID tagging (allocator flag only — no HW
+    // touch; task create/teardown and switch publish pick up IDs).
+    arch::asid_init();
+    // Issue #353: enable FP for test paths that bring up IRQ without
+    // the full boot flow (idempotent with kernel.cpp).
+    arch::fpu_init();
     Timer::init(frequency_hz);
     (void)Timer::calibrate();
     if (Timer::freq_hz() == 0) {

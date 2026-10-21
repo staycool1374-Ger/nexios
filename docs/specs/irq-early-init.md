@@ -94,11 +94,12 @@ Full production boot paths (#28 aarch64, #29 riscv64), DTB plumbing
 (#183), teardown validation (#199). `kernel.cpp` keeps its own staged
 calls; `early_irq_init()` codifies the same order for tests and
 bring-up reuse. Out of scope for #349: x86-only remainders (GDT/IDT
-gates, PIC, APIC/LAPIC/IOAPIC, HPET, MSI/MSI-X, SMP/IPI), virtio-MMIO
-transport/IRQ consumers (#350, drivers keep polling), interrupt-driven
-UART RX (#245/#247), SMP per-hart contexts (#351), GICv3 HW validation
-(QEMU cortex-a72 exercises GICv2 only), riscv release (#207), TCG wall
-accuracy (#359/#384), QE test authorship/counts/release-subset.
+gates, PIC, APIC/LAPIC/IOAPIC, HPET, MSI/MSI-X, SMP/IPI),
+interrupt-driven UART RX (#245/#247), SMP per-hart contexts (#351),
+GICv3 HW validation (QEMU cortex-a72 exercises GICv2 only), riscv
+release (#207), TCG wall accuracy (#359/#384), QE test
+authorship/counts/release-subset. Virtio-MMIO transport/IRQ consumers
+landed in #350 (drivers keep the poll fallback fail-closed).
 
 ## 6. Per-arch IRQ routing + timer parity (issue #349)
 
@@ -107,6 +108,10 @@ QEMU-virt INTID map (aarch64): UART0 = 33, RTC = 34, PCIe INTx =
 index 80). QEMU-virt PLIC map (riscv64, S-mode context 1): virtio-mmio
 = 1–8, UART = 10, RTC = 11, PCIe INTx = 32–35; S-context addresses are
 `0x0C002080` (enable), `0x0C201000` (threshold), `+4` (claim/complete).
+Virtio-mmio transport consumers (issue #350) register raw IDT handlers
+at INTID 48 + slot (GIC) / IRQ 1 + slot (PLIC), unmask the source, and
+ACK `InterruptStatus` after draining (drain-before-ACK, bounded
+re-check); teardown masks first.
 
 GICv2 programming order: CTLR=0 → disable all banks → IGROUPR=0
 (Group 0) → IPRIORITY = 0xA0 → ITARGETSR = CPU0 for SPIs (reset
@@ -120,3 +125,32 @@ ticks; `remaining()` returns ceil coarse ticks (0 disarmed/expired);
 `remaining_ns()` the sub-tick remainder. riscv64 `remaining*` are hard
 0 (S-mode cannot read mtimecmp) — enforcement tests must assert the
 contract, never wall time.
+
+## 7. User IRQ delivery on platform lines (issue #354 Slice B)
+
+- Cap windows (`arch/hal/irq_vectors.hpp`): x86_64 33–47 (PIC IRQ1–15),
+  aarch64 GIC SPI 32–255 (SGI/PPI incl. timer PPI 30 never claimable),
+  riscv64 PLIC 1–95. `IrqSlotKind::PLATFORM` owns the controller line
+  for the arm lifetime (mask ownership: table unmasks at arm, restores
+  pre-arm state at release/drain; the storm limiter may mask
+  independently).
+- `claim_slot()` validates the window, then rejects per-arch SYSCALL /
+  TIMER (riscv64 SYSCALL = 2 lies inside the PLIC window, so the check
+  is load-bearing there and stays unconditional), kernel-handler
+  vectors (`IDT::has_handler`, non-x86 only — x86 entries_ are always
+  populated), threaded-IRQ overlap, and duplicates; non-x86 claims are
+  always PLATFORM kind (MSI unsupported — no MSIX kind exists).
+- ISR path: GIC `handle_gic_irq` / PLIC `handle_plic_trap` call
+  `IrqDelivery::isr_entry()` before the generic `IDT::handle_interrupt`;
+  EOI (`g_last_acked` + EOIR) / claim-complete stays single-choked at
+  the existing tail — `isr_entry`'s own EOI is x86-only.
+- Locking: `arm` / `release_slot_idx` / `drain_task` take `IrqGuard`
+  before the slot `SpinLock` on non-x86 (GIC/PLIC permit
+  higher-priority preemption, so an unmasked line's ISR could spin on
+  the held lock on the same CPU). x86 keeps its exact prior ordering
+  (lock only — ISRs run with interrupts disabled, no same-CPU reentry).
+- MSI documented gap (Q1): GICv2 has no ITS, the PLIC has no MSI
+  endpoint — `pci_enable_msi/msix` fail closed (return 0),
+  `pci_msix_table_info` returns false, delivery goes via INTx/platform
+  lines; expanding to GICv3+ITS / RISC-V AIA is milestone-sized and out
+  of scope.

@@ -1,0 +1,291 @@
+diff --git a/docs/specs/configuration.md b/docs/specs/configuration.md
+index a83859d80..177376792 100644
+--- a/docs/specs/configuration.md
++++ b/docs/specs/configuration.md
+@@ -42,6 +42,7 @@ each defining the shared tunables plus arch-specific ones.  Categories:
+ | `CONFIG_HAS_FPU` | 1 | 1 | 1 |
+ | `CONFIG_HAS_*` | RDRAND, APIC | GIC | PLIC, SBI |
+ | `CONFIG_HAS_MPU` / `CONFIG_HAS_HPET` | 0 | 0 | 0 |
++| `CONFIG_TCG_BARRIERS` (issue #309b) | n/a | 1 = TCG-safe dmb sy (default); 0 = silicon dsb sy, flip gated on #397 | n/a |
+ 
+ **Rule (check-config enforces):** exactly one `CONFIG_ARCH_*` is active per
+ build; `CONFIG_PAGE_SIZE`/`CONFIG_HHDM_OFFSET`/`CONFIG_USER_SPACE_LIMIT` must
+@@ -191,6 +192,8 @@ Other actions must pass the class normally.  Kills leftover QEMU between runs.
+ 5. `CONFIG_IPC_MAX_MSG_SIZE` ≥ `sizeof(vfsd::Msg)` (64, fixed).
+ 6. `CONFIG_SYSCALL_COUNT` consistent with the enabled `CONFIG_INCLUDE_SYS_*`.
+ 7. `CONFIG_THREADED_IRQS` ⇒ `CONFIG_MAX_THREADED_IRQS` ≥ active vectors.
++8. `CONFIG_TCG_BARRIERS` ∈ {0,1} (only aarch64 consumes it; the value is
++   inert elsewhere).
+ 
+ ## 4. Matrix Semantics (what each dimension changes at runtime)
+ 
+diff --git a/docs/specs/debugd.md b/docs/specs/debugd.md
+index 1b18bafc8..b73d8cbef 100644
+--- a/docs/specs/debugd.md
++++ b/docs/specs/debugd.md
+@@ -287,7 +287,11 @@ These are MUST-level constraints on the kernel, independent of #169:
+ - QEMU-vs-hardware pitfalls (each is a normative MUST with the
+   rationale from #186): never trust assumed memory maps (validate
+   E820/UEFI/DT); TLB invalidation complete on every path QEMU-TCG
+-  forgives (`INVLPG`, `DSB+TLBI`, `SFENCE.VMA`); cache attributes
++  forgives (`INVLPG`, `DSB+TLBI`, `SFENCE.VMA`); the aarch64 TLB paths
++  select the barrier at build time — `CONFIG_TCG_BARRIERS=1` (default)
++  emits `dmb sy` for QEMU, `=0` emits the architecturally required
++  `dsb sy` for silicon, with the RPi4 proof tracked in #397 (issue
++  #309b); cache attributes
+   correct for DMA (non-cacheable where required); unaligned access
+   never relied upon; memory barriers present where SMP requires
+   them (QEMU serializes what silicon reorders); spurious-IRQ
+diff --git a/prompts/AGENTS-KERNEL-BRIEFING.md b/prompts/AGENTS-KERNEL-BRIEFING.md
+index d896f8ac9..8f99319a0 100644
+--- a/prompts/AGENTS-KERNEL-BRIEFING.md
++++ b/prompts/AGENTS-KERNEL-BRIEFING.md
+@@ -175,6 +175,7 @@ make execute-test x86 release selftest    # CI gate
+ 19. **TCG wall-clock variance is a known limitation, not a kernel bug** — under QEMU TCG the PIT/APIC/bus/TSC virtual clocks diverge from each other and from host wall (ns up to ~4x fast, ticks ~0.8x wall, cal 250–670 MHz across boots; issue #359, decided DOCUMENT): no boot scalar or tick-servo can be wall-true for all regimes (no sub-second in-guest wall reference; workload-dependent TSC rate). Kernel timeouts are self-consistent (single-domain). Accuracy gate is KVM/HW; TCG `hrt_wall_accuracy_bound` warn-skips on hypervisor. `OVERALL_CAP_S` stays 3600 (not re-tightened without proof). Suite summaries carry `TSC_CYCLES` (TSC never rewinds, unlike snapshot-rewound `ticks_`) for host-side analysis. Per-arch (#384, 2026-10-19): aarch64 (cntpct_el0 @ 62.5 MHz) and riscv64 (rdtime @ 10 MHz) show the same TCG unenforceability (wall bound +28%/+27.6% over, strict assert fails where x86 warn-skips — no CPUID hypervisor equivalent off-x86, QE-owned skip design); bare metal is the only quality gate on all arches, no TCG accuracy enforcement anywhere. `timing_core` off-x86 is blocked by the #356 task-spawn fault (ELR/sepc=0 at first test-task spawn, daemons degraded).
+ 20. **Off-x86 IRQ/timer contracts (issue #349)** — PLIC S-mode context is 1 (`0x0C002080` enable / `0x0C201000` threshold; M-context 0 belongs to OpenSBI, never program it); GICv2 SPIs need ITARGETSR=CPU0 (reset targets are not CPU0) and ICFGR edge only for virtio-mmio (48–79); version from GICD_PIDR2, never TYPER[15:11]. Timer `oneshot`/`periodic` args are coarse ticks at `BootParams::timer_hz` (absolute CVAL/SBI deadlines internally); `remaining()` is coarse ceil gated on the enable bit; riscv64 `remaining*` are hard 0 by S-mode hardware constraint.
+ 21. **Console/RTC/input parity (issue #355)** — riscv RTC is goldfish (`google,goldfish-rtc`) when the DTB provides it, mtime uptime fallback (epoch 1970) otherwise — check `RTC::source_name()`; `L0[0]` on riscv is explicit leaves plus one 4 KiB RTC page, **not** a blanket identity map (VA 0 still faults); console input on aarch64/riscv flows decoder-first (`Keyboard::pump_serial` + ring) then raw Serial; PL011 has no loopback mode (riscv MCR bit 4 only, debug-only, restore unconditionally).
++22. **aarch64 barriers are build-gated (issue #309b)** — `CONFIG_TCG_BARRIERS=1` (default) makes `arch::system_barrier()` emit `dmb sy` for QEMU; `=0` emits `dsb sy` for silicon (proof: #397). `dsb_sy()` is unconditional `dsb sy` and was never substituted. Never flip the default without #397's RPi4 evidence; the macro is rejected unless 0/1.
+ 
+ ## 13. Enforcement Rules (MANDATORY — violations halt and require human input)
+ 
+diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+index 07c9dc84e..8d58fe3c8 100644
+--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+@@ -26,6 +26,13 @@
+ 
+ #include <types.hpp>
+ 
++// CONFIG_TCG_BARRIERS: 1 = TCG-safe (dmb sy), 0 = hardware (dsb sy).
++// Anything else is a typo that the "undefined identifier == 0" rule would
++// silently turn into a hardware build — reject it at compile time.
++#if CONFIG_TCG_BARRIERS != 0 && CONFIG_TCG_BARRIERS != 1
++#error "CONFIG_TCG_BARRIERS must be 1 (TCG: dmb sy) or 0 (hardware: dsb sy)"
++#endif
++
+ namespace arch {
+ 
+ /// @brief Memory-mapped I/O write (8-bit).
+@@ -206,6 +213,18 @@ inline void dsb_sy() {
+ inline void isb() {
+     asm volatile("isb" : : : "memory");
+ }
++/// @brief Data barrier for TLB / address-space handoff paths (issue #309b).
++///        Emits `dmb sy` when CONFIG_TCG_BARRIERS == 1 (QEMU TCG, the
++///        default) and `dsb sy` when == 0 (silicon). always_inline keeps
++///        the TCG instruction stream byte-identical to the pre-#309b code.
++/// @note Silicon proof for the == 0 build: issue #397.
++[[gnu::always_inline]] inline void system_barrier() {
++#if CONFIG_TCG_BARRIERS
++    asm volatile("dmb sy" : : : "memory");
++#else
++    asm volatile("dsb sy" : : : "memory");
++#endif
++}
+ /// @brief TLB invalidate by VA (EL1, VMID-aware).
+ /// @param[in] vaddr Virtual address to invalidate.
+ inline void tlbi_vae1(uint64_t vaddr) {
+@@ -213,21 +232,26 @@ inline void tlbi_vae1(uint64_t vaddr) {
+ }
+ /// @brief TLB invalidate by ASID (EL1, issue #352).  Drops every entry
+ ///        tagged with @p asid.  ASID occupies Xt[63:48] (DDI0601 TLBI
+-///        ASIDE1 fieldset; low 48 bits RES0), so the raw ID is shifted.
+-///        Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
++///        fieldset; low 48 bits RES0), so the raw ID is shifted.
++///        Barriers go through system_barrier() (dmb under TCG, dsb on HW).
+ /// @param[in] asid Address-space ID to invalidate (0 invalidates nothing
+ ///        specific; callers pass nonzero user IDs).
+ inline void tlbi_aside1(uint16_t asid) {
+-    asm volatile("dmb sy; tlbi aside1, %0; dmb sy; isb"
++    system_barrier();
++    asm volatile("tlbi aside1, %0"
+                  :
+                  : "r"(static_cast<uint64_t>(asid) << 48)
+                  : "memory");
++    system_barrier();
++    isb();
+ }
+ /// @brief TLB invalidate all (EL1).
+ inline void tlbi_alle1() {
+-    asm volatile("dmb sy; tlbi vmalle1; dmb sy; isb" : : : "memory");
++    system_barrier();
++    asm volatile("tlbi vmalle1" : : : "memory");
++    system_barrier();
++    isb();
+ }
+-
+ /// @brief Read TTBR0_EL1 (user page table base).
+ /// @return Physical address of the user page table.
+ inline uint64_t read_ttbr0_el1() {
+@@ -284,17 +308,13 @@ inline void write_ttbr1_el1(uint64_t v) {
+ /// @param[in] v Physical address of the user page table.
+ inline void write_cr3(uint64_t v) {
+     write_ttbr0_el1(v);
+-    asm volatile("dmb sy" : : : "memory");
++    // Deliberately redundant barrier pair (own barrier + tlbi_alle1's):
++    // do NOT collapse — the TCG binary must stay byte-identical.
++    system_barrier();
+     tlbi_alle1();
+-    asm volatile("dmb sy" : : : "memory");
++    system_barrier();
+     isb();
+ }
+-/// @brief Write CR3 alias without TLB invalidation.
+-/// @param[in] v Physical address of the user page table.
+-inline void write_cr3_notlbi(uint64_t v) {
+-    write_ttbr0_el1(v);
+-    asm volatile("isb" : : : "memory");
+-}
+ /// @brief Read the kernel page-table root (TTBR1_EL1, issue #352).
+ /// @return Physical address of the kernel page table.
+ /// @note Distinct from read_cr3() (TTBR0/user) — callers that need the
+@@ -307,9 +327,14 @@ inline uint64_t kernel_page_table_base() {
+ inline uint64_t user_page_table_base() {
+     return read_ttbr0_el1();
+ }
+-// NOTE: dsb sy replaced with dmb sy throughout this file — QEMU TCG chokes on
+-// dsb sy after MMU+cache activity.  On real hardware dsb sy is required for
+-// correctness.
++// BARRIER NOTE (issue #309b): the aarch64 TLB / address-space paths
++// (tlbi_aside1, tlbi_alle1, write_cr3) take their data barrier from
++// arch::system_barrier(), which emits `dmb sy` for QEMU TCG
++// (CONFIG_TCG_BARRIERS == 1, the default) and `dsb sy` for silicon
++// (CONFIG_TCG_BARRIERS == 0).  The previous note claimed dsb was replaced
++// throughout this file — that was wrong: dsb_sy() always emits `dsb sy`
++// in both build kinds.  Flipping the default to 0 requires the RPi4
++// evidence tracked in issue #397.
+ 
+ /// @brief Enable FP/SIMD by clearing the FPEN trap in CPACR_EL1.
+ inline void fp_enable() {
+diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
+index 08670a8fe..d2622ed13 100644
+--- a/src/kernel/arch/aarch64/test_aarch64.cpp
++++ b/src/kernel/arch/aarch64/test_aarch64.cpp
+@@ -725,6 +725,35 @@ JARVIS_TEST(aarch64_mmu_cache_tlb) {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: issue #309b — the aarch64 TLB paths take their data barrier
++// from arch::system_barrier() (dmb sy under CONFIG_TCG_BARRIERS=1, dsb sy
++// on silicon): exercise write_cr3 (both converted sites + tlbi_alle1)
++// and tlbi_aside1 on a live root and prove TTBR0 is unchanged.
++// Input: current TTBR0 captured; write_cr3(same) + tlbi_aside1(0xFFF,
++// above ASID_MAX so no live ASID is purged); barriers + isb inline.
++// Expect: TTBR0/read_cr3 unchanged; execution reaches PASS (a wrong TTBR0
++// publish or missing ISB faults on the next fetch).
++// Depends: arch::system_barrier, write_cr3, tlbi_aside1 (issue #309b)
++JARVIS_TEST(aarch64_tlb_barrier_gate, "PRE: none | POST: none") {
++    static_assert(CONFIG_TCG_BARRIERS == 0 || CONFIG_TCG_BARRIERS == 1,
++                  "CONFIG_TCG_BARRIERS must be 0 or 1");
++    arch::IrqGuard ig{};
++    arch::system_barrier();
++    arch::system_barrier();
++    arch::isb();
++    const uint64_t ttbr0 = arch::read_ttbr0_el1();
++    arch::write_cr3(ttbr0);
++    JARVIS_ASSERT_FMT(arch::read_ttbr0_el1() == ttbr0,
++                      "TTBR0 changed by write_cr3: 0x%lx", ttbr0);
++    JARVIS_ASSERT_FMT(arch::read_cr3() == ttbr0,
++                      "read_cr3 mismatch after write_cr3");
++    arch::tlbi_aside1(0x0FFFu);
++    arch::system_barrier();
++    arch::isb();
++    JARVIS_TEST_PASS();
++}
++
+ /// @brief Check that FP and Advanced SIMD are implemented (ID_AA64PFR0_EL1).
+ JARVIS_TEST(aarch64_fpu_neon_detection) {
+     uint64_t id_aa64pfr0{};
+@@ -1353,6 +1382,7 @@ void register_aarch64_tests() {
+     JARVIS_REGISTER_TEST(aarch64_timer_counter_monotonic);
+     JARVIS_REGISTER_TEST(aarch64_timer_frequency);
+     JARVIS_REGISTER_TEST(aarch64_mmu_cache_tlb);
++    JARVIS_REGISTER_TEST(aarch64_tlb_barrier_gate);  // issue #309b
+     JARVIS_REGISTER_TEST(aarch64_fpu_neon_detection);
+     JARVIS_REGISTER_TEST(aarch64_uart_putc);
+     JARVIS_REGISTER_TEST(aarch64_pci_ecam_read);
+diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+index 882890e1b..5c74ede61 100644
+--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+@@ -214,11 +214,6 @@ inline uint64_t read_cr3() {
+ inline void write_cr3(uint64_t v) {
+     write_satp((8ULL << 60) | (v >> 12));
+ }
+-/// @brief Write the page-table root without TLB flush.
+-/// @param v SATP value (PPN already shifted).
+-inline void write_cr3_notlbi(uint64_t v) {
+-    write_satp((8ULL << 60) | v);
+-}
+ /// @brief Read the kernel page-table root (issue #352).  Sv39 uses one
+ ///        shared root for both halves, so this equals the user root.
+ /// @return Physical address of the kernel page table.
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index aa34c0345..5c289ac38 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -484,6 +484,23 @@
+ #define CONFIG_HAS_HPET 0
+ #endif
+ 
++// ---------------------------------------------------------------------------
++// Emulation vs. Silicon Behaviour
++// ---------------------------------------------------------------------------
++/// Barrier strength for the aarch64 TLB / address-space paths
++/// (hal/io_impl.hpp: tlbi_aside1, tlbi_alle1, write_cr3).
++///   1 = QEMU/TCG-safe: emit `dmb sy` (default; the only path every QEMU
++///       gate exercises).
++///   0 = hardware: emit `dsb sy` (architecturally required for TLB
++///       maintenance ordered against page-table walks).
++/// Only aarch64 consumes this; x86_64 has no substitution and riscv64
++/// already emits hardware-correct fence/sfence.vma semantics.
++/// Silicon proof for the 0 build is tracked in issue #397 (split from
++/// #309) — do NOT flip the default before that evidence lands.
++#ifndef CONFIG_TCG_BARRIERS
++#define CONFIG_TCG_BARRIERS 1
++#endif
++
+ // ---------------------------------------------------------------------------
+ // HRT monotonic clock (issue #16, v0.4.7 "Enhance HRT")
+ // ---------------------------------------------------------------------------
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 88de32ed4..40aa1d6f8 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -258,7 +258,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // arch
+     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
+ #if defined(CONFIG_ARCH_AARCH64)
+-    {"arch_aarch64",          0,   34,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214) + 1 EL1 fail-stop raw frame (#308)
++    {"arch_aarch64",          0,   35,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214) + 1 EL1 fail-stop raw frame (#308) + 1 TLB barrier gate (#309b)
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+     {"arch_riscv64",          0,    0,      31      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) + 1 kernel-exception raw frame (#308) — row was stale at 24 while 28 registered, corrected to 30
+diff --git a/test-history.txt b/test-history.txt
+index 3c27f40f0..3e4957a30 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4461,3 +4461,9 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 20:34:53 drivers PASSED: 56 FAILED: 2 TIME: 27s STATUS: 307-guard-rv64-r1-known-2
+ 2026-10-21 20:34:53 drivers PASSED: 56 FAILED: 2 TIME: 20s STATUS: 307-guard-rv64-r2-known-2
+ 2026-10-21 20:39:07 drivers_virtio_blk_req PASSED: 13 FAILED: 0 TIME: 1225ms STATUS: post-rejected-patch
++2026-10-21 20:53:49 arch_aarch64 PASSED: 35 FAILED: 0 TIME: 1068ms
++2026-10-21 20:54:20 selftest PASSED: 152 FAILED: 0 TIME: 4709ms STATUS: aarch64
++2026-10-21 20:56:25 selftest PASSED: 148 FAILED: 0 TIME: 12164ms
++2026-10-21 20:57:16 arch_riscv64 PASSED: 31 FAILED: 0 TIME: 964ms
++2026-10-21 20:58:22 selftest PASSED: 0 FAILED: 0 TIME: 3ms STATUS: aarch64-release-link-boot
++2026-10-21 20:59:48 selftest PASSED: 87 FAILED: 0 TIME: 3225ms STATUS: x86-release
+diff --git a/tools/check-config.py b/tools/check-config.py
+index de77c05cc..c75e9e82b 100755
+--- a/tools/check-config.py
++++ b/tools/check-config.py
+@@ -354,6 +354,8 @@ def validate(cfg: dict[str, int]):
+     if threaded_irqs:
+         check_ge("CONFIG_MAX_THREADED_IRQS",
+                  cfg.get("CONFIG_MAX_THREADED_IRQS", 16), 1)
++    # Issue #309b: aarch64 barrier-strength selector (1 = TCG dmb, 0 = HW dsb).
++    check_bool("CONFIG_TCG_BARRIERS", cfg.get("CONFIG_TCG_BARRIERS", 1))
+ 
+     # ═══════════════════════════════════════════════════════════════════════
+     # 9. Hooks

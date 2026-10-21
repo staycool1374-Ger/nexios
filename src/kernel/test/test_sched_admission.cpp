@@ -77,6 +77,34 @@ void destroy_denied(TaskControlBlock *t) {
     TaskControlBlock::destroy(t);
 }
 
+#if CONFIG_MEMORY_BUDGET
+// RAII global-budget drain (issue #383): loop-CAS the budget to zero so a
+// concurrent alloc between snapshot and reserve cannot slip through (mode
+// 1); the caller holds a tick mask across drain→fork→release so no daemon
+// free can land inside the window (mode 2). Idempotent release; the
+// destructor is the backstop — the global counter has no snapshot restore,
+// so an early return while holding pages would starve the rest of the suite.
+struct BudgetHold {
+    uint64_t pages_{0};
+    void drain_all() noexcept {
+        for (;;) {
+            uint64_t avail = Scheduler::remaining_memory_budget();
+            if (avail == 0)
+                return;
+            if (Scheduler::reserve_memory_pages(avail))
+                pages_ += avail;
+        }
+    }
+    void release() noexcept {
+        if (pages_ != 0) {
+            Scheduler::release_memory_pages(pages_);
+            pages_ = 0;
+        }
+    }
+    ~BudgetHold() noexcept { release(); }
+};
+#endif
+
 } // namespace
 
 // Runmode: kernel
@@ -330,30 +358,49 @@ JARVIS_TEST(admission_fork_denied_no_leak, "PRE: none | POST: none") {
 //        aperiodic task; admission itself has no budget check, so the
 //        forker dispatches and sys_fork must return -1 from the clone
 //        reserve failure. Budget restored before asserts.
-// Expect: sys_fork → -1; budget fully restored; no ResourceTracker delta.
+//        Issue #383: the drain→fork→release window runs INSIDE the forker
+//        under one tick mask (arch::IrqGuard). The class boots 1 vCPU, so
+//        the mask is system-wide quiescence: no daemon alloc/free can move
+//        the budget mid-window (mode 1: CAS-loop drain; mode 2: masked
+//        window). Precedent: #267 tick-masked cross-task tests. Non-goals:
+//        no retries, no daemon termination, no kernel change.
+// Expect: sys_fork → -1; drained flag set; budget 0 at fork, >0 after
+//         release; no child left (rollback); no ResourceTracker delta.
 // Depends: TaskControlBlock::clone budget reserve (issue #328)
 JARVIS_TEST(admission_memory_budget_denied_at_fork, "PRE: none | POST: none") {
 #if CONFIG_MEMORY_BUDGET
     static volatile uint64_t g_fork_ret = 0;
+    static volatile uint64_t g_drained = 0;
+    static volatile uint64_t g_remaining_after = 0;
+    static volatile uint64_t g_children_after = 0;
     g_fork_ret = 0;
+    g_drained = 0;
+    g_remaining_after = 0;
+    g_children_after = 0;
     auto *forker = TaskControlBlock::create(
         []() {
+            arch::IrqGuard ig;
+            BudgetHold hold;
+            hold.drain_all();
+            g_drained = 1;
             uint64_t regs[22] = {};
             g_fork_ret = Syscall::handle(
                 static_cast<uint64_t>(SyscallNumber::FORK), 0, 0, 0, 0,
                 regs);
+            g_remaining_after = Scheduler::remaining_memory_budget();
+            g_children_after = Scheduler::current_task()->num_children;
+            hold.release();
         },
         11, 0);
     JARVIS_ASSERT(forker != nullptr);
     Scheduler::add_task(*forker);
-    uint64_t avail = Scheduler::remaining_memory_budget();
-    JARVIS_ASSERT(avail > 0);
-    JARVIS_ASSERT(Scheduler::reserve_memory_pages(avail));
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(forker);
-    uint64_t fork_ret = g_fork_ret;
-    Scheduler::release_memory_pages(avail);
-    JARVIS_ASSERT(fork_ret == static_cast<uint64_t>(-1));
+    JARVIS_ASSERT(g_drained == 1);
+    JARVIS_ASSERT(g_fork_ret == static_cast<uint64_t>(-1));
+    JARVIS_ASSERT(g_remaining_after == 0);
+    JARVIS_ASSERT(g_children_after == 0);
+    JARVIS_ASSERT(Scheduler::remaining_memory_budget() > 0);
     kernel::test::terminate_if_live(forker);
     Scheduler::drain_zombie_list();
 #else

@@ -60,8 +60,9 @@ behaviour (§4.6).
 - **No copy-on-write (COW).**  Page tables are never re-pointed lazily; the
   pager explicitly maps backing frames.
 - **No demand paging of kernel memory.**  Kernel-space faults (HHDM, kstack
-  guard pages, recovery windows, reserved vectors) are untouched: they keep the
-  existing panic / `g_user_access_recover_ip` / guard-page behaviour (§3.2).
+  guard pages, recovery windows, reserved vectors) are untouched: they keep
+  the existing raw-dump + halt / `g_user_access_recover_ip` / guard-page
+  behaviour (§3.2, issue #308).
 - **No executable pager mappings in v1.**  `SYS_PAGER_MAP` maps frames
   non-executable (NX).  Instruction-fetch faults (`#PF` I/D=1) are therefore
   **not delegatable** in v1 — they keep the SIGSEGV path.  Executable pager
@@ -88,8 +89,8 @@ behaviour (§4.6).
 2. From-user exception → signal path (kernel.cpp:1510): `vector==14` from a
    user CS logs CR2 and delivers SIGSEGV via `deliver_signal_to_user`.
 3. Kernel-mode guard-page check for the kstack window (kernel.cpp:1536) →
-   `stack_overflow_hook`/panic.
-4. Everything else in kernel mode → CPU EXCEPTION panic.
+   `stack_overflow_hook`/raw-dump + halt.
+4. Everything else in kernel mode → CPU EXCEPTION first-chance dump + halt.
 
 ### 3.2 Delegatable set (new)
 

@@ -53,6 +53,43 @@ then invoke the callback **outside** the critical section.
 an in-flight DMA target can be handed to the producer.  Same fix pattern;
 `prepare_buf`/`xfer_buf` return the resolved pointer while holding the lock.
 
+### 2.3 PRD fail-closed + cache contract (issue #354 Slice C, #307)
+- `prd_from_sg()` rejects (returns 0, table zeroed): phys > 32 bits,
+  empty, > 64 KiB, odd (2-byte align), or 4 KiB-spanning entries — never
+  truncated. `PingPongDma::start_next()` treats 0 as failure before the
+  index swap. Callers treat 0 as failure.
+- BMDMA PRD base is 32-bit: `BmDmaChannel::start` rejects a table base
+  >= 4 GiB via `bm_prd_addr_ok()` before any port write (issue #307) —
+  no truncation; also fixes the `%x` log truncation to `%lx`.
+- Cache points (`arch/hal/cache.hpp`): `alloc_buffer` zero-range
+  clean+invalidate; `free_buffer` invalidate-before-release;
+  `BmDmaChannel::start` cleans the used PRD entries (the device reads
+  the table). Transfer DATA ranges are caller-owned: clean the SG range
+  before a device-read (`Direction::READ`), invalidate after a
+  device-write (`Direction::WRITE`) before CPU reads.
+  AHCI (issue #307): `start_cmd` cleans CFIS region + PRDTL=1 entry +
+  32 B command header before the CI doorbell; `read_sector` invalidates
+  the data buffer after wait; `write_sector` cleans it after staging;
+  IDENTIFY parse invalidates first. Exact consumed-byte cleans only —
+  never whole tables/rings on hot paths.
+  virtio-blk (issue #307): ring publication cleans (descs + avail +
+  used + dma area) before queue setup; submit cleans header/data/status
+  + touched descs + avail slot/idx in store→clean order before notify;
+  `finish_request` and both ISR drains invalidate the status byte before
+  the single latched load; data buffer invalidated on reads before
+  memcpy. Spin/fast-path `used->idx` reads stay fence-only (timing —
+  see #391 guard).
+- aarch64: DC CVAC/IVAC/CIVAC over the CTR_EL0 line size + dsb/isb.
+  riscv64: Zicbom `cbo.*` when the toolchain defines `__riscv_zicbom`
+  (today it does not: `-march=rv64imafdc` → fence-only documented
+  no-op, exact under QEMU virt coherence). x86_64: clflush/64 B + mfence
+  (coherent, still correct). Non-coherent silicon stays a #307 residual
+  (this issue consumes only the QEMU-observable contract).
+- BMDMA port I/O is x86_64-only hardware, but the channel API stays
+  arch-neutral: test_dma drives a mock base through it off-x86 (engine
+  state-machine harness). No real device can bind off-x86 (MSI
+  programming fails closed, §5.2).
+
 ## 3. AHCI (`ahci.cpp`)
 
 - **Init:** PCI find (class 01/06) → ABAR = BAR5 (validate
@@ -94,6 +131,12 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   (32-bit).  The old layout put attrs at DW0-high (= PRDTL position, so
   reads always transferred zero bytes) and a split PRDBC.  `start_cmd`
   sets `opts = CFL(5) | WRITE`, `prdtl = 1`.
+- **DMA cache points (#307):** `start_cmd` cleans the CFIS region (20 B),
+  the PRDTL=1 entry (16 B) and the 32 B command header before the CI
+  doorbell; `read_sector` invalidates the data buffer after `wait_cmd`
+  before memcpy; `write_sector` cleans it after staging; the IDENTIFY
+  parse invalidates first. AHCI is x86-only (coherent) — the points are
+  contract-uniformity, exact on silicon.
 - **Teardown:** `disable_msi_irq()` first — `GHC_IE` off, then per-port
   `PORT_IE = 0` + ack + waiter drain (error wake) under the port locks,
   then IDT unregister + vector free — so no in-flight ISR can touch freed
@@ -113,6 +156,42 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   Legacy fallback only (not the primary boot IO path in the current tree).
 
 ## 5. Virtio-blk (`virtio_blk.cpp`)
+
+### 5.1 Transport selection (issue #350)
+
+- x86_64: virtio-PCI modern (`0x1040` + type) via ECAM/MSI-X, plus AHCI
+  (x86-only HW — QEMU `virt` has no AHCI; virtio-blk is the `virt`
+  storage contract).
+- aarch64/riscv64: virtio-MMIO v2 discovery from the DTB
+  (`compatible = "virtio,mmio"`), with an architected slot-table
+  fallback (aarch64: the `-kernel` path passes no DTB — GDB-proven
+  `x0 == 0` at `higherhalf_entry` and no FDT magic in RAM). Slot
+  tables: aarch64 32 slots at PA `0x0A000000` + slot·`0x200`
+  (GIC INTID 48 + slot); riscv64 8 slots at `0x10001000` + slot·`0x1000`
+  (PLIC IRQ 1 + slot). Both windows are boot-mapped leaves; every
+  candidate is validated (MagicValue `0x74726976`, version, device ID)
+  before the transport fills — unpopulated slots read zero and skip.
+- QEMU `virt` exposes the legacy (v1) interface (Version reads 1):
+  queue setup uses GuestPageSize/QueueNum/QueueAlign/QueuePFN with one
+  contiguous 2-page chunk per queue (desc at +0, avail immediately
+  after, used at the single-sourced `virtio_legacy_used_off`), instead
+  of the v2 per-ring addresses + Ready bit. Submit/notify/completion
+  paths are version-independent and shared.
+- ISR: `InterruptStatus` read + per-pass used-ring drain +
+  `InterruptACK` write + bounded re-check (max 4 passes — the GIC SPI
+  is edge-triggered, so a completion landing between drain and ACK
+  raises no new edge); no allocation/blocking; wake outside
+  `compl_lock_`; teardown is mask → ACK → drain (error-wake) → clear
+  handler → free rings. Fail-closed poll fallback throughout.
+- TCG-coherent only; real-HW cache maintenance is implemented per site
+  (issue #307): ring publication cleans (descs + avail + used + dma area)
+  before queue setup; submit cleans header/data/status + touched descs +
+  avail slot/idx in store→clean order before notify; `finish_request`
+  and both ISR drains invalidate the status byte before the single
+  latched load; data buffer invalidated on reads. Spin/fast-path
+  `used->idx` reads stay fence-only. Non-coherent silicon + the absent
+  NONCACHEABLE map attribute remain #307 residuals; maintenance ops are
+  the mechanism.
 
 - `probe()`: `virtio_find_device(0x1042)` → `init()`: status
   RESET→ACK→DRIVER → negotiate `VIRTIO_F_VERSION_1` → queue_size=16 → 4 PMM
@@ -139,6 +218,86 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
   Without MSI-X/MSI (or with no task context / wheel-arm failure) the
   bounded 1M poll is preserved bit-identically.
 
+### 5.2 PCIe ECAM discovery (issue #354)
+
+- Discovery is DTB-first, board-constant-always: `pci_ecam_discover()`
+  (BOOT_ONLY latch, called once from `higherhalf_entry`) resolves the
+  `pci-host-ecam-generic` node via `dtb_find_compatible_nodes` +
+  `dtb_node_reg` and accepts it only when the reg base equals the
+  boot-mapped `CONFIG_PCI_ECAM_BASE` with size >= `PCI_ECAM_WINDOW_SIZE`
+  (256 MiB). A missing/invalid DTB or a disagreeing base fails closed to
+  the board constant (`PciEcamSource::BOARD_CONSTANT`, `dt_mismatch` set,
+  WARN + dmesg) — the effective base never redirects away from the
+  boot-mapped window (aarch64 `0x4010000000` HHDM-aliased, issue #216;
+  riscv64 `0x30000000` identity-mapped, issue #29).
+- aarch64 DTB source is the embedded trimmed dump (Q3: QEMU `-kernel`
+  passes no DTB in x0 for a generic ELF — GDB-proven; boot.S substitutes
+  the embedded phys only when x0==0, a bootloader DTB always wins). The
+  kernel ignores the embedded memory node by design (dump-time `-m`
+  goes stale); riscv64 uses the OpenSBI DTB for both discovery and
+  memory sizing.
+- MSI/MSI-X programming is fail-closed off-x86 (`pci_msi_supported()`
+  false: GICv2 has no ITS, PLIC has no MSI endpoint — documented gap,
+  Q1): `pci_enable_msi/msix` return 0, `pci_msix_table_info` returns
+  false, and `pci_scan_all()` skips the MSI-X premap (scan stays
+  allocation-free). INTx pin (`0x3D`) is captured per device for
+  platform-line routing (Slice B).
+- Test topology (Q2): one non-bound `virtio-rng-pci,disable-legacy=on`
+  on both arches' QEMU flags so BAR parsing + MSI-X capability
+  discovery exercise real config space; no in-tree PCI driver binds it.
+
+### 5.3 Framebuffer backends (issue #394)
+
+- Selection chain at `Framebuffer::init()` (BOOT_ONLY latched): virtio-gpu
+  → ramfb → documented gap. Success logs one INFO (`[FB] <backend>
+  <w>x<h>`) + `DRIVER+13`; total failure logs one WARN + `DRIVER+11`,
+  `available()` stays false, `backend_name()` stays `"none"` — never a
+  panic. `backend_name()` is runtime state (`"multiboot2"` x86_64,
+  `"virtio-gpu"` / `"ramfb"` / `"none"`); `version` prints it.
+- virtio-gpu: legacy-v1 virtio-mmio control queue (device id 16,
+  `virtio,mmio` + DeviceID-register filter — the DTB has no gpu node).
+  Command sequence per presentable frame: `GET_DISPLAY_INFO` (mode
+  validation against the 1280×800×32 bound) → `RESOURCE_CREATE_2D` (id
+  1, `B8G8R8X8_UNORM`) → `RESOURCE_ATTACH_BACKING` (page entries from
+  the PMM backing below) → `SET_SCANOUT` (output 0, full rect); per
+  dirty band: `TRANSFER_TO_HOST_2D` (rect + offset) + `RESOURCE_FLUSH`.
+  Single in-flight command, bounded poll with `arch::pause()`, used-ring
+  id match, `DRIVER_OK` after queue setup. No ISR is registered for the
+  device (polled by design); the lock is a plain `SpinLock` (never taken
+  in IRQ context).
+- Backing store: PMM-contiguous at boot (`backing_init`), HHDM-aliased
+  for CPU drawing, physical pages attached via `VMM::virt_to_phys_err`
+  (page-aligned staging only — `virt_to_phys_err` rejects sub-page
+  addresses). No VMM Device/UC remap exists or is needed (scanout is
+  guest RAM, not a BAR). A 4 MiB static BSS backing trips the riscv64
+  boot fail-stop (`kernel_phys_end < 0x80C00000` for the fixed
+  `.boot_stack_rv` + PMM metadata) — boot-time PMM is pre-baseline, so
+  the ResourceTracker delta stays zero (same discipline as virtio-blk
+  queue pages).
+- Dirty tracking: `put_pixel` narrows `[dirty_y0_, dirty_y1_)`; direct
+  `memcpy`/`memset` paths (Terminal clear/scroll) call `invalidate()`
+  first; `present()` transfers + flushes on newline/scroll/status-bar/
+  cursor/splash (no-ops for multiboot2/ramfb and when unavailable).
+- ramfb fallback: `fw_cfg` MMIO (`0x09020000` aarch64,
+  `0x10100000` riscv64 — per-machine DTB addresses, the riscv one inside
+  the UART 2 MB Device leaf) with big-endian selector/data/DMA. File
+  directory scan (≤128 files) finds `etc/ramfb`; the 28 B BE config
+  (phys + fourcc `0x34325258` + flags + w/h/stride) is DMA-written with
+  the file index in control[31:16] (SELECT bit set — a zero index would
+  target the read-only signature file and ERROR out). `present()` is a
+  no-op (host reads guest RAM directly).
+- Failure contract: GPU probe fails closed per step (best-effort
+  `RESOURCE_UNREF` after CREATE); ramfb fails closed per step (probe /
+  file / backing / DMA); only `fb=virtio-gpu` draws through the control
+  queue. QEMU flags: `-device virtio-gpu-device` + `-device ramfb`
+  appended after storage (slot/IRQ mapping preserved);
+  `QEMU_FB_GPU=` selects ramfb-only, `QEMU_FB_GPU= QEMU_FB_RAMFB=`
+  selects the gap path (`fb=none`, `available()==false`).
+- Real-hardware caveat: neither path does cache maintenance on the
+  scanout (x86_64/QEMU-virt are coherent). Non-coherent silicon would
+  need clean-before-present/invalidate-after over the backing range —
+  tracked with #307 (same residual as the DMA contract, §2.3).
+
 ## 6. Interrupt Layer (x86_64)
 
 ```
@@ -152,7 +311,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
  handle_interrupt_c(vec, err, rip, regs, tsc)        [kernel.cpp]
    ├─ v==7        lazy FPU/SSE (fpu_owner, fxsave/fxrstor)
    ├─ user-recover g_user_access_recover_ip redirect
-   ├─ v<32        user: deliver_signal / kernel: guard-page check → panic
+    ├─ v<32        user: deliver_signal / kernel: guard-page check → raw-dump + halt (issue #308)
    ├─ v==0x80     syscall_handler → signals → reschedule
    ├─ THREADED_IRQS: IrqThread::for_vector(v) → isr_entry (ack+Notify) → task
    ├─ else        IDT::handle_interrupt → handlers_[v]
@@ -209,19 +368,23 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
    in-tree, so wheel-blocking has no waker; RX is poll-model by design),
    ATA-PIO (legacy, no IRQ/DMA by hardware contract; `ATA_POLL_TIMEOUT`
    + false-propagation), and boot/pre-ISR bring-up (no task to BLOCK).
-3. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
+3. **MMIO access rules (issue #350).** Device-config reads on MMIO use
+   at most 4-byte accesses (the 64-bit `virtio-blk.capacity` is split
+   into two 32-bit reads); the MMIO ISR path drains before ACK with a
+   bounded (≤ 4) re-check and keeps the poll fallback fail-closed.
+4. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
    AHCI port command state) needs a `SpinLock` via `IrqSpinLockGuard`;
    callbacks invoked only after release, from stack-captured locals; no
    allocation/blocking while holding a lock in IRQ context.
-4. **`GHC_IE` ordering.** AHCI global interrupt-enable must not be set until a
+5. **`GHC_IE` ordering.** AHCI global interrupt-enable must not be set until a
    real ISR is wired (FLAW-04); teardown clears GHC_IE/PORT_IE and takes port
    locks before freeing CL/RFIS/CT/data memory.
-5. **UART FIFO drain.** 16550 FIFO = 16 bytes; `Serial::putchar` polls THRE per
+6. **UART FIFO drain.** 16550 FIFO = 16 bytes; `Serial::putchar` polls THRE per
    char and must drain between bursts to avoid overflow (perturbs timing).
-6. **Memory ordering for DMA.** `kernel::atomic_fence()` precedes issuing
+7. **Memory ordering for DMA.** `kernel::atomic_fence()` precedes issuing
    commands (AHCI `PORT_CI` write, virtio avail idx increment + kick) so
    descriptor writes are visible before the doorbell.
-7. **Nesting depth ≤ 2**; deeper = corruption (switch skipped).
+8. **Nesting depth ≤ 2**; deeper = corruption (switch skipped).
 
 ## 8. Open Flaw Ledger
 
@@ -387,3 +550,51 @@ Racy functions:
 | 5 | Gates | `all` → **931** | debug all 931/931, release all 84/84, selftest 132/132 |
 
 Final: `make build` clean, SIL 3 auditor sign-off, zero ResourceTracker leak deltas, §8 ledger updated.
+
+## 10. Console, input and RTC parity (issue #355)
+
+### 10.1 RTC sources + `available()`/`source_name()` contract
+
+| Arch | Source | Identity | Notes |
+|---|---|---|---|
+| aarch64 | PL031 @ `0x09010000` | `"pl031"` | Signature-probed (PeriphID rev-masked), RTCEN started, boot-mapped 2 MiB leaf; always available by construction. |
+| riscv64 | Goldfish @ `0x101000` (DTB `google,goldfish-rtc`) | `"goldfish"` | HIGH/LOW/HIGH latch (bound 8, warn-once, never panic); plausibility floor 1e9 s; 4 KiB identity page (boot.S L2[0] → L3). |
+| riscv64 fallback | mtime / 10 MHz | `"mtime-fallback"` | Uptime, epoch 1970 (documented, NOT wall clock). Loud WARN + dmesg at boot, never panic. |
+
+`available() == false` ⇒ `read_seconds()` is the uptime fallback.
+PL031 RTCDR is one 32-bit seconds counter (no latch, no tear).
+Goldfish TIME is nanoseconds (`read_seconds` divides by 1e9).
+Never assert host proximity (goldfish may carry a fixed device
+offset; TCG wall is unenforceable — #319/#384).
+
+### 10.2 riscv boot mapping note
+
+`L0[0]` is a set of explicit leaves (virtio-mmio, PLIC, UART, ECAM
+range, one 4 KiB RTC page), NOT a blanket identity map. A 2 MiB leaf
+at `L2[0]` would map device space at VA 0 and defeat null-deref
+detection — hence the L3 page. `.boot` must still end at
+`0x80207000` (fixed `.text` VMA/LMA contract).
+
+### 10.3 Serial testability + loopback contract
+
+- PL011 snapshot (`FR/CR/LCR_H/IBRD/FBRD/IMSC`): read-only observers;
+  `init()` writes CR `0x301`, LCR_H `0x70`, IBRD 26, FBRD 3, IMSC 0.
+  PL011 has **no** loopback mode — never fabricate one.
+- riscv 16550: snapshot (`IER/LCR/MCR/LSR`) + raw MCR/drain accessors;
+  SBI owns TX (divisor never reprogrammed); IER is never written
+  (RX is polled). Loopback = MCR bit 4, debug-build only, quiesced
+  (drain before/after), unconditionally restored, no logging and no
+  asserts inside the window (an abort would strand LOOP and silence
+  the console suite-wide).
+
+### 10.4 Decoder contract + ordering rule
+
+Normalization: CR/LF → `\n`, BS/DEL → `\b`, TAB → `\t`, NUL dropped,
+control (`0x01–0x1F`) and high (`0x80–0xFF`) bytes verbatim (UTF-8
+pass-through; a UART has no modifier channel — Ctrl arrives as the
+byte itself, never sticky state). Static SPSC ring (256) + drop
+counter; single producer (shell pump or harness inject); polling
+only. Ordering at `shell_try_get_key_impl`: decoder (pump + ring)
+first on aarch64/riscv64, raw Serial poll as fail-open fallback,
+then iocd, then the hardware ring. `Terminal::readline` has no pump
+(no second UART consumer).

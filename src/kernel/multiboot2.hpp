@@ -117,3 +117,30 @@ inline uint64_t mb2_find_tag(uint32_t type) {
     }
     return 0;
 }
+
+/// @brief Validated tag6 (memory map) entry count (issue #305): fail-closed
+///        descriptor validation. Returns 0 (= reject the whole tag) when the
+///        tag cannot be strided safely: entry_size 0 (div-by-zero), size
+///        smaller than the header (underflow), entry_size not equal to the
+///        spec 24-byte entry, or no room for one entry inside the multiboot
+///        info structure. Otherwise returns the entry count clamped by BOTH
+///        the tag's own size and the info-remaining bytes, so entries never
+///        overrun into adjacent tags. Pure (no kernel deps) — QE-unit-testable.
+/// @param tag Tag header (already located by mb2_find_tag).
+/// @param bytes_available Info-remaining bytes at the tag (0 at/over end).
+/// @return Usable entry count, or 0 to reject the tag.
+inline uint64_t mb2_mmap_validated_count(const MemoryMapTag *tag,
+                                         uint64_t bytes_available) {
+    if (tag->entry_size != sizeof(MemoryMapEntry))
+        return 0;
+    if (tag->size < sizeof(MemoryMapTag))
+        return 0;
+    if (bytes_available <= sizeof(MemoryMapTag))
+        return 0;
+    uint64_t by_size = (tag->size - sizeof(MemoryMapTag)) / tag->entry_size;
+    uint64_t room = bytes_available;
+    if (room > tag->size)
+        room = tag->size;
+    uint64_t by_avail = (room - sizeof(MemoryMapTag)) / tag->entry_size;
+    return (by_size < by_avail) ? by_size : by_avail;
+}

@@ -28,6 +28,7 @@
 /// driver execution).  The mode is read/written only under the slot lock.
 
 #include <kernel/irq_delivery.hpp>
+#include <kernel/arch/hal/irq_vectors.hpp>
 #include <kernel/cap/irq.hpp>
 #include <kernel/cap/msix.hpp>
 #include <kernel/task/task.hpp>
@@ -77,17 +78,24 @@ IrqRegistration *IrqDelivery::slot(int16_t idx) {
 ///        left delivering).  Mirrors the caller holding the slot lock.
 ///        PIC-kind only (issue #10): a MSI-X vector must never run the
 ///        `vector - 32` line arithmetic — it would mask a wrong PIC line.
+///        PLATFORM-kind only on non-x86 (issue #354): masks the controller
+///        line directly.
 static void restore_line_mask(IrqRegistration &r, bool force_mask) {
-    if (r.kind != IrqSlotKind::PIC)
+    if (r.kind == IrqSlotKind::MSIX)
         return;
 #if defined(CONFIG_ARCH_X86_64)
+    if (r.kind != IrqSlotKind::PIC)
+        return;
     uint8_t irq_line = static_cast<uint8_t>(r.vector - 32U);
     if (force_mask || r.line_was_masked) {
         arch::ArchInterruptController::mask(irq_line);
     }
 #else
-    (void)r;
-    (void)force_mask;
+    if (r.kind != IrqSlotKind::PLATFORM)
+        return;
+    if (force_mask || r.line_was_masked) {
+        arch::ArchInterruptController::mask(r.vector);
+    }
 #endif
 }
 
@@ -106,15 +114,25 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
     // uniprocessor an IrqGuard is sufficient to make the find->claim window
     // un-interleavable (same discipline as drain_zombie_list).
     arch::IrqGuard irq_guard{};
+#if defined(CONFIG_ARCH_X86_64)
     // Vector window (fail closed): PIC lines (33–47 = IRQ1–15) and MSI-X
     // vectors (48–255 minus §1 reservations), issue #10.
     if (vector < IRQ_VECTOR_MIN)
         return -1;
-    if (vector == static_cast<uint8_t>(arch::InterruptVector::SYSCALL))
-        return -1; // 0x80 — §1 sole live gate, never an IRQ source
     if (vector > MSIX_VECTOR_MAX)
         return -1;
-    // Timer vector must never be claimed (§1 scheduler tick, vector 32).
+#else
+    // Platform window (fail closed, issue #354): the cap window is the
+    // whole claim window off-x86 (MSI unsupported — no MSIX kind exists).
+    if (!arch::irq_cap_vector_valid(vector))
+        return -1;
+#endif
+    // SYSCALL/TIMER rejections use per-arch values and stay unconditional:
+    // riscv64 SYSCALL (= 2) lies INSIDE the PLIC window, so the check is
+    // load-bearing off-x86 (gating it x86-only would open vector 2).
+    if (vector == static_cast<uint8_t>(arch::InterruptVector::SYSCALL))
+        return -1; // §1 sole live gate, never an IRQ source
+    // Timer vector must never be claimed (scheduler tick).
     if (vector == static_cast<uint8_t>(arch::InterruptVector::TIMER))
         return -1;
 #if defined(CONFIG_ARCH_X86_64)
@@ -126,8 +144,15 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
     if (vector == static_cast<uint8_t>(arch::APIC::APIC_TIMER_VECTOR) ||
         vector == 0xFF) // arch::APIC::SPURIOUS_VECTOR (private member)
         return -1;
+#else
+    // A vector with a live kernel handler is never claimable (single-owner).
+    // Non-x86 only: x86 entries_ are always populated (hardware IDT), so
+    // the probe is meaningless there — x86 keeps its explicit window +
+    // reservation checks above.
+    if (arch::IDT::has_handler(vector))
+        return -1;
 #endif
-    // Reject vectors claimed by the threaded-IRQ path (single-owner).
+    // Reject vectors claimed by the threaded-IRQ handler (single-owner).
     if (IrqThread::for_vector(vector) != nullptr)
         return -1;
 
@@ -140,8 +165,12 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
         IrqRegistration &r = g_irq_regs[i];
         if (!r.occupied) {
             r.vector = vector;
+#if defined(CONFIG_ARCH_X86_64)
             r.kind = (vector <= IRQ_VECTOR_MAX) ? IrqSlotKind::PIC
                                                 : IrqSlotKind::MSIX;
+#else
+            r.kind = IrqSlotKind::PLATFORM;
+#endif
             r.occupied = true;
             r.armed = false;
             r.line_was_masked = true;
@@ -174,6 +203,15 @@ bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
     IrqRegistration *r = slot(reg_idx);
     if (!r)
         return false;
+#if !defined(CONFIG_ARCH_X86_64)
+    // IrqGuard BEFORE the slot lock (issue #354): unmasking a platform line
+    // while holding the slot lock would let this same line's ISR spin on
+    // that lock on the same CPU (GIC/PLIC permit higher-priority
+    // preemption). x86 keeps its exact prior ordering (lock only): x86 ISRs
+    // run with interrupts disabled, so no same-CPU reentry is possible
+    // there — widening its mask window would only add latency.
+    arch::IrqGuard irq_guard{};
+#endif
     // All IRQ-state transitions serialize on the per-slot lock (header
     // contract): re-validate occupied/armed AND ownership under the lock so a
     // concurrent revoke/dispose/drain + slot reuse cannot arm a FOREIGN cap's
@@ -210,6 +248,15 @@ bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
         auto *msix = static_cast<cap::MsixCap *>(&owner);
         msix->set_entry_masked(false);
     }
+#else
+    // PLATFORM (issue #354): unmask the controller line.  MSIX-kind slots
+    // cannot exist off-x86 (MSI programming fails closed), so any other
+    // kind here is a state violation — fail closed.
+    if (r->kind != IrqSlotKind::PLATFORM)
+        return false;
+    r->line_was_masked =
+        !arch::ArchInterruptController::line_enabled(r->vector);
+    arch::ArchInterruptController::unmask(r->vector);
 #endif
     return true;
 }
@@ -282,6 +329,10 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
     IrqRegistration *r = slot(reg_idx);
     if (!r)
         return false;
+#if !defined(CONFIG_ARCH_X86_64)
+    // Same IrqGuard-before-lock discipline as arm() (issue #354).
+    arch::IrqGuard irq_guard{};
+#endif
     SpinLockGuard<sync::SpinLock> guard(r->lock_);
     // Atomic ownership revalidation (issue #2): a slot drained at task death
     // and REUSED for another cap/vector between an outer check and this call
@@ -332,6 +383,11 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
 }
 
 void IrqDelivery::drain_task(TaskControlBlock &tcb) {
+#if !defined(CONFIG_ARCH_X86_64)
+    // Same IrqGuard-before-lock discipline as arm() (issue #354).  Bounded:
+    // CONFIG_CAP_MAX_IRQ iterations of lock-only work, no blocking.
+    arch::IrqGuard irq_guard{};
+#endif
     for (size_t i = 0; i < static_cast<size_t>(CONFIG_CAP_MAX_IRQ); ++i) {
         IrqRegistration &r = g_irq_regs[i];
         SpinLockGuard<sync::SpinLock> guard(r.lock_);

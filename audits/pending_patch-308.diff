@@ -1,0 +1,1380 @@
+diff --git a/docs/specs/drivers.md b/docs/specs/drivers.md
+index 40657f5c4..17c7dea9b 100644
+--- a/docs/specs/drivers.md
++++ b/docs/specs/drivers.md
+@@ -283,7 +283,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+  handle_interrupt_c(vec, err, rip, regs, tsc)        [kernel.cpp]
+    ├─ v==7        lazy FPU/SSE (fpu_owner, fxsave/fxrstor)
+    ├─ user-recover g_user_access_recover_ip redirect
+-   ├─ v<32        user: deliver_signal / kernel: guard-page check → panic
++    ├─ v<32        user: deliver_signal / kernel: guard-page check → raw-dump + halt (issue #308)
+    ├─ v==0x80     syscall_handler → signals → reschedule
+    ├─ THREADED_IRQS: IrqThread::for_vector(v) → isr_entry (ack+Notify) → task
+    ├─ else        IDT::handle_interrupt → handlers_[v]
+diff --git a/docs/specs/external-pager.md b/docs/specs/external-pager.md
+index 3fee0ba9c..706c4a6ae 100644
+--- a/docs/specs/external-pager.md
++++ b/docs/specs/external-pager.md
+@@ -60,8 +60,9 @@ behaviour (§4.6).
+ - **No copy-on-write (COW).**  Page tables are never re-pointed lazily; the
+   pager explicitly maps backing frames.
+ - **No demand paging of kernel memory.**  Kernel-space faults (HHDM, kstack
+-  guard pages, recovery windows, reserved vectors) are untouched: they keep the
+-  existing panic / `g_user_access_recover_ip` / guard-page behaviour (§3.2).
++  guard pages, recovery windows, reserved vectors) are untouched: they keep
++  the existing raw-dump + halt / `g_user_access_recover_ip` / guard-page
++  behaviour (§3.2, issue #308).
+ - **No executable pager mappings in v1.**  `SYS_PAGER_MAP` maps frames
+   non-executable (NX).  Instruction-fetch faults (`#PF` I/D=1) are therefore
+   **not delegatable** in v1 — they keep the SIGSEGV path.  Executable pager
+@@ -88,8 +89,8 @@ behaviour (§4.6).
+ 2. From-user exception → signal path (kernel.cpp:1510): `vector==14` from a
+    user CS logs CR2 and delivers SIGSEGV via `deliver_signal_to_user`.
+ 3. Kernel-mode guard-page check for the kstack window (kernel.cpp:1536) →
+-   `stack_overflow_hook`/panic.
+-4. Everything else in kernel mode → CPU EXCEPTION panic.
++   `stack_overflow_hook`/raw-dump + halt.
++4. Everything else in kernel mode → CPU EXCEPTION first-chance dump + halt.
+ 
+ ### 3.2 Delegatable set (new)
+ 
+diff --git a/docs/specs/memory.md b/docs/specs/memory.md
+index a969a560c..5d9129a69 100644
+--- a/docs/specs/memory.md
++++ b/docs/specs/memory.md
+@@ -77,7 +77,7 @@ data pages).  `page_table_shared_ = false`.  COW deferred to a later version.
+  slot_base = KERNEL_STACK_BASE + i*SLOT_SIZE
+    [slot_base]              guard  (unmapped 4 KiB)
+    [slot_base + PAGE_SIZE]  stack  (grows down)
+-   #PF on cr2 ∈ window  →  find_task_by_kstack_slot → panic("kernel stack overflow")
++    #PF on cr2 ∈ window  →  find_task_by_kstack_slot → stack_overflow_hook → raw-dump + halt (issue #308)
+ ```
+ Size tiers `CONFIG_STACK_SIZE_TABLE { 4096, 4096, 16384, 16384, 32768, 32768, 65536, 65536 }`.
+ The guard-page approach was adopted; software canaries are a secondary layer
+diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
+index e28df814a..d5a389ef9 100644
+--- a/src/kernel/arch/aarch64/interrupt_controller.cpp
++++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
+@@ -8,6 +8,7 @@
+ #include <kernel/kernel.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/debug/debug_stop.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ #include <signal.hpp>
+ 
+ #include <kernel/arch/hal/irq_storm.hpp>
+@@ -360,42 +361,23 @@ extern "C" uint64_t aarch64_last_el0_esr() { return g_last_el0_esr; }
+ ///        kernel.cpp:1664): while a guarded copy runs, ANY EL1 fault
+ ///        redirects ELR_EL1 to the recovery label so the copy returns
+ ///        false instead of panicking.  Returns 0 when recovery was
+-///        applied (asm stub restores + erets WITHOUT the legacy skip),
+-///        1 otherwise.  Any other EL1 sync fault is a kernel bug — the
+-///        old skip-and-eret behavior masked them (issue #209).  Dumps
+-///        ESR/FAR/ELR over the lock-free UART path (bounded poll,
+-///        byte-drop; no Logger format strings — %lx hangs) and panics
+-///        in debug builds.  In release builds returns 1 and the asm stub
+-///        resumes with the legacy skip.  Runs with interrupts masked
+-///        (vector entry); must not re-enable IRQs or touch the
+-///        scheduler.  Recovery resume is safe: the guarded copy's
+-///        recovery label needs no caller-saved state (same contract the
+-///        x86/riscv recovery paths rely on).
++///        applied (asm stub restores + erets).  Any other EL1 sync fault
++///        is a kernel bug — issue #308: raw first-chance frame over the
++///        lock-free UART path, then halt in ALL builds (the old release
++///        ELR+=4 skip silently continued after kernel faults).  Runs with
++///        interrupts masked (vector entry); must not re-enable IRQs or
++///        touch the scheduler.
+ extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
+-                                                 uint64_t elr) {
++                                                uint64_t elr, uint64_t sp) {
+     uint64_t recover = kernel::g_user_access_recover_ip;
+     if (recover != 0) {
+         kernel::g_user_access_recover_ip = 0;
+         asm volatile("msr elr_el1, %0" ::"r"(recover));
+         return 0;
+     }
+-    arch::Serial::puts("\nEL1 sync fault: ESR=0x");
+-    for (int i = 60; i >= 0; i -= 4)
+-        arch::Serial::putchar("0123456789ABCDEF"[(esr >> i) & 0xF]);
+-    arch::Serial::puts(" FAR=0x");
+-    for (int i = 60; i >= 0; i -= 4)
+-        arch::Serial::putchar("0123456789ABCDEF"[(far >> i) & 0xF]);
+-    arch::Serial::puts(" ELR=0x");
+-    for (int i = 60; i >= 0; i -= 4)
+-        arch::Serial::putchar("0123456789ABCDEF"[(elr >> i) & 0xF]);
+-    arch::Serial::puts("\n");
+-#ifdef CONFIG_DEBUG
+-    panic("EL1 sync fault");
+-#else
+-    (void)esr;
+-    (void)far;
+-    (void)elr;
+-#endif
++    auto frame = kernel::debug::make_aarch64_frame(
++        esr, far, elr, sp, arch::read_ttbr0_el1(), arch::read_ttbr1_el1());
++    kernel::debug::first_chance_halt(frame);
+     return 1;
+ }
+ 
+diff --git a/src/kernel/arch/aarch64/test_aarch64.cpp b/src/kernel/arch/aarch64/test_aarch64.cpp
+index f4e5c912a..08670a8fe 100644
+--- a/src/kernel/arch/aarch64/test_aarch64.cpp
++++ b/src/kernel/arch/aarch64/test_aarch64.cpp
+@@ -40,6 +40,7 @@
+ #include <kernel/arch/irq_guard.hpp>
+ #include <kernel/core/global_state.hpp>
+ #include <kernel/debug/debug_regs.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ #include <kernel/test/test_sched_helpers.hpp>
+ #include <kernel/test/test_isolate.hpp>
+ #include <kernel/elf/elf_loader.hpp>
+@@ -1240,7 +1241,7 @@ JARVIS_TEST(aarch64_clone_frame_readback, "PRE: none | POST: none") {
+ 
+ /// @brief Register all AArch64 architecture test cases.
+ extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
+-                                                 uint64_t elr);
++                                                uint64_t elr, uint64_t sp);
+ 
+ // Runmode: kernel
+ // Testidea: v0.5.x issue #214 — EL1 sync faults must reach the fail-stop
+@@ -1289,8 +1290,8 @@ JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
+     asm volatile("mrs %0, elr_el1" : "=r"(saved_elr));
+     kernel::gs::user_access_recover_ip() = 0xA11CEULL;
+     const uint64_t ret = aarch64_el1_unexpected_fault(0x2000000ULL,
+-                                                     0x400000ULL,
+-                                                     saved_elr);
++                                                      0x400000ULL,
++                                                      saved_elr, 0);
+     JARVIS_ASSERT_FMT(ret == 0, "recovery path returned %lx, want 0", ret);
+     JARVIS_ASSERT_FMT(kernel::gs::user_access_recover_ip() == 0,
+                       "recovery left armed: 0x%lx",
+@@ -1304,6 +1305,40 @@ JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: issue #308 — the non-recovery EL1 fault path emits a raw
++// first-chance frame (FAR/ELR/SP/TTBR) and reaches the halt seam exactly
++// once, with no Logger/dmesg traffic. Recovery stays disarmed; the
++// CONFIG_DEBUG seam returns instead of halting.
++// Input: synthetic (esr, far, elr, sp) with recovery disarmed + armed seam.
++// Expect: halt count 1; last frame carries FAR/ELR/SP/TTBR0/1 verbatim.
++// Depends: aarch64_el1_unexpected_fault, crash_dump seam (issue #308)
++// CONFIG_DEBUG-only: arms the debug halt seam.
++#if CONFIG_DEBUG
++JARVIS_TEST(aarch64_el1_failstop_raw_frame) {
++    kernel::gs::user_access_recover_ip() = 0;
++    kernel::debug::test_reset_crash_halt();
++    kernel::debug::test_arm_crash_halt();
++    const uint64_t ret = aarch64_el1_unexpected_fault(
++        0x96000010ULL, 0x40008000ULL, 0xFFFF000040000000ULL,
++        0xFFFF000041000000ULL);
++    JARVIS_ASSERT_FMT(ret == 1, "non-recovery path returned %lx, want 1",
++                      ret);
++    JARVIS_ASSERT_FMT(kernel::debug::test_crash_halt_count() == 1,
++                      "halt count %lx, want 1",
++                      kernel::debug::test_crash_halt_count());
++    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
++    JARVIS_ASSERT_FMT(
++        f.addr == 0x40008000ULL && f.pc == 0xFFFF000040000000ULL &&
++            f.sp == 0xFFFF000041000000ULL &&
++            f.pgtbl0 == arch::read_ttbr0_el1() &&
++            f.pgtbl1 == arch::read_ttbr1_el1(),
++        "frame mismatch: FAR/ELR/SP/TTBR not echoed");
++    kernel::debug::test_reset_crash_halt();
++    JARVIS_TEST_PASS();
++}
++#endif // CONFIG_DEBUG (first-chance seam test)
++
+ void register_aarch64_tests() {
+     Logger::info("Registering aarch64 architecture tests");
+ 
+@@ -1340,6 +1375,9 @@ void register_aarch64_tests() {
+     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
+     JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
+     JARVIS_REGISTER_TEST(aarch64_el1_sync_unexpected_failstop_routing);
++#if CONFIG_DEBUG
++    JARVIS_REGISTER_TEST(aarch64_el1_failstop_raw_frame);  // issue #308
++#endif
+ }
+ 
+ #endif
+\ No newline at end of file
+diff --git a/src/kernel/arch/aarch64/vectors.S b/src/kernel/arch/aarch64/vectors.S
+index 05456ceb9..fc66a8681 100644
+--- a/src/kernel/arch/aarch64/vectors.S
++++ b/src/kernel/arch/aarch64/vectors.S
+@@ -76,12 +76,11 @@ default_exception:
+     ldp     x0, x1, [sp], #16
+     eret
+ 
+-// EL1 sync unexpected-fault handler (issue #214).  The old behavior routed
+-// these slots through default_exception, which silently skipped the faulting
+-// instruction (ELR+=4, no log) — masking kernel bugs (issue #209: 36 faulting
+-// frame-build stores became no-ops with zero output).  Now: record
+-// ESR/FAR/ELR, call the C handler (dumps + panics in debug builds), and on
+-// return (release builds) fall through to the legacy skip epilogue.
++// EL1 sync unexpected-fault handler (issue #214, first-chance path issue
++// #308).  Records ESR/FAR/ELR, then calls the C handler with (esr, far,
++// elr, sp).  On non-recovery the handler halts; a nonzero return used to
++// take the legacy ELR+=4 skip (now removed: silent continuation after a
++// kernel fault is a correctness violation).  Any return here parks.
+ .type el1_sync_unexpected, @function
+ el1_sync_unexpected:
+     stp     x0, x1, [sp, #-16]!
+@@ -96,22 +95,24 @@ el1_sync_unexpected:
+     mrs     x2, elr_el1
+     adrp    x3, g_debug_elr
+     str     x2, [x3, #:lo12:g_debug_elr]
+-    // Marshal (esr, far, elr) into x0-x2 for the C handler.
++    // Marshal (esr, far, elr, sp) into x0-x3 for the C handler. The three
++    // pushes above consumed 40 bytes, so the faulting SP is sp+40 (issue
++    // #308: clobbers x3 only after x2/x3 were saved).
+     mrs     x0, esr_el1
+     mrs     x1, far_el1
+     mrs     x2, elr_el1
++    mov     x3, sp
++    add     x3, x3, #40
+     bl      aarch64_el1_unexpected_fault
+     // x0 == 0: fault recovery applied (ELR_EL1 already redirected by the
+     // C handler, issue #235) — restore and eret WITHOUT the legacy skip.
+     cbz     x0, .Lel1_recovered
+-    // Release return path (debug panics, never returns): restore and skip.
+-    ldr     x30, [sp], #16
+-    ldp     x2, x3, [sp], #16
+-    mrs     x0, elr_el1
+-    add     x0, x0, #4
+-    msr     elr_el1, x0
+-    ldp     x0, x1, [sp], #16
+-    eret
++    // Non-recovery return (the C handler halts in production; this parks
++    // the test seam): DAIF-set + wfi loop, never the ELR+=4 skip.
++    msr     daifset, #2
++1:
++    wfi
++    b       1b
+ .Lel1_recovered:
+     ldr     x30, [sp], #16
+     ldp     x2, x3, [sp], #16
+diff --git a/src/kernel/arch/riscv64/interrupt_controller.cpp b/src/kernel/arch/riscv64/interrupt_controller.cpp
+index a3bfffe53..f483b7fa0 100644
+--- a/src/kernel/arch/riscv64/interrupt_controller.cpp
++++ b/src/kernel/arch/riscv64/interrupt_controller.cpp
+@@ -9,6 +9,7 @@
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/debug/debug_stop.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ #include <kernel/arch/irq_guard.hpp>
+ #include <signal.hpp>
+ 
+@@ -157,71 +158,16 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
+     }
+ }
+ 
++/// @brief S-mode kernel-fault handler (issue #308 first-chance path):
++///        raw register frame over SBI console transport, then halt - no
++///        Logger formatting (Logger may be the casualty), no recovery, no
++///        SBI shutdown (preserves post-mortem). Transport stays raw SBI
++///        console_putchar (a7=1), extended with SP + SATP.
+ extern "C" void handle_kernel_exception(uint64_t sepc, uint64_t scause,
+-                                        uint64_t stval) {
+-    const char msg[] = {'[', 'E', 'X', 'C', ']', ' ', 's',
+-                        'c', 'a', 'u', 's', 'e', '=', 0};
+-    for (const char *p = msg; *p; ++p) {
+-        uint64_t ch = (unsigned char)*p;
+-        asm volatile("mv a0, %0; li a7, 1; ecall"
+-                     :
+-                     : "r"(ch)
+-                     : "a0", "a7", "memory");
+-    }
+-    uint64_t v = scause;
+-    for (int i = 60; i >= 0; i -= 4) {
+-        uint64_t nibble = (v >> i) & 0xF;
+-        char c = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
+-        uint64_t ch = (unsigned char)c;
+-        asm volatile("mv a0, %0; li a7, 1; ecall"
+-                     :
+-                     : "r"(ch)
+-                     : "a0", "a7", "memory");
+-    }
+-    const char msg2[] = {' ', 's', 'e', 'p', 'c', '=', 0};
+-    for (const char *p = msg2; *p; ++p) {
+-        uint64_t ch = (unsigned char)*p;
+-        asm volatile("mv a0, %0; li a7, 1; ecall"
+-                     :
+-                     : "r"(ch)
+-                     : "a0", "a7", "memory");
+-    }
+-    v = sepc;
+-    for (int i = 60; i >= 0; i -= 4) {
+-        uint64_t nibble = (v >> i) & 0xF;
+-        char c = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
+-        uint64_t ch = (unsigned char)c;
+-        asm volatile("mv a0, %0; li a7, 1; ecall"
+-                     :
+-                     : "r"(ch)
+-                     : "a0", "a7", "memory");
+-    }
+-    const char msg3[] = {' ', 's', 't', 'v', 'a', 'l', '=', 0};
+-    for (const char *p = msg3; *p; ++p) {
+-        uint64_t ch = (unsigned char)*p;
+-        asm volatile("mv a0, %0; li a7, 1; ecall"
+-                     :
+-                     : "r"(ch)
+-                     : "a0", "a7", "memory");
+-    }
+-    v = stval;
+-    for (int i = 60; i >= 0; i -= 4) {
+-        uint64_t nibble = (v >> i) & 0xF;
+-        char c = nibble < 10 ? '0' + nibble : 'A' + nibble - 10;
+-        uint64_t ch = (unsigned char)c;
+-        asm volatile("mv a0, %0; li a7, 1; ecall"
+-                     :
+-                     : "r"(ch)
+-                     : "a0", "a7", "memory");
+-    }
+-    {
+-        uint64_t ch = (unsigned char)'\n';
+-        asm volatile("mv a0, %0; li a7, 1; ecall"
+-                     :
+-                     : "r"(ch)
+-                     : "a0", "a7", "memory");
+-    }
+-    panic("riscv64: unhandled exception");
++                                        uint64_t stval, uint64_t sp) {
++    auto frame = kernel::debug::make_riscv_frame(scause, sepc, stval, sp,
++                                                 arch::read_satp());
++    kernel::debug::first_chance_halt(frame);
+ }
+ 
+ /// @brief Latched last U-mode fault CSRs for test readback.
+@@ -308,7 +254,7 @@ extern "C" void riscv64_exception_dispatch(uint64_t *frame, uint64_t sstatus) {
+         riscv64_u_fault_handler(frame);
+         return;
+     }
+-    handle_kernel_exception(frame[31], frame[33], frame[34]);
++    handle_kernel_exception(frame[31], frame[33], frame[34], frame[1]);
+ }
+ 
+ } // namespace arch
+diff --git a/src/kernel/arch/riscv64/test_riscv64.cpp b/src/kernel/arch/riscv64/test_riscv64.cpp
+index 6f97423c1..5be19186a 100644
+--- a/src/kernel/arch/riscv64/test_riscv64.cpp
++++ b/src/kernel/arch/riscv64/test_riscv64.cpp
+@@ -36,6 +36,7 @@
+ #include <kernel/arch/riscv64/hal/plic.hpp>
+ #include <kernel/arch/riscv64/hal/uart.hpp>
+ #include <kernel/arch/riscv64/hal/memmap.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/syscall/syscall.hpp>
+ #include <kernel/task/scheduler.hpp>
+@@ -1356,6 +1357,39 @@ JARVIS_TEST(riscv64_elf_ecall_smoke, "PRE: none | POST: none") {
+ }
+ 
+ /// @brief Register all riscv64 architecture tests.
++/// @brief S-mode kernel-fault entry (interrupt_controller.cpp), 4-arg
++///        first-chance form (issue #308).
++extern "C" void handle_kernel_exception(uint64_t sepc, uint64_t scause,
++                                        uint64_t stval, uint64_t sp);
++
++#if CONFIG_DEBUG
++// Runmode: kernel
++// Testidea: issue #308 — the S-mode kernel-fault path emits a raw
++// first-chance frame (STVAL/SATP/SEPC/SP) and reaches the halt seam
++// exactly once, with no Logger/dmesg traffic. CONFIG_DEBUG seam returns
++// instead of halting.
++// Input: synthetic (sepc, scause, stval, sp) + armed seam.
++// Expect: halt count 1; last frame carries STVAL/SATP/SEPC/SP verbatim.
++// Depends: handle_kernel_exception, crash_dump seam (issue #308)
++JARVIS_TEST(riscv64_kernel_exception_raw_frame, "PRE: none | POST: none") {
++    kernel::debug::test_reset_crash_halt();
++    kernel::debug::test_arm_crash_halt();
++    handle_kernel_exception(0xFFFFFFC080001000ULL, 12, 0xDEADULL,
++                            0xFFFFFFC081000000ULL);
++    JARVIS_ASSERT_FMT(kernel::debug::test_crash_halt_count() == 1,
++                      "halt count %lx, want 1",
++                      kernel::debug::test_crash_halt_count());
++    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
++    JARVIS_ASSERT_FMT(f.pc == 0xFFFFFFC080001000ULL && f.vector == 12 &&
++                          f.addr == 0xDEADULL &&
++                          f.sp == 0xFFFFFFC081000000ULL &&
++                          f.pgtbl0 == arch::read_satp(),
++                      "frame mismatch: STVAL/SATP/SEPC/SP not echoed");
++    kernel::debug::test_reset_crash_halt();
++    JARVIS_TEST_PASS();
++}
++#endif // CONFIG_DEBUG (first-chance seam test)
++
+ void register_riscv64_tests() {
+     Logger::info("Registering riscv64 architecture tests");
+ 
+@@ -1403,6 +1437,9 @@ void register_riscv64_tests() {
+     JARVIS_REGISTER_TEST(riscv64_exec_slots);            // issue #206 M2
+     JARVIS_REGISTER_TEST(riscv64_u_fault_terminates);    // issue #206 M2
+     JARVIS_REGISTER_TEST(riscv64_elf_ecall_smoke);       // issue #206 M2
++#if CONFIG_DEBUG
++    JARVIS_REGISTER_TEST(riscv64_kernel_exception_raw_frame);  // issue #308
++#endif
+ }
+ 
+ #endif
+diff --git a/src/kernel/debug/crash_dump.cpp b/src/kernel/debug/crash_dump.cpp
+new file mode 100644
+index 000000000..85fc98a5a
+--- /dev/null
++++ b/src/kernel/debug/crash_dump.cpp
+@@ -0,0 +1,229 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file crash_dump.cpp
++/// @brief First-chance raw crash dump (issue #308): bounded formatter
++///        (no Logger/libc), arch::Serial emitter, weak halt default.
++
++#include <kernel/debug/crash_dump.hpp>
++#include <kernel/arch/serial.hpp>
++#include <kernel/arch/io.hpp>
++#include <types.hpp>
++
++namespace kernel {
++namespace debug {
++
++namespace {
++
++// Bounded helpers: no allocation, no locks, no formatting library.
++void emit_str(const char *s) {
++    while (*s)
++        arch::Serial::putchar(*s++);
++}
++
++void emit_hex(uint64_t v) {
++    emit_str("0x");
++    for (int sh = 60; sh >= 0; sh -= 4)
++        arch::Serial::putchar(
++            "0123456789abcdef"[(v >> sh) & 0xF]);
++}
++
++size_t fmt_str(char *out, size_t cap, size_t p, const char *s) {
++    while (*s && p < cap)
++        out[p++] = *s++;
++    return p;
++}
++
++size_t fmt_hex(char *out, size_t cap, size_t p, uint64_t v) {
++    p = fmt_str(out, cap, p, "0x");
++    for (int sh = 60; sh >= 0 && p < cap; sh -= 4)
++        out[p++] = "0123456789abcdef"[(v >> sh) & 0xF];
++    return p;
++}
++
++const char *arch_name(FirstChanceArch a) {
++    switch (a) {
++    case FirstChanceArch::X86_64:
++        return "x86_64";
++    case FirstChanceArch::AARCH64:
++        return "aarch64";
++    default:
++        return "riscv64";
++    }
++}
++
++const char *cause_name(FirstChanceCause c) {
++    return (c == FirstChanceCause::STACK_OVERFLOW) ? "STACK-OVERFLOW"
++                                                  : "CPU-EXCEPTION";
++}
++
++} // namespace
++
++#if CONFIG_DEBUG
++// Debug latch + last frame (this TU is the sole writer; test seam
++// functions are the readers). Named scope so the weak arch::crash_halt
++// below can reference them.
++bool g_halt_armed = false;
++uint64_t g_halt_count = 0;
++FirstChanceFrame g_last_frame{FirstChanceArch::X86_64,
++                              FirstChanceCause::CPU_EXCEPTION,
++                              0, 0, 0, 0, 0, 0, 0};
++#endif
++
++size_t format_first_chance(const FirstChanceFrame &frame, char *out,
++                           size_t cap) noexcept {
++    size_t p = 0;
++    p = fmt_str(out, cap, p, "\n[FIRST-CHANCE] ");
++    p = fmt_str(out, cap, p, cause_name(frame.cause));
++    p = fmt_str(out, cap, p, " (raw) arch=");
++    p = fmt_str(out, cap, p, arch_name(frame.arch));
++    // Retain the CPU EXCEPTION token for tools/gpf-debug.sh.
++    p = fmt_str(out, cap, p, " CPU EXCEPTION vec=");
++    p = fmt_hex(out, cap, p, frame.vector);
++    p = fmt_str(out, cap, p, " err=");
++    p = fmt_hex(out, cap, p, frame.error);
++    p = fmt_str(out, cap, p, " addr=");
++    p = fmt_hex(out, cap, p, frame.addr);
++    p = fmt_str(out, cap, p, " pc=");
++    p = fmt_hex(out, cap, p, frame.pc);
++    p = fmt_str(out, cap, p, " sp=");
++    p = fmt_hex(out, cap, p, frame.sp);
++    p = fmt_str(out, cap, p, " pgtbl0=");
++    p = fmt_hex(out, cap, p, frame.pgtbl0);
++    p = fmt_str(out, cap, p, " pgtbl1=");
++    p = fmt_hex(out, cap, p, frame.pgtbl1);
++    p = fmt_str(out, cap, p, "\n");
++    return p;
++}
++
++void first_chance_emit(const FirstChanceFrame &frame) noexcept {
++    switch (frame.arch) {
++    case FirstChanceArch::X86_64:
++        emit_str("\n[FIRST-CHANCE] CPU-EXCEPTION (raw) arch=x86_64 CPU "
++                 "EXCEPTION");
++        break;
++    case FirstChanceArch::AARCH64:
++        emit_str("\n[FIRST-CHANCE] CPU-EXCEPTION (raw) arch=aarch64 CPU "
++                 "EXCEPTION");
++        break;
++    default:
++        emit_str("\n[FIRST-CHANCE] CPU-EXCEPTION (raw) arch=riscv64 CPU "
++                 "EXCEPTION");
++        break;
++    }
++    if (frame.cause == FirstChanceCause::STACK_OVERFLOW)
++        emit_str(" [STACK-OVERFLOW]");
++    emit_str(" vec=");
++    emit_hex(frame.vector);
++    emit_str(" err=");
++    emit_hex(frame.error);
++    emit_str(" addr=");
++    emit_hex(frame.addr);
++    emit_str(" pc=");
++    emit_hex(frame.pc);
++    emit_str(" sp=");
++    emit_hex(frame.sp);
++    emit_str(" pgtbl0=");
++    emit_hex(frame.pgtbl0);
++    emit_str(" pgtbl1=");
++    emit_hex(frame.pgtbl1);
++    emit_str("\n");
++#if CONFIG_DEBUG
++    g_last_frame = frame;
++#endif
++}
++
++void first_chance_halt(const FirstChanceFrame &frame) noexcept {
++    first_chance_emit(frame);
++    arch::crash_halt();
++#if CONFIG_DEBUG
++    // Test seam only: production crash_halt never returns.
++    ++g_halt_count;
++#endif
++}
++
++FirstChanceFrame make_x86_frame(uint64_t vector, uint64_t error,
++                                uint64_t rip, uint64_t sp, uint64_t cr2,
++                                uint64_t cr3) noexcept {
++    FirstChanceFrame f{FirstChanceArch::X86_64,
++                       FirstChanceCause::CPU_EXCEPTION,
++                       vector, error, cr2, rip, sp, cr3, 0};
++    return f;
++}
++
++FirstChanceFrame make_aarch64_frame(uint64_t esr, uint64_t far, uint64_t elr,
++                                    uint64_t sp, uint64_t ttbr0,
++                                    uint64_t ttbr1) noexcept {
++    FirstChanceFrame f{FirstChanceArch::AARCH64,
++                       FirstChanceCause::CPU_EXCEPTION,
++                       esr, 0, far, elr, sp, ttbr0, ttbr1};
++    return f;
++}
++
++FirstChanceFrame make_riscv_frame(uint64_t scause, uint64_t sepc,
++                                  uint64_t stval, uint64_t sp,
++                                  uint64_t satp) noexcept {
++    FirstChanceFrame f{FirstChanceArch::RISCV64,
++                       FirstChanceCause::CPU_EXCEPTION,
++                       scause, 0, stval, sepc, sp, satp, 0};
++    return f;
++}
++
++FirstChanceFrame first_chance_frame_here(FirstChanceCause cause) noexcept {
++    uint64_t sp = 0;
++#if defined(CONFIG_ARCH_X86_64)
++    asm volatile("mov %%rsp, %0" : "=r"(sp));
++    FirstChanceFrame f{FirstChanceArch::X86_64, cause, 0, 0, 0, 0, sp, 0, 0};
++#elif defined(CONFIG_ARCH_AARCH64)
++    asm volatile("mov %0, sp" : "=r"(sp));
++    FirstChanceFrame f{FirstChanceArch::AARCH64, cause, 0, 0, 0, 0, sp, 0, 0};
++#else
++    asm volatile("mv %0, sp" : "=r"(sp));
++    FirstChanceFrame f{FirstChanceArch::RISCV64, cause, 0, 0, 0, 0, sp, 0, 0};
++#endif
++    return f;
++}
++
++#if CONFIG_DEBUG
++void test_arm_crash_halt() noexcept { g_halt_armed = true; }
++uint64_t test_crash_halt_count() noexcept { return g_halt_count; }
++FirstChanceFrame test_last_frame() noexcept { return g_last_frame; }
++void test_reset_crash_halt() noexcept {
++    g_halt_armed = false;
++    g_halt_count = 0;
++}
++#endif
++
++} // namespace debug
++} // namespace kernel
++
++namespace arch {
++
++// Weak default: IRQs off + halt loop, never returns. The CONFIG_DEBUG test
++// override returns only when explicitly armed.
++__attribute__((weak)) void crash_halt() noexcept {
++#if CONFIG_DEBUG
++    if (kernel::debug::g_halt_armed)
++        return;
++#endif
++    arch::cli();
++    for (;;)
++        arch::hlt();
++}
++
++} // namespace arch
+diff --git a/src/kernel/debug/crash_dump.hpp b/src/kernel/debug/crash_dump.hpp
+new file mode 100644
+index 000000000..f710899af
+--- /dev/null
++++ b/src/kernel/debug/crash_dump.hpp
+@@ -0,0 +1,114 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file crash_dump.hpp
++/// @brief First-chance raw crash dump (issue #308, debugd §8.3): raw polled
++///        register dump to UART + halt, with no Logger formatting (Logger
++///        may be the casualty) and no recovery attempts. Terminal path only.
++
++#pragma once
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++namespace kernel {
++namespace debug {
++
++/// @brief Architecture that produced the first-chance frame.
++enum class FirstChanceArch : uint8_t { X86_64 = 0, AARCH64 = 1, RISCV64 = 2 };
++
++/// @brief First-chance cause: unrecoverable CPU exception or stack overflow.
++enum class FirstChanceCause : uint8_t { CPU_EXCEPTION = 0, STACK_OVERFLOW = 1 };
++
++/// @brief Arch-neutral first-chance frame. Field slots are reused per arch:
++///        x86_64: addr=CR2, pc=RIP, sp=RSP, pgtbl0=CR3, pgtbl1=unused,
++///        vector/error as trapped. aarch64: addr=FAR, pc=ELR, sp=SP,
++///        pgtbl0=TTBR0, pgtbl1=TTBR1, vector=ESR. riscv64: addr=stval,
++///        pc=sepc, sp=SP, pgtbl0=SATP, pgtbl1=unused, vector=scause.
++struct FirstChanceFrame {
++    FirstChanceArch arch;
++    FirstChanceCause cause;
++    uint64_t vector;
++    uint64_t error;
++    uint64_t addr;
++    uint64_t pc;
++    uint64_t sp;
++    uint64_t pgtbl0;
++    uint64_t pgtbl1;
++};
++
++/// @brief Render a frame into a bounded NUL-free byte stream (no Logger,
++///        no libc, no allocation). Returns bytes written (<= cap).
++size_t format_first_chance(const FirstChanceFrame &frame, char *out,
++                           size_t cap) noexcept;
++
++/// @brief Emit a frame via raw polled UART only (arch::Serial). Records the
++///        frame in the debug latch when CONFIG_DEBUG is set.
++void first_chance_emit(const FirstChanceFrame &frame) noexcept;
++
++/// @brief Emit then halt. Returns only under the armed CONFIG_DEBUG seam
++///        (test override); production halt never returns.
++void first_chance_halt(const FirstChanceFrame &frame) noexcept;
++
++/// @brief Faulting RSP from an x86 trap frame (issue #308): the CPU pushes
++///        SS:RSP only on a privilege change (user fault, CS.RPL=3); a
++///        kernel-mode fault has no pushed RSP, so report 0 rather than a
++///        stack-content word. regs layout: [17]=RIP [18]=CS [19]=RFLAGS
++///        [20]=RSP [21]=SS (isr_stubs.asm uniform 16-byte stub frame).
++inline uint64_t x86_fault_sp(const uint64_t *regs) noexcept {
++    return (regs[18] & 3) ? regs[20] : 0;
++}
++
++/// @brief Per-arch frame constructors from trap context words.
++FirstChanceFrame make_x86_frame(uint64_t vector, uint64_t error,
++                                uint64_t rip, uint64_t sp, uint64_t cr2,
++                                uint64_t cr3) noexcept;
++FirstChanceFrame make_aarch64_frame(uint64_t esr, uint64_t far, uint64_t elr,
++                                    uint64_t sp, uint64_t ttbr0,
++                                    uint64_t ttbr1) noexcept;
++FirstChanceFrame make_riscv_frame(uint64_t scause, uint64_t sepc,
++                                  uint64_t stval, uint64_t sp,
++                                  uint64_t satp) noexcept;
++
++/// @brief Capture the current register state as a frame (stack-overflow
++///        path: no trap frame available). Values are the capture point's
++///        state, not a faulting frame.
++FirstChanceFrame first_chance_frame_here(FirstChanceCause cause) noexcept;
++
++#if CONFIG_DEBUG
++/// @brief Test seam: arm the halt override (returns instead of halting).
++void test_arm_crash_halt() noexcept;
++/// @brief Test seam: halt invocations since last reset.
++uint64_t test_crash_halt_count() noexcept;
++/// @brief Test seam: last emitted frame.
++FirstChanceFrame test_last_frame() noexcept;
++/// @brief Test seam: disarm + clear count and frame (snapshot restore).
++void test_reset_crash_halt() noexcept;
++#endif
++
++} // namespace debug
++} // namespace kernel
++
++namespace arch {
++
++/// @brief Halt the CPU after a first-chance dump (never returns in
++///        production). Weak default; CONFIG_DEBUG test override returns
++///        only when explicitly armed.
++void crash_halt() noexcept;
++
++} // namespace arch
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 332ef8026..3204fa99e 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -100,6 +100,7 @@
+ #include <constants.hpp>
+ #include <signal.hpp>
+ #include <kernel/debug/dump.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ #include <kernel/debug/debug_stop.hpp>
+ #include <fdt/libfdt.h>
+ #include <fdt/libfdt_internal.h>
+@@ -1782,7 +1783,9 @@ extern "C" void panic(const char *msg) {
+ }
+ 
+ #if CONFIG_ARCH_X86_64
+-static void dump_regs(uint64_t *regs) {
++// Only caller is the CONFIG_USER_FAULT_VERBOSE user-fault path below;
++// unused-function would otherwise fire -Werror in default configs.
++__attribute__((unused)) static void dump_regs(uint64_t *regs) {
+     if (!regs)
+         return;
+ 
+@@ -1879,9 +1882,9 @@ static void dump_regs(uint64_t *regs) {
+     }
+ #elif defined(CONFIG_ARCH_AARCH64)
+     L::raw_write("  ELR: ");
+-    L::print_hex(regs[31]);
+-    L::raw_write("  SPSR: ");
+     L::print_hex(regs[32]);
++    L::raw_write("  SPSR: ");
++    L::print_hex(regs[33]);
+     L::raw_write("\n  Stack trace:\n");
+     uint64_t *fp = reinterpret_cast<uint64_t *>(regs[29]);
+     // MP-4 (PAN): only walk a KERNEL frame chain; a user FP deref would be a
+@@ -1904,12 +1907,16 @@ static void dump_regs(uint64_t *regs) {
+ #endif // CONFIG_ARCH_X86_64
+ 
+ #if CONFIG_STACK_OVERFLOW_HOOK
+-// v0.4.0 MP-6.2: weak default stack-overflow hook — production panics.  A
+-// strong override (test suites) may instead recover the faulting task; see
+-// the guard-page #PF handler in handle_interrupt_c.
+-__attribute__((weak)) void stack_overflow_hook(kernel::TaskControlBlock *task) {
++// v0.4.0 MP-6.2 (bool contract, issue #308): weak default returns false
++// with no logging — the caller raw-dumps + halts.  A strong override
++// (test suites) returns true only when it recovers the faulting task;
++// see the guard-page #PF handler in handle_interrupt_c.
++__attribute__((weak)) bool stack_overflow_hook(
++    kernel::TaskControlBlock &task,
++    const kernel::debug::FirstChanceFrame &frame) {
+     (void)task;
+-    panic("kernel stack overflow");
++    (void)frame;
++    return false;
+ }
+ #endif // CONFIG_STACK_OVERFLOW_HOOK
+ 
+@@ -2489,23 +2496,19 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+             uint64_t cr2 = read_cr2();
+             if (cr2 >= t->kstack_slot_va_ &&
+                 cr2 < t->kstack_slot_va_ + arch::PAGE_SIZE) {
+-                kernel::Logger::fatal(
+-                    "STACK OVERFLOW: task '%s' (ID=%u) overflowed "
+-                    "kernel stack (CR2=0x%lx slot_va=0x%lx top=0x%lx)",
+-                    t->name, t->id, cr2,
+-                    t->kstack_slot_va_,
+-                    t->kernel_stack_top);
+-                dump_regs(regs);
+ #if CONFIG_STACK_OVERFLOW_HOOK
+-                // v0.4.0 MP-6.2: invoke the overflow hook.  The weak default
+-                // panics internally — production behaviour is unchanged.  A
+-                // strong override (test suite) may recover the faulting task
+-                // (rewrite the iret frame + TERMINATE), in which case we
+-                // return instead of panicking (mirrors the
+-                // g_user_access_recover_ip recovery).  The weak symbol always
+-                // resolves (to the default or the override), so no null
+-                // check is needed.
+-                stack_overflow_hook(t);
++                // Issue #308: hook first — a recovering override returns
++                // true (test-only, gated inside the override); otherwise
++                // raw-dump + halt with no Logger formatting.
++                auto frame = kernel::debug::make_x86_frame(
++                    vector, error_code, rip,
++                    kernel::debug::x86_fault_sp(regs), read_cr2(),
++                    read_cr3());
++                frame.cause =
++                    kernel::debug::FirstChanceCause::STACK_OVERFLOW;
++                if (stack_overflow_hook(*t, frame))
++                    return;
++                kernel::debug::first_chance_halt(frame);
+                 return;
+ #else
+                 panic("kernel stack overflow");
+@@ -2513,25 +2516,14 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+             }
+         }
+ 
+-        kernel::Logger::fatal("CPU EXCEPTION: %s (vector=%x err=%x rip=%x)",
+-                              exception_name(vector), vector, error_code, rip);
+-        dump_regs(regs);
+-
+-        // ---- Full diagnostic dump before panic ----
+-        kernel::debug::dump_all_tasks();
+-        kernel::debug::dump_scheduler_info();
+-
+-        if (t) {
+-            kernel::Logger::raw_write("  Task: id=");
+-            kernel::Logger::print_hex(t->id);
+-            kernel::Logger::raw_write(" prio=");
+-            kernel::Logger::print_dec(t->priority);
+-            kernel::Logger::raw_write(" state=");
+-            kernel::Logger::print_hex(static_cast<uint64_t>(t->state));
+-            kernel::Logger::raw_write("\n");
+-        }
+-
+-        panic("CPU EXCEPTION");
++        // Issue #308: first-chance raw dump + halt. No Logger formatting
++        // (Logger may be the casualty), no task/scheduler dumps, no
++        // recovery — raw registers to UART, then cli/hlt. GDB
++        // (make debug-test) is the post-mortem path.
++        auto frame = kernel::debug::make_x86_frame(
++            vector, error_code, rip,
++            kernel::debug::x86_fault_sp(regs), read_cr2(), read_cr3());
++        kernel::debug::first_chance_halt(frame);
+         return;
+     }
+ #elif defined(CONFIG_ARCH_AARCH64)
+@@ -2550,12 +2542,15 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+             }
+             return;
+         }
+-        kernel::Logger::fatal("CPU EXCEPTION: %s (vector=%x err=%x elr=%x)",
+-                              exception_name(vector), vector, error_code, rip);
+-        kernel::debug::dump_all_tasks();
+-        kernel::debug::dump_scheduler_info();
+-        kernel::debug::dump_cpu_regs();
+-        panic("CPU EXCEPTION");
++        // Issue #308: first-chance path (consistency with the live
++        // vectors.S site): raw registers, no Logger, halt. save_all
++        // layout: regs[31]=SP, regs[32]=ELR, regs[33]=SPSR.
++        auto frame = kernel::debug::make_aarch64_frame(
++            vector, error_code, regs[32], regs[31], arch::read_ttbr0_el1(),
++            arch::read_ttbr1_el1());
++        (void)rip;
++        kernel::debug::first_chance_halt(frame);
++        return;
+     }
+ #endif
+ 
+diff --git a/src/kernel/task/idle_monitor.cpp b/src/kernel/task/idle_monitor.cpp
+index e0a9be77a..dfd8f682e 100644
+--- a/src/kernel/task/idle_monitor.cpp
++++ b/src/kernel/task/idle_monitor.cpp
+@@ -99,10 +99,14 @@ IdleScanProgress idle_scan_stack(IdleScanCursor &cursor,
+                                      t->stack_low_water_bytes);
+         if (!user_ok || !kstack_ok) [[unlikely]] {
+             // Existing escalation path only (spec §3 E1): production
+-            // fail-stops here exactly as the guard-page #PF path does.
+-            // The scanner itself kills/reaps/reprioritizes nothing (M6).
++            // fail-stops here exactly as the guard-page #PF path does
++            // (issue #308: raw-dump + halt on false). The scanner itself
++            // kills/reaps/reprioritizes nothing (M6).
+ #if CONFIG_STACK_OVERFLOW_HOOK
+-            stack_overflow_hook(t);
++            auto frame = kernel::debug::first_chance_frame_here(
++                kernel::debug::FirstChanceCause::STACK_OVERFLOW);
++            if (!stack_overflow_hook(*t, frame))
++                kernel::debug::first_chance_halt(frame);
+ #endif
+         }
+     };
+diff --git a/src/kernel/task/idle_monitor.hpp b/src/kernel/task/idle_monitor.hpp
+index 8b7ae81fb..dee0a4405 100644
+--- a/src/kernel/task/idle_monitor.hpp
++++ b/src/kernel/task/idle_monitor.hpp
+@@ -27,6 +27,7 @@
+ ///        handler paths (spec §3 E1-E3).
+ 
+ #include <types.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ 
+ namespace kernel {
+ 
+@@ -147,9 +148,13 @@ void idle_monitor_slice() noexcept;
+ } // namespace kernel
+ 
+ #if CONFIG_STACK_OVERFLOW_HOOK
+-/// @brief Existing overflow hook (weak default in kernel.cpp: fail-stop
+-///        panic; strong test overrides latch). Global scope (defined
+-///        outside any namespace in kernel.cpp). Declared here so the
+-///        scanner TU can feed the existing escalation path (spec §3 E1).
+-void stack_overflow_hook(kernel::TaskControlBlock *task);
++/// @brief Existing overflow hook (weak default in kernel.cpp: returns false
++///        so the caller raw-dumps + halts; strong test overrides recover and
++///        return true only when test-active). Global scope (defined outside
++///        any namespace in kernel.cpp). Declared here so the scanner TU can
++///        feed the existing escalation path (spec §3 E1). New bool contract
++///        (issue #308): the frame carries the capture-point SP.
++bool stack_overflow_hook(
++    kernel::TaskControlBlock &task,
++    const kernel::debug::FirstChanceFrame &frame);
+ #endif
+diff --git a/src/kernel/test/test_debug_dump.cpp b/src/kernel/test/test_debug_dump.cpp
+index 79fee4f67..b2134c7cc 100644
+--- a/src/kernel/test/test_debug_dump.cpp
++++ b/src/kernel/test/test_debug_dump.cpp
+@@ -38,8 +38,10 @@
+ #include <test.hpp>
+ #include <logger.hpp>
+ #include <kernel/debug/dump.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ #include <kernel/log/ring_buffer.hpp>
+ #include <kernel/arch/irq_guard.hpp>
++#include <kernel/arch/serial.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <string.hpp>
+@@ -242,10 +244,131 @@ JARVIS_TEST(debug_dump_cpu_regs_snapshot, "PRE: vfsd, iocd | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: issue #308 — the first-chance formatter renders every arch's
++// register order with labels and no [DUMP]/ANSI bytes (raw UART path).
++// CONFIG_DEBUG-only: uses the debug halt seam.
++// Input: synthetic frames for x86_64/aarch64/riscv64 run through
++// format_first_chance into a stack buffer.
++// Expect: exact "[FIRST-CHANCE]" header, arch token, all field labels in
++// order, non-empty bounded output, no Logger-style "[DUMP]" bytes.
++// Depends: kernel::debug::format_first_chance (issue #308)
++#if CONFIG_DEBUG
++JARVIS_TEST(first_chance_format_register_order, "PRE: none | POST: none") {
++    char buf[512];
++#if defined(CONFIG_ARCH_X86_64)
++    kernel::debug::FirstChanceFrame f =
++        kernel::debug::make_x86_frame(13, 2, 0x1000, 0x2000, 0x3000, 0x4000);
++    const char *arch_tok = "arch=x86_64";
++#elif defined(CONFIG_ARCH_AARCH64)
++    kernel::debug::FirstChanceFrame f = kernel::debug::make_aarch64_frame(
++        0x96000010ULL, 0x4000, 0x1000, 0x2000, 0x3000, 0x4000);
++    const char *arch_tok = "arch=aarch64";
++#else
++    kernel::debug::FirstChanceFrame f = kernel::debug::make_riscv_frame(
++        12, 0x1000, 0x2000, 0x3000, 0x4000);
++    const char *arch_tok = "arch=riscv64";
++#endif
++    const size_t n = kernel::debug::format_first_chance(f, buf, sizeof(buf));
++    JARVIS_ASSERT(n > 64 && n < sizeof(buf));
++    buf[n] = '\0';
++    JARVIS_ASSERT(has(buf, "[FIRST-CHANCE]"));
++    JARVIS_ASSERT(has(buf, arch_tok));
++    JARVIS_ASSERT(has(buf, "vec="));
++    JARVIS_ASSERT(has(buf, "pc="));
++    JARVIS_ASSERT(has(buf, "sp="));
++    JARVIS_ASSERT(!has(buf, "[DUMP]"));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: issue #308 — the per-arch frame constructors round-trip field
++// values verbatim (no masking, no swapping).
++// Input: synthetic register words through each make_*_frame constructor.
++// Expect: every output field equals its input word.
++// Depends: kernel::debug frame constructors (issue #308)
++JARVIS_TEST(first_chance_capture_frame, "PRE: none | POST: none") {
++    {
++        auto f = kernel::debug::make_x86_frame(13, 2, 0x1000, 0x2000, 0x3000,
++                                               0x4000);
++        JARVIS_ASSERT(f.vector == 13 && f.error == 2 && f.addr == 0x3000 &&
++                      f.pc == 0x1000 && f.sp == 0x2000 && f.pgtbl0 == 0x4000);
++    }
++    {
++        auto f = kernel::debug::make_aarch64_frame(1, 2, 3, 4, 5, 6);
++        JARVIS_ASSERT(f.vector == 1 && f.addr == 2 && f.pc == 3 &&
++                      f.sp == 4 && f.pgtbl0 == 5 && f.pgtbl1 == 6);
++    }
++    {
++        auto f = kernel::debug::make_riscv_frame(7, 8, 9, 10, 11);
++        JARVIS_ASSERT(f.vector == 7 && f.pc == 8 && f.addr == 9 &&
++                      f.sp == 10 && f.pgtbl0 == 11);
++    }
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: issue #308 — first_chance_emit uses raw UART only: klog stays
++// empty while arch::Serial::write_count advances.
++// Input: klog drained; emit a synthetic frame with interrupts frozen.
++// Expect: klog read length 0; serial write count strictly greater.
++// Depends: kernel::debug::first_chance_emit, arch::Serial (issue #308)
++JARVIS_TEST(first_chance_emit_uses_raw_uart_only, "PRE: none | POST: none") {
++    auto f = kernel::debug::first_chance_frame_here(
++        kernel::debug::FirstChanceCause::CPU_EXCEPTION);
++    size_t klog_before = 0;
++    uint64_t serial_before = 0;
++    {
++        arch::IrqGuard ig;
++        kernel::log::KlogService::instance().clear();
++        serial_before = arch::Serial::write_count();
++        kernel::debug::first_chance_emit(f);
++        char drain[64];
++        klog_before = kernel::log::KlogService::instance().read(drain,
++                                                               sizeof(drain));
++    }
++    const uint64_t serial_after = arch::Serial::write_count();
++    JARVIS_ASSERT(klog_before == 0);
++    JARVIS_ASSERT(serial_after > serial_before);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: issue #308 — first_chance_halt reaches the halt seam exactly
++// once and latches the emitted frame (CONFIG_DEBUG seam returns when
++// armed; production halt never returns).
++// Input: armed seam + synthetic frame through first_chance_halt.
++// Expect: halt count 1; last frame equals the emitted one; seam reset.
++// Depends: crash_dump CONFIG_DEBUG seam (issue #308)
++JARVIS_TEST(first_chance_halt_seam_reached_once, "PRE: none | POST: none") {
++    kernel::debug::test_reset_crash_halt();
++    kernel::debug::test_arm_crash_halt();
++    auto f = kernel::debug::first_chance_frame_here(
++        kernel::debug::FirstChanceCause::STACK_OVERFLOW);
++    f.vector = 0xAB;
++    kernel::debug::first_chance_halt(f);
++    JARVIS_ASSERT(kernel::debug::test_crash_halt_count() == 1);
++    kernel::debug::FirstChanceFrame latched =
++        kernel::debug::test_last_frame();
++    JARVIS_ASSERT(latched.vector == 0xAB);
++    JARVIS_ASSERT(latched.cause ==
++                  kernel::debug::FirstChanceCause::STACK_OVERFLOW);
++    kernel::debug::test_reset_crash_halt();
++    JARVIS_ASSERT(kernel::debug::test_crash_halt_count() == 0);
++    JARVIS_TEST_PASS();
++}
++#endif // CONFIG_DEBUG (first-chance seam tests)
++
+ void register_debug_dump_tests() {
+     Logger::info("Registering debug dump tests");
+     JARVIS_REGISTER_TEST(debug_dump_scheduler_info_renders_state);
+     JARVIS_REGISTER_TEST(debug_dump_task_info_valid_and_missing);
+     JARVIS_REGISTER_TEST(debug_dump_all_tasks_walks_registry);
+     JARVIS_REGISTER_TEST(debug_dump_cpu_regs_snapshot);
++#if CONFIG_DEBUG
++    JARVIS_REGISTER_TEST(first_chance_format_register_order);
++    JARVIS_REGISTER_TEST(first_chance_capture_frame);
++    JARVIS_REGISTER_TEST(first_chance_emit_uses_raw_uart_only);
++    JARVIS_REGISTER_TEST(first_chance_halt_seam_reached_once);
++#endif
+ }
+diff --git a/src/kernel/test/test_exc_table.cpp b/src/kernel/test/test_exc_table.cpp
+index 5f44490b1..c11811da1 100644
+--- a/src/kernel/test/test_exc_table.cpp
++++ b/src/kernel/test/test_exc_table.cpp
+@@ -30,6 +30,8 @@
+ #include <kernel/elf/elf.hpp>
+ #include <initrd/initrd.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/debug/crash_dump.hpp>
++#include <kernel/log/ring_buffer.hpp>
+ #include "test_sched_helpers.hpp"
+ 
+ using namespace kernel;
+@@ -256,6 +258,43 @@ JARVIS_TEST(exception_name_reserved_lookup, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++// Runmode: kernel
++// Testidea: issue #308 — the x86 kernel-fault tail emits the raw
++// first-chance frame BEFORE any Logger use: drive handle_interrupt_c with
++// a synthetic #GP(13) in kernel mode (probe override disarmed), seam
++// armed, klog drained.
++// Input: vector 13, kernel CS, synthetic RIP; seam armed.
++// Expect: halt seam reached exactly once; frame pc == RIP, sp == 0
++// (kernel CS: no pushed RSP); klog read length 0 (no Logger formatting
++// before the raw dump).
++// Depends: handle_interrupt_c generic tail, crash_dump seam (issue #308)
++// CONFIG_DEBUG-only: arms the debug halt seam.
++#if CONFIG_DEBUG
++JARVIS_TEST(first_chance_kernel_fault_ordering, "PRE: none | POST: none") {
++    uint64_t regs[22] = {};
++    regs[17] = 0x1234ULL; // RIP
++    regs[18] = 0x8;       // CS (kernel)
++    g_probe_armed = false;
++    kernel::debug::test_reset_crash_halt();
++    kernel::debug::test_arm_crash_halt();
++    size_t klog_len = 0;
++    {
++        arch::IrqGuard guard;
++        kernel::log::KlogService::instance().clear();
++        handle_interrupt_c(13, 0xCCULL, regs[17], regs, 0);
++        char drain[64];
++        klog_len = kernel::log::KlogService::instance().read(drain,
++                                                             sizeof(drain));
++    }
++    JARVIS_ASSERT(kernel::debug::test_crash_halt_count() == 1);
++    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
++    JARVIS_ASSERT(f.pc == 0x1234ULL && f.sp == 0);
++    JARVIS_ASSERT(klog_len == 0);
++    kernel::debug::test_reset_crash_halt();
++    JARVIS_TEST_PASS();
++}
++#endif // CONFIG_DEBUG (first-chance seam test)
++
+ void register_exc_table_tests() {
+     Logger::info("Registering exception-table tests");
+ 
+@@ -263,5 +302,8 @@ void register_exc_table_tests() {
+     JARVIS_REGISTER_TEST(ve_cp_frame_layout);
+     JARVIS_REGISTER_TEST(reserved_vec_panics);
+     JARVIS_REGISTER_TEST(exception_name_reserved_lookup);
++#if CONFIG_DEBUG
++    JARVIS_REGISTER_TEST(first_chance_kernel_fault_ordering);
++#endif
+ }
+ #endif // CONFIG_ARCH_X86_64
+\ No newline at end of file
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index ae9c4ccd2..88de32ed4 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -206,7 +206,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"hal_core",             14,    0,       0      },  // HAL page tables/context/interrupts/timers/io/cpuid
+     {"hal_bits",             14,    0,       0      },  // bit-manipulation utilities
+     {"hal_idt",               6,    0,       0      },  // IDT entries/handlers/IST
+-    {"exc_table",             4,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131)
++    {"exc_table",             5,    0,       0      },  // ISR_ERR mask audit, #VE/#HV frame layout, reserved-vector routing + exception_name lookup (#131) + first-chance raw ordering (#308)
+     {"hal_timer",             5,    0,       0      },  // PIT/timer subsystem
+     {"irq_early_std",         7,    0,       0      },  // early IRQ+timer init conformance (issue #198)
+     {"hal_apic",              3,    0,       0      },  // APIC timer tick rate, one-shot, stop
+@@ -227,7 +227,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"shell_interaction",    20,    0,       0      },  // shell commands (+ tasks memory columns) + P2 key-delivery seam test (#303 item 3)
+     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
+     {"shell_textutils",       1,    0,       0      },  // text utilities
+-    {"debug_dump",            4,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers
++    {"debug_dump",            8,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers + 4 first-chance raw tests (#308)
+     {"synchronization_err_api", 7, 0,       0      },  // sync *_err API (issue #132): EventGroup, Notify, Queue, Semaphore, Mutex, guards + SPSC ring
+     {"kernel_top",            22, 0,       0      },  // Top-level kernel (#131): histogram + random + IrqThread (#144, unknown-vec/sync-ack/guard) + datetime + global_state accessors (#136)
+     {"per_cpu",               4,  0,       0      },  // Per-CPU foundation (issue #25 + #151): frozen slot offsets, BSP identity, nesting-depth live storage, fpu-owner independence
+@@ -258,10 +258,10 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // arch
+     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
+ #if defined(CONFIG_ARCH_AARCH64)
+-    {"arch_aarch64",          0,   33,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214)
++    {"arch_aarch64",          0,   34,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214) + 1 EL1 fail-stop raw frame (#308)
+ #endif
+ #if defined(CONFIG_ARCH_RISCV64)
+-    {"arch_riscv64",          0,    0,      30      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) — row was stale at 24 while 28 registered, corrected to 30
++    {"arch_riscv64",          0,    0,      31      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) + 1 kernel-exception raw frame (#308) — row was stale at 24 while 28 registered, corrected to 30
+ #endif
+ 
+     // bench
+@@ -309,11 +309,11 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"storage",             167,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333) + 1 readdir mount overlay (#346)
+     {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
+     {"drivers",             107,  0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342)
+-    {"hal",                 122,    0,       0      },  // hal_* + exc_table(4, +1 exception_name #131) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
++    {"hal",                 123,    0,       0      },  // hal_* + exc_table(5, +1 exception_name #131 +1 first-chance raw ordering #308) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
+     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
+     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
+     {"deadline",            147,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 validate-id-range-gate (#374) + 1 pre-existing aggregate drift at HEAD
+-    {"ui",                  74,    0,       0      },  // shell_* + framebuffer + debug_dump + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
++    {"ui",                  78,    0,       0      },  // shell_* + framebuffer + debug_dump(+4 first-chance raw #308) + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
+     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
+     {"random",              17,   0,       0      },  // random_* (issue #173)
+     {"bench",               28,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303) + 1 path_tracer overhead (#347-E)
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 362959c9e..c7eda2fd5 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -35,6 +35,7 @@
+ #include <kernel/driver/iocd.hpp>
+ #include <kernel/irq_thread.hpp>
+ #include <kernel/memory/vmm.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ #include <kernel/arch/page_table.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/arch/irq_guard.hpp>
+@@ -951,6 +952,11 @@ void snapshot_restore(const char *test_name) {
+     // RAII-guard teardown already disarm; this is the abort backstop).
+     // Unconditional call — release def is a no-op.
+     VMM::test_table_alloc_fail_snapshot_reset();
++#if CONFIG_DEBUG
++    // Reset the first-chance halt seam (issue #308) so an armed seam can
++    // never leak into the next cycle.
++    kernel::debug::test_reset_crash_halt();
++#endif
+     // Reset the POSIX timer/timerfd registries + clock anchor (issue #76)
+     // so timer slots, waiter registrations, and the REALTIME latch never
+     // leak across snapshot cycles (wheel reset above already disarmed all
+diff --git a/src/kernel/test/test_stack_alloc.cpp b/src/kernel/test/test_stack_alloc.cpp
+index 6a755d5eb..28ef5ec3f 100644
+--- a/src/kernel/test/test_stack_alloc.cpp
++++ b/src/kernel/test/test_stack_alloc.cpp
+@@ -26,6 +26,7 @@
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <kernel/test/test_isolate.hpp>
++#include <kernel/debug/crash_dump.hpp>
+ 
+ using namespace kernel;
+ 
+@@ -107,29 +108,32 @@ JARVIS_TEST(stack_alloc_multiple_tasks_distinct_stacks,
+ }
+ 
+ // v0.4.0 MP-6.2: strong test override of the weak stack_overflow_hook.  In
+-// test-active mode it records the faulting task and returns (the #PF handler
+-// then resumes via the rewritten iret frame); outside tests it panics exactly
+-// like the weak production default.  is_test_active() gates recovery so a
+-// real production overflow can never be swallowed.
++// test-active mode it records the faulting task and returns true (the #PF
++// handler then resumes via the rewritten iret frame); outside tests it
++// returns false exactly like the weak production default (caller raw-dumps
++// + halts).  is_test_active() gates recovery so a real production overflow
++// can never be swallowed.  New bool contract (issue #308).
+ static uint64_t g_hook_task_id = 0;
+ static uint64_t g_hook_rip = 0;
+ 
+-void stack_overflow_hook(kernel::TaskControlBlock *task) {
+-    if (!task)
+-        return;
+-    g_hook_task_id = task->id;
++bool stack_overflow_hook(kernel::TaskControlBlock &task,
++                         const kernel::debug::FirstChanceFrame &frame) {
++    (void)frame;
++    g_hook_task_id = task.id;
+     g_hook_rip = 0xDEAD0000BEEFULL;
+     if (kernel::Scheduler::is_test_active()) {
+         // Synthetic-drive recovery: nothing to recover (we are not inside the
+-        // #PF handler) — just latch and return.
+-        return;
++        // #PF handler) — just latch and report recovered.
++        return true;
+     }
+-    panic("kernel stack overflow");
++    return false;
+ }
+ 
+ JARVIS_TEST(stack_alloc_overflow_hook_weak_symbol,
+             "PRE: none | POST: none") {
+-    extern void stack_overflow_hook(kernel::TaskControlBlock *task);
++    extern bool stack_overflow_hook(
++        kernel::TaskControlBlock &task,
++        const kernel::debug::FirstChanceFrame &frame);
+     // v0.4.0 MP-6.2: the weak default is now DEFINED in kernel.cpp, so the
+     // symbol must resolve to the strong test override here (never null).
+     JARVIS_ASSERT(stack_overflow_hook != nullptr);
+@@ -187,8 +191,10 @@ JARVIS_TEST(kstack_guard_base_unmapped, "PRE: none | POST: none") {
+ // no syscall dereferences the guard VA in kernel mode), so the hook is
+ // driven synthetically here.
+ // Input: create_user() (kstack_slot_va_ set); call stack_overflow_hook(t).
+-// Expect: g_hook_task_id == t->id; g_hook_rip != 0.
+-// Depends: kernel.cpp weak default + test strong override
++// Expect: g_hook_task_id == t->id; g_hook_rip != 0; returns the test-active
++// contract (true only when the scheduler is test-active).
++// Depends: kernel.cpp weak default + test strong override (bool contract,
++// issue #308)
+ JARVIS_TEST(kstack_overflow_invokes_hook, "PRE: none | POST: none") {
+     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+     JARVIS_ASSERT(t != nullptr);
+@@ -199,10 +205,14 @@ JARVIS_TEST(kstack_overflow_invokes_hook, "PRE: none | POST: none") {
+     g_hook_task_id = 0;
+     g_hook_rip = 0;
+ 
+-    stack_overflow_hook(t);
++    auto frame = kernel::debug::first_chance_frame_here(
++        kernel::debug::FirstChanceCause::STACK_OVERFLOW);
++    bool recovered = stack_overflow_hook(*t, frame);
+ 
+     JARVIS_ASSERT(g_hook_task_id == t->id);
+     JARVIS_ASSERT(g_hook_rip != 0);
++    JARVIS_ASSERT(recovered ==
++                  kernel::Scheduler::is_test_active());
+     JARVIS_TEST_PASS();
+ }
+ 
+diff --git a/test-history.txt b/test-history.txt
+index 336193a2c..4530eedc6 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4425,3 +4425,23 @@ SUMMARY: total=24 ok=24 fail=0
+ 2026-10-21 18:59:55 selftest PASSED: 87 FAILED: 0 TIME: 3165ms STATUS: x86-release
+ 2026-10-21 19:00:54 selftest PASSED: 0 FAILED: 0 TIME: 0ms STATUS: aarch64-release-link-boot
+ 2026-10-21 19:01:53 selftest PASSED: 0 FAILED: 0 TIME: 1ms STATUS: riscv64-release-link-boot
++2026-10-21 19:28:37 debug_dump PASSED: 8 FAILED: 0 TIME: 558ms
++2026-10-21 19:29:02 exc_table PASSED: 5 FAILED: 0 TIME: 374ms
++2026-10-21 19:29:27 memory_stack_alloc PASSED: 12 FAILED: 0 TIME: 857ms
++2026-10-21 19:29:54 scheduler_idle PASSED: 40 FAILED: 0 TIME: 3145ms
++2026-10-21 19:30:20 memory_checked_ptr_api PASSED: 10 FAILED: 0 TIME: 733ms
++2026-10-21 19:30:49 debug_syscall PASSED: 29 FAILED: 0 TIME: 2394ms
++2026-10-21 19:31:18 cap_pager PASSED: 15 FAILED: 0 TIME: 1179ms
++2026-10-21 19:31:44 process_signals PASSED: 8 FAILED: 0 TIME: 567ms
++2026-10-21 19:36:24 testrunner PASSED: 1 FAILED: 0 TIME: 0ms STATUS: expected-panic-PCP-retry-budget-after-120s-stall-retry
++2026-10-21 19:36:57 selftest PASSED: 148 FAILED: 0 TIME: 12189ms
++2026-10-21 19:37:46 arch_aarch64 PASSED: 34 FAILED: 0 TIME: 1053ms
++2026-10-21 19:38:08 hal PASSED: 57 FAILED: 0 TIME: 1611ms STATUS: aarch64
++2026-10-21 19:38:31 selftest PASSED: 151 FAILED: 0 TIME: 4711ms STATUS: aarch64
++2026-10-21 19:38:58 release-elf-aarch64 STATUS: link-ok
++2026-10-21 19:39:28 arch_riscv64 PASSED: 31 FAILED: 0 TIME: 999ms
++2026-10-21 19:39:55 selftest PASSED: 65 FAILED: 0 TIME: 5061ms STATUS: riscv64
++2026-10-21 19:40:49 selftest PASSED: 87 FAILED: 0 TIME: 3232ms STATUS: x86-release
++2026-10-21 19:41:17 debug_dump PASSED: 8 FAILED: 0 TIME: 248ms STATUS: aarch64
++2026-10-21 19:41:47 debug_dump PASSED: 8 FAILED: 0 TIME: 256ms STATUS: riscv64
++2026-10-21 19:44:38 debug_dump PASSED: 8 FAILED: 0 TIME: 597ms STATUS: post-counts

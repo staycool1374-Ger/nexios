@@ -27,6 +27,7 @@
 ///        handler paths (spec §3 E1-E3).
 
 #include <types.hpp>
+#include <kernel/debug/crash_dump.hpp>
 
 namespace kernel {
 
@@ -147,9 +148,13 @@ void idle_monitor_slice() noexcept;
 } // namespace kernel
 
 #if CONFIG_STACK_OVERFLOW_HOOK
-/// @brief Existing overflow hook (weak default in kernel.cpp: fail-stop
-///        panic; strong test overrides latch). Global scope (defined
-///        outside any namespace in kernel.cpp). Declared here so the
-///        scanner TU can feed the existing escalation path (spec §3 E1).
-void stack_overflow_hook(kernel::TaskControlBlock *task);
+/// @brief Existing overflow hook (weak default in kernel.cpp: returns false
+///        so the caller raw-dumps + halts; strong test overrides recover and
+///        return true only when test-active). Global scope (defined outside
+///        any namespace in kernel.cpp). Declared here so the scanner TU can
+///        feed the existing escalation path (spec §3 E1). New bool contract
+///        (issue #308): the frame carries the capture-point SP.
+bool stack_overflow_hook(
+    kernel::TaskControlBlock &task,
+    const kernel::debug::FirstChanceFrame &frame);
 #endif

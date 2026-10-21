@@ -121,6 +121,13 @@ uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
     return VMM::sv39_pte_phys(entry);
 }
 
+uint64_t VMM::vmm_arch_leaf_flags(uint64_t entry) {
+    // Low-10 flag bits plus high reserved bits [63:54] (future
+    // PBMT/NAPOT/custom) — never any PPN bit.  Matches the split-fill
+    // preservation in ArchPageTable::split_l0_block.
+    return (entry & 0x3FFULL) | (entry & (0x3FFULL << 54));
+}
+
 unsigned VMM::vmm_arch_walk_levels() { return 3; }
 
 void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {

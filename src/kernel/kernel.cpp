@@ -28,6 +28,7 @@
 #include <kernel/arch/interrupt_controller.hpp>
 #include <kernel/arch/rtc.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/pci.hpp>
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/arch/qemu_debugcon.hpp>
 #include <kernel/arch/serial.hpp>
@@ -78,6 +79,13 @@
 #include <kernel/vfs/procfs.hpp>
 #include <kernel/vfs/tmpfs.hpp>
 #include <kernel/vfs/ramdisk_fs.hpp>
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/asid.hpp>
+#include <kernel/arch/aarch64/hal/fpu.hpp>
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/asid.hpp>
+#include <kernel/arch/riscv64/hal/fpu.hpp>
+#endif
 #include <initrd/initrd.hpp>
 #include <services/terminal/framebuffer.hpp>
 #include <services/terminal/terminal.hpp>
@@ -92,6 +100,7 @@
 #include <constants.hpp>
 #include <signal.hpp>
 #include <kernel/debug/dump.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <fdt/libfdt.h>
 #include <fdt/libfdt_internal.h>
@@ -908,12 +917,29 @@ uint64_t boot_entry_raw() noexcept {
 }
 } // namespace kernel
 
+/// @brief Pre-serial POST checkpoint codes (issue #304, x86_64 only).
+///        Emitted via arch::post_code() (0x80 + 0x300 mirror) before
+///        Logger::init(): ENTRY proves long mode + GDT + bootloader stack;
+///        BOOT_STATE proves writable .bss/global access (the #251 family);
+///        KERNEL_STACK proves the RSP move — a capture ending at 0xA3 with
+///        no serial output localizes the fault to Logger::init/Serial::init.
+enum class BootPost : uint8_t { ENTRY = 0xA1, BOOT_STATE = 0xA2, KERNEL_STACK = 0xA3 };
+
 extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+#if defined(CONFIG_ARCH_X86_64)
+    arch::post_code(static_cast<uint8_t>(BootPost::ENTRY));
+#endif
     kernel::gs::boot_info() = BootInfo();
     [[maybe_unused]] kernel::gs::WriteContext ctx{
         kernel::gs::StatePhase::BOOT, 0};
+    // Issue #354 (Q3): true when the DTB came from the bootloader/firmware
+    // (aarch64 x0, riscv64 OpenSBI a1). The aarch64 embedded fallback DTB
+    // (boot.S, x0 == 0) is device-discovery-only: its memory node is ignored
+    // by design (dump-time -m goes stale), RAM sizing stays on the fallback.
+    [[maybe_unused]] bool dtb_from_bootloader = false;
 
 #if defined(CONFIG_ARCH_X86_64)
+    arch::post_code(static_cast<uint8_t>(BootPost::BOOT_STATE));
     kernel::gs::try_set_multiboot(magic, mb_info, ctx);
     // Issue #251: hidden visibility forces direct (non-GOT) binding.
     // Ubuntu GCC defaults to PIE and resolved this extern's GOT slot to an
@@ -930,14 +956,36 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     asm volatile("mov %0, %%rsp\n" : : "r"(kernel_stack_top));
     kernel::gs::boot_info().multiboot_magic = magic;
     kernel::gs::boot_info().multiboot_info = mb_info;
+    arch::post_code(static_cast<uint8_t>(BootPost::KERNEL_STACK));
 #elif defined(CONFIG_ARCH_AARCH64)
     g_dtb_ptr = reinterpret_cast<void *>(magic);
     kernel::gs::boot_info().dtb_ptr = magic;
+    // The boot.S fallback (x0 == 0) substitutes the embedded DTB's PHYSICAL
+    // address, which is nonzero — (magic != 0) alone cannot discriminate and
+    // is identically true on this arch. Compare against the embedded blob's
+    // phys range (link VA minus the HHDM slide, mirroring boot.S) so the
+    // embedded memory node stays device-discovery-only by design. Plain
+    // extern (no linkage-spec: nested extern "C" is ill-formed); the
+    // declarations inherit C linkage from higherhalf_entry's extern "C",
+    // same as the kernel_stack_top precedent above.
+    extern const uint8_t _binary_virt_dtb_start[];
+    extern const uint8_t _binary_virt_dtb_end[];
+    {
+        const uint64_t emb_start =
+            reinterpret_cast<uint64_t>(&_binary_virt_dtb_start) -
+            arch::HHDM_OFFSET;
+        const uint64_t emb_end =
+            reinterpret_cast<uint64_t>(&_binary_virt_dtb_end) -
+            arch::HHDM_OFFSET;
+        dtb_from_bootloader =
+            (magic != 0) && (magic < emb_start || magic >= emb_end);
+    }
     (void)mb_info;
     arch::fp_enable();
 #elif defined(CONFIG_ARCH_RISCV64)
     kernel::gs::boot_info().hart_id = static_cast<int>(magic);
     kernel::gs::boot_info().dtb_ptr = mb_info;
+    dtb_from_bootloader = (mb_info != 0);
     arch::fp_enable();
 
 #endif
@@ -1076,14 +1124,37 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     {
         uint64_t tag_addr = mb2_find_tag(6);
         if (tag_addr) {
+            // Issue #305: fail-closed tag6 validation. The tag's own size
+            // is untrusted (entry_size 0 = div-by-zero, size below the
+            // header = underflow, entries overrunning into adjacent tags),
+            // and each region is untrusted (base+length wraparound would
+            // corrupt the max-end PMM sizing below). Rejects skip without
+            // adding — never truncate, never clamp a region to fit.
+            auto *info = reinterpret_cast<Multiboot2Info *>(
+                kernel::gs::get_multiboot_info_ptr());
+            uint64_t info_end =
+                kernel::gs::get_multiboot_info_ptr() + info->total_size;
+            uint64_t avail =
+                (info_end > tag_addr) ? (info_end - tag_addr) : 0;
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *mem_tag = reinterpret_cast<MemoryMapTag *>(tag_addr);
-            uint64_t entries =
-                (mem_tag->size - sizeof(MemoryMapTag)) / mem_tag->entry_size;
+            uint64_t entries = mb2_mmap_validated_count(mem_tag, avail);
+            if (entries == 0) {
+                debug_write("[BOOT] tag6 has no usable entries "
+                            "(malformed or empty)\n");
+            }
             for (uint64_t i = 0; i < entries; ++i) {
                 auto &entry = mem_tag->entries[i];
+                if (entry.length == 0) {
+                    debug_write("[BOOT] tag6 entry skipped (zero length)\n");
+                    continue;
+                }
+                if (entry.base_addr + entry.length < entry.base_addr) {
+                    debug_write("[BOOT] tag6 entry skipped (overflow)\n");
+                    continue;
+                }
                 kernel::gs::boot_info().add_region(entry.base_addr, entry.length,
-                                       entry.type);
+                                        entry.type);
             }
         }
     }
@@ -1105,12 +1176,15 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
         void *dtb = reinterpret_cast<void *>(dtb_phys);
         if (dtb && fdt_check_header(dtb) == 0) {
+            // Issue #354 (Q3): the memory node is honored only for a
+            // bootloader/firmware DTB. The embedded fallback's memory node
+            // reflects the dump-time -m and must never size RAM.
             int offset = fdt_node_offset_by_prop_value(dtb, -1, "device_type",
                                                        "memory", 7);
             if (offset < 0) {
                 offset = fdt_subnode_offset_namelen(dtb, 0, "memory", 6);
             }
-            if (offset >= 0) {
+            if (offset >= 0 && dtb_from_bootloader) {
                 int len{};
                 const uint32_t *reg = static_cast<const uint32_t *>(
                     fdt_getprop_namelen(dtb, offset, "reg", &len));
@@ -1173,6 +1247,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
 
     }
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    // Issue #354 Slice A: resolve + validate the ECAM base once at boot.
+    // (Planner step A6 named early_init, but early_irq_init runs only on
+    // test paths — production boot reaches here, with DTB + HHDM live.)
+    // Placed AFTER the fallback region is recorded: dtb_from_boot_info
+    // requires the blob inside a usable region, and with the embedded DTB
+    // the memory-node block is skipped by design, so no region exists yet
+    // at the DTB-parse site.
+    arch::pci_ecam_discover();
+#endif
     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
 #if defined(CONFIG_ARCH_RISCV64)
     // Issue #29: pin the 64KB boot stack (linker .boot_stack_rv at
@@ -1462,8 +1546,9 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         }
     }
 
-    // Probe virtio-net NIC and initialize network stack
-#if defined(CONFIG_ARCH_X86_64)
+    // Probe virtio-net NIC and initialize network stack.
+    // Issue #350: ungated — the MMIO finder serves aarch64/riscv64
+    // (QEMU virtio-net-device); the PCI finder serves x86_64.
     {
         static net::Nic g_boot_nic{};
         if (kernel::net::virtio_net_probe(g_boot_nic)) {
@@ -1476,7 +1561,6 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] No virtio-net NIC found\n");
         }
     }
-#endif
     boot_mark(kernel::BootStage::DRIVER_PROBE);
 
     // Initialize sampling profiler (must be before Timer::init() so record_sample is safe)
@@ -1485,6 +1569,20 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::profiling::Sampler::set_enabled(true);
 
     arch::Timer::init(kernel::BootParams::instance().timer_hz);
+
+    // Issue #352: activate context-ID tagging on aarch64/riscv64
+    // (allocator flag only — task create/teardown and switch publish
+    // pick up IDs from here on).  x86_64 activates via pcid_init()
+    // above; early_irq_init() repeats it idempotently for test paths.
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    arch::asid_init();
+#endif
+    // Issue #353: enable FP/SIMD early so user tasks can execute FP
+    // from first dispatch (aarch64 NEON / riscv64 F/D; loud degraded
+    // log when absent).  x86 keeps lazy #NM (no eager enable).
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    arch::fpu_init();
+#endif
 
     // Issue #25 (Phase B3): wake + park APs.  Single-CPU runs are a silent
     // no-op (MADT ncpus <= 1 or unusable trampoline block).
@@ -1685,7 +1783,9 @@ extern "C" void panic(const char *msg) {
 }
 
 #if CONFIG_ARCH_X86_64
-static void dump_regs(uint64_t *regs) {
+// Only caller is the CONFIG_USER_FAULT_VERBOSE user-fault path below;
+// unused-function would otherwise fire -Werror in default configs.
+__attribute__((unused)) static void dump_regs(uint64_t *regs) {
     if (!regs)
         return;
 
@@ -1782,9 +1882,9 @@ static void dump_regs(uint64_t *regs) {
     }
 #elif defined(CONFIG_ARCH_AARCH64)
     L::raw_write("  ELR: ");
-    L::print_hex(regs[31]);
-    L::raw_write("  SPSR: ");
     L::print_hex(regs[32]);
+    L::raw_write("  SPSR: ");
+    L::print_hex(regs[33]);
     L::raw_write("\n  Stack trace:\n");
     uint64_t *fp = reinterpret_cast<uint64_t *>(regs[29]);
     // MP-4 (PAN): only walk a KERNEL frame chain; a user FP deref would be a
@@ -1807,12 +1907,16 @@ static void dump_regs(uint64_t *regs) {
 #endif // CONFIG_ARCH_X86_64
 
 #if CONFIG_STACK_OVERFLOW_HOOK
-// v0.4.0 MP-6.2: weak default stack-overflow hook — production panics.  A
-// strong override (test suites) may instead recover the faulting task; see
-// the guard-page #PF handler in handle_interrupt_c.
-__attribute__((weak)) void stack_overflow_hook(kernel::TaskControlBlock *task) {
+// v0.4.0 MP-6.2 (bool contract, issue #308): weak default returns false
+// with no logging — the caller raw-dumps + halts.  A strong override
+// (test suites) returns true only when it recovers the faulting task;
+// see the guard-page #PF handler in handle_interrupt_c.
+__attribute__((weak)) bool stack_overflow_hook(
+    kernel::TaskControlBlock &task,
+    const kernel::debug::FirstChanceFrame &frame) {
     (void)task;
-    panic("kernel stack overflow");
+    (void)frame;
+    return false;
 }
 #endif // CONFIG_STACK_OVERFLOW_HOOK
 
@@ -2392,23 +2496,19 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             uint64_t cr2 = read_cr2();
             if (cr2 >= t->kstack_slot_va_ &&
                 cr2 < t->kstack_slot_va_ + arch::PAGE_SIZE) {
-                kernel::Logger::fatal(
-                    "STACK OVERFLOW: task '%s' (ID=%u) overflowed "
-                    "kernel stack (CR2=0x%lx slot_va=0x%lx top=0x%lx)",
-                    t->name, t->id, cr2,
-                    t->kstack_slot_va_,
-                    t->kernel_stack_top);
-                dump_regs(regs);
 #if CONFIG_STACK_OVERFLOW_HOOK
-                // v0.4.0 MP-6.2: invoke the overflow hook.  The weak default
-                // panics internally — production behaviour is unchanged.  A
-                // strong override (test suite) may recover the faulting task
-                // (rewrite the iret frame + TERMINATE), in which case we
-                // return instead of panicking (mirrors the
-                // g_user_access_recover_ip recovery).  The weak symbol always
-                // resolves (to the default or the override), so no null
-                // check is needed.
-                stack_overflow_hook(t);
+                // Issue #308: hook first — a recovering override returns
+                // true (test-only, gated inside the override); otherwise
+                // raw-dump + halt with no Logger formatting.
+                auto frame = kernel::debug::make_x86_frame(
+                    vector, error_code, rip,
+                    kernel::debug::x86_fault_sp(regs), read_cr2(),
+                    read_cr3());
+                frame.cause =
+                    kernel::debug::FirstChanceCause::STACK_OVERFLOW;
+                if (stack_overflow_hook(*t, frame))
+                    return;
+                kernel::debug::first_chance_halt(frame);
                 return;
 #else
                 panic("kernel stack overflow");
@@ -2416,25 +2516,14 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             }
         }
 
-        kernel::Logger::fatal("CPU EXCEPTION: %s (vector=%x err=%x rip=%x)",
-                              exception_name(vector), vector, error_code, rip);
-        dump_regs(regs);
-
-        // ---- Full diagnostic dump before panic ----
-        kernel::debug::dump_all_tasks();
-        kernel::debug::dump_scheduler_info();
-
-        if (t) {
-            kernel::Logger::raw_write("  Task: id=");
-            kernel::Logger::print_hex(t->id);
-            kernel::Logger::raw_write(" prio=");
-            kernel::Logger::print_dec(t->priority);
-            kernel::Logger::raw_write(" state=");
-            kernel::Logger::print_hex(static_cast<uint64_t>(t->state));
-            kernel::Logger::raw_write("\n");
-        }
-
-        panic("CPU EXCEPTION");
+        // Issue #308: first-chance raw dump + halt. No Logger formatting
+        // (Logger may be the casualty), no task/scheduler dumps, no
+        // recovery — raw registers to UART, then cli/hlt. GDB
+        // (make debug-test) is the post-mortem path.
+        auto frame = kernel::debug::make_x86_frame(
+            vector, error_code, rip,
+            kernel::debug::x86_fault_sp(regs), read_cr2(), read_cr3());
+        kernel::debug::first_chance_halt(frame);
         return;
     }
 #elif defined(CONFIG_ARCH_AARCH64)
@@ -2453,12 +2542,15 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
             }
             return;
         }
-        kernel::Logger::fatal("CPU EXCEPTION: %s (vector=%x err=%x elr=%x)",
-                              exception_name(vector), vector, error_code, rip);
-        kernel::debug::dump_all_tasks();
-        kernel::debug::dump_scheduler_info();
-        kernel::debug::dump_cpu_regs();
-        panic("CPU EXCEPTION");
+        // Issue #308: first-chance path (consistency with the live
+        // vectors.S site): raw registers, no Logger, halt. save_all
+        // layout: regs[31]=SP, regs[32]=ELR, regs[33]=SPSR.
+        auto frame = kernel::debug::make_aarch64_frame(
+            vector, error_code, regs[32], regs[31], arch::read_ttbr0_el1(),
+            arch::read_ttbr1_el1());
+        (void)rip;
+        kernel::debug::first_chance_halt(frame);
+        return;
     }
 #endif
 

@@ -26,7 +26,8 @@
 /// slots armed in NOTIFY mode (the driver must use sys_notify_wait instead).
 /// All dereferences through a capability slot validated by cap::lookup.  Both
 /// returns are -1 on any validation failure (reachable states, never ENSURE).
-/// Non-x86_64 builds return -1 (no user-deliverable PIC vectors).
+/// Off-x86_64 the same machinery delivers GIC/PLIC platform lines via
+/// IrqSlotKind::PLATFORM (issue #354); MSI-X paths fail closed there.
 
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
@@ -45,8 +46,6 @@ namespace kernel {
 cap::CNode *current_cspace();
 
 namespace {
-
-#if defined(CONFIG_ARCH_X86_64)
 
 /// @brief Looks up an IrqCap OR MsixCap in @p src (issue #10).  Both wrap a
 ///        hardware vector that the delivery table can arm for user-space
@@ -87,13 +86,10 @@ bool irq_like_fields(KernelObject *obj, bool is_msix, int16_t &reg_idx,
     return reg_idx >= 0;
 }
 
-#endif // CONFIG_ARCH_X86_64
-
 } // namespace
 
 uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
                                    uint64_t, uint64_t, uint64_t *) {
-#if defined(CONFIG_ARCH_X86_64)
     cap::CNode *src = current_cspace();
     if (!src)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -141,16 +137,10 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
 
     obj->release();
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
-#else
-    (void)cap_handle;
-    (void)arg1;
-    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-#endif
 }
 
 uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
                                uint64_t, uint64_t *) {
-#if defined(CONFIG_ARCH_X86_64)
     cap::CNode *src = current_cspace();
     if (!src)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -264,10 +254,6 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     }
     obj->release();
     return result;
-#else
-    (void)cap_handle;
-    return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-#endif
 }
 
 } // namespace kernel

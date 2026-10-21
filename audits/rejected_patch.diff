@@ -1,21 +1,27 @@
-diff --git a/src/kernel/memory/vmm_aarch64.cpp b/src/kernel/memory/vmm_aarch64.cpp
---- a/src/kernel/memory/vmm_aarch64.cpp
-+++ b/src/kernel/memory/vmm_aarch64.cpp
-@@ -117,9 +117,15 @@ uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
-     return leaf & ~(PAGE_UXN | PAGE_PXN);
- }
-
- bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
--    bool ro = (leaf & (PAGE_AP_USER | PAGE_AP_RO)) ==
--              (PAGE_AP_USER | PAGE_AP_RO);
-+    // Issue #376 boot-text W^X: AP[1] (PAGE_AP_RO) alone selects
-+    // read-only on ARMv8 (AP=10 is EL1-RO, AP=11 is EL1+EL0-RO).
-+    // Requiring AP_USER as well misreports EL1-only RO kernel leaves
-+    // (hardened text/rodata, AP=10) as writable, failing the
-+    // kernel_half_boot_wx_pins text/rodata asserts on aarch64 despite
-+    // correct hardware state. User RO leaves (AP=11) still read true;
-+    // user/kernel RW leaves (AP=00/01) still read false.
-+    bool ro = (leaf & PAGE_AP_RO) != 0;
-     if (executable_out != nullptr)
-         *executable_out = (leaf & PAGE_UXN) == 0;
-     return ro;
+diff --git a/src/kernel/driver/virtio_blk.cpp b/src/kernel/driver/virtio_blk.cpp
+--- a/src/kernel/driver/virtio_blk.cpp
++++ b/src/kernel/driver/virtio_blk.cpp
+@@ -651,13 +651,20 @@ bool VirtioBlkDriver::handle_irq() {
+             bool done = false;
+             match_completion(pos, static_cast<uint16_t>(pos + 1), entry_id,
+                              compl_.head_idx, &done);
+             if (!done)
+                 continue;
+             compl_.done = true;
+-            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
+-                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
+-            compl_.status = *status_ptr;
++            // Cache contract (issue #307): invalidate before the load and latch
++            // once - same contract as drain_used_ring_mmio and finish_request.
++            // A stale cached 0 reads as VIRTIO_BLK_S_OK and would retire a
++            // failed request as success. Address derived from dma_buf_
++            // (volatile-to-const cast is forbidden).
++            uint8_t *status_addr =
++                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
++            arch::cache_invalidate(status_addr, sizeof(uint8_t));
++            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
++            compl_.status = *status_ptr;
+             wake_task = compl_.waiter;
+             wake_gen = compl_.waiter_gen;
+             compl_.waiter = nullptr;
+             compl_.waiter_gen = 0;

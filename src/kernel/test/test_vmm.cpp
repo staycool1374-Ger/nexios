@@ -130,14 +130,62 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
     for (size_t i = 0; i < 512; ++i)
         parent_virt[i] = 0;
 
-    uint64_t pdpt_phys = PMM::alloc_user_page();
-    JARVIS_ASSERT(pdpt_phys != 0);
-    uint64_t pd_phys = PMM::alloc_user_page();
+    uint64_t pdpt_phys = 0;
+    uint64_t pd_phys = 0;
+    uint64_t pt_phys = 0;
+#if defined(CONFIG_ARCH_RISCV64)
+    // Sv39 has no PDPT level: L1/L2 tables only (L0 -> L1 -> L2 leaf).
+    pd_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(pd_phys != 0);
-    uint64_t pt_phys = PMM::alloc_user_page();
+    pt_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(pt_phys != 0);
+#else
+    pdpt_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(pdpt_phys != 0);
+    pd_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(pd_phys != 0);
+    pt_phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(pt_phys != 0);
+#endif
 
-    // Set up parent page tables (user mapping at 0x400000)
+    // Set up parent page tables (user mapping at 0x400000).
+    // Issue #352: native codec per arch.  The x86 4-level idiom
+    // (PDPT/PD/PT + x86 flag values) does not decode on Sv39, which
+    // needs L0 -> L1 -> L2 with V-only table links and a V|R|W|U leaf.
+    // Same property under test on every arch: the child shares the
+    // parent's tables, one free_user_pages frees them exactly once.
+    uint64_t test_va = 0x400000;
+#if defined(CONFIG_ARCH_RISCV64)
+    // Sv39 3-level chain (issue #352): L0 -> L1 -> L2 leaf.  Local Sv39
+    // codec (V=bit0, table=V-only, leaf=V|R|W|U, child=((e>>10)<<12)),
+    // mirroring the x86 local-constants idiom below — VMM flag members
+    // are private to the VMM.
+    constexpr uint64_t SV39_V = 1ULL << 0;
+    constexpr uint64_t SV39_R = 1ULL << 1;
+    constexpr uint64_t SV39_W = 1ULL << 2;
+    constexpr uint64_t SV39_U = 1ULL << 4;
+    auto sv39_table = [](uint64_t phys) {
+        return ((phys >> 12) << 10) | SV39_V;
+    };
+    auto sv39_phys = [](uint64_t e) {
+        return ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
+    };
+    (void)sv39_phys;
+    const size_t top_idx = (test_va >> 30) & 0x1FF;
+    const size_t mid_idx = (test_va >> 21) & 0x1FF;
+    const size_t leaf_idx = (test_va >> 12) & 0x1FF;
+    parent_virt[top_idx] = sv39_table(pd_phys);
+    auto *l1_tab =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
+    l1_tab[mid_idx] = sv39_table(pt_phys);
+    auto *l2_tab =
+        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
+
+    // Allocate a user page and map it
+    uint64_t user_page = PMM::alloc_user_page();
+    JARVIS_ASSERT(user_page != 0);
+    l2_tab[leaf_idx] = sv39_table(user_page) | SV39_R | SV39_W | SV39_U;
+#else
     constexpr uint64_t PML4_SHIFT = 39;
     constexpr uint64_t PDPT_SHIFT = 30;
     constexpr uint64_t PD_SHIFT = 21;
@@ -146,7 +194,6 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
     constexpr uint64_t PAGE_WRITE = 1ULL << 1;
     constexpr uint64_t PAGE_USER = 1ULL << 2;
 
-    uint64_t test_va = 0x400000;
     size_t pml4_idx = (test_va >> PML4_SHIFT) & 0x1FF;
     size_t pdpt_idx = (test_va >> PDPT_SHIFT) & 0x1FF;
     size_t pd_idx = (test_va >> PD_SHIFT) & 0x1FF;
@@ -163,6 +210,7 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
     pt[pt_idx] = user_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+#endif
 
     // Create child PML4 that shares the page table pages (simulating fork)
     uint64_t child_pml4 = PMM::alloc_page();
@@ -186,11 +234,18 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
     // With the new PMM semantics free_page() preserves the owner bit, so
     // the pages are free (bitmap = 0) but still show as USER-owned.
     // Only the parent's direct manual cleanup (free_page below) is valid.  The
-    // child's view is now freed — we verify by checking the PML4 entry is zeroed
-    // (free_user_pages clears each PML4 slot after draining its subtree).
+    // child's view is now freed — we verify by checking the top entry is
+    // zeroed (free_user_pages clears each slot after draining its
+    // subtree).  Top index is arch-dependent (PML4 on 4-level, L0 on
+    // Sv39); both are 0 for test_va 0x400000, asserted explicitly.
+#if defined(CONFIG_ARCH_RISCV64)
+    JARVIS_ASSERT(child_virt[top_idx] == 0);
+#else
     JARVIS_ASSERT(child_virt[pml4_idx] == 0);
+#endif
 
-    // Clean up
+    // Clean up (pdpt_phys is 0/unused on Sv39 — free_page(0) is a
+    // range-guarded no-op, kept unconditional for symmetry).
     PMM::free_page(pdpt_phys);
     PMM::free_page(pd_phys);
     PMM::free_page(pt_phys);

@@ -270,6 +270,15 @@ These are MUST-level constraints on the kernel, independent of #169:
 - POST codes (x86_64 only): hex checkpoints to port 0x80/0x300 for
   crashes before serial is alive. ARM/RISC-V have no POST card —
   there the UART-crash-dump path (§8.3) is mandatory instead.
+  Implemented (issue #304): `arch::post_code(u8)` in
+  `arch/x86_64/hal/io_impl.hpp` (polled `outb`, boot-only,
+  pre-serial legal; code 0 reserved for `io_wait()` traffic).
+  `higherhalf_entry` fires ENTRY=0xA1 (first statement),
+  BOOT_STATE=0xA2 (after `gs::boot_info` init), KERNEL_STACK=0xA3
+  (before `Logger::init`). Mirror kill-switch:
+  `POST_MIRROR_PORT_300`. Capture: QEMU `isa-debugcon` on 0x80 and
+  0x300; 0x300 must read exactly `a1 a2 a3`, 0x80 by non-zero tail
+  (`io_wait` floods 0x00, SeaBIOS pre-handoff codes ignored).
 - Fail-fast crash dump: the first-chance exception path dumps raw
   registers (CR2/CR3/RIP/SP; TTBR/ELR/SP; stval/satp/sepc/sp) to
   UART and halts (`cli;hlt` / `wfi`) on unrecoverable faults. No
@@ -278,7 +287,11 @@ These are MUST-level constraints on the kernel, independent of #169:
 - QEMU-vs-hardware pitfalls (each is a normative MUST with the
   rationale from #186): never trust assumed memory maps (validate
   E820/UEFI/DT); TLB invalidation complete on every path QEMU-TCG
-  forgives (`INVLPG`, `DSB+TLBI`, `SFENCE.VMA`); cache attributes
+  forgives (`INVLPG`, `DSB+TLBI`, `SFENCE.VMA`); the aarch64 TLB paths
+  select the barrier at build time — `CONFIG_TCG_BARRIERS=1` (default)
+  emits `dmb sy` for QEMU, `=0` emits the architecturally required
+  `dsb sy` for silicon, with the RPi4 proof tracked in #397 (issue
+  #309b); cache attributes
   correct for DMA (non-cacheable where required); unaligned access
   never relied upon; memory barriers present where SMP requires
   them (QEMU serializes what silicon reorders); spurious-IRQ

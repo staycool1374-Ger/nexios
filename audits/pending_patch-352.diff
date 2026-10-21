@@ -1,0 +1,1030 @@
+diff --git a/src/kernel/arch/aarch64/early_init.cpp b/src/kernel/arch/aarch64/early_init.cpp
+index 519b7d2e1..6f5e69e13 100644
+--- a/src/kernel/arch/aarch64/early_init.cpp
++++ b/src/kernel/arch/aarch64/early_init.cpp
+@@ -31,6 +31,7 @@
+ #include <kernel/arch/interrupt_controller.hpp>
+ #include <kernel/arch/idt.hpp>
+ #include <kernel/arch/timer.hpp>
++#include <kernel/arch/aarch64/hal/asid.hpp>
+ 
+ namespace arch {
+ 
+@@ -90,6 +91,9 @@ arch::EarlyIrqResult arch::early_irq_init(uint32_t frequency_hz) {
+     arch::IDT::init();
+     arch::IDT::load();
+     arch::ArchInterruptController::init();
++    // Issue #352: activate ASID tagging (allocator flag only — no HW
++    // touch; task create/teardown and switch publish pick up IDs).
++    arch::asid_init();
+     if (!arch::gic_redist_ready()) {
+         return arch::EarlyIrqResult::CTRL_TIMEOUT;
+     }
+diff --git a/src/kernel/arch/aarch64/hal/asid.cpp b/src/kernel/arch/aarch64/hal/asid.cpp
+new file mode 100644
+index 000000000..2b153c7cf
+--- /dev/null
++++ b/src/kernel/arch/aarch64/hal/asid.cpp
+@@ -0,0 +1,117 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file asid.cpp
++/// @brief Address-space identifier allocator (issue #352, aarch64 only).
++
++#include <kernel/arch/aarch64/hal/asid.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/arch/aarch64/hal/page_table_impl.hpp>
++
++namespace arch {
++namespace {
++
++// Allocator state (create/cleanup-time mutation only — never on the
++// timer-ISR or context-switch hot path; callers serialize via IrqGuard
++// here because allocation can race task creation on SMP).
++bool g_supported = false;
++uint16_t g_next = 1;
++uint64_t g_epoch = 0;
++// Live-ID bitmap: 256 bits = 4 u64s, bit N set = ASID N live.  Claimed
++// under IrqGuard (allocation never happens on the switch hot path).
++uint64_t g_live[4] = {};
++
++bool live_claim(uint16_t asid) {
++    uint64_t *slot = &g_live[asid / 64];
++    uint64_t bit = 1ULL << (asid % 64);
++    uint64_t seen = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
++    while ((seen & bit) == 0) {
++        if (__atomic_compare_exchange_n(slot, &seen, seen | bit, false,
++                                        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
++            return true;
++        }
++    }
++    return false;
++}
++
++void live_clear(uint16_t asid) {
++    __atomic_fetch_and(&g_live[asid / 64], ~(1ULL << (asid % 64)),
++                       __ATOMIC_ACQ_REL);
++}
++
++} // namespace
++
++void asid_init() {
++    g_supported = true;
++}
++
++bool asid_supported() {
++    return g_supported;
++}
++
++uint16_t asid_alloc() {
++    if (!g_supported)
++        return ASID_KERNEL;
++    arch::IrqGuard guard{};
++    // First pass: cursor to end.  Second pass: start to cursor.
++    // A live ID is never reissued (bitmap-checked both passes).
++    for (int pass = 0; pass < 2; ++pass) {
++        uint16_t start = (pass == 0) ? g_next : 1;
++        uint16_t limit = (pass == 0) ? (ASID_MAX + 1) : g_next;
++        for (uint16_t id = start; id < limit; ++id) {
++            if (live_claim(id)) {
++                g_next = (id == ASID_MAX) ? 1 : (id + 1);
++                return id;
++            }
++        }
++    }
++    // Exhausted: epoch bump + global purge, cursor reset to 1.  Live IDs
++    // stay set, so reuse is still impossible and a fully-live space
++    // answers 0 (caller falls back untagged).
++    ++g_epoch;
++    ArchPageTable::tlb_flush_all();
++    g_next = 1;
++    for (uint16_t id = 1; id <= ASID_MAX; ++id) {
++        if (live_claim(id)) {
++            g_next = (id == ASID_MAX) ? 1 : (id + 1);
++            return id;
++        }
++    }
++    return ASID_KERNEL; // all 255 live — caller falls back untagged
++}
++
++void asid_free(uint16_t asid) {
++    if (asid == ASID_KERNEL)
++        return;
++    {
++        arch::IrqGuard guard{};
++        live_clear(asid);
++    }
++    // Purge-before-free: the freed address space's entries tagged with
++    // this ASID survive in the TLB (tagged switches no longer flush).
++    // A same-root full flush is the safe fallback until VA+ASID targeted
++    // invalidation lands (step 4 of issue #352).
++    if (g_supported)
++        ArchPageTable::tlb_flush_all();
++}
++
++uint64_t asid_epoch() {
++    return g_epoch;
++}
++
++} // namespace arch
+diff --git a/src/kernel/arch/aarch64/hal/asid.hpp b/src/kernel/arch/aarch64/hal/asid.hpp
+new file mode 100644
+index 000000000..2027bb4b0
+--- /dev/null
++++ b/src/kernel/arch/aarch64/hal/asid.hpp
+@@ -0,0 +1,68 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file asid.hpp
++/// @brief Address-space identifier allocator (issue #352, aarch64 only).
++///
++/// ASIDs tag TLB entries so TTBR0 switches between user address spaces
++/// retain translations instead of flushing.  ASID 0 is reserved for the
++/// kernel (TTBR1); user address spaces allocate 1..255 (safe 8-bit range —
++/// wider hardware ASIDs are deliberately unused).  On exhaustion the
++/// allocator bumps an epoch, issues one global flush, and restarts from 1 —
++/// a live ID is never reissued (bitmap-checked).
++///
++/// Mutation happens at task create/cleanup only (never on the timer-ISR or
++/// context-switch hot path).  Purge-before-free: the freed ID's entries are
++/// flushed before the ID returns to the pool.
++
++#pragma once
++
++#include <types.hpp>
++
++namespace arch {
++
++/// @brief Maximum ASID value (8-bit safe range, 0 reserved for kernel).
++inline constexpr uint16_t ASID_MAX = 255;
++/// @brief ASID reserved for the kernel (TTBR1, never allocated).
++inline constexpr uint16_t ASID_KERNEL = 0;
++
++/// @brief Probe once at boot (BSP).  ASIDs always exist on AArch64.
++void asid_init();
++/// @brief True when ASID tagging is active.
++bool asid_supported();
++/// @brief Allocate a user ASID (1..255), or 0 when unsupported.
++///        On exhaustion: epoch bump + one global flush, cursor reset to 1
++///        (freed IDs are reused low-first); returns 0 if every ID is still
++///        live — the caller falls back untagged.  A live ID is never
++///        reissued.
++uint16_t asid_alloc();
++/// @brief Release a user ASID (0 is a no-op).  Purges the ID's entries
++///        before returning it to the pool.
++void asid_free(uint16_t asid);
++/// @brief Tag a TTBR0 phys with an ASID for publication (0 → raw phys).
++///        ASID occupies TTBR0_EL1 bits [55:48].
++inline uint64_t asid_tag(uint64_t ttbr0_phys, uint16_t asid) {
++    if (asid == ASID_KERNEL)
++        return ttbr0_phys;
++    return (ttbr0_phys & ~(0xFFULL << 48)) |
++           ((static_cast<uint64_t>(asid) & 0xFFULL) << 48);
++}
++/// @brief Current rollover epoch (diagnostic only).
++uint64_t asid_epoch();
++
++} // namespace arch
+diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+index 33fd54a10..2cf70ef79 100644
+--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+@@ -283,6 +283,18 @@ inline void write_cr3_notlbi(uint64_t v) {
+     write_ttbr0_el1(v);
+     asm volatile("isb" : : : "memory");
+ }
++/// @brief Read the kernel page-table root (TTBR1_EL1, issue #352).
++/// @return Physical address of the kernel page table.
++/// @note Distinct from read_cr3() (TTBR0/user) — callers that need the
++///       kernel half must use this, never the CR3 alias.
++inline uint64_t kernel_page_table_base() {
++    return read_ttbr1_el1();
++}
++/// @brief Read the user page-table root (TTBR0_EL1, issue #352).
++/// @return Physical address of the current user page table.
++inline uint64_t user_page_table_base() {
++    return read_ttbr0_el1();
++}
+ // NOTE: dsb sy replaced with dmb sy throughout this file — QEMU TCG chokes on
+ // dsb sy after MMU+cache activity.  On real hardware dsb sy is required for
+ // correctness.
+diff --git a/src/kernel/arch/hal/context_id.hpp b/src/kernel/arch/hal/context_id.hpp
+new file mode 100644
+index 000000000..3e6d4e588
+--- /dev/null
++++ b/src/kernel/arch/hal/context_id.hpp
+@@ -0,0 +1,108 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file context_id.hpp
++/// @brief Architecture-neutral context-ID (PCID/ASID) API (issue #352).
++///
++/// Thin wrappers over the per-arch allocators so generic kernel code
++/// (task create/cleanup, scheduler root publication) never branches on
++/// the architecture:
++/// - x86_64 delegates to `pcid_*` (`arch/x86_64/hal/pcid.hpp`).
++/// - aarch64 delegates to `asid_*` (`arch/aarch64/hal/asid.hpp`, 8-bit).
++/// - riscv64 delegates to `asid_*` (`arch/riscv64/hal/asid.hpp`, 16-bit).
++///
++/// ID 0 (`CONTEXT_ID_KERNEL`) is reserved for the kernel root on every
++/// arch and means "untagged" to `context_id_tag`.  A live ID is never
++/// reissued by any backend (bitmap-checked).
++
++#pragma once
++
++#include <types.hpp>
++
++#if defined(CONFIG_ARCH_X86_64)
++#include <kernel/arch/x86_64/hal/pcid.hpp>
++#elif defined(CONFIG_ARCH_AARCH64)
++#include <kernel/arch/aarch64/hal/asid.hpp>
++#elif defined(CONFIG_ARCH_RISCV64)
++#include <kernel/arch/riscv64/hal/asid.hpp>
++#endif
++
++namespace arch {
++
++/// @brief Context ID reserved for the kernel root (never allocated).
++inline constexpr uint16_t CONTEXT_ID_KERNEL = 0;
++
++/// @brief Probe once at boot (BSP).
++inline void context_id_init() {
++#if defined(CONFIG_ARCH_X86_64)
++    pcid_init();
++#else
++    asid_init();
++#endif
++}
++
++/// @brief True when context-ID tagging is active.
++inline bool context_id_supported() {
++#if defined(CONFIG_ARCH_X86_64)
++    return pcid_supported();
++#else
++    return asid_supported();
++#endif
++}
++
++/// @brief Allocate a user context ID, or 0 when unsupported/exhausted
++///        (caller falls back untagged).  A live ID is never reissued.
++inline uint16_t context_id_alloc() {
++#if defined(CONFIG_ARCH_X86_64)
++    return pcid_alloc();
++#else
++    return asid_alloc();
++#endif
++}
++
++/// @brief Release a user context ID (0 is a no-op).  Purges the ID's
++///        entries before returning it to the pool.
++inline void context_id_free(uint16_t id) {
++#if defined(CONFIG_ARCH_X86_64)
++    pcid_free(id);
++#else
++    asid_free(id);
++#endif
++}
++
++/// @brief Tag a page-table root phys with a context ID for publication
++///        (0 → raw phys).  Returns the FULL register value to publish
++///        (CR3 / TTBR0_EL1 / SATP).
++inline uint64_t context_id_tag(uint64_t root_phys, uint16_t id) {
++#if defined(CONFIG_ARCH_X86_64)
++    return pcid_tag(root_phys, id);
++#else
++    return asid_tag(root_phys, id);
++#endif
++}
++
++/// @brief Current rollover epoch (diagnostic only).
++inline uint64_t context_id_epoch() {
++#if defined(CONFIG_ARCH_X86_64)
++    return pcid_epoch();
++#else
++    return asid_epoch();
++#endif
++}
++
++} // namespace arch
+diff --git a/src/kernel/arch/riscv64/early_init.cpp b/src/kernel/arch/riscv64/early_init.cpp
+index 00b0f2f7e..f900d84aa 100644
+--- a/src/kernel/arch/riscv64/early_init.cpp
++++ b/src/kernel/arch/riscv64/early_init.cpp
+@@ -26,6 +26,7 @@
+ #include <kernel/arch/interrupt_controller.hpp>
+ #include <kernel/arch/idt.hpp>
+ #include <kernel/arch/timer.hpp>
++#include <kernel/arch/riscv64/hal/asid.hpp>
+ 
+ namespace arch {
+ 
+@@ -44,6 +45,9 @@ EarlyIrqResult early_irq_init(uint32_t frequency_hz) {
+     IDT::init();
+     IDT::load();
+     ArchInterruptController::init();
++    // Issue #352: activate ASID tagging (allocator flag only — no HW
++    // touch; task create/teardown and switch publish pick up IDs).
++    arch::asid_init();
+     Timer::init(frequency_hz);
+     (void)Timer::calibrate();
+     if (Timer::freq_hz() == 0) {
+diff --git a/src/kernel/arch/riscv64/hal/asid.cpp b/src/kernel/arch/riscv64/hal/asid.cpp
+new file mode 100644
+index 000000000..117655688
+--- /dev/null
++++ b/src/kernel/arch/riscv64/hal/asid.cpp
+@@ -0,0 +1,119 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file asid.cpp
++/// @brief Address-space identifier allocator (issue #352, riscv64 only).
++
++#include <kernel/arch/riscv64/hal/asid.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/arch/riscv64/hal/page_table_impl.hpp>
++
++namespace arch {
++namespace {
++
++// Allocator state (create/cleanup-time mutation only — never on the
++// timer-ISR or context-switch hot path; callers serialize via IrqGuard
++// here because allocation can race task creation on SMP).
++bool g_supported = false;
++uint16_t g_next = 1;
++uint64_t g_epoch = 0;
++// Live-ID bitmap: 65536 bits = 1024 u64s, bit N set = ASID N live.
++// Claimed under IrqGuard (allocation never happens on the switch hot
++// path).
++uint64_t g_live[1024] = {};
++
++bool live_claim(uint16_t asid) {
++    uint64_t *slot = &g_live[asid / 64];
++    uint64_t bit = 1ULL << (asid % 64);
++    uint64_t seen = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
++    while ((seen & bit) == 0) {
++        if (__atomic_compare_exchange_n(slot, &seen, seen | bit, false,
++                                        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
++            return true;
++        }
++    }
++    return false;
++}
++
++void live_clear(uint16_t asid) {
++    __atomic_fetch_and(&g_live[asid / 64], ~(1ULL << (asid % 64)),
++                       __ATOMIC_ACQ_REL);
++}
++
++} // namespace
++
++void asid_init() {
++    g_supported = true;
++}
++
++bool asid_supported() {
++    return g_supported;
++}
++
++uint16_t asid_alloc() {
++    if (!g_supported)
++        return ASID_KERNEL;
++    arch::IrqGuard guard{};
++    // First pass: cursor to end.  Second pass: start to cursor (wraps
++    // past 65535 via the 32-bit loop bound).  A live ID is never
++    // reissued (bitmap-checked both passes).
++    for (int pass = 0; pass < 2; ++pass) {
++        uint32_t start = (pass == 0) ? g_next : 1;
++        uint32_t limit = (pass == 0) ? (uint32_t)ASID_MAX + 1 : g_next;
++        for (uint32_t id = start; id < limit; ++id) {
++            if (live_claim((uint16_t)id)) {
++                g_next = (id == ASID_MAX) ? 1 : (uint16_t)(id + 1);
++                return (uint16_t)id;
++            }
++        }
++    }
++    // Exhausted: epoch bump + global purge, cursor reset to 1.  Live IDs
++    // stay set, so reuse is still impossible and a fully-live space
++    // answers 0 (caller falls back untagged).
++    ++g_epoch;
++    ArchPageTable::tlb_flush_all();
++    g_next = 1;
++    for (uint32_t id = 1; id <= (uint32_t)ASID_MAX; ++id) {
++        if (live_claim((uint16_t)id)) {
++            g_next = (id == ASID_MAX) ? 1 : (uint16_t)(id + 1);
++            return (uint16_t)id;
++        }
++    }
++    return ASID_KERNEL; // all 65535 live — caller falls back untagged
++}
++
++void asid_free(uint16_t asid) {
++    if (asid == ASID_KERNEL)
++        return;
++    {
++        arch::IrqGuard guard{};
++        live_clear(asid);
++    }
++    // Purge-before-free: the freed address space's entries tagged with
++    // this ASID survive in the TLB (tagged switches no longer flush).
++    // A full local sfence.vma is the safe fallback until VA+ASID
++    // targeted invalidation lands (step 4 of issue #352).
++    if (g_supported)
++        ArchPageTable::tlb_flush_all();
++}
++
++uint64_t asid_epoch() {
++    return g_epoch;
++}
++
++} // namespace arch
+diff --git a/src/kernel/arch/riscv64/hal/asid.hpp b/src/kernel/arch/riscv64/hal/asid.hpp
+new file mode 100644
+index 000000000..a4658819b
+--- /dev/null
++++ b/src/kernel/arch/riscv64/hal/asid.hpp
+@@ -0,0 +1,68 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file asid.hpp
++/// @brief Address-space identifier allocator (issue #352, riscv64 only).
++///
++/// ASIDs tag TLB entries so SATP switches between user address spaces
++/// retain translations instead of flushing.  ASID 0 is reserved for the
++/// kernel; user address spaces allocate 1..65535 (full 16-bit range).
++/// On exhaustion the allocator bumps an epoch, issues one global flush,
++/// and restarts from 1 — a live ID is never reissued (bitmap-checked).
++///
++/// Mutation happens at task create/cleanup only (never on the timer-ISR or
++/// context-switch hot path).  Purge-before-free: the freed ID's entries are
++/// flushed before the ID returns to the pool.
++
++#pragma once
++
++#include <types.hpp>
++
++namespace arch {
++
++/// @brief Maximum ASID value (16-bit field, 0 reserved for kernel).
++inline constexpr uint16_t ASID_MAX = 65535;
++/// @brief ASID reserved for the kernel (never allocated).
++inline constexpr uint16_t ASID_KERNEL = 0;
++
++/// @brief Probe once at boot (BSP).  SATP MODE Sv39 always carries ASID.
++void asid_init();
++/// @brief True when ASID tagging is active.
++bool asid_supported();
++/// @brief Allocate a user ASID (1..65535), or 0 when unsupported.
++///        On exhaustion: epoch bump + one global flush, cursor reset to 1
++///        (freed IDs are reused low-first); returns 0 if every ID is still
++///        live — the caller falls back untagged.  A live ID is never
++///        reissued.
++uint16_t asid_alloc();
++/// @brief Release a user ASID (0 is a no-op).  Purges the ID's entries
++///        before returning it to the pool.
++void asid_free(uint16_t asid);
++/// @brief Tag a SATP root phys with an ASID for publication (0 → raw phys).
++///        ASID occupies SATP bits [59:44].
++inline uint64_t asid_tag(uint64_t satp_phys, uint16_t asid) {
++    uint64_t ppn = (satp_phys >> 12) & 0xFFFFFFFFFFFULL;
++    uint64_t v = (8ULL << 60) | ppn;
++    if (asid == ASID_KERNEL)
++        return v;
++    return v | ((static_cast<uint64_t>(asid) & 0xFFFFULL) << 44);
++}
++/// @brief Current rollover epoch (diagnostic only).
++uint64_t asid_epoch();
++
++} // namespace arch
+diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+index 720d4ef50..4a19e922c 100644
+--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+@@ -199,6 +199,18 @@ inline void write_cr3(uint64_t v) {
+ inline void write_cr3_notlbi(uint64_t v) {
+     write_satp((8ULL << 60) | v);
+ }
++/// @brief Read the kernel page-table root (issue #352).  Sv39 uses one
++///        shared root for both halves, so this equals the user root.
++/// @return Physical address of the kernel page table.
++inline uint64_t kernel_page_table_base() {
++    return read_cr3();
++}
++/// @brief Read the user page-table root (issue #352).  Sv39 uses one
++///        shared root for both halves, so this equals the kernel root.
++/// @return Physical address of the current user page table.
++inline uint64_t user_page_table_base() {
++    return read_cr3();
++}
+ /// @brief Write the tp register (user thread-local-storage base, issue #74).
+ /// @param v User VA of the thread block (0 clears). tp is ABI-reserved so the
+ /// compiler never allocates it; the write is exact. Trap-return consumes the
+diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
+index 2fefb01f3..782d240ac 100644
+--- a/src/kernel/arch/riscv64/syscall_entry.S
++++ b/src/kernel/arch/riscv64/syscall_entry.S
+@@ -306,17 +306,14 @@ apply:
+     ld ra, 0(sp)
+     addi sp, sp, 16
+ 
+-    # Check SATP switch.  load_cr3_from carries the RAW root physical
+-    # address (in-tree convention: producers pass phys, consumers add the
+-    # mode — cf. io_impl write_cr3; issue #29).  A raw csrw would install
+-    # MODE=0 (Bare) and switch the MMU off mid-return.
++    # Check SATP switch.  load_cr3_from carries the FULL SATP value
++    # (mode|ASID|PPN — issue #352: context_id_tag publishes the tagged
++    # root, so no re-encoding here).  Write it verbatim: decomposing and
++    # re-adding the mode would drop a nonzero ASID.  A raw csrw of a
++    # phys would install MODE=0 (Bare) and switch the MMU off mid-return.
+     la t0, scheduler_load_cr3_from
+     ld t0, 0(t0)
+     beqz t0, 7f
+-    srli t0, t0, 12              // PPN = phys >> 12
+-    li t1, 8
+-    slli t1, t1, 60              // Sv39 mode
+-    or t0, t0, t1
+     csrw satp, t0
+     sfence.vma
+     la t0, scheduler_load_cr3_from
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 4a6ef1a52..fd6ea5890 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -78,6 +78,11 @@
+ #include <kernel/vfs/procfs.hpp>
+ #include <kernel/vfs/tmpfs.hpp>
+ #include <kernel/vfs/ramdisk_fs.hpp>
++#if defined(CONFIG_ARCH_AARCH64)
++#include <kernel/arch/aarch64/hal/asid.hpp>
++#elif defined(CONFIG_ARCH_RISCV64)
++#include <kernel/arch/riscv64/hal/asid.hpp>
++#endif
+ #include <initrd/initrd.hpp>
+ #include <services/terminal/framebuffer.hpp>
+ #include <services/terminal/terminal.hpp>
+@@ -1486,6 +1491,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+ 
+     arch::Timer::init(kernel::BootParams::instance().timer_hz);
+ 
++    // Issue #352: activate context-ID tagging on aarch64/riscv64
++    // (allocator flag only — task create/teardown and switch publish
++    // pick up IDs from here on).  x86_64 activates via pcid_init()
++    // above; early_irq_init() repeats it idempotently for test paths.
++#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
++    arch::asid_init();
++#endif
++
+     // Issue #25 (Phase B3): wake + park APs.  Single-CPU runs are a silent
+     // no-op (MADT ncpus <= 1 or unusable trampoline block).
+ #if defined(CONFIG_ARCH_X86_64)
+diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
+index 09dddd0f7..25a89f57b 100644
+--- a/src/kernel/memory/vmm.hpp
++++ b/src/kernel/memory/vmm.hpp
+@@ -133,6 +133,15 @@ class VMM {
+     ///       Context: any-task (register read). SMP: N/A.
+     static uint64_t current_pml4();
+ 
++    /// @brief Returns the physical address of the kernel page-table root
++    ///        (issue #352; no callers yet — step 2 wires it up).
++    ///        On x86_64/riscv64 this is the shared root; on aarch64 it is
++    ///        the TTBR1_EL1 root, never the TTBR0 user alias.
++    /// @return Physical address of the kernel page-table root.
++    /// @note Concurrency/caller contract (issue #366): Lock: none.
++    ///       Context: any-task (register read). SMP: N/A.
++    static uint64_t current_kernel_pml4();
++
+     /// @brief Creates a fresh PML4: zeroes user entries (0-255),
+     /// copies kernel entries (256-511). Used during exec/load —
+     /// NOT for fork (which needs parent user entries).
+diff --git a/src/kernel/task/scheduler_switch.cpp b/src/kernel/task/scheduler_switch.cpp
+index 7b1e56f4a..2176a73ca 100644
+--- a/src/kernel/task/scheduler_switch.cpp
++++ b/src/kernel/task/scheduler_switch.cpp
+@@ -38,9 +38,7 @@
+ #include <kernel/arch/hal/iopb.hpp>
+ #include <lib/logger.hpp>
+ #include <assert.hpp>
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-#include <kernel/arch/x86_64/hal/pcid.hpp>
+-#endif
++#include <kernel/arch/hal/context_id.hpp>
+ 
+ namespace kernel {
+ 
+@@ -288,20 +286,16 @@ void restore_preempted_current(TaskControlBlock *current,
+ // switch_to_task
+ // ---------------------------------------------------------------------------
+ 
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-/// @brief Lazily assign a user PCID at first CR3 publish (issue #156).
+-///        Single choke point covering create/clone/elf births uniformly
+-///        (deviation D1 from the creation-site plan: the elf::load path
+-///        also births user address spaces).  Runs under scheduler_lock_
+-///        at both publish sites; fires once per task lifetime (later
+-///        publishes see nonzero pcid_).  Returns 0 when unsupported so
+-///        the publish stays raw-phys (full flush, today's behavior).
+-static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
+-    if (next.is_user_ && next.pcid_ == 0 && arch::pcid_supported())
+-        next.pcid_ = arch::pcid_alloc();
++/// @brief Lazily assign a user context ID at first root publish
++///        (issue #352; arch-neutral twin of publish_pcid_for).
++///        Same choke-point contract (scheduler_lock_ at both publish
++///        sites, once per lifetime, 0 when unsupported).  x86_64
++///        delegates to the PCID allocator, aarch64/riscv64 to ASID.
++static uint16_t publish_context_id_for(TaskControlBlock &next) noexcept {
++    if (next.is_user_ && next.pcid_ == 0 && arch::context_id_supported())
++        next.pcid_ = arch::context_id_alloc();
+     return next.pcid_;
+ }
+-#endif
+ 
+ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+                     sync::SpinLock *held_lock = nullptr) {
+@@ -661,12 +655,11 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
+                      __ATOMIC_RELEASE);
+     if (next.get_page_table()) {
+-        // Issue #156: publish tagged (PCID 0 = raw phys, full flush).
+-        uint64_t cr3_value = next.get_page_table();
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-        cr3_value = arch::pcid_tag(next.get_page_table(),
+-                                   publish_pcid_for(next));
+-#endif
++        // Issue #352: publish tagged (ID 0 = raw phys, full flush).
++        // x86_64 tags PCID, aarch64/riscv64 tag ASID; untagged arches
++        // and unsupported CPUs publish raw phys (today's behavior).
++        uint64_t cr3_value = arch::context_id_tag(
++            next.get_page_table(), publish_context_id_for(next));
+         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
+                          __ATOMIC_RELEASE);
+         // Issue #74: publish the TLS base alongside CR3 (0 for unset;
+@@ -687,7 +680,11 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
+             arch::GDT::set_tss_rsp0(next.kernel_stack_top);
+ #endif
+     } else {
+-        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
++        // Issue #352: kernel/harness targets publish the kernel root
++        // untagged (ID 0) — still through the tag helper so the value
++        // carries the arch root encoding (riscv SATP mode bits).
++        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(),
++                         arch::context_id_tag(VMM::get_kernel_pml4(), 0),
+                          __ATOMIC_RELEASE);
+         // Issue #74: kernel/harness targets never carry TLS (apply loads
+         // nothing); publish 0 so no stale user base survives.
+@@ -923,12 +920,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+         __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
+                          __ATOMIC_RELEASE);
+         if (next->get_page_table()) {
+-            // Issue #156: tagged publish (same contract as above).
+-            uint64_t cr3_value = next->get_page_table();
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-            cr3_value = arch::pcid_tag(next->get_page_table(),
+-                                       publish_pcid_for(*next));
+-#endif
++            // Issue #352: tagged publish (same contract as above).
++            uint64_t cr3_value = arch::context_id_tag(
++                next->get_page_table(), publish_context_id_for(*next));
+             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
+                              __ATOMIC_RELEASE);
+             // Issue #74: publish the TLS base alongside CR3 (second publish
+@@ -937,7 +931,11 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
+                              next->is_user_ ? next->tls_base_ : 0,
+                              __ATOMIC_RELEASE);
+         } else {
+-            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
++            // Issue #352: kernel/harness targets publish the kernel root
++            // untagged (ID 0) — but still through the tag helper so the
++            // value carries the arch root encoding (riscv SATP mode bits).
++            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(),
++                             arch::context_id_tag(VMM::get_kernel_pml4(), 0),
+                              __ATOMIC_RELEASE);
+             // Issue #74: kernel/harness targets never carry TLS.
+             __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index f197a3b3f..18b015242 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -47,9 +47,7 @@
+ #include <kernel/debug/debug_bind.hpp>
+ #include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/daemon/daemon_mgr.hpp>
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-#include <kernel/arch/x86_64/hal/pcid.hpp>
+-#endif
++#include <kernel/arch/hal/context_id.hpp>
+ #include <kernel/sync/notify.hpp>
+ #include <kernel/sync/eventgroup.hpp>
+ #include <kernel/sync/semaphore.hpp>
+@@ -1376,12 +1374,11 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
+     }
+     tcb->install_page_table(pml4);
+     tcb->is_user_ = true;
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-    // Issue #156: eager PCID assignment at birth (0 when unsupported).
+-    // Publish-time lazy assignment remains as backstop for paths that
+-    // install user PML4s without passing here.
+-    tcb->pcid_ = arch::pcid_alloc();
+-#endif
++// Issue #352: eager context-ID assignment at birth (0 when unsupported).
++// Publish-time lazy assignment remains as backstop for paths that
++// install user PML4s without passing here.  Arch-neutral: x86_64
++// delegates to pcid_alloc, aarch64/riscv64 to asid_alloc.
++    tcb->pcid_ = arch::context_id_alloc();
+ 
+     // Guard page: leave first page unmapped, start mapping at +arch::PAGE_SIZE
+     uint64_t user_stack_virt = mem::STACK_VADDR + arch::PAGE_SIZE;
+@@ -1649,12 +1646,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     // (every task now owns a private kernel-half PML4).
+     bool is_user_task = is_user_parent;
+     tcb->is_user_ = is_user_task;
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-    // Issue #156: fork gets a FRESH PCID (never the parent's — the child
+-    // owns a private address space).
++// Issue #352: fork gets a FRESH context ID (never the parent's — the child
++// owns a private address space).  Arch-neutral (x86_64 pcid, aarch64/riscv64
++// asid); 0 when unsupported.
+     if (is_user_task)
+-        tcb->pcid_ = arch::pcid_alloc();
+-#endif
++        tcb->pcid_ = arch::context_id_alloc();
+     uint64_t slot_va = alloc_kslot(STACK_SIZE);
+     if (slot_va) {
+         tcb->kstack_slot_va_ = slot_va;
+@@ -2220,13 +2216,11 @@ void TaskControlBlock::complete_teardown() noexcept {
+         // free below skips them (pages owned by mapping tasks, retention
+         // decides frees at zero/zero).
+         kernel::elf::ElfLoader::unmap_golden(this);
+-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
+-        // Issue #156: release the PCID before the address space goes
++        // Issue #352: release the context ID before the address space goes
+         // away (keyed on the live TCB, never after free; 0 is a no-op
+-        // for kernel tasks and never-published users).
+-        arch::pcid_free(pcid_);
++        // for kernel tasks and never-published users).  Arch-neutral.
++        arch::context_id_free(pcid_);
+         pcid_ = 0;
+-#endif
+         VMM::free_user_pages(get_page_table());
+         PMM::free_page(get_page_table());
+ #if defined(CONFIG_ARCH_X86_64)
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 0c51422c7..1fdd64b45 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -451,12 +451,19 @@ struct TaskControlBlock {
+     void swap_page_table(uint64_t new_pml4) noexcept;
+     /// @brief Teardown clear (issue #377): the caller freed the table.
+     void clear_page_table() noexcept;
+-    /// @brief Process-context identifier for TLB tagging (issue #156,
+-    ///        x86_64 only).  0 = untagged (kernel tasks + unsupported
+-    ///        CPUs); user tasks hold an allocated 1..4095.  Owned by the
+-    ///        TCB (not the PML4): survives exec PML4 swaps, dies with the
+-    ///        task so IDs are never reused while live.
++    /// @brief Context identifier for TLB tagging (issue #156 x86_64 PCID,
++    ///        generalized issue #352: aarch64/riscv64 ASID).  0 = untagged
++    ///        (kernel tasks + unsupported CPUs); user tasks hold an
++    ///        allocated ID.  Owned by the TCB (not the PML4): survives exec
++    ///        PML4 swaps, dies with the task so IDs are never reused
++    ///        while live.
+     uint16_t pcid_;
++    /// @brief Generic context-ID accessor (issue #352).  The stored
++    ///        `pcid_` field carries the PCID on x86_64 and the ASID on
++    ///        aarch64/riscv64; 0 means untagged on every arch.
++    uint16_t context_id() const noexcept {
++        return pcid_;
++    }
+     /// @brief Physical address of the private PDPT page allocated in
+     /// clone() for the user stack region. Zero when not applicable.
+     /// Used by cleanup() to free the private PDPT and its child PD/PT
+diff --git a/src/kernel/test/test_page_tables.cpp b/src/kernel/test/test_page_tables.cpp
+index d4eab64e3..430bc7c79 100644
+--- a/src/kernel/test/test_page_tables.cpp
++++ b/src/kernel/test/test_page_tables.cpp
+@@ -91,7 +91,24 @@ JARVIS_TEST(page_tables_kernel_task_private_pml4, "PRE: none | POST: none") {
+     auto *kern = reinterpret_cast<uint64_t *>(
+         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
++#if defined(CONFIG_ARCH_RISCV64)
++        // Issue #352: riscv64 L0[0] carries the kernel MMIO/identity
++        // subtree (U=0, issue #221 deep-copy) — not user mappings.  The
++        // ported property is "no USER-reachable entries", not
++        // blanket-zero: allow absent entries and present-but-U-clear
++        // kernel entries, reject anything U-accessible.  Local Sv39
++        // flag values (VMM members are private).
++        constexpr uint64_t SV39_V = 1ULL << 0;
++        constexpr uint64_t SV39_U = 1ULL << 4;
++        const uint64_t e = priv[i];
++        const bool absent = (e & SV39_V) == 0;
++        const bool kernel_owned =
++            ((e & SV39_V) != 0) && ((e & SV39_U) == 0);
++        JARVIS_ASSERT_FMT(absent || kernel_owned,
++                          "priv[%zu] is user-reachable: 0x%lx", i, e);
++#else
+         JARVIS_ASSERT(priv[i] == 0);
++#endif
+     }
+     for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
+         JARVIS_ASSERT(priv[i] == kern[i]);
+@@ -183,7 +200,12 @@ JARVIS_TEST(page_tables_isolation, "PRE: none | POST: none") {
+     JARVIS_ASSERT(a->get_page_table() != b->get_page_table());
+ 
+     // Map a test page in A's PML4 at a known VA (below STACK_VADDR).
+-    uint64_t test_va = 0x10000000;
++    // Issue #352: 0x10000000 aliases riscv64's L0[0] 0-1GB identity
++    // window, so it resolves via identity in EVERY table (no isolation
++    // failure, wrong VA choice).  0x50000000 sits in L0[1] — outside
++    // the identity window, below STACK_VADDR/HEAP_VADDR, and valid
++    // user space on x86_64/aarch64 too.
++    uint64_t test_va = 0x50000000;
+     uint64_t test_pa = PMM::alloc_user_page();
+     JARVIS_ASSERT(test_pa != 0);
+     VMM::map_page_in_pml4(test_va, test_pa, true, false, a->get_page_table());
+diff --git a/src/kernel/test/test_vmm.cpp b/src/kernel/test/test_vmm.cpp
+index 35b0399f3..de430db42 100644
+--- a/src/kernel/test/test_vmm.cpp
++++ b/src/kernel/test/test_vmm.cpp
+@@ -130,14 +130,62 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
+     for (size_t i = 0; i < 512; ++i)
+         parent_virt[i] = 0;
+ 
+-    uint64_t pdpt_phys = PMM::alloc_user_page();
++    uint64_t pdpt_phys = 0;
++    uint64_t pd_phys = 0;
++    uint64_t pt_phys = 0;
++#if defined(CONFIG_ARCH_RISCV64)
++    // Sv39 has no PDPT level: L1/L2 tables only (L0 -> L1 -> L2 leaf).
++    pd_phys = PMM::alloc_user_page();
++    JARVIS_ASSERT(pd_phys != 0);
++    pt_phys = PMM::alloc_user_page();
++    JARVIS_ASSERT(pt_phys != 0);
++#else
++    pdpt_phys = PMM::alloc_user_page();
+     JARVIS_ASSERT(pdpt_phys != 0);
+-    uint64_t pd_phys = PMM::alloc_user_page();
++    pd_phys = PMM::alloc_user_page();
+     JARVIS_ASSERT(pd_phys != 0);
+-    uint64_t pt_phys = PMM::alloc_user_page();
++    pt_phys = PMM::alloc_user_page();
+     JARVIS_ASSERT(pt_phys != 0);
++#endif
+ 
+-    // Set up parent page tables (user mapping at 0x400000)
++    // Set up parent page tables (user mapping at 0x400000).
++    // Issue #352: native codec per arch.  The x86 4-level idiom
++    // (PDPT/PD/PT + x86 flag values) does not decode on Sv39, which
++    // needs L0 -> L1 -> L2 with V-only table links and a V|R|W|U leaf.
++    // Same property under test on every arch: the child shares the
++    // parent's tables, one free_user_pages frees them exactly once.
++    uint64_t test_va = 0x400000;
++#if defined(CONFIG_ARCH_RISCV64)
++    // Sv39 3-level chain (issue #352): L0 -> L1 -> L2 leaf.  Local Sv39
++    // codec (V=bit0, table=V-only, leaf=V|R|W|U, child=((e>>10)<<12)),
++    // mirroring the x86 local-constants idiom below — VMM flag members
++    // are private to the VMM.
++    constexpr uint64_t SV39_V = 1ULL << 0;
++    constexpr uint64_t SV39_R = 1ULL << 1;
++    constexpr uint64_t SV39_W = 1ULL << 2;
++    constexpr uint64_t SV39_U = 1ULL << 4;
++    auto sv39_table = [](uint64_t phys) {
++        return ((phys >> 12) << 10) | SV39_V;
++    };
++    auto sv39_phys = [](uint64_t e) {
++        return ((e >> 10) << 12) & 0xFFFFFFFFFFF000ULL;
++    };
++    (void)sv39_phys;
++    const size_t top_idx = (test_va >> 30) & 0x1FF;
++    const size_t mid_idx = (test_va >> 21) & 0x1FF;
++    const size_t leaf_idx = (test_va >> 12) & 0x1FF;
++    parent_virt[top_idx] = sv39_table(pd_phys);
++    auto *l1_tab =
++        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
++    l1_tab[mid_idx] = sv39_table(pt_phys);
++    auto *l2_tab =
++        reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
++
++    // Allocate a user page and map it
++    uint64_t user_page = PMM::alloc_user_page();
++    JARVIS_ASSERT(user_page != 0);
++    l2_tab[leaf_idx] = sv39_table(user_page) | SV39_R | SV39_W | SV39_U;
++#else
+     constexpr uint64_t PML4_SHIFT = 39;
+     constexpr uint64_t PDPT_SHIFT = 30;
+     constexpr uint64_t PD_SHIFT = 21;
+@@ -146,7 +194,6 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
+     constexpr uint64_t PAGE_WRITE = 1ULL << 1;
+     constexpr uint64_t PAGE_USER = 1ULL << 2;
+ 
+-    uint64_t test_va = 0x400000;
+     size_t pml4_idx = (test_va >> PML4_SHIFT) & 0x1FF;
+     size_t pdpt_idx = (test_va >> PDPT_SHIFT) & 0x1FF;
+     size_t pd_idx = (test_va >> PD_SHIFT) & 0x1FF;
+@@ -163,6 +210,7 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
+     uint64_t user_page = PMM::alloc_user_page();
+     JARVIS_ASSERT(user_page != 0);
+     pt[pt_idx] = user_page | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
++#endif
+ 
+     // Create child PML4 that shares the page table pages (simulating fork)
+     uint64_t child_pml4 = PMM::alloc_page();
+@@ -186,11 +234,18 @@ JARVIS_TEST(vmm_free_user_pages_shared, "PRE: none | POST: none") {
+     // With the new PMM semantics free_page() preserves the owner bit, so
+     // the pages are free (bitmap = 0) but still show as USER-owned.
+     // Only the parent's direct manual cleanup (free_page below) is valid.  The
+-    // child's view is now freed — we verify by checking the PML4 entry is zeroed
+-    // (free_user_pages clears each PML4 slot after draining its subtree).
++    // child's view is now freed — we verify by checking the top entry is
++    // zeroed (free_user_pages clears each slot after draining its
++    // subtree).  Top index is arch-dependent (PML4 on 4-level, L0 on
++    // Sv39); both are 0 for test_va 0x400000, asserted explicitly.
++#if defined(CONFIG_ARCH_RISCV64)
++    JARVIS_ASSERT(child_virt[top_idx] == 0);
++#else
+     JARVIS_ASSERT(child_virt[pml4_idx] == 0);
++#endif
+ 
+-    // Clean up
++    // Clean up (pdpt_phys is 0/unused on Sv39 — free_page(0) is a
++    // range-guarded no-op, kept unconditional for symmetry).
+     PMM::free_page(pdpt_phys);
+     PMM::free_page(pd_phys);
+     PMM::free_page(pt_phys);

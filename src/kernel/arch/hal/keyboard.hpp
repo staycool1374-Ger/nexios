@@ -102,18 +102,24 @@ class Keyboard {
 /// @brief No-op keyboard stub for architectures without PS/2.
 class Keyboard {
   public:
-    static void init() {
-    }
-    static void handle_irq() {
-    }
-    static bool getchar(char &) {
-        return false;
-    }
-    static size_t read(char *, size_t) {
-        return 0;
-    }
-    static void flush() {
-    }
+    static void init();
+    /// @brief Contract-parity no-op — no UART IRQ exists on these
+    ///        arches (issue #355: polling decoder instead).
+    static void handle_irq();
+    /// @brief Pop one decoded key (non-blocking).
+    /// @param[out] c Output character.
+    /// @return true if a key was available.
+    static bool getchar(char &c);
+    /// @brief Pop up to @p len decoded keys (non-blocking).
+    static size_t read(char *buf, size_t len);
+    /// @brief Discard all buffered keys.
+    static void flush();
+    /// @brief Pump the UART into the decoder (shell input path).
+    /// @return Bytes pushed.
+    static size_t pump_serial();
+    /// @brief Inject raw serial bytes (harness/test path).
+    /// @return Bytes accepted.
+    static size_t inject_serial(const char *bytes, size_t len);
     static bool is_shifted() {
         return false;
     }

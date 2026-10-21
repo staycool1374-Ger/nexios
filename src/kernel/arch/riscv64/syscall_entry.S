@@ -246,15 +246,46 @@ nested_timer:
     li t1, 5
     bne t0, t1, 7f
 apply:
+    # H2 generation-lock (mirrors x86_64 isr_stubs .depth_ok): capture the
+    # publishing generation BEFORE touching the arm. A concurrent publisher
+    # superseding or half-overwriting the pair between capture and apply
+    # must not be applied (half-written RSP/CR3 pair).
+    la t3, scheduler_switch_generation
+    ld t3, 0(t3)
     # Check scheduler_save_rsp_to
     la t0, scheduler_save_rsp_to
     ld t0, 0(t0)
     beqz t0, 7f
+    # Verify the generation is unchanged (no torn publish in between —
+    # e.g. a nested tick re-arming mid-apply). Mismatch: record the skip
+    # and leave the atoms untouched (the superseding publisher's own arm
+    # is in place; a stale arm is ignored by the next trap's check).
+    la t1, scheduler_switch_generation
+    ld t1, 0(t1)
+    bne t3, t1, gen_skip
 
     # Save current SP (pointer to save area — matches x86_64 IRET frame pointer)
     la t1, scheduler_save_rsp_to
     ld t2, 0(t1)
     sd sp, 0(t2)
+
+    # H2 apply-side liveness + ownership re-check (mirrors x86_64
+    # scheduler_validate_pending_switch): the arm can outlive its trap and
+    # the target can be terminated + freed + recycled in between (issue
+    # #385: resume onto a recycled stack + sret into an unmapped yield
+    # stub with stale current). Refuse to resume onto freed/foreign
+    # memory. C call with 64 bytes reserved below the frame: only sp is
+    # live here (ABI-preserved); every GPR is reloaded from the frame by
+    # restore_all below; ra is stashed to match the on_context_switch
+    # call convention used further down.
+    addi sp, sp, -64
+    sd ra, 0(sp)
+    call scheduler_validate_pending_switch
+    ld ra, 0(sp)
+    addi sp, sp, 64
+    # a0 = 1 apply / 0 abort (the validator already invalidated the atoms
+    # and undid the publish side effects on abort).
+    beqz a0, abort_switch
 
     # Load new SP (points to save area of next task)
     la t2, scheduler_load_rsp_from
@@ -275,21 +306,49 @@ apply:
     ld ra, 0(sp)
     addi sp, sp, 16
 
-    # Check SATP switch.  load_cr3_from carries the RAW root physical
-    # address (in-tree convention: producers pass phys, consumers add the
-    # mode — cf. io_impl write_cr3; issue #29).  A raw csrw would install
-    # MODE=0 (Bare) and switch the MMU off mid-return.
+    # Check SATP switch.  load_cr3_from carries the FULL SATP value
+    # (mode|ASID|PPN — issue #352: context_id_tag publishes the tagged
+    # root, so no re-encoding here).  Write it verbatim: decomposing and
+    # re-adding the mode would drop a nonzero ASID.  A raw csrw of a
+    # phys would install MODE=0 (Bare) and switch the MMU off mid-return.
     la t0, scheduler_load_cr3_from
     ld t0, 0(t0)
     beqz t0, 7f
-    srli t0, t0, 12              // PPN = phys >> 12
-    li t1, 8
-    slli t1, t1, 60              // Sv39 mode
-    or t0, t0, t1
     csrw satp, t0
     sfence.vma
     la t0, scheduler_load_cr3_from
     sd zero, 0(t0)
+    j 7f
+
+gen_skip:
+    # Torn publish: a concurrent publisher superseded the pair between
+    # capture and apply. Record the skip and leave the atoms untouched
+    # (the superseding arm — including its TLS slot — stays in place for
+    # the next trap). Jump past the TLS consume so the pending TLS value
+    # is not stolen. a0/a1 are reloaded from the frame by restore_all.
+    mv a0, t3
+    la t1, scheduler_switch_generation
+    ld a1, 0(t1)
+    addi sp, sp, -64
+    sd ra, 0(sp)
+    call scheduler_record_skip
+    ld ra, 0(sp)
+    addi sp, sp, 64
+    j 8f
+
+abort_switch:
+    # The validator refused the arm (stale target or foreign RSP) and
+    # already invalidated the atoms + undid the publish side effects.
+    # Rebind anything the arm side redirected, then return to the
+    # current task. sp still points at the current frame (nothing was
+    # loaded). The TLS slot was cleared by the validator, so falling
+    # into the shared consume is a no-op.
+    addi sp, sp, -64
+    sd ra, 0(sp)
+    call scheduler_abort_switch_fixup
+    ld ra, 0(sp)
+    addi sp, sp, 64
+    j 7f
 
 7:  # Issue #74: consume the TLS slot into the trap-frame TP save area.
     # Both SATP paths converge here, so the slot is consumed

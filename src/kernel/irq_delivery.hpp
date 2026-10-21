@@ -56,16 +56,23 @@ enum class IrqDeliveryMode : uint8_t {
 /// (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore
 /// state; MSI-X vectors (48–255) mask/unmask their table entry instead.  All
 /// mask logic is gated on this kind — a MSI-X vector must never run the
-/// PIC `vector - 32` line arithmetic (would mask the wrong IRQ line).
+/// `vector - 32` line arithmetic (it would mask a wrong IRQ line).  Issue
+/// #354 adds PLATFORM: off-x86 (GIC SPI / PLIC source) vectors mask/unmask
+/// the controller line directly (mask ownership: the delivery table owns the
+/// line for the arm lifetime; the storm limiter may mask independently and
+/// the table re-unmasks on release only when it unmasked at arm).
 enum class IrqSlotKind : uint8_t {
-    PIC = 0,  ///< legacy PIC line (vectors 33–47)
-    MSIX = 1  ///< MSI-X table entry (vectors 48–255, != 0x80)
+    PIC = 0,    ///< legacy PIC line (vectors 33–47)
+    MSIX = 1,   ///< MSI-X table entry (vectors 48–255, != 0x80)
+    PLATFORM = 2 ///< GIC/PLIC line (aarch64 32–255, riscv64 1–95)
 };
 
 /// @brief One armed IRQ delivery registration.
 struct IrqRegistration {
-    uint8_t vector = 0;        ///< hardware vector (PIC 33–47 or MSI-X 48–255)
-    IrqSlotKind kind = IrqSlotKind::PIC; ///< PIC vs MSI-X (kind-gated masks)
+    uint8_t vector = 0;        ///< hardware vector (PIC 33–47, MSI-X 48–255,
+                               ///< or PLATFORM: GIC 32–255 / PLIC 1–95)
+    IrqSlotKind kind = IrqSlotKind::PIC; ///< PIC vs MSI-X vs PLATFORM
+                                         ///< (kind-gated masks)
     bool occupied = false;     ///< slot in use
     bool armed = false;        ///< vector unmasked + delivering to recipient
     bool line_was_masked = true; ///< PIC mask state of this line before arm

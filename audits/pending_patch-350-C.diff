@@ -1,0 +1,277 @@
+diff --git a/docs/specs/drivers.md b/docs/specs/drivers.md
+index a4201b5f7..ef163028f 100644
+--- a/docs/specs/drivers.md
++++ b/docs/specs/drivers.md
+@@ -114,6 +114,35 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+ 
+ ## 5. Virtio-blk (`virtio_blk.cpp`)
+ 
++### 5.1 Transport selection (issue #350)
++
++- x86_64: virtio-PCI modern (`0x1040` + type) via ECAM/MSI-X, plus AHCI
++  (x86-only HW — QEMU `virt` has no AHCI; virtio-blk is the `virt`
++  storage contract).
++- aarch64/riscv64: virtio-MMIO v2 discovery from the DTB
++  (`compatible = "virtio,mmio"`), with an architected slot-table
++  fallback (aarch64: the `-kernel` path passes no DTB — GDB-proven
++  `x0 == 0` at `higherhalf_entry` and no FDT magic in RAM). Slot
++  tables: aarch64 32 slots at PA `0x0A000000` + slot·`0x200`
++  (GIC INTID 48 + slot); riscv64 8 slots at `0x10001000` + slot·`0x1000`
++  (PLIC IRQ 1 + slot). Both windows are boot-mapped leaves; every
++  candidate is validated (MagicValue `0x74726976`, version, device ID)
++  before the transport fills — unpopulated slots read zero and skip.
++- QEMU `virt` exposes the legacy (v1) interface (Version reads 1):
++  queue setup uses GuestPageSize/QueueNum/QueueAlign/QueuePFN with one
++  contiguous 2-page chunk per queue (desc at +0, avail immediately
++  after, used at the single-sourced `virtio_legacy_used_off`), instead
++  of the v2 per-ring addresses + Ready bit. Submit/notify/completion
++  paths are version-independent and shared.
++- ISR: `InterruptStatus` read + per-pass used-ring drain +
++  `InterruptACK` write + bounded re-check (max 4 passes — the GIC SPI
++  is edge-triggered, so a completion landing between drain and ACK
++  raises no new edge); no allocation/blocking; wake outside
++  `compl_lock_`; teardown is mask → ACK → drain (error-wake) → clear
++  handler → free rings. Fail-closed poll fallback throughout.
++- TCG-coherent only; real-HW cache maintenance (aarch64 `dc civac`,
++  riscv `fence`) is a follow-up.
++
+ - `probe()`: `virtio_find_device(0x1042)` → `init()`: status
+   RESET→ACK→DRIVER → negotiate `VIRTIO_F_VERSION_1` → queue_size=16 → 4 PMM
+   pages (desc/avail/used/dma_buf) → `virtio_setup_queue` → DRIVER_OK →
+@@ -209,19 +238,23 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
+    in-tree, so wheel-blocking has no waker; RX is poll-model by design),
+    ATA-PIO (legacy, no IRQ/DMA by hardware contract; `ATA_POLL_TIMEOUT`
+    + false-propagation), and boot/pre-ISR bring-up (no task to BLOCK).
+-3. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
++3. **MMIO access rules (issue #350).** Device-config reads on MMIO use
++   at most 4-byte accesses (the 64-bit `virtio-blk.capacity` is split
++   into two 32-bit reads); the MMIO ISR path drains before ACK with a
++   bounded (≤ 4) re-check and keeps the poll fallback fail-closed.
++4. **Spinlock-in-IRQ rules.** Shared ISR/task state (DmaEngine, PingPongDma,
+    AHCI port command state) needs a `SpinLock` via `IrqSpinLockGuard`;
+    callbacks invoked only after release, from stack-captured locals; no
+    allocation/blocking while holding a lock in IRQ context.
+-4. **`GHC_IE` ordering.** AHCI global interrupt-enable must not be set until a
++5. **`GHC_IE` ordering.** AHCI global interrupt-enable must not be set until a
+    real ISR is wired (FLAW-04); teardown clears GHC_IE/PORT_IE and takes port
+    locks before freeing CL/RFIS/CT/data memory.
+-5. **UART FIFO drain.** 16550 FIFO = 16 bytes; `Serial::putchar` polls THRE per
++6. **UART FIFO drain.** 16550 FIFO = 16 bytes; `Serial::putchar` polls THRE per
+    char and must drain between bursts to avoid overflow (perturbs timing).
+-6. **Memory ordering for DMA.** `kernel::atomic_fence()` precedes issuing
++7. **Memory ordering for DMA.** `kernel::atomic_fence()` precedes issuing
+    commands (AHCI `PORT_CI` write, virtio avail idx increment + kick) so
+    descriptor writes are visible before the doorbell.
+-7. **Nesting depth ≤ 2**; deeper = corruption (switch skipped).
++8. **Nesting depth ≤ 2**; deeper = corruption (switch skipped).
+ 
+ ## 8. Open Flaw Ledger
+ 
+diff --git a/docs/specs/irq-early-init.md b/docs/specs/irq-early-init.md
+index 3444a099f..90f7af169 100644
+--- a/docs/specs/irq-early-init.md
++++ b/docs/specs/irq-early-init.md
+@@ -94,11 +94,12 @@ Full production boot paths (#28 aarch64, #29 riscv64), DTB plumbing
+ (#183), teardown validation (#199). `kernel.cpp` keeps its own staged
+ calls; `early_irq_init()` codifies the same order for tests and
+ bring-up reuse. Out of scope for #349: x86-only remainders (GDT/IDT
+-gates, PIC, APIC/LAPIC/IOAPIC, HPET, MSI/MSI-X, SMP/IPI), virtio-MMIO
+-transport/IRQ consumers (#350, drivers keep polling), interrupt-driven
+-UART RX (#245/#247), SMP per-hart contexts (#351), GICv3 HW validation
+-(QEMU cortex-a72 exercises GICv2 only), riscv release (#207), TCG wall
+-accuracy (#359/#384), QE test authorship/counts/release-subset.
++gates, PIC, APIC/LAPIC/IOAPIC, HPET, MSI/MSI-X, SMP/IPI),
++interrupt-driven UART RX (#245/#247), SMP per-hart contexts (#351),
++GICv3 HW validation (QEMU cortex-a72 exercises GICv2 only), riscv
++release (#207), TCG wall accuracy (#359/#384), QE test
++authorship/counts/release-subset. Virtio-MMIO transport/IRQ consumers
++landed in #350 (drivers keep the poll fallback fail-closed).
+ 
+ ## 6. Per-arch IRQ routing + timer parity (issue #349)
+ 
+@@ -107,6 +108,10 @@ QEMU-virt INTID map (aarch64): UART0 = 33, RTC = 34, PCIe INTx =
+ index 80). QEMU-virt PLIC map (riscv64, S-mode context 1): virtio-mmio
+ = 1–8, UART = 10, RTC = 11, PCIe INTx = 32–35; S-context addresses are
+ `0x0C002080` (enable), `0x0C201000` (threshold), `+4` (claim/complete).
++Virtio-mmio transport consumers (issue #350) register raw IDT handlers
++at INTID 48 + slot (GIC) / IRQ 1 + slot (PLIC), unmask the source, and
++ACK `InterruptStatus` after draining (drain-before-ACK, bounded
++re-check); teardown masks first.
+ 
+ GICv2 programming order: CTLR=0 → disable all banks → IGROUPR=0
+ (Group 0) → IPRIORITY = 0xA0 → ITARGETSR = CPU0 for SPIs (reset
+diff --git a/prompts/STATE.md b/prompts/STATE.md
+index 1efd8e425..7446d05af 100644
+--- a/prompts/STATE.md
++++ b/prompts/STATE.md
+@@ -6,6 +6,7 @@
+ ## Active Summary
+ ### Objective
+ - **ACTIVE (2026-10-20):** #353 FPU/SIMD parity — step 1b LANDED (`c0ee9de71`, APPROVED clean): eager switch in on_context_switch + frame FS (create/loader/exec) + ensure-enabled + S3 cures (availability gate, doc tail); riscv panic convicted+fixed (sret-restored FS=0); GDB gen evidence; QE task_fpu handoff posted. Remaining: QE groups + close.
++- **ACTIVE (2026-10-20):** #350 virtio-MMIO parity — ALL THREE SLICES LANDED, awaiting final audit/commit: A (dormant transport + DTB plumbing, `edc83b1de`), B (MMIO discovery + blk live, `b7b803ab2` — legacy v1 interface, slot fallback, dma ECAM-addr fix), C (net live both arches + docs). Gates: x86 drivers 107/107 + storage 167/167 + selftest 148/148; riscv drivers 56/58 + storage 166/167; aarch64 drivers 57/58 + storage 166/167 + arch 33/33. Residuals filed: #391 (timing-marginal dma + virtio-timeout), #392 (procfs lseek).
+ - **OPEN (2026-10-20):** #352 MMU/VMM/TLB parity — KERNEL TRACK COMPLETE (APPROVED): remaining QE test ports (pml4_clone/pt_merge, proc_elf EM, shootdown-hook invocation) + known riscv reds (#387, #388 test-side).
+ - **DONE (2026-10-19):** #385 HHDM-rot + exec_slots hang CLOSED (audited APPROVED, pending QE + #387): riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch + abort, x86 mirror) — stale arm to recycled memory no longer resumes foreign context with stale current (U-fault killed init → hang). Gates: arch_riscv64 24/30 + no hang ×3 (5 fails = QE fixture/PLIC updates, 1 = #387 fork follow-up), x86 elf_loader/selftest green, 3-arch link green. H1 (image-range creep) + tests 6/7 (M-vs-S skew, OpenSBI M-threshold=7 boot state) convicted as QE test updates. FEEDBACK entry in LEARNINGS.
+ - **DONE (2026-10-19):** #349 IRQ + timer parity CLOSED (audited APPROVED): GICv2 full init (PIDR2 version, 8 enable banks, EOI ownership, spurious no-EOI, storm limiter) + CVAL/SBI absolute deadlines with coarse-tick units + CTL-gated remaining + PLIC S-context + IDT 64→256 + docs §6 + gotcha #20. Gates: aarch64 6 classes green, riscv64 5+1 (known QE test-side), x86 all green + selftest 148/148, x86_64 bit-identical. arch_riscv64 HHDM rot filed as #385 (out of scope). FEEDBACK entry in LEARNINGS.
+diff --git a/src/kernel/driver/virtio_net.cpp b/src/kernel/driver/virtio_net.cpp
+index 14d93b907..e9ca90fac 100644
+--- a/src/kernel/driver/virtio_net.cpp
++++ b/src/kernel/driver/virtio_net.cpp
+@@ -43,6 +43,27 @@ static VirtioNetDevice *g_virtio_net_dev = nullptr;
+ VirtioNetDevice::~VirtioNetDevice() {
+     if (queue_size == 0)
+         return;
++#if !defined(CONFIG_ARCH_X86_64)
++    // Legacy chunks (issue #350): free the contiguous pages at each
++    // chunk base, never the byte offsets.
++    if (legacy_queue_chunks_) {
++        uint64_t chunk_bases[2] = {rx_desc_phys, tx_desc_phys};
++        for (uint64_t base : chunk_bases) {
++            if (!base)
++                continue;
++            for (uint64_t page = 0;
++                 page < arch::VIRTIO_LEGACY_CHUNK_PAGES; ++page) {
++                PMM::free_page(base + page * arch::VIRTIO_LEGACY_ALIGN);
++            }
++        }
++        rx_desc_phys = 0;
++        rx_avail_phys = 0;
++        rx_used_phys = 0;
++        tx_desc_phys = 0;
++        tx_avail_phys = 0;
++        tx_used_phys = 0;
++    }
++#endif
+     auto pages_for = [](size_t bytes) {
+         return (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
+     };
+@@ -111,6 +132,38 @@ static bool alloc_queue_pages(uint64_t &desc_phys, uint64_t &avail_phys,
+     return true;
+ }
+ 
++#if !defined(CONFIG_ARCH_X86_64)
++// Legacy (v1) queue chunk (issue #350): ONE contiguous chunk per queue —
++// desc at +0, avail immediately after, used at the single-sourced
++// virtio_legacy_used_off (must match the device's PFN+align computation).
++static bool alloc_legacy_chunk(uint64_t &desc_phys, uint64_t &avail_phys,
++                               uint64_t &used_phys, arch::VirtqDesc *&desc,
++                               arch::VirtqAvail *&avail,
++                               arch::VirtqUsed *&used, uint16_t queue_size) {
++    uint64_t chunk = PMM::alloc_contiguous(arch::VIRTIO_LEGACY_CHUNK_PAGES);
++    if (chunk == 0) {
++        Logger::error("virtio-net: OOM for legacy queue chunk");
++        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
++                                    kernel::log::kDmesgBase_DRIVER + 6,
++                                    kernel::log::LogSeverity::ERROR,
++                                    "virtio-net queue OOM", 0);
++        return false;
++    }
++    desc_phys = chunk;
++    avail_phys = chunk + static_cast<uint64_t>(queue_size) * 16;
++    used_phys = chunk + arch::virtio_legacy_used_off(queue_size);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    desc = reinterpret_cast<arch::VirtqDesc *>(HHDM_OFFSET + chunk);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    avail = reinterpret_cast<arch::VirtqAvail *>(HHDM_OFFSET + avail_phys);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    used = reinterpret_cast<arch::VirtqUsed *>(HHDM_OFFSET + used_phys);
++    memset(desc, 0,
++           arch::VIRTIO_LEGACY_CHUNK_PAGES * arch::VIRTIO_LEGACY_ALIGN);
++    return true;
++}
++#endif
++
+ /// @brief Fills one RX descriptor + avail-ring entry.  Lock-free helper:
+ ///        callers must hold dev.lock_ (via IrqSpinLockGuard).  The
+ ///        atomic_fence ordering (descriptor -> avail entry -> fence ->
+@@ -183,12 +236,29 @@ bool virtio_net_probe(Nic &nic) {
+     dev->tx_inflight_ = false;
+ 
+     // Allocate queue memory
+-    if (!alloc_queue_pages(dev->rx_desc_phys, dev->rx_avail_phys,
+-                           dev->rx_used_phys, dev->rx_desc, dev->rx_avail,
+-                           dev->rx_used, dev->queue_size) ||
+-        !alloc_queue_pages(dev->tx_desc_phys, dev->tx_avail_phys,
+-                           dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
+-                           dev->tx_used, dev->queue_size)) {
++#if !defined(CONFIG_ARCH_X86_64)
++    // Legacy (v1) queues live in contiguous chunks (not per-ring pages).
++    if (transport.mmio &&
++        transport.mmio_version == VIRTIO_MMIO_VERSION_LEGACY) {
++        dev->legacy_queue_chunks_ = true;
++        if (!alloc_legacy_chunk(dev->rx_desc_phys, dev->rx_avail_phys,
++                                dev->rx_used_phys, dev->rx_desc, dev->rx_avail,
++                                dev->rx_used, dev->queue_size) ||
++            !alloc_legacy_chunk(dev->tx_desc_phys, dev->tx_avail_phys,
++                                dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
++                                dev->tx_used, dev->queue_size)) {
++            dev->~VirtioNetDevice();
++            kernel::MemPool::free(dev);
++            return false;
++        }
++    } else
++#endif
++        if (!alloc_queue_pages(dev->rx_desc_phys, dev->rx_avail_phys,
++                               dev->rx_used_phys, dev->rx_desc, dev->rx_avail,
++                               dev->rx_used, dev->queue_size) ||
++            !alloc_queue_pages(dev->tx_desc_phys, dev->tx_avail_phys,
++                               dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
++                               dev->tx_used, dev->queue_size)) {
+         dev->~VirtioNetDevice();
+         kernel::MemPool::free(dev);
+         return false;
+diff --git a/src/kernel/driver/virtio_net.hpp b/src/kernel/driver/virtio_net.hpp
+index b85eec427..f8b147d37 100644
+--- a/src/kernel/driver/virtio_net.hpp
++++ b/src/kernel/driver/virtio_net.hpp
+@@ -65,6 +65,11 @@ struct VirtioNetDevice {
+     arch::VirtqDesc *tx_desc;
+     arch::VirtqAvail *tx_avail;
+     arch::VirtqUsed *tx_used;
++#if !defined(CONFIG_ARCH_X86_64)
++    // Issue #350 (MMIO legacy v1): per-queue contiguous chunks
++    // (desc = chunk base; avail/used are byte offsets into it).
++    bool legacy_queue_chunks_ = false;
++#endif
+ 
+     // DMA buffers for RX
+     uint8_t *rx_bufs[16];
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index a856a7e84..1afced9b9 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -1469,8 +1469,9 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+         }
+     }
+ 
+-    // Probe virtio-net NIC and initialize network stack
+-#if defined(CONFIG_ARCH_X86_64)
++    // Probe virtio-net NIC and initialize network stack.
++    // Issue #350: ungated — the MMIO finder serves aarch64/riscv64
++    // (QEMU virtio-net-device); the PCI finder serves x86_64.
+     {
+         static net::Nic g_boot_nic{};
+         if (kernel::net::virtio_net_probe(g_boot_nic)) {
+@@ -1483,7 +1484,6 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+             debug_write("[BOOT] No virtio-net NIC found\n");
+         }
+     }
+-#endif
+     boot_mark(kernel::BootStage::DRIVER_PROBE);
+ 
+     // Initialize sampling profiler (must be before Timer::init() so record_sample is safe)
+diff --git a/test-history.txt b/test-history.txt
+index 364c655cf..d5e95b2dd 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4251,3 +4251,11 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 18:51:59 storage PASSED: 166 FAILED: 1 TIME: 23976ms STATUS: #350-sliceB-aarch64-gate-known-#392
+ 2026-10-20 18:53:07 storage PASSED: 166 FAILED: 1 TIME: 23944ms STATUS: #350-sliceB-riscv64-gate-known-#392
+ 2026-10-20 19:02:06 basic_lib PASSED: 26 FAILED: 0 TIME: 1659ms STATUS: #350-sliceB-s3c-x86-gate
++2026-10-20 19:15:43 drivers PASSED: 107 FAILED: 0 TIME: 7206ms STATUS: #350-sliceC-gate
++2026-10-20 19:16:25 storage PASSED: 167 FAILED: 0 TIME: 35882ms STATUS: #350-sliceC-gate
++2026-10-20 19:16:57 selftest PASSED: 148 FAILED: 0 TIME: 11866ms STATUS: #350-sliceC-gate
++2026-10-20 19:17:23 drivers PASSED: 57 FAILED: 1 TIME: 1882ms STATUS: #350-sliceC-gate-known-#391
++2026-10-20 19:18:01 storage PASSED: 166 FAILED: 1 TIME: 24103ms STATUS: #350-sliceC-gate-known-#392
++2026-10-20 19:18:31 drivers PASSED: 56 FAILED: 2 TIME: 1818ms STATUS: #350-sliceC-gate-known-#391x2
++2026-10-20 19:19:12 storage PASSED: 166 FAILED: 1 TIME: 23967ms STATUS: #350-sliceC-gate-known-#392
++2026-10-20 19:19:41 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1024ms STATUS: #350-sliceC-gate

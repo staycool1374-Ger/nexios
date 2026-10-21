@@ -102,11 +102,7 @@ void register_pic_tests() {
         "Skipped: register_pic_tests (not supported on this arch)");
 }
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_rtc_tests() {
-    kernel::Logger::info(
-        "Skipped: register_rtc_tests (not supported on this arch)");
-}
+// Issue #355 H2: register_rtc_tests is defined by test_rtc.cpp (shared).
 
 /// @brief Stub — not supported on non-x86 architectures.
 void register_shell_interaction_tests() {

@@ -99,10 +99,14 @@ IdleScanProgress idle_scan_stack(IdleScanCursor &cursor,
                                      t->stack_low_water_bytes);
         if (!user_ok || !kstack_ok) [[unlikely]] {
             // Existing escalation path only (spec §3 E1): production
-            // fail-stops here exactly as the guard-page #PF path does.
-            // The scanner itself kills/reaps/reprioritizes nothing (M6).
+            // fail-stops here exactly as the guard-page #PF path does
+            // (issue #308: raw-dump + halt on false). The scanner itself
+            // kills/reaps/reprioritizes nothing (M6).
 #if CONFIG_STACK_OVERFLOW_HOOK
-            stack_overflow_hook(t);
+            auto frame = kernel::debug::first_chance_frame_here(
+                kernel::debug::FirstChanceCause::STACK_OVERFLOW);
+            if (!stack_overflow_hook(*t, frame))
+                kernel::debug::first_chance_halt(frame);
 #endif
         }
     };

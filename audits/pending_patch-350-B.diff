@@ -1,0 +1,887 @@
+diff --git a/Makefile b/Makefile
+index 30a36210c..83d1a70e2 100644
+--- a/Makefile
++++ b/Makefile
+@@ -269,6 +269,10 @@ KERNEL_DIS     := build/kernel.dis
+ 
+ FAT32_DISK     := build/fat32.img
+ QEMU_NET       := -netdev user,id=net0 -device virtio-net-pci,netdev=net0,disable-legacy=on
++# Issue #350: virtio-MMIO net/block devices for the QEMU `virt` machine
++# (aarch64/riscv64 have no PCI storage); x86_64 keeps PCI/IDE above.
++QEMU_NET_MMIO  := -netdev user,id=net0 -device virtio-net-device,netdev=net0
++QEMU_STORAGE_MMIO := -drive file=$(FAT32_DISK),if=none,id=vblk0,format=raw -device virtio-blk-device,drive=vblk0
+ # Recursive evaluation (use `=`) so that DEBUG_ISO can be overridden
+ # per-target (e.g. release tests) via target-specific variables or $(eval).
+ # Kernel debug output goes to the QEMU debugcon port (0xE9) instead of the
+@@ -401,7 +405,8 @@ QEMU_TRACE_EVENTS ?= $(if $(HRT_ICOUNT),$(HRT_TRACE_FLAGS),)
+ 
+ # For aarch64, load kernel directly instead of via ISO/GRUB
+ ifeq ($(ARCH),aarch64)
+-QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET) \
++QEMU_FLAGS     = -kernel $(KERNEL_DEBUG) -m 256M -serial mon:stdio $(QEMU_NET_MMIO) \
++                $(QEMU_STORAGE_MMIO) \
+                 -machine virt -cpu cortex-a72 -display none -no-reboot \
+                 -semihosting-config enable=on,target=native
+ endif
+@@ -415,7 +420,8 @@ $(KERNEL_RISCV_BIN): $(KERNEL_DEBUG)
+ 	$(OBJCOPY) -O binary $< $@
+ 
+ QEMU_FLAGS     = -kernel $(KERNEL_RISCV_BIN) -m 256M -serial mon:stdio \
+-                $(QEMU_NET) -machine virt -bios default -display none -no-reboot
++                $(QEMU_NET_MMIO) $(QEMU_STORAGE_MMIO) \
++                -machine virt -bios default -display none -no-reboot
+ endif
+ 
+ # ------------------------------------------------------------------------------
+diff --git a/src/kernel/arch/riscv64/hal/plic.hpp b/src/kernel/arch/riscv64/hal/plic.hpp
+index 1274bab58..20bb33c32 100644
+--- a/src/kernel/arch/riscv64/hal/plic.hpp
++++ b/src/kernel/arch/riscv64/hal/plic.hpp
+@@ -50,6 +50,8 @@ inline constexpr uint32_t IRQ_VIRTIO1 = 2;
+ inline constexpr uint32_t IRQ_VIRTIO2 = 3;
+ inline constexpr uint32_t IRQ_VIRTIO3 = 4;
+ inline constexpr uint32_t IRQ_VIRTIO4 = 5;
++/// @brief virtio-mmio IRQ window size (issue #350: IRQs 1-8).
++inline constexpr uint32_t IRQ_VIRTIO_COUNT = 8;
+ inline constexpr uint32_t IRQ_UART    = 10;
+ inline constexpr uint32_t IRQ_RTC     = 11;   // Goldfish RTC
+ inline constexpr uint32_t IRQ_KEYBOARD = 12;
+diff --git a/src/kernel/arch/virtio.hpp b/src/kernel/arch/virtio.hpp
+index 54d0b7efe..7e53fbfaa 100644
+--- a/src/kernel/arch/virtio.hpp
++++ b/src/kernel/arch/virtio.hpp
+@@ -172,6 +172,7 @@ struct VirtioTransport {
+     uint64_t mmio_base_phys = 0;  ///< MMIO register base (phys)
+     uint16_t mmio_irq = 0;        ///< GIC INTID / PLIC IRQ number
+     uint16_t mmio_slot = 0;       ///< DTB discovery slot index
++    uint16_t mmio_version = 0;    ///< MMIO interface version (1/2, 0 = unset)
+ };
+ 
+ /// Virtio MMIO (v2) register offsets — QEMU `virt` transport region.
+@@ -184,9 +185,12 @@ enum VirtioMmioReg : uint16_t {
+     VIRTIO_MMIO_DEVICE_FEATURES_SEL = 0x014,
+     VIRTIO_MMIO_DRIVER_FEATURES = 0x020,
+     VIRTIO_MMIO_DRIVER_FEATURES_SEL = 0x024,
++    VIRTIO_MMIO_GUEST_PAGE_SIZE = 0x028,
+     VIRTIO_MMIO_QUEUE_SEL = 0x030,
+     VIRTIO_MMIO_QUEUE_NUM_MAX = 0x034,
+     VIRTIO_MMIO_QUEUE_NUM = 0x038,
++    VIRTIO_MMIO_QUEUE_ALIGN = 0x03C,
++    VIRTIO_MMIO_QUEUE_PFN = 0x040,
+     VIRTIO_MMIO_QUEUE_READY = 0x044,
+     VIRTIO_MMIO_QUEUE_NOTIFY = 0x050,
+     VIRTIO_MMIO_INTERRUPT_STATUS = 0x060,
+@@ -205,13 +209,47 @@ enum VirtioMmioReg : uint16_t {
+ /// MMIO v2 identification constants.
+ constexpr uint32_t VIRTIO_MMIO_MAGIC_VALUE = 0x74726976; // "virt"
+ constexpr uint32_t VIRTIO_MMIO_VERSION_MODERN = 2;
++constexpr uint32_t VIRTIO_MMIO_VERSION_LEGACY = 1;
+ constexpr uint32_t VIRTIO_MMIO_REGION_SIZE = 0x200;
+-constexpr uint64_t VIRTIO_MMIO_BASE = 0x0A000000;
+-constexpr uint64_t VIRTIO_MMIO_WINDOW = 0x200000; // one 2MiB boot leaf
+ constexpr uint32_t VIRTIO_MMIO_DEVICE_NET = 1;
+ constexpr uint32_t VIRTIO_MMIO_DEVICE_BLOCK = 2;
+ constexpr uint16_t VIRTIO_MMIO_REG_NONE = 0xFFFF;
+ 
++/// Legacy (v1) queue chunk geometry (issue #350): one contiguous chunk
++/// holding descriptors at +0, the avail ring immediately after, and the
++/// used ring at the aligned offset below. The allocator (driver) and the
++/// fit check (setup) both derive addresses from this single definition —
++/// they cannot disagree.
++constexpr uint64_t VIRTIO_LEGACY_ALIGN = 0x1000;
++constexpr uint64_t VIRTIO_LEGACY_CHUNK_PAGES = 2;
++constexpr uint64_t virtio_legacy_used_off(uint16_t queue_size) {
++    uint64_t end = static_cast<uint64_t>(queue_size) * 16 + 6 +
++                   static_cast<uint64_t>(queue_size) * 2;
++    return (end + VIRTIO_LEGACY_ALIGN - 1) & ~(VIRTIO_LEGACY_ALIGN - 1);
++}
++
++/// Architected QEMU `virt` MMIO discovery windows (issue #350). The DTB
++/// is primary where firmware provides it (riscv64 boot passes it; the
++/// aarch64 `-kernel` path provably does not — GDB: x0 == 0 at
++/// higherhalf_entry and no FDT magic anywhere in RAM). The slot table
++/// covers the stable board layout for the fallback probe — the same
++/// class of board knowledge as the hardcoded UART/GIC/PLIC/ECAM maps.
++/// DTB windows must lie inside a boot-mapped leaf (aarch64: the 2MiB
++/// Device leaf at 0x0A000000; riscv64: the UART leaf at 0x10000000).
++#if defined(CONFIG_ARCH_AARCH64)
++constexpr uint64_t VIRTIO_MMIO_DTB_BASE = 0x0A000000;
++constexpr uint64_t VIRTIO_MMIO_DTB_WINDOW = 0x200000;
++constexpr uint64_t VIRTIO_MMIO_SLOT_BASE = 0x0A000000;
++constexpr uint32_t VIRTIO_MMIO_SLOT_STRIDE = 0x200;
++constexpr uint32_t VIRTIO_MMIO_SLOT_COUNT = 32;
++#elif defined(CONFIG_ARCH_RISCV64)
++constexpr uint64_t VIRTIO_MMIO_DTB_BASE = 0x10000000;
++constexpr uint64_t VIRTIO_MMIO_DTB_WINDOW = 0x200000;
++constexpr uint64_t VIRTIO_MMIO_SLOT_BASE = 0x10001000;
++constexpr uint32_t VIRTIO_MMIO_SLOT_STRIDE = 0x1000;
++constexpr uint32_t VIRTIO_MMIO_SLOT_COUNT = 8;
++#endif
++
+ /// Map a PCI common-cfg register to its MMIO v2 offset for reads, or
+ /// VIRTIO_MMIO_REG_NONE when the register has no MMIO equivalent.
+ constexpr uint16_t virtio_mmio_read_offset(uint16_t pci_reg) {
+diff --git a/src/kernel/driver/dma.cpp b/src/kernel/driver/dma.cpp
+index 7b29375d8..1c8c44686 100644
+--- a/src/kernel/driver/dma.cpp
++++ b/src/kernel/driver/dma.cpp
+@@ -173,7 +173,10 @@ void prd_reset(PrdTable &prd) {
+ // --- PCI Bus Master ---
+ 
+ void pci_set_bus_master(arch::PciBdf bdf, bool enable) {
+-    uint32_t addr = arch::pci_make_addr(bdf, arch::PCI_COMMAND);
++    // Issue #350: 64-bit address — the aarch64 ECAM window is an HHDM VA
++    // (0xFFFF804010000000+); a uint32_t truncated it to 0x10000004 and
++    // faulted (FAR-proof). x86 port addresses are unaffected either way.
++    uint64_t addr = arch::pci_make_addr(bdf, arch::PCI_COMMAND);
+     uint16_t cmd = arch::pci_config_readw(addr);
+     if (enable) {
+         cmd |= arch::PCI_CMD_BUS_MASTER;
+diff --git a/src/kernel/driver/virtio_blk.cpp b/src/kernel/driver/virtio_blk.cpp
+index c65930611..c0b40a5ab 100644
+--- a/src/kernel/driver/virtio_blk.cpp
++++ b/src/kernel/driver/virtio_blk.cpp
+@@ -25,6 +25,12 @@
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/arch/pci.hpp>
+ #include <kernel/arch/hal/idt.hpp>
++#include <kernel/arch/hal/interrupt_controller.hpp>
++#if defined(CONFIG_ARCH_AARCH64)
++#include <kernel/arch/aarch64/hal/gic.hpp>
++#elif defined(CONFIG_ARCH_RISCV64)
++#include <kernel/arch/riscv64/hal/plic.hpp>
++#endif
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/ipc/ipc.hpp>
+@@ -55,6 +61,19 @@ VirtioBlkDriver::~VirtioBlkDriver() {
+     // in-flight completion path can touch the freed queue pages.
+     disable_irq();
+ 
++#if !defined(CONFIG_ARCH_X86_64)
++    // Legacy chunk (issue #350): free the contiguous pages at the chunk
++    // base, never the byte offsets.
++    if (legacy_queue_chunk_) {
++        for (uint64_t page = 0; page < arch::VIRTIO_LEGACY_CHUNK_PAGES;
++             ++page) {
++            PMM::free_page(desc_phys_ + page * arch::VIRTIO_LEGACY_ALIGN);
++        }
++        desc_phys_ = 0;
++        avail_phys_ = 0;
++        used_phys_ = 0;
++    }
++#endif
+     if (desc_phys_)
+         PMM::free_page(desc_phys_);
+     if (avail_phys_)
+@@ -95,9 +114,35 @@ bool VirtioBlkDriver::init() {
+     // Available ring: 6 + queue_size * 2 bytes
+     // Used ring: 8 + queue_size * 8 bytes
+     // Total: roughly < 4KB for small queues, use one page each
+-    desc_phys_ = PMM::alloc_page();
+-    avail_phys_ = PMM::alloc_page();
+-    used_phys_ = PMM::alloc_page();
++#if !defined(CONFIG_ARCH_X86_64)
++    if (transport_.mmio &&
++        transport_.mmio_version == arch::VIRTIO_MMIO_VERSION_LEGACY) {
++        // Legacy (v1) queue (issue #350): ONE contiguous chunk — desc at
++        // +0, avail immediately after, used at the single-sourced
++        // virtio_legacy_used_off (must match the device's PFN+align
++        // computation exactly).
++        uint64_t chunk =
++            PMM::alloc_contiguous(arch::VIRTIO_LEGACY_CHUNK_PAGES);
++        if (chunk == 0) {
++            Logger::error("virtio-blk: OOM for legacy queue chunk");
++            kernel::log::dmesg_push_sev(
++                kernel::log::ErrorSubsystem::DRIVER,
++                kernel::log::kDmesgBase_DRIVER + 6,
++                kernel::log::LogSeverity::ERROR, "virtio-blk queue OOM", 0);
++            return false;
++        }
++        desc_phys_ = chunk;
++        avail_phys_ = chunk + static_cast<uint64_t>(queue_size_) * 16;
++        used_phys_ = chunk + arch::virtio_legacy_used_off(queue_size_);
++        legacy_queue_chunk_ = true;
++    } else {
++#endif
++        desc_phys_ = PMM::alloc_page();
++        avail_phys_ = PMM::alloc_page();
++        used_phys_ = PMM::alloc_page();
++#if !defined(CONFIG_ARCH_X86_64)
++    }
++#endif
+     dma_buf_phys_ = PMM::alloc_page();
+ 
+     if (!desc_phys_ || !avail_phys_ || !used_phys_ || !dma_buf_phys_) {
+@@ -139,10 +184,31 @@ bool VirtioBlkDriver::init() {
+     arch::virtio_write_status(transport_, status | VIRTIO_STATUS_DRIVER_OK);
+ 
+     // Read sector count from device config (at offset 0 for virtio-blk)
++#if defined(CONFIG_ARCH_X86_64)
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *cfg =
+         reinterpret_cast<volatile uint64_t *>(transport_.device_cfg.virt_addr);
+     sector_count_ = cfg[0];
++#else
++    if (transport_.mmio) {
++        // MMIO device config allows at most 4-byte accesses (issue #350):
++        // split virtio-blk.capacity into two 32-bit reads.
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *cfg_lo = reinterpret_cast<volatile uint32_t *>(
++            transport_.device_cfg.virt_addr);
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *cfg_hi = reinterpret_cast<volatile uint32_t *>(
++            transport_.device_cfg.virt_addr + 4);
++        uint32_t cap_lo = *cfg_lo;
++        uint32_t cap_hi = *cfg_hi;
++        sector_count_ = (static_cast<uint64_t>(cap_hi) << 32) | cap_lo;
++    } else {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *cfg = reinterpret_cast<volatile uint64_t *>(
++            transport_.device_cfg.virt_addr);
++        sector_count_ = cfg[0];
++    }
++#endif
+     Logger::info("virtio-blk: %d sectors (%d MB)", sector_count_,
+                  static_cast<uint64_t>(sector_count_) * BLOCK_SIZE /
+                      (static_cast<uint64_t>(1024) * 1024));
+@@ -408,15 +474,80 @@ bool VirtioBlkDriver::submit_request(uint32_t type, uint64_t sector,
+ /// @brief Read-and-ack the device ISR status byte (virtio 1.0: a read
+ /// returns queue/config interrupt bits and clears them).  Null-guarded:
+ /// an unmapped ISR window means no interrupt.
++/// On MMIO (issue #350) InterruptStatus is NOT read-to-clear: this
++/// returns the low 8 bits without ACK (see ack_isr_status).
+ uint8_t VirtioBlkDriver::read_isr_status() const {
+     if (transport_.isr_cfg.virt_addr == 0)
+         return 0;
++#if !defined(CONFIG_ARCH_X86_64)
++    if (transport_.mmio) {
++        // NOLINTNEXTLINE(performance-no-int-to-ptr)
++        auto *reg = reinterpret_cast<volatile uint32_t *>(
++            transport_.isr_cfg.virt_addr + arch::VIRTIO_MMIO_INTERRUPT_STATUS);
++        return static_cast<uint8_t>(*reg & 0xFF);
++    }
++#endif
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *reg =
+         reinterpret_cast<volatile uint8_t *>(transport_.isr_cfg.virt_addr);
+     return *reg;
+ }
+ 
++#if !defined(CONFIG_ARCH_X86_64)
++void VirtioBlkDriver::ack_isr_status(uint8_t status) const {
++    if (transport_.isr_cfg.virt_addr == 0)
++        return;
++    if (!transport_.mmio)
++        return;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *reg = reinterpret_cast<volatile uint32_t *>(
++        transport_.isr_cfg.virt_addr + arch::VIRTIO_MMIO_INTERRUPT_ACK);
++    *reg = status;
++}
++
++// MMIO drain core: the x86 collect-under-lock block, contract-coupled.
++// No ACK, no wake here — the caller orders those (drain-before-ACK).
++bool VirtioBlkDriver::drain_used_ring_mmio(TaskControlBlock *&wake_task,
++                                           uint32_t &wake_gen) {
++    bool consumed = false;
++    sync::IrqSpinLockGuard guard(compl_lock_);
++    kernel::atomic_fence();
++    uint16_t used_now = used_->idx;
++    // Bounded drain (≤ queue_size_): a coalesced/stray entry can never
++    // stick the ring, and last_seen_used_ always advances.
++    for (uint16_t pos = last_seen_used_;
++         pos != used_now &&
++         static_cast<uint16_t>(pos - last_seen_used_) < queue_size_;
++         pos = static_cast<uint16_t>(pos + 1)) {
++        uint16_t slot = static_cast<uint16_t>(pos % queue_size_);
++        uint32_t entry_id = used_->ring[slot].id;
++        last_seen_used_ = static_cast<uint16_t>(pos + 1);
++        consumed = true;
++        // Every newly-drained entry is an ISR-observed completion,
++        // waiter or not (introspection counts what the ISR consumed).
++        ++isr_completions_;
++        if (!compl_.waiter || compl_.done)
++            continue;
++        if (pos < compl_.arm_used)
++            continue;
++        bool done = false;
++        match_completion(pos, static_cast<uint16_t>(pos + 1), entry_id,
++                         compl_.head_idx, &done);
++        if (!done)
++            continue;
++        compl_.done = true;
++        auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
++            dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
++        compl_.status = *status_ptr;
++        wake_task = compl_.waiter;
++        wake_gen = compl_.waiter_gen;
++        compl_.waiter = nullptr;
++        compl_.waiter_gen = 0;
++    }
++    return consumed;
++}
++#endif
++
+ void VirtioBlkDriver::isr_entry(uint64_t vector, uint64_t, uint64_t) {
+     VirtioBlkDriver *target = g_virtio_blk_isr_target;
+     if (!target || vector != target->irq_vector_)
+@@ -434,6 +565,25 @@ bool VirtioBlkDriver::handle_irq() {
+     if (isr == 0)
+         return false;
+ 
++#if !defined(CONFIG_ARCH_X86_64)
++    // MMIO path (issue #350): drain-before-ACK with a bounded re-check.
++    // The GIC SPI is edge-triggered: a completion landing between the
++    // drain and the ACK raises no new edge, so a single ACK-last pass
++    // could strand it in the used ring. Each pass drains first, ACKs
++    // second, and re-reads; at most 4 passes, then the waiter (if any)
++    // is woken once below. At most one waiter exists (submit_lock_).
++    if (transport_.mmio) {
++        for (uint8_t pass = 0; pass < 4; ++pass) {
++            (void)drain_used_ring_mmio(wake_task, wake_gen);
++            ack_isr_status(isr);
++            if (wake_task != nullptr)
++                break;
++            isr = read_isr_status();
++            if (isr == 0)
++                break;
++        }
++    } else {
++#endif
+     {
+         sync::IrqSpinLockGuard guard(compl_lock_);
+         kernel::atomic_fence();
+@@ -469,6 +619,9 @@ bool VirtioBlkDriver::handle_irq() {
+             compl_.waiter_gen = 0;
+         }
+     }
++#if !defined(CONFIG_ARCH_X86_64)
++    }
++#endif
+ 
+     // Wake-outside-lock (Notify discipline): liveness + BLOCKED +
+     // generation, reject TERMINATED/REAPED.  No reschedule() from ISR.
+@@ -510,6 +663,34 @@ bool VirtioBlkDriver::enable_irq() {
+     irq_allocated_ = true;
+     Logger::info("virtio-blk: completion ISR armed on vector %u", vec);
+     return true;
++#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
++    // Issue #350 (MMIO): no MSI-X/MSI — the DTB-discovered GIC INTID /
++    // PLIC IRQ is the vector. Registration order mirrors x86 (handler
++    // first, source unmask last); fail-closed to polling otherwise.
++    if (irq_vector_ != 0)
++        return true;
++    if (!transport_.mmio)
++        return false;
++    uint16_t vec = transport_.mmio_irq;
++#if defined(CONFIG_ARCH_AARCH64)
++    if (vec < arch::INTID_VIRTIO_BASE ||
++        vec >= arch::INTID_VIRTIO_BASE + arch::INTID_VIRTIO_COUNT)
++        return false;
++#else
++    if (vec < arch::IRQ_VIRTIO0 ||
++        vec >= arch::IRQ_VIRTIO0 + arch::IRQ_VIRTIO_COUNT)
++        return false;
++#endif
++    g_virtio_blk_isr_target = this;
++    arch::IDT::register_handler_raw(static_cast<uint8_t>(vec),
++                                    &VirtioBlkDriver::isr_entry);
++    uint8_t stale = read_isr_status();
++    ack_isr_status(stale);
++    arch::ArchInterruptController::unmask(static_cast<uint8_t>(vec));
++    irq_vector_ = static_cast<uint8_t>(vec);
++    irq_allocated_ = true;
++    Logger::info("virtio-blk: completion ISR armed on IRQ %u", vec);
++    return true;
+ #else
+     return false;
+ #endif
+@@ -550,6 +731,40 @@ void VirtioBlkDriver::disable_irq() {
+     }
+     irq_vector_ = 0;
+     irq_allocated_ = false;
++#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
++    // Issue #350 (MMIO): mask the source first (no new ISR entries),
++    // then ACK stale status, drain an armed waiter with an error wake,
++    // then clear the handler (real registrations only — a
++    // test-simulated arming owns nothing).
++    if (irq_vector_ == 0)
++        return;
++    if (transport_.mmio) {
++        arch::ArchInterruptController::mask(irq_vector_);
++        uint8_t stale = read_isr_status();
++        ack_isr_status(stale);
++    }
++    TaskControlBlock *drained = nullptr;
++    {
++        sync::IrqSpinLockGuard guard(compl_lock_);
++        if (compl_.waiter) {
++            drained = compl_.waiter;
++            compl_.waiter = nullptr;
++            compl_.waiter_gen = 0;
++            compl_.done = true;
++            compl_.status = 0xFF; // sentinel → error return, never stranding
++        }
++    }
++    // Wakers own the wakeup contract (§12.3).
++    if (drained && TaskControlBlock::is_valid(drained) &&
++        drained->state == TaskState::BLOCKED) {
++        Scheduler::set_task_ready(*drained);
++    }
++    if (irq_allocated_) {
++        g_virtio_blk_isr_target = nullptr;
++        arch::IDT::register_handler_raw(irq_vector_, nullptr);
++    }
++    irq_vector_ = 0;
++    irq_allocated_ = false;
+ #endif
+ }
+ 
+diff --git a/src/kernel/driver/virtio_blk.hpp b/src/kernel/driver/virtio_blk.hpp
+index ca35d1b33..ef8031225 100644
+--- a/src/kernel/driver/virtio_blk.hpp
++++ b/src/kernel/driver/virtio_blk.hpp
+@@ -154,6 +154,17 @@ class VirtioBlkDriver final : public BlockDevice {
+     static void isr_entry(uint64_t vector, uint64_t error_code, uint64_t rip);
+     // ISR status byte read-and-ack (null-guarded for unmapped windows).
+     uint8_t read_isr_status() const;
++#if !defined(CONFIG_ARCH_X86_64)
++    // Issue #350 (MMIO): InterruptStatus is NOT read-to-clear — the
++    // driver ACKs explicitly after draining (drain-before-ACK, bounded
++    // re-check). Contract-coupled with handle_irq()'s MMIO branch: any
++    // change to the drain core must update both together.
++    void ack_isr_status(uint8_t status) const;
++    // MMIO used-ring drain core (collect-under-lock only; the caller
++    // ACKs and wakes). Shares the x86 drain contract field-for-field.
++    bool drain_used_ring_mmio(TaskControlBlock *&wake_task,
++                              uint32_t &wake_gen);
++#endif
+ 
+     arch::VirtioTransport transport_;
+     uint64_t sector_count_ = 0;
+@@ -162,6 +173,13 @@ class VirtioBlkDriver final : public BlockDevice {
+     uint64_t desc_phys_ = 0;
+     uint64_t avail_phys_ = 0;
+     uint64_t used_phys_ = 0;
++#if !defined(CONFIG_ARCH_X86_64)
++    // Issue #350 (MMIO legacy v1): the queue lives in ONE contiguous
++    // chunk (desc_phys_ = chunk base); avail/used are byte offsets into
++    // it, not separate pages. The destructor frees the chunk, never the
++    // offsets.
++    bool legacy_queue_chunk_ = false;
++#endif
+ 
+     // Virtual addresses for queue memory
+     arch::VirtqDesc *desc_ = nullptr;
+diff --git a/src/kernel/driver/virtio_mmio.cpp b/src/kernel/driver/virtio_mmio.cpp
+new file mode 100644
+index 000000000..4a3309e3b
+--- /dev/null
++++ b/src/kernel/driver/virtio_mmio.cpp
+@@ -0,0 +1,187 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file virtio_mmio.cpp
++/// @brief Virtio MMIO (v2) transport discovery (issue #350) — QEMU `virt`
++/// exposes virtio devices as MMIO windows enumerated in the DTB
++/// (`compatible = "virtio,mmio"`). Non-x86 definition of
++/// virtio_find_device(); the PCI definition in virtio_pci.cpp is
++/// x86-only. Fail-closed throughout: no DTB / no node / bad window /
++/// bad IRQ / bad identity → false, and the drivers keep their bounded
++/// polling fallback.
++
++#include <kernel/arch/virtio.hpp>
++#include <kernel/boot/dtb.hpp>
++#include <kernel/log/dmesg.hpp>
++#include <logger.hpp>
++
++#if defined(CONFIG_ARCH_AARCH64)
++#include <kernel/arch/aarch64/hal/gic.hpp>
++#elif defined(CONFIG_ARCH_RISCV64)
++#include <kernel/arch/riscv64/hal/plic.hpp>
++#endif
++
++using namespace kernel;
++
++namespace arch {
++
++#if !defined(CONFIG_ARCH_X86_64)
++namespace {
++
++// 32-bit volatile MMIO read (the transport window is boot-mapped).
++uint32_t mmio_read32(uint64_t virt_base, uint32_t reg) {
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *ptr =
++        reinterpret_cast<volatile uint32_t *>(virt_base + reg);
++    return *ptr;
++}
++
++// Validate one candidate window and fill the transport on an identity
++// match (magic + v1/v2 + wanted device). Shared by the DTB path and the
++// architected slot fallback. Fail-closed: any mismatch → false.
++bool try_mmio_slot(uint64_t base, uint16_t irq, uint16_t slot,
++                   uint16_t mmio_id, uint16_t want_id,
++                   VirtioTransport &transport) {
++    uint64_t virt = virtio_mmio_virt(base);
++    if (virt == 0) return false;
++    if (mmio_read32(virt, VIRTIO_MMIO_MAGIC) != VIRTIO_MMIO_MAGIC_VALUE)
++        return false;
++    // QEMU `virt` exposes the legacy (v1) interface — Version reads 1
++    // (GDB-proven on riscv64: magic + version + device ID all live).
++    uint32_t version = mmio_read32(virt, VIRTIO_MMIO_VERSION);
++    if (version != VIRTIO_MMIO_VERSION_MODERN &&
++        version != VIRTIO_MMIO_VERSION_LEGACY)
++        return false;
++    if (mmio_read32(virt, VIRTIO_MMIO_DEVICE_ID) != mmio_id) return false;
++
++    transport = VirtioTransport{};
++    transport.mmio = true;
++    transport.mmio_base_phys = base;
++    transport.mmio_irq = irq;
++    transport.mmio_slot = slot;
++    transport.mmio_version = static_cast<uint16_t>(version);
++    transport.device_id = want_id;
++    transport.modern = true;
++    transport.notify_off_multiplier = 0;
++    transport.common_cfg.virt_addr = virt;
++    transport.common_cfg.phys_addr = base;
++    transport.common_cfg.length = VIRTIO_MMIO_REGION_SIZE;
++    transport.notify_cfg = transport.common_cfg;
++    transport.isr_cfg = transport.common_cfg;
++    transport.device_cfg.virt_addr = virt + VIRTIO_MMIO_CONFIG;
++    transport.device_cfg.phys_addr = base + VIRTIO_MMIO_CONFIG;
++    transport.device_cfg.length = VIRTIO_MMIO_REGION_SIZE;
++
++    Logger::info("virtio-mmio: slot=%d base=0x%lx irq=%d dev=%d", slot,
++                 static_cast<uint64_t>(base), irq, mmio_id);
++    return true;
++}
++
++} // namespace
++#endif
++
++// The PCI finder (virtio_pci.cpp) owns the virtio_find_device symbol on
++// x86_64; this TU contributes the symbol only elsewhere.
++#if !defined(CONFIG_ARCH_X86_64)
++bool virtio_find_device(uint16_t device_id, VirtioTransport &transport) {
++    uint16_t mmio_id = virtio_mmio_device_id(device_id);
++    if (mmio_id == 0) return false;
++
++    // Primary: DTB discovery (works where firmware passes a DTB).
++    const void *fdt = kernel::boot::dtb_from_boot_info();
++    if (fdt) {
++        int nodes[kernel::boot::DTB_MAX_MATCHES];
++        int found = kernel::boot::dtb_find_compatible_nodes(
++            fdt, "virtio,mmio", nodes, kernel::boot::DTB_MAX_MATCHES);
++        for (int idx = 0; idx < found; ++idx) {
++            uint64_t base = 0;
++            uint64_t size = 0;
++            if (!kernel::boot::dtb_node_reg(fdt, nodes[idx], base, size))
++                continue;
++            // Window check: inside the boot-mapped DTB leaf, at least
++            // one 0x200 register block, slot-aligned. End-contained:
++            // the whole touched window must fit (audit S3 hardening).
++            if (base < VIRTIO_MMIO_DTB_BASE ||
++                base + VIRTIO_MMIO_REGION_SIZE >
++                    VIRTIO_MMIO_DTB_BASE + VIRTIO_MMIO_DTB_WINDOW)
++                continue;
++            if (size < VIRTIO_MMIO_REGION_SIZE) continue;
++            if ((base % VIRTIO_MMIO_REGION_SIZE) != 0) continue;
++
++            uint32_t cells[4];
++            int cell_count = 0;
++            if (!kernel::boot::dtb_node_cells(fdt, nodes[idx], "interrupts",
++                                             cells, 4, cell_count))
++                continue;
++            uint16_t irq = 0;
++#if defined(CONFIG_ARCH_AARCH64)
++            // GIC SPI triplet: <0 spi flags> → INTID = 32 + spi.
++            if (cell_count != 3 || cells[0] != 0) continue;
++            uint32_t intid = 32 + cells[1];
++            if (intid < INTID_VIRTIO_BASE ||
++                intid >= INTID_VIRTIO_BASE + INTID_VIRTIO_COUNT)
++                continue;
++            irq = static_cast<uint16_t>(intid);
++#elif defined(CONFIG_ARCH_RISCV64)
++            // PLIC single cell: source ID directly.
++            if (cell_count != 1) continue;
++            if (cells[0] < IRQ_VIRTIO0 ||
++                cells[0] >= IRQ_VIRTIO0 + IRQ_VIRTIO_COUNT)
++                continue;
++            irq = static_cast<uint16_t>(cells[0]);
++#else
++            continue;
++#endif
++
++            if (try_mmio_slot(base, irq, static_cast<uint16_t>(idx),
++                              mmio_id, device_id, transport))
++                return true;
++        }
++    } else {
++        Logger::info("virtio-mmio: no validated DTB — slot probing");
++    }
++
++    // Fallback: architected slot table. The aarch64 `-kernel` path
++    // passes no DTB (proven: x0 == 0 at higherhalf_entry, no FDT magic
++    // in RAM); the QEMU `virt` slot layout is stable board knowledge.
++    // Unpopulated slots read as zero → magic mismatch → skip.
++    for (uint32_t slot = 0; slot < VIRTIO_MMIO_SLOT_COUNT; ++slot) {
++        uint64_t base = VIRTIO_MMIO_SLOT_BASE +
++                        static_cast<uint64_t>(slot) * VIRTIO_MMIO_SLOT_STRIDE;
++#if defined(CONFIG_ARCH_AARCH64)
++        uint32_t intid = INTID_VIRTIO_BASE + slot;
++        if (intid >= INTID_VIRTIO_BASE + INTID_VIRTIO_COUNT) continue;
++        uint16_t irq = static_cast<uint16_t>(intid);
++#elif defined(CONFIG_ARCH_RISCV64)
++        uint32_t src = IRQ_VIRTIO0 + slot;
++        if (src >= IRQ_VIRTIO0 + IRQ_VIRTIO_COUNT) continue;
++        uint16_t irq = static_cast<uint16_t>(src);
++#else
++        continue;
++#endif
++        if (try_mmio_slot(base, irq, static_cast<uint16_t>(slot), mmio_id,
++                          device_id, transport))
++            return true;
++    }
++
++    Logger::info("virtio-mmio: no matching device (wanted %d)", device_id);
++    return false;
++}
++#endif // !CONFIG_ARCH_X86_64
++
++} // namespace arch
+diff --git a/src/kernel/driver/virtio_pci.cpp b/src/kernel/driver/virtio_pci.cpp
+index bdd2e950d..df36ff538 100644
+--- a/src/kernel/driver/virtio_pci.cpp
++++ b/src/kernel/driver/virtio_pci.cpp
+@@ -68,8 +68,11 @@ bool virtio_map_mmio(uint8_t bar, uint32_t offset, uint32_t length,
+     return true;
+ }
+ 
++// PCI-finder helpers (x86-only since the finder moved under
++// CONFIG_ARCH_X86_64; kept in this TU to preserve the PCI path verbatim).
++#if defined(CONFIG_ARCH_X86_64)
+ static bool parse_virtio_cap(PciBdf bdf, uint8_t cap_offset,
+-                             VirtioPciCap &cap) {
++                              VirtioPciCap &cap) {
+     cap.cap_vndr = pci_config_readb(pci_make_addr(bdf, cap_offset));
+     cap.cap_next = pci_config_readb(pci_make_addr(bdf, cap_offset + 1));
+     cap.cap_len = pci_config_readb(pci_make_addr(bdf, cap_offset + 2));
+@@ -97,7 +100,11 @@ static VirtioMmio *virtio_cfg_target(VirtioTransport &t, uint8_t cfg_type) {
+         return nullptr;
+     }
+ }
++#endif // CONFIG_ARCH_X86_64 (PCI-finder helpers)
+ 
++// The PCI finder owns the virtio_find_device symbol on x86_64; the MMIO
++// finder (virtio_mmio.cpp) owns it elsewhere (issue #350).
++#if defined(CONFIG_ARCH_X86_64)
+ bool virtio_find_device(uint16_t device_id, VirtioTransport &transport) {
+     pci_scan_all();
+     const PciDeviceInfo *dev = nullptr;
+@@ -154,6 +161,7 @@ bool virtio_find_device(uint16_t device_id, VirtioTransport &transport) {
+                  bdf.bus, bdf.device, bdf.function, transport.modern);
+     return true;
+ }
++#endif // CONFIG_ARCH_X86_64
+ 
+ bool virtio_init_transport(VirtioTransport &transport) {
+     // v0.4.0 MP-1 hardening: a transport with no MMIO mapping (null
+@@ -167,6 +175,13 @@ bool virtio_init_transport(VirtioTransport &transport) {
+         transport.device_cfg.virt_addr == 0) {
+         return false;
+     }
++#if !defined(CONFIG_ARCH_X86_64)
++    // Issue #350: an MMIO transport without a discovered base never
++    // reaches the status handshake (avoids faulting on address 0x70).
++    if (transport.mmio && transport.mmio_base_phys == 0) {
++        return false;
++    }
++#endif
+ 
+     virtio_write_status(transport, VIRTIO_STATUS_RESET);
+     for (int i = 0; i < 100; ++i) {
+@@ -216,6 +231,66 @@ bool virtio_negotiate_features(VirtioTransport &t, uint64_t driver_features) {
+     return true;
+ }
+ 
++#if !defined(CONFIG_ARCH_X86_64)
++// Legacy (v1) MMIO queue setup (issue #350): no per-ring address
++// registers and no Ready bit — one contiguous chunk described by PFN,
++// used ring at ALIGN_UP(desc + avail, 0x1000). desc_phys IS the chunk
++// base (the driver allocates the 2-page chunk contiguously);
++// avail_phys/used_phys are informational only on this path.
++static bool virtio_setup_queue_legacy(VirtioTransport &t, uint16_t queue_idx,
++                                      uint16_t queue_size, uint64_t chunk_phys) {
++    // Geometry is single-sourced (virtio_legacy_used_off): the driver
++    // addresses the used ring at the same offset the device computes.
++    uint64_t used_off = virtio_legacy_used_off(queue_size);
++    uint64_t used_size = 8 + static_cast<uint64_t>(queue_size) * 8;
++    if (used_off + used_size >
++        VIRTIO_LEGACY_CHUNK_PAGES * VIRTIO_LEGACY_ALIGN) {
++        Logger::error("virtio-mmio: legacy queue %d overflows chunk",
++                      queue_idx);
++        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
++                                    kernel::log::kDmesgBase_DRIVER + 3,
++                                    kernel::log::LogSeverity::ERROR,
++                                    "virtio-mmio legacy chunk", queue_idx);
++        return false;
++    }
++    // PFN is a page number — the chunk must be page-aligned.
++    if ((chunk_phys % VIRTIO_LEGACY_ALIGN) != 0)
++        return false;
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *page_size_reg = reinterpret_cast<volatile uint32_t *>(
++        t.common_cfg.virt_addr + VIRTIO_MMIO_GUEST_PAGE_SIZE);
++    *page_size_reg = static_cast<uint32_t>(PAGE_SIZE);
++    virtio_write_common16(t, VIRTIO_COMMON_QUEUE_SEL, queue_idx);
++    kernel::atomic_fence();
++    uint16_t max = virtio_read_common16(t, VIRTIO_COMMON_QUEUE_SIZE);
++    if (max == 0) {
++        Logger::error("virtio-mmio: legacy queue %d not available",
++                      queue_idx);
++        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
++                                    kernel::log::kDmesgBase_DRIVER + 3,
++                                    kernel::log::LogSeverity::ERROR,
++                                    "virtio-mmio legacy queue", queue_idx);
++        return false;
++    }
++    if (queue_size > max)
++        queue_size = max;
++    virtio_write_common(t, VIRTIO_COMMON_QUEUE_SIZE, queue_size);
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *align_reg = reinterpret_cast<volatile uint32_t *>(
++        t.common_cfg.virt_addr + VIRTIO_MMIO_QUEUE_ALIGN);
++    *align_reg = static_cast<uint32_t>(VIRTIO_LEGACY_ALIGN);
++    kernel::atomic_fence();
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *pfn_reg = reinterpret_cast<volatile uint32_t *>(
++        t.common_cfg.virt_addr + VIRTIO_MMIO_QUEUE_PFN);
++    *pfn_reg = static_cast<uint32_t>(chunk_phys / VIRTIO_LEGACY_ALIGN);
++    kernel::atomic_fence();
++    Logger::info("virtio-mmio: legacy queue %d setup (size=%d)", queue_idx,
++                 queue_size);
++    return true;
++}
++#endif // !CONFIG_ARCH_X86_64
++
+ // NOLINTBEGIN(bugprone-easily-swappable-parameters)
+ bool virtio_setup_queue(VirtioTransport &t, uint16_t queue_idx,
+                         uint16_t queue_size, uint64_t desc_phys,
+@@ -235,6 +310,49 @@ bool virtio_setup_queue(VirtioTransport &t, uint16_t queue_idx,
+     if (queue_size > size)
+         queue_size = size;
+ 
++#if !defined(CONFIG_ARCH_X86_64)
++    if (t.mmio) {
++        // Legacy (v1) has no per-ring registers or Ready bit: PFN path.
++        // desc_phys doubles as the chunk base (driver-side contract).
++        if (t.mmio_version == VIRTIO_MMIO_VERSION_LEGACY)
++            return virtio_setup_queue_legacy(t, queue_idx, queue_size,
++                                             desc_phys);
++        if (t.mmio_version != VIRTIO_MMIO_VERSION_MODERN)
++            return false;
++        // MMIO v2 order (issue #350): QueueNum BEFORE the addresses,
++        // then QueueReady + readback. The shared PCI order below does
++        // not apply.
++        virtio_write_common(t, VIRTIO_COMMON_QUEUE_SIZE, queue_size);
++        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DESC_LO,
++                            static_cast<uint32_t>(desc_phys & 0xFFFFFFFF));
++        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DESC_HI,
++                            static_cast<uint32_t>((desc_phys >> 32) & 0xFFFFFFFF));
++        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DRIVER_LO,
++                            static_cast<uint32_t>(avail_phys & 0xFFFFFFFF));
++        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DRIVER_HI,
++                            static_cast<uint32_t>((avail_phys >> 32) & 0xFFFFFFFF));
++        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DEVICE_LO,
++                            static_cast<uint32_t>(used_phys & 0xFFFFFFFF));
++        virtio_write_common(t, VIRTIO_COMMON_QUEUE_DEVICE_HI,
++                            static_cast<uint32_t>((used_phys >> 32) & 0xFFFFFFFF));
++        virtio_write_common16(t, VIRTIO_COMMON_QUEUE_ENABLE, 1);
++        kernel::atomic_fence();
++        uint16_t ready = virtio_read_common16(t, VIRTIO_COMMON_QUEUE_ENABLE);
++        if (ready != 1) {
++            Logger::error("virtio-mmio: queue %d not ready", queue_idx);
++            kernel::log::dmesg_push_sev(
++                kernel::log::ErrorSubsystem::DRIVER,
++                kernel::log::kDmesgBase_DRIVER + 3,
++                kernel::log::LogSeverity::ERROR, "virtio-mmio queue ready",
++                queue_idx);
++            return false;
++        }
++        Logger::info("virtio-mmio: queue %d setup (size=%d)", queue_idx,
++                     queue_size);
++        return true;
++    }
++#endif
++
+     virtio_write_common(t, VIRTIO_COMMON_QUEUE_DESC_LO,
+                         static_cast<uint32_t>(desc_phys & 0xFFFFFFFF));
+     virtio_write_common(t, VIRTIO_COMMON_QUEUE_DESC_HI,
+diff --git a/src/lib/fdt/fdt_ro.cpp b/src/lib/fdt/fdt_ro.cpp
+index 7cbfcdaf1..6a319435b 100644
+--- a/src/lib/fdt/fdt_ro.cpp
++++ b/src/lib/fdt/fdt_ro.cpp
+@@ -197,12 +197,25 @@ int fdt_first_child(const void *fdt, int parentoffset) {
+         return -FDT_ERR_BADOFFSET;
+ 
+     offset = next;
+-    tag = fdt_next_tag_(fdt, offset, &next);
+-
+-    if (tag != FDT_BEGIN_NODE)
+-        return -FDT_ERR_NOTFOUND;
+-
+-    return offset;
++    // Issue #350: skip the parent's own properties — a QEMU root carries
++    // #address-cells/#size-cells/compatible/model before its first child,
++    // and the old code returned NOTFOUND for any such parent. Stop at the
++    // first nested BEGIN_NODE, the parent's END_NODE, or FDT_END. Callers
++    // must pass validated blobs (dtb.cpp enforces layout + structure);
++    // the hand-built test blobs are valid by construction.
++    for (;;) {
++        tag = fdt_next_tag_(fdt, offset, &next);
++        if (tag == FDT_BEGIN_NODE)
++            return offset;
++        if (tag == FDT_END_NODE || tag == FDT_END)
++            return -FDT_ERR_NOTFOUND;
++        // Audit S3: explicit arm — only PROP/NOP may be skipped; any
++        // other tag is malformed input (unreachable on validated blobs,
++        // which terminate in FDT_END by construction).
++        if (tag != FDT_PROP && tag != FDT_NOP)
++            return -FDT_ERR_BADSTRUCTURE;
++        offset = next;
++    }
+ }
+ 
+ int fdt_next_sibling(const void *fdt, int offset) {
+diff --git a/test-history.txt b/test-history.txt
+index 580b540be..364c655cf 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4245,3 +4245,9 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 10:55:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 953ms STATUS: #353-s3c-riscv64-gate-known-5QE+#387
+ 2026-10-20 17:04:48 basic_lib PASSED: 26 FAILED: 0 TIME: 1768ms STATUS: #350-sliceA-x86-gate
+ 2026-10-20 17:08:19 basic_lib PASSED: 26 FAILED: 0 TIME: 1769ms STATUS: #350-sliceA-s3c-x86-gate
++2026-10-20 18:45:58 drivers PASSED: 56 FAILED: 2 TIME: 1823ms STATUS: #350-sliceB-riscv64-gate-known-#391x2
++2026-10-20 18:45:58 drivers PASSED: 56 FAILED: 2 TIME: 1809ms STATUS: #350-sliceB-riscv64-gate-known-#391x2
++2026-10-20 18:50:56 drivers PASSED: 57 FAILED: 1 TIME: 1877ms STATUS: #350-sliceB-aarch64-gate-known-#391
++2026-10-20 18:51:59 storage PASSED: 166 FAILED: 1 TIME: 23976ms STATUS: #350-sliceB-aarch64-gate-known-#392
++2026-10-20 18:53:07 storage PASSED: 166 FAILED: 1 TIME: 23944ms STATUS: #350-sliceB-riscv64-gate-known-#392
++2026-10-20 19:02:06 basic_lib PASSED: 26 FAILED: 0 TIME: 1659ms STATUS: #350-sliceB-s3c-x86-gate

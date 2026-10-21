@@ -1,0 +1,177 @@
+diff --git a/src/kernel/arch/aarch64/serial.cpp b/src/kernel/arch/aarch64/serial.cpp
+index 54d5ecf1c..bf0281e4a 100644
+--- a/src/kernel/arch/aarch64/serial.cpp
++++ b/src/kernel/arch/aarch64/serial.cpp
+@@ -131,4 +131,17 @@ void Serial::puts(const char *s) {
+         putchar(*s++);
+ }
+ 
++/// @brief PL011 register snapshot for init-state assertions (issue #355).
++/// Read-only: six MMIO reads, no writes, no side effects.
++Serial::Pl011Snapshot Serial::pl011_snapshot() {
++    Pl011Snapshot snap{};
++    snap.fr = mmio_read32(UART_BASE + UART_FR / 4);
++    snap.cr = mmio_read32(UART_BASE + UART_CR / 4);
++    snap.lcr_h = mmio_read32(UART_BASE + UART_LCR_H / 4);
++    snap.ibrd = mmio_read32(UART_BASE + UART_IBRD / 4);
++    snap.fbrd = mmio_read32(UART_BASE + UART_FBRD / 4);
++    snap.imsc = mmio_read32(UART_BASE + UART_IMSC / 4);
++    return snap;
++}
++
+ } // namespace arch
+diff --git a/src/kernel/arch/hal/serial.hpp b/src/kernel/arch/hal/serial.hpp
+index 36dde7303..09927934f 100644
+--- a/src/kernel/arch/hal/serial.hpp
++++ b/src/kernel/arch/hal/serial.hpp
+@@ -22,6 +22,7 @@
+ /// @brief Serial port (UART) driver — architecture-agnostic interface.
+ 
+ #include <types.hpp>
++#include <kernel/nexios_config.h>
+ 
+ namespace arch {
+ 
+@@ -50,13 +51,50 @@ class Serial {
+     static void puts(const char *str);
+ 
+     /// @brief Returns the number of characters written to the serial console
+-    ///        since boot.  The interactive shell snapshots this value before
++    ///        since boot.  The interactive shell snapshots this before
+     ///        drawing its prompt; if it advanced while the shell waits for
+     ///        input, a background task wrote to the console and the shell
+     ///        redraws its prompt on a fresh line (prevents async output such
+     ///        as the ELF loader's "completed" event from gluing onto the
+     ///        prompt).
+     static uint64_t write_count() noexcept;
++
++#if defined(CONFIG_ARCH_AARCH64)
++    /// @brief PL011 register snapshot for init-state assertions (issue
++    ///        #355): read-only observers so tests never duplicate the
++    ///        UART base. No behavior change, no side effects.
++    struct Pl011Snapshot {
++        uint32_t fr;
++        uint32_t cr;
++        uint32_t lcr_h;
++        uint32_t ibrd;
++        uint32_t fbrd;
++        uint32_t imsc;
++    };
++    static Pl011Snapshot pl011_snapshot();
++#endif
++
++#if defined(CONFIG_ARCH_RISCV64)
++    /// @brief 16550A register snapshot (issue #355): read-only observers
++    ///        for init-state assertions (IER must stay 0 — polling only).
++    struct Uart16550Snapshot {
++        uint8_t ier;
++        uint8_t lcr;
++        uint8_t mcr;
++        uint8_t lsr;
++    };
++    static Uart16550Snapshot uart_snapshot();
++    /// @brief MCR LOOP bit (bit 4): TX→RX internal loopback for the
++    ///        test-only round-trip (production never sets it).
++    static constexpr uint8_t UART_MCR_LOOP = 0x10;
++    /// @brief Raw MCR read (loopback setup observes the pre-test value).
++    static uint8_t uart_mcr();
++    /// @brief Raw MCR write (test-only loopback control; production
++    ///        never calls it — TX stays on the SBI path).
++    static void uart_mcr_set(uint8_t value);
++    /// @brief Drain the RX FIFO (bounded 16 reads — the 16550 FIFO depth).
++    static void uart_drain_rx();
++#endif
+ };
+ 
+ } // namespace arch
+diff --git a/src/kernel/arch/riscv64/serial.cpp b/src/kernel/arch/riscv64/serial.cpp
+index 804ef57e4..8d96d0a27 100644
+--- a/src/kernel/arch/riscv64/serial.cpp
++++ b/src/kernel/arch/riscv64/serial.cpp
+@@ -31,8 +31,12 @@ namespace arch {
+ ///        LSR probe in test_riscv64.cpp).
+ static constexpr uint64_t RISCV_UART_BASE = 0x10000000ULL;
+ static constexpr uint64_t RISCV_UART_RBR_OFF = 0;
++static constexpr uint64_t RISCV_UART_IER_OFF = 1;
++static constexpr uint64_t RISCV_UART_LCR_OFF = 3;
++static constexpr uint64_t RISCV_UART_MCR_OFF = 4;
+ static constexpr uint64_t RISCV_UART_LSR_OFF = 5;
+ static constexpr uint8_t RISCV_UART_LSR_DATA_READY = 0x01;
++static constexpr uint8_t RISCV_UART_MCR_LOOP = 0x10;
+ static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
+ 
+ /// @brief Number of characters written to the console since boot.
+@@ -43,7 +47,8 @@ static volatile uint64_t s_serial_write_count = 0;
+ /// @brief Initialize the serial port (no-op on RISC-V64).
+ /// The virt 16550A divisor is pre-initialized by OpenSBI/QEMU;
+ /// reprogramming it risks breaking the S-mode SBI TX path, so RX-only
+-/// polling attaches to the live configuration (issue #247).
++/// polling attaches to the live configuration (issue #247). The kernel
++/// never writes IER — RX is polled, never interrupt-driven.
+ void Serial::init() {
+ }
+ 
+@@ -117,4 +122,52 @@ void Serial::puts(const char *s) {
+         putchar(*s++);
+ }
+ 
++/// @brief 16550A register snapshot for init-state assertions (issue #355).
++/// Read-only: four MMIO byte reads, no writes, no side effects.
++Serial::Uart16550Snapshot Serial::uart_snapshot() {
++    Uart16550Snapshot snap{};
++    const volatile void *ier_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_IER_OFF);
++    const volatile void *lcr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_LCR_OFF);
++    const volatile void *mcr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_MCR_OFF);
++    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
++    snap.ier = arch::mmio_read8(ier_addr);
++    snap.lcr = arch::mmio_read8(lcr_addr);
++    snap.mcr = arch::mmio_read8(mcr_addr);
++    snap.lsr = arch::mmio_read8(lsr_addr);
++    return snap;
++}
++
++/// @brief Raw MCR read (loopback setup observes the pre-test value).
++uint8_t Serial::uart_mcr() {
++    const volatile void *mcr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_MCR_OFF);
++    return arch::mmio_read8(mcr_addr);
++}
++
++/// @brief Raw MCR write (test-only loopback control; production never
++///        calls it — TX stays on the SBI path).
++void Serial::uart_mcr_set(uint8_t value) {
++    volatile void *mcr_addr = reinterpret_cast<volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_MCR_OFF);
++    arch::mmio_write8(mcr_addr, value);
++}
++
++/// @brief Drain the RX FIFO (bounded 16 reads — the 16550 FIFO depth).
++void Serial::uart_drain_rx() {
++    const volatile void *lsr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_LSR_OFF);
++    const volatile void *rbr_addr = reinterpret_cast<const volatile void *>(
++        RISCV_UART_BASE + RISCV_UART_RBR_OFF);
++    for (int idx = 0; idx < 16; ++idx) {
++        if ((arch::mmio_read8(lsr_addr) & RISCV_UART_LSR_DATA_READY) == 0)
++            break;
++        (void)arch::mmio_read8(rbr_addr);
++        arch::pause();
++    }
++}
++
+ } // namespace arch
+diff --git a/test-history.txt b/test-history.txt
+index 9cd80c652..ceeeba330 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4266,3 +4266,6 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 20:34:01 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 918ms STATUS: #355-sliceA-riscv64-known6-stash-proven-baseline
+ 2026-10-20 20:34:45 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1037ms STATUS: #355-sliceA-aarch64-gate
+ 2026-10-20 20:36:48 hal_rtc PASSED: 1 FAILED: 0 TIME: 38ms STATUS: #355-sliceA-riscv64-final
++2026-10-20 21:05:11 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 657ms STATUS: #355-sliceB-x86-control
++2026-10-20 21:06:22 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1030ms STATUS: #355-sliceB-aarch64-gate
++2026-10-20 21:07:33 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 916ms STATUS: #355-sliceB-riscv64-known6

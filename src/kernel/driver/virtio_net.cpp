@@ -43,6 +43,27 @@ static VirtioNetDevice *g_virtio_net_dev = nullptr;
 VirtioNetDevice::~VirtioNetDevice() {
     if (queue_size == 0)
         return;
+#if !defined(CONFIG_ARCH_X86_64)
+    // Legacy chunks (issue #350): free the contiguous pages at each
+    // chunk base, never the byte offsets.
+    if (legacy_queue_chunks_) {
+        uint64_t chunk_bases[2] = {rx_desc_phys, tx_desc_phys};
+        for (uint64_t base : chunk_bases) {
+            if (!base)
+                continue;
+            for (uint64_t page = 0;
+                 page < arch::VIRTIO_LEGACY_CHUNK_PAGES; ++page) {
+                PMM::free_page(base + page * arch::VIRTIO_LEGACY_ALIGN);
+            }
+        }
+        rx_desc_phys = 0;
+        rx_avail_phys = 0;
+        rx_used_phys = 0;
+        tx_desc_phys = 0;
+        tx_avail_phys = 0;
+        tx_used_phys = 0;
+    }
+#endif
     auto pages_for = [](size_t bytes) {
         return (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
     };
@@ -110,6 +131,38 @@ static bool alloc_queue_pages(uint64_t &desc_phys, uint64_t &avail_phys,
 
     return true;
 }
+
+#if !defined(CONFIG_ARCH_X86_64)
+// Legacy (v1) queue chunk (issue #350): ONE contiguous chunk per queue —
+// desc at +0, avail immediately after, used at the single-sourced
+// virtio_legacy_used_off (must match the device's PFN+align computation).
+static bool alloc_legacy_chunk(uint64_t &desc_phys, uint64_t &avail_phys,
+                               uint64_t &used_phys, arch::VirtqDesc *&desc,
+                               arch::VirtqAvail *&avail,
+                               arch::VirtqUsed *&used, uint16_t queue_size) {
+    uint64_t chunk = PMM::alloc_contiguous(arch::VIRTIO_LEGACY_CHUNK_PAGES);
+    if (chunk == 0) {
+        Logger::error("virtio-net: OOM for legacy queue chunk");
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::DRIVER,
+                                    kernel::log::kDmesgBase_DRIVER + 6,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "virtio-net queue OOM", 0);
+        return false;
+    }
+    desc_phys = chunk;
+    avail_phys = chunk + static_cast<uint64_t>(queue_size) * 16;
+    used_phys = chunk + arch::virtio_legacy_used_off(queue_size);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    desc = reinterpret_cast<arch::VirtqDesc *>(HHDM_OFFSET + chunk);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    avail = reinterpret_cast<arch::VirtqAvail *>(HHDM_OFFSET + avail_phys);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    used = reinterpret_cast<arch::VirtqUsed *>(HHDM_OFFSET + used_phys);
+    memset(desc, 0,
+           arch::VIRTIO_LEGACY_CHUNK_PAGES * arch::VIRTIO_LEGACY_ALIGN);
+    return true;
+}
+#endif
 
 /// @brief Fills one RX descriptor + avail-ring entry.  Lock-free helper:
 ///        callers must hold dev.lock_ (via IrqSpinLockGuard).  The
@@ -183,12 +236,29 @@ bool virtio_net_probe(Nic &nic) {
     dev->tx_inflight_ = false;
 
     // Allocate queue memory
-    if (!alloc_queue_pages(dev->rx_desc_phys, dev->rx_avail_phys,
-                           dev->rx_used_phys, dev->rx_desc, dev->rx_avail,
-                           dev->rx_used, dev->queue_size) ||
-        !alloc_queue_pages(dev->tx_desc_phys, dev->tx_avail_phys,
-                           dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
-                           dev->tx_used, dev->queue_size)) {
+#if !defined(CONFIG_ARCH_X86_64)
+    // Legacy (v1) queues live in contiguous chunks (not per-ring pages).
+    if (transport.mmio &&
+        transport.mmio_version == VIRTIO_MMIO_VERSION_LEGACY) {
+        dev->legacy_queue_chunks_ = true;
+        if (!alloc_legacy_chunk(dev->rx_desc_phys, dev->rx_avail_phys,
+                                dev->rx_used_phys, dev->rx_desc, dev->rx_avail,
+                                dev->rx_used, dev->queue_size) ||
+            !alloc_legacy_chunk(dev->tx_desc_phys, dev->tx_avail_phys,
+                                dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
+                                dev->tx_used, dev->queue_size)) {
+            dev->~VirtioNetDevice();
+            kernel::MemPool::free(dev);
+            return false;
+        }
+    } else
+#endif
+        if (!alloc_queue_pages(dev->rx_desc_phys, dev->rx_avail_phys,
+                               dev->rx_used_phys, dev->rx_desc, dev->rx_avail,
+                               dev->rx_used, dev->queue_size) ||
+            !alloc_queue_pages(dev->tx_desc_phys, dev->tx_avail_phys,
+                               dev->tx_used_phys, dev->tx_desc, dev->tx_avail,
+                               dev->tx_used, dev->queue_size)) {
         dev->~VirtioNetDevice();
         kernel::MemPool::free(dev);
         return false;

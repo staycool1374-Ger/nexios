@@ -80,6 +80,20 @@ public:
     /// @brief Returns whether the framebuffer was successfully initialised.
     /// @return True if available.
     static bool available() { return initialized_; }
+    /// @brief Backend name (issue #394: runtime-selected, was
+    /// compile-time-only in #357). "multiboot2" on x86_64; on other arches
+    /// the init chain selects "virtio-gpu" then "ramfb", else "none".
+    /// @return Backend name string (stable pointer, never null).
+    static const char *backend_name();
+    /// @brief Flushes dirty rows to the host scanout (issue #394).
+    /// No-op for backends without host presentation (multiboot2 writes
+    /// real RAM directly; ramfb points the host at guest RAM directly).
+    /// Safe to call when unavailable (returns immediately).
+    static void present();
+    /// @brief Marks the whole framebuffer dirty (issue #394).
+    /// Call after direct framebuffer writes that bypass put_pixel
+    /// (Terminal clear/scroll fast paths) and before the next present().
+    static void invalidate();
     /// @brief Reads one pixel back (issue #269 test oracle).
     /// @return 0x000000 when unavailable or out of bounds.
     static uint32_t get_pixel(uint32_t x, uint32_t y);

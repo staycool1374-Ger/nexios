@@ -55,6 +55,7 @@ enum PciRegister : uint8_t {
     PCI_BAR4 = 0x20,
     PCI_BAR5 = 0x24,
     PCI_SECONDARY_BUS = 0x19,
+    PCI_INT_PIN = 0x3D,
 };
 
 /// PCI status register bits
@@ -148,9 +149,42 @@ struct PciDeviceInfo {
     uint8_t prog_if;
     uint8_t revision;
     uint8_t header_type;
+    uint8_t intx_pin; ///< INTx pin (0 = none, 1-4 = INTA-D; config 0x3D)
     PciBar bars[6];
     uint8_t bar_count;
 };
+
+// --- ECAM discovery (issue #354) ---
+
+/// @brief Where the effective ECAM base came from.
+enum class PciEcamSource : uint8_t {
+    NONE = 0,       ///< x86_64 (CF8/CFC, no ECAM) or undiscovered.
+    ///< NOTE (audit S3): on x86_64 discover() latches NONE explicitly, and
+    ///< any unread latch is zero-init == NONE by construction — never
+    ///< mistake it for a pending discovery.
+    DEVICE_TREE,    ///< validated DTB pcie-ecam-generic node matches board
+    BOARD_CONSTANT, ///< no/invalid DTB or DTB mismatch — boot-mapped constant
+};
+
+/// @brief ECAM discovery result (BOOT_ONLY latch, written once at boot).
+struct PciEcamInfo {
+    uint64_t phys_base = 0; ///< effective ECAM base (== CONFIG base always)
+    uint64_t size = 0;      ///< window size (PCI_ECAM_WINDOW_SIZE when live)
+    uint64_t dt_phys_base = 0; ///< DTB pcie-ecam-generic reg base (0 if none)
+    bool dt_found = false;     ///< DTB node present and reg parsed
+    bool dt_mismatch = false;  ///< DT node disagrees with the boot mapping
+    PciEcamSource source = PciEcamSource::NONE;
+};
+
+/// @brief Read the latched ECAM discovery result.
+const PciEcamInfo &pci_ecam_info();
+
+/// @brief Resolve + validate the ECAM base once at boot (BOOT_ONLY).
+/// DTB-first: the `pci-host-ecam-generic` reg must equal the boot-mapped
+/// CONFIG base with size >= PCI_ECAM_WINDOW_SIZE, else fail closed to the
+/// board constant with dt_mismatch set (dmesg DOCUMENT). Latched — a second
+/// call is a no-op. Safe to call on x86_64 (latches NONE).
+void pci_ecam_discover();
 
 // --- Unified (arch-independent) config space access wrappers ---
 

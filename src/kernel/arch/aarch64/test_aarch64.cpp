@@ -40,6 +40,7 @@
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/debug/debug_regs.hpp>
+#include <kernel/debug/crash_dump.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/elf/elf_loader.hpp>
@@ -724,6 +725,35 @@ JARVIS_TEST(aarch64_mmu_cache_tlb) {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: issue #309b — the aarch64 TLB paths take their data barrier
+// from arch::system_barrier() (dmb sy under CONFIG_TCG_BARRIERS=1, dsb sy
+// on silicon): exercise write_cr3 (both converted sites + tlbi_alle1)
+// and tlbi_aside1 on a live root and prove TTBR0 is unchanged.
+// Input: current TTBR0 captured; write_cr3(same) + tlbi_aside1(0xFFF,
+// above ASID_MAX so no live ASID is purged); barriers + isb inline.
+// Expect: TTBR0/read_cr3 unchanged; execution reaches PASS (a wrong TTBR0
+// publish or missing ISB faults on the next fetch).
+// Depends: arch::system_barrier, write_cr3, tlbi_aside1 (issue #309b)
+JARVIS_TEST(aarch64_tlb_barrier_gate, "PRE: none | POST: none") {
+    static_assert(CONFIG_TCG_BARRIERS == 0 || CONFIG_TCG_BARRIERS == 1,
+                  "CONFIG_TCG_BARRIERS must be 0 or 1");
+    arch::IrqGuard ig{};
+    arch::system_barrier();
+    arch::system_barrier();
+    arch::isb();
+    const uint64_t ttbr0 = arch::read_ttbr0_el1();
+    arch::write_cr3(ttbr0);
+    JARVIS_ASSERT_FMT(arch::read_ttbr0_el1() == ttbr0,
+                      "TTBR0 changed by write_cr3: 0x%lx", ttbr0);
+    JARVIS_ASSERT_FMT(arch::read_cr3() == ttbr0,
+                      "read_cr3 mismatch after write_cr3");
+    arch::tlbi_aside1(0x0FFFu);
+    arch::system_barrier();
+    arch::isb();
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Check that FP and Advanced SIMD are implemented (ID_AA64PFR0_EL1).
 JARVIS_TEST(aarch64_fpu_neon_detection) {
     uint64_t id_aa64pfr0{};
@@ -1240,7 +1270,7 @@ JARVIS_TEST(aarch64_clone_frame_readback, "PRE: none | POST: none") {
 
 /// @brief Register all AArch64 architecture test cases.
 extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
-                                                 uint64_t elr);
+                                                uint64_t elr, uint64_t sp);
 
 // Runmode: kernel
 // Testidea: v0.5.x issue #214 — EL1 sync faults must reach the fail-stop
@@ -1289,8 +1319,8 @@ JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
     asm volatile("mrs %0, elr_el1" : "=r"(saved_elr));
     kernel::gs::user_access_recover_ip() = 0xA11CEULL;
     const uint64_t ret = aarch64_el1_unexpected_fault(0x2000000ULL,
-                                                     0x400000ULL,
-                                                     saved_elr);
+                                                      0x400000ULL,
+                                                      saved_elr, 0);
     JARVIS_ASSERT_FMT(ret == 0, "recovery path returned %lx, want 0", ret);
     JARVIS_ASSERT_FMT(kernel::gs::user_access_recover_ip() == 0,
                       "recovery left armed: 0x%lx",
@@ -1303,6 +1333,40 @@ JARVIS_TEST(aarch64_el1_sync_unexpected_failstop_routing) {
     asm volatile("isb");
     JARVIS_TEST_PASS();
 }
+
+// Runmode: kernel
+// Testidea: issue #308 — the non-recovery EL1 fault path emits a raw
+// first-chance frame (FAR/ELR/SP/TTBR) and reaches the halt seam exactly
+// once, with no Logger/dmesg traffic. Recovery stays disarmed; the
+// CONFIG_DEBUG seam returns instead of halting.
+// Input: synthetic (esr, far, elr, sp) with recovery disarmed + armed seam.
+// Expect: halt count 1; last frame carries FAR/ELR/SP/TTBR0/1 verbatim.
+// Depends: aarch64_el1_unexpected_fault, crash_dump seam (issue #308)
+// CONFIG_DEBUG-only: arms the debug halt seam.
+#if CONFIG_DEBUG
+JARVIS_TEST(aarch64_el1_failstop_raw_frame) {
+    kernel::gs::user_access_recover_ip() = 0;
+    kernel::debug::test_reset_crash_halt();
+    kernel::debug::test_arm_crash_halt();
+    const uint64_t ret = aarch64_el1_unexpected_fault(
+        0x96000010ULL, 0x40008000ULL, 0xFFFF000040000000ULL,
+        0xFFFF000041000000ULL);
+    JARVIS_ASSERT_FMT(ret == 1, "non-recovery path returned %lx, want 1",
+                      ret);
+    JARVIS_ASSERT_FMT(kernel::debug::test_crash_halt_count() == 1,
+                      "halt count %lx, want 1",
+                      kernel::debug::test_crash_halt_count());
+    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
+    JARVIS_ASSERT_FMT(
+        f.addr == 0x40008000ULL && f.pc == 0xFFFF000040000000ULL &&
+            f.sp == 0xFFFF000041000000ULL &&
+            f.pgtbl0 == arch::read_ttbr0_el1() &&
+            f.pgtbl1 == arch::read_ttbr1_el1(),
+        "frame mismatch: FAR/ELR/SP/TTBR not echoed");
+    kernel::debug::test_reset_crash_halt();
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_DEBUG (first-chance seam test)
 
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
@@ -1318,6 +1382,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_timer_counter_monotonic);
     JARVIS_REGISTER_TEST(aarch64_timer_frequency);
     JARVIS_REGISTER_TEST(aarch64_mmu_cache_tlb);
+    JARVIS_REGISTER_TEST(aarch64_tlb_barrier_gate);  // issue #309b
     JARVIS_REGISTER_TEST(aarch64_fpu_neon_detection);
     JARVIS_REGISTER_TEST(aarch64_uart_putc);
     JARVIS_REGISTER_TEST(aarch64_pci_ecam_read);
@@ -1340,6 +1405,9 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_el0_fault_frame_in_debug_slot);  // #236
     JARVIS_REGISTER_TEST(aarch64_pl011_poll_idle_false);  // issue #245
     JARVIS_REGISTER_TEST(aarch64_el1_sync_unexpected_failstop_routing);
+#if CONFIG_DEBUG
+    JARVIS_REGISTER_TEST(aarch64_el1_failstop_raw_frame);  // issue #308
+#endif
 }
 
 #endif

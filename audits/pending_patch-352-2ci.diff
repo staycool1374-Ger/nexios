@@ -1,0 +1,741 @@
+diff --git a/audits/pending_patch-352-2ci.diff b/audits/pending_patch-352-2ci.diff
+new file mode 100644
+index 000000000..bf51cfd71
+--- /dev/null
++++ b/audits/pending_patch-352-2ci.diff
+@@ -0,0 +1,450 @@
++diff --git a/audits/pending_patch-352-2ci.diff b/audits/pending_patch-352-2ci.diff
++new file mode 100644
++index 000000000..c9977775f
++--- /dev/null
+++++ b/audits/pending_patch-352-2ci.diff
++@@ -0,0 +1,218 @@
+++diff --git a/prompts/STATE.md b/prompts/STATE.md
+++index b508ca668..e751c6d24 100644
+++--- a/prompts/STATE.md
++++++ b/prompts/STATE.md
+++@@ -5,6 +5,7 @@
+++ 
+++ ## Active Summary
+++ ### Objective
++++- **ACTIVE (2026-10-20):** #352 MMU/VMM/TLB parity — step 2b LANDED (`625e4edf1`, audit APPROVED): context_id HAL + ASID allocators + task lifecycle + tagged publish + SATP-verbatim; 3 test-idiom ports (memory_vmm + page_tables green riscv); GDB ASIDs 1-4 live. Step-2a root edit CANCELLED (shared-L0 disproof). Filed #388 (riscv init_stack direction). Next: step 2c (TLB ops, splits, deep-copy flags, shootdown; must define/remove current_kernel_pml4 per audit S3).
+++ - **DONE (2026-10-19):** #385 HHDM-rot + exec_slots hang CLOSED (audited APPROVED, pending QE + #387): riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch + abort, x86 mirror) — stale arm to recycled memory no longer resumes foreign context with stale current (U-fault killed init → hang). Gates: arch_riscv64 24/30 + no hang ×3 (5 fails = QE fixture/PLIC updates, 1 = #387 fork follow-up), x86 elf_loader/selftest green, 3-arch link green. H1 (image-range creep) + tests 6/7 (M-vs-S skew, OpenSBI M-threshold=7 boot state) convicted as QE test updates. FEEDBACK entry in LEARNINGS.
+++ - **DONE (2026-10-19):** #349 IRQ + timer parity CLOSED (audited APPROVED): GICv2 full init (PIDR2 version, 8 enable banks, EOI ownership, spurious no-EOI, storm limiter) + CVAL/SBI absolute deadlines with coarse-tick units + CTL-gated remaining + PLIC S-context + IDT 64→256 + docs §6 + gotcha #20. Gates: aarch64 6 classes green, riscv64 5+1 (known QE test-side), x86 all green + selftest 148/148, x86_64 bit-identical. arch_riscv64 HHDM rot filed as #385 (out of scope). FEEDBACK entry in LEARNINGS.
+++ - **DONE (2026-10-19):** #384 per-arch wall-time truth CLOSED (docs-only, no kernel stubs found): P0' survey (Timer HAL complete x3, riscv64 remaining_ns hard-0 is HW constraint) + TCG smoke (x86 hrt 6/6 + timing 19/19; aarch64/riscv64 hrt 5/6 ungated-bound fails +28%/+27.6%; timing panics ELR/sepc=0 → #356) + P1' bare-metal-only policy + QE missing-tests handoff. Real sil3_auditor re-audit APPROVED zero findings (`audits/report-2026-10-18T22-05-51Z.md`). FEEDBACK entry in LEARNINGS.
+++diff --git a/src/kernel/arch/aarch64/hal/asid.cpp b/src/kernel/arch/aarch64/hal/asid.cpp
+++index 2b153c7cf..457f9b81b 100644
+++--- a/src/kernel/arch/aarch64/hal/asid.cpp
++++++ b/src/kernel/arch/aarch64/hal/asid.cpp
+++@@ -104,10 +104,10 @@ void asid_free(uint16_t asid) {
+++     }
+++     // Purge-before-free: the freed address space's entries tagged with
+++     // this ASID survive in the TLB (tagged switches no longer flush).
+++-    // A same-root full flush is the safe fallback until VA+ASID targeted
+++-    // invalidation lands (step 4 of issue #352).
++++    // Targeted context purge (issue #352 step 2c-i); full flush was the
++++    // safe fallback before targeted ops existed.
+++     if (g_supported)
+++-        ArchPageTable::tlb_flush_all();
++++        ArchPageTable::tlb_flush_asid(asid);
+++ }
+++ 
+++ uint64_t asid_epoch() {
+++diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+++index 2cf70ef79..007104e2b 100644
+++--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+++@@ -211,6 +211,17 @@ inline void isb() {
+++ inline void tlbi_vae1(uint64_t vaddr) {
+++     asm volatile("tlbi vae1, %0" : : "r"(vaddr) : "memory");
+++ }
++++/// @brief TLB invalidate by ASID (EL1, issue #352).  Drops every entry
++++///        tagged with @p asid (raw value in Xt[15:0]; 8-bit IDs always
++++///        fit).  Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
++++/// @param[in] asid Address-space ID to invalidate (0 invalidates nothing
++++///        specific; callers pass nonzero user IDs).
++++inline void tlbi_aside1(uint16_t asid) {
++++    asm volatile("dmb sy; tlbi aside1, %0; dmb sy; isb"
++++                 :
++++                 : "r"(static_cast<uint64_t>(asid))
++++                 : "memory");
++++}
+++ /// @brief TLB invalidate all (EL1).
+++ inline void tlbi_alle1() {
+++     asm volatile("dmb sy; tlbi vmalle1; dmb sy; isb" : : : "memory");
+++diff --git a/src/kernel/arch/aarch64/hal/page_table_impl.hpp b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
+++index 4e1fca82c..1517412a6 100644
+++--- a/src/kernel/arch/aarch64/hal/page_table_impl.hpp
++++++ b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
+++@@ -58,14 +58,17 @@ inline void arch_page_table_tlb_flush_all() {
+++     isb();
+++ }
+++ 
+++-/// @brief Purge one context's non-global TLB entries (issue #184).
+++-///        Fallback: this port allocates no ASIDs, so the required semantics
+++-///        are provided via a full EL1 invalidate — a safe superset of a
+++-///        single-context purge, mirroring the x86_64 CR3-reload fallback.
+++-///        Local CPU only; cross-CPU invalidation is out of scope.
+++-/// @param pcid Owning context id, ignored (0 = untagged/kernel).
+++-inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
+++-    arch_page_table_tlb_flush_all();
++++/// @brief Purge one context's non-global TLB entries (issue #352).
++++///        Real ASID purge now that the allocator is live (issue #184
++++///        fallback retained for ID 0).  Local CPU only; cross-CPU
++++///        invalidation is out of scope.
++++/// @param pcid Owning context id (0 = untagged/kernel → full flush).
++++inline void tlb_purge_context(uint16_t pcid) {
++++    if (pcid == 0) {
++++        arch_page_table_tlb_flush_all();
++++        return;
++++    }
++++    tlbi_aside1(pcid);
+++ }
+++ 
+++ /// @brief AArch64 4-level page table manager (TTBR1_EL1 kernel space).
+++@@ -89,6 +92,20 @@ class ArchPageTable {
+++     static inline void tlb_flush_all() {
+++         arch_page_table_tlb_flush_all();
+++     }
++++    /// @brief Flush one context's TLB entries (issue #352).
++++    /// @param[in] id Address-space ID (0 → full flush, same as above).
++++    static inline void tlb_flush_asid(uint16_t id) {
++++        tlb_purge_context(id);
++++    }
++++    /// @brief Flush one VA in one context (issue #352).  AArch64 EL1 has
++++    ///        no VA+ASID-combined invalidate, so this purges the context
++++    ///        (safe superset, documented).
++++    /// @param[in] virt_addr Virtual address (recorded, context purged).
++++    /// @param[in] id Address-space ID (0 → full flush).
++++    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
++++        (void)virt_addr;
++++        tlb_purge_context(id);
++++    }
+++ 
+++     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
+++     static constexpr uint64_t ENTRIES = 512;
+++diff --git a/src/kernel/arch/riscv64/hal/asid.cpp b/src/kernel/arch/riscv64/hal/asid.cpp
+++index 117655688..d74d419f1 100644
+++--- a/src/kernel/arch/riscv64/hal/asid.cpp
++++++ b/src/kernel/arch/riscv64/hal/asid.cpp
+++@@ -106,10 +106,10 @@ void asid_free(uint16_t asid) {
+++     }
+++     // Purge-before-free: the freed address space's entries tagged with
+++     // this ASID survive in the TLB (tagged switches no longer flush).
+++-    // A full local sfence.vma is the safe fallback until VA+ASID
+++-    // targeted invalidation lands (step 4 of issue #352).
++++    // Targeted context purge (issue #352 step 2c-i); full fence was the
++++    // safe fallback before ASID-scoped ops existed.
+++     if (g_supported)
+++-        ArchPageTable::tlb_flush_all();
++++        ArchPageTable::tlb_flush_asid(asid);
+++ }
+++ 
+++ uint64_t asid_epoch() {
+++diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+++index 4a19e922c..40b4d4223 100644
+++--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+++@@ -168,6 +168,24 @@ inline void sfence_vma() {
+++ inline void sfence_vma_va(uint64_t vaddr) {
+++     asm volatile("sfence.vma %0" : : "r"(vaddr) : "memory");
+++ }
++++/// @brief TLB flush for one address space (issue #352).
++++///        `sfence.vma x0, asid`: rs1==x0 selects ASID-only invalidation.
++++/// @param[in] asid Address-space ID to invalidate (nonzero user ID).
++++inline void sfence_vma_asid(uint16_t asid) {
++++    asm volatile("sfence.vma %0, %1"
++++                 :
++++                 : "r"(0ULL), "r"(static_cast<uint64_t>(asid))
++++                 : "memory");
++++}
++++/// @brief TLB flush for one VA in one address space (issue #352).
++++/// @param[in] vaddr Virtual address to invalidate.
++++/// @param[in] asid Address-space ID to invalidate within.
++++inline void sfence_vma_va_asid(uint64_t vaddr, uint16_t asid) {
++++    asm volatile("sfence.vma %0, %1"
++++                 :
++++                 : "r"(vaddr), "r"(static_cast<uint64_t>(asid))
++++                 : "memory");
++++}
+++ 
+++ /// @brief Read the SATP CSR (supervisor address translation and protection).
+++ /// @return Current SATP value.
+++diff --git a/src/kernel/arch/riscv64/hal/page_table_impl.hpp b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
+++index d2db0b445..ef1d1825e 100644
+++--- a/src/kernel/arch/riscv64/hal/page_table_impl.hpp
++++++ b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
+++@@ -66,14 +66,17 @@ inline void arch_page_table_tlb_flush_all() {
+++     asm volatile("sfence.vma" : : : "memory");
+++ }
+++ 
+++-/// @brief Purge one context's non-global TLB entries (issue #184).
+++-///        Fallback: this port allocates no ASIDs, so the required semantics
+++-///        are provided via a full fence — a safe superset of a
+++-///        single-context purge, mirroring the x86_64 CR3-reload fallback.
+++-///        Local CPU only; cross-CPU invalidation is out of scope.
+++-/// @param pcid Owning address-space id, ignored (0 = untagged/kernel).
+++-inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
+++-    arch_page_table_tlb_flush_all();
++++/// @brief Purge one context's non-global TLB entries (issue #352).
++++///        Real ASID purge now that the allocator is live (issue #184
++++///        fallback retained for ID 0).  Local CPU only; cross-CPU
++++///        invalidation is out of scope.
++++/// @param pcid Owning address-space id (0 = untagged/kernel → full fence).
++++inline void tlb_purge_context(uint16_t pcid) {
++++    if (pcid == 0) {
++++        arch_page_table_tlb_flush_all();
++++        return;
++++    }
++++    sfence_vma_asid(pcid);
+++ }
+++ 
+++ /// @brief Sv39 page table manager — wraps arch_page_table_* free functions
+++@@ -96,6 +99,21 @@ class ArchPageTable {
+++     static inline void tlb_flush_all() {
+++         arch_page_table_tlb_flush_all();
+++     }
++++    /// @brief Flush one context's TLB entries (issue #352).
++++    /// @param[in] id Address-space ID (0 → full fence, same as above).
++++    static inline void tlb_flush_asid(uint16_t id) {
++++        tlb_purge_context(id);
++++    }
++++    /// @brief Flush one VA in one context (issue #352).
++++    /// @param[in] virt_addr Virtual address to invalidate.
++++    /// @param[in] id Address-space ID (0 → VA-only fence, all ASIDs).
++++    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
++++        if (id == 0) {
++++            arch_page_table_tlb_flush(virt_addr);
++++            return;
++++        }
++++        sfence_vma_va_asid(virt_addr, id);
++++    }
+++ 
+++     /// @brief Page size in bytes (4 KB).
+++     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
+++diff --git a/test-history.txt b/test-history.txt
+++index de032d8b3..62f90862e 100644
+++--- a/test-history.txt
++++++ b/test-history.txt
+++@@ -4185,3 +4185,11 @@ SUMMARY: total=26 ok=25 fail=1
+++ 2026-10-20 08:35:00 timing_core PASSED: 19 FAILED: 0 TIME: 1848ms STATUS: #352-2b-x64-gate
+++ 2026-10-20 08:35:00 hal_timer PASSED: 5 FAILED: 0 TIME: 353ms STATUS: #352-2b-x64-gate
+++ 2026-10-20 08:35:00 selftest PASSED: 148 FAILED: 0 TIME: 12454ms STATUS: #352-2b-x64-gate
++++2026-10-20 09:00:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 339ms STATUS: #352-2ci-rv64-gate
++++2026-10-20 09:00:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 448ms STATUS: #352-2ci-rv64-gate
++++2026-10-20 09:00:00 timing_core PASSED: 19 FAILED: 0 TIME: 966ms STATUS: #352-2ci-rv64-gate
++++2026-10-20 09:00:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 935ms STATUS: #352-2ci-rv64-gate-known-5QE+#387
++++2026-10-20 09:00:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 334ms STATUS: #352-2ci-a64-gate
++++2026-10-20 09:00:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 418ms STATUS: #352-2ci-a64-gate
++++2026-10-20 09:00:00 timing_core PASSED: 19 FAILED: 0 TIME: 913ms STATUS: #352-2ci-a64-gate
++++2026-10-20 09:00:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1058ms STATUS: #352-2ci-a64-gate
++diff --git a/prompts/STATE.md b/prompts/STATE.md
++index b508ca668..e751c6d24 100644
++--- a/prompts/STATE.md
+++++ b/prompts/STATE.md
++@@ -5,6 +5,7 @@
++ 
++ ## Active Summary
++ ### Objective
+++- **ACTIVE (2026-10-20):** #352 MMU/VMM/TLB parity — step 2b LANDED (`625e4edf1`, audit APPROVED): context_id HAL + ASID allocators + task lifecycle + tagged publish + SATP-verbatim; 3 test-idiom ports (memory_vmm + page_tables green riscv); GDB ASIDs 1-4 live. Step-2a root edit CANCELLED (shared-L0 disproof). Filed #388 (riscv init_stack direction). Next: step 2c (TLB ops, splits, deep-copy flags, shootdown; must define/remove current_kernel_pml4 per audit S3).
++ - **DONE (2026-10-19):** #385 HHDM-rot + exec_slots hang CLOSED (audited APPROVED, pending QE + #387): riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch + abort, x86 mirror) — stale arm to recycled memory no longer resumes foreign context with stale current (U-fault killed init → hang). Gates: arch_riscv64 24/30 + no hang ×3 (5 fails = QE fixture/PLIC updates, 1 = #387 fork follow-up), x86 elf_loader/selftest green, 3-arch link green. H1 (image-range creep) + tests 6/7 (M-vs-S skew, OpenSBI M-threshold=7 boot state) convicted as QE test updates. FEEDBACK entry in LEARNINGS.
++ - **DONE (2026-10-19):** #349 IRQ + timer parity CLOSED (audited APPROVED): GICv2 full init (PIDR2 version, 8 enable banks, EOI ownership, spurious no-EOI, storm limiter) + CVAL/SBI absolute deadlines with coarse-tick units + CTL-gated remaining + PLIC S-context + IDT 64→256 + docs §6 + gotcha #20. Gates: aarch64 6 classes green, riscv64 5+1 (known QE test-side), x86 all green + selftest 148/148, x86_64 bit-identical. arch_riscv64 HHDM rot filed as #385 (out of scope). FEEDBACK entry in LEARNINGS.
++ - **DONE (2026-10-19):** #384 per-arch wall-time truth CLOSED (docs-only, no kernel stubs found): P0' survey (Timer HAL complete x3, riscv64 remaining_ns hard-0 is HW constraint) + TCG smoke (x86 hrt 6/6 + timing 19/19; aarch64/riscv64 hrt 5/6 ungated-bound fails +28%/+27.6%; timing panics ELR/sepc=0 → #356) + P1' bare-metal-only policy + QE missing-tests handoff. Real sil3_auditor re-audit APPROVED zero findings (`audits/report-2026-10-18T22-05-51Z.md`). FEEDBACK entry in LEARNINGS.
++diff --git a/src/kernel/arch/aarch64/hal/asid.cpp b/src/kernel/arch/aarch64/hal/asid.cpp
++index 2b153c7cf..457f9b81b 100644
++--- a/src/kernel/arch/aarch64/hal/asid.cpp
+++++ b/src/kernel/arch/aarch64/hal/asid.cpp
++@@ -104,10 +104,10 @@ void asid_free(uint16_t asid) {
++     }
++     // Purge-before-free: the freed address space's entries tagged with
++     // this ASID survive in the TLB (tagged switches no longer flush).
++-    // A same-root full flush is the safe fallback until VA+ASID targeted
++-    // invalidation lands (step 4 of issue #352).
+++    // Targeted context purge (issue #352 step 2c-i); full flush was the
+++    // safe fallback before targeted ops existed.
++     if (g_supported)
++-        ArchPageTable::tlb_flush_all();
+++        ArchPageTable::tlb_flush_asid(asid);
++ }
++ 
++ uint64_t asid_epoch() {
++diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
++index 2cf70ef79..007104e2b 100644
++--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
+++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
++@@ -211,6 +211,17 @@ inline void isb() {
++ inline void tlbi_vae1(uint64_t vaddr) {
++     asm volatile("tlbi vae1, %0" : : "r"(vaddr) : "memory");
++ }
+++/// @brief TLB invalidate by ASID (EL1, issue #352).  Drops every entry
+++///        tagged with @p asid (raw value in Xt[15:0]; 8-bit IDs always
+++///        fit).  Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
+++/// @param[in] asid Address-space ID to invalidate (0 invalidates nothing
+++///        specific; callers pass nonzero user IDs).
+++inline void tlbi_aside1(uint16_t asid) {
+++    asm volatile("dmb sy; tlbi aside1, %0; dmb sy; isb"
+++                 :
+++                 : "r"(static_cast<uint64_t>(asid))
+++                 : "memory");
+++}
++ /// @brief TLB invalidate all (EL1).
++ inline void tlbi_alle1() {
++     asm volatile("dmb sy; tlbi vmalle1; dmb sy; isb" : : : "memory");
++diff --git a/src/kernel/arch/aarch64/hal/page_table_impl.hpp b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
++index 4e1fca82c..012fbbdc6 100644
++--- a/src/kernel/arch/aarch64/hal/page_table_impl.hpp
+++++ b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
++@@ -58,14 +58,17 @@ inline void arch_page_table_tlb_flush_all() {
++     isb();
++ }
++ 
++-/// @brief Purge one context's non-global TLB entries (issue #184).
++-///        Fallback: this port allocates no ASIDs, so the required semantics
++-///        are provided via a full EL1 invalidate — a safe superset of a
++-///        single-context purge, mirroring the x86_64 CR3-reload fallback.
++-///        Local CPU only; cross-CPU invalidation is out of scope.
++-/// @param pcid Owning context id, ignored (0 = untagged/kernel).
++-inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
++-    arch_page_table_tlb_flush_all();
+++/// @brief Purge one context's non-global TLB entries (issue #352).
+++///        Real ASID purge now that the allocator is live (issue #184
+++///        fallback retained for ID 0).  Local CPU only; cross-CPU
+++///        invalidation is out of scope.
+++/// @param pcid Owning context id (0 = untagged/kernel → full flush).
+++inline void tlb_purge_context(uint16_t pcid) {
+++    if (pcid == 0) {
+++        arch_page_table_tlb_flush_all();
+++        return;
+++    }
+++    tlbi_aside1(pcid);
++ }
++ 
++ /// @brief AArch64 4-level page table manager (TTBR1_EL1 kernel space).
++@@ -89,6 +92,20 @@ class ArchPageTable {
++     static inline void tlb_flush_all() {
++         arch_page_table_tlb_flush_all();
++     }
+++    /// @brief Flush one context's TLB entries (issue #352).
+++    /// @param[in] id Address-space ID (0 → full flush, same as above).
+++    static inline void tlb_flush_asid(uint16_t id) {
+++        tlb_purge_context(id);
+++    }
+++    /// @brief Flush one VA in one context (issue #352).  Purges the
+++    ///        whole context (safe superset of VA-scoped invalidation;
+++    ///        revisit with a VA-scoped op if one proves available).
+++    /// @param[in] virt_addr Virtual address (recorded, context purged).
+++    /// @param[in] id Address-space ID (0 → full flush).
+++    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
+++        (void)virt_addr;
+++        tlb_purge_context(id);
+++    }
++ 
++     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
++     static constexpr uint64_t ENTRIES = 512;
++diff --git a/src/kernel/arch/riscv64/hal/asid.cpp b/src/kernel/arch/riscv64/hal/asid.cpp
++index 117655688..d74d419f1 100644
++--- a/src/kernel/arch/riscv64/hal/asid.cpp
+++++ b/src/kernel/arch/riscv64/hal/asid.cpp
++@@ -106,10 +106,10 @@ void asid_free(uint16_t asid) {
++     }
++     // Purge-before-free: the freed address space's entries tagged with
++     // this ASID survive in the TLB (tagged switches no longer flush).
++-    // A full local sfence.vma is the safe fallback until VA+ASID
++-    // targeted invalidation lands (step 4 of issue #352).
+++    // Targeted context purge (issue #352 step 2c-i); full fence was the
+++    // safe fallback before ASID-scoped ops existed.
++     if (g_supported)
++-        ArchPageTable::tlb_flush_all();
+++        ArchPageTable::tlb_flush_asid(asid);
++ }
++ 
++ uint64_t asid_epoch() {
++diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
++index 4a19e922c..882890e1b 100644
++--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
+++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
++@@ -168,6 +168,26 @@ inline void sfence_vma() {
++ inline void sfence_vma_va(uint64_t vaddr) {
++     asm volatile("sfence.vma %0" : : "r"(vaddr) : "memory");
++ }
+++/// @brief TLB flush for one address space (issue #352).
+++///        `sfence.vma x0, asid`: rs1==x0 selects ASID-only invalidation.
+++///        NOTE: scope selects on the rs1 REGISTER (x0), not on a zero
+++///        value — a value-zero word in any other register fences VA 0x0 only.
+++/// @param[in] asid Address-space ID to invalidate (nonzero user ID).
+++inline void sfence_vma_asid(uint16_t asid) {
+++    asm volatile("sfence.vma x0, %0"
+++                 :
+++                 : "r"(static_cast<uint64_t>(asid))
+++                 : "memory");
+++}
+++/// @brief TLB flush for one VA in one address space (issue #352).
+++/// @param[in] vaddr Virtual address to invalidate.
+++/// @param[in] asid Address-space ID to invalidate within.
+++inline void sfence_vma_va_asid(uint64_t vaddr, uint16_t asid) {
+++    asm volatile("sfence.vma %0, %1"
+++                 :
+++                 : "r"(vaddr), "r"(static_cast<uint64_t>(asid))
+++                 : "memory");
+++}
++ 
++ /// @brief Read the SATP CSR (supervisor address translation and protection).
++ /// @return Current SATP value.
++diff --git a/src/kernel/arch/riscv64/hal/page_table_impl.hpp b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
++index d2db0b445..ef1d1825e 100644
++--- a/src/kernel/arch/riscv64/hal/page_table_impl.hpp
+++++ b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
++@@ -66,14 +66,17 @@ inline void arch_page_table_tlb_flush_all() {
++     asm volatile("sfence.vma" : : : "memory");
++ }
++ 
++-/// @brief Purge one context's non-global TLB entries (issue #184).
++-///        Fallback: this port allocates no ASIDs, so the required semantics
++-///        are provided via a full fence — a safe superset of a
++-///        single-context purge, mirroring the x86_64 CR3-reload fallback.
++-///        Local CPU only; cross-CPU invalidation is out of scope.
++-/// @param pcid Owning address-space id, ignored (0 = untagged/kernel).
++-inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
++-    arch_page_table_tlb_flush_all();
+++/// @brief Purge one context's non-global TLB entries (issue #352).
+++///        Real ASID purge now that the allocator is live (issue #184
+++///        fallback retained for ID 0).  Local CPU only; cross-CPU
+++///        invalidation is out of scope.
+++/// @param pcid Owning address-space id (0 = untagged/kernel → full fence).
+++inline void tlb_purge_context(uint16_t pcid) {
+++    if (pcid == 0) {
+++        arch_page_table_tlb_flush_all();
+++        return;
+++    }
+++    sfence_vma_asid(pcid);
++ }
++ 
++ /// @brief Sv39 page table manager — wraps arch_page_table_* free functions
++@@ -96,6 +99,21 @@ class ArchPageTable {
++     static inline void tlb_flush_all() {
++         arch_page_table_tlb_flush_all();
++     }
+++    /// @brief Flush one context's TLB entries (issue #352).
+++    /// @param[in] id Address-space ID (0 → full fence, same as above).
+++    static inline void tlb_flush_asid(uint16_t id) {
+++        tlb_purge_context(id);
+++    }
+++    /// @brief Flush one VA in one context (issue #352).
+++    /// @param[in] virt_addr Virtual address to invalidate.
+++    /// @param[in] id Address-space ID (0 → VA-only fence, all ASIDs).
+++    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
+++        if (id == 0) {
+++            arch_page_table_tlb_flush(virt_addr);
+++            return;
+++        }
+++        sfence_vma_va_asid(virt_addr, id);
+++    }
++ 
++     /// @brief Page size in bytes (4 KB).
++     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
++diff --git a/test-history.txt b/test-history.txt
++index de032d8b3..40a4caba2 100644
++--- a/test-history.txt
+++++ b/test-history.txt
++@@ -4185,3 +4185,17 @@ SUMMARY: total=26 ok=25 fail=1
++ 2026-10-20 08:35:00 timing_core PASSED: 19 FAILED: 0 TIME: 1848ms STATUS: #352-2b-x64-gate
++ 2026-10-20 08:35:00 hal_timer PASSED: 5 FAILED: 0 TIME: 353ms STATUS: #352-2b-x64-gate
++ 2026-10-20 08:35:00 selftest PASSED: 148 FAILED: 0 TIME: 12454ms STATUS: #352-2b-x64-gate
+++2026-10-20 09:00:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 339ms STATUS: #352-2ci-rv64-gate
+++2026-10-20 09:00:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 448ms STATUS: #352-2ci-rv64-gate
+++2026-10-20 09:00:00 timing_core PASSED: 19 FAILED: 0 TIME: 966ms STATUS: #352-2ci-rv64-gate
+++2026-10-20 09:00:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 935ms STATUS: #352-2ci-rv64-gate-known-5QE+#387
+++2026-10-20 09:00:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 334ms STATUS: #352-2ci-a64-gate
+++2026-10-20 09:00:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 418ms STATUS: #352-2ci-a64-gate
+++2026-10-20 09:00:00 timing_core PASSED: 19 FAILED: 0 TIME: 913ms STATUS: #352-2ci-a64-gate
+++2026-10-20 09:00:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1058ms STATUS: #352-2ci-a64-gate
+++2026-10-20 09:30:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 341ms STATUS: #352-2ci2-rv64-S1fix-gate
+++2026-10-20 09:30:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 444ms STATUS: #352-2ci2-rv64-S1fix-gate
+++2026-10-20 09:30:00 timing_core PASSED: 19 FAILED: 0 TIME: 972ms STATUS: #352-2ci2-rv64-S1fix-gate
+++2026-10-20 09:30:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 331ms STATUS: #352-2ci2-a64-S1fix-gate
+++2026-10-20 09:30:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 419ms STATUS: #352-2ci2-a64-S1fix-gate
+++2026-10-20 09:30:00 timing_core PASSED: 19 FAILED: 0 TIME: 970ms STATUS: #352-2ci2-a64-S1fix-gate
+diff --git a/audits/rejected_patch-352-2ci.diff b/audits/rejected_patch-352-2ci.diff
+new file mode 100644
+index 000000000..b6874f56d
+--- /dev/null
++++ b/audits/rejected_patch-352-2ci.diff
+@@ -0,0 +1,17 @@
++diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
++--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
+++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
++@@ -171,9 +171,11 @@
++ /// @brief TLB flush for one address space (issue #352).
++ ///        `sfence.vma x0, asid`: rs1==x0 selects ASID-only invalidation.
+++///        NOTE: scope selects on the rs1 REGISTER (x0), not on a zero
+++///        value — a value-zero word in any other register fences VA 0x0 only.
++ /// @param[in] asid Address-space ID to invalidate (nonzero user ID).
++ inline void sfence_vma_asid(uint16_t asid) {
++-    asm volatile("sfence.vma %0, %1"
+++    asm volatile("sfence.vma x0, %0"
++                  :
++-                 : "r"(0ULL), "r"(static_cast<uint64_t>(asid))
+++                 : "r"(static_cast<uint64_t>(asid))
++                  : "memory");
++ }
+diff --git a/audits/report-2026-10-20T12-05-20Z.md b/audits/report-2026-10-20T12-05-20Z.md
+new file mode 100644
+index 000000000..1f5ba5927
+--- /dev/null
++++ b/audits/report-2026-10-20T12-05-20Z.md
+@@ -0,0 +1,23 @@
++# AUDIT REPORT 2026-10-20T12-05-20Z
++PATCH: audits/pending_patch-352-2ci.diff
++FILES: prompts/STATE.md, src/kernel/arch/aarch64/hal/asid.cpp, src/kernel/arch/aarch64/hal/io_impl.hpp, src/kernel/arch/aarch64/hal/page_table_impl.hpp, src/kernel/arch/riscv64/hal/asid.cpp, src/kernel/arch/riscv64/hal/io_impl.hpp, src/kernel/arch/riscv64/hal/page_table_impl.hpp, test-history.txt
++
++## FINDINGS
++- [S1] src/kernel/arch/riscv64/hal/io_impl.hpp:175 — memory safety / ISA operand encoding (sfence.vma rs1 scope)
++  WHY: SFENCE.VMA all-VA scope selects on the rs1 REGISTER being x0, not on a zero value, so "r"(0ULL) materializes zero in a nonzero register and fences only VA 0x0 for the ASID — purge-before-free then leaves the freed context's other entries stale for the next holder of the recycled ASID (QEMU flushes coarsely, which is why the rv64 gates stayed green).
++- [S3] src/kernel/arch/aarch64/hal/page_table_impl.hpp:92 — documentation accuracy (tlb_flush_va_asid rationale)
++  WHY: The comment claims EL1 has no VA+ASID-combined invalidate, but TLBI VAE1 with an ASID-carrying Xt is exactly that op — the chosen context-purge superset is safe, only the rationale needs correction.
++
++## CHECK DISPOSITIONS
++1. Dynamic allocations: CLEAN — patch adds inline asm + delegates only; no new/delete/malloc.
++2. Concurrency boundaries: CLEAN — asid_free keeps its IrqGuard/live_clear shape and g_supported guard; purge runs in task context exactly where the full flush ran; no new ISR paths.
++3. Assertion masking: CLEAN — no test assertions touched in scope (test-history.txt/STATE.md out of scope).
++4. Memory safety: S1 (riscv sfence_vma_asid, above); aarch64 tlbi aside1 raw-ASID operand convention correct per Linux/Xen precedent; id-0 fallbacks preserved on both arches; riscv va_asid two-register form correct.
++5. Critical sections: CLEAN — targeted purge-before-free covers exactly the freed ID's tagged entries; untagged stragglers still flushed at map/unmap sites (vmm.cpp per-VA+full, tlb_shootdown.cpp per-VA); exhaustion path retains the full flush (asid.cpp:87/89 both arches, verified in tree).
++6. Preprocessor/conditional symmetry: CLEAN — riscv-only + aarch64-only hunks, zero x86 lines, no asymmetric ifdef behavior.
++7. Retrieval artifacts: SATISFIED per brief (step-2c-i Rule-A post + approval + P0 baselines on issue #352 thread).
++
++## PATCH
++`audits/rejected_patch-352-2ci.diff` was written (git apply --check green) and constrains riscv sfence_vma_asid to the explicit `sfence.vma x0, asid` form so the whole ASID is purged.
++
++DECISION: REJECTED
+diff --git a/prompts/STATE.md b/prompts/STATE.md
+index b508ca668..e751c6d24 100644
+--- a/prompts/STATE.md
++++ b/prompts/STATE.md
+@@ -5,6 +5,7 @@
+ 
+ ## Active Summary
+ ### Objective
++- **ACTIVE (2026-10-20):** #352 MMU/VMM/TLB parity — step 2b LANDED (`625e4edf1`, audit APPROVED): context_id HAL + ASID allocators + task lifecycle + tagged publish + SATP-verbatim; 3 test-idiom ports (memory_vmm + page_tables green riscv); GDB ASIDs 1-4 live. Step-2a root edit CANCELLED (shared-L0 disproof). Filed #388 (riscv init_stack direction). Next: step 2c (TLB ops, splits, deep-copy flags, shootdown; must define/remove current_kernel_pml4 per audit S3).
+ - **DONE (2026-10-19):** #385 HHDM-rot + exec_slots hang CLOSED (audited APPROVED, pending QE + #387): riscv trap epilogue now validates deferred arms (gen-check + validate_pending_switch + abort, x86 mirror) — stale arm to recycled memory no longer resumes foreign context with stale current (U-fault killed init → hang). Gates: arch_riscv64 24/30 + no hang ×3 (5 fails = QE fixture/PLIC updates, 1 = #387 fork follow-up), x86 elf_loader/selftest green, 3-arch link green. H1 (image-range creep) + tests 6/7 (M-vs-S skew, OpenSBI M-threshold=7 boot state) convicted as QE test updates. FEEDBACK entry in LEARNINGS.
+ - **DONE (2026-10-19):** #349 IRQ + timer parity CLOSED (audited APPROVED): GICv2 full init (PIDR2 version, 8 enable banks, EOI ownership, spurious no-EOI, storm limiter) + CVAL/SBI absolute deadlines with coarse-tick units + CTL-gated remaining + PLIC S-context + IDT 64→256 + docs §6 + gotcha #20. Gates: aarch64 6 classes green, riscv64 5+1 (known QE test-side), x86 all green + selftest 148/148, x86_64 bit-identical. arch_riscv64 HHDM rot filed as #385 (out of scope). FEEDBACK entry in LEARNINGS.
+ - **DONE (2026-10-19):** #384 per-arch wall-time truth CLOSED (docs-only, no kernel stubs found): P0' survey (Timer HAL complete x3, riscv64 remaining_ns hard-0 is HW constraint) + TCG smoke (x86 hrt 6/6 + timing 19/19; aarch64/riscv64 hrt 5/6 ungated-bound fails +28%/+27.6%; timing panics ELR/sepc=0 → #356) + P1' bare-metal-only policy + QE missing-tests handoff. Real sil3_auditor re-audit APPROVED zero findings (`audits/report-2026-10-18T22-05-51Z.md`). FEEDBACK entry in LEARNINGS.
+diff --git a/src/kernel/arch/aarch64/hal/asid.cpp b/src/kernel/arch/aarch64/hal/asid.cpp
+index 2b153c7cf..457f9b81b 100644
+--- a/src/kernel/arch/aarch64/hal/asid.cpp
++++ b/src/kernel/arch/aarch64/hal/asid.cpp
+@@ -104,10 +104,10 @@ void asid_free(uint16_t asid) {
+     }
+     // Purge-before-free: the freed address space's entries tagged with
+     // this ASID survive in the TLB (tagged switches no longer flush).
+-    // A same-root full flush is the safe fallback until VA+ASID targeted
+-    // invalidation lands (step 4 of issue #352).
++    // Targeted context purge (issue #352 step 2c-i); full flush was the
++    // safe fallback before targeted ops existed.
+     if (g_supported)
+-        ArchPageTable::tlb_flush_all();
++        ArchPageTable::tlb_flush_asid(asid);
+ }
+ 
+ uint64_t asid_epoch() {
+diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+index 2cf70ef79..07c9dc84e 100644
+--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+@@ -211,6 +211,18 @@ inline void isb() {
+ inline void tlbi_vae1(uint64_t vaddr) {
+     asm volatile("tlbi vae1, %0" : : "r"(vaddr) : "memory");
+ }
++/// @brief TLB invalidate by ASID (EL1, issue #352).  Drops every entry
++///        tagged with @p asid.  ASID occupies Xt[63:48] (DDI0601 TLBI
++///        ASIDE1 fieldset; low 48 bits RES0), so the raw ID is shifted.
++///        Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
++/// @param[in] asid Address-space ID to invalidate (0 invalidates nothing
++///        specific; callers pass nonzero user IDs).
++inline void tlbi_aside1(uint16_t asid) {
++    asm volatile("dmb sy; tlbi aside1, %0; dmb sy; isb"
++                 :
++                 : "r"(static_cast<uint64_t>(asid) << 48)
++                 : "memory");
++}
+ /// @brief TLB invalidate all (EL1).
+ inline void tlbi_alle1() {
+     asm volatile("dmb sy; tlbi vmalle1; dmb sy; isb" : : : "memory");
+diff --git a/src/kernel/arch/aarch64/hal/page_table_impl.hpp b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
+index 4e1fca82c..012fbbdc6 100644
+--- a/src/kernel/arch/aarch64/hal/page_table_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/page_table_impl.hpp
+@@ -58,14 +58,17 @@ inline void arch_page_table_tlb_flush_all() {
+     isb();
+ }
+ 
+-/// @brief Purge one context's non-global TLB entries (issue #184).
+-///        Fallback: this port allocates no ASIDs, so the required semantics
+-///        are provided via a full EL1 invalidate — a safe superset of a
+-///        single-context purge, mirroring the x86_64 CR3-reload fallback.
+-///        Local CPU only; cross-CPU invalidation is out of scope.
+-/// @param pcid Owning context id, ignored (0 = untagged/kernel).
+-inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
+-    arch_page_table_tlb_flush_all();
++/// @brief Purge one context's non-global TLB entries (issue #352).
++///        Real ASID purge now that the allocator is live (issue #184
++///        fallback retained for ID 0).  Local CPU only; cross-CPU
++///        invalidation is out of scope.
++/// @param pcid Owning context id (0 = untagged/kernel → full flush).
++inline void tlb_purge_context(uint16_t pcid) {
++    if (pcid == 0) {
++        arch_page_table_tlb_flush_all();
++        return;
++    }
++    tlbi_aside1(pcid);
+ }
+ 
+ /// @brief AArch64 4-level page table manager (TTBR1_EL1 kernel space).
+@@ -89,6 +92,20 @@ class ArchPageTable {
+     static inline void tlb_flush_all() {
+         arch_page_table_tlb_flush_all();
+     }
++    /// @brief Flush one context's TLB entries (issue #352).
++    /// @param[in] id Address-space ID (0 → full flush, same as above).
++    static inline void tlb_flush_asid(uint16_t id) {
++        tlb_purge_context(id);
++    }
++    /// @brief Flush one VA in one context (issue #352).  Purges the
++    ///        whole context (safe superset of VA-scoped invalidation;
++    ///        revisit with a VA-scoped op if one proves available).
++    /// @param[in] virt_addr Virtual address (recorded, context purged).
++    /// @param[in] id Address-space ID (0 → full flush).
++    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
++        (void)virt_addr;
++        tlb_purge_context(id);
++    }
+ 
+     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
+     static constexpr uint64_t ENTRIES = 512;
+diff --git a/src/kernel/arch/riscv64/hal/asid.cpp b/src/kernel/arch/riscv64/hal/asid.cpp
+index 117655688..d74d419f1 100644
+--- a/src/kernel/arch/riscv64/hal/asid.cpp
++++ b/src/kernel/arch/riscv64/hal/asid.cpp
+@@ -106,10 +106,10 @@ void asid_free(uint16_t asid) {
+     }
+     // Purge-before-free: the freed address space's entries tagged with
+     // this ASID survive in the TLB (tagged switches no longer flush).
+-    // A full local sfence.vma is the safe fallback until VA+ASID
+-    // targeted invalidation lands (step 4 of issue #352).
++    // Targeted context purge (issue #352 step 2c-i); full fence was the
++    // safe fallback before ASID-scoped ops existed.
+     if (g_supported)
+-        ArchPageTable::tlb_flush_all();
++        ArchPageTable::tlb_flush_asid(asid);
+ }
+ 
+ uint64_t asid_epoch() {
+diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+index 4a19e922c..882890e1b 100644
+--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+@@ -168,6 +168,26 @@ inline void sfence_vma() {
+ inline void sfence_vma_va(uint64_t vaddr) {
+     asm volatile("sfence.vma %0" : : "r"(vaddr) : "memory");
+ }
++/// @brief TLB flush for one address space (issue #352).
++///        `sfence.vma x0, asid`: rs1==x0 selects ASID-only invalidation.
++///        NOTE: scope selects on the rs1 REGISTER (x0), not on a zero
++///        value — a value-zero word in any other register fences VA 0x0 only.
++/// @param[in] asid Address-space ID to invalidate (nonzero user ID).
++inline void sfence_vma_asid(uint16_t asid) {
++    asm volatile("sfence.vma x0, %0"
++                 :
++                 : "r"(static_cast<uint64_t>(asid))
++                 : "memory");
++}
++/// @brief TLB flush for one VA in one address space (issue #352).
++/// @param[in] vaddr Virtual address to invalidate.
++/// @param[in] asid Address-space ID to invalidate within.
++inline void sfence_vma_va_asid(uint64_t vaddr, uint16_t asid) {
++    asm volatile("sfence.vma %0, %1"
++                 :
++                 : "r"(vaddr), "r"(static_cast<uint64_t>(asid))
++                 : "memory");
++}
+ 
+ /// @brief Read the SATP CSR (supervisor address translation and protection).
+ /// @return Current SATP value.
+diff --git a/src/kernel/arch/riscv64/hal/page_table_impl.hpp b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
+index d2db0b445..ef1d1825e 100644
+--- a/src/kernel/arch/riscv64/hal/page_table_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/page_table_impl.hpp
+@@ -66,14 +66,17 @@ inline void arch_page_table_tlb_flush_all() {
+     asm volatile("sfence.vma" : : : "memory");
+ }
+ 
+-/// @brief Purge one context's non-global TLB entries (issue #184).
+-///        Fallback: this port allocates no ASIDs, so the required semantics
+-///        are provided via a full fence — a safe superset of a
+-///        single-context purge, mirroring the x86_64 CR3-reload fallback.
+-///        Local CPU only; cross-CPU invalidation is out of scope.
+-/// @param pcid Owning address-space id, ignored (0 = untagged/kernel).
+-inline void tlb_purge_context([[maybe_unused]] uint16_t pcid) {
+-    arch_page_table_tlb_flush_all();
++/// @brief Purge one context's non-global TLB entries (issue #352).
++///        Real ASID purge now that the allocator is live (issue #184
++///        fallback retained for ID 0).  Local CPU only; cross-CPU
++///        invalidation is out of scope.
++/// @param pcid Owning address-space id (0 = untagged/kernel → full fence).
++inline void tlb_purge_context(uint16_t pcid) {
++    if (pcid == 0) {
++        arch_page_table_tlb_flush_all();
++        return;
++    }
++    sfence_vma_asid(pcid);
+ }
+ 
+ /// @brief Sv39 page table manager — wraps arch_page_table_* free functions
+@@ -96,6 +99,21 @@ class ArchPageTable {
+     static inline void tlb_flush_all() {
+         arch_page_table_tlb_flush_all();
+     }
++    /// @brief Flush one context's TLB entries (issue #352).
++    /// @param[in] id Address-space ID (0 → full fence, same as above).
++    static inline void tlb_flush_asid(uint16_t id) {
++        tlb_purge_context(id);
++    }
++    /// @brief Flush one VA in one context (issue #352).
++    /// @param[in] virt_addr Virtual address to invalidate.
++    /// @param[in] id Address-space ID (0 → VA-only fence, all ASIDs).
++    static inline void tlb_flush_va_asid(uint64_t virt_addr, uint16_t id) {
++        if (id == 0) {
++            arch_page_table_tlb_flush(virt_addr);
++            return;
++        }
++        sfence_vma_va_asid(virt_addr, id);
++    }
+ 
+     /// @brief Page size in bytes (4 KB).
+     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
+diff --git a/test-history.txt b/test-history.txt
+index de032d8b3..95e836a51 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4185,3 +4185,23 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 08:35:00 timing_core PASSED: 19 FAILED: 0 TIME: 1848ms STATUS: #352-2b-x64-gate
+ 2026-10-20 08:35:00 hal_timer PASSED: 5 FAILED: 0 TIME: 353ms STATUS: #352-2b-x64-gate
+ 2026-10-20 08:35:00 selftest PASSED: 148 FAILED: 0 TIME: 12454ms STATUS: #352-2b-x64-gate
++2026-10-20 09:00:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 339ms STATUS: #352-2ci-rv64-gate
++2026-10-20 09:00:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 448ms STATUS: #352-2ci-rv64-gate
++2026-10-20 09:00:00 timing_core PASSED: 19 FAILED: 0 TIME: 966ms STATUS: #352-2ci-rv64-gate
++2026-10-20 09:00:00 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 935ms STATUS: #352-2ci-rv64-gate-known-5QE+#387
++2026-10-20 09:00:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 334ms STATUS: #352-2ci-a64-gate
++2026-10-20 09:00:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 418ms STATUS: #352-2ci-a64-gate
++2026-10-20 09:00:00 timing_core PASSED: 19 FAILED: 0 TIME: 913ms STATUS: #352-2ci-a64-gate
++2026-10-20 09:00:00 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1058ms STATUS: #352-2ci-a64-gate
++2026-10-20 09:30:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 341ms STATUS: #352-2ci2-rv64-S1fix-gate
++2026-10-20 09:30:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 444ms STATUS: #352-2ci2-rv64-S1fix-gate
++2026-10-20 09:30:00 timing_core PASSED: 19 FAILED: 0 TIME: 972ms STATUS: #352-2ci2-rv64-S1fix-gate
++2026-10-20 09:30:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 331ms STATUS: #352-2ci2-a64-S1fix-gate
++2026-10-20 09:30:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 419ms STATUS: #352-2ci2-a64-S1fix-gate
++2026-10-20 09:30:00 timing_core PASSED: 19 FAILED: 0 TIME: 970ms STATUS: #352-2ci2-a64-S1fix-gate
++2026-10-20 09:45:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 341ms STATUS: #352-2ci3-riscv64-S1fix2-gate
++2026-10-20 09:45:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 440ms STATUS: #352-2ci3-riscv64-S1fix2-gate
++2026-10-20 09:45:00 timing_core PASSED: 19 FAILED: 0 TIME: 1031ms STATUS: #352-2ci3-riscv64-S1fix2-gate
++2026-10-20 09:45:00 memory_vmm PASSED: 11 FAILED: 0 TIME: 331ms STATUS: #352-2ci3-aarch64-S1fix2-gate
++2026-10-20 09:45:00 memory_page_tables PASSED: 13 FAILED: 0 TIME: 415ms STATUS: #352-2ci3-aarch64-S1fix2-gate
++2026-10-20 09:45:00 timing_core PASSED: 19 FAILED: 0 TIME: 976ms STATUS: #352-2ci3-aarch64-S1fix2-gate

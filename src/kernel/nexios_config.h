@@ -485,6 +485,23 @@
 #endif
 
 // ---------------------------------------------------------------------------
+// Emulation vs. Silicon Behaviour
+// ---------------------------------------------------------------------------
+/// Barrier strength for the aarch64 TLB / address-space paths
+/// (hal/io_impl.hpp: tlbi_aside1, tlbi_alle1, write_cr3).
+///   1 = QEMU/TCG-safe: emit `dmb sy` (default; the only path every QEMU
+///       gate exercises).
+///   0 = hardware: emit `dsb sy` (architecturally required for TLB
+///       maintenance ordered against page-table walks).
+/// Only aarch64 consumes this; x86_64 has no substitution and riscv64
+/// already emits hardware-correct fence/sfence.vma semantics.
+/// Silicon proof for the 0 build is tracked in issue #397 (split from
+/// #309) — do NOT flip the default before that evidence lands.
+#ifndef CONFIG_TCG_BARRIERS
+#define CONFIG_TCG_BARRIERS 1
+#endif
+
+// ---------------------------------------------------------------------------
 // HRT monotonic clock (issue #16, v0.4.7 "Enhance HRT")
 // ---------------------------------------------------------------------------
 /// 64-bit nanosecond width for ns_monotonic() (documents wrap period).
@@ -890,9 +907,10 @@
 #define CONFIG_TICK_HOOK 0
 #endif
 
-/// If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock*).
-/// v0.4.0 MP-6.2: enabled — the hook is invoked on a kernel-stack guard-page
-/// #PF before the fatal panic (belt-and-braces; tests override it strongly).
+/// If non-zero, declares weak symbol stack_overflow_hook(TaskControlBlock&,
+/// FirstChanceFrame) returning bool (issue #308). v0.4.0 MP-6.2: enabled —
+/// the hook is invoked on a kernel-stack guard-page #PF before the raw-dump
+/// + halt (belt-and-braces; tests override it strongly).
 #ifndef CONFIG_STACK_OVERFLOW_HOOK
 #define CONFIG_STACK_OVERFLOW_HOOK 1
 #endif

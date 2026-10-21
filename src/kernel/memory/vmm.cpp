@@ -542,6 +542,25 @@ uint64_t VMM::current_pml4() {
     return arch::read_cr3();
 }
 
+// Weak default: single-CPU runs need no cross-CPU invalidation.  SMP
+// ports override this symbol (tracked separately from #386).
+__attribute__((weak)) void VMM::smp_tlb_shootdown_hook(uint64_t va,
+                                                       uint16_t context_id,
+                                                       bool all) {
+    (void)va;
+    (void)context_id;
+    (void)all;
+}
+
+void VMM::tlb_shootdown(uint64_t va, uint16_t context_id, bool all) {
+    if (all) {
+        arch::ArchPageTable::tlb_flush_all();
+    } else {
+        arch::ArchPageTable::tlb_flush_va_asid(va, context_id);
+    }
+    smp_tlb_shootdown_hook(va, context_id, all);
+}
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 /// @brief Map a page into a specific (non-kernel) PML4 page table.
 /// @param virt_addr Page-aligned virtual address.

@@ -354,6 +354,8 @@ def validate(cfg: dict[str, int]):
     if threaded_irqs:
         check_ge("CONFIG_MAX_THREADED_IRQS",
                  cfg.get("CONFIG_MAX_THREADED_IRQS", 16), 1)
+    # Issue #309b: aarch64 barrier-strength selector (1 = TCG dmb, 0 = HW dsb).
+    check_bool("CONFIG_TCG_BARRIERS", cfg.get("CONFIG_TCG_BARRIERS", 1))
 
     # ═══════════════════════════════════════════════════════════════════════
     # 9. Hooks

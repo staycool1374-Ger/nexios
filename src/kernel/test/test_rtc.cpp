@@ -19,7 +19,8 @@
 /// @file test_rtc.cpp
 /// @brief RTC (Real-Time Clock) driver tests.
 
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/arch/rtc.hpp>
@@ -46,6 +47,9 @@ JARVIS_TEST(rtc_read_seconds, "PRE: iocd | POST: none") {
 // Input: bcd_to_bin on 0x00, 0x09, 0x10, 0x15, 0x23, 0x59.
 // Expect: Correct binary values (0x00->0, 0x10->10, 0x59->0x3B, etc.).
 // Depends: arch::RTC
+// NOTE (issue #355 H2): bcd_to_bin exists only on the x86 RTC HAL —
+// non-x86 arches have no BCD conversion API.
+#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(rtc_bcd_conversion, "PRE: iocd | POST: none") {
     JARVIS_ASSERT_EQ(0x00, arch::RTC::bcd_to_bin(0x00));
     JARVIS_ASSERT_EQ(0x09, arch::RTC::bcd_to_bin(0x09));
@@ -55,6 +59,7 @@ JARVIS_TEST(rtc_bcd_conversion, "PRE: iocd | POST: none") {
     JARVIS_ASSERT_EQ(0x3B, arch::RTC::bcd_to_bin(0x59));
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_ARCH_X86_64 (bcd_to_bin is x86-HAL-only)
 
 // Runmode: kernel
 // Testidea: Register all RTC tests with the test framework.
@@ -62,6 +67,8 @@ JARVIS_TEST(rtc_bcd_conversion, "PRE: iocd | POST: none") {
 void register_rtc_tests() {
     Logger::info("Registering RTC tests");
     JARVIS_REGISTER_TEST(rtc_read_seconds);
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(rtc_bcd_conversion);
+#endif
 }
 #endif

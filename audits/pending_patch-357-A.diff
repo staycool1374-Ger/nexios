@@ -1,0 +1,294 @@
+diff --git a/Makefile b/Makefile
+index 83d1a70e2..91a46850e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -123,6 +123,7 @@ CXXFLAGS_COMMON := -std=c++20 -ffreestanding -fno-exceptions -fno-rtti \
+                    -Wall -Wextra -Werror \
+                    -I src -I src/lib -pipe -MMD -MP \
+                    -DCONFIG_ARCH_$(ARCH_UPPER) \
++                   -DNEXIOS_ARCH_NAME=$(ARCH) \
+                    -DPICOLIBC_VERSION_NUM=$(PICOLIBC_VERSION) \
+                    -ffunction-sections -fdata-sections \
+                    $(CONFIG_DEFS)
+@@ -694,13 +695,13 @@ ifneq ($(NO_LTO),1)
+ # link via raw ld/gcc without the LTO plugin, so they must stay non-LTO.
+ # The kernel link uses the compiler driver (see mk/rules.mk) to load the
+ # LTO plugin; LDFLAGS carries -flto for that.
+-debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage -flto
++debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage -flto -DBUILD_TYPE=debug
+ debug: CCFLAGS  += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer
+ debug: LDFLAGS  += -flto
+ else
+ # GDB flows (debug-test/debug-shell/rr-record) build without LTO so function
+ # boundaries survive for clean single-stepping and stack unwinding.
+-debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage
++debug: CXXFLAGS += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer -fstack-usage -DBUILD_TYPE=debug
+ debug: CCFLAGS  += -g -Og -DCONFIG_DEBUG -fno-omit-frame-pointer
+ endif
+ debug: $(TEST_REGISTRY_GEN)
+@@ -740,7 +741,7 @@ endif
+ ifeq ($(_DISPATCH_IN_PROGRESS),)
+ ANALYZER_NOWARN := analyzer-null-argument analyzer-possible-null-argument analyzer-possible-null-dereference analyzer-use-of-uninitialized-value analyzer-infinite-loop analyzer-malloc-leak analyzer-undefined-behavior-ptrdiff analyzer-out-of-bounds
+ cc-has-warning = $(shell printf '\n' | $(CXX) -x c++ -fsyntax-only -Wno-error=$(1) -o /dev/null - >/dev/null 2>&1 && echo '-Wno-error=$(1)')
+-RELEASE_CXXFLAGS := -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w)))
++RELEASE_CXXFLAGS := -g -O2 -fanalyzer $(foreach w,$(ANALYZER_NOWARN),$(call cc-has-warning,$(w))) -DBUILD_TYPE=release
+ release: CXXFLAGS += $(RELEASE_CXXFLAGS)
+ release: $(TEST_REGISTRY_GEN)
+ release:
+@@ -810,7 +811,7 @@ profiling: CXX := x86_64-elf-g++
+ profiling: CXXFLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
+                        -Wno-type-limits -Wno-unused-but-set-variable \
+                        -Wno-class-memaccess \
+-                       -finstrument-functions -DCONFIG_PROFILING -DCONFIG_DEBUG
++                       -finstrument-functions -DCONFIG_PROFILING -DCONFIG_DEBUG -DBUILD_TYPE=debug
+ profiling: LDFLAGS += -L $(GCOV_LIB_DIR)
+ profiling: clean $(OBJ) $(INITRD_OBJ) $(FAT32_OBJ) linker/linker_$(ARCH).ld iso/boot
+ 	@printf '  %-7s %s\n' 'LD' 'kernel.elf (profiling)'
+@@ -892,7 +893,7 @@ COVERAGE_EXCLUDES  := src/kernel/gcov/,gcov_handler.cpp
+ # Flags shared by both phases.
+ COVERAGE_COMMON_FLAGS := $(filter-out -target x86_64-elf,$(CXXFLAGS)) \
+                       -g -Og -fno-inline -fno-inline-functions \
+-                      -fno-omit-frame-pointer -DCONFIG_DEBUG \
++                      -fno-omit-frame-pointer -DCONFIG_DEBUG -DBUILD_TYPE=debug \
+                       -Wno-type-limits -Wno-unused-but-set-variable \
+                       -Wno-class-memaccess
+ 
+diff --git a/src/kernel/build_info.hpp b/src/kernel/build_info.hpp
+new file mode 100644
+index 000000000..ce3bdd89e
+--- /dev/null
++++ b/src/kernel/build_info.hpp
+@@ -0,0 +1,89 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file build_info.hpp
++/// @brief Compile-time build identity (issue #357): architecture, build
++///        type, debug flag, pointer width, and framebuffer backend.
++///        Values arrive as bare preprocessor tokens from the Makefile
++///        (`-DNEXIOS_ARCH_NAME=$(ARCH)`, `-DBUILD_TYPE=debug|release` —
++///        never quoted, per the #244 rule) and are stringified here.
++///        Constexpr-only: no runtime state, no thread interaction.
++
++#include <types.hpp>
++
++#ifndef NEXIOS_ARCH_NAME
++#define NEXIOS_ARCH_NAME unknown
++#endif
++#ifndef BUILD_TYPE
++#define BUILD_TYPE unknown
++#endif
++
++#define NEXIOS_BUILD_STR_INNER(x) #x
++#define NEXIOS_BUILD_STR(x) NEXIOS_BUILD_STR_INNER(x)
++
++namespace kernel::build_info {
++
++/// @brief Bounded string equality (16 chars — arch/type names are short).
++constexpr bool streq(const char *left, const char *right) {
++    for (int idx = 0; idx < 16; ++idx) {
++        if (left[idx] != right[idx])
++            return false;
++        if (left[idx] == '\0')
++            return true;
++    }
++    return left[16] == '\0' && right[16] == '\0';
++}
++
++inline constexpr const char *arch_name = NEXIOS_BUILD_STR(NEXIOS_ARCH_NAME);
++inline constexpr const char *build_type = NEXIOS_BUILD_STR(BUILD_TYPE);
++
++#if defined(CONFIG_DEBUG)
++inline constexpr bool debug_build = true;
++#else
++inline constexpr bool debug_build = false;
++#endif
++
++inline constexpr unsigned bits = sizeof(void *) * 8;
++
++#if defined(CONFIG_ARCH_X86_64)
++inline constexpr const char *fb_backend = "multiboot2";
++inline constexpr bool fb_compiled_in = true;
++#else
++inline constexpr const char *fb_backend = "none";
++inline constexpr bool fb_compiled_in = false;
++#endif
++
++static_assert(bits == 64);
++
++#if defined(CONFIG_ARCH_X86_64)
++static_assert(streq(arch_name, "x86_64"));
++#elif defined(CONFIG_ARCH_AARCH64)
++static_assert(streq(arch_name, "aarch64"));
++#elif defined(CONFIG_ARCH_RISCV64)
++static_assert(streq(arch_name, "riscv64"));
++#endif
++
++#if defined(CONFIG_DEBUG)
++static_assert(streq(build_type, "debug"));
++#else
++static_assert(streq(build_type, "release"));
++#endif
++
++} // namespace kernel::build_info
+diff --git a/src/kernel/log/dmesg_catalog.hpp b/src/kernel/log/dmesg_catalog.hpp
+index 91ab009ea..3da3a0c82 100644
+--- a/src/kernel/log/dmesg_catalog.hpp
++++ b/src/kernel/log/dmesg_catalog.hpp
+@@ -158,6 +158,8 @@ constexpr DmesgRecord kDmesgCatalog_DRIVER[] = {
+      "Driver using fallback configuration"},
+     {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 10, LogSeverity::WARN,
+      "Driver scan truncated: table full"},
++    {ErrorSubsystem::DRIVER, kDmesgBase_DRIVER + 11, LogSeverity::WARN,
++     "Framebuffer backend unavailable (documented gap)"},
+ };
+ 
+ /// @brief Init records (canonical base kDmesgBase_INIT): init-rc, fstab,
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index 73a6c1fa7..ab7153b12 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -19,6 +19,7 @@
+ #include <services/shell.hpp>
+ #include <services/terminal/terminal.hpp>
+ #include <services/terminal/framebuffer.hpp>
++#include <kernel/build_info.hpp>
+ #include <lib/fmt/term_fmt.hpp>
+ #include <services/program.hpp>
+ #include <kernel/task/scheduler.hpp>
+@@ -1808,6 +1809,14 @@ void Shell::cmd_version(int, const char**) {
+     Terminal::write(kernel::Version::build_date());
+     Terminal::write(" ");
+     Terminal::write(kernel::Version::build_time());
++    Terminal::write("\nArch:   ");
++    Terminal::write(kernel::build_info::arch_name);
++    Terminal::write(" (");
++    print_uint(kernel::build_info::bits);
++    Terminal::write("-bit, fb=");
++    Terminal::write(kernel::build_info::fb_backend);
++    Terminal::write(")\nType:   ");
++    Terminal::write(kernel::build_info::build_type);
+     Terminal::write("\n");
+ }
+ 
+diff --git a/src/services/terminal/framebuffer.cpp b/src/services/terminal/framebuffer.cpp
+index d3fa505b3..7fc0c2e0f 100644
+--- a/src/services/terminal/framebuffer.cpp
++++ b/src/services/terminal/framebuffer.cpp
+@@ -21,8 +21,11 @@
+ #if defined(CONFIG_ARCH_X86_64)
+ #include <kernel/multiboot2.hpp>
+ #endif
++#include <kernel/build_info.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
++#include <kernel/log/dmesg.hpp>
++#include <logger.hpp>
+ #include <assert.hpp>
+ #include <constants.hpp>
+ 
+@@ -30,15 +33,39 @@ namespace service {
+ 
+ FramebufferInfo Framebuffer::info_ = {};
+ bool Framebuffer::initialized_ = false;
++#if !defined(CONFIG_ARCH_X86_64)
++// One-shot gap line (issue #357): boot path only, pre-scheduler.
++static bool gap_logged = false;
++#endif
++
++const char *Framebuffer::backend_name() {
++    return kernel::build_info::fb_backend;
++}
+ 
+ bool Framebuffer::init() {
+ #if defined(CONFIG_ARCH_X86_64)
+     uint64_t tag_addr = mb2_find_tag(8);
+-    if (!tag_addr) return false;
++    if (!tag_addr) {
++        kernel::Logger::error("[FB] multiboot2 framebuffer tag missing/unusable");
++        kernel::log::dmesg_push_sev(
++            kernel::log::ErrorSubsystem::DRIVER,
++            kernel::log::kDmesgBase_DRIVER + 11,
++            kernel::log::LogSeverity::ERROR,
++            "Framebuffer backend unavailable (documented gap)", 0);
++        return false;
++    }
+ 
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto* tag = reinterpret_cast<FramebufferTag*>(tag_addr);
+-    if (tag->type_specific != 1 && tag->type_specific != 2) return false;
++    if (tag->type_specific != 1 && tag->type_specific != 2) {
++        kernel::Logger::error("[FB] multiboot2 framebuffer tag missing/unusable");
++        kernel::log::dmesg_push_sev(
++            kernel::log::ErrorSubsystem::DRIVER,
++            kernel::log::kDmesgBase_DRIVER + 11,
++            kernel::log::LogSeverity::ERROR,
++            "Framebuffer backend unavailable (documented gap)", 0);
++        return false;
++    }
+ 
+     info_.addr   = tag->addr;
+     info_.pitch  = tag->pitch;
+@@ -74,6 +101,18 @@ bool Framebuffer::init() {
+     clear(0x000000);
+     return true;
+ #else
++    // Documented gap (issue #357, follow-up #394): no backend on this
++    // arch — loud once, never silent, never a panic.
++    if (!gap_logged) {
++        gap_logged = true;
++        kernel::Logger::warn("[FB] no framebuffer backend (documented gap; "
++                             "virtio-gpu/ramfb follow-up #394)");
++        kernel::log::dmesg_push_sev(
++            kernel::log::ErrorSubsystem::DRIVER,
++            kernel::log::kDmesgBase_DRIVER + 11,
++            kernel::log::LogSeverity::WARN,
++            "Framebuffer backend unavailable (documented gap)", 0);
++    }
+     return false;
+ #endif
+ }
+diff --git a/src/services/terminal/framebuffer.hpp b/src/services/terminal/framebuffer.hpp
+index 5be6598b0..d724986b9 100644
+--- a/src/services/terminal/framebuffer.hpp
++++ b/src/services/terminal/framebuffer.hpp
+@@ -80,6 +80,11 @@ public:
+     /// @brief Returns whether the framebuffer was successfully initialised.
+     /// @return True if available.
+     static bool available() { return initialized_; }
++    /// @brief Compiled-in backend name (issue #357 documented gap).
++    /// Reports the backend, not runtime success: "multiboot2" on
++    /// x86_64, "none" where no backend exists.
++    /// @return Static backend name string.
++    static const char *backend_name();
+     /// @brief Reads one pixel back (issue #269 test oracle).
+     /// @return 0x000000 when unavailable or out of bounds.
+     static uint32_t get_pixel(uint32_t x, uint32_t y);
+diff --git a/test-history.txt b/test-history.txt
+index 01ed9f865..880a2a439 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -4272,3 +4272,6 @@ SUMMARY: total=26 ok=25 fail=1
+ 2026-10-20 21:10:11 shell_interaction PASSED: 20 FAILED: 0 TIME: 3428ms STATUS: #355-sliceC-x86-control
+ 2026-10-20 21:11:22 arch_aarch64 PASSED: 33 FAILED: 0 TIME: 1030ms STATUS: #355-sliceC-aarch64-gate
+ 2026-10-20 21:12:33 arch_riscv64 PASSED: 24 FAILED: 6 TIME: 919ms STATUS: #355-sliceC-riscv64-known6
++2026-10-20 21:44:07 ui PASSED: 74 FAILED: 0 TIME: 7175ms STATUS: #357-sliceA-x86-gate
++2026-10-20 21:44:07 configuration_build PASSED: 10 FAILED: 0 TIME: 643ms STATUS: #357-sliceA-x86-gate
++2026-10-20 21:44:07 selftest PASSED: 148 FAILED: 0 TIME: 11782ms STATUS: #357-sliceA-x86-gate

@@ -5,6 +5,16 @@
 _start:
     // Save DTB address (x0 from bootloader) in x20
     mov     x20, x0
+    // Issue #354 (Q3): QEMU -kernel is a generic ELF, so no DTB arrives in
+    // x0 — fall back to the embedded virt DTB (virt_dtb.S). A bootloader
+    // DTB in x0 always wins (cbnz skips). Pre-MMU: pass the PHYSICAL address
+    // (link VA minus the HHDM slide); dtb_from_boot_info() re-adds HHDM.
+    cbnz    x0, 9f
+    ldr     x1, =_binary_virt_dtb_start
+    ldr     x2, =0xFFFF800000000000
+    sub     x1, x1, x2
+    mov     x20, x1
+9:
 
     // Drop to EL1 from whichever EL we boot at
     mrs     x0, CurrentEl
@@ -270,6 +280,14 @@ _start:
     // Jump via absolute address — this takes us to higherhalf_entry at its
     // higher-half VMA.  From this point forward the kernel runs entirely
     // via TTBR1_EL1 (higher-half) and TTBR0_EL1 can be freely switched.
+    // Enable FP+SIMD (CPACR_EL1.FPEN=0b11) BEFORE the jump: release
+    // builds emit NEON in higherhalf_entry's prologue (BootInfo zeroing,
+    // issue #393) and FPEN is 0 at reset — without this the first
+    // SIMD insn traps into reset-vector space (VBAR is still 0).
+    // arch::fp_enable() re-asserts the same bits later (idempotent).
+    mov     x0, #(3 << 20)      // CPACR_EL1: FPEN=0b11
+    msr     cpacr_el1, x0
+    isb
     mov     x0, x20             // DTB pointer saved at _start
     mov     x1, xzr             // mb_info = 0
     ldr     x2, =higherhalf_entry

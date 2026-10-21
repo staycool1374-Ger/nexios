@@ -20,9 +20,16 @@
 #include <services/terminal/font.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/multiboot2.hpp>
+#else
+#include <kernel/driver/fb_backing.hpp>
+#include <kernel/driver/ramfb.hpp>
+#include <kernel/driver/virtio_gpu.hpp>
 #endif
+#include <kernel/build_info.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/vmm_errors.hpp> // issue #366 Q1a: checked maps
+#include <kernel/log/dmesg.hpp>
+#include <logger.hpp>
 #include <assert.hpp>
 #include <constants.hpp>
 
@@ -30,15 +37,74 @@ namespace service {
 
 FramebufferInfo Framebuffer::info_ = {};
 bool Framebuffer::initialized_ = false;
+#if !defined(CONFIG_ARCH_X86_64)
+// One-shot gap line (issue #357): boot path only, pre-scheduler.
+static bool gap_logged = false;
+// Issue #394: runtime backend selection (Slice A: virtio-gpu; Slice B
+// appends ramfb before the gap fallthrough).
+static const char *backend_name_ = kernel::build_info::fb_backend;
+static kernel::gpu::FbBackend backend_kind_ =
+    kernel::gpu::FbBackend::None;
+static bool init_attempted = false;
+static bool init_result = false;
+static uint32_t dirty_y0_ = 0;
+static uint32_t dirty_y1_ = 0;
+#endif
+
+const char *Framebuffer::backend_name() {
+#if defined(CONFIG_ARCH_X86_64)
+    return kernel::build_info::fb_backend;
+#else
+    return backend_name_;
+#endif
+}
+
+void Framebuffer::present() {
+#if !defined(CONFIG_ARCH_X86_64)
+    if (!initialized_ || dirty_y1_ <= dirty_y0_)
+        return;
+    // Only virtio-gpu needs host presentation (multiboot2/ramfb scanouts
+    // are directly visible memory). Slice B keeps this arm first.
+    if (backend_kind_ == kernel::gpu::FbBackend::VirtioGpu) {
+        if (kernel::gpu::virtio_gpu_present(dirty_y0_, dirty_y1_)) {
+            dirty_y0_ = 0;
+            dirty_y1_ = 0;
+        }
+    }
+#endif
+}
+
+void Framebuffer::invalidate() {
+#if !defined(CONFIG_ARCH_X86_64)
+    dirty_y0_ = 0;
+    dirty_y1_ = info_.height;
+#endif
+}
 
 bool Framebuffer::init() {
 #if defined(CONFIG_ARCH_X86_64)
     uint64_t tag_addr = mb2_find_tag(8);
-    if (!tag_addr) return false;
+    if (!tag_addr) {
+        kernel::Logger::error("[FB] multiboot2 framebuffer tag missing/unusable");
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::DRIVER,
+            kernel::log::kDmesgBase_DRIVER + 11,
+            kernel::log::LogSeverity::ERROR,
+            "Framebuffer backend unavailable (documented gap)", 0);
+        return false;
+    }
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto* tag = reinterpret_cast<FramebufferTag*>(tag_addr);
-    if (tag->type_specific != 1 && tag->type_specific != 2) return false;
+    if (tag->type_specific != 1 && tag->type_specific != 2) {
+        kernel::Logger::error("[FB] multiboot2 framebuffer tag missing/unusable");
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::DRIVER,
+            kernel::log::kDmesgBase_DRIVER + 11,
+            kernel::log::LogSeverity::ERROR,
+            "Framebuffer backend unavailable (documented gap)", 0);
+        return false;
+    }
 
     info_.addr   = tag->addr;
     info_.pitch  = tag->pitch;
@@ -74,6 +140,85 @@ bool Framebuffer::init() {
     clear(0x000000);
     return true;
 #else
+    // Runtime backend chain (issue #394): virtio-gpu → ramfb (Slice B) →
+    // documented gap.  Latched: the second call returns the first result
+    // without touching devices.
+    if (init_attempted)
+        return init_result;
+    init_attempted = true;
+
+    uint32_t w = 0;
+    uint32_t h = 0;
+    if (kernel::gpu::virtio_gpu_probe(w, h) && w != 0 && h != 0) {
+        uint64_t span = static_cast<uint64_t>(w) * h * 4;
+        if (span <= kernel::fb::backing_bytes()) {
+            info_.addr = reinterpret_cast<uint64_t>(
+                kernel::fb::backing_ptr());
+            info_.pitch = w * 4;
+            info_.width = w;
+            info_.height = h;
+            info_.bpp = 32;
+            backend_name_ = "virtio-gpu";
+            backend_kind_ = kernel::gpu::FbBackend::VirtioGpu;
+            initialized_ = true;
+            init_result = true;
+            invalidate();
+            clear(0x000000);
+            // Logger %d reads uint64_t (vprint) — cast narrow args
+            // explicitly (audit S3, LEARNINGS %lx gotcha family).
+            kernel::Logger::info("[FB] virtio-gpu %dx%d",
+                                 static_cast<uint64_t>(w),
+                                 static_cast<uint64_t>(h));
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::DRIVER,
+                kernel::log::kDmesgBase_DRIVER + 13,
+                kernel::log::LogSeverity::INFO,
+                "Framebuffer backend ready", 0);
+            return true;
+        }
+    }
+    // Slice B inserts the ramfb probe here (before the gap fallthrough).
+    // ramfb reuses the same PMM backing contract (backing_init inside
+    // ramfb_probe); success looks identical to the GPU path above.
+    if (kernel::ramfb::ramfb_probe(w, h) && w != 0 && h != 0) {
+        uint64_t span = static_cast<uint64_t>(w) * h * 4;
+        if (span != 0 && span <= kernel::fb::backing_bytes() &&
+            kernel::fb::backing_ptr() != nullptr) {
+            info_.addr = reinterpret_cast<uint64_t>(
+                kernel::fb::backing_ptr());
+            info_.pitch = w * 4;
+            info_.width = w;
+            info_.height = h;
+            info_.bpp = 32;
+            backend_name_ = "ramfb";
+            backend_kind_ = kernel::gpu::FbBackend::Ramfb;
+            initialized_ = true;
+            init_result = true;
+            invalidate();
+            clear(0x000000);
+            kernel::Logger::info("[FB] ramfb %dx%d",
+                                 static_cast<uint64_t>(w),
+                                 static_cast<uint64_t>(h));
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::DRIVER,
+                kernel::log::kDmesgBase_DRIVER + 13,
+                kernel::log::LogSeverity::INFO,
+                "Framebuffer backend ready", 0);
+            return true;
+        }
+    }
+    // Documented gap (issue #357, follow-up #394): no backend on this
+    // arch — loud once, never silent, never a panic.
+    if (!gap_logged) {
+        gap_logged = true;
+        kernel::Logger::warn("[FB] no framebuffer backend (documented gap; "
+                             "virtio-gpu/ramfb follow-up #394)");
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::DRIVER,
+            kernel::log::kDmesgBase_DRIVER + 11,
+            kernel::log::LogSeverity::WARN,
+            "Framebuffer backend unavailable (documented gap)", 0);
+    }
     return false;
 #endif
 }
@@ -94,6 +239,9 @@ void Framebuffer::clear(uint32_t color) {
             if (bpp_bytes > 3) fb[offset + 3] = 0xFF;
         }
     }
+    // Full-frame write: flush the whole band (present checks the backend).
+    invalidate();
+    present();
 }
 
 void Framebuffer::draw_pixel(uint32_t x, uint32_t y, uint32_t color) {
@@ -141,6 +289,15 @@ void Framebuffer::put_pixel(uint32_t x, uint32_t y, uint32_t color)
     fb[offset + 1] = (color >> 8) & 0xFF;
     fb[offset + 2] = (color >> 16) & 0xFF;
     if (bpp_bytes > 3) fb[offset + 3] = 0xFF;
+#if !defined(CONFIG_ARCH_X86_64)
+    // Dirty-row tracking for host presentation (issue #394); draw_pixel
+    // bounds-checks, direct callers must stay in bounds (terminal paths
+    // clip via width()/height()).
+    if (y < dirty_y0_)
+        dirty_y0_ = y;
+    if (y + 1 > dirty_y1_)
+        dirty_y1_ = y + 1;
+#endif
 }
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)

@@ -134,12 +134,46 @@ _start:
     slli t1, t1, 10
     or t1, t1, t4
     sd t1, 1024(t2)           /* 128 * 8 = 1024 */
+    /* NOTE (issue #394): riscv64 fw_cfg lives at 0x10100000 (DTB-proven
+     * `fw-cfg@10100000`), inside this UART 2MB Device leaf — no extra
+     * boot leaf needed (an earlier L2[72] leaf mapped the aarch64
+     * address 0x09000000, which faults on riscv; removed). */
+
+    /* L2_page[0] -> _boot_pt_l3_rtc (4 KiB Goldfish RTC page, issue #355).
+     * One 4 KiB leaf for PA 0x101000 — NOT a 2 MiB leaf: a 2 MiB leaf at
+     * L2[0] would map device space at VA 0 and silently defeat
+     * null-deref detection. t5 = table flags (V-only), t4 = leaf flags.
+     * VA 0x101000 via L3 index 0x101 (0x101 * 8 = 0x808). */
+    la t1, _boot_pt_l3_rtc
+    srli t1, t1, 2
+    or t1, t1, t5
+    la t2, _boot_pt_l2
+    sd t1, 0(t2)              /* L2_page[0] */
+    li t1, 0x101
+    slli t1, t1, 10           /* PPN << 10 */
+    or t1, t1, t4             /* | leaf flags */
+    la t2, _boot_pt_l3_rtc
+    li t3, 0x808              /* L3 index 0x101 byte offset (over 12-bit
+                               * store-imm range — address arithmetics) */
+    add t2, t2, t3
+    sd t1, 0(t2)              /* L3[0x101]: 4 KiB leaf PA 0x101000 */
+
+    /* L2_page[80]: 2MB leaf PA 0x0A000000 (virtio-mmio window, issue #350;
+     * matches aarch64 boot.S L2 index 80; one 2MB Device leaf covers all
+     * 32 virtio-mmio slots at 0x0A000000 + slot*0x200). */
+    li t1, 0x0A000
+    slli t1, t1, 10
+    or t1, t1, t4
+    sd t1, 640(t2)            /* 80 * 8 = 640 */
 
     /* L2_page[384..511]: 128x2MB identity leaves PA 0x30000000-0x3FFFFFFF
      * (PCIe ECAM, issue #29; QEMU virt `info mtree` proof: pcie-ecam @
      * 0x30000000, 256MB).  Identity (not HHDM-aliased): follows the
-     * in-tree PLIC/UART precedent above — L0[0] already covers VA
-     * 0x0-0x40000000, so raw-phys ECAM access is valid in S-mode. */
+     * in-tree PLIC/UART precedent above.  NOTE (issue #355): L0[0] is a
+     * set of explicit leaves (virtio-mmio, PLIC, UART, ECAM range, one
+     * 4 KiB RTC page via L2[0]) — NOT a blanket 0x0-0x40000000 identity
+     * map.  Raw-phys access is valid in S-mode only where a leaf exists;
+     * VA 0 still faults. */
     la t2, _boot_pt_l2
     li t1, 3072              /* 384 * 8: first ECAM leaf slot */
     add t2, t2, t1
@@ -205,12 +239,15 @@ _boot_pt_l1_id:
     .space 4096
 _boot_pt_l2_id:
     .space 4096
-/* LOAD-BEARING PADDING: .boot must still end at 0x80207000 (= boot_vma_end
+/* LOAD-BEARING PAGE: .boot must still end at 0x80207000 (= boot_vma_end
  * = .text LMA).  The fixed .text VMA (0xFFFFFFC080207000) requires LMA
  * 0x80207000 (VMA = HHDM_base + (LMA & 0x1FFFFF) within the shared 2MB
- * page).  The 64KB stack moved to .boot_stack_rv; this 4KB reservation
- * keeps every downstream LMA byte-stable after its removal. */
-_boot_reserved:
+ * page).  This 4 KiB page was pure padding (_boot_reserved); issue #355
+ * puts it to work as the Goldfish RTC L3 table (L2_page[0] points here).
+ * It is now functional AND load-bearing: removing it desyncs VMA/LMA.
+ * VA 0 still faults (only L3[0x101] is valid) — null-deref detection
+ * is preserved. */
+_boot_pt_l3_rtc:
     .space 4096
 
 /* Issue #29: dedicated 64KB boot stack, clear of the page tables above.

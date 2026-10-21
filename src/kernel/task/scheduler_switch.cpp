@@ -38,9 +38,7 @@
 #include <kernel/arch/hal/iopb.hpp>
 #include <lib/logger.hpp>
 #include <assert.hpp>
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-#include <kernel/arch/x86_64/hal/pcid.hpp>
-#endif
+#include <kernel/arch/hal/context_id.hpp>
 
 namespace kernel {
 
@@ -288,20 +286,16 @@ void restore_preempted_current(TaskControlBlock *current,
 // switch_to_task
 // ---------------------------------------------------------------------------
 
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-/// @brief Lazily assign a user PCID at first CR3 publish (issue #156).
-///        Single choke point covering create/clone/elf births uniformly
-///        (deviation D1 from the creation-site plan: the elf::load path
-///        also births user address spaces).  Runs under scheduler_lock_
-///        at both publish sites; fires once per task lifetime (later
-///        publishes see nonzero pcid_).  Returns 0 when unsupported so
-///        the publish stays raw-phys (full flush, today's behavior).
-static uint16_t publish_pcid_for(TaskControlBlock &next) noexcept {
-    if (next.is_user_ && next.pcid_ == 0 && arch::pcid_supported())
-        next.pcid_ = arch::pcid_alloc();
+/// @brief Lazily assign a user context ID at first root publish
+///        (issue #352; arch-neutral twin of publish_pcid_for).
+///        Same choke-point contract (scheduler_lock_ at both publish
+///        sites, once per lifetime, 0 when unsupported).  x86_64
+///        delegates to the PCID allocator, aarch64/riscv64 to ASID.
+static uint16_t publish_context_id_for(TaskControlBlock &next) noexcept {
+    if (next.is_user_ && next.pcid_ == 0 && arch::context_id_supported())
+        next.pcid_ = arch::context_id_alloc();
     return next.pcid_;
 }
-#endif
 
 void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                     sync::SpinLock *held_lock = nullptr) {
@@ -661,12 +655,11 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
                      __ATOMIC_RELEASE);
     if (next.get_page_table()) {
-        // Issue #156: publish tagged (PCID 0 = raw phys, full flush).
-        uint64_t cr3_value = next.get_page_table();
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-        cr3_value = arch::pcid_tag(next.get_page_table(),
-                                   publish_pcid_for(next));
-#endif
+        // Issue #352: publish tagged (ID 0 = raw phys, full flush).
+        // x86_64 tags PCID, aarch64/riscv64 tag ASID; untagged arches
+        // and unsupported CPUs publish raw phys (today's behavior).
+        uint64_t cr3_value = arch::context_id_tag(
+            next.get_page_table(), publish_context_id_for(next));
         __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
                          __ATOMIC_RELEASE);
         // Issue #74: publish the TLS base alongside CR3 (0 for unset;
@@ -687,7 +680,11 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             arch::GDT::set_tss_rsp0(next.kernel_stack_top);
 #endif
     } else {
-        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
+        // Issue #352: kernel/harness targets publish the kernel root
+        // untagged (ID 0) — still through the tag helper so the value
+        // carries the arch root encoding (riscv SATP mode bits).
+        __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(),
+                         arch::context_id_tag(VMM::get_kernel_pml4(), 0),
                          __ATOMIC_RELEASE);
         // Issue #74: kernel/harness targets never carry TLS (apply loads
         // nothing); publish 0 so no stale user base survives.
@@ -923,12 +920,9 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
                          __ATOMIC_RELEASE);
         if (next->get_page_table()) {
-            // Issue #156: tagged publish (same contract as above).
-            uint64_t cr3_value = next->get_page_table();
-#if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
-            cr3_value = arch::pcid_tag(next->get_page_table(),
-                                       publish_pcid_for(*next));
-#endif
+            // Issue #352: tagged publish (same contract as above).
+            uint64_t cr3_value = arch::context_id_tag(
+                next->get_page_table(), publish_context_id_for(*next));
             __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), cr3_value,
                              __ATOMIC_RELEASE);
             // Issue #74: publish the TLS base alongside CR3 (second publish
@@ -937,7 +931,11 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
                              next->is_user_ ? next->tls_base_ : 0,
                              __ATOMIC_RELEASE);
         } else {
-            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), VMM::get_kernel_pml4(),
+            // Issue #352: kernel/harness targets publish the kernel root
+            // untagged (ID 0) — but still through the tag helper so the
+            // value carries the arch root encoding (riscv SATP mode bits).
+            __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(),
+                             arch::context_id_tag(VMM::get_kernel_pml4(), 0),
                              __ATOMIC_RELEASE);
             // Issue #74: kernel/harness targets never carry TLS.
             __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,

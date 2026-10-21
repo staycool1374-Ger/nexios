@@ -50,6 +50,8 @@ inline constexpr uint32_t IRQ_VIRTIO1 = 2;
 inline constexpr uint32_t IRQ_VIRTIO2 = 3;
 inline constexpr uint32_t IRQ_VIRTIO3 = 4;
 inline constexpr uint32_t IRQ_VIRTIO4 = 5;
+/// @brief virtio-mmio IRQ window size (issue #350: IRQs 1-8).
+inline constexpr uint32_t IRQ_VIRTIO_COUNT = 8;
 inline constexpr uint32_t IRQ_UART    = 10;
 inline constexpr uint32_t IRQ_RTC     = 11;   // Goldfish RTC
 inline constexpr uint32_t IRQ_KEYBOARD = 12;

@@ -116,6 +116,10 @@ uint64_t VMM::vmm_arch_block_base(uint64_t entry, bool huge) {
     return entry & (huge ? PAGE_HUGE_FRAME_MASK : PAGE_FRAME_MASK);
 }
 
+uint64_t VMM::vmm_arch_leaf_flags(uint64_t entry) {
+    return entry & ~PAGE_FRAME_MASK;
+}
+
 unsigned VMM::vmm_arch_walk_levels() { return 4; }
 
 void VMM::vmm_arch_walk_indices(uint64_t virt_addr, size_t idx[4]) {

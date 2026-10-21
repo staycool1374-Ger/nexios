@@ -20,6 +20,7 @@
 /// @brief DMA driver implementation.
 
 #include <kernel/driver/dma.hpp>
+#include <kernel/arch/hal/cache.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -71,12 +72,21 @@ DmaBuffer alloc_buffer(size_t size) {
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     memset(reinterpret_cast<void *>(buf.virt_addr), 0, buf.size);
+    // Cache contract (issue #354): the zeroed range is clean+invalidated so
+    // a later device read sees zeros and no stale line survives.
+    arch::cache_clean_invalidate(reinterpret_cast<const void *>(buf.virt_addr),
+                                 buf.size);
     return buf;
 }
 
 void free_buffer(DmaBuffer &buf) {
     if (!buf.owned || !buf.phys_addr)
         return;
+    // Cache contract (issue #354): invalidate before release so a stale
+    // device-written line is never read through a recycled mapping.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    arch::cache_invalidate(reinterpret_cast<const void *>(buf.virt_addr),
+                           buf.size);
     size_t page_count = buf.size / PAGE_SIZE;
     for (size_t i = 0; i < page_count; ++i) {
         // Issue #366 Q2b: log-and-continue on holes (free must complete);
@@ -152,11 +162,20 @@ void sg_reset(SgList &sg) {
 size_t prd_from_sg(PrdTable &prd, const SgList &sg, bool eot) {
     prd.count = 0;
     for (size_t i = 0; i < sg.count && prd.count < DMA_MAX_PRD_ENTRIES; ++i) {
+        uint64_t phys = sg.entries[i].phys_addr;
+        uint64_t length = sg.entries[i].length;
+        // Fail closed (issue #354): the ATA PRD entry is 32-bit phys +
+        // 16-bit (count − 1) + 16-bit flags.  Reject anything that does not
+        // fit instead of truncating — a truncated entry DMA-writes the wrong
+        // physical address (memory corruption, silent on coherent fabrics).
+        if (phys > 0xFFFFFFFFULL || length == 0 || length > 0x10000 ||
+            (phys & 1) != 0 || ((phys & 0xFFFULL) + length) > 0x1000) {
+            prd.count = 0;
+            return 0;
+        }
         auto &entry = prd.entries[prd.count];
-        entry.phys_addr =
-            static_cast<uint32_t>(sg.entries[i].phys_addr & 0xFFFFFFFF);
-        entry.byte_count =
-            static_cast<uint16_t>((sg.entries[i].length - 1) & 0xFFFF);
+        entry.phys_addr = static_cast<uint32_t>(phys);
+        entry.byte_count = static_cast<uint16_t>(length - 1);
         entry.flags = 0;
         ++prd.count;
     }
@@ -173,7 +192,10 @@ void prd_reset(PrdTable &prd) {
 // --- PCI Bus Master ---
 
 void pci_set_bus_master(arch::PciBdf bdf, bool enable) {
-    uint32_t addr = arch::pci_make_addr(bdf, arch::PCI_COMMAND);
+    // Issue #350: 64-bit address — the aarch64 ECAM window is an HHDM VA
+    // (0xFFFF804010000000+); a uint32_t truncated it to 0x10000004 and
+    // faulted (FAR-proof). x86 port addresses are unaffected either way.
+    uint64_t addr = arch::pci_make_addr(bdf, arch::PCI_COMMAND);
     uint16_t cmd = arch::pci_config_readw(addr);
     if (enable) {
         cmd |= arch::PCI_CMD_BUS_MASTER;
@@ -203,12 +225,27 @@ bool BmDmaChannel::start(PrdTable &prd, Direction dir) {
     if (!bm_io_base_ || prd.count == 0)
         return false;
 
+    // Cache contract (issue #354): the device reads the PRD table — clean
+    // the used entries before programming the controller.  Port I/O itself
+    // is x86-only hardware, but the channel API doubles as the DMA engine's
+    // mock-port test harness off-x86 (test_dma drives 0xFF00 through it),
+    // so the paths stay arch-neutral — no real device can bind here
+    // off-x86 (MSI programming fails closed, Slice A).
+    arch::cache_clean(&prd, prd.count * sizeof(PrdEntry));
+
     uint64_t prd_phys = VMM::virt_to_phys(reinterpret_cast<uint64_t>(&prd));
     if (!prd_phys)
         return false;
 
+    // Fail closed (issue #307): the 32-bit PRDTPR cannot address a table
+    // at/above 4 GiB — no controller state is touched before this check.
+    if (!bm_prd_addr_ok(prd_phys)) {
+        Logger::error("dma: BmDmaChannel start PRD table above 4 GiB");
+        return false;
+    }
+
     arch::outl(static_cast<uint16_t>(bm_io_base_ + 4),
-               static_cast<uint32_t>(prd_phys & 0xFFFFFFFF));
+               static_cast<uint32_t>(prd_phys));
 
     uint8_t cmd = BMCMD_START;
     if (dir == Direction::READ) {
@@ -216,8 +253,7 @@ bool BmDmaChannel::start(PrdTable &prd, Direction dir) {
     }
     arch::outb(static_cast<uint16_t>(bm_io_base_ + 0), cmd);
 
-    Logger::info("dma: BmDmaChannel start prd_phys=0x%x dir=%s",
-                 static_cast<unsigned>(prd_phys),
+    Logger::info("dma: BmDmaChannel start prd_phys=%lx dir=%s", prd_phys,
                  dir == Direction::READ ? "READ" : "WRITE");
     return true;
 }
@@ -373,7 +409,11 @@ bool PingPongDma::start_next(Direction dir, ChainCallback cb, uint64_t ctx) {
         return false;
 
     PrdTable prd{};
-    prd_from_sg(prd, sg, true);
+    // Fail-closed PRD (issue #354): 0 means a reject (over-4G, oversize,
+    // unaligned or 4K-spanning entry) — never hand an empty table to the
+    // engine (its start would fail after the index swap below).
+    if (prd_from_sg(prd, sg, true) == 0)
+        return false;
 
     // Swap indices: what was being prepared becomes the transfer buffer
     uint8_t tmp = prepare_idx_;
