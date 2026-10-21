@@ -12,6 +12,7 @@
 - TCBs are memset-zeroed, never ctor-built: set every non-zero sentinel at all 4 memset sites (create/create_user/clone/elf finalize) plus a mechanical defense that never trusts the value (see #3).
 - Release the primitive lock BEFORE reschedule; every BLOCKED leaves the ready queue (INV-2); waits are bounded or scheduler-mediated; test bridge sequences guard add_task too (§11, #208).
 - Test waits use need_resched + hlt (wait_for_termination_safe); BLOCKED + dequeue_ready; bare pause-spins starve ticks under TCG. Rendezvous tests must wake on message arrivals, never on third-party timing (tick-dependent peers/killers hang under load); cyclic-capable walks get trip-count fail-stops, inserts unlink-first.
+- Single-asm stack-save for GPR dumps (multi-block mov corrupts); exc_table is x86-only; release 0/0 rows are link-boot, not coverage (#306).
 - Work-begun retrieval comment BEFORE implementing (iter-1 REJECT was procedural check-7 with zero code findings); `init` is not a class (`task_init` is) (#305).
 - Manual QEMU runs must mirror harness flags (UEFI pflash for El Torito ISOs); isa-debugcon chardevs + self-exit for byte-exact port proof; never SIGKILL proof runs (#304).
 - Flake hunts: identical binary + controlled load>2 (uptime per run) + 3 consecutive runs; reap load procs after; TEST_SERIAL_LOG per run; stash-prove off-arch failures on unmodified main (#383).
