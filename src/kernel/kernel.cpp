@@ -916,7 +916,18 @@ uint64_t boot_entry_raw() noexcept {
 }
 } // namespace kernel
 
+/// @brief Pre-serial POST checkpoint codes (issue #304, x86_64 only).
+///        Emitted via arch::post_code() (0x80 + 0x300 mirror) before
+///        Logger::init(): ENTRY proves long mode + GDT + bootloader stack;
+///        BOOT_STATE proves writable .bss/global access (the #251 family);
+///        KERNEL_STACK proves the RSP move — a capture ending at 0xA3 with
+///        no serial output localizes the fault to Logger::init/Serial::init.
+enum class BootPost : uint8_t { ENTRY = 0xA1, BOOT_STATE = 0xA2, KERNEL_STACK = 0xA3 };
+
 extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+#if defined(CONFIG_ARCH_X86_64)
+    arch::post_code(static_cast<uint8_t>(BootPost::ENTRY));
+#endif
     kernel::gs::boot_info() = BootInfo();
     [[maybe_unused]] kernel::gs::WriteContext ctx{
         kernel::gs::StatePhase::BOOT, 0};
@@ -927,6 +938,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     [[maybe_unused]] bool dtb_from_bootloader = false;
 
 #if defined(CONFIG_ARCH_X86_64)
+    arch::post_code(static_cast<uint8_t>(BootPost::BOOT_STATE));
     kernel::gs::try_set_multiboot(magic, mb_info, ctx);
     // Issue #251: hidden visibility forces direct (non-GOT) binding.
     // Ubuntu GCC defaults to PIE and resolved this extern's GOT slot to an
@@ -943,6 +955,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     asm volatile("mov %0, %%rsp\n" : : "r"(kernel_stack_top));
     kernel::gs::boot_info().multiboot_magic = magic;
     kernel::gs::boot_info().multiboot_info = mb_info;
+    arch::post_code(static_cast<uint8_t>(BootPost::KERNEL_STACK));
 #elif defined(CONFIG_ARCH_AARCH64)
     g_dtb_ptr = reinterpret_cast<void *>(magic);
     kernel::gs::boot_info().dtb_ptr = magic;

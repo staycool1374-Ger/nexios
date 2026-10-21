@@ -211,6 +211,25 @@ inline void outl(uint16_t port, uint32_t val) {
 inline uint32_t inl(uint16_t port) {
     return arch_inl(port);
 }
+/// @brief Legacy POST checkpoint port (manufacturing/POST-card, issue #304).
+inline constexpr uint16_t POST_PORT = 0x80;
+/// @brief PCI POST-card mirror port (debugd §8 "0x80/0x300").
+inline constexpr uint16_t POST_PORT_PCI = 0x300;
+/// @brief Emit POST codes on both ports (kill-switch for boards where 0x300
+///        is decoded by real hardware).
+inline constexpr bool POST_MIRROR_PORT_300 = true;
+/// @brief Polled POST checkpoint — boot-only, pre-serial legal (issue #304).
+///        Single-byte outb, no inb readback exists (write-only latch); code
+///        0 is reserved for io_wait() traffic, so checkpoints use non-zero
+///        codes to stay filterable. Legal with IRQs off, GS-base unset, and
+///        on the bootloader stack. Never call after Logger::init(), from an
+///        ISR, or from an RT path (bus-serializing write on real hardware).
+inline void post_code(uint8_t code) noexcept {
+    outb(POST_PORT, code);
+    if constexpr (POST_MIRROR_PORT_300) {
+        outb(POST_PORT_PCI, code);
+    }
+}
 /// @brief I/O delay — write to an unused port to insert a small bus pause.
 inline void io_wait() {
     outb(0x80, 0);

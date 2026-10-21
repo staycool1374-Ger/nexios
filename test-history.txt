@@ -4411,3 +4411,6 @@ SUMMARY: total=24 ok=24 fail=0
 2026-10-21 17:34:53 sched_admission PASSED: 0 FAILED: 0 TIME: 0ms STATUS: aarch64-EL1-sync-fault-PREEXISTING-stash-proven
 2026-10-21 17:49:16 sched_admission PASSED: 0 FAILED: 0 TIME: 0ms STATUS: riscv64-unhandled-exc-PREEXISTING-stash-proven
 2026-10-21 17:53:36 sched_admission PASSED: 10 FAILED: 0 TIME: 708ms STATUS: post-S3-cleanup
+2026-10-21 18:17:33 hal_serial_logic PASSED: 7 FAILED: 0 TIME: 657ms
+2026-10-21 18:18:07 selftest PASSED: 148 FAILED: 0 TIME: 11878ms
+2026-10-21 18:24:34 selftest PASSED: 87 FAILED: 0 TIME: 3155ms STATUS: release
