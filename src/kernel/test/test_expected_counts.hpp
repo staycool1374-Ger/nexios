@@ -258,7 +258,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (16 + 2 SMEP-gated + 3 SMAP-gated + 4 teardown, x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   34,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214) + 1 EL1 fail-stop raw frame (#308)
+    {"arch_aarch64",          0,   35,       0      },  // 17 existing + 5 MP-4.4 + 1 #103 deep-copy descriptor regression + 3 ABI frame tests (issue #30) + 1 EL0 fork smoke (issue #104) + 1 clone frame readback (issue #209) + 1 EL0 fault terminates (issue #28) + 1 fault wakes waitpid parent (issue #217) + 1 EL0 fault frame debug slot (#236) + 1 PL011 poll idle false (issue #245) + 1 EL1 fail-stop routing (#214) + 1 EL1 fail-stop raw frame (#308) + 1 TLB barrier gate (#309b)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,      31      },  // 21 registered - 3 deferred (issue #205: boot_mvendorid + medeleg_selected + fpu_extension_detection read M-mode CSRs) + fixes (plic_init, init_stack, RTC pin, Sv39 backend proving map_unmap + block_split) + 1 U-mode ECALL smoke (issue #206 M1) + 5 M2 loader probes (bad_machine, clone_frame, exec_slots, u_fault, elf_ecall) + 2 UART poll tests (issue #247) + 1 kernel-exception raw frame (#308) — row was stale at 24 while 28 registered, corrected to 30

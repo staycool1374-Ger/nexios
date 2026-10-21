@@ -26,6 +26,16 @@
 
 #include <types.hpp>
 
+// CONFIG_TCG_BARRIERS: 1 = TCG-safe (dmb sy), 0 = hardware (dsb sy).
+// Anything else is a typo that the "undefined identifier == 0" rule would
+// silently turn into a hardware build — reject it at compile time.
+#ifndef CONFIG_TCG_BARRIERS
+#error "CONFIG_TCG_BARRIERS is not defined (nexios_config.h must define 0 or 1)"
+#endif
+#if CONFIG_TCG_BARRIERS != 0 && CONFIG_TCG_BARRIERS != 1
+#error "CONFIG_TCG_BARRIERS must be 1 (TCG: dmb sy) or 0 (hardware: dsb sy)"
+#endif
+
 namespace arch {
 
 /// @brief Memory-mapped I/O write (8-bit).
@@ -206,6 +216,18 @@ inline void dsb_sy() {
 inline void isb() {
     asm volatile("isb" : : : "memory");
 }
+/// @brief Data barrier for TLB / address-space handoff paths (issue #309b).
+///        Emits `dmb sy` when CONFIG_TCG_BARRIERS == 1 (QEMU TCG, the
+///        default) and `dsb sy` when == 0 (silicon). always_inline keeps
+///        the TCG instruction stream byte-identical to the pre-#309b code.
+/// @note Silicon proof for the == 0 build: issue #397.
+[[gnu::always_inline]] inline void system_barrier() {
+#if CONFIG_TCG_BARRIERS
+    asm volatile("dmb sy" : : : "memory");
+#else
+    asm volatile("dsb sy" : : : "memory");
+#endif
+}
 /// @brief TLB invalidate by VA (EL1, VMID-aware).
 /// @param[in] vaddr Virtual address to invalidate.
 inline void tlbi_vae1(uint64_t vaddr) {
@@ -213,21 +235,26 @@ inline void tlbi_vae1(uint64_t vaddr) {
 }
 /// @brief TLB invalidate by ASID (EL1, issue #352).  Drops every entry
 ///        tagged with @p asid.  ASID occupies Xt[63:48] (DDI0601 TLBI
-///        ASIDE1 fieldset; low 48 bits RES0), so the raw ID is shifted.
-///        Barrier shape mirrors tlbi_alle1 (dmb, not dsb — TCG).
+///        fieldset; low 48 bits RES0), so the raw ID is shifted.
+///        Barriers go through system_barrier() (dmb under TCG, dsb on HW).
 /// @param[in] asid Address-space ID to invalidate (0 invalidates nothing
 ///        specific; callers pass nonzero user IDs).
 inline void tlbi_aside1(uint16_t asid) {
-    asm volatile("dmb sy; tlbi aside1, %0; dmb sy; isb"
+    system_barrier();
+    asm volatile("tlbi aside1, %0"
                  :
                  : "r"(static_cast<uint64_t>(asid) << 48)
                  : "memory");
+    system_barrier();
+    isb();
 }
 /// @brief TLB invalidate all (EL1).
 inline void tlbi_alle1() {
-    asm volatile("dmb sy; tlbi vmalle1; dmb sy; isb" : : : "memory");
+    system_barrier();
+    asm volatile("tlbi vmalle1" : : : "memory");
+    system_barrier();
+    isb();
 }
-
 /// @brief Read TTBR0_EL1 (user page table base).
 /// @return Physical address of the user page table.
 inline uint64_t read_ttbr0_el1() {
@@ -284,16 +311,12 @@ inline void write_ttbr1_el1(uint64_t v) {
 /// @param[in] v Physical address of the user page table.
 inline void write_cr3(uint64_t v) {
     write_ttbr0_el1(v);
-    asm volatile("dmb sy" : : : "memory");
+    // Deliberately redundant barrier pair (own barrier + tlbi_alle1's):
+    // do NOT collapse — the TCG binary must stay byte-identical.
+    system_barrier();
     tlbi_alle1();
-    asm volatile("dmb sy" : : : "memory");
+    system_barrier();
     isb();
-}
-/// @brief Write CR3 alias without TLB invalidation.
-/// @param[in] v Physical address of the user page table.
-inline void write_cr3_notlbi(uint64_t v) {
-    write_ttbr0_el1(v);
-    asm volatile("isb" : : : "memory");
 }
 /// @brief Read the kernel page-table root (TTBR1_EL1, issue #352).
 /// @return Physical address of the kernel page table.
@@ -307,9 +330,14 @@ inline uint64_t kernel_page_table_base() {
 inline uint64_t user_page_table_base() {
     return read_ttbr0_el1();
 }
-// NOTE: dsb sy replaced with dmb sy throughout this file — QEMU TCG chokes on
-// dsb sy after MMU+cache activity.  On real hardware dsb sy is required for
-// correctness.
+// BARRIER NOTE (issue #309b): the aarch64 TLB / address-space paths
+// (tlbi_aside1, tlbi_alle1, write_cr3) take their data barrier from
+// arch::system_barrier(), which emits `dmb sy` for QEMU TCG
+// (CONFIG_TCG_BARRIERS == 1, the default) and `dsb sy` for silicon
+// (CONFIG_TCG_BARRIERS == 0).  The previous note claimed dsb was replaced
+// throughout this file — that was wrong: dsb_sy() always emits `dsb sy`
+// in both build kinds.  Flipping the default to 0 requires the RPi4
+// evidence tracked in issue #397.
 
 /// @brief Enable FP/SIMD by clearing the FPEN trap in CPACR_EL1.
 inline void fp_enable() {

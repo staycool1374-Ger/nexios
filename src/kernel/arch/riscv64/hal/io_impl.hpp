@@ -214,11 +214,6 @@ inline uint64_t read_cr3() {
 inline void write_cr3(uint64_t v) {
     write_satp((8ULL << 60) | (v >> 12));
 }
-/// @brief Write the page-table root without TLB flush.
-/// @param v SATP value (PPN already shifted).
-inline void write_cr3_notlbi(uint64_t v) {
-    write_satp((8ULL << 60) | v);
-}
 /// @brief Read the kernel page-table root (issue #352).  Sv39 uses one
 ///        shared root for both halves, so this equals the user root.
 /// @return Physical address of the kernel page table.

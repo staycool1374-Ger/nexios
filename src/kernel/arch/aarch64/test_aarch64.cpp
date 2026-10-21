@@ -725,6 +725,35 @@ JARVIS_TEST(aarch64_mmu_cache_tlb) {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: issue #309b — the aarch64 TLB paths take their data barrier
+// from arch::system_barrier() (dmb sy under CONFIG_TCG_BARRIERS=1, dsb sy
+// on silicon): exercise write_cr3 (both converted sites + tlbi_alle1)
+// and tlbi_aside1 on a live root and prove TTBR0 is unchanged.
+// Input: current TTBR0 captured; write_cr3(same) + tlbi_aside1(0xFFF,
+// above ASID_MAX so no live ASID is purged); barriers + isb inline.
+// Expect: TTBR0/read_cr3 unchanged; execution reaches PASS (a wrong TTBR0
+// publish or missing ISB faults on the next fetch).
+// Depends: arch::system_barrier, write_cr3, tlbi_aside1 (issue #309b)
+JARVIS_TEST(aarch64_tlb_barrier_gate, "PRE: none | POST: none") {
+    static_assert(CONFIG_TCG_BARRIERS == 0 || CONFIG_TCG_BARRIERS == 1,
+                  "CONFIG_TCG_BARRIERS must be 0 or 1");
+    arch::IrqGuard ig{};
+    arch::system_barrier();
+    arch::system_barrier();
+    arch::isb();
+    const uint64_t ttbr0 = arch::read_ttbr0_el1();
+    arch::write_cr3(ttbr0);
+    JARVIS_ASSERT_FMT(arch::read_ttbr0_el1() == ttbr0,
+                      "TTBR0 changed by write_cr3: 0x%lx", ttbr0);
+    JARVIS_ASSERT_FMT(arch::read_cr3() == ttbr0,
+                      "read_cr3 mismatch after write_cr3");
+    arch::tlbi_aside1(0x0FFFu);
+    arch::system_barrier();
+    arch::isb();
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Check that FP and Advanced SIMD are implemented (ID_AA64PFR0_EL1).
 JARVIS_TEST(aarch64_fpu_neon_detection) {
     uint64_t id_aa64pfr0{};
@@ -1353,6 +1382,7 @@ void register_aarch64_tests() {
     JARVIS_REGISTER_TEST(aarch64_timer_counter_monotonic);
     JARVIS_REGISTER_TEST(aarch64_timer_frequency);
     JARVIS_REGISTER_TEST(aarch64_mmu_cache_tlb);
+    JARVIS_REGISTER_TEST(aarch64_tlb_barrier_gate);  // issue #309b
     JARVIS_REGISTER_TEST(aarch64_fpu_neon_detection);
     JARVIS_REGISTER_TEST(aarch64_uart_putc);
     JARVIS_REGISTER_TEST(aarch64_pci_ecam_read);

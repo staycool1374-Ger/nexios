@@ -287,7 +287,11 @@ These are MUST-level constraints on the kernel, independent of #169:
 - QEMU-vs-hardware pitfalls (each is a normative MUST with the
   rationale from #186): never trust assumed memory maps (validate
   E820/UEFI/DT); TLB invalidation complete on every path QEMU-TCG
-  forgives (`INVLPG`, `DSB+TLBI`, `SFENCE.VMA`); cache attributes
+  forgives (`INVLPG`, `DSB+TLBI`, `SFENCE.VMA`); the aarch64 TLB paths
+  select the barrier at build time — `CONFIG_TCG_BARRIERS=1` (default)
+  emits `dmb sy` for QEMU, `=0` emits the architecturally required
+  `dsb sy` for silicon, with the RPi4 proof tracked in #397 (issue
+  #309b); cache attributes
   correct for DMA (non-cacheable where required); unaligned access
   never relied upon; memory barriers present where SMP requires
   them (QEMU serializes what silicon reorders); spurious-IRQ
