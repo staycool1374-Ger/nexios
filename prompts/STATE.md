@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **CLOSED (2026-10-21):** #383 budget-fork flake fixed (in-task mask + BudgetHold), APPROVED, deadline 147/147 x4; commit 8179dbfec (closes); off-x86 panics stash-proven pre-existing, QE handoff posted.
 - **CLOSED (2026-10-21):** #387 fork + folded PLIC/HHDM fixed, APPROVED, arch_riscv64 30/30; commits a495e6157 + 21dba21dd (closes); QE handoff posted (two-flavour fixture, sv39 warn, aarch64 no-hardcode sweep).
 - **ACTIVE (2026-10-21):** #394 framebuffer backend completed, kernel track APPROVED, issue open for QE test work.
 - **ACTIVE (2026-10-21):** #354 PCI ECAM + IRQ/MSI parity — KERNEL TRACK COMPLETE (all APPROVED): Q3 embedded-DTB handoff (`d279308a0`, iter-3), Slice A ECAM discovery + MSI gates (`4df9be00a`), Slice B PLATFORM delivery (`021788c9f`), Slice C PRD/cache (`4dcdb4f7c`). Gates: x86 drivers 107/107 + capability 155/155 + logging_debug 36/36; aarch64 arch 33/33 + hal 57/57 + drivers 57/58 (known #391) + logging 36/36; riscv64 drivers 56/58 (#391x2) + hal 56/57 (#388) + arch 24/30 (#385x5 + #387). Remaining: QE test track (test_pci port, ECAM regression tests, cap_irq/cap_irq_notify per-arch rows, dma PRD/cache tests) + close.
