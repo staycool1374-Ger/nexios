@@ -12,6 +12,7 @@
 - TCBs are memset-zeroed, never ctor-built: set every non-zero sentinel at all 4 memset sites (create/create_user/clone/elf finalize) plus a mechanical defense that never trusts the value (see #3).
 - Release the primitive lock BEFORE reschedule; every BLOCKED leaves the ready queue (INV-2); waits are bounded or scheduler-mediated; test bridge sequences guard add_task too (§11, #208).
 - Test waits use need_resched + hlt (wait_for_termination_safe); BLOCKED + dequeue_ready; bare pause-spins starve ticks under TCG. Rendezvous tests must wake on message arrivals, never on third-party timing (tick-dependent peers/killers hang under load); cyclic-capable walks get trip-count fail-stops, inserts unlink-first.
+- Post-edit grep every site after repeated-pattern edits (replaceAll missed the differently-indented handle_irq drain — auditor S2, #307).
 - x86 trap regs[17]=RIP [18]=CS [19]=RFLAGS [20]=RSP(user-only): CS-gate SP; new .cpp needs gen.mk regen; GAS: `msr daifset, #2`; test TUs compile in release so CONFIG_DEBUG seam users must be guarded (#308).
 - Single-asm stack-save for GPR dumps (multi-block mov corrupts); exc_table is x86-only; release 0/0 rows are link-boot, not coverage (#306).
 - Work-begun retrieval comment BEFORE implementing (iter-1 REJECT was procedural check-7 with zero code findings); `init` is not a class (`task_init` is) (#305).
@@ -1448,3 +1449,8 @@
 - **Learned:** (1) x86 trap frame: regs[17]=RIP [18]=CS [19]=RFLAGS [20]=RSP (user only) — CS-gate the SP (x86_fault_sp) or print garbage. (2) aarch64 save_all: x0-29 @[0..239], x30@240, sp_el0@248(=[31]), elr@[32], spsr@[33] — dump_regs was off by one. (3) New .cpp needs `rm mk/cpp-rules.*.gen.mk` rule regen (no rule for target). (4) GAS wants `msr daifset, #2`, not bare `daifset`. (5) Test TUs compile in release: CONFIG_DEBUG seam users must be #if-guarded (+registrations). (6) `daifset`-style park replaces the ELR+=4 skip — silent continuation after kernel faults is a correctness violation.
 - **Adapted:** crash_dump module (format/emit/halt + seam); hook bool contract; vectors.S SP arg + park; riscv SP/SATP extension; spec doc updates.
 - **Style re-face:** unused static after caller removal = -Werror — attribute or gate immediately; `__attribute__((unused))` preferred over dead-code retention.
+
+### #307 — DMA fail-closed + cache maintenance (CLOSED 2026-10-21, SIL3 APPROVED iter-2)
+- **Learned:** (1) replaceAll on identical code blocks can miss a near-duplicate (handle_irq drain had different indentation) — the auditor's S2 caught it; always grep all call sites after a repeated-pattern edit. (2) Invalidate-then-latch with a local is the only safe shape for device-written status bytes (stale 0 == OK). (3) Spin/fast-path used-idx reads stay fence-only (timing) — maintenance belongs at publish + confirmed-completion points. (4) sizeof(type) everywhere, no byte literals — the no-hardcode rule extends to maintenance ranges.
+- **Adapted:** bm_prd_addr_ok predicate (QE-unit-testable); AHCI CT/CH clean + read/write/IDENTIFY points; virtio publish/submit/finish/ISR points in store-clean order.
+- **Style re-face:** verify repeated-pattern edits with a post-edit grep of every site.
