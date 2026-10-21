@@ -12,6 +12,7 @@
 - TCBs are memset-zeroed, never ctor-built: set every non-zero sentinel at all 4 memset sites (create/create_user/clone/elf finalize) plus a mechanical defense that never trusts the value (see #3).
 - Release the primitive lock BEFORE reschedule; every BLOCKED leaves the ready queue (INV-2); waits are bounded or scheduler-mediated; test bridge sequences guard add_task too (§11, #208).
 - Test waits use need_resched + hlt (wait_for_termination_safe); BLOCKED + dequeue_ready; bare pause-spins starve ticks under TCG. Rendezvous tests must wake on message arrivals, never on third-party timing (tick-dependent peers/killers hang under load); cyclic-capable walks get trip-count fail-stops, inserts unlink-first.
+- Byte-identity via per-function objdump diff (totals mislead); always_inline hot helpers; #ifndef + value #error as a pair; GAS needs `msr daifset, #n` (#309b).
 - Post-edit grep every site after repeated-pattern edits (replaceAll missed the differently-indented handle_irq drain — auditor S2, #307).
 - x86 trap regs[17]=RIP [18]=CS [19]=RFLAGS [20]=RSP(user-only): CS-gate SP; new .cpp needs gen.mk regen; GAS: `msr daifset, #2`; test TUs compile in release so CONFIG_DEBUG seam users must be guarded (#308).
 - Single-asm stack-save for GPR dumps (multi-block mov corrupts); exc_table is x86-only; release 0/0 rows are link-boot, not coverage (#306).
@@ -1454,3 +1455,8 @@
 - **Learned:** (1) replaceAll on identical code blocks can miss a near-duplicate (handle_irq drain had different indentation) — the auditor's S2 caught it; always grep all call sites after a repeated-pattern edit. (2) Invalidate-then-latch with a local is the only safe shape for device-written status bytes (stale 0 == OK). (3) Spin/fast-path used-idx reads stay fence-only (timing) — maintenance belongs at publish + confirmed-completion points. (4) sizeof(type) everywhere, no byte literals — the no-hardcode rule extends to maintenance ranges.
 - **Adapted:** bm_prd_addr_ok predicate (QE-unit-testable); AHCI CT/CH clean + read/write/IDENTIFY points; virtio publish/submit/finish/ISR points in store-clean order.
 - **Style re-face:** verify repeated-pattern edits with a post-edit grep of every site.
+
+### #309b — TCG barrier gate + notlbi removal (CLOSED 2026-10-21, SIL3 APPROVED)
+- **Learned:** (1) Replacing combined asm strings with helper calls can shift inlining elsewhere — prove byte-identity per-function via objdump, not totals; here only the new test fn differed. (2) always_inline is load-bearing at -Og for hot-path helpers. (3) GAS rejects bare `daifset` — use `msr daifset, #n` (matches io_impl idiom). (4) Duplicate static inline definitions in one TU are a hard error — post-edit grep for redefinition, not just the intended site. (5) A #error value-guard needs a companion #ifndef — undefined macros silently evaluate to 0.
+- **Adapted:** CONFIG_TCG_BARRIERS + system_barrier(); notlbi deleted both arches (zero callers proven); NOTE + BRIEFING corrections.
+- **Style re-face:** #ifndef + value #error always come as a pair for 0/1 macros.

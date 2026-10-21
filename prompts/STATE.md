@@ -5,6 +5,7 @@
 
 ## Active Summary
 ### Objective
+- **CLOSED (2026-10-21):** #309 remainder (TCG gate + notlbi), APPROVED, aa64 35/35 + byte-identity; commit 12f27ae4d (closes). #397 holds HW half. SEQUENCE COMPLETE: 304, 305, 306, 308, 391-triaged, 307, 309 done.
 - **CLOSED (2026-10-21):** #307 DMA maintenance, APPROVED iter-2 (S2 caught by audit, rejected_patch applied verbatim), #391 guard holds; commit 6a3ab16eb (closes). Next: #309b.
 - **CLOSED (2026-10-21):** #308 first-chance dump+halt, APPROVED, full 3-arch battery green; commit 6e0933f5c (closes). Unblocked by #306. Next: #391 triage.
 - **CLOSED (2026-10-21):** #306 reg dumps, APPROVED, debug_dump 4/4 x3 arches; commit 39b9aee86 (closes). Unblocks #308. Next: #308.
