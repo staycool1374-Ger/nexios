@@ -1,15 +1,26 @@
-diff --git a/tools/trim_dtb.py b/tools/trim_dtb.py
---- a/tools/trim_dtb.py
-+++ b/tools/trim_dtb.py
-@@ -20,7 +20,10 @@ def main() -> None:
-     if blob[:4] != b"\xd0\x0d\xfe\xed":
-         raise SystemExit("not a device-tree blob: %s" % src)
-     off_struct, off_strings = struct.unpack(">II", blob[8:16])
--    size_struct, size_strings = struct.unpack(">II", blob[32:40])
-+    # FDT header order (src/lib/fdt/fdt.h:30-31): size_dt_strings at +32,
-+    # size_dt_struct at +36. Unpack names must match, else the trim point
-+    # (off_strings + size_strings) lands on the wrong block end.
-+    size_strings, size_struct = struct.unpack(">II", blob[32:40])
-     version = struct.unpack(">I", blob[20:24])[0]
-     if version < 16:
-         raise SystemExit("unsupported FDT version %d" % version)
+diff --git a/src/kernel/driver/fw_cfg.cpp b/src/kernel/driver/fw_cfg.cpp
+--- a/src/kernel/driver/fw_cfg.cpp
++++ b/src/kernel/driver/fw_cfg.cpp
+@@ -168,9 +168,9 @@
+     return false;
+ }
+ 
+ bool fw_cfg_dma_write(uint16_t selector, const void *src, uint32_t len) {
+-    if (!src || len == 0 || len > sizeof(g_dma_page) - kDmaPayloadOff)
++    if (selector == 0 || !src || len == 0 || len > sizeof(g_dma_page) - kDmaPayloadOff)
+         return false;
+     uint64_t page_phys = phys_of(g_dma_page);
+     if (!page_phys)
+         return false;
+diff --git a/src/kernel/driver/ramfb.hpp b/src/kernel/driver/ramfb.hpp
+--- a/src/kernel/driver/ramfb.hpp
++++ b/src/kernel/driver/ramfb.hpp
+@@ -47,7 +47,7 @@
+ /// @brief Encode an `etc/ramfb` config (pure, QE-testable).
+ /// Wire order is big-endian; the swaps below run at compile time.
+ /// @param phys Guest-physical backing address (page-aligned, validated).
+-/// @param width Height in pixels; height in pixels (validated: fit in u32
++/// @param width Width in pixels; @param height Height in pixels (validated: fit in u32
+ /// when multiplied by 4 — the caller upholds the FB_MAX bound).
+ /// @return Big-endian wire encoding.
+ constexpr RamfbConfig make_ramfb_config(uint64_t phys, uint32_t width,
