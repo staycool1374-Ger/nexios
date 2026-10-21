@@ -1123,14 +1123,37 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     {
         uint64_t tag_addr = mb2_find_tag(6);
         if (tag_addr) {
+            // Issue #305: fail-closed tag6 validation. The tag's own size
+            // is untrusted (entry_size 0 = div-by-zero, size below the
+            // header = underflow, entries overrunning into adjacent tags),
+            // and each region is untrusted (base+length wraparound would
+            // corrupt the max-end PMM sizing below). Rejects skip without
+            // adding — never truncate, never clamp a region to fit.
+            auto *info = reinterpret_cast<Multiboot2Info *>(
+                kernel::gs::get_multiboot_info_ptr());
+            uint64_t info_end =
+                kernel::gs::get_multiboot_info_ptr() + info->total_size;
+            uint64_t avail =
+                (info_end > tag_addr) ? (info_end - tag_addr) : 0;
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *mem_tag = reinterpret_cast<MemoryMapTag *>(tag_addr);
-            uint64_t entries =
-                (mem_tag->size - sizeof(MemoryMapTag)) / mem_tag->entry_size;
+            uint64_t entries = mb2_mmap_validated_count(mem_tag, avail);
+            if (entries == 0) {
+                debug_write("[BOOT] tag6 has no usable entries "
+                            "(malformed or empty)\n");
+            }
             for (uint64_t i = 0; i < entries; ++i) {
                 auto &entry = mem_tag->entries[i];
+                if (entry.length == 0) {
+                    debug_write("[BOOT] tag6 entry skipped (zero length)\n");
+                    continue;
+                }
+                if (entry.base_addr + entry.length < entry.base_addr) {
+                    debug_write("[BOOT] tag6 entry skipped (overflow)\n");
+                    continue;
+                }
                 kernel::gs::boot_info().add_region(entry.base_addr, entry.length,
-                                       entry.type);
+                                        entry.type);
             }
         }
     }
