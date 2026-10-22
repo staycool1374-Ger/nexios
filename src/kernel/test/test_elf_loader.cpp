@@ -45,6 +45,16 @@ using namespace kernel;
 
 namespace {
 
+// Native ELF machine for synthetic headers (issue #352): the validator
+// gates e_machine per arch (x86_64 0x3E, AArch64 0xB7, RISC-V 0xF3).
+#if defined(CONFIG_ARCH_AARCH64)
+constexpr uint16_t kNativeEm = 0xB7;
+#elif defined(CONFIG_ARCH_RISCV64)
+constexpr uint16_t kNativeEm = 0xF3;
+#else
+constexpr uint16_t kNativeEm = 0x3E;
+#endif
+
 /// @brief Build a minimal valid ELF64 image into @p data (same shape as
 ///        test_elf's build_minimal_elf, but self-contained).
 uint64_t build_minimal_elf(elf::ELF64Header *hdr, uint8_t *data) {
@@ -56,7 +66,7 @@ uint64_t build_minimal_elf(elf::ELF64Header *hdr, uint8_t *data) {
     hdr->ident[4] = 2; // ELFCLASS64
     hdr->ident[5] = 1; // little-endian
     hdr->type = elf::ET_EXEC;
-    hdr->machine = 0x3E;
+    hdr->machine = kNativeEm;
     hdr->version = 1;
     hdr->entry = 0x400000;
     hdr->phoff = sizeof(elf::ELF64Header);
@@ -705,7 +715,7 @@ uint64_t build_rw_elf(elf::ELF64Header *hdr, uint8_t *data) {
     hdr->ident[4] = 2;
     hdr->ident[5] = 1;
     hdr->type = elf::ET_EXEC;
-    hdr->machine = 0x3E;
+    hdr->machine = kNativeEm;
     hdr->version = 1;
     hdr->entry = 0x400000;
     hdr->phoff = sizeof(elf::ELF64Header);
@@ -756,7 +766,7 @@ uint64_t build_bss_elf(elf::ELF64Header *hdr, uint8_t *data) {
     hdr->ident[4] = 2;
     hdr->ident[5] = 1;
     hdr->type = elf::ET_EXEC;
-    hdr->machine = 0x3E;
+    hdr->machine = kNativeEm;
     hdr->version = 1;
     hdr->entry = 0x400000;
     hdr->phoff = sizeof(elf::ELF64Header);

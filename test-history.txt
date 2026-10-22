@@ -4638,3 +4638,9 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-10-22 19:31:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 437ms STATUS: #352-riscv64-shootdown-contextid-final
 2026-10-22 19:31:00 memory_vmm PASSED: 18 FAILED: 0 TIME: 1159ms STATUS: #352-x86_64-shootdown-contextid-final
 2026-10-22 19:32:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 444ms STATUS: #352-aarch64-shootdown-contextid-final
+2026-10-22 19:40:00 proc_elf PASSED: 81 FAILED: 0 TIME: 2782ms STATUS: #352-aarch64-native-EM-fixtures
+2026-10-22 19:41:00 proc_elf PASSED: 77 FAILED: 0 TIME: 2738ms STATUS: #352-riscv64-native-EM-fixtures-gated4
+2026-10-22 19:42:00 proc_elf PASSED: 81 FAILED: 0 TIME: 2959ms STATUS: #352-riscv64-load-ungate
+2026-10-22 19:42:00 proc_elf PASSED: 131 FAILED: 0 TIME: 46189ms STATUS: #352-x86_64-EM-regression
+2026-10-22 19:43:00 elf_loader PASSED: 25 FAILED: 0 TIME: 1249ms STATUS: #352-riscv64-native-EM-fixtures
+2026-10-22 19:43:00 elf_loader PASSED: 25 FAILED: 0 TIME: 1108ms STATUS: #352-aarch64-native-EM-fixtures
