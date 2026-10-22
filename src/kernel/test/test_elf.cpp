@@ -29,6 +29,18 @@
 
 using namespace kernel;
 
+// Native ELF machine for synthetic headers (issue #352): the validator
+// gates e_machine per arch (x86_64 0x3E, AArch64 0xB7, RISC-V 0xF3), so
+// good-header fixtures must use the build arch's value; 0x28 (EM_ARM)
+// stays the universal bad-machine probe.
+#if defined(CONFIG_ARCH_AARCH64)
+constexpr uint16_t kNativeEm = 0xB7;
+#elif defined(CONFIG_ARCH_RISCV64)
+constexpr uint16_t kNativeEm = 0xF3;
+#else
+constexpr uint16_t kNativeEm = 0x3E;
+#endif
+
 // Runmode: kernel
 // Testidea: Validates that elf::validate_header returns false when given a
 // null pointer.
@@ -56,7 +68,7 @@ JARVIS_TEST(elf_validate_header_magic, "PRE: none | POST: none") {
     hdr.ident[5] = 1;
     hdr.ident[6] = 1;
     hdr.type = 2;
-    hdr.machine = 0x3E;
+    hdr.machine = kNativeEm;
     hdr.version = 1;
     hdr.ehsize = sizeof(elf::ELF64Header);
     hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
@@ -72,7 +84,7 @@ JARVIS_TEST(elf_validate_header_magic, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: Validates that an ELF header with an unsupported machine type
-// (0x28 instead of 0x3E) is rejected.
+// (0x28/EM_ARM on every 64-bit arch) is rejected.
 // Input: A valid ELF64Header with machine set to 0x28
 // Expect: JARVIS_ASSERT checks that !elf::validate_header(&hdr)
 // Depends: test, elf
@@ -86,7 +98,7 @@ JARVIS_TEST(elf_validate_header_bad_machine, "PRE: none | POST: none") {
     hdr.ident[5] = 1;
     hdr.ident[6] = 1;
     hdr.type = 2;
-    hdr.machine = 0x3E;
+    hdr.machine = kNativeEm;
     hdr.version = 1;
     hdr.ehsize = sizeof(elf::ELF64Header);
     hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
@@ -116,7 +128,7 @@ JARVIS_TEST(elf_validate_header_excessive_phnum, "PRE: none | POST: none") {
     hdr.ident[5] = 1;
     hdr.ident[6] = 1;
     hdr.type = 2;
-    hdr.machine = 0x3E;
+    hdr.machine = kNativeEm;
     hdr.version = 1;
     hdr.ehsize = sizeof(elf::ELF64Header);
     hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
@@ -145,7 +157,7 @@ JARVIS_TEST(elf_validate_header_bad_entry, "PRE: none | POST: none") {
     hdr.ident[5] = 1;
     hdr.ident[6] = 1;
     hdr.type = 2;
-    hdr.machine = 0x3E;
+    hdr.machine = kNativeEm;
     hdr.version = 1;
     hdr.ehsize = sizeof(elf::ELF64Header);
     hdr.phentsize = sizeof(elf::ELF64ProgramHeader);
@@ -156,7 +168,6 @@ JARVIS_TEST(elf_validate_header_bad_entry, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
-#if !defined(CONFIG_ARCH_RISCV64)
 static void build_minimal_elf(elf::ELF64Header *hdr,
                               elf::ELF64ProgramHeader *phdr, uint8_t *data) {
     hdr->ident[0] = 0x7F;
@@ -169,7 +180,7 @@ static void build_minimal_elf(elf::ELF64Header *hdr,
     for (int i = 7; i < 16; ++i)
         hdr->ident[i] = 0;
     hdr->type = elf::ET_EXEC;
-    hdr->machine = 0x3E;
+    hdr->machine = kNativeEm;
     hdr->version = 1;
     hdr->entry = 0x400000;
     hdr->phoff = sizeof(elf::ELF64Header);
@@ -198,7 +209,6 @@ static void build_minimal_elf(elf::ELF64Header *hdr,
         data[code_offset + i] = 0x90;
     }
 }
-#endif
 
 // Runmode: kernel
 // Testidea: Validates that loading an ELF with an invalid program segment is
@@ -206,7 +216,6 @@ static void build_minimal_elf(elf::ELF64Header *hdr,
 // Input: ELF with W^X violating segment (both writable and executable)
 // Expect: elf::load returns nullptr
 // Depends: test, elf
-#if !defined(CONFIG_ARCH_RISCV64)
 JARVIS_TEST(elf_load_invalid_segment, "PRE: none | POST: none") {
     elf::ELF64Header hdr{};
     elf::ELF64ProgramHeader phdr{};
@@ -221,7 +230,6 @@ JARVIS_TEST(elf_load_invalid_segment, "PRE: none | POST: none") {
     JARVIS_ASSERT(tcb == nullptr);
     JARVIS_TEST_PASS();
 }
-#endif
 
 // Runmode: kernel
 // Testidea: Validates that elf::load sets up stdin/stdout/stderr file
@@ -230,7 +238,6 @@ JARVIS_TEST(elf_load_invalid_segment, "PRE: none | POST: none") {
 // Expect: JARVIS_ASSERT checks tcb non-null, /dev/tty resolves, and fd_table
 // entries 0-2 exist, are used, and point to the tty vnode
 // Depends: test, elf, vfs
-#if !defined(CONFIG_ARCH_RISCV64)
 JARVIS_TEST(elf_load_sets_std_fds, "PRE: vfsd, iocd | POST: none") {
     elf::ELF64Header hdr{};
     elf::ELF64ProgramHeader phdr{};
@@ -254,7 +261,6 @@ JARVIS_TEST(elf_load_sets_std_fds, "PRE: vfsd, iocd | POST: none") {
     delete tcb;
     JARVIS_TEST_PASS();
 }
-#endif
 
 // Runmode: kernel
 // Testidea: Validates that elf::load allocates a user stack for the loaded
@@ -263,7 +269,6 @@ JARVIS_TEST(elf_load_sets_std_fds, "PRE: vfsd, iocd | POST: none") {
 // Expect: JARVIS_ASSERT checks tcb->user_stack_ non-zero and
 // tcb->user_stack_size_ equals mem::STACK_SIZE
 // Depends: test, elf
-#if !defined(CONFIG_ARCH_RISCV64)
 JARVIS_TEST(elf_load_creates_user_stack, "PRE: none | POST: none") {
     elf::ELF64Header hdr{};
     elf::ELF64ProgramHeader phdr{};
@@ -279,9 +284,7 @@ JARVIS_TEST(elf_load_creates_user_stack, "PRE: none | POST: none") {
     delete tcb;
     JARVIS_TEST_PASS();
 }
-#endif
 
-#if !defined(CONFIG_ARCH_RISCV64)
 JARVIS_TEST(elf_load_from_hhdm_buffer, "PRE: none | POST: none") {
     elf::ELF64Header hdr{};
     elf::ELF64ProgramHeader phdr{};
@@ -297,7 +300,6 @@ JARVIS_TEST(elf_load_from_hhdm_buffer, "PRE: none | POST: none") {
     delete tcb;
     JARVIS_TEST_PASS();
 }
-#endif
 
 // Runmode: kernel
 // Testidea: Registers all ELF-related unit tests with the test framework.
@@ -313,10 +315,8 @@ void register_elf_tests() {
     JARVIS_REGISTER_TEST(elf_validate_header_bad_machine);
     JARVIS_REGISTER_TEST(elf_validate_header_excessive_phnum);
     JARVIS_REGISTER_TEST(elf_validate_header_bad_entry);
-#if !defined(CONFIG_ARCH_RISCV64)
     JARVIS_REGISTER_TEST(elf_load_invalid_segment);
     JARVIS_REGISTER_TEST(elf_load_sets_std_fds);
     JARVIS_REGISTER_TEST(elf_load_creates_user_stack);
     JARVIS_REGISTER_TEST(elf_load_from_hhdm_buffer);
-#endif
 }

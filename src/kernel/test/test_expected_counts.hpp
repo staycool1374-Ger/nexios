@@ -46,12 +46,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex+semaphore
 
     // scheduler
-    {"scheduler_core",       21,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249) + 1 evict-backstop test (issue #250) + 1 starvation-breaker test (issue #242)
+    {"scheduler_core",       21,    21,      21     },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249) + 1 evict-backstop test (issue #250) + 1 starvation-breaker test (issue #242)
     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server scheduling policy
     {"scheduler_idle",       40,    0,       0      },  // idle_task(10) + idle_cleanup(1) + idle_monitor(29, issues #282/#283/#284/#285/#294)
-    {"scheduler_zombie",      5,    0,       0      },  // zombie_cleanup(4) + wcet_cleanup(1)
+    {"scheduler_zombie",      5,    5,       5      },  // zombie_cleanup(4) + wcet_cleanup(1)
     {"scheduler_preemption", 13,    0,       0      },  // preemption(7) + preemption_under_syscall(4) + 2 block-arm tests (issue #212)
     {"scheduler_budget",      6,    0,       0      },  // task budget accounting
     {"scheduler_cpu_load",    5,    0,       0      },  // idle/CPU load metrics
@@ -59,29 +59,29 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"scheduler_hrt",         4,    0,       0      },  // hard-RT time assertions on real dispatch (issue #102): rdtsc canary + IPC/semaphore wake latency + release jitter
 
     // task
-    {"task_core",             7,    4,       4      },  // TCB cleanup/page tables/clone + recent-ring claim (#264); off-x86: cleanup/create_user/elf-ipc/ring live, 3 synthetic-parent clone tests x86-gated pending kernel verdict (issue #356 QE note)
+    {"task_core",             7,    7,       7      },  // TCB cleanup/page tables/clone + recent-ring claim (#264); all arches: 3 clone tests use real create_user parents + ScopedCurrentTask impersonation (no dispatch) per #399 verdict, fixture parked BLOCKED before scope exit
     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
-    {"task_fpu",              0,    5,       5      },  // x86 files excluded from build (GCC 16); off-x86 FPU context (issue #353: detect/basic/sweep/clone/switch-area); x86 stays 0 (pre-existing empty-class stall)
+    {"task_fpu",              0,    7,       7      },  // x86 files excluded from build (GCC 16); off-x86 FPU context (issue #353: detect/basic/sweep/clone/switch-area) + user-task persist/isolate (Phase 2 vehicle); x86 stays 0 (pre-existing empty-class stall)
     {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
-    {"syscall_core",         33,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
+    {"syscall_core",         33,    30,      30     },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
     {"debug_syscall",         29,   29,      29     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2) + 3 death-publish guards (#379); arch-neutral, x86_64 measured via TCOUNT
 
     // process
-    {"process_lifecycle",    16,   12,      12     },  // process lifecycle, child table (12 + 4 MP-1/7); off-x86: 12 bookkeeping + kernel-half (arch-aware L0[0] check); 4 synthetic-parent clone tests x86-gated pending #399
+    {"process_lifecycle",    16,   16,      16     },  // process lifecycle, child table (12 + 4 MP-1/7); all arches: 4 clone tests use real create_user parents + ScopedCurrentTask impersonation (no dispatch) per #399 verdict, fixture parked BLOCKED before scope exit
     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
-    {"elf_loader",            25,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork + BSS-only DATA-canary live-E2E follow-up)
+    {"elf_loader",            25,   25,      25     },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork + BSS-only DATA-canary live-E2E follow-up) — off-x86 via #352 native-EM fixtures
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
-    {"process_pml4_clone",   13,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
-    {"pt_merge",              6,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
+    {"process_pml4_clone",   13,    13,      13     },  // fork deep-copy page tables (7 + 3 MP-7 named) — off-x86 via #352 real-parent clone + recursive independence walk (riscv64 L0[0] kernel window skipped by index; U=1 MMIO quirk filed as #401)
+    {"pt_merge",              6,    6,       6      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected — off-x86 via #352 per-arch codec (table_link/block_leaf/index_of)
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
 
     // cap — capability-based access control (CSpace)
@@ -138,7 +138,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
-    {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
+    {"ipc_timeout",           7,    7,       7      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
     {"ipc_extended",          13,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317)
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
     {"ipc_robustness",       11,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A) + 4 send_sync reply-matching regressions (issue #296; mid-wait DestDeath skipped, see test)
@@ -179,7 +179,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_page_tables",    13,   0,       0      },  // page-table pool, budget, no sharing + kernel-half runtime NX (#376) + boot W^X pins (#376)
     {"memory_kernel_isolation", 6,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s + teardown validation (issue #199)
     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
-    {"memory_vmm",           14,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60) + unmap-err holes (#366)
+    {"memory_vmm",           18,    15,      15     },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60) + unmap-err holes (#366) + #365 1G-geometry + 1G-reject-unaligned + tlb-shootdown-hook + context-ID-lifecycle (off-x86: shared + 4 new; 3 x86-only gates stay x86)
 
     // wcet / deadline
     {"wcet_overrun",          2,    0,       0      },  // WcetOverrunDetectionFires + DeadlineMissWithinWcet
@@ -297,7 +297,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_tracing",        25,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end, +1 destroy-after-teardown noop #373)
     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
     {"capability",          149,  0,       0      },  // all cap_* excl. iommu_live (#173): +2 pager dispatch, +1 frame_create (#134) + 1 pre-existing aggregate drift at HEAD (member fine rows all match the dump; aggregate never re-reconciled; reconciled #342) + 1 zero-esz ring probe (#343)
-    {"proc_elf",            131,  0,       0      },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD + 4 drift (#340 P1/P2 + #348, unrecorded) + 4 libc_thread (#303 M12)
+    {"proc_elf",            131,  81,      81     },  // process_* + elf_* + pt_merge + libc_verify 7 (issues #173, #75, #77) + loader vnode-leak pin + 5 libc_stdio + 5 libc_malloc + 3 libc_string + 4 libc_syscall + 2 cross_boundary (#303) + 1 ring3 create/trunc (#341) + 1 RO-perm pin (#271 P0) + 2 retention/balance (#271 P1) + 2 byte-identity/refusals (#271 P2) + 4 decay/canary/supersede/fork (#271 P3) + 1 BSS-only DATA-canary (#271 live-E2E) + 1 kbd-read delivery (#340 P0) + 6 pre-existing aggregate drift at HEAD + 4 drift (#340 P1/P2 + #348, unrecorded) + 4 libc_thread (#303 M12) — off-x86: 81 via #352 native-EM fixtures + riscv64 load-test ungate (elf_shared stays x86-only: dynamic linking)
     {"libc_verify",          8,    0,       0      },  // hosted-C Ring 3 verify (issue #75, x86_64-only) + wired activation/denial (#77) + Ring-3 create/trunc flag-translation probe (#341)
     {"libc_stdio",            5,    0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (#303, x86_64-only)
     {"libc_malloc",           5,    0,       0      },  // malloc0/align/calloc/realloc+OOM/cycle-no-leak (#303, x86_64-only)

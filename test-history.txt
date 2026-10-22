@@ -4591,3 +4591,82 @@ SUMMARY: total=3 ok=3 fail=0 ARCH=aarch64
 2026-10-22 17:44:17 ui PASSED: 19 FAILED: 0 TIME: 245ms
 
 SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
+2026-10-22 17:56:11 storage PASSED: 167 FAILED: 0 TIME: 21053ms STATUS: #350-riscv64-post-392-fix
+2026-10-22 17:56:11 storage PASSED: 167 FAILED: 0 TIME: 21048ms STATUS: #350-aarch64-post-392-fix
+2026-10-22 17:57:10 drivers PASSED: 62 FAILED: 0 TIME: 1956ms STATUS: #350-riscv64-post-merge-regression-check
+2026-10-22 17:57:30 drivers PASSED: 62 FAILED: 0 TIME: 1978ms STATUS: #350-aarch64-post-merge-regression-check
+2026-10-22 18:30:00 task_core PASSED: 7 FAILED: 0 TIME: 260ms STATUS: #356-riscv64-real-parent-rewrite
+2026-10-22 18:31:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 531ms STATUS: #356-riscv64-real-parent-rewrite
+2026-10-22 18:33:00 task_core PASSED: 0 FAILED: 0 TIME: 0 STATUS: #356-aarch64-wedge-no-BLOCKED-park-gdb-convicted
+2026-10-22 18:40:00 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0 STATUS: #356-aarch64-wedge-no-BLOCKED-park
+2026-10-22 18:44:00 task_core PASSED: 7 FAILED: 0 TIME: 220ms STATUS: #356-aarch64-BLOCKED-park-fix
+2026-10-22 18:45:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 501ms STATUS: #356-aarch64-BLOCKED-park-fix
+2026-10-22 18:45:00 task_core PASSED: 7 FAILED: 0 TIME: 232ms STATUS: #356-riscv64-BLOCKED-park-regression
+2026-10-22 18:45:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 529ms STATUS: #356-riscv64-BLOCKED-park-regression
+2026-10-22 18:46:00 task_core PASSED: 7 FAILED: 0 TIME: 488ms STATUS: #356-x86_64-BLOCKED-park-regression
+2026-10-22 18:46:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 1100ms STATUS: #356-x86_64-BLOCKED-park-regression
+2026-10-22 18:50:00 task_fpu PASSED: 5 FAILED: 0 TIME: 153ms STATUS: #353-riscv64-Phase1-post-merge-verify
+2026-10-22 18:50:00 task_fpu PASSED: 5 FAILED: 0 TIME: 149ms STATUS: #353-aarch64-Phase1-post-merge-verify
+2026-10-22 18:51:00 drivers_pci PASSED: 4 FAILED: 0 TIME: 133ms STATUS: #354-riscv64-post-merge-verify
+2026-10-22 18:51:00 drivers_pci PASSED: 4 FAILED: 0 TIME: 120ms STATUS: #354-aarch64-post-merge-verify
+2026-10-22 18:51:00 cap_irq PASSED: 11 FAILED: 0 TIME: 364ms STATUS: #354-riscv64-post-merge-verify
+2026-10-22 18:52:00 cap_irq PASSED: 11 FAILED: 0 TIME: 345ms STATUS: #354-aarch64-post-merge-verify
+2026-10-22 18:52:00 cap_irq_notify PASSED: 6 FAILED: 0 TIME: 217ms STATUS: #354-riscv64-post-merge-verify
+2026-10-22 18:52:00 cap_irq_notify PASSED: 6 FAILED: 0 TIME: 205ms STATUS: #354-aarch64-post-merge-verify
+2026-10-22 18:55:00 hal PASSED: 78 FAILED: 0 TIME: 2207ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:55:00 shell_interaction PASSED: 20 FAILED: 0 TIME: 748ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:56:00 ui PASSED: 78 FAILED: 0 TIME: 2631ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:56:00 configuration_build PASSED: 8 FAILED: 0 TIME: 234ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:57:00 hal PASSED: 76 FAILED: 0 TIME: 2160ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:57:00 shell_interaction PASSED: 20 FAILED: 0 TIME: 793ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:58:00 ui PASSED: 78 FAILED: 0 TIME: 2744ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:58:00 configuration_build PASSED: 8 FAILED: 0 TIME: 233ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:55:15 core_basic PASSED: 17 FAILED: 0 TIME: 7ms
+2026-10-22 18:55:23 storage PASSED: 40 FAILED: 0 TIME: 21ms
+2026-10-22 18:55:32 ui PASSED: 19 FAILED: 0 TIME: 309ms
+
+SUMMARY: total=3 ok=3 fail=0 ARCH=aarch64
+2026-10-22 18:55:48 storage PASSED: 40 FAILED: 0 TIME: 33ms
+2026-10-22 18:55:56 ui PASSED: 19 FAILED: 0 TIME: 243ms
+
+SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
+2026-10-22 19:20:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 380ms STATUS: #365-riscv64-new-regression-tests
+2026-10-22 19:21:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 374ms STATUS: #365-aarch64-new-regression-tests
+2026-10-22 19:21:00 memory_vmm PASSED: 16 FAILED: 0 TIME: 1046ms STATUS: #365-x86_64-new-regression-tests
+2026-10-22 19:30:00 memory_vmm PASSED: 14 FAILED: 1 TIME: 0 STATUS: #352-riscv64-shootdown-contextid-take1-time-uncaptured
+2026-10-22 19:30:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 440ms STATUS: #352-aarch64-shootdown-contextid-take1
+2026-10-22 19:31:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 437ms STATUS: #352-riscv64-shootdown-contextid-final
+2026-10-22 19:31:00 memory_vmm PASSED: 18 FAILED: 0 TIME: 1159ms STATUS: #352-x86_64-shootdown-contextid-final
+2026-10-22 19:32:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 444ms STATUS: #352-aarch64-shootdown-contextid-final
+2026-10-22 19:40:00 proc_elf PASSED: 81 FAILED: 0 TIME: 2782ms STATUS: #352-aarch64-native-EM-fixtures
+2026-10-22 19:41:00 proc_elf PASSED: 77 FAILED: 0 TIME: 2738ms STATUS: #352-riscv64-native-EM-fixtures-gated4
+2026-10-22 19:42:00 proc_elf PASSED: 81 FAILED: 0 TIME: 2959ms STATUS: #352-riscv64-load-ungate
+2026-10-22 19:42:00 proc_elf PASSED: 131 FAILED: 0 TIME: 46189ms STATUS: #352-x86_64-EM-regression
+2026-10-22 19:43:00 elf_loader PASSED: 25 FAILED: 0 TIME: 1249ms STATUS: #352-riscv64-native-EM-fixtures
+2026-10-22 19:43:00 elf_loader PASSED: 25 FAILED: 0 TIME: 1108ms STATUS: #352-aarch64-native-EM-fixtures
+2026-10-22 20:10:00 task_fpu PASSED: 7 FAILED: 0 TIME: 258ms STATUS: #353-riscv64-Phase2-vehicle
+2026-10-22 20:11:00 task_fpu PASSED: 5 FAILED: 2 TIME: 0 STATUS: #353-aarch64-Phase2-vehicle-take1-stub-bugs-time-uncaptured
+2026-10-22 20:12:00 task_fpu PASSED: 7 FAILED: 0 TIME: 248ms STATUS: #353-aarch64-Phase2-vehicle-final
+2026-10-22 20:13:00 task_core PASSED: 7 FAILED: 0 TIME: 229ms STATUS: #353-riscv64-vehicle-regression
+2026-10-22 20:13:00 task_core PASSED: 7 FAILED: 0 TIME: 216ms STATUS: #353-aarch64-vehicle-regression
+2026-10-22 20:14:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 1027ms STATUS: #353-riscv64-vehicle-regression
+2026-10-22 20:14:00 scheduler_core PASSED: 21 FAILED: 0 TIME: 966ms STATUS: #353-aarch64-vehicle-regression
+2026-10-22 20:15:00 ipc_timeout PASSED: 7 FAILED: 0 TIME: 262ms STATUS: #353-riscv64-vehicle-regression
+2026-10-22 20:15:00 ipc_timeout PASSED: 7 FAILED: 0 TIME: 252ms STATUS: #353-aarch64-vehicle-regression
+2026-10-22 20:16:00 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 2888ms STATUS: #353-riscv64-vehicle-regression
+2026-10-22 20:16:00 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 1851ms STATUS: #353-aarch64-vehicle-regression
+2026-10-22 20:17:00 syscall_core PASSED: 30 FAILED: 0 TIME: 925ms STATUS: #353-riscv64-vehicle-regression
+2026-10-22 20:17:00 syscall_core PASSED: 30 FAILED: 0 TIME: 895ms STATUS: #353-aarch64-vehicle-regression
+2026-10-22 20:20:00 servers_iocd PASSED: 7 FAILED: 0 TIME: 241ms STATUS: #303-aarch64-MMIO-live-verify
+2026-10-22 20:20:00 servers_iocd PASSED: 7 FAILED: 0 TIME: 244ms STATUS: #303-riscv64-MMIO-live-verify
+2026-10-22 20:21:00 debug_syscall PASSED: 29 FAILED: 0 TIME: 1037ms STATUS: #238-aarch64-flake-watch-run1
+2026-10-22 20:22:00 debug_syscall PASSED: 29 FAILED: 0 TIME: 1039ms STATUS: #238-aarch64-flake-watch-run2
+2026-10-22 20:22:00 debug_syscall PASSED: 29 FAILED: 0 TIME: 1055ms STATUS: #238-aarch64-flake-watch-run3
+2026-10-22 19:50:00 pt_merge PASSED: 6 FAILED: 0 TIME: 400ms STATUS: #352-x86_64-codec-port-rerun-stable
+2026-10-22 19:51:00 pt_merge PASSED: 6 FAILED: 0 TIME: 177ms STATUS: #352-aarch64-codec-port-rerun-stable
+2026-10-22 19:51:00 pt_merge PASSED: 5 FAILED: 1 TIME: 0 STATUS: #352-riscv64-late-mapping-2M-align-take1-time-uncaptured
+2026-10-22 19:52:00 pt_merge PASSED: 6 FAILED: 0 TIME: 180ms STATUS: #352-riscv64-codec-port-final
+2026-10-22 19:52:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 889ms STATUS: #352-x86_64-walk-port-control
+2026-10-22 19:53:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 403ms STATUS: #352-aarch64-walk-port
+2026-10-22 19:53:00 process_pml4_clone PASSED: 9 FAILED: 4 TIME: 0 STATUS: #352-riscv64-allowlist-walk-take1-time-uncaptured
+2026-10-22 19:54:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 465ms STATUS: #352-riscv64-walk-port-final
