@@ -4605,3 +4605,28 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-10-22 18:45:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 529ms STATUS: #356-riscv64-BLOCKED-park-regression
 2026-10-22 18:46:00 task_core PASSED: 7 FAILED: 0 TIME: 488ms STATUS: #356-x86_64-BLOCKED-park-regression
 2026-10-22 18:46:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 1100ms STATUS: #356-x86_64-BLOCKED-park-regression
+2026-10-22 18:50:00 task_fpu PASSED: 5 FAILED: 0 TIME: 153ms STATUS: #353-riscv64-Phase1-post-merge-verify
+2026-10-22 18:50:00 task_fpu PASSED: 5 FAILED: 0 TIME: 149ms STATUS: #353-aarch64-Phase1-post-merge-verify
+2026-10-22 18:51:00 drivers_pci PASSED: 4 FAILED: 0 TIME: 133ms STATUS: #354-riscv64-post-merge-verify
+2026-10-22 18:51:00 drivers_pci PASSED: 4 FAILED: 0 TIME: 120ms STATUS: #354-aarch64-post-merge-verify
+2026-10-22 18:51:00 cap_irq PASSED: 11 FAILED: 0 TIME: 364ms STATUS: #354-riscv64-post-merge-verify
+2026-10-22 18:52:00 cap_irq PASSED: 11 FAILED: 0 TIME: 345ms STATUS: #354-aarch64-post-merge-verify
+2026-10-22 18:52:00 cap_irq_notify PASSED: 6 FAILED: 0 TIME: 217ms STATUS: #354-riscv64-post-merge-verify
+2026-10-22 18:52:00 cap_irq_notify PASSED: 6 FAILED: 0 TIME: 205ms STATUS: #354-aarch64-post-merge-verify
+2026-10-22 18:55:00 hal PASSED: 78 FAILED: 0 TIME: 2207ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:55:00 shell_interaction PASSED: 20 FAILED: 0 TIME: 748ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:56:00 ui PASSED: 78 FAILED: 0 TIME: 2631ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:56:00 configuration_build PASSED: 8 FAILED: 0 TIME: 234ms STATUS: #355-riscv64-post-merge-verify
+2026-10-22 18:57:00 hal PASSED: 76 FAILED: 0 TIME: 2160ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:57:00 shell_interaction PASSED: 20 FAILED: 0 TIME: 793ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:58:00 ui PASSED: 78 FAILED: 0 TIME: 2744ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:58:00 configuration_build PASSED: 8 FAILED: 0 TIME: 233ms STATUS: #355-aarch64-post-merge-verify
+2026-10-22 18:55:15 core_basic PASSED: 17 FAILED: 0 TIME: 7ms
+2026-10-22 18:55:23 storage PASSED: 40 FAILED: 0 TIME: 21ms
+2026-10-22 18:55:32 ui PASSED: 19 FAILED: 0 TIME: 309ms
+
+SUMMARY: total=3 ok=3 fail=0 ARCH=aarch64
+2026-10-22 18:55:48 storage PASSED: 40 FAILED: 0 TIME: 33ms
+2026-10-22 18:55:56 ui PASSED: 19 FAILED: 0 TIME: 243ms
+
+SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
