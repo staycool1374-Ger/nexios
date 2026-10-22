@@ -22,6 +22,8 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/memory/vmm_internal.hpp>
+#include <kernel/arch/hal/context_id.hpp>
 #include <kernel/memory/vmm_errors.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/arch/page_table.hpp>
@@ -725,6 +727,265 @@ JARVIS_TEST(vmm_unmap_err_not_mapped, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Pin the 1 GiB block geometry + decode_block_base contract
+// (issue #365): the only multi-megabyte level the teardown free path
+// reasons about. Pure-function coverage — no PMM, no tables.
+// Input: Aligned/misaligned bases at the 1 GiB + 2 MiB levels.
+// Expect: Aligned decodes to the identical base; misaligned rejects with
+// out_base untouched; mask identities hold; 1 GiB-aligned implies
+// 2 MiB-aligned (level nesting).
+// Depends: kernel::decode_block_base, kBlock1G*/kHuge2M* (vmm_internal.hpp)
+JARVIS_TEST(vmm_block_1g_geometry, "PRE: none | POST: none") {
+    constexpr uint64_t kSentinel = 0xDEADBEEFDEADBEEFULL;
+    JARVIS_ASSERT_EQ(0x3FFFFFFFULL, kernel::kBlock1GOffsetMask);
+    JARVIS_ASSERT_EQ(~0x3FFFFFFFULL, kernel::kBlock1GBaseMask);
+    JARVIS_ASSERT_EQ(0x1FFFFFULL, kernel::kHuge2MOffsetMask);
+    JARVIS_ASSERT_EQ(512ULL * (kernel::kHuge2MOffsetMask + 1),
+                     kernel::kBlock1GOffsetMask + 1);
+
+    uint64_t out = kSentinel;
+    JARVIS_ASSERT(
+        kernel::decode_block_base(0x40000000ULL, kernel::kBlock1GOffsetMask, out));
+    JARVIS_ASSERT_EQ(0x40000000ULL, out);
+    // Zero is level-aligned (vacuous accept; no producer maps phys 0).
+    out = kSentinel;
+    JARVIS_ASSERT(
+        kernel::decode_block_base(0ULL, kernel::kBlock1GOffsetMask, out));
+    JARVIS_ASSERT_EQ(0ULL, out);
+    // Misaligned: 4 KiB, 2 MiB, and single-bit offsets all reject.
+    out = kSentinel;
+    JARVIS_ASSERT(!kernel::decode_block_base(0x40001000ULL,
+                                             kernel::kBlock1GOffsetMask, out));
+    JARVIS_ASSERT_EQ(kSentinel, out);
+    JARVIS_ASSERT(!kernel::decode_block_base(0x40200000ULL,
+                                             kernel::kBlock1GOffsetMask, out));
+    JARVIS_ASSERT_EQ(kSentinel, out);
+    JARVIS_ASSERT(!kernel::decode_block_base(0x40000001ULL,
+                                             kernel::kBlock1GOffsetMask, out));
+    JARVIS_ASSERT_EQ(kSentinel, out);
+    // Level nesting: a 1 GiB base also decodes at the 2 MiB level.
+    out = kSentinel;
+    JARVIS_ASSERT(kernel::decode_block_base(0x40000000ULL,
+                                            kernel::kHuge2MOffsetMask, out));
+    JARVIS_ASSERT_EQ(0x40000000ULL, out);
+    // 2 MiB level standalone.
+    out = kSentinel;
+    JARVIS_ASSERT(kernel::decode_block_base(0x200000ULL,
+                                            kernel::kHuge2MOffsetMask, out));
+    JARVIS_ASSERT_EQ(0x200000ULL, out);
+    out = kSentinel;
+    JARVIS_ASSERT(!kernel::decode_block_base(0x201000ULL,
+                                             kernel::kHuge2MOffsetMask, out));
+    JARVIS_ASSERT_EQ(kSentinel, out);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: A misaligned synthetic 1 GiB block leaf in scratch tables is
+// SKIPPED by free_user_pages, never freed, without halting (issue #365:
+// teardown pins validate-before-gate; skips preserve integrity).
+// Input: Scratch top + mid tables (user pages) with one hand-installed
+// 1 GiB block entry whose arch-decoded base is 1 GiB-misaligned but
+// user-owned (so the alignment gate is the only reason it survives);
+// per-arch block codec (x86 PS bit / aarch64 block descriptor / Sv39
+// R|W|X leaf). free_user_pages runs on the scratch root.
+// Expect: PMM delta is exactly the drained mid table (+1 x86/aarch64,
+// +0 riscv64 L0-direct); the data page is NOT freed; the walk visited
+// the slot (top entry cleared where the walker drains, preserved where
+// the defensive L0 site skips); no halt.
+// Depends: VMM::free_user_pages, PMM user pages, arch block codec
+JARVIS_TEST(vmm_free_user_pages_pdpt_1g_rejects_unaligned,
+            "PRE: none | POST: none") {
+    constexpr uint64_t kMask1G = 0x3FFFFFFFULL;
+#if !defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t kMask2M = 0x1FFFFFULL;
+#endif
+
+    auto *top_virt = static_cast<uint64_t *>(nullptr);
+    uint64_t top = PMM::alloc_user_page();
+    JARVIS_ASSERT(top != 0);
+    top_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + top);
+    for (size_t i = 0; i < 512; ++i)
+        top_virt[i] = 0;
+
+    // Find a user page whose block-decoded base is 1 GiB-misaligned: the
+    // kernel masks the entry address to the 2 MiB huge frame (x86/aarch64)
+    // or shift-decodes it (Sv39, identity for 4 KiB phys), then requires
+    // 1 GiB alignment. Free duds immediately; the pool is large so the
+    // first pages almost always qualify — the cap only guards a
+    // pathologically aligned pool.
+    uint64_t data = 0;
+    for (int tries = 0; tries < 64; ++tries) {
+        uint64_t cand = PMM::alloc_user_page();
+        JARVIS_ASSERT(cand != 0);
+#if defined(CONFIG_ARCH_RISCV64)
+        const uint64_t raw = cand;
+#else
+        const uint64_t raw = cand & ~kMask2M;
+#endif
+        if ((raw & kMask1G) != 0) {
+            data = cand;
+            break;
+        }
+        PMM::free_page(cand);
+    }
+    JARVIS_ASSERT_FMT(data != 0,
+                      "no 1G-misaligned user page in 64 tries (pool shape?)");
+
+#if defined(CONFIG_ARCH_RISCV64)
+    // Sv39 L0 defensive site: leaf = V|R|W|X|U with shift-coded PPN.
+    constexpr uint64_t SV39_V = 1ULL << 0;
+    constexpr uint64_t SV39_R = 1ULL << 1;
+    constexpr uint64_t SV39_W = 1ULL << 2;
+    constexpr uint64_t SV39_X = 1ULL << 3;
+    constexpr uint64_t SV39_U = 1ULL << 4;
+    constexpr size_t kSlot = 2;
+    top_virt[kSlot] =
+        ((data >> 12) << 10) | SV39_V | SV39_R | SV39_W | SV39_X | SV39_U;
+#else
+    uint64_t mid = PMM::alloc_user_page();
+    JARVIS_ASSERT(mid != 0);
+    auto *mid_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + mid);
+    for (size_t i = 0; i < 512; ++i)
+        mid_virt[i] = 0;
+    constexpr size_t kTopSlot = 0;
+    constexpr size_t kBlkSlot = 1;
+#if defined(CONFIG_ARCH_AARCH64)
+    // aarch64 L0 table descriptor (bits[1:0] = 11) + L1 block
+    // descriptor (bits[1:0] = 01, valid). AF/attrs zero are fine for a
+    // never-dispatched scratch entry — the teardown path only reads
+    // the descriptor type + frame.
+    top_virt[kTopSlot] = (mid & ~0xFFFULL) | 0x3ULL;
+    mid_virt[kBlkSlot] = (data & ~0xFFFULL) | 0x1ULL;
+#else
+    // x86_64 PML4->PDPT table link (no PS bit) + 1 GiB PDPT leaf
+    // (PRESENT|WRITE|USER|PS).
+    constexpr uint64_t P = 1ULL << 0;
+    constexpr uint64_t W = 1ULL << 1;
+    constexpr uint64_t U = 1ULL << 2;
+    constexpr uint64_t PS = 1ULL << 7;
+    top_virt[kTopSlot] = (mid & ~0xFFFULL) | P | W | U;
+    mid_virt[kBlkSlot] = (data & ~0xFFFULL) | P | W | U | PS;
+#endif
+#endif
+
+    const uint64_t free_before = PMM::free_pages_ref();
+    VMM::free_user_pages(top);
+    const int64_t delta = (int64_t)(PMM::free_pages_ref() - free_before);
+#if defined(CONFIG_ARCH_RISCV64)
+    // Nothing drained (L0-direct leaf skipped): delta 0, slot preserved.
+    JARVIS_ASSERT_FMT(delta == 0, "riscv64 L0 1G skip freed %ld pages",
+                      (long)delta);
+    JARVIS_ASSERT(top_virt[kSlot] != 0);
+#else
+    // Mid table drained (+1), misaligned data page skipped (not +2), top
+    // slot cleared by the draining walk.
+    JARVIS_ASSERT_FMT(delta == 1, "block skip freed %ld pages, want 1 (mid)",
+                      (long)delta);
+    JARVIS_ASSERT(top_virt[kTopSlot] == 0);
+#endif
+
+    // Manual cleanup of what free_user_pages provably leaves: the scratch
+    // top + the skipped data page (the mid table was drained above).
+    PMM::free_page(top);
+    PMM::free_page(data);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: VMM::tlb_shootdown (issue #352 step 2c-iii) performs the local
+// arch invalidate (full flush for all=true, VA+context-ID targeted
+// otherwise) then calls the weak smp_tlb_shootdown_hook (no-op default;
+// SMP override is #351/#389 territory, not asserted here).
+// Input: all=true, VA+ID targeted, and VA+ID-zero targeted invocations.
+// Expect: No crash/halt; zero PMM delta (invalidate allocates nothing).
+// Depends: VMM::tlb_shootdown, PMM
+JARVIS_TEST(vmm_tlb_shootdown_invokes_hook, "PRE: none | POST: none") {
+    const uint64_t free_before = PMM::free_pages_ref();
+    VMM::tlb_shootdown(0ULL, 0, true);
+    VMM::tlb_shootdown(0x50000000ULL, 1, false);
+    VMM::tlb_shootdown(0x50000000ULL, 0, false);
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "tlb_shootdown allocated %ld pages",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: context_id lifecycle (issue #352 step 2b allocators + 2c-i
+// targeted purge on free): distinct live IDs, freed IDs recyclable, live
+// IDs never reissued, free(0) is a no-op, tag format (0 → raw phys).
+// Input: alloc/free/tag through arch::context_id_* (x86 delegates to
+// pcid_*; aarch64/riscv64 use the ASID allocators).
+// Expect: Allocated IDs nonzero + pairwise distinct; re-alloc after free
+// returns the freed ID; tag(phys, 0) == phys; tag(phys, id) != phys.
+// Depends: arch::context_id_alloc/free/tag/supported
+JARVIS_TEST(vmm_context_id_lifecycle, "PRE: none | POST: none") {
+    if (!arch::context_id_supported()) {
+        // Fallback contract: unsupported → alloc 0, free/tag safe.
+        JARVIS_ASSERT_EQ(0, arch::context_id_alloc());
+        arch::context_id_free(0);
+        constexpr uint64_t kRootU = 0x40000000ULL;
+        JARVIS_ASSERT_EQ(arch::context_id_tag(kRootU, 0),
+                         arch::context_id_tag(kRootU, 0));
+        JARVIS_TEST_PASS();
+        return;
+    }
+    uint16_t a = arch::context_id_alloc();
+    uint16_t b = arch::context_id_alloc();
+    uint16_t c = arch::context_id_alloc();
+    JARVIS_ASSERT(a != 0);
+    JARVIS_ASSERT(b != 0);
+    JARVIS_ASSERT(c != 0);
+    JARVIS_ASSERT(a != b);
+    JARVIS_ASSERT(a != c);
+    JARVIS_ASSERT(b != c);
+    // Exhaust the pool (bounded): every handed-out ID must be distinct —
+    // a live ID is never reissued; small pools answer 0 instead. (Bounded
+    // at 300 consecutive distinct allocs: large 16-bit pools need not
+    // drain fully; hitting the cap with zero duplicates proves the
+    // invariant under pressure either way.)
+    uint16_t ids[300];
+    size_t n = 0;
+    ids[n++] = a;
+    ids[n++] = b;
+    ids[n++] = c;
+    for (int i = 0; i < 300; ++i) {
+        uint16_t id = arch::context_id_alloc();
+        if (id == 0)
+            break;
+        for (size_t k = 0; k < n; ++k) {
+            JARVIS_ASSERT_FMT(ids[k] != id,
+                              "context ID %u reissued while live", id);
+        }
+        if (n >= 300)
+            break;
+        ids[n++] = id;
+    }
+    // Tag contract (arch shapes differ — x86/aarch64 return raw phys for
+    // id 0, riscv64 always formats the SATP value): tagging is a pure
+    // function of (root, id), and a live ID changes the published value.
+    constexpr uint64_t kRoot = 0x40000000ULL;
+    const uint64_t untagged = arch::context_id_tag(kRoot, 0);
+    const uint64_t tagged = arch::context_id_tag(kRoot, a);
+    JARVIS_ASSERT_EQ(untagged, arch::context_id_tag(kRoot, 0));
+    JARVIS_ASSERT_EQ(tagged, arch::context_id_tag(kRoot, a));
+    JARVIS_ASSERT_FMT(tagged != untagged,
+                      "context ID %u not encoded in tagged root", a);
+    // free(0) is a no-op; epoch never moves backwards.
+    const uint64_t epoch_before = arch::context_id_epoch();
+    arch::context_id_free(0);
+    JARVIS_ASSERT(arch::context_id_epoch() >= epoch_before);
+    for (size_t k = 0; k < n; ++k)
+        arch::context_id_free(ids[k]);
+    // Pool recovered: a fresh alloc works after the drain.
+    uint16_t r = arch::context_id_alloc();
+    JARVIS_ASSERT(r != 0);
+    arch::context_id_free(r);
+    JARVIS_TEST_PASS();
+}
+
 void register_vmm_tests() {
     Logger::info("Registering VMM tests");
     JARVIS_REGISTER_TEST(vmm_unmap_already_unmapped);
@@ -740,6 +1001,10 @@ void register_vmm_tests() {
 #endif
     JARVIS_REGISTER_TEST(vmm_free_user_pages_skips_kernel_owned_entries);
     JARVIS_REGISTER_TEST(vmm_free_user_pages_fork_stack_scenario);
+    JARVIS_REGISTER_TEST(vmm_block_1g_geometry);
+    JARVIS_REGISTER_TEST(vmm_free_user_pages_pdpt_1g_rejects_unaligned);
+    JARVIS_REGISTER_TEST(vmm_tlb_shootdown_invokes_hook);
+    JARVIS_REGISTER_TEST(vmm_context_id_lifecycle);
     JARVIS_REGISTER_TEST(vmm_err_wrappers_and_queries);
     JARVIS_REGISTER_TEST(vmm_unmap_err_not_mapped);
     JARVIS_REGISTER_TEST(vmm_cap_frame_mmio_paths);

@@ -4630,3 +4630,11 @@ SUMMARY: total=3 ok=3 fail=0 ARCH=aarch64
 2026-10-22 18:55:56 ui PASSED: 19 FAILED: 0 TIME: 243ms
 
 SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
+2026-10-22 19:20:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 380ms STATUS: #365-riscv64-new-regression-tests
+2026-10-22 19:21:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 374ms STATUS: #365-aarch64-new-regression-tests
+2026-10-22 19:21:00 memory_vmm PASSED: 16 FAILED: 0 TIME: 1046ms STATUS: #365-x86_64-new-regression-tests
+2026-10-22 19:30:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 437ms STATUS: #352-riscv64-shootdown-contextid-take1-1fail
+2026-10-22 19:30:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 440ms STATUS: #352-aarch64-shootdown-contextid-take1
+2026-10-22 19:31:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 437ms STATUS: #352-riscv64-shootdown-contextid-final
+2026-10-22 19:31:00 memory_vmm PASSED: 18 FAILED: 0 TIME: 1159ms STATUS: #352-x86_64-shootdown-contextid-final
+2026-10-22 19:32:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 444ms STATUS: #352-aarch64-shootdown-contextid-final
