@@ -27,12 +27,6 @@
 // Issue #354: register_pci_tests is defined by test_pci.cpp (ECAM
 // regression port).
 
-/// @brief Stub — PML4 page-table tests are x86_64-specific.
-void register_pml4_clone_tests() {
-    kernel::Logger::info(
-        "Skipped: register_pml4_clone_tests (not supported on this arch)");
-}
-
 /// @brief Stub — not supported on non-x86 architectures.
 void register_virtio_tests() {
     kernel::Logger::info(
@@ -94,12 +88,6 @@ void register_buffer_pool_tests() {
 void register_apic_tpr_tests() {
     kernel::Logger::info(
         "Skipped: register_apic_tpr_tests (not supported on this arch)");
-}
-
-/// @brief Stub — PT-merge tests are x86_64-specific (PML4 merge semantics).
-void register_pt_merge_tests() {
-    kernel::Logger::info(
-        "Skipped: register_pt_merge_tests (not supported on this arch)");
 }
 
 #endif // !defined(CONFIG_ARCH_X86_64)

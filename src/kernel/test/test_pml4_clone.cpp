@@ -31,8 +31,6 @@
 #include <constants.hpp>
 #include "test_sched_helpers.hpp"
 
-#if defined(CONFIG_ARCH_X86_64)
-
 using namespace kernel;
 
 // v0.4.0 MP-7 compile-time requirement: the sharing flag must be GONE.
@@ -42,117 +40,154 @@ static_assert(!has_page_table_shared_v<TaskControlBlock>,
               "MP-7: TaskControlBlock::page_table_shared_ must be removed "
               "(deep-copy fork never shares table pages)");
 
-enum : uint64_t {
-    PML4_SHIFT = 39,
-    PDPT_SHIFT = 30,
-    PD_SHIFT = 21,
-    PT_SHIFT = 12,
-    PAGE_PRESENT = 1ULL << 0,
-    PAGE_WRITE = 1ULL << 1,
-    PAGE_USER = 1ULL << 2,
-    PAGE_HUGE = 1ULL << 7,
-    PAGE_NX = 1ULL << 63,
-};
+// Per-arch table codec (issue #352): hand-built scratch chains must satisfy
+// the arch's own table/leaf classifiers. Mirrors test_pt_merge.cpp §1
+// (kept byte-identical in shape so an auditor can diff the two files).
+#if defined(CONFIG_ARCH_RISCV64)
+constexpr unsigned kLevels = 3;
+#else
+constexpr unsigned kLevels = 4;
+#endif
+constexpr unsigned kEntries = 512; // arch::ArchPageTable::ENTRIES, all arches
 
-static void dbg_dump_pml4(uint64_t pml4_phys) {
-    auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                              (pml4_phys & ~0xFFFULL));
-    Logger::raw_write("PML4 at 0x");
-    Logger::print_hex(pml4_phys);
-    Logger::raw_write(":\n");
+/// @brief Level index of va (level 0 = top). riscv64 uses the public
+/// VMM Sv39 geometry (no ArchPageTable index helpers there by design).
+inline size_t index_of(uint64_t va, unsigned level) {
+#if defined(CONFIG_ARCH_RISCV64)
+    if (level == 0)
+        return static_cast<size_t>((va & VMM::L0_MASK) >> VMM::L0_SHIFT);
+    if (level == 1)
+        return static_cast<size_t>((va & VMM::L1_MASK) >> VMM::L1_SHIFT);
+    return static_cast<size_t>((va & VMM::L2_MASK) >> VMM::L2_SHIFT);
+#else
+    if (level == 0)
+        return arch::ArchPageTable::pml4_index(va);
+    if (level == 1)
+        return arch::ArchPageTable::pdpt_index(va);
+    if (level == 2)
+        return arch::ArchPageTable::pd_index(va);
+    return arch::ArchPageTable::pt_index(va);
+#endif
+}
 
-    for (int i = 0; i < 512; ++i) {
-        if (!(pml4[i] & PAGE_PRESENT))
+/// @brief Present bit (bit 0: P on x86, valid on aarch64, V on Sv39).
+inline bool entry_present(uint64_t e) { return (e & 1ULL) != 0; }
+
+/// @brief Table-vs-leaf classifier, mirroring vmm_arch_is_table per arch.
+inline bool entry_is_table(uint64_t e) {
+#if defined(CONFIG_ARCH_X86_64)
+    return (e & (1ULL << 7)) == 0; // PS bit clear = table
+#elif defined(CONFIG_ARCH_AARCH64)
+    return (e & 0x3ULL) == 0x3ULL; // bits[1:0] = 11 = table descriptor
+#else
+    return (e & 0xEULL) == 0; // R|W|X clear = table (V only)
+#endif
+}
+
+/// @brief Child-table phys from a table entry (never call on a leaf:
+/// raw masking leaks NX/UXN/PXN and mis-decodes Sv39 PPNs).
+inline uint64_t entry_table_child(uint64_t e) {
+#if defined(CONFIG_ARCH_RISCV64)
+    return VMM::sv39_pte_phys(e);
+#else
+    return e & ~0xFFFULL;
+#endif
+}
+
+/// @brief Child-table phys from a table entry (never call on a leaf:
+/// raw masking leaks NX/UXN/PXN and mis-decodes Sv39 PPNs).
+inline uint64_t entry_leaf_frame(uint64_t e) {
+#if defined(CONFIG_ARCH_RISCV64)
+    return VMM::sv39_pte_phys(e);
+#elif defined(CONFIG_ARCH_AARCH64)
+    return e & 0x0000FFFFFFFFF000ULL;
+#else
+    return e & 0x000FFFFFFFFFF000ULL;
+#endif
+}
+
+/// @brief Whether an entry marks user-accessible memory (for the #387
+/// inheritance rule: kernel-owned leaves are inherited by value and must
+/// be skipped by independence walks).
+inline bool entry_has_user_flag(uint64_t e) {
+#if defined(CONFIG_ARCH_X86_64)
+    return (e & (1ULL << 2)) != 0;
+#elif defined(CONFIG_ARCH_AARCH64)
+    return (e & (1ULL << 6)) != 0; // AP_USER
+#else
+    return (e & (1ULL << 4)) != 0; // U
+#endif
+}
+
+/// @brief Whether an entry is user-owned: U-flagged, or a frame from the
+/// user pool (covers flag-less kernel leaves mapping user frames).
+inline bool entry_is_user_owned(uint64_t e) {
+    if (entry_has_user_flag(e))
+        return true;
+    return PMM::is_user_page(entry_leaf_frame(e));
+}
+
+/// @brief Whether a present entry is a meaningful mapping at this level.
+/// Only Sv39 has reserved present-but-meaningless encodings: a V-only
+/// entry at the leaf level (L2) is an invalid non-leaf (#206) — neither
+/// a mapping to compare nor a table to descend.
+inline bool entry_is_meaningful(uint64_t e, unsigned level) {
+#if defined(CONFIG_ARCH_RISCV64)
+    if (level + 1 >= kLevels)
+        return (e & 0xEULL) != 0; // R|W|X set = real leaf
+#else
+    (void)e;
+    (void)level;
+#endif
+    return true;
+}
+
+/// @brief Level-aware page-table dumper (debug aid only): walks present
+/// entries, prints table/leaf classification via the arch codec, descends
+/// only into user-owned tables. Never uses raw masking on leaves.
+static void dbg_dump_tables(uint64_t root_phys, unsigned level,
+                            unsigned max_depth) {
+    if (level >= max_depth)
+        return;
+    auto *tab = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                             (root_phys & ~0xFFFULL));
+    for (unsigned i = 0; i < kEntries; ++i) {
+        const uint64_t e = tab[i];
+        if (!entry_present(e))
             continue;
-        uint64_t phys = pml4[i] & ~0xFFFULL;
-        Logger::raw_write("  [");
+        for (unsigned s = 0; s <= level; ++s)
+            Logger::raw_write("  ");
+        Logger::raw_write("[");
         Logger::print_dec(i);
-        Logger::raw_write("] PDPT=0x");
-        Logger::print_hex(phys);
-        if (pml4[i] & PAGE_USER)
-            Logger::raw_write(" US");
-        if (pml4[i] & PAGE_WRITE)
-            Logger::raw_write(" RW");
-        Logger::raw_write("\n");
-
-        if (i >= static_cast<int>(arch::PML4_USER_COUNT))
-            continue;
-        auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + phys);
-        for (int j = 0; j < 512; ++j) {
-            if (!(pdpt[j] & PAGE_PRESENT))
-                continue;
-            uint64_t pd_phys = pdpt[j] & ~0xFFFULL;
-            uint64_t va_base = (static_cast<uint64_t>(i) << PML4_SHIFT) |
-                               (static_cast<uint64_t>(j) << PDPT_SHIFT);
-            Logger::raw_write("    [");
-            Logger::print_dec(j);
-            Logger::raw_write("] ");
-            if (pdpt[j] & PAGE_HUGE) {
-                Logger::raw_write("1GiB page phys=0x");
-                Logger::print_hex(pd_phys);
-            } else {
-                Logger::raw_write("PD=0x");
-                Logger::print_hex(pd_phys);
-            }
-            Logger::raw_write(" va=0x");
-            Logger::print_hex(va_base);
-            if (pdpt[j] & PAGE_USER)
-                Logger::raw_write(" US");
-            if (pdpt[j] & PAGE_WRITE)
-                Logger::raw_write(" RW");
+        if (entry_is_table(e)) {
+            Logger::raw_write("] T=0x");
+            Logger::print_hex(entry_table_child(e));
             Logger::raw_write("\n");
-
-            if ((pdpt[j] & PAGE_HUGE) || !PMM::is_user_page(pd_phys))
-                continue;
-            auto *pd =
-                reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
-            for (int k = 0; k < 512; ++k) {
-                if (!(pd[k] & PAGE_PRESENT))
-                    continue;
-                uint64_t pt_phys = pd[k] & ~0xFFFULL;
-                Logger::raw_write("      [");
-                Logger::print_dec(k);
-                Logger::raw_write("] ");
-                if (pd[k] & PAGE_HUGE) {
-                    Logger::raw_write("2MiB page phys=0x");
-                    Logger::print_hex(pt_phys);
-                } else {
-                    Logger::raw_write("PT=0x");
-                    Logger::print_hex(pt_phys);
-                }
-                if (pd[k] & PAGE_USER)
-                    Logger::raw_write(" US");
-                if (pd[k] & PAGE_WRITE)
-                    Logger::raw_write(" RW");
-                Logger::raw_write("\n");
-
-                if ((pd[k] & PAGE_HUGE) || !PMM::is_user_page(pt_phys))
-                    continue;
-                auto *pt =
-                    reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
-                for (int l = 0; l < 512; ++l) {
-                    if (!(pt[l] & PAGE_PRESENT))
-                        continue;
-                    uint64_t leaf = pt[l] & ~0xFFFULL;
-                    Logger::raw_write("        [");
-                    Logger::print_dec(l);
-                    Logger::raw_write("] page=0x");
-                    Logger::print_hex(leaf);
-                    if (pt[l] & PAGE_USER)
-                        Logger::raw_write(" US");
-                    if (pt[l] & PAGE_WRITE)
-                        Logger::raw_write(" RW");
-                    Logger::raw_write("\n");
-                }
-            }
+            if (PMM::is_user_page(entry_table_child(e)))
+                dbg_dump_tables(entry_table_child(e), level + 1, max_depth);
+        } else {
+            Logger::raw_write("] L=0x");
+            Logger::print_hex(entry_leaf_frame(e));
+            if (entry_is_user_owned(e))
+                Logger::raw_write(" US");
+            Logger::raw_write("\n");
         }
     }
+}
+
+static void dbg_dump_pml4(uint64_t pml4_phys) {
+    Logger::raw_write("Tables at 0x");
+    Logger::print_hex(pml4_phys);
+    Logger::raw_write(":\n");
+    dbg_dump_tables(pml4_phys, 0, kLevels);
 }
 
 // Runmode: kernel
 // Testidea: Verifies clone_kernel_pml4() has zero entries in user range 0-255.
 // Input: Call clone_kernel_pml4(), inspect entries 0-255
-// Expect: All user entries are zero (no identity-map leak)
+// Expect: All user entries are zero (no identity-map leak) — except
+// riscv64 L0[0], the shared kernel identity/MMIO window (present but
+// never user-accessible, U==0, by design #205/#221).
 // Depends: kernel::memory::VMM
 JARVIS_TEST(pml4_clone_clears_user_entries, "PRE: none | POST: none") {
     uint64_t pml4 = VMM::clone_kernel_pml4();
@@ -161,12 +196,19 @@ JARVIS_TEST(pml4_clone_clears_user_entries, "PRE: none | POST: none") {
     auto *virt =
         reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + (pml4 & ~0xFFFULL));
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
+#if defined(CONFIG_ARCH_RISCV64)
+        // L0[0]: shared kernel identity/MMIO window (present, U==0).
+        if (i == 0 && virt[i] != 0 && !entry_has_user_flag(virt[i]))
+            continue;
+#endif
         if (virt[i] != 0) {
+            VMM::free_user_pages(pml4);
             PMM::free_page(pml4);
             JARVIS_FAIL("LEAK: entry %u = 0x%x", i, virt[i]);
         }
     }
 
+    VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     JARVIS_TEST_PASS();
 }
@@ -189,12 +231,14 @@ JARVIS_TEST(pml4_clone_kernel_entries_match, "PRE: none | POST: none") {
 
     for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
         if (new_virt[i] != kern_virt[i]) {
+            VMM::free_user_pages(pml4);
             PMM::free_page(pml4);
             JARVIS_FAIL("MISMATCH entry %u: new=0x%x kernel=0x%x", i,
                         new_virt[i], kern_virt[i]);
         }
     }
 
+    VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     JARVIS_TEST_PASS();
 }
@@ -204,7 +248,7 @@ JARVIS_TEST(pml4_clone_kernel_entries_match, "PRE: none | POST: none") {
 // copies them.
 // Input: Create parent PML4 with user mapping, create child PML4 copying
 // user entries
-// Expect: Child's user entries match parent's, kernel entries match kernel PML4
+// Expect: Child's user entries match parent's; kernel entries match kernel PML4
 // Depends: kernel::memory::VMM, PMM
 JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
     uint64_t parent_pml4 = VMM::clone_kernel_pml4();
@@ -212,10 +256,10 @@ JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
     uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
 
-    // Set up a USER-owned mapping at virtual address 0x400000 (typical ELF
-    // base) via map_page_in_pml4 — table pages become USER-owned so
-    // free_user_pages reclaims them.
-    constexpr uint64_t TEST_VA = 0x400000;
+    // Set up a USER-owned mapping at a VA in L0[1] on Sv39 (clear of the
+    // L0[0] kernel identity/MMIO window) via map_page_in_pml4 — table
+    // pages become USER-owned so free_user_pages reclaims them.
+    constexpr uint64_t TEST_VA = 0x40000000ULL;
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
     VMM::map_page_in_pml4(TEST_VA, user_page, true, false, parent_pml4);
@@ -223,9 +267,9 @@ JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
     // v0.4.0 MP-7 fork semantics: deep copy, never shared tables.
     JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, child_pml4));
 
-    size_t pml4_idx = (TEST_VA >> PML4_SHIFT) & 0x1FF;
-    size_t pdpt_idx = (TEST_VA >> PDPT_SHIFT) & 0x1FF;
-    JARVIS_ASSERT(pml4_idx < arch::PML4_USER_COUNT);
+    const size_t top_idx = index_of(TEST_VA, 0);
+    const size_t next_idx = index_of(TEST_VA, 1);
+    JARVIS_ASSERT(top_idx < arch::PML4_USER_COUNT);
 
     auto *parent_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                      (parent_pml4 & ~0xFFFULL));
@@ -235,16 +279,16 @@ JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
 
     // User entries are present in both (deep copy preserved the mapping).
-    JARVIS_ASSERT(child_virt[pml4_idx] & PAGE_PRESENT);
-    // But the table pages differ: the child owns its own PDPT/PD/PT chain.
-    JARVIS_ASSERT((child_virt[pml4_idx] & ~0xFFFULL) !=
-                  (parent_virt[pml4_idx] & ~0xFFFULL));
-    auto *child_pdpt = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + (child_virt[pml4_idx] & ~0xFFFULL));
-    auto *parent_pdpt = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + (parent_virt[pml4_idx] & ~0xFFFULL));
-    JARVIS_ASSERT((child_pdpt[pdpt_idx] & ~0xFFFULL) !=
-                  (parent_pdpt[pdpt_idx] & ~0xFFFULL));
+    JARVIS_ASSERT(entry_present(child_virt[top_idx]));
+    // But the table pages differ: the child owns its own chain.
+    JARVIS_ASSERT(entry_table_child(child_virt[top_idx]) !=
+                  entry_table_child(parent_virt[top_idx]));
+    auto *child_next = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + entry_table_child(child_virt[top_idx]));
+    auto *parent_next = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + entry_table_child(parent_virt[top_idx]));
+    JARVIS_ASSERT(entry_table_child(child_next[next_idx]) !=
+                  entry_table_child(parent_next[next_idx]));
 
     // The leaf data page differs too (deep copy of content).
     uint64_t parent_leaf =
@@ -273,37 +317,46 @@ JARVIS_TEST(pml4_fork_user_entries_match, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: Verifies mapping in child's PML4 does not corrupt parent's PML4.
-// Input: Create parent PML4, fork child, map a new page in child's PML4
-// Expect: Parent's PML4 unchanged, child's PML4 has the new mapping
+// Input: Create parent PML4, fork child via clone_kernel_pml4 (private
+// kernel-half copy, empty user half), map a new page in child's PML4.
+// Expect: Parent's PML4 unchanged, child's PML4 has the new mapping.
 // Depends: kernel::memory::VMM, PMM
 JARVIS_TEST(pml4_fork_no_child_corrupt_parent, "PRE: none | POST: none") {
     uint64_t parent_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(parent_pml4 != 0);
 
-    // Simulate fork: child copies parent's user entries
+    // Simulate fork: the child is a private clone (never a raw copy of
+    // the parent's user half — on riscv64 that would share the L0[0]
+    // kernel identity subtree and the child's teardown would free it
+    // out from under the parent).
     auto *parent_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                      (parent_pml4 & ~0xFFFULL));
-    uint64_t kernel_pml4 = VMM::get_kernel_pml4();
-    auto *kern_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                   (kernel_pml4 & ~0xFFFULL));
-
-    uint64_t child_pml4 = PMM::alloc_page();
+    uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
     auto *child_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                     (child_pml4 & ~0xFFFULL));
 
-    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i)
-        child_virt[i] = parent_virt[i];
-    for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i)
-        child_virt[i] = kern_virt[i];
+    // Pin the "copy is a no-op" claim: the fresh clone's user half is
+    // empty (riscv64 L0[0] kernel window allowed, never U-flagged).
+    for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
+#if defined(CONFIG_ARCH_RISCV64)
+        if (i == 0 && parent_virt[i] != 0 &&
+            !entry_has_user_flag(parent_virt[i]))
+            continue;
+#endif
+        JARVIS_ASSERT(parent_virt[i] == 0);
+        JARVIS_ASSERT(child_virt[i] == 0);
+    }
 
-    // Snapshot parent's user entries before child modifies
+    // Snapshot parent's user entries before child modifies (fixed-size
+    // snapshot: user half is 256 entries on every arch).
     uint64_t parent_snapshot[256];
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i)
         parent_snapshot[i] = parent_virt[i];
 
-    // Map a page in the CHILD's PML4 (note: the kid uses child_pml4)
-    uint64_t child_va = 0x7FFF00000000ULL;
+    // Map a page in the CHILD's PML4 (L0[1] on Sv39: clear of the
+    // L0[0] kernel window; low user half everywhere else).
+    constexpr uint64_t child_va = 0x58000000ULL;
     uint64_t child_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(child_phys != 0);
     VMM::map_page_in_pml4(child_va, child_phys, true, false, child_pml4);
@@ -324,11 +377,12 @@ JARVIS_TEST(pml4_fork_no_child_corrupt_parent, "PRE: none | POST: none") {
     uint64_t parent_t = VMM::virt_to_phys_in_pml4(child_va, parent_pml4);
     JARVIS_ASSERT(parent_t == 0);
 
-    // Free page-table pages allocated by map_page_in_pml4 before freeing the
-    // PML4
+    // Teardown: free_user_pages reclaims each root's own USER-owned
+    // tables + data (the child's fresh mapping, the riscv64 L0[0]
+    // subtree); then free the roots.
     VMM::free_user_pages(child_pml4);
-    PMM::free_page(child_phys);
     PMM::free_page(child_pml4);
+    VMM::free_user_pages(parent_pml4);
     PMM::free_page(parent_pml4);
     JARVIS_TEST_PASS();
 }
@@ -336,15 +390,15 @@ JARVIS_TEST(pml4_fork_no_child_corrupt_parent, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: v0.4.0 MP-7 — verifies deep_copy_user_pages() produces a
 // no-alias address space: the child's data frame AND its table pages
-// (PDPT/PD/PT) all differ from the parent's, and a write through the
-// child's frame does not disturb the parent's frame.
+// all differ from the parent's, and a write through the child's frame
+// does not disturb the parent's frame.
 // Input: Parent PML4 via clone_kernel_pml4; map a USER-owned data page at
 // TEST_VA via map_page_in_pml4 (user=true so the table pages are also
 // USER-owned and reclaimed by free_user_pages); deep_copy_user_pages into a
 // fresh child PML4.
 // Expect: virt_to_phys_in_pml4(TEST_VA, child) != parent phys; writing 0xA5
 // into the child frame via HHDM leaves the parent frame at its original
-// 0x5A; the child's PDPT page differs from the parent's.
+// 0x5A; the child's top table differs from the parent's.
 // Depends: kernel::memory::VMM, PMM
 JARVIS_TEST(pml4_deep_copy_no_alias, "PRE: none | POST: none") {
     uint64_t parent_pml4 = VMM::clone_kernel_pml4();
@@ -352,7 +406,7 @@ JARVIS_TEST(pml4_deep_copy_no_alias, "PRE: none | POST: none") {
     uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
 
-    constexpr uint64_t TEST_VA = 0x400000;
+    constexpr uint64_t TEST_VA = 0x40000000ULL;
     uint64_t parent_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(parent_phys != 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -377,15 +431,15 @@ JARVIS_TEST(pml4_deep_copy_no_alias, "PRE: none | POST: none") {
     JARVIS_ASSERT(child_frame[0] == 0xA5);
     JARVIS_ASSERT(parent_frame[0] == 0x5A);
 
-    // Table pages must differ too: the PML4 entries point to distinct PDPT
-    // pages.
+    // Table pages must differ too: the top-level entries point to
+    // distinct tables.
     auto *parent_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                      (parent_pml4 & ~0xFFFULL));
     auto *child_virt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                     (child_pml4 & ~0xFFFULL));
-    size_t pml4_idx = (TEST_VA >> PML4_SHIFT) & 0x1FF;
-    JARVIS_ASSERT((parent_virt[pml4_idx] & ~0xFFFULL) !=
-                  (child_virt[pml4_idx] & ~0xFFFULL));
+    const size_t top_idx = index_of(TEST_VA, 0);
+    JARVIS_ASSERT(entry_table_child(parent_virt[top_idx]) !=
+                  entry_table_child(child_virt[top_idx]));
 
     // Teardown: free_user_pages reclaims the USER-owned table pages AND the
     // data page in each address space (MP-7 unconditional semantics).
@@ -412,7 +466,7 @@ JARVIS_TEST(pml4_free_user_pages_shared_safe, "PRE: none | POST: none") {
     uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
 
-    constexpr uint64_t va = 0x10000000;
+    constexpr uint64_t va = 0x50000000ULL;
     uint64_t user_page = PMM::alloc_user_page();
     JARVIS_ASSERT(user_page != 0);
     VMM::map_page_in_pml4(va, user_page, true, false, parent_pml4);
@@ -425,12 +479,13 @@ JARVIS_TEST(pml4_free_user_pages_shared_safe, "PRE: none | POST: none") {
     JARVIS_ASSERT(child_leaf != 0);
     JARVIS_ASSERT(child_leaf != parent_leaf);
 
-    // Tear down the CHILD address space completely.
+    // Tear down the CHILD address space completely. free_user_pages
+    // clears each drained slot, so the gone-mapping assert must run
+    // BEFORE the root page itself is freed (no read-after-free).
     VMM::free_user_pages(child_pml4);
-    PMM::free_page(child_pml4);
-
     // The child's VA must be gone (its USER-owned tables + data reclaimed).
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, child_pml4) == 0);
+    PMM::free_page(child_pml4);
 
     // The parent is untouched: same leaf, still mapped.
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, parent_pml4) == user_page);
@@ -458,12 +513,19 @@ JARVIS_TEST(pml4_dump_no_user_entries, "PRE: none | POST: none") {
     auto *virt =
         reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + (pml4 & ~0xFFFULL));
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
-        if (virt[i] & PAGE_PRESENT) {
+#if defined(CONFIG_ARCH_RISCV64)
+        // L0[0]: shared kernel identity/MMIO window (present, U==0).
+        if (i == 0 && virt[i] != 0 && !entry_has_user_flag(virt[i]))
+            continue;
+#endif
+        if (entry_present(virt[i])) {
+            VMM::free_user_pages(pml4);
             PMM::free_page(pml4);
             JARVIS_FAIL("UNEXPECTED PRESENT entry %u = 0x%x", i, virt[i]);
         }
     }
 
+    VMM::free_user_pages(pml4);
     PMM::free_page(pml4);
     JARVIS_TEST_PASS();
 }
@@ -475,160 +537,144 @@ JARVIS_TEST(pml4_dump_no_user_entries, "PRE: none | POST: none") {
 // parent's, and the same holds at PD and PT levels; the data page is a
 // private copy (distinct phys, distinct tables).  Kernel entries mirror the
 // kernel PML4.
-// Input: parent kernel task (prio 11, is_user_ set) with a USER-owned data
-// page mapped at PROBE_VA; the dispatched lambda calls TaskControlBlock::
-// clone() (real fork path), then walks every present user entry of both
-// address spaces at all four levels.
-// Expect: every user table phys differs at PML4/PDPT/PD/PT; the child data
+// Input: REAL user parent (create_user: real PMM user stack + real user
+// page tables, never dispatched) impersonated via ScopedCurrentTask;
+// a USER-owned data page mapped at PROBE_VA; clone() runs the genuine
+// user copy path in the test's own context, then every present user
+// entry of both address spaces is walked recursively.
+// Expect: every user table phys differs at every level; the child data
 // leaf is a fresh copy (child_leaf != parent_leaf); kernel entries mirror
 // the kernel PML4; the parent mapping survives the child's teardown.
 // Depends: kernel::TaskControlBlock, kernel::Scheduler, kernel::memory::VMM
+//
+// Recursive independence walk: tables must be distinct pages at every
+// level; leaves owned by the user must differ; kernel-owned leaves are
+// inherited by value (#387) and skipped. Child-only entries are expected
+// (the child's own user stack) and not visited.
+static bool walk_tables_independent(uint64_t *p_tab, uint64_t *c_tab,
+                                    unsigned level, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+#if defined(CONFIG_ARCH_RISCV64)
+        // Skip the L0[0] kernel window entirely (level 0, index 0): it is
+        // kernel infrastructure with its own fork rules (inherit-or-drop
+        // per level, U=1 boot MMIO leaves) — not user fork semantics.
+        // No test maps user VA below 1 GiB, so nothing user-owned is
+        // skipped. Covered instead by the L0[0] allowlists + teardown
+        // tests. See the #352 walk note (U=1 RTC leaf L2[257]).
+        if (level == 0 && i == 0)
+            continue;
+#endif
+        const uint64_t p_ent = p_tab[i];
+        if (!entry_present(p_ent))
+            continue;
+        if (!entry_is_meaningful(p_ent, level))
+            continue; // reserved encoding, never a mapping (Sv39 L2 V-only)
+        const uint64_t c_ent = c_tab[i];
+        if (!entry_present(c_ent))
+            return false;
+        // At the leaf level every present entry is a leaf; above it the
+        // arch codec decides (blocks are leaves at any level).
+        const bool p_tabbed =
+            (level + 1 < kLevels) && entry_is_table(p_ent);
+        const bool c_tabbed =
+            (level + 1 < kLevels) && entry_is_table(c_ent);
+        if (p_tabbed != c_tabbed)
+            return false;
+        if (!p_tabbed) {
+            if (!entry_is_user_owned(p_ent))
+                continue;
+            if (entry_leaf_frame(c_ent) == entry_leaf_frame(p_ent))
+                return false;
+            continue;
+        }
+        if (entry_table_child(c_ent) == entry_table_child(p_ent))
+            return false;
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *p_next = reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + entry_table_child(p_ent));
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto *c_next = reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + entry_table_child(c_ent));
+        if (!walk_tables_independent(p_next, c_next, level + 1, kEntries))
+            return false;
+    }
+    return true;
+}
+
 JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
-    static uint64_t g_ran = 0;
-    static uint64_t g_all_indep = 0;
-    static uint64_t g_leaf_diff = 0;
-    static uint64_t g_parent_ok = 0;
-    constexpr uint64_t PROBE_VA = 0x20000000;
+    constexpr uint64_t PROBE_VA = 0x48000000ULL;
 
-    auto *parent = TaskControlBlock::create(
-        []() {
-            auto *self = Scheduler::current_task();
-            uint64_t regs[37] = {};
-            test::make_synthetic_clone_frame(regs);
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
+    JARVIS_ASSERT(parent != nullptr);
+    JARVIS_ASSERT(parent->is_user_);
+    uint64_t phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(phys != 0);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
 
-            auto *child = TaskControlBlock::clone(regs);
-            if (child == nullptr)
-                return;
-            g_all_indep = 1;
-            g_leaf_diff = 0;
+    uint64_t all_indep = 0;
+    uint64_t leaf_diff = 0;
+    uint64_t parent_ok = 0;
+    uint64_t ran = 0;
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
 
+        auto *child = TaskControlBlock::clone(regs);
+        if (child != nullptr) {
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *pv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    (self->get_page_table() & ~0xFFFULL));
+                                                    (parent->get_page_table() &
+                                                     ~0xFFFULL));
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *cv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    (child->get_page_table() & ~0xFFFULL));
-            auto *kv = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+                                                    (child->get_page_table() &
+                                                     ~0xFFFULL));
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *kv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                                    (VMM::get_kernel_pml4() &
+                                                     ~0xFFFULL));
 
-            for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
-                uint64_t p_ent = pv[i];
-                // Only parent-present entries must have an independent child
-                // copy.  Child-only entries are expected (its own user stack).
-                if (!(p_ent & PAGE_PRESENT))
-                    continue;
-                uint64_t c_ent = cv[i];
-                if (!(c_ent & PAGE_PRESENT) ||
-                    (c_ent & ~0xFFFULL) == (p_ent & ~0xFFFULL)) {
-                    g_all_indep = 0;
-                    continue;
-                }
-                auto *ppdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                           (p_ent & ~0xFFFULL));
-                auto *cpdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                           (c_ent & ~0xFFFULL));
-                for (size_t j = 0; j < 512; ++j) {
-                    uint64_t p_pd = ppdpt[j];
-                    if (!(p_pd & PAGE_PRESENT))
-                        continue;
-                    uint64_t c_pd = cpdpt[j];
-                    if ((p_pd & PAGE_HUGE) || (c_pd & PAGE_HUGE)) {
-                        if (!(c_pd & PAGE_PRESENT) ||
-                            (c_pd & ~0xFFFULL) == (p_pd & ~0xFFFULL)) {
-                            g_all_indep = 0;
-                        }
-                        continue;
-                    }
-                    if (!(c_pd & PAGE_PRESENT) ||
-                        (c_pd & ~0xFFFULL) == (p_pd & ~0xFFFULL)) {
-                        g_all_indep = 0;
-                        continue;
-                    }
-                    auto *ppd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                             (p_pd & ~0xFFFULL));
-                    auto *cpd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                             (c_pd & ~0xFFFULL));
-                    for (size_t k = 0; k < 512; ++k) {
-                        uint64_t p_pt = ppd[k];
-                        if (!(p_pt & PAGE_PRESENT))
-                            continue;
-                        uint64_t c_pt = cpd[k];
-                        if ((p_pt & PAGE_HUGE) || (c_pt & PAGE_HUGE)) {
-                            if (!(c_pt & PAGE_PRESENT) ||
-                                (c_pt & ~0xFFFULL) == (p_pt & ~0xFFFULL)) {
-                                g_all_indep = 0;
-                            }
-                            continue;
-                        }
-                        if (!(c_pt & PAGE_PRESENT) ||
-                            (c_pt & ~0xFFFULL) == (p_pt & ~0xFFFULL)) {
-                            g_all_indep = 0;
-                            continue;
-                        }
-                        auto *ppt = reinterpret_cast<uint64_t *>(
-                            arch::HHDM_OFFSET + (p_pt & ~0xFFFULL));
-                        auto *cpt = reinterpret_cast<uint64_t *>(
-                            arch::HHDM_OFFSET + (c_pt & ~0xFFFULL));
-                        for (size_t l = 0; l < 512; ++l) {
-                            uint64_t p_leaf = ppt[l];
-                            if (!(p_leaf & PAGE_PRESENT))
-                                continue;
-                            uint64_t c_leaf = cpt[l];
-                            if (!(c_leaf & PAGE_PRESENT) ||
-                                (c_leaf & ~0xFFFULL) == (p_leaf & ~0xFFFULL)) {
-                                g_all_indep = 0;
-                            }
-                        }
-                    }
-                }
-            }
+            all_indep = walk_tables_independent(pv, cv, 0,
+                                                  arch::PML4_USER_COUNT)
+                                ? 1
+                                : 0;
 
             // Kernel entries mirror the kernel PML4 in the child.
-            for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
+            for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES;
+                 ++i) {
                 if (cv[i] != kv[i])
-                    g_all_indep = 0;
+                    all_indep = 0;
             }
 
-            uint64_t p_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table());
-            uint64_t c_leaf =
+            const uint64_t p_leaf =
+                VMM::virt_to_phys_in_pml4(PROBE_VA, parent->get_page_table());
+            const uint64_t c_leaf =
                 VMM::virt_to_phys_in_pml4(PROBE_VA, child->get_page_table());
-            if (c_leaf == 0 || c_leaf == p_leaf) {
-                g_leaf_diff = 0;
-            } else {
-                g_leaf_diff = 1;
-            }
+            leaf_diff = (c_leaf != 0 && c_leaf != p_leaf) ? 1 : 0;
 
             child->cleanup();
             delete child;
 
             // Parent mapping survives the child's teardown.
-            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table()) ==
-                p_leaf) {
-                g_parent_ok = 1;
-            } else {
-                g_parent_ok = 0;
-            }
-            g_ran = 1;
-        },
-        11, 10);
-    JARVIS_ASSERT(parent != nullptr);
-    parent->is_user_ = true;           // simulate a user parent for clone()
-    parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
-    parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
-    uint64_t phys = PMM::alloc_user_page();
-    JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
+            parent_ok = (VMM::virt_to_phys_in_pml4(
+                             PROBE_VA, parent->get_page_table()) == p_leaf)
+                            ? 1
+                            : 0;
+            ran = 1;
+        }
+        // Park the never-dispatched fixture BEFORE scope exit: set_current()
+        // re-enqueues a READY/RUNNING outgoing current (issue #399 follow-up).
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
 
-    Scheduler::add_task(*parent);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(parent);
-    // The parent self-terminated and is owned by the zombie list.  Reclaim it
-    // BEFORE asserting so a failure cannot leak the parent TCB.
-    Scheduler::drain_zombie_list();
-
-    JARVIS_ASSERT_EQ(1ULL, g_ran);
-    JARVIS_ASSERT_EQ(1ULL, g_all_indep);
-    JARVIS_ASSERT_EQ(1ULL, g_leaf_diff);
-    JARVIS_ASSERT_EQ(1ULL, g_parent_ok);
+    JARVIS_ASSERT_EQ(1ULL, ran);
+    JARVIS_ASSERT_EQ(1ULL, all_indep);
+    JARVIS_ASSERT_EQ(1ULL, leaf_diff);
+    JARVIS_ASSERT_EQ(1ULL, parent_ok);
     // The parent's cleanup reclaimed the USER-owned leaf via free_user_pages.
     JARVIS_TEST_PASS();
 }
@@ -648,74 +694,66 @@ JARVIS_TEST(fork_deep_copy_child_tables_independent, "PRE: none | POST: none") {
 // resolves to its own leaf; PMM::free_pages_ref() returns to the baseline.
 // Depends: kernel::TaskControlBlock, kernel::Scheduler, kernel::memory::VMM
 JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
-    static uint64_t g_ran = 0;
-    static uint64_t g_leaf_diff = 0;
-    static uint64_t g_parent_entry_ok = 0;
-    static uint64_t g_parent_leaf_ok = 0;
-    constexpr uint64_t PROBE_VA = 0x20001000;
+    constexpr uint64_t PROBE_VA = 0x48001000ULL;
 
     uint64_t free_before = PMM::free_pages_ref();
 
-    auto *parent = TaskControlBlock::create(
-        []() {
-            auto *self = Scheduler::current_task();
-            uint64_t regs[37] = {};
-            test::make_synthetic_clone_frame(regs);
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
+    JARVIS_ASSERT(parent != nullptr);
+    JARVIS_ASSERT(parent->is_user_);
+    uint64_t phys = PMM::alloc_user_page();
+    JARVIS_ASSERT(phys != 0);
+    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
 
-            auto *child = TaskControlBlock::clone(regs);
-            if (child == nullptr)
-                return;
-            size_t pml4_idx = (PROBE_VA >> PML4_SHIFT) & 0x1FF;
+    uint64_t leaf_diff = 0;
+    uint64_t parent_entry_ok = 0;
+    uint64_t parent_leaf_ok = 0;
+    uint64_t ran = 0;
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
+
+        auto *child = TaskControlBlock::clone(regs);
+        if (child != nullptr) {
+            const size_t top_idx = index_of(PROBE_VA, 0);
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *pv = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    (self->get_page_table() & ~0xFFFULL));
-            uint64_t parent_pdpt = pv[pml4_idx] & ~0xFFFULL;
-            uint64_t parent_leaf =
-                VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table());
-            uint64_t child_leaf =
+                                                    (parent->get_page_table() &
+                                                     ~0xFFFULL));
+            const uint64_t parent_top = pv[top_idx];
+            const uint64_t parent_leaf =
+                VMM::virt_to_phys_in_pml4(PROBE_VA, parent->get_page_table());
+            const uint64_t child_leaf =
                 VMM::virt_to_phys_in_pml4(PROBE_VA, child->get_page_table());
-            if (child_leaf == 0 || child_leaf == parent_leaf) {
-                g_leaf_diff = 0;
-            } else {
-                g_leaf_diff = 1;
-            }
+            leaf_diff = (child_leaf != 0 && child_leaf != parent_leaf) ? 1 : 0;
 
             // Tear down the child: cleanup() frees its deep-copied tables
             // AND the copied data page (free_user_pages semantics).
             child->cleanup();
             delete child;
 
-            // Parent survives: PML4->PDPT entry unchanged, VA still resolves.
-            if ((pv[pml4_idx] & ~0xFFFULL) == parent_pdpt) {
-                g_parent_entry_ok = 1;
-            } else {
-                g_parent_entry_ok = 0;
-            }
-            if (VMM::virt_to_phys_in_pml4(PROBE_VA, self->get_page_table()) ==
-                parent_leaf) {
-                g_parent_leaf_ok = 1;
-            } else {
-                g_parent_leaf_ok = 0;
-            }
-            g_ran = 1;
-        },
-        11, 10);
-    JARVIS_ASSERT(parent != nullptr);
-    parent->is_user_ = true;           // simulate a user parent for clone()
-    parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
-    parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
-    uint64_t phys = PMM::alloc_user_page();
-    JARVIS_ASSERT(phys != 0);
-    VMM::map_page_in_pml4(PROBE_VA, phys, true, false, parent->get_page_table());
+            // Parent survives: top-level entry unchanged, VA still resolves.
+            parent_entry_ok = (pv[top_idx] == parent_top) ? 1 : 0;
+            parent_leaf_ok =
+                (VMM::virt_to_phys_in_pml4(PROBE_VA,
+                                           parent->get_page_table()) ==
+                 parent_leaf)
+                    ? 1
+                    : 0;
+            ran = 1;
+        }
+        // Park the never-dispatched fixture (issue #399 follow-up).
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
 
-    Scheduler::add_task(*parent);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(parent);
-    Scheduler::drain_zombie_list();
-
-    JARVIS_ASSERT_EQ(1ULL, g_ran);
-    JARVIS_ASSERT_EQ(1ULL, g_leaf_diff);
-    JARVIS_ASSERT_EQ(1ULL, g_parent_entry_ok);
-    JARVIS_ASSERT_EQ(1ULL, g_parent_leaf_ok);
+    JARVIS_ASSERT_EQ(1ULL, ran);
+    JARVIS_ASSERT_EQ(1ULL, leaf_diff);
+    JARVIS_ASSERT_EQ(1ULL, parent_entry_ok);
+    JARVIS_ASSERT_EQ(1ULL, parent_leaf_ok);
     // Full cycle returns to the PMM baseline: no leak, no double-free.
     JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
                       "PMM delta %ld pages after fork deep-copy teardown",
@@ -726,50 +764,47 @@ JARVIS_TEST(fork_free_user_pages_child_deepcopy, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: v0.4.0 MP-7 — TaskControlBlock::page_table_shared_ no longer
 // exists (compile-time static_assert) and a real clone() produces a child
-// whose page_table_ is a fresh deep copy (never equal to the parent's PML4).
-// Input: a REAL dispatched kernel task (prio 11) with a user-like TCB calls
-// clone(); capture the child's page_table_.
+// whose page_table_ is a fresh deep copy (never equal to the parent's).
+// Input: REAL user parent (create_user, never dispatched) impersonated via
+// ScopedCurrentTask; clone() runs the genuine user copy path; capture the
+// child's page_table_.
 // Expect: build succeeds with the field removed (static_assert passes);
 // child->get_page_table() != 0 and != parent->get_page_table(); the child stack
 // exists; teardown leaves zero task delta.
 // Depends: kernel::TaskControlBlock, kernel::Scheduler
 JARVIS_TEST(fork_page_table_shared_flag_absent, "PRE: none | POST: none") {
-    static uint64_t g_child_pt = 0;
-    static uint64_t g_child_stack = 0;
-    static uint64_t g_child_ok = 0;
-    static uint64_t g_parent_pt = 0;
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
+    JARVIS_ASSERT(parent != nullptr);
+    JARVIS_ASSERT(parent->is_user_);
+    const uint64_t parent_pt = parent->get_page_table();
+    JARVIS_ASSERT(parent_pt != 0);
+    uint64_t child_pt = 0;
+    uint64_t child_stack = 0;
+    uint64_t child_ok = 0;
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
 
-    auto *parent = TaskControlBlock::create(
-        []() {
-            uint64_t regs[37] = {};
-            test::make_synthetic_clone_frame(regs);
-
-            auto *child = TaskControlBlock::clone(regs);
-            if (child == nullptr)
-                return;
-            g_child_pt = child->get_page_table();
-            g_child_stack = child->user_stack_;
-            g_child_ok = (g_child_pt != 0 && g_child_stack != 0) ? 1 : 0;
+        auto *child = TaskControlBlock::clone(regs);
+        if (child != nullptr) {
+            child_pt = child->get_page_table();
+            child_stack = child->user_stack_;
+            child_ok = (child_pt != 0 && child_stack != 0) ? 1 : 0;
             child->cleanup();
             delete child;
-        },
-        11, 10);
-    JARVIS_ASSERT(parent != nullptr);
-    g_parent_pt = parent->get_page_table();
-    parent->is_user_ = true;           // simulate a user parent for clone()
-    parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
-    parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
-    Scheduler::add_task(*parent);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(parent);
-    // The parent self-terminated and is owned by the zombie list.  Reclaim it
-    // BEFORE asserting so a failure cannot leak the parent TCB.
-    Scheduler::drain_zombie_list();
+        }
+        // Park the never-dispatched fixture (issue #399 follow-up).
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
 
-    JARVIS_ASSERT_EQ(1ULL, g_child_ok);
-    JARVIS_ASSERT(g_child_pt != 0);
-    JARVIS_ASSERT(g_child_pt != g_parent_pt);
-    JARVIS_ASSERT(g_child_stack != 0);
+    JARVIS_ASSERT_EQ(1ULL, child_ok);
+    JARVIS_ASSERT(child_pt != 0);
+    JARVIS_ASSERT(child_pt != parent_pt);
+    JARVIS_ASSERT(child_stack != 0);
     JARVIS_TEST_PASS();
 }
 
@@ -793,8 +828,8 @@ JARVIS_TEST(fork_deep_copy_flag_parity, "PRE: none | POST: none") {
     uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
 
-    constexpr uint64_t RO_VA = 0x400000ULL;
-    constexpr uint64_t X_VA = 0x401000ULL;
+    constexpr uint64_t RO_VA = 0x40000000ULL;
+    constexpr uint64_t X_VA = 0x40001000ULL;
     uint64_t ro_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(ro_phys != 0);
     uint64_t x_phys = PMM::alloc_user_page();
@@ -829,9 +864,9 @@ JARVIS_TEST(fork_deep_copy_flag_parity, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: deep_copy fails closed on a user-range huge entry (no alias)
-// Input: parent user PD holds a hand-installed 2 MiB huge leaf;
-//        deep-copy into a child clone
-// Expect: false; child PD entry absent (no shared writable page);
+// Input: parent holds a hand-installed block leaf at the 2 MiB level
+//        (PD on x86, L2 on aarch64, L1 on Sv39); deep-copy into a child
+// Expect: false; child block entry absent (no shared writable page);
 //         parent restored + teardown neutral
 // Depends: kernel::memory::VMM::deep_copy_user_pages (issue #325-E)
 JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
@@ -840,9 +875,10 @@ JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
     uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
 
-    // Build the PD first with a throwaway 4 KiB map, then replace the PD
-    // entry with a huge leaf (tables stay; leaf ownership moves to huge).
-    constexpr uint64_t HUGE_VA = 0x400000ULL;
+    // Build the tables first with a throwaway 4 KiB map, then replace the
+    // block-level entry with a huge leaf (tables stay; leaf ownership
+    // moves to huge). HUGE_VA is in L0[1] on Sv39 (clear of L0[0]).
+    constexpr uint64_t HUGE_VA = 0x40000000ULL;
     uint64_t scratch_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(scratch_phys != 0);
     VMM::map_page_in_pml4(HUGE_VA, scratch_phys, true, false, parent_pml4);
@@ -850,24 +886,40 @@ JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
     PMM::free_page(scratch_phys);
     uint64_t huge_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(huge_phys != 0);
+    // Pre-mask to the 2M frame so every arch decodes the identical base.
+    const uint64_t huge_base = huge_phys & ~0x1FFFFFULL;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *parent_top = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (parent_pml4 & ~0xFFFULL));
-    const size_t pml4_idx = arch::ArchPageTable::pml4_index(HUGE_VA);
+    const size_t i0 = index_of(HUGE_VA, 0);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *parent_pdpt = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + (parent_top[pml4_idx] & ~0xFFFULL));
-    const size_t pdpt_idx = arch::ArchPageTable::pdpt_index(HUGE_VA);
+    auto *mid1 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + entry_table_child(parent_top[i0]));
+    const size_t i1 = index_of(HUGE_VA, 1);
+#if defined(CONFIG_ARCH_RISCV64)
+    auto *blk_tab = mid1;
+    const size_t ib = i1;
+#else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *parent_pd = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + (parent_pdpt[pdpt_idx] & ~0xFFFULL));
-    const size_t pd_idx = arch::ArchPageTable::pd_index(HUGE_VA);
-    constexpr uint64_t kX86HugeBit = 1ULL << 7;
-    // Capture the orphaned PT before overwriting its PD entry (free below;
-    // free_user_pages cannot reach it once the PD holds the huge leaf).
-    const uint64_t orphan_pt = parent_pd[pd_idx] & ~0xFFFULL;
-    parent_pd[pd_idx] =
-        (huge_phys & ~0x1FFFFFULL) | 0x7ULL | kX86HugeBit; // P+W+U+huge
+    auto *mid2 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + entry_table_child(mid1[i1]));
+    const size_t ib = index_of(HUGE_VA, 2);
+    auto *blk_tab = mid2;
+#endif
+    // Capture the orphaned next-level table before overwriting its entry
+    // (free below; free_user_pages cannot reach it once the block leaf
+    // is installed).
+    const uint64_t orphan = entry_table_child(blk_tab[ib]);
+#if defined(CONFIG_ARCH_X86_64)
+    blk_tab[ib] = (huge_base & ~0xFFFULL) | 0x87ULL; // P+W+U+huge
+#elif defined(CONFIG_ARCH_AARCH64)
+    // valid + block descriptor + EL0 access (USER bit is load-bearing).
+    blk_tab[ib] = (huge_base & ~0xFFFULL) | 0x1ULL | (1ULL << 6);
+#else
+    // Sv39 megapage leaf: V|R|W|U (USER bit is load-bearing).
+    blk_tab[ib] =
+        VMM::sv39_phys_pte(huge_base) | 0x1ULL | 0x2ULL | 0x4ULL | 0x10ULL;
+#endif
     // Issue #387: the USER bit is load-bearing — a production user huge
     // PTE carries U=1 (the throwaway map above was user); U=0 + user frame
     // is a hand-made corner the fork copy inherits by value.
@@ -875,26 +927,30 @@ JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
 
     JARVIS_ASSERT(!VMM::deep_copy_user_pages(parent_pml4, child_pml4));
 
-    // No alias: the child installed no PD entry for the huge region.
+    // No alias: the child installed no block entry for the huge region.
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *child_top = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (child_pml4 & ~0xFFFULL));
-    if ((child_top[pml4_idx] & 1ULL) != 0) {
+    if (entry_present(child_top[i0])) {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        auto *child_pdpt = reinterpret_cast<uint64_t *>(
-            arch::HHDM_OFFSET + (child_top[pml4_idx] & ~0xFFFULL));
-        if ((child_pdpt[pdpt_idx] & 1ULL) != 0) {
+        auto *child_mid1 = reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + entry_table_child(child_top[i0]));
+        if (entry_present(child_mid1[i1])) {
+#if defined(CONFIG_ARCH_RISCV64)
+            JARVIS_ASSERT(!entry_present(child_mid1[ib]));
+#else
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *child_pd = reinterpret_cast<uint64_t *>(
-                arch::HHDM_OFFSET + (child_pdpt[pdpt_idx] & ~0xFFFULL));
-            JARVIS_ASSERT((child_pd[pd_idx] & 1ULL) == 0);
+            auto *child_mid2 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + entry_table_child(child_mid1[i1]));
+            JARVIS_ASSERT(!entry_present(child_mid2[ib]));
+#endif
         }
     }
 
     // Restore + manual free (hand-made entry: bypass free_user_pages).
     PMM::free_page(huge_phys);
-    PMM::free_page(orphan_pt);
-    parent_pd[pd_idx] = 0;
+    PMM::free_page(orphan);
+    blk_tab[ib] = 0;
     arch::ArchPageTable::tlb_flush(HUGE_VA);
     VMM::free_user_pages(child_pml4);
     PMM::free_page(child_pml4);
@@ -907,9 +963,9 @@ JARVIS_TEST(fork_deep_copy_huge_fails_closed, "PRE: none | POST: none") {
 // Testidea: deep_copy OOM returns false and the partial child is fully
 //          reclaimed by teardown (caller-destroys contract)
 // Input: parent holds one user page; both pools drained (unified
-//        refusal-loop drain); 3 tables freed back so the copy installs
-//        PDPT+PD+PT then fails on the data page
-// Expect: false; free_user_pages(child) reclaims the 3 tables;
+//        refusal-loop drain); a measured number of tables freed back so
+//        the copy installs tables then fails on the data page
+// Expect: false; free_user_pages(child) reclaims the partial tables;
 //         fully neutral counters
 // Depends: kernel::memory::VMM::deep_copy_user_pages (issue #325-E)
 JARVIS_TEST(fork_deep_copy_oom_reclaimed, "PRE: none | POST: none") {
@@ -921,10 +977,24 @@ JARVIS_TEST(fork_deep_copy_oom_reclaimed, "PRE: none | POST: none") {
     JARVIS_ASSERT(parent_pml4 != 0);
     uint64_t child_pml4 = VMM::clone_kernel_pml4();
     JARVIS_ASSERT(child_pml4 != 0);
-    constexpr uint64_t VA = 0x400000ULL;
+    constexpr uint64_t VA = 0x40000000ULL;
     uint64_t data_phys = PMM::alloc_user_page();
     JARVIS_ASSERT(data_phys != 0);
     VMM::map_page_in_pml4(VA, data_phys, true, false, parent_pml4);
+
+    // Measure: run the copy once against a probe child to count the
+    // allocations a single-page deep-copy needs (tables + data). The
+    // count is arch-dependent (riscv64 materialises the inherited L0[0]
+    // subtree, so a hard-coded number is wrong by construction).
+    uint64_t probe_pml4 = VMM::clone_kernel_pml4();
+    JARVIS_ASSERT(probe_pml4 != 0);
+    const uint64_t probe_before = PMM::free_pages_ref();
+    JARVIS_ASSERT(VMM::deep_copy_user_pages(parent_pml4, probe_pml4));
+    const uint64_t probe_after = PMM::free_pages_ref();
+    JARVIS_ASSERT(probe_after < probe_before);
+    const uint64_t kAllocsNeeded = probe_before - probe_after;
+    VMM::free_user_pages(probe_pml4);
+    PMM::free_page(probe_pml4);
 
     arch::IrqGuard drain_guard;
     PMM::rebuild_free_list();
@@ -948,8 +1018,10 @@ JARVIS_TEST(fork_deep_copy_oom_reclaimed, "PRE: none | POST: none") {
             break;
         }
     }
-    // PDPT + PD + PT for the copy; the data page then fails.
-    for (size_t keep = 0; keep < 3; ++keep) {
+    // Free back all-but-one of the measured allocations, so the copy
+    // installs tables then fails on the final (data) allocation.
+    JARVIS_ASSERT(kAllocsNeeded > 0);
+    for (size_t keep = 0; keep < kAllocsNeeded - 1; ++keep) {
         JARVIS_ASSERT(chain_head != 0);
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         auto *link = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -992,5 +1064,3 @@ void register_pml4_clone_tests() {
     JARVIS_REGISTER_TEST(fork_deep_copy_huge_fails_closed);
     JARVIS_REGISTER_TEST(fork_deep_copy_oom_reclaimed);
 }
-
-#endif // CONFIG_ARCH_X86_64

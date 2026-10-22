@@ -80,8 +80,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit/brk
     {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
-    {"process_pml4_clone",   13,    0,       0      },  // fork deep-copy page tables (7 + 3 MP-7 named)
-    {"pt_merge",              6,    0,       0      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected
+    {"process_pml4_clone",   13,    13,      13     },  // fork deep-copy page tables (7 + 3 MP-7 named) — off-x86 via #352 real-parent clone + recursive independence walk (riscv64 L0[0] kernel window skipped by index; U=1 MMIO quirk filed as #401)
+    {"pt_merge",              6,    6,       6      },  // kernel-half merge (issue #96): equivalence, idempotent, late-mapping, allocates-nothing, mismatch-detected — off-x86 via #352 per-arch codec (table_link/block_leaf/index_of)
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
 
     // cap — capability-based access control (CSpace)

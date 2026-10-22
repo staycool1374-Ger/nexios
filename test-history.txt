@@ -4633,7 +4633,7 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-10-22 19:20:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 380ms STATUS: #365-riscv64-new-regression-tests
 2026-10-22 19:21:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 374ms STATUS: #365-aarch64-new-regression-tests
 2026-10-22 19:21:00 memory_vmm PASSED: 16 FAILED: 0 TIME: 1046ms STATUS: #365-x86_64-new-regression-tests
-2026-10-22 19:30:00 memory_vmm PASSED: 13 FAILED: 0 TIME: 437ms STATUS: #352-riscv64-shootdown-contextid-take1-1fail
+2026-10-22 19:30:00 memory_vmm PASSED: 14 FAILED: 1 TIME: 0 STATUS: #352-riscv64-shootdown-contextid-take1-time-uncaptured
 2026-10-22 19:30:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 440ms STATUS: #352-aarch64-shootdown-contextid-take1
 2026-10-22 19:31:00 memory_vmm PASSED: 15 FAILED: 0 TIME: 437ms STATUS: #352-riscv64-shootdown-contextid-final
 2026-10-22 19:31:00 memory_vmm PASSED: 18 FAILED: 0 TIME: 1159ms STATUS: #352-x86_64-shootdown-contextid-final
@@ -4644,3 +4644,11 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-10-22 19:42:00 proc_elf PASSED: 131 FAILED: 0 TIME: 46189ms STATUS: #352-x86_64-EM-regression
 2026-10-22 19:43:00 elf_loader PASSED: 25 FAILED: 0 TIME: 1249ms STATUS: #352-riscv64-native-EM-fixtures
 2026-10-22 19:43:00 elf_loader PASSED: 25 FAILED: 0 TIME: 1108ms STATUS: #352-aarch64-native-EM-fixtures
+2026-10-22 19:50:00 pt_merge PASSED: 6 FAILED: 0 TIME: 400ms STATUS: #352-x86_64-codec-port-rerun-stable
+2026-10-22 19:51:00 pt_merge PASSED: 6 FAILED: 0 TIME: 177ms STATUS: #352-aarch64-codec-port-rerun-stable
+2026-10-22 19:51:00 pt_merge PASSED: 5 FAILED: 1 TIME: 0 STATUS: #352-riscv64-late-mapping-2M-align-take1-time-uncaptured
+2026-10-22 19:52:00 pt_merge PASSED: 6 FAILED: 0 TIME: 180ms STATUS: #352-riscv64-codec-port-final
+2026-10-22 19:52:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 889ms STATUS: #352-x86_64-walk-port-control
+2026-10-22 19:53:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 403ms STATUS: #352-aarch64-walk-port
+2026-10-22 19:53:00 process_pml4_clone PASSED: 9 FAILED: 4 TIME: 0 STATUS: #352-riscv64-allowlist-walk-take1-time-uncaptured
+2026-10-22 19:54:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 465ms STATUS: #352-riscv64-walk-port-final

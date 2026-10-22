@@ -29,21 +29,107 @@
 #include <logger.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/arch/page_table.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <constants.hpp>
 
-#if defined(CONFIG_ARCH_X86_64)
-
 using namespace kernel;
 
-enum : uint64_t {
-    PML4_SHIFT = 39,
-    PAGE_PRESENT = 1ULL << 0,
-    PAGE_WRITE = 1ULL << 1,
-    PAGE_HUGE = 1ULL << 7,
-    PAGE_NX = 1ULL << 63,
-};
+// Per-arch table codec (issue #352): the merge tests hand-build scratch
+// chains, so every entry must satisfy the arch's own table/leaf
+// classifiers (VMM::is_table_entry → vmm_arch_is_table). Raw x86 flag
+// idioms mis-decode elsewhere (aarch64 needs the 0b11 table descriptor,
+// Sv39 needs the shift-coded PPN). Table geometry: 4 levels on
+// x86_64/aarch64 (L0→L1→L2→L3), 3 on riscv64/Sv39 (L0→L1→L2).
+#if defined(CONFIG_ARCH_RISCV64)
+constexpr unsigned kLevels = 3;
+#else
+constexpr unsigned kLevels = 4;
+#endif
+constexpr unsigned kEntries = 512; // arch::ArchPageTable::ENTRIES, all arches
+
+/// @brief Level index of va (level 0 = top). riscv64 uses the public
+/// VMM Sv39 geometry (no ArchPageTable index helpers there by design).
+inline size_t index_of(uint64_t va, unsigned level) {
+#if defined(CONFIG_ARCH_RISCV64)
+    if (level == 0)
+        return static_cast<size_t>((va & VMM::L0_MASK) >> VMM::L0_SHIFT);
+    if (level == 1)
+        return static_cast<size_t>((va & VMM::L1_MASK) >> VMM::L1_SHIFT);
+    return static_cast<size_t>((va & VMM::L2_MASK) >> VMM::L2_SHIFT);
+#else
+    if (level == 0)
+        return arch::ArchPageTable::pml4_index(va);
+    if (level == 1)
+        return arch::ArchPageTable::pdpt_index(va);
+    if (level == 2)
+        return arch::ArchPageTable::pd_index(va);
+    return arch::ArchPageTable::pt_index(va);
+#endif
+}
+
+/// @brief Present bit (bit 0: P on x86, valid on aarch64, V on Sv39).
+inline bool entry_present(uint64_t e) { return (e & 1ULL) != 0; }
+
+/// @brief Table-vs-leaf classifier, mirroring vmm_arch_is_table per arch.
+inline bool entry_is_table(uint64_t e) {
+#if defined(CONFIG_ARCH_X86_64)
+    return (e & (1ULL << 7)) == 0; // PS bit clear = table
+#elif defined(CONFIG_ARCH_AARCH64)
+    return (e & 0x3ULL) == 0x3ULL; // bits[1:0] = 11 = table descriptor
+#else
+    return (e & 0xEULL) == 0; // R|W|X clear = table (V only)
+#endif
+}
+
+/// @brief Child-table phys from a table entry (never call on a leaf:
+/// raw masking leaks NX/UXN/PXN and mis-decodes Sv39 PPNs).
+inline uint64_t entry_table_child(uint64_t e) {
+#if defined(CONFIG_ARCH_RISCV64)
+    return VMM::sv39_pte_phys(e);
+#else
+    return e & ~0xFFFULL;
+#endif
+}
+
+/// @brief Table link entry (present + table-shaped, kernel flags only —
+/// merge tests never activate scratch roots, so no USER/attr bits needed).
+inline uint64_t make_table_link(uint64_t phys) {
+#if defined(CONFIG_ARCH_RISCV64)
+    return VMM::sv39_phys_pte(phys) | 0x1ULL; // V, no R|W|X = table
+#elif defined(CONFIG_ARCH_AARCH64)
+    return (phys & ~0xFFFULL) | 0x3ULL; // valid + table descriptor
+#else
+    return (phys & ~0xFFFULL) | 0x3ULL; // P + W
+#endif
+}
+
+/// @brief 4 KiB data-leaf entry at the deepest level (scratch-only: never
+/// decoded or freed, only copied/compared — alignment is informational).
+inline uint64_t make_page_leaf(uint64_t phys) {
+#if defined(CONFIG_ARCH_RISCV64)
+    return VMM::sv39_phys_pte(phys) | 0xFULL; // V|R|W|X leaf, kernel
+#elif defined(CONFIG_ARCH_AARCH64)
+    return (phys & ~0xFFFULL) | 0x3ULL; // valid + L3 page descriptor
+#else
+    return (phys & ~0xFFFULL) | 0x83ULL; // P + W + NX (data, never exec)
+#endif
+}
+
+/// @brief Block-leaf entry at the given level (1 GiB at level 1 on
+/// x86_64/aarch64, 2 MiB at level 1 on Sv39). Scratch-only: copied by
+/// value, never decoded or freed.
+inline uint64_t make_block_leaf(uint64_t phys, unsigned level) {
+    (void)level; // geometry selected by arch, not by parameter
+#if defined(CONFIG_ARCH_RISCV64)
+    return VMM::sv39_phys_pte(phys) | 0xFULL; // V|R|W|X megapage leaf
+#elif defined(CONFIG_ARCH_AARCH64)
+    return (phys & ~0xFFFULL) | 0x1ULL; // valid, bit 1 clear = block
+#else
+    return (phys & ~0xFFFULL) | 0x83ULL; // P + W + PS (huge)
+#endif
+}
 
 /// @brief Allocate a kernel-owned page and zero it (scratch table).
 /// @return Physical address, or 0 on OOM (caller fails the test).
@@ -69,8 +155,8 @@ static uint64_t *table_virt(uint64_t phys) {
 // Testidea: Merging a populated parent into a fresh child converges the
 //           child exactly (link semantics: entries shared, user half
 //           untouched) — the canonical fork fast-path behavior.
-// Input: Scratch parent with a table chain + huge entry in 256..511;
-//        fresh zeroed scratch child.
+// Input: Scratch parent with a table chain + block leaf in the kernel
+//        half; fresh zeroed scratch child.
 // Expect: merge returns true; child entries equal parent entries;
 //         child shares the parent's tables (same phys); user half stays
 //         zero; PMM delta zero after teardown.
@@ -86,13 +172,14 @@ JARVIS_TEST(merge_equivalent_to_full_copy, "PRE: none | POST: none") {
     JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && pt != 0 &&
                   data != 0 && child != 0);
 
-    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(pdpt)[0] = pd | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(pd)[0] = pt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(pt)[0] =
-        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_NX;
-    table_virt(parent)[511] =
-        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
+    // Kernel-half chain (index 256 = first kernel-half slot, all arches).
+    // The 1 GiB block sits at level 1 (legal block level on every arch —
+    // a level-0 block is not a valid descriptor anywhere).
+    table_virt(parent)[256] = make_table_link(pdpt);
+    table_virt(pdpt)[0] = make_table_link(pd);
+    table_virt(pd)[0] = make_table_link(pt);
+    table_virt(pt)[0] = make_page_leaf(data);
+    table_virt(pdpt)[7] = make_block_leaf(data, 1);
 
     JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
     auto *c = table_virt(child);
@@ -101,7 +188,7 @@ JARVIS_TEST(merge_equivalent_to_full_copy, "PRE: none | POST: none") {
         JARVIS_ASSERT(c[i] == p[i]);
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i)
         JARVIS_ASSERT(c[i] == 0);
-    JARVIS_ASSERT((c[256] & ~0xFFFULL) == (pdpt & ~0xFFFULL));
+    JARVIS_ASSERT(entry_table_child(c[256]) == (pdpt & ~0xFFFULL));
     JARVIS_ASSERT(c[257] == 0);
     JARVIS_ASSERT(VMM::kernel_half_equal(child, parent));
 
@@ -135,21 +222,19 @@ JARVIS_TEST(merge_idempotent, "PRE: none | POST: none") {
     JARVIS_ASSERT(parent != 0 && parent_pdpt != 0 && child != 0 &&
                   child_pdpt != 0 && data_a != 0 && data_b != 0);
 
+    // k_idx is in the kernel half on every arch (256..511).
     constexpr size_t k_idx = 300;
-    table_virt(parent)[k_idx] = parent_pdpt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(parent_pdpt)[7] =
-        (data_a & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(child)[k_idx] = child_pdpt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(child_pdpt)[8] =
-        (data_b & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE;
+    table_virt(parent)[k_idx] = make_table_link(parent_pdpt);
+    table_virt(parent_pdpt)[7] = make_block_leaf(data_a, 1);
+    table_virt(child)[k_idx] = make_table_link(child_pdpt);
+    table_virt(child_pdpt)[8] = make_block_leaf(data_b, 1);
 
     JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
     auto *cc = table_virt(child);
     JARVIS_ASSERT(cc[k_idx] == table_virt(child)[k_idx]);
-    auto *cc_pdpt = table_virt(cc[k_idx] & ~0xFFFULL);
+    auto *cc_pdpt = table_virt(entry_table_child(cc[k_idx]));
     JARVIS_ASSERT(cc_pdpt[7] == table_virt(parent_pdpt)[7]);
-    JARVIS_ASSERT(cc_pdpt[8] ==
-                  ((data_b & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE));
+    JARVIS_ASSERT(cc_pdpt[8] == make_block_leaf(data_b, 1));
 
     uint64_t snapshot[512];
     __builtin_memcpy(snapshot, cc_pdpt, arch::PAGE_SIZE);
@@ -177,10 +262,9 @@ JARVIS_TEST(merge_idempotent, "PRE: none | POST: none") {
 // Testidea: A mapping added to the canonical root after the template
 //           snapshot becomes visible to a merged child but not to a
 //           pre-merge child (paper §4 row 2: late-mapping convergence).
-//           Uses a 2 MiB PD-level huge entry: the kernel walker resolves
-//           PD-huge (PML4-level 1 GiB huge is not walkable — pre-existing
-//           walker limitation, out of scope for #96).
-// Input: Scratch canonical root; snapshot its entries; add a 2 MiB
+//           Uses a block entry at level kLevels-2 (2 MiB on every arch:
+//           PD on x86, L2 on aarch64, L1 on Sv39).
+// Input: Scratch canonical root; snapshot its entries; add a block
 //        mapping; merge into child A only.
 // Expect: child A resolves the VA, child B does not, and the snapshot
 //         predates the mapping.
@@ -199,23 +283,35 @@ JARVIS_TEST(late_mapping_visible_after_merge, "PRE: none | POST: none") {
     uint64_t tmpl[512];
     __builtin_memcpy(tmpl, table_virt(canon), arch::PAGE_SIZE);
 
+    // k_idx is kernel-half on every arch; k_pd selects a slot at the
+    // block level below; the VA is assembled from level indices (never
+    // raw shifts — Sv39 level geometry differs).
     constexpr size_t k_idx = 400;
     constexpr size_t k_pd = 5;
     constexpr uint64_t k_off = 0x12345ULL;
-    // 2 MiB pages mask the low 21 bits (HUGE_FRAME_MASK); the synthetic
-    // phys is only 4 KiB-aligned, so expect the masked frame.
-    constexpr uint64_t k_huge_mask = 0x000FFFFFFFE00000ULL;
-    table_virt(canon)[k_idx] = canon_pdpt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(canon_pdpt)[0] = canon_pd | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(canon_pd)[k_pd] =
-        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
+    // Block bases are 2 MiB-aligned on every arch: pre-mask the synthetic
+    // 4 KiB phys so the installed base provably equals what every walker
+    // decodes (PMM placement does not guarantee 2M alignment).
+    const uint64_t blk_base = data & ~0x1FFFFFULL;
+    // 2 MiB blocks mask the low 21 bits on every arch.
+    constexpr uint64_t k_block_mask = ~0x1FFFFFULL;
+    table_virt(canon)[k_idx] = make_table_link(canon_pdpt);
+#if defined(CONFIG_ARCH_RISCV64)
+    // Sv39: 3 levels — the level below the top IS the 2 MiB block level.
+    table_virt(canon_pdpt)[k_pd] = make_block_leaf(blk_base, 1);
+    const uint64_t va = (static_cast<uint64_t>(k_idx) << VMM::L0_SHIFT) |
+                        (static_cast<uint64_t>(k_pd) << VMM::L1_SHIFT) | k_off;
+#else
+    table_virt(canon_pdpt)[0] = make_table_link(canon_pd);
+    table_virt(canon_pd)[k_pd] = make_block_leaf(blk_base, 2);
+    const uint64_t va = (static_cast<uint64_t>(k_idx) << 39) |
+                        (static_cast<uint64_t>(k_pd) << 21) | k_off;
+#endif
     JARVIS_ASSERT(tmpl[k_idx] == 0);
 
     JARVIS_ASSERT(VMM::merge_kernel_half(canon, child_a));
-    uint64_t va = (static_cast<uint64_t>(k_idx) << PML4_SHIFT) |
-                  (static_cast<uint64_t>(k_pd) << 21) | k_off;
     uint64_t resolved = VMM::virt_to_phys_in_pml4(va, child_a);
-    JARVIS_ASSERT(resolved == ((data & k_huge_mask) | k_off));
+    JARVIS_ASSERT(resolved == ((data & k_block_mask) | k_off));
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(va, child_b) == 0);
 
     PMM::free_page(data);
@@ -244,13 +340,11 @@ JARVIS_TEST(merge_allocates_nothing, "PRE: none | POST: none") {
     JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && data != 0 &&
                   child != 0);
 
-    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(parent)[257] =
-        (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE;
-    table_virt(parent)[511] = pd | PAGE_PRESENT | PAGE_WRITE;
+    table_virt(parent)[256] = make_table_link(pdpt);
+    table_virt(pdpt)[0] = make_block_leaf(data, 1);
+    table_virt(parent)[511] = make_table_link(pd);
     for (size_t i = 0; i < 8; ++i)
-        table_virt(pd)[i] =
-            (data & ~0xFFFULL) | PAGE_PRESENT | PAGE_WRITE | PAGE_NX;
+        table_virt(pd)[i] = make_page_leaf(data);
 
     uint64_t pages_before = PMM::pool_used_pages();
     JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
@@ -279,7 +373,7 @@ JARVIS_TEST(template_mismatch_detected, "PRE: none | POST: none") {
 
     size_t victim = 0;
     for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
-        if ((c[i] & PAGE_PRESENT) != 0) {
+        if (entry_present(c[i])) {
             victim = i;
             break;
         }
@@ -298,6 +392,9 @@ JARVIS_TEST(template_mismatch_detected, "PRE: none | POST: none") {
     JARVIS_ASSERT(VMM::kernel_half_equal(child, VMM::get_kernel_pml4()));
     JARVIS_ASSERT(VMM::kernel_half_matches_template(child));
 
+    // Drain riscv64's inherited L0[0] user-owned subtree (no-op walk on
+    // x86_64/aarch64 empty user halves), then free the root.
+    VMM::free_user_pages(child);
     PMM::free_page(child);
     JARVIS_TEST_PASS();
 }
@@ -323,16 +420,21 @@ JARVIS_TEST(merge_child_teardown_preserves_shared, "PRE: none | POST: none") {
     JARVIS_ASSERT(parent != 0 && pdpt != 0 && pd != 0 && pt != 0 &&
                   data != 0 && child != 0);
 
-    table_virt(parent)[256] = pdpt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(pdpt)[0] = pd | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(pd)[0] = pt | PAGE_PRESENT | PAGE_WRITE;
-    table_virt(pt)[0] = data | PAGE_PRESENT | PAGE_WRITE;
+    const uint64_t pdpt_link = make_table_link(pdpt);
+    const uint64_t pd_link = make_table_link(pd);
+    const uint64_t pt_link = make_table_link(pt);
+    const uint64_t data_leaf = make_page_leaf(data);
+    table_virt(parent)[256] = pdpt_link;
+    table_virt(pdpt)[0] = pd_link;
+    table_virt(pd)[0] = pt_link;
+    table_virt(pt)[0] = data_leaf;
 
     JARVIS_ASSERT(VMM::merge_kernel_half(parent, child));
     auto *c = table_virt(child);
-    JARVIS_ASSERT((c[256] & ~0xFFFULL) == (pdpt & ~0xFFFULL));
+    JARVIS_ASSERT(entry_table_child(c[256]) == (pdpt & ~0xFFFULL));
 
-    // Fork-failure path: destroy the child address space.
+    // Fork-failure path: destroy the child address space. All shared
+    // tables/data are kernel-owned, so the drain must skip them.
     VMM::free_user_pages(child);
     PMM::free_page(child);
 
@@ -341,10 +443,10 @@ JARVIS_TEST(merge_child_teardown_preserves_shared, "PRE: none | POST: none") {
     JARVIS_ASSERT(PMM::is_allocated(pd));
     JARVIS_ASSERT(PMM::is_allocated(pt));
     JARVIS_ASSERT(PMM::is_allocated(data));
-    JARVIS_ASSERT(table_virt(parent)[256] == (pdpt | PAGE_PRESENT | PAGE_WRITE));
-    JARVIS_ASSERT(table_virt(pdpt)[0] == (pd | PAGE_PRESENT | PAGE_WRITE));
-    JARVIS_ASSERT(table_virt(pd)[0] == (pt | PAGE_PRESENT | PAGE_WRITE));
-    JARVIS_ASSERT(table_virt(pt)[0] == (data | PAGE_PRESENT | PAGE_WRITE));
+    JARVIS_ASSERT(table_virt(parent)[256] == pdpt_link);
+    JARVIS_ASSERT(table_virt(pdpt)[0] == pd_link);
+    JARVIS_ASSERT(table_virt(pd)[0] == pt_link);
+    JARVIS_ASSERT(table_virt(pt)[0] == data_leaf);
 
     PMM::free_page(data);
     PMM::free_page(pt);
@@ -364,5 +466,3 @@ void register_pt_merge_tests() {
     JARVIS_REGISTER_TEST(template_mismatch_detected);
     JARVIS_REGISTER_TEST(merge_child_teardown_preserves_shared);
 }
-
-#endif // CONFIG_ARCH_X86_64
