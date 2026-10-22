@@ -1082,14 +1082,14 @@ TEST_FULL_CLASSES_x86_64 := core_basic core_sync core_sched core_task core_memor
 # x86_64 release = measured 24/24 (ahci/iommu are DEBUG_ONLY-skipped).
 TEST_FULL_CLASSES_x86_64_release := core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu testrunner
 # aarch64 debug = B1 green aggregates + testrunner (excluded: core_sched
-# STALL, core_memory PANIC, capability STALL, proc_elf 43/22, storage
-# #392, servers 60/6, drivers #391, deadline PANIC, ui fb-gap, bench
-# 27/1, task_fpu empty, smp*/ahci/iommu x86-only).
-TEST_FULL_CLASSES_aarch64 := core_basic core_sync core_task core_syscall core_tracing ipc hal logging_debug random task_tcb_log testrunner
+# STALL, core_memory PANIC, capability STALL, proc_elf partial, deadline
+# PANIC, bench 27/1, smp*/ahci/iommu x86-only, process_pml4_clone x86-only).
+TEST_FULL_CLASSES_aarch64 := core_basic core_sync core_task core_syscall core_tracing ipc hal logging_debug random task_tcb_log storage drivers ui servers task_fpu configuration_build task_core process_lifecycle shell_interaction cap_irq cap_irq_notify testrunner
 # riscv64 debug = owner-mandated base + measured-green extensions
-# (excluded: drivers #391x2, storage #392, proc_elf, ui, hal #388,
-# selftest reds; arch_riscv64 known-red until #387+QE).
-TEST_FULL_CLASSES_riscv64 := arch_riscv64 scheduler_zombie configuration_build memory_vmm memory_page_tables timing_core hal_timer irq_early_std
+# (excluded: proc_elf partial, selftest reds, hal #388 remnants,
+# arch_riscv64 known-red until QE fixtures close; process_pml4_clone
+# x86-only; core_memory pre-existing stall handed to QE #352).
+TEST_FULL_CLASSES_riscv64 := arch_riscv64 scheduler_zombie configuration_build memory_vmm memory_page_tables timing_core hal_timer irq_early_std storage drivers ui servers task_fpu shell_interaction cap_irq cap_irq_notify task_core process_lifecycle hal
 SELFTEST_CLASSES_x86_64 := selftest
 SELFTEST_CLASSES_aarch64 := arch_aarch64 configuration_build hal hal_timer irq_early_std memory_page_tables memory_vmm timing_core
 SELFTEST_CLASSES_riscv64 := configuration_build hal_timer irq_early_std memory_page_tables memory_vmm timing_core scheduler_zombie

@@ -243,19 +243,26 @@ carries `ARCH=<arch>`. Counts are measured, never hand-summed.
 | Arch | Runs | Green (FAILED: 0) | Excluded (with evidence) |
 |---|---|---|---|
 | x86_64 | 26 | all (incl. smp, ahci_live, iommu_live) | — |
-| aarch64 | 11 + testrunner | core_basic, core_sync, core_task, core_syscall, core_tracing, ipc, hal, logging_debug, random, task_tcb_log | core_sched STALL, core_memory PANIC, capability STALL, proc_elf 43/22, storage #392, servers 60/6, drivers #391, deadline PANIC, ui fb-gap, bench 27/1, task_fpu empty, smp*/ahci/iommu x86-only |
-| riscv64 | 8 | arch_riscv64 (known-red: 5 QE fixtures + #387), scheduler_zombie, configuration_build, memory_vmm, memory_page_tables, timing_core, hal_timer, irq_early_std | drivers #391×2, storage #392, proc_elf, ui, hal #388, selftest reds |
+| aarch64 | 21 + testrunner | core_basic, core_sync, core_task, core_syscall, core_tracing, ipc, hal (76), logging_debug, random, task_tcb_log, storage (167), drivers (62), ui (78), servers (66), task_fpu (5), configuration_build (8), task_core (4), process_lifecycle (12), shell_interaction (20), cap_irq (11), cap_irq_notify (6) | core_sched STALL, core_memory PANIC (+ stash-proven pre-existing zero-S-line stall, QE #352), capability STALL, proc_elf partial, deadline PANIC, bench 27/1, smp*/ahci/iommu x86-only, process_pml4_clone x86-only (empty class stalls off-x86) |
+| riscv64 | 19 | arch_riscv64 (known-red: 5 QE fixtures + #387), scheduler_zombie, configuration_build (8), memory_vmm (11), memory_page_tables, timing_core, hal_timer, irq_early_std, storage (167), drivers (62), ui (78), servers (66), task_fpu (5), shell_interaction (20), cap_irq (11), cap_irq_notify (6), task_core (4), process_lifecycle (12), hal (78) | proc_elf partial, selftest reds, process_pml4_clone x86-only, core_memory pre-existing stall (same signature as aarch64, QE #352) |
 
 A class enters the green set only with a measured `FAILED: 0` row;
 exclusion cites the red row + issue. No blind wiring.
+Gate parity landed 2026-10-22 (issue #357 Slice D): aarch64 11→21,
+riscv64 8→19 classes, every newly-wired class re-run green on `main`
+(counts: task_fpu {0,5,5}, configuration_build {10,8,8}, task_core
+{7,4,4}, process_lifecycle {16,12,12}, shell_interaction {20,20,20},
+cap_irq {12,11,11}, cap_irq_notify {7,6,6}, drivers {107,62,62},
+ui {78,78,78}, servers {66,66,66}, storage {167,167,167}, hal
+{—,76,78}). #392 (procfs) and #391 (DMA timing) closed as blockers.
 
 ### Release gate
 
 | Arch | Artifact | List |
 |---|---|---|
 | x86_64 | `make release` ISO (+ `release/.baked-test-config`) | measured 24-class TF_RELEASE set |
-| aarch64 | `make release-elf` → `build/kernel.elf` (+ `build/.baked-test-config-aarch64`) | TF_RELEASE subsets per B1 census; `none` E2E post-#393 |
-| riscv64 | `make release-elf` → `build/kernel-riscv64-release.bin` (+ stamp) | TF_RELEASE subsets per B1 census; `none` E2E post-#393 |
+| aarch64 | `make release-elf` → `build/kernel.elf` (+ `build/.baked-test-config-aarch64`) | TF_RELEASE subsets per B1 census; `none` E2E pending (unblocked: #393 closed 2026-10-20) |
+| riscv64 | `make release-elf` → `build/kernel-riscv64-release.bin` (+ stamp) | TF_RELEASE subsets per B1 census; `none` E2E pending (unblocked: #393 closed 2026-10-20) |
 
 `make release` stays x86_64-only (UEFI ISO is an x86 boot concept).
 Stale baked configs fail loud (`build/.baked-test-config-<arch>`
