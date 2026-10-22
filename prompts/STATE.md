@@ -5,6 +5,8 @@
 
 ## Active Summary
 ### Objective
+- **DONE (2026-10-22):** #392 procfs lseek-beyond-EOF FIX (option-a only, APPROVED, no iteration): shared proc_content_seek helper, meminfo+pci delegate, x86 PCI-content guard untouched (#354 owns content). Gates: storage 167/167 x86_64+aarch64+riscv64 debug + 40/40 release; commit d0e649d05 (fixes). Unblocks #350 close (QE re-run).
+- **VERDICT (2026-10-22):** #399 synthetic-parent clone() NOT SUPPORTED (GDB-convicted both arches, no kernel change): flag-flipped kernel TCB + fake user_stack_ 0x80000000 faults on clone()'s first stack-copy iteration (aa64 data abort EC=0x25 FAR=HHDM+fake at copy-loop ldrb; rv64 load access fault scause=5 stval ditto at task.cpp:1840) into first-chance halt = silent TIMEOUT. QE rewrites the 3 task_clone + 4 process_clone tests with real create_user parents, no dispatch. Open: S3 fail-closed clone() guard (non-PMM user_stack_ → nullptr) as separate cycle.
 - **CLOSED (2026-10-21):** #309 remainder (TCG gate + notlbi), APPROVED, aa64 35/35 + byte-identity; commit 12f27ae4d (closes). #397 holds HW half. SEQUENCE COMPLETE: 304, 305, 306, 308, 391-triaged, 307, 309 done.
 - **CLOSED (2026-10-21):** #307 DMA maintenance, APPROVED iter-2 (S2 caught by audit, rejected_patch applied verbatim), #391 guard holds; commit 6a3ab16eb (closes). Next: #309b.
 - **CLOSED (2026-10-21):** #308 first-chance dump+halt, APPROVED, full 3-arch battery green; commit 6e0933f5c (closes). Unblocked by #306. Next: #391 triage.
