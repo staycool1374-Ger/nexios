@@ -43,6 +43,19 @@ namespace kernel {
 ///        code segments).  Yields every 64 leaf entries so higher-priority
 ///        tasks can run during teardown of large address spaces.
 void VMM::free_user_pages(uint64_t pml4_phys) {
+    // v0.3.11: bounded diagnostic — log page-table pages skipped because
+    // their owner bit is KERNEL or their block base is misaligned
+    // (free_user_pages only frees USER-owned, level-aligned block bases).
+    // Hoisted above the arch split so riscv64 shares the same diagnostic.
+    static uint64_t s_fup_skip_log = 0;
+    auto log_skip = [](const char *lvl, uint64_t phys) {
+        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
+            kFupSkipLogCap)
+            return;
+        __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
+        arch::QemuDebugcon::write(lvl);
+        write_hex_debugcon(phys);
+    };
 #if defined(CONFIG_ARCH_RISCV64)
     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
@@ -52,9 +65,17 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
     for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
         if (!(l0[l0_idx] & PAGE_PRESENT))
             continue;
-        // Check for 1GB block at L0
+        // Defensive 1 GiB block at L0 (riscv64 has no 1 GiB user-leaf
+        // producer): Sv39 shift-codec decode, then 1 GiB alignment
+        // validation (decode_block_base, issue #365) — misaligned
+        // entries are skipped, never freed.
         if ((l0[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-            uint64_t page = VMM::sv39_pte_phys(l0[l0_idx]);
+            uint64_t raw = VMM::sv39_pte_phys(l0[l0_idx]);
+            uint64_t page = 0;
+            if (!decode_block_base(raw, kBlock1GOffsetMask, page)) {
+                log_skip("[FUP-SKIP] blk1g ", raw);
+                continue;
+            }
             if (!PMM::is_user_page(page))
                 continue;
             PMM::free_page(page);
@@ -67,9 +88,16 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
         for (int l1_idx = 0; l1_idx < 512; ++l1_idx) {
             if (!(l1[l1_idx] & PAGE_PRESENT))
                 continue;
-            // Check for 2MB block at L1
+            // 2 MiB block at L1: shift-codec decode + level alignment
+            // (decode_block_base, issue #365) — misaligned entries are
+            // skipped, never freed (same rationale as 1 GiB).
             if ((l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
-                uint64_t page = VMM::sv39_pte_phys(l1[l1_idx]);
+                uint64_t raw = VMM::sv39_pte_phys(l1[l1_idx]);
+                uint64_t page = 0;
+                if (!decode_block_base(raw, kHuge2MOffsetMask, page)) {
+                    log_skip("[FUP-SKIP] blk2m ", raw);
+                    continue;
+                }
                 if (!PMM::is_user_page(page))
                     continue;
                 PMM::free_page(page);
@@ -103,17 +131,6 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                               (pml4_phys & PAGE_TABLE_ADDR_MASK));
-    // v0.3.11: bounded diagnostic — log page-table pages skipped because their
-    // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
-    static uint64_t s_fup_skip_log = 0;
-    auto log_skip = [](const char *lvl, uint64_t phys) {
-        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
-            kFupSkipLogCap)
-            return;
-        __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
-        arch::QemuDebugcon::write(lvl);
-        write_hex_debugcon(phys);
-    };
     for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
          ++pml4_idx) {
         if (!(pml4[pml4_idx] & PAGE_PRESENT))
@@ -129,11 +146,21 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
         for (int pdpt_idx = 0; pdpt_idx < 512; ++pdpt_idx) {
             if (!(pdpt[pdpt_idx] & PAGE_PRESENT))
                 continue;
-            // Block/leaf test via is_table_entry (issue #363 P2/P4). The
-            // 1 GiB base decode stays verbatim (issue #365 owns its
-            // cross-arch re-derivation — do NOT touch kPdptBlockBaseMask).
+            // 1 GiB block at PDPT (x86_64) / L1 (aarch64): same level.
+            // No in-tree producer creates user 1 GiB leaves, so this site
+            // is defensive — the arch-decoded base must be 1 GiB-aligned
+            // (decode_block_base, issue #365) or the entry is skipped,
+            // never freed. A skip preserves integrity (at worst a 4 KiB
+            // leak); halting a dead-task teardown path would trade a
+            // defensive state for an availability fault.
             if (!is_table_entry(pdpt[pdpt_idx], 1)) {
-                uint64_t page = pdpt[pdpt_idx] & kPdptBlockBaseMask;
+                uint64_t raw =
+                    vmm_arch_block_base(pdpt[pdpt_idx], /*huge=*/true);
+                uint64_t page = 0;
+                if (!decode_block_base(raw, kBlock1GOffsetMask, page)) {
+                    log_skip("[FUP-SKIP] blk1g ", raw);
+                    continue;
+                }
                 if (!PMM::is_user_page(page))
                     continue;
                 PMM::free_page(page);
@@ -150,9 +177,16 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
             for (int pd_idx = 0; pd_idx < 512; ++pd_idx) {
                 if (!(pd[pd_idx] & PAGE_PRESENT))
                     continue;
-                // Arch block-leaf test + frame decode (issue #363 P2).
+                // 2 MiB block at PD: arch frame decode + level alignment
+                // (decode_block_base, issue #365) — misaligned entries
+                // are skipped, never freed (same rationale as 1 GiB).
                 if (!is_table_entry(pd[pd_idx], 2)) {
-                    uint64_t page = vmm_arch_block_base(pd[pd_idx], true);
+                    uint64_t raw = vmm_arch_block_base(pd[pd_idx], true);
+                    uint64_t page = 0;
+                    if (!decode_block_base(raw, kHuge2MOffsetMask, page)) {
+                        log_skip("[FUP-SKIP] blk2m ", raw);
+                        continue;
+                    }
                     if (!PMM::is_user_page(page))
                         continue;
                     PMM::free_page(page);
@@ -240,8 +274,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
             // reachable here inherit by value (issue #387: U=0 preserved,
             // no new privilege).  Arch leaf test via is_table_entry.
             if (!is_table_entry(src_pdpt[pdpt_idx], 1)) {
-                // huge=true (2 MiB mask) ≡ kPdptBlockBaseMask (1 GiB mask)
-                // for aligned entries — same 4 KiB owner page either way.
+                // Block base via the per-arch frame codec; teardown pins
+                // the same level alignment (decode_block_base, #365) —
+                // aligned entries decode to the identical owner page.
                 if (vmm_leaf_is_user_owned(
                         src_pdpt[pdpt_idx],
                         vmm_arch_block_base(src_pdpt[pdpt_idx],
@@ -273,9 +308,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                 // rationale as above); kernel-owned inherits by value
                 // (issue #387).
                 if (!is_table_entry(src_pd[pd_idx], 2)) {
-                    // huge=true (2 MiB mask) matches the free_user_pages
-                    // decode: identical page for aligned entries, which all
-                    // block entries are by construction.
+                    // Block base via the per-arch frame codec (decode
+                    // symmetry with free_user_pages, issue #365): user
+                    // ownership fails the fork closed either way.
                     if (vmm_leaf_is_user_owned(
                             src_pd[pd_idx],
                             vmm_arch_block_base(src_pd[pd_idx],

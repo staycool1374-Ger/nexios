@@ -76,24 +76,45 @@ void arm_test_touch_flags(bool arm_hhdm, bool arm_identity);
 // Cap for bounded throttled diagnostics (issue #254 H5: was a raw 24).
 inline constexpr uint64_t kFupSkipLogCap = 24;
 
-// Page-offset / block-base masks (issue #363 checkbox 2): single named
-// definitions replacing inline 0xFFF/0x1FFFFF/0x3FFFFF literals. All arches
-// use 4 KiB base pages; x86_64/aarch64 split 2 MiB huge leaves, the PDPT
-// free path reasons about 1 GiB block bases.
+// Page-offset / block-base masks (issue #363 checkbox 2, #365 1 GiB):
+// single named definitions replacing inline 0xFFF/0x1FFFFF/0x3FFFFFFF
+// literals. All arches use 4 KiB base pages; x86_64/aarch64 split 2 MiB
+// huge leaves, the PDPT free path reasons about 1 GiB block bases.
 inline constexpr uint64_t kPageOffsetMask = 0xFFFULL;
 inline constexpr uint64_t kHuge2MOffsetMask = 0x1FFFFFULL;
 inline constexpr uint64_t kHuge2MBaseMask = ~0x1FFFFFULL;
-inline constexpr uint64_t kPdptBlockBaseMask = ~0x3FFFFFULL;
 static_assert(kPageOffsetMask + 1 == CONFIG_PAGE_SIZE,
               "page offset mask must match the base page size");
 static_assert(kHuge2MOffsetMask == 512 * CONFIG_PAGE_SIZE - 1,
               "2M offset mask must cover exactly one huge leaf");
 static_assert(kHuge2MBaseMask == ~kHuge2MOffsetMask,
               "huge base mask must be the offset mask complement");
-// NOTE: kPdptBlockBaseMask preserves the pre-split 22-bit shape verbatim
-// (free_user_pages PDPT-block base). It is deliberately NOT re-derived
-// from 1 GiB geometry here — any reinterpretation needs an owner decision
-// (issue #363 follow-up), so no static_assert pins a geometry claim.
+// 1 GiB block geometry (issue #365): the only multi-megabyte level the
+// teardown free path reasons about. x86_64 PDPT and aarch64 L1 blocks
+// share this level; riscv64 has no 1 GiB user leaf, only the defensive
+// L0 site. Decoded bases come from the per-arch frame codec
+// (vmm_arch_block_base / sv39_pte_phys) — never a raw PTE mask.
+inline constexpr uint64_t kBlock1GOffsetMask = 0x3FFFFFFFULL;
+inline constexpr uint64_t kBlock1GBaseMask = ~kBlock1GOffsetMask;
+static_assert(kBlock1GOffsetMask + 1 == 512ULL * (kHuge2MOffsetMask + 1),
+              "1 GiB block must be exactly 512 x 2 MiB");
+static_assert(kBlock1GBaseMask == ~kBlock1GOffsetMask,
+              "1 GiB base mask must be the offset complement");
+
+/// @brief Validate an arch-decoded block base against level alignment.
+/// @param phys Already arch-decoded physical base (never a raw PTE).
+/// @param offset_mask Level offset mask (kHuge2M/Block1GOffsetMask).
+/// @param out_base Decoded base, written only when aligned.
+/// @return True when phys is level-aligned; false means reject-before-use
+///         — callers skip the entry, never free it (see #365).
+[[nodiscard]] constexpr bool decode_block_base(uint64_t phys,
+                                               uint64_t offset_mask,
+                                               uint64_t &out_base) noexcept {
+    if ((phys & offset_mask) != 0)
+        return false;
+    out_base = phys & ~offset_mask;
+    return true;
+}
 
 /// @brief Hex-value diagnostic writer (debugcon port IO only).
 void write_hex_debugcon(uint64_t val);

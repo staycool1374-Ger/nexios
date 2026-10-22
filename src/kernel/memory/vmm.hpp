@@ -374,6 +374,9 @@ class VMM {
     /// space. Skips kernel-owned pages (PMM::is_user_page owner-bit
     /// check) — v0.4.0 MP-7: no task shares another's user entries, so
     /// this is always the full teardown of a private address space.
+    /// Defensive block sites (1 GiB / 2 MiB) validate level alignment
+    /// via decode_block_base and skip misaligned entries, never freeing
+    /// them: no in-tree producer creates user huge/block leaves (#365).
     /// @param pml4_phys Physical address of the user PML4.
     /// @brief Deep-copy user-space page tables from src_pml4 to dst_pml4.
     ///        Allocates new PDPT/PD/PT pages and copies data page content.
