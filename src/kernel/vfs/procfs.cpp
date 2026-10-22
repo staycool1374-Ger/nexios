@@ -52,6 +52,53 @@ static void uint64_to_str(char *buffer, uint64_t n) {
     buffer[i] = '\0';
 }
 
+/// @brief Maximum seek position (INT64_MAX; no <limits> provider in tree).
+constexpr uint64_t kMaxSeekPos = 0x7FFF'FFFF'FFFF'FFFFULL;
+
+/// @brief Resolve a cached-content seek with POSIX beyond-EOF semantics.
+/// @param content_len Length of the cached content (st_size basis).
+/// @param current_pos Snapshot of the fd offset (by value, never aliased).
+/// @param offset Signed seek offset.
+/// @param whence SEEK_SET, SEEK_CUR, or SEEK_END.
+/// @param out_pos Destination offset, written only on success.
+/// @return New position, or VFS_INVALID (offset untouched) on bad whence,
+///         negative result, or overflow past INT64_MAX.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static int64_t proc_content_seek(uint64_t content_len, uint64_t current_pos,
+                                 int64_t offset, int whence,
+                                 uint64_t &out_pos) {
+    uint64_t base = 0;
+    switch (whence) {
+    case SEEK_SET:
+        base = 0;
+        break;
+    case SEEK_CUR:
+        if (current_pos > kMaxSeekPos)
+            return VFS_INVALID;
+        base = current_pos;
+        break;
+    case SEEK_END:
+        base = content_len;
+        break;
+    default:
+        return VFS_INVALID;
+    }
+    uint64_t new_pos = 0;
+    if (offset >= 0) {
+        uint64_t delta = static_cast<uint64_t>(offset);
+        if (base > kMaxSeekPos - delta)
+            return VFS_INVALID;
+        new_pos = base + delta;
+    } else {
+        uint64_t magnitude = static_cast<uint64_t>(-(offset + 1)) + 1ULL;
+        if (magnitude > base)
+            return VFS_INVALID;
+        new_pos = base - magnitude;
+    }
+    out_pos = new_pos;
+    return static_cast<int64_t>(new_pos);
+}
+
 // ── meminfo vnode ──
 /// @brief Vnode with cached memory info content.
 struct MemInfoVnode {
@@ -87,30 +134,16 @@ static int meminfo_open(Vnode &, uint64_t) {
 static void meminfo_close(Vnode &) {
 }
 
+/// @brief Seek on /proc/meminfo (POSIX: seeks past EOF are legal;
+/// negative results and overflow past INT64_MAX are rejected).
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static int64_t meminfo_lseek(Vnode &self, int64_t offset, int whence,
                              uint64_t *out_pos) {
     auto *mi = static_cast<MemInfoVnode *>(self.private_data);
     if (!mi)
         return VFS_INVALID;
-    uint64_t new_pos = 0;
-    switch (whence) {
-    case SEEK_SET:
-        new_pos = static_cast<uint64_t>(offset);
-        break;
-    case SEEK_CUR:
-        new_pos = *out_pos + static_cast<uint64_t>(offset);
-        break;
-    case SEEK_END:
-        new_pos = mi->content_len + static_cast<uint64_t>(offset);
-        break;
-    default:
-        return VFS_INVALID;
-    }
-    if (new_pos > mi->content_len)
-        new_pos = mi->content_len;
-    *out_pos = new_pos;
-    return static_cast<int64_t>(new_pos);
+    return proc_content_seek(mi->content_len, *out_pos, offset, whence,
+                             *out_pos);
 }
 
 /// @brief Get /proc/meminfo status.
@@ -180,30 +213,16 @@ static int pci_open(Vnode &, uint64_t) {
 static void pci_close(Vnode &) {
 }
 
+/// @brief Seek on /proc/pci (POSIX: seeks past EOF are legal;
+/// negative results and overflow past INT64_MAX are rejected).
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static int64_t pci_lseek(Vnode &self, int64_t offset, int whence,
                          uint64_t *out_pos) {
     auto *pi = static_cast<PciVnode *>(self.private_data);
     if (!pi)
         return VFS_INVALID;
-    uint64_t new_pos = 0;
-    switch (whence) {
-    case SEEK_SET:
-        new_pos = static_cast<uint64_t>(offset);
-        break;
-    case SEEK_CUR:
-        new_pos = *out_pos + static_cast<uint64_t>(offset);
-        break;
-    case SEEK_END:
-        new_pos = pi->content_len + static_cast<uint64_t>(offset);
-        break;
-    default:
-        return VFS_INVALID;
-    }
-    if (new_pos > pi->content_len)
-        new_pos = pi->content_len;
-    *out_pos = new_pos;
-    return static_cast<int64_t>(new_pos);
+    return proc_content_seek(pi->content_len, *out_pos, offset, whence,
+                             *out_pos);
 }
 
 /// @brief Get /proc/pci status.

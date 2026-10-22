@@ -4489,3 +4489,7 @@ SUMMARY: total=24 ok=24 fail=0
 2026-10-21 21:04:24 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0 STATUS: #399-riscv64-hang-pre-gate-fix-timeout-killed
 2026-10-21 21:04:24 configuration_build PASSED: 0 FAILED: 0 TIME: 0 STATUS: #357-riscv64-misa-trap-hang-timeout-killed
 2026-10-21 21:04:24 servers_vfsd_auth PASSED: 0 FAILED: 0 TIME: 0 STATUS: #356-riscv64-wrong-class-name-Unknown-test-class
+2026-10-22 13:15:15 storage PASSED: 167 FAILED: 0 TIME: 32353ms
+2026-10-22 13:16:07 storage PASSED: 167 FAILED: 0 TIME: 21359ms
+2026-10-22 13:16:58 storage PASSED: 167 FAILED: 0 TIME: 20961ms
+2026-10-22 13:17:30 storage PASSED: 40 FAILED: 0 TIME: 48ms

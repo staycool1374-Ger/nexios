@@ -81,7 +81,8 @@ JARVIS_TEST(procfs_ops_root_rejects_byte_ops,
 // Testidea: /proc/meminfo is a read-only regular file: open/close succeed,
 // ioctl/readdir/lookup are rejected as not-supported, reading at or past the
 // cached content length returns 0 (EOF), and lseek implements all three
-// whence modes with clamping to the content length.
+// whence modes with POSIX beyond-EOF semantics (seeks past the content
+// length succeed; negative results and overflow are rejected).
 // Input: lookup("meminfo"); open(0); ioctl; readdir; lookup("sub");
 //        read(offset=content_len); lseek SEEK_SET 4 / SEEK_CUR +2 /
 //        SEEK_END 0 / invalid whence; close.
@@ -145,7 +146,9 @@ JARVIS_TEST(procfs_ops_meminfo_readonly_contract,
 // Runmode: kernel
 // Testidea: /proc/pci mirrors the meminfo contract for a much larger cached
 // buffer: open/close succeed, write/ioctl/readdir/lookup are rejected, and
-// lseek honours all three whence modes against the PCI tree length.
+// lseek honours all three whence modes against the PCI tree length with
+// POSIX beyond-EOF semantics (empty content still seeks; reads past EOF
+// return 0).
 // Input: lookup("pci"); open(0); write(4); ioctl; readdir; lookup("sub");
 //        lseek SEEK_SET/CUR/END/invalid; close.
 // Expect: open == 0; write/ioctl/readdir == VFS_INVALID; lookup == nullptr;

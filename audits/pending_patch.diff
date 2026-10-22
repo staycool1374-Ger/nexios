@@ -1,492 +1,153 @@
-diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
-index eb69d5457..4a6ef1a52 100644
---- a/src/kernel/kernel.cpp
-+++ b/src/kernel/kernel.cpp
-@@ -1578,6 +1578,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
-     // all boot-time map_page work (drivers, kslot window) is done, and no
-     // task exists yet.  Fork/exec converge toward the live root; drift
-     // from this baseline is diagnosed, never fatal (paper §4 row 2).
-+    // Issue #376 (boot-text W^X): harden boot-established image
-+    // permissions (text RX / rodata RO+NX / data+bss RW+NX) BEFORE the
-+    // snapshot so the template and all later clones inherit them.
-+    kernel::VMM::harden_kernel_half();
-     kernel::VMM::snapshot_kernel_template();
-     boot_mark(kernel::BootStage::TABLE_REBUILD);
- #if defined(CONFIG_DEBUG)
-diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
-index cf21d5f11..080cb8af0 100644
---- a/src/kernel/memory/vmm.cpp
-+++ b/src/kernel/memory/vmm.cpp
-@@ -129,6 +129,82 @@ void VMM::init() {
- #endif
+diff --git a/src/kernel/test/test_procfs_ops.cpp b/src/kernel/test/test_procfs_ops.cpp
+index 5515cea14..225fa0443 100644
+--- a/src/kernel/test/test_procfs_ops.cpp
++++ b/src/kernel/test/test_procfs_ops.cpp
+@@ -81,7 +81,8 @@ JARVIS_TEST(procfs_ops_root_rejects_byte_ops,
+ // Testidea: /proc/meminfo is a read-only regular file: open/close succeed,
+ // ioctl/readdir/lookup are rejected as not-supported, reading at or past the
+ // cached content length returns 0 (EOF), and lseek implements all three
+-// whence modes with clamping to the content length.
++// whence modes with POSIX beyond-EOF semantics (seeks past the content
++// length succeed; negative results and overflow are rejected).
+ // Input: lookup("meminfo"); open(0); ioctl; readdir; lookup("sub");
+ //        read(offset=content_len); lseek SEEK_SET 4 / SEEK_CUR +2 /
+ //        SEEK_END 0 / invalid whence; close.
+@@ -145,7 +146,9 @@ JARVIS_TEST(procfs_ops_meminfo_readonly_contract,
+ // Runmode: kernel
+ // Testidea: /proc/pci mirrors the meminfo contract for a much larger cached
+ // buffer: open/close succeed, write/ioctl/readdir/lookup are rejected, and
+-// lseek honours all three whence modes against the PCI tree length.
++// lseek honours all three whence modes against the PCI tree length with
++// POSIX beyond-EOF semantics (empty content still seeks; reads past EOF
++// return 0).
+ // Input: lookup("pci"); open(0); write(4); ioctl; readdir; lookup("sub");
+ //        lseek SEEK_SET/CUR/END/invalid; close.
+ // Expect: open == 0; write/ioctl/readdir == VFS_INVALID; lookup == nullptr;
+diff --git a/src/kernel/vfs/procfs.cpp b/src/kernel/vfs/procfs.cpp
+index 6ac5c2e45..13c338f7e 100644
+--- a/src/kernel/vfs/procfs.cpp
++++ b/src/kernel/vfs/procfs.cpp
+@@ -52,6 +52,53 @@ static void uint64_to_str(char *buffer, uint64_t n) {
+     buffer[i] = '\0';
  }
  
-+extern "C" {
-+// Linker section bounds (4K-aligned starts on all arches; see
-+// linker/linker_{x86_64,aarch64,riscv64}.ld). Mirrors the integrity.hpp
-+// _text_start/_text_end declaration idiom.
-+extern uint64_t _text_start[];
-+extern uint64_t _text_end[];
-+extern uint64_t _rodata_start[];
-+extern uint64_t _rodata_end[];
-+extern uint64_t _data_start[];
-+extern uint64_t _bss_end[];
-+}
++/// @brief Maximum seek position (INT64_MAX; no <limits> provider in tree).
++constexpr uint64_t kMaxSeekPos = 0x7FFF'FFFF'FFFF'FFFFULL;
 +
-+void VMM::harden_kernel_half() {
-+    // Issue #376 (boot-text W^X epic remainder): convert the RWX
-+    // boot-established mappings over the image to text RX / rodata RO+NX /
-+    // data+bss RW+NX. Runs once at end of bring-up (single-threaded BSP,
-+    // IRQs off, PMM up) BEFORE snapshot_kernel_template() so the template
-+    // and every later clone inherit hardened flags by value. Identity map
-+    // and non-image HHDM (boot code/stack, AP trampoline, boot structs)
-+    // stay RWX by design. Any mapping failure panics: a half-hardened root
-+    // must never boot.
-+    const uint64_t pml4 = kernel_pml4_;
-+    if (pml4 == 0)
-+        panic("VMM: harden with null kernel PML4");
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t text_start = reinterpret_cast<uint64_t>(_text_start);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t text_end = reinterpret_cast<uint64_t>(_text_end);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t rodata_start = reinterpret_cast<uint64_t>(_rodata_start);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t rodata_end = reinterpret_cast<uint64_t>(_rodata_end);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t data_start = reinterpret_cast<uint64_t>(_data_start);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t bss_end = reinterpret_cast<uint64_t>(_bss_end);
-+    if (!(text_start < text_end && text_end <= rodata_start &&
-+          rodata_start < rodata_end && rodata_end <= data_start &&
-+          data_start < bss_end))
-+        panic("VMM: harden section bounds disordered");
-+
-+    // Per-page worker: resolve phys (unmapped holes panic — the image is
-+    // contiguous), install a 4K non-user leaf via try (splits boot huge
-+    // entries; split fills preserve flags), then encode the region bits.
-+    // text: RX (RO encode keeps X via the kernel_text_exec hook);
-+    // rodata: RO+NX; data+bss: RW+NX (no RO step).
-+    auto harden_page = [&](uint64_t va, bool exec, bool read_only) {
-+        const uint64_t phys = virt_to_phys_in_pml4(va, pml4);
-+        if (phys == 0)
-+            panic("VMM: harden unmapped image page");
-+        // Text installs executable (RWX window, never NX — an NX window
-+        // on the live text would triple-fault the next fetch after the
-+        // map's internal TLB flush); rodata/data install non-executable
-+        // (never executed, window safe). The RO encode then clears W.
-+        if (map_page_in_pml4_try(va, phys, false, exec, pml4) !=
-+            errors::VMM_ERR_OK)
-+            panic("VMM: harden map failed");
-+        uint64_t *leaf = pte_leaf_in_pml4(va, pml4);
-+        if (leaf == nullptr)
-+            panic("VMM: harden leaf missing after map");
-+        if (read_only)
-+            *leaf = vmm_arch_encode_ro(*leaf, exec);
-+        if (exec)
-+            *leaf = vmm_arch_kernel_text_exec(*leaf);
-+        arch::ArchPageTable::tlb_flush(va);
-+    };
-+
-+    for (uint64_t va = text_start; va < text_end; va += arch::PAGE_SIZE)
-+        harden_page(va, true, true);
-+    for (uint64_t va = rodata_start; va < rodata_end; va += arch::PAGE_SIZE)
-+        harden_page(va, false, true);
-+    for (uint64_t va = data_start; va < bss_end; va += arch::PAGE_SIZE)
-+        harden_page(va, false, false);
-+    arch::ArchPageTable::tlb_flush_all();
-+}
-+
- /// @brief Walk or create a page-table entry at the current level.
- /// @param table     Pointer to the current-level page table.
- /// @param index     Entry index within @p table.
-diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index b9b2fe659..09dddd0f7 100644
---- a/src/kernel/memory/vmm.hpp
-+++ b/src/kernel/memory/vmm.hpp
-@@ -205,6 +205,21 @@ class VMM {
-     /// @note Concurrency/caller contract (issue #366): Lock: none.
-     ///       Context: boot-only (single call). SMP: boot-single-CPU.
-     static void snapshot_kernel_template();
-+    /// @brief Harden boot-established kernel-half permissions to W^X
-+    ///        (issue #376 epic remainder): text RX, rodata RO+NX, data/bss
-+    ///        RW+NX over the linker section ranges. Splits boot huge/block
-+    ///        entries to 4K as needed (split fills preserve flags, see the
-+    ///        arch notes), then applies per-page bits. TLB flushed per
-+    ///        page as each leaf reaches its final state, plus one full
-+    ///        flush at the end. Call ONCE at end of bring-up after PMM/VMM
-+    ///        init and
-+    ///        BEFORE snapshot_kernel_template() so the template and every
-+    ///        later clone_kernel_pml4 inherit hardened flags by value.
-+    ///        Panics on any mapping failure (a half-hardened root must
-+    ///        never boot). Single-threaded BSP, IRQs off; no locks taken.
-+    /// @note Concurrency/caller contract (issue #366): Lock: none.
-+    ///       Context: boot-only (single call). SMP: boot-single-CPU.
-+    static void harden_kernel_half();
-     /// @brief True when @p a_pml4 and @p b_pml4 agree on every kernel-half
-     ///        entry (256..511), compared recursively through shared
-     ///        tables (present+equal u64, or both-absent, at each level).
-@@ -863,6 +878,14 @@ class VMM {
-     static uint64_t vmm_arch_encode_ro(uint64_t leaf, bool executable);
-     static bool vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out);
-     static bool vmm_arch_leaf_is_executable(uint64_t leaf);
-+    /// @brief Ensure EL1/kernel-mode executability on a kernel-half leaf
-+    ///        (issue #376 boot-text W^X). The 5-arg map path installs
-+    ///        non-executable kernel leaves by policy (slice-1 data default),
-+    ///        so the harden pass restores X on text leaves through this
-+    ///        hook after the RO encode. Kernel-half only — never applied
-+    ///        to user pages (aarch64 keeps PXN there as ret2usr backstop).
-+    ///        x86_64 clears NX; aarch64 clears UXN+PXN; riscv64 sets X.
-+    static uint64_t vmm_arch_kernel_text_exec(uint64_t leaf);
-     static uint64_t vmm_arch_block_base(uint64_t entry, bool huge);
-     /// @brief Walk geometry shims (issue #378): table levels from the root
-     ///        (4 on x86_64/aarch64, 3 on Sv39 riscv64) + the per-level VA
-diff --git a/src/kernel/memory/vmm_aarch64.cpp b/src/kernel/memory/vmm_aarch64.cpp
-index f196c9807..bce7946af 100644
---- a/src/kernel/memory/vmm_aarch64.cpp
-+++ b/src/kernel/memory/vmm_aarch64.cpp
-@@ -52,8 +52,12 @@ bool VMM::vmm_arch_split_needed(uint64_t entry) {
- 
- void VMM::vmm_arch_split_fill(uint64_t *new_table, uint64_t src_entry) {
-     uint64_t huge_base = src_entry & kHuge2MBaseMask;
-+    // Issue #376 (boot W^X): carry UXN/PXN (already) plus the AP access
-+    // bits. A post-harden split of an AP_RO block must not silently
-+    // re-widen it to AP_RW; same-block EL0 accessibility rides along.
-     uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_AF | PAGE_UXN |
--                                       PAGE_PXN | PAGE_ATTR_NORMAL);
-+                                       PAGE_PXN | PAGE_ATTR_NORMAL |
-+                                       PAGE_AP_USER | PAGE_AP_RO);
-     for (size_t i = 0; i < 512; ++i) {
-         // L3 page leaves: bits[1:0]=11 (PAGE_TABLE set) — bit1=0 at L3
-         // is a block-at-invalid-level encoding and faults as a
-@@ -85,12 +89,17 @@ uint64_t VMM::vmm_arch_encode_map_leaf(uint64_t phys, bool user,
-                                         bool executable) {
-     // Same base shape as the kernel leaf; the NX policy adds UXN.
-     uint64_t out = PAGE_PRESENT | PAGE_TABLE | PAGE_AF | PAGE_ATTR_NORMAL;
--    if (user)
-+    if (user) {
-         out |= PAGE_AP_USER | PAGE_PXN;
--    else
-+        if (!executable)
-+            out |= PAGE_UXN; // UXN — not executable at EL0
-+    } else if (!executable) {
-+        // Kernel data default (slice-1 MMIO policy): neither EL0 nor EL1
-+        // may fetch. Kernel + executable (boot-text harden only — no
-+        // other caller uses this combination) sets neither UXN nor PXN
-+        // so EL1 can fetch; PXN must stay clear or EL1 faults.
-         out |= PAGE_UXN | PAGE_PXN;
--    if (!executable)
--        out |= PAGE_UXN; // UXN — not executable at EL0
++/// @brief Resolve a cached-content seek with POSIX beyond-EOF semantics.
++/// @param content_len Length of the cached content (st_size basis).
++/// @param current_pos Snapshot of the fd offset (by value, never aliased).
++/// @param offset Signed seek offset.
++/// @param whence SEEK_SET, SEEK_CUR, or SEEK_END.
++/// @param out_pos Destination offset, written only on success.
++/// @return New position, or VFS_INVALID (offset untouched) on bad whence,
++///         negative result, or overflow past INT64_MAX.
++// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
++static int64_t proc_content_seek(uint64_t content_len, uint64_t current_pos,
++                                 int64_t offset, int whence,
++                                 uint64_t &out_pos) {
++    uint64_t base = 0;
++    switch (whence) {
++    case SEEK_SET:
++        base = 0;
++        break;
++    case SEEK_CUR:
++        if (current_pos > kMaxSeekPos)
++            return VFS_INVALID;
++        base = current_pos;
++        break;
++    case SEEK_END:
++        base = content_len;
++        break;
++    default:
++        return VFS_INVALID;
 +    }
-     return phys | out;
- }
- 
-@@ -101,9 +110,22 @@ uint64_t VMM::vmm_arch_encode_ro(uint64_t leaf, bool executable) {
-     return leaf | PAGE_AP_RO;
- }
- 
-+uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
-+    // Issue #376: kernel text stays EL1-executable — clear UXN+PXN set by
-+    // the data-default 5-arg map. Kernel-half only; user pages keep PXN
-+    // as the ret2usr backstop (this hook never runs on them).
-+    return leaf & ~(PAGE_UXN | PAGE_PXN);
++    uint64_t new_pos = 0;
++    if (offset >= 0) {
++        uint64_t delta = static_cast<uint64_t>(offset);
++        if (base > kMaxSeekPos - delta)
++            return VFS_INVALID;
++        new_pos = base + delta;
++    } else {
++        uint64_t magnitude = static_cast<uint64_t>(-(offset + 1)) + 1ULL;
++        if (magnitude > base)
++            return VFS_INVALID;
++        new_pos = base - magnitude;
++    }
++    out_pos = new_pos;
++    return static_cast<int64_t>(new_pos);
 +}
 +
- bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
--    bool ro = (leaf & (PAGE_AP_USER | PAGE_AP_RO)) ==
--              (PAGE_AP_USER | PAGE_AP_RO);
-+    // Issue #376 boot-text W^X: AP[1] (PAGE_AP_RO) alone selects
-+    // read-only on ARMv8 (AP=10 is EL1-RO, AP=11 is EL1+EL0-RO).
-+    // Requiring AP_USER as well misreports EL1-only RO kernel leaves
-+    // (hardened text/rodata, AP=10) as writable, failing the
-+    // kernel_half_boot_wx_pins text/rodata asserts on aarch64 despite
-+    // correct hardware state. User RO leaves (AP=11) still read true;
-+    // user/kernel RW leaves (AP=00/01) still read false.
-+    bool ro = (leaf & PAGE_AP_RO) != 0;
-     if (executable_out != nullptr)
-         *executable_out = (leaf & PAGE_UXN) == 0;
-     return ro;
-diff --git a/src/kernel/memory/vmm_riscv64.cpp b/src/kernel/memory/vmm_riscv64.cpp
-index 0f40818bc..77499ad78 100644
---- a/src/kernel/memory/vmm_riscv64.cpp
-+++ b/src/kernel/memory/vmm_riscv64.cpp
-@@ -98,6 +98,13 @@ uint64_t VMM::vmm_arch_encode_ro(uint64_t leaf, bool executable) {
-     return leaf & ~PAGE_WRITE;
+ // ── meminfo vnode ──
+ /// @brief Vnode with cached memory info content.
+ struct MemInfoVnode {
+@@ -87,30 +134,16 @@ static int meminfo_open(Vnode &, uint64_t) {
+ static void meminfo_close(Vnode &) {
  }
  
-+uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
-+    // Issue #376: kernel text stays executable — set X cleared by the
-+    // data-default 5-arg map (W was already cleared by encode_ro).
-+    // Kernel-half only.
-+    return leaf | PAGE_EXEC;
-+}
-+
- bool VMM::vmm_arch_leaf_is_ro(uint64_t leaf, bool *executable_out) {
-     bool ro = ((leaf & PAGE_READ) != 0) && ((leaf & PAGE_WRITE) == 0);
-     if (executable_out != nullptr)
-diff --git a/src/kernel/memory/vmm_x86_64.cpp b/src/kernel/memory/vmm_x86_64.cpp
-index c9a585e98..b43a9a653 100644
---- a/src/kernel/memory/vmm_x86_64.cpp
-+++ b/src/kernel/memory/vmm_x86_64.cpp
-@@ -52,12 +52,23 @@ bool VMM::vmm_arch_split_needed(uint64_t entry) {
- 
- void VMM::vmm_arch_split_fill(uint64_t *new_table, uint64_t src_entry) {
-     uint64_t huge_base = src_entry & kHuge2MBaseMask;
--    uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
-+    // Issue #376 (boot W^X): carry NX into the split leaves. A post-harden
-+    // split of an NX page must not silently re-execute it; RO (W-clear) was
-+    // already carried by the mask. PAT/PWT/PCD/G are left at the boot
-+    // default (not present on boot huge entries by construction).
-+    uint64_t base_flags = src_entry & (PAGE_PRESENT | PAGE_WRITE | PAGE_USER |
-+                                       arch::ArchPageTable::NX);
-     for (size_t i = 0; i < 512; ++i) {
-         new_table[i] = (huge_base + i * 0x1000) | base_flags;
-     }
++/// @brief Seek on /proc/meminfo (POSIX: seeks past EOF are legal;
++/// negative results and overflow past INT64_MAX are rejected).
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ static int64_t meminfo_lseek(Vnode &self, int64_t offset, int whence,
+                              uint64_t *out_pos) {
+     auto *mi = static_cast<MemInfoVnode *>(self.private_data);
+     if (!mi)
+         return VFS_INVALID;
+-    uint64_t new_pos = 0;
+-    switch (whence) {
+-    case SEEK_SET:
+-        new_pos = static_cast<uint64_t>(offset);
+-        break;
+-    case SEEK_CUR:
+-        new_pos = *out_pos + static_cast<uint64_t>(offset);
+-        break;
+-    case SEEK_END:
+-        new_pos = mi->content_len + static_cast<uint64_t>(offset);
+-        break;
+-    default:
+-        return VFS_INVALID;
+-    }
+-    if (new_pos > mi->content_len)
+-        new_pos = mi->content_len;
+-    *out_pos = new_pos;
+-    return static_cast<int64_t>(new_pos);
++    return proc_content_seek(mi->content_len, *out_pos, offset, whence,
++                             *out_pos);
  }
  
-+uint64_t VMM::vmm_arch_kernel_text_exec(uint64_t leaf) {
-+    // Issue #376: text stays executable — clear NX set by the data-default
-+    // 5-arg map. Kernel-half only; never applied to user pages.
-+    return leaf & ~arch::ArchPageTable::NX;
-+}
-+
- uint64_t VMM::vmm_arch_table_link(uint64_t new_phys) {
-     return new_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
- }
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 80907d170..6c8b16631 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -711,9 +711,17 @@ static void map_kstack_page(uint64_t virt, uint64_t phys) {
-         return;
-     constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
-     constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
-+#if defined(CONFIG_ARCH_X86_64)
-+    // Issue #376 (boot-text W^X): kernel stacks are data — RW+NX.
-+    // x86-only window (other arches use the HHDM fallback, out of scope).
-+    constexpr uint64_t NX = 1ULL << 63;
-+    const uint64_t leaf_flags = P | W | NX;
-+#else
-+    const uint64_t leaf_flags = P | W;
-+#endif
-     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             s_kstack_pt_pages[pt_idx]);
--    pt[entry] = phys | P | W;
-+    pt[entry] = phys | leaf_flags;
-     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
+ /// @brief Get /proc/meminfo status.
+@@ -180,30 +213,16 @@ static int pci_open(Vnode &, uint64_t) {
+ static void pci_close(Vnode &) {
  }
  
-diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
-index 3b3965f29..ae9c4ccd2 100644
---- a/src/kernel/test/test_expected_counts.hpp
-+++ b/src/kernel/test/test_expected_counts.hpp
-@@ -177,7 +177,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"memory_static_pools",   4,    0,       0      },  // MemPool::reserve only (no PMM gating without CONFIG_STATIC_POOLS_ONLY)
- #endif
-     {"memory_no_op_new",      6,    0,       0      },  // no operator new/delete, all MemPool / placement-new
--    {"memory_page_tables",    12,   0,       0      },  // page-table pool, budget, no sharing + kernel-half runtime NX (#376)
-+    {"memory_page_tables",    13,   0,       0      },  // page-table pool, budget, no sharing + kernel-half runtime NX (#376) + boot W^X pins (#376)
-     {"memory_kernel_isolation", 6,  0,       0      },  // v0.4.0 MP-1 private kernel-half PML4s + teardown validation (issue #199)
-     {"memory_isolation",      3,    0,       0      },  // v0.4.0 MP-5 cross-task / HHDM / guard-page proof
-     {"memory_vmm",           14,    0,       0      },  // VMM map/unmap/clone/huge-page/hhdm + err wrappers + cap map paths (issue #143) + take semantics (#60) + unmap-err holes (#366)
-@@ -293,7 +293,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
-     {"core_sync",           93,   0,       0      },  // all synchronization_* incl. pip/pcp/pi_donation/err_api (#364; measured)
-     {"core_sched",          112,  0,       0      },  // all scheduler_* (#364; measured)
-     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
--    {"core_memory",         119,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376)
-+    {"core_memory",         120,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376) + boot W^X pins (#376)
-     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
-     {"core_tracing",        25,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end, +1 destroy-after-teardown noop #373)
-     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
-diff --git a/src/kernel/test/test_page_tables.cpp b/src/kernel/test/test_page_tables.cpp
-index 13c309df9..d4eab64e3 100644
---- a/src/kernel/test/test_page_tables.cpp
-+++ b/src/kernel/test/test_page_tables.cpp
-@@ -429,6 +429,60 @@ JARVIS_TEST(kernel_half_runtime_map_nx, "PRE: none | POST: none") {
-     JARVIS_TEST_PASS();
++/// @brief Seek on /proc/pci (POSIX: seeks past EOF are legal;
++/// negative results and overflow past INT64_MAX are rejected).
+ // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+ static int64_t pci_lseek(Vnode &self, int64_t offset, int whence,
+                          uint64_t *out_pos) {
+     auto *pi = static_cast<PciVnode *>(self.private_data);
+     if (!pi)
+         return VFS_INVALID;
+-    uint64_t new_pos = 0;
+-    switch (whence) {
+-    case SEEK_SET:
+-        new_pos = static_cast<uint64_t>(offset);
+-        break;
+-    case SEEK_CUR:
+-        new_pos = *out_pos + static_cast<uint64_t>(offset);
+-        break;
+-    case SEEK_END:
+-        new_pos = pi->content_len + static_cast<uint64_t>(offset);
+-        break;
+-    default:
+-        return VFS_INVALID;
+-    }
+-    if (new_pos > pi->content_len)
+-        new_pos = pi->content_len;
+-    *out_pos = new_pos;
+-    return static_cast<int64_t>(new_pos);
++    return proc_content_seek(pi->content_len, *out_pos, offset, whence,
++                             *out_pos);
  }
  
-+extern "C" {
-+// Linker image bounds (4K-aligned starts; see linker/linker_*.ld).
-+// Mirrors the integrity.hpp _text_start idiom.
-+extern uint64_t _text_start[];
-+extern uint64_t _rodata_start[];
-+extern uint64_t _data_start[];
-+extern uint64_t _bss_end[];
-+}
-+
-+// Runmode: kernel
-+// Testidea: boot-established kernel-half image permissions are W^X
-+//           (issue #376 epic remainder, VMM::harden_kernel_half): text RX,
-+//           rodata RO+NX, data/bss RW+NX. Sample VAs come straight from the
-+//           linker symbols; arch dispatch lives in the inspectors.
-+// Input: live kernel PML4 + section VAs.
-+// Expect: text RO + executable (also the inspector's positive control);
-+//         rodata RO + non-executable; data/bss non-RO + non-executable.
-+//         No mapping changes (walk-only), PMM delta zero.
-+// Depends: harden_kernel_half, pte_is_ro_in_pml4,
-+//          pte_is_executable_in_pml4.
-+// Note: the x86 kslot window (RW+NX via map_kstack_page) has no stable VA
-+// in the test harness (HHDM fallback when in_test_harness), so no slot
-+// assert here — every x86 task creation post-harden maps its stack NX,
-+// and a faulting stack would triple-fault the suite instantly.
-+JARVIS_TEST(kernel_half_boot_wx_pins, "PRE: none | POST: none") {
-+    const uint64_t pml4 = VMM::get_kernel_pml4();
-+    JARVIS_ASSERT(pml4 != 0);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t text_va = reinterpret_cast<uint64_t>(_text_start);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t rodata_va = reinterpret_cast<uint64_t>(_rodata_start);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t data_va = reinterpret_cast<uint64_t>(_data_start);
-+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-+    const uint64_t bss_va = reinterpret_cast<uint64_t>(_bss_end) - 8;
-+
-+    bool exec = false;
-+    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(text_va, pml4, &exec),
-+                      "text not RO");
-+    JARVIS_ASSERT_FMT(exec, "text not executable");
-+    JARVIS_ASSERT_FMT(VMM::pte_is_ro_in_pml4(rodata_va, pml4, &exec),
-+                      "rodata not RO");
-+    JARVIS_ASSERT_FMT(!exec, "rodata executable");
-+    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(data_va, pml4, nullptr),
-+                      "data RO");
-+    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(data_va, pml4),
-+                      "data executable");
-+    JARVIS_ASSERT_FMT(!VMM::pte_is_ro_in_pml4(bss_va, pml4, nullptr),
-+                      "bss RO");
-+    JARVIS_ASSERT_FMT(!VMM::pte_is_executable_in_pml4(bss_va, pml4),
-+                      "bss executable");
-+    JARVIS_TEST_PASS();
-+}
-+
- void register_page_tables_tests() {
-     Logger::info("Registering page tables tests");
-     JARVIS_REGISTER_TEST(page_tables_alloc_from_pool);
-@@ -443,4 +497,5 @@ void register_page_tables_tests() {
-     JARVIS_REGISTER_TEST(map_page_err_validation_and_success);
-     JARVIS_REGISTER_TEST(map_page_err_oom_writes_nothing);
-     JARVIS_REGISTER_TEST(kernel_half_runtime_map_nx);
-+    JARVIS_REGISTER_TEST(kernel_half_boot_wx_pins);
- }
-diff --git a/src/kernel/test/test_vmm.cpp b/src/kernel/test/test_vmm.cpp
-index 79ad37664..35b0399f3 100644
---- a/src/kernel/test/test_vmm.cpp
-+++ b/src/kernel/test/test_vmm.cpp
-@@ -270,16 +270,18 @@ JARVIS_TEST(vmm_free_user_pages_fork_stack_scenario, "PRE: none | POST: none") {
- // Testidea: Regression test for bug #3 — verify map_page splits a 2 MiB huge
- // page in the kernel HHDM and correctly maps a 4 KiB target page while
- // preserving neighbouring translations.
--// Input: Virtual address at HHDM_OFFSET+0x802000 inside a 2 MiB huge page;
--// allocate a different physical page and map it via map_page.
-+// Input: Virtual address at HHDM_OFFSET+0x2082000 inside a 2 MiB huge page;
-+// allocate a different physical page and map it via map_page. The fixture
-+// lives above the hardened image range (issue #376: PD entries covering
-+// the image are split to 4K at boot, so low HHDM VAs are no longer huge).
- // Expect: After map, target resolves to new physical page; neighbouring
- // pages still resolve correctly via the newly allocated page table; original
- // mapping is restored.
- // Depends: PMM, VMM, arch
- // v0.3.6: re-enabled with HHDM PD save/restore + hhdm_modified_ flag.
- JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
--    constexpr uint64_t test_vaddr = arch::HHDM_OFFSET + 0x802000;
--    constexpr uint64_t huge_page_base = arch::HHDM_OFFSET + 0x800000;
-+    constexpr uint64_t test_vaddr = arch::HHDM_OFFSET + 0x2082000;
-+    constexpr uint64_t huge_page_base = arch::HHDM_OFFSET + 0x2080000;
-     uint64_t const PAGE_PRESENT = 1ULL << 0;
-     uint64_t const PAGE_HUGE = 1ULL << 7;
-     uint64_t kernel_pml4 = arch::read_cr3();
-@@ -300,16 +302,16 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
-     // Resolve physical address from the 2MB huge page entry directly:
-     // phys_base = (entry & ~0x1FFFFF), then add page offset.
-     uint64_t before = (pd[pd_idx] & ~0x1FFFFFULL) + (test_vaddr & 0x1FFFFFULL);
--    JARVIS_ASSERT(before == 0x802000);
-+    JARVIS_ASSERT(before == 0x2082000);
-     uint64_t before_base = (pd[pd_idx] & ~0x1FFFFFULL) +
-                            (huge_page_base & 0x1FFFFFULL);
--    JARVIS_ASSERT(before_base == 0x800000);
-+    JARVIS_ASSERT(before_base == 0x2080000);
-     uint64_t before_neighbour = (pd[pd_idx] & ~0x1FFFFFULL) +
-                                 ((huge_page_base + 0x1000) & 0x1FFFFFULL);
--    JARVIS_ASSERT(before_neighbour == 0x801000);
-+    JARVIS_ASSERT(before_neighbour == 0x2081000);
-     uint64_t test_phys = PMM::alloc_page();
-     JARVIS_ASSERT(test_phys != 0);
--    JARVIS_ASSERT(test_phys != 0x802000);
-+    JARVIS_ASSERT(test_phys != 0x2082000);
-     // Issue #200: HHDM PD surgery is IRQ-critical (spec
-     // docs/_archive/hhdm-snapshot-restore.md §5.1) — mask the timer ISR
-     // and task preemption across map..manual-restore (see
-@@ -322,7 +324,8 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
-     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pt_phys);
-     size_t pt_idx = static_cast<size_t>((test_vaddr & (0x1FFULL << 12)) >> 12);
-     // Split-inherited entries keep the boot huge entry's flags verbatim
--    // (PRESENT|WRITE — boot sets no XD on huge DATA entries); only the
-+    // (PRESENT|WRITE — boot sets no XD on huge DATA entries, and the
-+    // split_fill NX/AP carry only preserves bits already set); only the
-     // explicitly (re)mapped leaf carries NX (issue #376 slice 1).
-     constexpr uint64_t X64_PT_FLAGS = (1ULL << 0) | (1ULL << 1);
-     constexpr uint64_t X64_MAPPED_FLAGS =
-@@ -330,16 +333,16 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
-     JARVIS_ASSERT(pt[pt_idx] == (test_phys & ~0xFFFULL) + X64_MAPPED_FLAGS);
-     // The huge page base and neighbour should still resolve via the PT page
-     size_t base_pt_idx = static_cast<size_t>((huge_page_base & (0x1FFULL << 12)) >> 12);
--    JARVIS_ASSERT(pt[base_pt_idx] == (0x800000 & ~0xFFFULL) + X64_PT_FLAGS);
-+    JARVIS_ASSERT(pt[base_pt_idx] == (0x2080000 & ~0xFFFULL) + X64_PT_FLAGS);
-     size_t neigh_pt_idx = static_cast<size_t>(((huge_page_base + 0x1000) & (0x1FFULL << 12)) >> 12);
--    JARVIS_ASSERT(pt[neigh_pt_idx] == (0x801000 & ~0xFFFULL) + X64_PT_FLAGS);
-+    JARVIS_ASSERT(pt[neigh_pt_idx] == (0x2081000 & ~0xFFFULL) + X64_PT_FLAGS);
-     VMM::unmap_page(test_vaddr);
-     // After unmap: PT entry in the just-created PT page should be cleared.
-     // The unmap_page guard returns early for kernel VAs during tests, so
-     // manually clear it.  The PD restore in snapshot_restore will clean up.
-     pt[pt_idx] = 0;
--    VMM::map_page(test_vaddr, 0x802000, false);
--    JARVIS_ASSERT(pt[pt_idx] == (0x802000 & ~0xFFFULL) + X64_MAPPED_FLAGS);
-+    VMM::map_page(test_vaddr, 0x2082000, false);
-+    JARVIS_ASSERT(pt[pt_idx] == (0x2082000 & ~0xFFFULL) + X64_MAPPED_FLAGS);
-     pt_phys = pd[pd_idx] & ~0xFFFULL;
-     JARVIS_ASSERT(!(pd[pd_idx] & PAGE_HUGE));
-     PMM::free_page(pt_phys);
-@@ -352,7 +355,9 @@ JARVIS_TEST(vmm_huge_page_split_regression, "PRE: none | POST: none") {
- JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
-     uint64_t kernel_pml4 = VMM::get_kernel_pml4();
-     JARVIS_ASSERT(kernel_pml4 != 0);
--    uint64_t v = arch::HHDM_OFFSET + 0x900000;
-+    // Fixture above the hardened image range (issue #376: low HHDM PD
-+    // entries covering the image are split at boot, no longer huge).
-+    uint64_t v = arch::HHDM_OFFSET + 0x2300000;
-     uint64_t cr3 = arch::read_cr3();
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + (cr3 & ~0xFFFULL));
-     size_t pml4_i = static_cast<size_t>((v & (0x1FFULL << 39)) >> 39);
-@@ -383,7 +388,7 @@ JARVIS_TEST(vmm_hhdm_access_consistency, "PRE: none | POST: none") {
-     JARVIS_ASSERT(pt[pt_idx] == (p & ~0xFFFULL) + X64_PT_FLAGS_2);
-     VMM::unmap_page(v);
-     JARVIS_ASSERT(pt[pt_idx] == 0);
--    VMM::map_page(v, 0x900000, false);
-+    VMM::map_page(v, 0x2300000, false);
-     pt_phys = pd[pd_i] & ~0xFFFULL;
-     PMM::free_page(pt_phys);
-     pd[pd_i] = saved_pd_entry;
-@@ -410,9 +415,9 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
-     JARVIS_ASSERT(!VMM::take_identity_modified());
-     JARVIS_ASSERT(!VMM::hhdm_was_modified());
-     // Set via the real setter: map a scratch HHDM page (2 MiB huge
--    // page at HHDM+0xA00000, same save/split/restore pattern as the
--    // regression test above).
--    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0xA02000;
-+    // page at HHDM+0x2400000, same save/split/restore pattern as the
-+    // regression test above; above the hardened image range, issue #376).
-+    constexpr uint64_t scratch_va = arch::HHDM_OFFSET + 0x2402000;
-     uint64_t const PAGE_PRESENT = 1ULL << 0;
-     uint64_t const PAGE_HUGE = 1ULL << 7;
-     uint64_t kernel_pml4 = arch::read_cr3();
-@@ -451,7 +456,7 @@ JARVIS_TEST(vmm_hhdm_take_semantics, "PRE: none | POST: none") {
-     auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (pd[pd_i] & ~0xFFFULL));
-     pt[pt_i] = 0;
--    VMM::map_page(scratch_va, 0xA02000, false);
-+    VMM::map_page(scratch_va, 0x2402000, false);
-     uint64_t pt_phys = pd[pd_i] & ~0xFFFULL;
-     PMM::free_page(pt_phys);
-     pd[pd_i] = saved_pd_entry;
+ /// @brief Get /proc/pci status.
