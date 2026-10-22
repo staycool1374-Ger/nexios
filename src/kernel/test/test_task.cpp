@@ -77,63 +77,61 @@ JARVIS_TEST(task_create_user_page_table, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
-#if defined(CONFIG_ARCH_X86_64)
 // Runmode: kernel
 // Testidea: Verifies that TaskControlBlock::clone() deep-copies page tables.
-// Input: A REAL dispatched kernel task (prio 11) with a cloned PML4 calls
-//        clone(); the child is created in the running task's own context.
+// Input: A REAL user parent (create_user: real PMM user stack + real user
+//        page tables, never dispatched) impersonated via ScopedCurrentTask;
+//        clone() runs the genuine user copy path in the test's own context.
 // Expect: child has own page tables (deep-copied — page_table_ != 0 and
 // != parent's), child user stack exists
 // Depends: kernel::TaskControlBlock, kernel::Scheduler
-// NOTE (issue #356 QE): off-x86 gated out — cloning a flag-flipped
-// "user-like" kernel parent hangs both QEMU virt arches deterministically
-// (no output, host-watchdog TIMEOUT). Fork from real user tasks works
-// (#387); the synthetic-parent clone path needs a kernel-side verdict
-// before these tests can run off-x86.
+// NOTE (issue #399 verdict): synthetic parents (flag-flipped kernel tasks
+// with a fake 0x80000000 user_stack_) are UNSUPPORTED — clone() faults on
+// the first stack-copy iteration (HHDM+fake dereference) and hangs both
+// QEMU virt arches. Real create_user parents exercise the same user copy
+// path without dispatch.
 JARVIS_TEST(task_clone_shares_page_tables, "PRE: none | POST: none") {
-    static uint64_t g_child_pt = 0;
-    static uint64_t g_child_shared = 0;
-    static uint64_t g_child_stack = 0;
-    static uint64_t g_child_ok = 0;
-    static uint64_t g_parent_pt = 0;
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
+    JARVIS_ASSERT(parent != nullptr);
+    JARVIS_ASSERT(parent->is_user_);
+    JARVIS_ASSERT(parent->user_stack_ != 0);
+    const uint64_t parent_pt = parent->get_page_table();
+    uint64_t child_pt = 0;
+    uint64_t child_shared = 1;
+    uint64_t child_stack = 0;
+    uint64_t child_ok = 0;
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
 
-    auto *parent = TaskControlBlock::create(
-        []() {
-            uint64_t regs[37] = {};
-            test::make_synthetic_clone_frame(regs);
-
-            auto *child = TaskControlBlock::clone(regs);
-            if (child == nullptr)
-                return;
-            g_child_pt = child->get_page_table();
+        auto *child = TaskControlBlock::clone(regs);
+        if (child != nullptr) {
+            child_pt = child->get_page_table();
             // v0.4.0 MP-7: page_table_shared_ removed — deep copy means the
             // child's PML4 must differ from the parent's.
-            g_child_shared = (g_child_pt != g_parent_pt) ? 0 : 1;
-            g_child_stack = child->user_stack_;
-            g_child_ok = (g_child_pt != 0 && g_child_stack != 0) ? 1 : 0;
+            child_shared = (child_pt != parent_pt) ? 0 : 1;
+            child_stack = child->user_stack_;
+            child_ok = (child_pt != 0 && child_stack != 0) ? 1 : 0;
             child->cleanup();
             delete child;
-        },
-        11, 10);
-    JARVIS_ASSERT(parent != nullptr);
-    g_parent_pt = parent->get_page_table();
-    parent->is_user_ = true;           // simulate a user parent for clone()
-    parent->user_stack_ = 0x80000000;  // mark as user-like for clone path
-    parent->user_stack_size_ = 32_KiB; // clone() needs a real size to succeed
-    Scheduler::add_task(*parent);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(parent);
-    // The parent self-terminated and is owned by the zombie list.  Reclaim it
-    // BEFORE asserting so a failure cannot leak the parent TCB.
-    Scheduler::drain_zombie_list();
+        }
+        // Park the never-dispatched fixture BEFORE scope exit: set_current()
+        // re-enqueues a READY/RUNNING outgoing current, which would dispatch
+        // this fixture on the next tick (then cleanup would free a live
+        // task). BLOCKED outgoing currents are left alone.
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
 
-    JARVIS_ASSERT_EQ(1ULL, g_child_ok);
-    JARVIS_ASSERT(g_child_pt != 0);
-    JARVIS_ASSERT_EQ(0ULL, g_child_shared);
-    JARVIS_ASSERT(g_child_stack != 0);
+    JARVIS_ASSERT_EQ(1ULL, child_ok);
+    JARVIS_ASSERT(child_pt != 0);
+    JARVIS_ASSERT_EQ(0ULL, child_shared);
+    JARVIS_ASSERT(child_stack != 0);
     JARVIS_TEST_PASS();
 }
-#endif // CONFIG_ARCH_X86_64 (clone of synthetic user-like parent hangs off-x86; see note above)
 
 // Runmode: kernel
 // Testidea: Verifies that ELF loading initializes IPC notification/event
@@ -173,90 +171,89 @@ JARVIS_TEST(task_elf_load_inits_ipc_objects, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: Verifies that cleaning up a cloned child task does not affect
 // the parent's page table (deep copy ensures independence).
-// Input: A REAL dispatched kernel task (prio 11) with a cloned PML4 calls
-//        clone(); the child is cleaned up in the running task's own context.
+// Input: A REAL user parent (create_user, never dispatched) impersonated
+//        via ScopedCurrentTask; clone + child teardown in the test's own
+//        context, no dispatch.
 // Expect: parent->get_page_table() unchanged and non-null after child cleanup
 // Depends: kernel::TaskControlBlock, kernel::Scheduler
-// NOTE (issue #356 QE): off-x86 gated out — same synthetic-parent clone
-// hang as task_clone_shares_page_tables (see note there).
-#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(task_fork_child_cleanup_preserves_parent_pages,
             "PRE: none | POST: none") {
-    static uint64_t g_parent_pt = 0;
-    static uint64_t g_preserved = 0;
-
-    auto *parent = TaskControlBlock::create(
-        []() {
-            uint64_t regs[37] = {};
-            test::make_synthetic_clone_frame(regs);
-
-            auto *self = Scheduler::current_task();
-            auto *child = TaskControlBlock::clone(regs);
-            if (child == nullptr)
-                return;
-            uint64_t parent_pml4 = self->get_page_table();
-            // delete calls cleanup() internally
-            delete child;
-            g_parent_pt = self->get_page_table();
-            g_preserved = (parent_pml4 != 0 && self->get_page_table() != 0 &&
-                           self->get_page_table() == parent_pml4)
-                              ? 1
-                              : 0;
-        },
-        11, 10);
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
     JARVIS_ASSERT(parent != nullptr);
-    parent->is_user_ = true; // simulate a user parent for clone()
-    parent->user_stack_ = 0x80000000;
-    parent->user_stack_size_ = 32_KiB;
-    Scheduler::add_task(*parent);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(parent);
-    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT(parent->is_user_);
+    const uint64_t parent_pml4 = parent->get_page_table();
+    JARVIS_ASSERT(parent_pml4 != 0);
+    uint64_t after_pt = 0;
+    uint64_t preserved = 0;
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
 
-    JARVIS_ASSERT_EQ(1ULL, g_preserved);
-    JARVIS_ASSERT(g_parent_pt != 0);
+        auto *child = TaskControlBlock::clone(regs);
+        if (child != nullptr) {
+            // delete calls cleanup() internally (destroy path)
+            delete child;
+            after_pt = parent->get_page_table();
+            preserved = (parent_pml4 != 0 && after_pt != 0 &&
+                         after_pt == parent_pml4)
+                            ? 1
+                            : 0;
+        }
+        // Park the never-dispatched fixture (see clone_shares test): a
+        // READY outgoing current would be re-enqueued by set_current().
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
+
+    JARVIS_ASSERT_EQ(1ULL, preserved);
+    JARVIS_ASSERT(after_pt != 0);
     JARVIS_TEST_PASS();
 }
-#endif // CONFIG_ARCH_X86_64 (synthetic-parent clone hangs off-x86)
 
 // Runmode: kernel
 // Testidea: Verifies that clone + cleanup does not leak page-table-level
-// pages (bug #015).  A REAL dispatched kernel task (prio 11) with a cloned
-// PML4 clones a child and cleans it up in its own running context.
-// Input: Real dispatched parent task, clone child, cleanup+delete both.
+// pages (bug #015). A REAL user parent (create_user, never dispatched) is
+// impersonated via ScopedCurrentTask; the child is cloned and torn down in
+// the test's own context.
+// Input: Real user parent, clone child, cleanup+delete both.
 // Expect: Free memory count is the same after the round-trip as before.
-// NOTE (issue #356 QE): off-x86 gated out — same synthetic-parent clone
-// hang as task_clone_shares_page_tables (see note there).
-#if defined(CONFIG_ARCH_X86_64)
+// Depends: kernel::TaskControlBlock, PMM
 JARVIS_TEST(task_clone_no_page_table_leak, "PRE: none | POST: none") {
-    static uint64_t g_ran = 0;
-
-    auto *parent = TaskControlBlock::create(
-        []() {
-            uint64_t regs[37] = {};
-            test::make_synthetic_clone_frame(regs);
-
-            auto *child = TaskControlBlock::clone(regs);
-            if (child == nullptr)
-                return;
-            // delete calls cleanup() internally
-            delete child;
-            g_ran = 1;
-        },
-        11, 10);
+    uint64_t free_before = 0;
+    uint64_t ran = 0;
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
     JARVIS_ASSERT(parent != nullptr);
-    parent->is_user_ = true; // simulate a user parent for clone()
-    parent->user_stack_ = 0x80000000;
-    parent->user_stack_size_ = 32_KiB;
-    Scheduler::add_task(*parent);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(parent);
-    Scheduler::drain_zombie_list();
+    free_before = PMM::free_pages_ref();
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
 
-    JARVIS_ASSERT_EQ(1ULL, g_ran);
+        auto *child = TaskControlBlock::clone(regs);
+        if (child != nullptr) {
+            // delete calls cleanup() internally (destroy path)
+            delete child;
+            ran = 1;
+        }
+        // Park the never-dispatched fixture (see clone_shares test): a
+        // READY outgoing current would be re-enqueued by set_current().
+        parent->state = TaskState::BLOCKED;
+    }
+    const int64_t pmm_delta =
+        (int64_t)(PMM::free_pages_ref() - free_before);
+    parent->cleanup();
+    delete parent;
+
+    JARVIS_ASSERT_EQ(1ULL, ran);
+    JARVIS_ASSERT_FMT(pmm_delta == 0,
+                      "PMM delta %ld pages after clone teardown",
+                      (long)pmm_delta);
     JARVIS_TEST_PASS();
 }
-#endif // CONFIG_ARCH_X86_64 (synthetic-parent clone hangs off-x86)
 
 // Runmode: kernel
 // Testidea: Registers all task management unit tests with the test framework.
@@ -318,14 +315,10 @@ void register_task_tests() {
     Logger::info("Registering task tests");
     JARVIS_REGISTER_TEST(task_cleanup_frees_resources);
     JARVIS_REGISTER_TEST(task_create_user_page_table);
-#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(task_clone_shares_page_tables);
-#endif
     JARVIS_REGISTER_TEST(task_elf_load_inits_ipc_objects);
-#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(task_fork_child_cleanup_preserves_parent_pages);
     JARVIS_REGISTER_TEST(task_clone_no_page_table_leak);
-#endif
     JARVIS_REGISTER_TEST(task_recent_ring_claim_distinct_slots);
 }
 #endif

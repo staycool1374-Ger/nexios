@@ -59,7 +59,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"scheduler_hrt",         4,    0,       0      },  // hard-RT time assertions on real dispatch (issue #102): rdtsc canary + IPC/semaphore wake latency + release jitter
 
     // task
-    {"task_core",             7,    4,       4      },  // TCB cleanup/page tables/clone + recent-ring claim (#264); off-x86: cleanup/create_user/elf-ipc/ring live, 3 synthetic-parent clone tests x86-gated pending kernel verdict (issue #356 QE note)
+    {"task_core",             7,    7,       7      },  // TCB cleanup/page tables/clone + recent-ring claim (#264); all arches: 3 clone tests use real create_user parents + ScopedCurrentTask impersonation (no dispatch) per #399 verdict, fixture parked BLOCKED before scope exit
     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
     {"task_fpu",              0,    5,       5      },  // x86 files excluded from build (GCC 16); off-x86 FPU context (issue #353: detect/basic/sweep/clone/switch-area); x86 stays 0 (pre-existing empty-class stall)
     {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
@@ -73,7 +73,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"debug_syscall",         29,   29,      29     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2) + 3 death-publish guards (#379); arch-neutral, x86_64 measured via TCOUNT
 
     // process
-    {"process_lifecycle",    16,   12,      12     },  // process lifecycle, child table (12 + 4 MP-1/7); off-x86: 12 bookkeeping + kernel-half (arch-aware L0[0] check); 4 synthetic-parent clone tests x86-gated pending #399
+    {"process_lifecycle",    16,   16,      16     },  // process lifecycle, child table (12 + 4 MP-1/7); all arches: 4 clone tests use real create_user parents + ScopedCurrentTask impersonation (no dispatch) per #399 verdict, fixture parked BLOCKED before scope exit
     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
     {"elf_loader",            25,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork + BSS-only DATA-canary live-E2E follow-up)
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)

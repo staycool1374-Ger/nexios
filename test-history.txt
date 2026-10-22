@@ -4591,3 +4591,17 @@ SUMMARY: total=3 ok=3 fail=0 ARCH=aarch64
 2026-10-22 17:44:17 ui PASSED: 19 FAILED: 0 TIME: 245ms
 
 SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
+2026-10-22 17:56:11 storage PASSED: 167 FAILED: 0 TIME: 21053ms STATUS: #350-riscv64-post-392-fix
+2026-10-22 17:56:11 storage PASSED: 167 FAILED: 0 TIME: 21048ms STATUS: #350-aarch64-post-392-fix
+2026-10-22 17:57:10 drivers PASSED: 62 FAILED: 0 TIME: 1956ms STATUS: #350-riscv64-post-merge-regression-check
+2026-10-22 17:57:30 drivers PASSED: 62 FAILED: 0 TIME: 1978ms STATUS: #350-aarch64-post-merge-regression-check
+2026-10-22 18:30:00 task_core PASSED: 7 FAILED: 0 TIME: 260ms STATUS: #356-riscv64-real-parent-rewrite
+2026-10-22 18:31:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 531ms STATUS: #356-riscv64-real-parent-rewrite
+2026-10-22 18:33:00 task_core PASSED: 0 FAILED: 0 TIME: 0 STATUS: #356-aarch64-wedge-no-BLOCKED-park-gdb-convicted
+2026-10-22 18:40:00 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0 STATUS: #356-aarch64-wedge-no-BLOCKED-park
+2026-10-22 18:44:00 task_core PASSED: 7 FAILED: 0 TIME: 220ms STATUS: #356-aarch64-BLOCKED-park-fix
+2026-10-22 18:45:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 501ms STATUS: #356-aarch64-BLOCKED-park-fix
+2026-10-22 18:45:00 task_core PASSED: 7 FAILED: 0 TIME: 232ms STATUS: #356-riscv64-BLOCKED-park-regression
+2026-10-22 18:45:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 529ms STATUS: #356-riscv64-BLOCKED-park-regression
+2026-10-22 18:46:00 task_core PASSED: 7 FAILED: 0 TIME: 488ms STATUS: #356-x86_64-BLOCKED-park-regression
+2026-10-22 18:46:00 process_lifecycle PASSED: 16 FAILED: 0 TIME: 1100ms STATUS: #356-x86_64-BLOCKED-park-regression
