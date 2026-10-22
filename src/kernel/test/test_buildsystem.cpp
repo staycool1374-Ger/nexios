@@ -1,6 +1,45 @@
 /// @file test_buildsystem.cpp
 /// @brief Build system integration tests.
 
+#include <test.hpp>
+#include <logger.hpp>
+
+using namespace kernel;
+
+// Runmode: kernel
+// Testidea: Verifies kernel compiles with -DCONFIG_DEBUG for test builds.
+// Input: Check debug build flags
+// Expect: CONFIG_DEBUG defined, debug symbols present
+// Depends: Makefile
+JARVIS_TEST(buildsystem_debug_flags, "PRE: none | POST: none") {
+#if defined(CONFIG_DEBUG)
+    bool debug_defined = true;
+#else
+    bool debug_defined = false;
+#endif
+    JARVIS_ASSERT_FMT(debug_defined,
+                      "CONFIG_DEBUG must be defined for test builds");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Verifies that a known CONFIG_ARCH_* macro is defined for the
+// build (arch-appropriate TU selection).
+// Input: Preprocessor check
+// Expect: exactly one known CONFIG_ARCH_* macro defined
+// Depends: Makefile, build system
+JARVIS_TEST(buildsystem_config_arch_defined, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
+    bool arch_ok = true;
+#else
+    bool arch_ok = false;
+#endif
+    JARVIS_ASSERT_FMT(arch_ok,
+                      "a known CONFIG_ARCH_* must be defined for the build");
+    JARVIS_TEST_PASS();
+}
+
 #if defined(CONFIG_ARCH_X86_64)
 /*
  * NexIOS RTOS — Development Roadmap / Kernel Core
@@ -90,44 +129,39 @@ JARVIS_TEST(buildsystem_default_arch_x86_64, "PRE: none | POST: none") {
 }
 #endif
 
-// Runmode: kernel
-// Testidea: Verifies kernel compiles with -DCONFIG_DEBUG for test builds.
-// Input: Check debug build flags
-// Expect: CONFIG_DEBUG defined, debug symbols present
-// Depends: Makefile
-JARVIS_TEST(buildsystem_debug_flags, "PRE: none | POST: none") {
-#if defined(CONFIG_DEBUG)
-    bool debug_defined = true;
-#else
-    bool debug_defined = false;
-#endif
-    JARVIS_ASSERT_FMT(debug_defined,
-                      "CONFIG_DEBUG must be defined for test builds");
-    JARVIS_TEST_PASS();
-}
-
-// Runmode: kernel
-// Testidea: Verifies that CONFIG_ARCH_X86_64 is defined for x86-64 builds.
-// Input: Preprocessor check
-// Expect: CONFIG_ARCH_X86_64 is defined
-// Depends: Makefile, build system
-JARVIS_TEST(buildsystem_config_arch_defined, "PRE: none | POST: none") {
-#if defined(CONFIG_ARCH_X86_64)
-    bool arch_ok = true;
-#else
-    bool arch_ok = false;
-#endif
-    JARVIS_ASSERT_FMT(arch_ok,
-                      "CONFIG_ARCH_X86_64 must be defined for x86-64 builds");
-    JARVIS_TEST_PASS();
-}
-
 void register_buildsystem_tests() {
     Logger::info("Registering buildsystem tests");
 
     JARVIS_REGISTER_TEST(buildsystem_arch_x86_64_toolchain);
     JARVIS_REGISTER_TEST(buildsystem_invalid_arch_error);
     JARVIS_REGISTER_TEST(buildsystem_default_arch_x86_64);
+    JARVIS_REGISTER_TEST(buildsystem_debug_flags);
+    JARVIS_REGISTER_TEST(buildsystem_config_arch_defined);
+}
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/cpuid.hpp>
+
+// Runmode: kernel
+// Testidea: The non-x86 toolchain targets the right architecture: 64-bit
+// pointers plus the hardware FPU the kernel context-switches (NEON/FP on
+// aarch64 QEMU virt via EL1-readable PFR0; riscv64 proves XLEN=64 via
+// pointers only — S-mode misa reads trap, so FPU presence detection
+// belongs to #353, not build identity; see the deliberately
+// unregistered riscv64_fpu_extension_detection).
+// Input: sizeof(void*), arch::has_fpu() (aarch64 only).
+// Expect: 8-byte pointers; FPU present where readable.
+// Depends: toolchain triple, arch::has_fpu
+JARVIS_TEST(buildsystem_arch_toolchain, "PRE: none | POST: none") {
+    JARVIS_ASSERT_EQ(8ULL, sizeof(void *));
+#if defined(CONFIG_ARCH_AARCH64)
+    JARVIS_ASSERT(arch::has_fpu());
+#endif
+    JARVIS_TEST_PASS();
+}
+
+void register_buildsystem_tests() {
+    Logger::info("Registering buildsystem tests");
+    JARVIS_REGISTER_TEST(buildsystem_arch_toolchain);
     JARVIS_REGISTER_TEST(buildsystem_debug_flags);
     JARVIS_REGISTER_TEST(buildsystem_config_arch_defined);
 }

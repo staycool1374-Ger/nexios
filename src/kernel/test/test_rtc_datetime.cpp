@@ -177,4 +177,143 @@ void register_rtc_datetime_tests() {
     JARVIS_REGISTER_TEST(rtc_dt_bcd_roundtrip_full);
     JARVIS_REGISTER_TEST(rtc_dt_bcd_invalid_nibble_contract);
 }
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+#include <test.hpp>
+#include <logger.hpp>
+#include <kernel/arch/rtc.hpp>
+#include <string.hpp>
+
+using namespace kernel;
+
+namespace {
+
+// Independent reference: days-from-civil (Howard Hinnant algorithm),
+// same contract as the x86 section's reference — no shared code with the
+// RTC driver under test.
+uint64_t ref_days_from_civil(uint64_t year, unsigned month, unsigned day) {
+    year -= month <= 2;
+    uint64_t era = year / 400;
+    unsigned yoe = static_cast<unsigned>(year - era * 400);
+    unsigned doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+uint64_t ref_timestamp(const arch::tm &t) {
+    uint64_t days = ref_days_from_civil(
+        static_cast<uint64_t>(t.tm_year + 1900),
+        static_cast<unsigned>(t.tm_mon + 1), static_cast<unsigned>(t.tm_mday));
+    return days * 86400ULL + static_cast<uint64_t>(t.tm_hour) * 3600ULL +
+           static_cast<uint64_t>(t.tm_min) * 60ULL +
+           static_cast<uint64_t>(t.tm_sec);
+}
+
+} // namespace
+
+// Runmode: kernel
+// Testidea: The wall-clock source contract (issue #355): QEMU virt always
+// provides a clock (PL011 on aarch64, Goldfish on riscv64), so available()
+// is true and source_name() names it. If the platform ever drops the
+// device the test fails loud (fail-loud, never silent).
+// Input: RTC::available(), RTC::source_name().
+// Expect: available() true; "pl031" on aarch64, "goldfish" on riscv64.
+// Depends: arch::RTC
+JARVIS_TEST(rtc_dt_source_contract, "PRE: iocd | POST: none") {
+    JARVIS_ASSERT(arch::RTC::available());
+    const char *name = arch::RTC::source_name();
+    JARVIS_ASSERT(name != nullptr);
+#if defined(CONFIG_ARCH_AARCH64)
+    JARVIS_ASSERT(strcmp(name, "pl031") == 0);
+#elif defined(CONFIG_ARCH_RISCV64)
+    JARVIS_ASSERT(strcmp(name, "goldfish") == 0);
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Wall-clock seconds are plausible and monotonic — at/after the
+// 2001 plausibility floor, never going backwards. No host-clock proximity
+// is asserted (TCG/host clocks may diverge by design, issue #384).
+// Input: Two read_seconds() calls.
+// Expect: both >= 1e9; second >= first.
+// Depends: arch::RTC
+JARVIS_TEST(rtc_dt_seconds_plausible_monotonic, "PRE: iocd | POST: none") {
+    uint64_t first = arch::RTC::read_seconds();
+    uint64_t second = arch::RTC::read_seconds();
+    JARVIS_ASSERT(first >= 1000000000ULL);
+    JARVIS_ASSERT(second >= 1000000000ULL);
+    JARVIS_ASSERT(second >= first);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: read_time fields are calendar-valid on the platform clock,
+// with the documented untracked zeros (issue #355 H4: field ranges).
+// Input: RTC::read_time().
+// Expect: mon 0-11; mday 1-31; hour <= 23; min/sec <= 59;
+//         year >= 101 (2001 plausibility floor); wday/yday/isdst zero.
+// Depends: arch::RTC
+JARVIS_TEST(rtc_dt_tm_field_ranges, "PRE: iocd | POST: none") {
+    arch::tm t{};
+    arch::RTC::read_time(&t);
+    JARVIS_ASSERT(t.tm_mon >= 0 && t.tm_mon <= 11);
+    JARVIS_ASSERT(t.tm_mday >= 1 && t.tm_mday <= 31);
+    JARVIS_ASSERT(t.tm_hour >= 0 && t.tm_hour <= 23);
+    JARVIS_ASSERT(t.tm_min >= 0 && t.tm_min <= 59);
+    JARVIS_ASSERT(t.tm_sec >= 0 && t.tm_sec <= 59);
+    JARVIS_ASSERT(t.tm_year >= 101);
+    JARVIS_ASSERT_EQ(0, t.tm_wday);
+    JARVIS_ASSERT_EQ(0, t.tm_yday);
+    JARVIS_ASSERT_EQ(0, t.tm_isdst);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The mtime-fallback contract is documented even though QEMU
+// virt always provides a clock (issue #355 H4): without a wall source the
+// driver renders mtime uptime from the 1970 epoch (small values), while a
+// live source always reads at/after the plausibility floor.
+// Input: RTC::available(), RTC::read_seconds(), source_name().
+// Expect: !available ⇒ seconds < 1e9 and source "mtime-fallback";
+//         available ⇒ seconds >= 1e9.
+// Depends: arch::RTC
+JARVIS_TEST(rtc_dt_fallback_contract_documented, "PRE: iocd | POST: none") {
+    bool avail = arch::RTC::available();
+    uint64_t secs = arch::RTC::read_seconds();
+    const char *name = arch::RTC::source_name();
+    JARVIS_ASSERT(name != nullptr);
+    if (!avail) {
+        JARVIS_ASSERT(secs < 1000000000ULL);
+        JARVIS_ASSERT(strcmp(name, "mtime-fallback") == 0);
+    } else {
+        JARVIS_ASSERT(secs >= 1000000000ULL);
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: read_seconds agrees with the independent civil-calendar
+// conversion of read_time within a generous bound (the clock may tick
+// between the two reads; no shared code with the driver).
+// Input: read_seconds() and read_time() on the platform clock.
+// Expect: |direct - composed| <= 120 s.
+// Depends: arch::RTC
+JARVIS_TEST(rtc_dt_seconds_tm_composition, "PRE: iocd | POST: none") {
+    uint64_t direct = arch::RTC::read_seconds();
+    arch::tm t{};
+    arch::RTC::read_time(&t);
+    uint64_t composed = ref_timestamp(t);
+    uint64_t delta = direct > composed ? direct - composed : composed - direct;
+    JARVIS_ASSERT(delta <= 120ULL);
+    JARVIS_TEST_PASS();
+}
+
+void register_rtc_datetime_tests() {
+    Logger::info("Registering RTC datetime tests");
+    JARVIS_REGISTER_TEST(rtc_dt_source_contract);
+    JARVIS_REGISTER_TEST(rtc_dt_seconds_plausible_monotonic);
+    JARVIS_REGISTER_TEST(rtc_dt_tm_field_ranges);
+    JARVIS_REGISTER_TEST(rtc_dt_fallback_contract_documented);
+    JARVIS_REGISTER_TEST(rtc_dt_seconds_tm_composition);
+}
 #endif // CONFIG_ARCH_X86_64

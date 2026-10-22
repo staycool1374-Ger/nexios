@@ -38,6 +38,8 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/hal/interrupt_controller.hpp>
+#include <kernel/arch/hal/irq_vectors.hpp>
+#include <kernel/arch/hal/idt.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include "test_sched_helpers.hpp"
 #include "task_ptr.hpp"
@@ -160,18 +162,58 @@ JARVIS_TEST(irq_cap_create_fields, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: IrqCap vector validation fails closed: vectors outside the
-//           hardware IRQ window and the reserved timer vector (32) are
-//           rejected.
-// Input: create(31), create(48), create(32), create(33)
-// Expect: only the in-window non-timer vector succeeds
+//           hardware IRQ window and the reserved timer/syscall vectors
+//           are rejected. x86 window: PIC 33-47, timer 32. Off-x86
+//           windows (issue #354 Slice B): riscv64 PLIC 1-95 (SYSCALL=2
+//           in-window — the claim_slot reject is load-bearing there),
+//           aarch64 GIC SPI 32-255.
+// Input: create(below-window), create(above-window), create(timer),
+//        create(syscall), create(first claimable via try-claim probe).
+// Expect: all reserved/out-of-window fail; first claimable succeeds.
 // Depends: kernel::cap::IrqCap
 JARVIS_TEST(irq_cap_vector_bounds, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_ASSERT(cap::IrqCap::create(31) == nullptr);
     JARVIS_ASSERT(cap::IrqCap::create(48) == nullptr);
     JARVIS_ASSERT(cap::IrqCap::create(32) == nullptr); // timer reserved
     auto *irq = cap::IrqCap::create(33);
     JARVIS_ASSERT(irq != nullptr);
     irq->release();
+#else
+    const uint16_t lo = arch::irq_cap_vector_min();
+    const uint16_t hi = arch::irq_cap_vector_max();
+    const uint8_t timer_v =
+        static_cast<uint8_t>(arch::InterruptVector::TIMER);
+    const uint8_t syscall_v =
+        static_cast<uint8_t>(arch::InterruptVector::SYSCALL);
+    if (lo > 0) {
+        JARVIS_ASSERT(
+            cap::IrqCap::create(static_cast<uint8_t>(lo - 1)) == nullptr);
+    }
+    if (hi < 255) {
+        JARVIS_ASSERT(
+            cap::IrqCap::create(static_cast<uint8_t>(hi + 1)) == nullptr);
+    }
+    JARVIS_ASSERT(cap::IrqCap::create(timer_v) == nullptr);
+    JARVIS_ASSERT(cap::IrqCap::create(syscall_v) == nullptr);
+    // First claimable vector proves the window is live (try-claim probe:
+    // failed creates have no side effects; the success is released).
+    uint8_t first = 0;
+    bool have_first = false;
+    for (uint16_t v = lo; v <= hi && !have_first; ++v) {
+        auto *probe = cap::IrqCap::create(static_cast<uint8_t>(v));
+        if (probe != nullptr) {
+            first = static_cast<uint8_t>(v);
+            have_first = true;
+            probe->release();
+        }
+    }
+    JARVIS_ASSERT_FMT(have_first, "no claimable vector in window");
+    auto *irq = cap::IrqCap::create(first);
+    JARVIS_ASSERT(irq != nullptr);
+    irq->release();
+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), IrqDelivery::occupied_count());
+#endif
     JARVIS_TEST_PASS();
 }
 
@@ -197,13 +239,20 @@ JARVIS_TEST(irq_cap_single_owner_vector, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: The delivery table is bounded: claiming every in-window vector
-//           fills the table and the next create fails closed; releasing
-//           restores.
-// Input: create one cap per in-window vector (33..47), then one more
-// Expect: all 15 succeed; the 16th fails; after release the table is empty
+// Testidea: The delivery table is bounded: claiming vectors fills the
+//           table and the next create fails closed; releasing restores.
+//           x86 window (33-47) holds 15 vectors. Off-x86 the window is
+//           wide (issue #354), so TABLE-full (not window-full) is pinned:
+//           claim CONFIG_CAP_MAX_IRQ distinct probed vectors, prove the
+//           next fails on a full table (it succeeds again after one
+//           release), then drain to zero.
+// Input: try-claim probe across the arch window; fill; overfill; partial
+//        release + retry; full release.
+// Expect: exactly MAX succeed; overfill fails; retry-after-release
+//         succeeds; final occupied count 0.
 // Depends: kernel::cap::IrqCap, kernel::IrqDelivery
 JARVIS_TEST(irq_cap_live_bound_exhaustion, "PRE: none | POST: none") {
+#if defined(CONFIG_ARCH_X86_64)
     enum { FIRST = 33, LAST = 47 };
     cap::IrqCap *caps[LAST - FIRST + 1];
     size_t n = 0;
@@ -218,6 +267,43 @@ JARVIS_TEST(irq_cap_live_bound_exhaustion, "PRE: none | POST: none") {
 
     for (size_t i = 0; i < n; ++i)
         caps[i]->release();
+#else
+    const uint16_t lo = arch::irq_cap_vector_min();
+    const uint16_t hi = arch::irq_cap_vector_max();
+    // Pass 1: identify MAX+1 distinct claimable vectors by try-claim +
+    // immediate release (zero residue — a failed create allocates
+    // nothing, a success is released at once). Probing and filling in
+    // one pass cannot work: once the table is full every further
+    // create fails, hiding whether the vector itself is claimable.
+    uint8_t cand[CONFIG_CAP_MAX_IRQ + 1];
+    size_t m = 0;
+    for (uint16_t v = lo; v <= hi && m <= CONFIG_CAP_MAX_IRQ; ++v) {
+        auto *p = cap::IrqCap::create(static_cast<uint8_t>(v));
+        if (p != nullptr) {
+            cand[m++] = static_cast<uint8_t>(v);
+            p->release();
+        }
+    }
+    JARVIS_ASSERT_FMT(m == CONFIG_CAP_MAX_IRQ + 1,
+                      "window yielded %u claimable, need %u", (unsigned)m,
+                      (unsigned)(CONFIG_CAP_MAX_IRQ + 1));
+    // Pass 2: fill the table; the spare fails closed on a full table.
+    cap::IrqCap *caps[CONFIG_CAP_MAX_IRQ];
+    for (size_t i = 0; i < CONFIG_CAP_MAX_IRQ; ++i) {
+        caps[i] = cap::IrqCap::create(cand[i]);
+        JARVIS_ASSERT(caps[i] != nullptr);
+    }
+    JARVIS_ASSERT_EQ(static_cast<size_t>(CONFIG_CAP_MAX_IRQ),
+                     IrqDelivery::occupied_count());
+    JARVIS_ASSERT(cap::IrqCap::create(cand[CONFIG_CAP_MAX_IRQ]) == nullptr);
+    // Not vector-blocked: freeing one slot admits the spare.
+    caps[0]->release();
+    auto *retry = cap::IrqCap::create(cand[CONFIG_CAP_MAX_IRQ]);
+    JARVIS_ASSERT(retry != nullptr);
+    retry->release();
+    for (size_t i = 1; i < CONFIG_CAP_MAX_IRQ; ++i)
+        caps[i]->release();
+#endif
     JARVIS_ASSERT_EQ(static_cast<size_t>(0), IrqDelivery::occupied_count());
     JARVIS_TEST_PASS();
 }

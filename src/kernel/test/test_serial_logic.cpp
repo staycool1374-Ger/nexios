@@ -219,4 +219,173 @@ void register_serial_logic_tests() {
     JARVIS_REGISTER_TEST(serial_getchar_idle_returns_nul);
     JARVIS_REGISTER_TEST(serial_poll_getchar_loopback); // issue #245
 }
+#elif defined(CONFIG_ARCH_AARCH64)
+#include <test.hpp>
+#include <logger.hpp>
+#include <kernel/arch/serial.hpp>
+
+using namespace kernel;
+using arch::Serial;
+
+// Runmode: kernel
+// Testidea: Serial::init() programs the documented PL011 state: CR 0x301
+// (RXE+TXE+UARTEN), 8N1+FIFO LCR_H 0x70, 115200-baud divisors (IBRD 26,
+// FBRD 3) and IMSC 0 (polling only — no UART IRQ exists, issue #355).
+// The PL011 has no loopback mode, so init-state readback is the parity
+// contract (no fabricated loopback).
+// Input: Serial::init(), then pl011_snapshot().
+// Expect: CR == 0x301; LCR_H == 0x70; IBRD == 26; FBRD == 3; IMSC == 0;
+//         FR shows TX FIFO empty (TXFE set, idle UART).
+// Depends: arch::Serial::pl011_snapshot
+JARVIS_TEST(serial_pl011_init_registers, "PRE: iocd | POST: none") {
+    Serial::init();
+    arch::Serial::Pl011Snapshot snap = Serial::pl011_snapshot();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x301),
+                     static_cast<uint64_t>(snap.cr));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0x70),
+                     static_cast<uint64_t>(snap.lcr_h));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(26),
+                     static_cast<uint64_t>(snap.ibrd));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3),
+                     static_cast<uint64_t>(snap.fbrd));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     static_cast<uint64_t>(snap.imsc));
+    JARVIS_ASSERT((snap.fr & (1u << 7)) != 0); // TXFE: FIFO empty when idle
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The IMSC==0 no-interrupt pin holds across transmit traffic —
+// the polled driver never arms a UART IRQ source (issue #355, polling
+// only by design).
+// Input: pl011_snapshot(); putchar('Z'); pl011_snapshot().
+// Expect: IMSC == 0 before and after; the transmit completes (no hang
+//         proves TXFE polling still drains).
+// Depends: arch::Serial::pl011_snapshot
+JARVIS_TEST(serial_pl011_irqs_never_armed, "PRE: iocd | POST: none") {
+    arch::Serial::Pl011Snapshot before = Serial::pl011_snapshot();
+    Serial::putchar('Z');
+    arch::Serial::Pl011Snapshot after = Serial::pl011_snapshot();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     static_cast<uint64_t>(before.imsc));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     static_cast<uint64_t>(after.imsc));
+    JARVIS_TEST_PASS();
+}
+
+void register_serial_logic_tests() {
+    Logger::info("Registering serial logic tests");
+    JARVIS_REGISTER_TEST(serial_pl011_init_registers);
+    JARVIS_REGISTER_TEST(serial_pl011_irqs_never_armed);
+}
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <test.hpp>
+#include <logger.hpp>
+#include <kernel/arch/serial.hpp>
+#include <kernel/input/serial_input.hpp>
+
+using namespace kernel;
+using arch::Serial;
+
+// Runmode: kernel
+// Testidea: The virt 16550A snapshot observes the OpenSBI/QEMU live
+// configuration: IER stays 0 (RX is polled, never interrupt-driven —
+// the kernel never writes IER, issue #355) and DLAB stays clear.
+// Input: Serial::uart_snapshot() on the live UART.
+// Expect: IER == 0; LCR DLAB bit (0x80) clear; MCR LOOP bit clear in
+//         steady state (no test left the window open).
+// Depends: arch::Serial::uart_snapshot
+JARVIS_TEST(serial_16550_snapshot_init_state, "PRE: iocd | POST: none") {
+    arch::Serial::Uart16550Snapshot snap = Serial::uart_snapshot();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     static_cast<uint64_t>(snap.ier));
+    JARVIS_ASSERT((snap.lcr & 0x80) == 0); // DLAB clear
+    JARVIS_ASSERT((snap.mcr & arch::Serial::UART_MCR_LOOP) == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: MCR loopback round-trip — with LOOP set, an SBI-transmitted
+// byte (OpenSBI writes the same THR the MMIO path reads) returns via RBR
+// instead of reaching the host. All observations happen inside the
+// window; every assert runs after unconditional restore (a failed assert
+// inside the window would strand LOOP and silence the console suite).
+// Newline note: putchar('\n') expands to CR+LF in the kernel AND OpenSBI
+// expands '\n' again, so only the first looped byte ('\r', ours) is
+// asserted — the remainder is drained boundedly (firmware composition is
+// not kernel contract).
+// Input: loopback_begin; putchar('A'); getchar; putchar('\n'); getchar;
+//        bounded drain; loopback_end (unconditional).
+// Expect: 'A', then '\r'; drain terminates; MCR after == MCR before.
+// Depends: arch::Serial MCR accessors, input::serial loopback window
+JARVIS_TEST(serial_16550_loopback_roundtrip, "PRE: iocd | POST: none") {
+    uint8_t mcr_before = Serial::uart_mcr();
+    bool entered = kernel::input::serial::loopback_begin();
+    char got_a = 0;
+    char got_cr = 0;
+    bool drained = false;
+    if (entered) {
+        Serial::putchar('A');
+        got_a = Serial::getchar();
+        Serial::putchar('\n');
+        got_cr = Serial::getchar();
+        // Drain the firmware-composed remainder (bounded by FIFO depth).
+        drained = true;
+        for (int i = 0; i < 16; ++i) {
+            char junk = 0;
+            if (!Serial::poll_getchar(junk))
+                break;
+            if (i == 15)
+                drained = false;
+        }
+    }
+    kernel::input::serial::loopback_end();
+    uint8_t mcr_after = Serial::uart_mcr();
+    JARVIS_ASSERT(entered);
+    JARVIS_ASSERT_EQ('A', got_a);
+    JARVIS_ASSERT_EQ('\r', got_cr);
+    JARVIS_ASSERT(drained);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(mcr_before),
+                     static_cast<uint64_t>(mcr_after));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The loopback window is fail-closed — nested begin refuses,
+// a foreign LOOP bit refuses without touching MCR, and the window can be
+// re-entered after a clean exit (issue #355 Slice C contract).
+// Input: begin; begin again; end; set LOOP manually; begin; restore
+//        manually; begin; end. All asserts after the windows close.
+// Expect: first begin true; nested and foreign begins false with MCR
+//         unmodified by the refusals; re-entry true; final MCR == pre-test.
+// Depends: arch::Serial MCR accessors, input::serial loopback window
+JARVIS_TEST(serial_16550_loopback_fail_closed, "PRE: iocd | POST: none") {
+    uint8_t pre = Serial::uart_mcr();
+    bool first = kernel::input::serial::loopback_begin();
+    bool nested = kernel::input::serial::loopback_begin();
+    kernel::input::serial::loopback_end();
+    Serial::uart_mcr_set(
+        static_cast<uint8_t>(pre | arch::Serial::UART_MCR_LOOP));
+    uint8_t forced = Serial::uart_mcr();
+    bool foreign = kernel::input::serial::loopback_begin();
+    Serial::uart_mcr_set(pre);
+    bool reopen = kernel::input::serial::loopback_begin();
+    kernel::input::serial::loopback_end();
+    uint8_t post = Serial::uart_mcr();
+    JARVIS_ASSERT(first);
+    JARVIS_ASSERT(!nested);
+    JARVIS_ASSERT((forced & arch::Serial::UART_MCR_LOOP) != 0);
+    JARVIS_ASSERT(!foreign);
+    JARVIS_ASSERT(reopen);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(pre),
+                     static_cast<uint64_t>(post));
+    JARVIS_TEST_PASS();
+}
+
+void register_serial_logic_tests() {
+    Logger::info("Registering serial logic tests");
+    JARVIS_REGISTER_TEST(serial_16550_snapshot_init_state);
+    JARVIS_REGISTER_TEST(serial_16550_loopback_roundtrip);
+    JARVIS_REGISTER_TEST(serial_16550_loopback_fail_closed);
+}
 #endif // CONFIG_ARCH_X86_64

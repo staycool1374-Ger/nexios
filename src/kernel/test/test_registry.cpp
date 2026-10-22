@@ -226,11 +226,14 @@ void register_cap_shm_tests();
 void register_cap_death_tests();
 void register_cap_pager_tests();
 void register_ipc_fastpath_tests();
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
 void register_rtc_datetime_tests();
 void register_keyboard_decode_tests();
-void register_gdt_layout_tests();
 void register_serial_logic_tests();
+#endif
+#if defined(CONFIG_ARCH_X86_64)
+void register_gdt_layout_tests();
 void register_acpi_parse_tests();
 void register_smp_madt_tests();
 void register_smp_ipi_tests();
@@ -534,13 +537,16 @@ static void run_irq_early_std_group() { register_irq_early_std_tests(); }
 static void run_hal_apic_group() { register_apic_timer_tests(); }
 static void run_apic_tpr_group() { register_apic_tpr_tests(); }
 static void run_hal_rtc_group() { register_rtc_tests(); }
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
 static void run_hal_rtc_datetime_group() { register_rtc_datetime_tests(); }
 static void run_hal_keyboard_decode_group() {
     register_keyboard_decode_tests();
 }
-static void run_hal_gdt_layout_group() { register_gdt_layout_tests(); }
 static void run_hal_serial_logic_group() { register_serial_logic_tests(); }
+#endif
+#if defined(CONFIG_ARCH_X86_64)
+static void run_hal_gdt_layout_group() { register_gdt_layout_tests(); }
 static void run_acpi_parse_group() { register_acpi_parse_tests(); }
 static void run_smp_madt_group() { register_smp_madt_tests(); }
 static void run_smp_ipi_group() { register_smp_ipi_tests(); }
@@ -904,11 +910,14 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"hal_apic", []() { run_hal_apic_group(); }},
     {"apic_tpr", []() { run_apic_tpr_group(); }},
     {"hal_rtc", []() { run_hal_rtc_group(); }},
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
     {"hal_rtc_datetime", []() { run_hal_rtc_datetime_group(); }},
     {"hal_keyboard_decode", []() { run_hal_keyboard_decode_group(); }},
-    {"hal_gdt_layout", []() { run_hal_gdt_layout_group(); }},
     {"hal_serial_logic", []() { run_hal_serial_logic_group(); }},
+#endif
+#if defined(CONFIG_ARCH_X86_64)
+    {"hal_gdt_layout", []() { run_hal_gdt_layout_group(); }},
     {"acpi_parse", []() { run_acpi_parse_group(); }},
     {"smp_madt", []() { run_smp_madt_group(); }},
     {"smp_ipi", []() { run_smp_ipi_group(); }},
@@ -1229,11 +1238,14 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_hal_apic_group();
          run_apic_tpr_group();
          run_hal_rtc_group();
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
          run_hal_rtc_datetime_group();
          run_hal_keyboard_decode_group();
-         run_hal_gdt_layout_group();
          run_hal_serial_logic_group();
+#endif
+#if defined(CONFIG_ARCH_X86_64)
+         run_hal_gdt_layout_group();
          run_acpi_parse_group();
 #endif
          run_arch_cross_group();

@@ -605,4 +605,448 @@ void register_shell_interaction_tests() {
     JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
     JARVIS_REGISTER_TEST(shell_key_delivery_via_seam);
 }
-#endif
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+#include <test.hpp>
+#include <logger.hpp>
+#include <services/shell.hpp>
+#include <services/terminal/terminal.hpp>
+#include <kernel/arch/keyboard.hpp>
+#include <kernel/arch/serial.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/arch/timer.hpp>
+#include <string.hpp>
+
+using namespace kernel;
+using arch::Keyboard;
+using arch::Serial;
+
+static bool serial_contains(const char *buf, const char *needle) {
+    for (size_t i = 0; buf[i] != '\0'; ++i) {
+        size_t j;
+        for (j = 0; needle[j] != '\0'; ++j) {
+            if (buf[i + j] != needle[j])
+                break;
+        }
+        if (needle[j] == '\0')
+            return true;
+    }
+    return false;
+}
+
+// Runmode: kernel
+// Testidea: Terminal::write output lands in the capture buffer (issue
+// #355 H3: off-x86 port of the COM1-loopback write test onto
+// Terminal::capture_begin/end — no UART loopback on these arches).
+// Input: capture_begin; write("HelloWorld"); capture_end.
+// Expect: capture contains "HelloWorld".
+// Depends: service::Terminal
+JARVIS_TEST(shell_loopback_manual_string, "PRE: vfsd, iocd | POST: none") {
+    char cap[64];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("HelloWorld");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "HelloWorld"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_terminal_write (H3): Terminal output
+// is observable in-memory without UART loopback.
+// Input: capture_begin; write("TESTMARKER"); capture_end.
+// Expect: capture contains "TESTMARKER".
+// Depends: service::Terminal
+JARVIS_TEST(shell_terminal_write, "PRE: vfsd, iocd | POST: none") {
+    char cap[256];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("TESTMARKER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "TESTMARKER"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_simple_write (H3).
+// Input: capture_begin; write("SIMPLE_TEST"); capture_end.
+// Expect: capture contains "SIMPLE_TEST".
+// Depends: service::Terminal
+JARVIS_TEST(shell_simple_write, "PRE: vfsd, iocd | POST: none") {
+    char cap[64];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("SIMPLE_TEST");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "SIMPLE_TEST"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_write_with_newline (H3): multi-line
+// writes land in order.
+// Input: capture_begin; write("LINE1\nLINE2\n"); capture_end.
+// Expect: capture contains LINE1 and LINE2.
+// Depends: service::Terminal
+JARVIS_TEST(shell_write_with_newline, "PRE: vfsd, iocd | POST: none") {
+    char cap[512];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("LINE1\nLINE2\n");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "LINE1"));
+    JARVIS_ASSERT(serial_contains(cap, "LINE2"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_echo_and_write (H3).
+// Input: capture_begin; write ALPHA + BETA; capture_end.
+// Expect: capture contains both.
+// Depends: service::Terminal
+JARVIS_TEST(shell_echo_and_write, "PRE: vfsd, iocd | POST: none") {
+    char cap[512];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("ALPHA");
+    service::Terminal::write("BETA");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "ALPHA"));
+    JARVIS_ASSERT(serial_contains(cap, "BETA"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_heap_delete (H3): heap churn between
+// writes loses nothing.
+// Input: capture_begin; write BEFORE; new/delete; write END;
+//        capture_end.
+// Expect: capture contains BEFORE and END.
+// Depends: service::Terminal
+JARVIS_TEST(shell_heap_delete, "PRE: vfsd, iocd | POST: none") {
+    char cap[512];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    char *tmp = new char[8];
+    delete[] tmp;
+    service::Terminal::write("END");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "END"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_execute_serial (H3): an unknown command
+// reports through the shared path while markers bracket it.
+// Input: capture_begin; write BEFORE; execute("garbing"); write AFTER;
+//        capture_end.
+// Expect: capture contains BEFORE, AFTER and "Unknown".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_execute_serial, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("garbing");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, "Unknown"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_help_command (H3): the full help text
+// is capturable in-memory (no 16-byte FIFO window — the whole header is
+// present, so the full "Available commands" needle applies).
+// Input: capture_begin; write BEFORE; execute("help"); write AFTER;
+//        capture_end.
+// Expect: capture contains BEFORE, AFTER and "Available commands".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_help_command, "PRE: vfsd, iocd | POST: none") {
+    char cap[4096];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("help");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, "Available commands"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_echo_command (H3).
+// Input: capture_begin; write BEFORE; execute("echo Hello World");
+//        write AFTER; capture_end.
+// Expect: capture contains BEFORE, AFTER and "Hello".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_echo_command, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("echo Hello World");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, "Hello"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_uptime_command (H3).
+// Input: capture_begin; write BEFORE; execute("uptime"); write AFTER;
+//        capture_end.
+// Expect: capture contains BEFORE, AFTER and "Uptime".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_uptime_command, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("uptime");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, "Uptime"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_pwd_command (H3).
+// Input: capture_begin; write BEFORE; execute("pwd"); write AFTER;
+//        capture_end.
+// Expect: capture contains BEFORE, AFTER and "/".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_pwd_command, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("pwd");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, "/"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_help_shows_which (H3): dispatch of
+// "locate locate" proves registration; the entry format carries " (".
+// Input: capture_begin; write BEFORE; execute("locate locate");
+//        write AFTER; capture_end.
+// Expect: capture contains BEFORE, AFTER, " (" and "locate".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_help_shows_which, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("locate locate");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, " ("));
+    JARVIS_ASSERT(serial_contains(cap, "locate"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_which_command (H3).
+// Input: capture_begin; write BEFORE; execute("locate help");
+//        write AFTER; capture_end.
+// Expect: capture contains BEFORE, AFTER, " (" and "help".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_which_command, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("locate help");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, " ("));
+    JARVIS_ASSERT(serial_contains(cap, "help"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_which_notfound (H3).
+// Input: capture_begin; write BEFORE; execute("locate xyzzy");
+//        write AFTER; capture_end.
+// Expect: capture contains BEFORE, AFTER, ": not" and "xyzzy".
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_which_notfound, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("locate xyzzy");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_ASSERT(serial_contains(cap, ": not"));
+    JARVIS_ASSERT(serial_contains(cap, "xyzzy"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_env_command (H3).
+// Input: capture_begin; write BEFORE; execute("env"); write AFTER;
+//        capture_end.
+// Expect: capture contains BEFORE and AFTER (env runs clean).
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_env_command, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("env");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_export_command (H3).
+// Input: capture_begin; write BEFORE; execute("export FOO=bar");
+//        write AFTER; capture_end.
+// Expect: capture contains BEFORE and AFTER (export runs clean).
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_export_command, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("export FOO=bar");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Capture port of shell_sleep_zero (H3).
+// Input: capture_begin; write BEFORE; execute("sleep 0"); write AFTER;
+//        capture_end.
+// Expect: capture contains BEFORE and AFTER (returns immediately).
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_sleep_zero, "PRE: vfsd, iocd | POST: none") {
+    char cap[1024];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Terminal::write("BEFORE");
+    service::Shell::execute("sleep 0");
+    service::Terminal::write("AFTER");
+    service::Terminal::capture_end();
+    JARVIS_ASSERT(serial_contains(cap, "BEFORE"));
+    JARVIS_ASSERT(serial_contains(cap, "AFTER"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Verifies the "clear" built-in command executes without crash
+// (arch-neutral — no I/O asserted).
+// Input: Shell::execute("clear")
+// Expect: No crash, terminal cleared
+// Depends: service::Shell, service::Terminal
+JARVIS_TEST(shell_clear_command, "PRE: vfsd, iocd | POST: none") {
+    service::Shell::execute("clear");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The `tasks` command reports per-task memory info: stack
+// high-water/low-water, stack size, and text/data/bss segments
+// (arch-neutral — capture-based).
+// Input: Shell::execute("tasks") with Terminal capture enabled
+// Expect: Captured output contains the new memory columns
+// Depends: service::Shell, service::Terminal, kernel::TaskControlBlock
+JARVIS_TEST(shell_tasks_memory_columns, "PRE: vfsd, iocd | POST: none") {
+    // Capture must hold MAX_TASKS rows (~108 B each) + headers.
+    char cap[CONFIG_MAX_TASKS * 128u + 512u];
+    service::Terminal::capture_begin(cap, sizeof(cap));
+    service::Shell::execute("tasks");
+    service::Terminal::capture_end();
+
+    // New memory columns present in the header.
+    JARVIS_ASSERT(serial_contains(cap, "/STACK"));
+    JARVIS_ASSERT(serial_contains(cap, "/TEXT"));
+    JARVIS_ASSERT(serial_contains(cap, "/DATA"));
+    JARVIS_ASSERT(serial_contains(cap, "/BSS"));
+    JARVIS_ASSERT(serial_contains(cap, "MEM_PG"));
+    JARVIS_ASSERT(serial_contains(cap, "CPU_TIME"));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Decoder seam delivery (issue #355 H3): bytes injected via
+// Keyboard::inject_serial travel the production shell_try_get_key path
+// (pump → decoder → raw-UART fallback → iocd) exactly once. The "\r"
+// normalizes to "\n" in the decoder, and the UART stays idle throughout
+// (proving the bytes arrived via inject, not the wire).
+// Input: drain UART RX (bounded); inject "echo hi\r" (8 bytes); collect
+//        via shell_try_get_key (50-tick bound); two extra polls + a raw
+//        UART poll.
+// Expect: exact sequence e,c,h,o,' ',h,i,'\n'; both extra polls false;
+//         raw UART poll false.
+// Depends: shell_try_get_key seam, arch::Keyboard, arch::Serial
+JARVIS_TEST(shell_key_via_decoder_seam, "PRE: vfsd, iocd | POST: none") {
+    for (int i = 0; i < 64; ++i) {
+        char junk = 0;
+        if (!Serial::poll_getchar(junk))
+            break;
+    }
+    Keyboard::init();
+    const char keys[8] = {'e', 'c', 'h', 'o', ' ', 'h', 'i', '\r'};
+    size_t accepted = Keyboard::inject_serial(keys, sizeof(keys));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(8),
+                     static_cast<uint64_t>(accepted));
+    char got[8] = {};
+    size_t n = 0;
+    const uint64_t deadline = arch::Timer::ticks() + 50;
+    while (n < 8 && arch::Timer::ticks() < deadline) {
+        char k = 0;
+        if (service::shell_try_get_key(k))
+            got[n++] = k;
+        else
+            arch::pause();
+    }
+    char extra1 = 0;
+    char extra2 = 0;
+    bool empty1 = !service::shell_try_get_key(extra1);
+    bool empty2 = !service::shell_try_get_key(extra2);
+    char uart = 0;
+    bool uart_idle = !Serial::poll_getchar(uart);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(8),
+                     static_cast<uint64_t>(n));
+    JARVIS_ASSERT(memcmp(got, "echo hi\n", 8) == 0);
+    JARVIS_ASSERT(empty1);
+    JARVIS_ASSERT(empty2);
+    JARVIS_ASSERT(uart_idle);
+    JARVIS_TEST_PASS();
+}
+
+void register_shell_interaction_tests() {
+    Logger::info("Registering shell interaction tests");
+    JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
+    JARVIS_REGISTER_RELEASE_TEST(shell_terminal_write);
+    JARVIS_REGISTER_RELEASE_TEST(shell_simple_write);
+    JARVIS_REGISTER_RELEASE_TEST(shell_write_with_newline);
+    JARVIS_REGISTER_RELEASE_TEST(shell_echo_and_write);
+    JARVIS_REGISTER_RELEASE_TEST(shell_heap_delete);
+    JARVIS_REGISTER_RELEASE_TEST(shell_execute_serial);
+    JARVIS_REGISTER_RELEASE_TEST(shell_help_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_echo_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_uptime_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_pwd_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_help_shows_which);
+    JARVIS_REGISTER_RELEASE_TEST(shell_which_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_which_notfound);
+    JARVIS_REGISTER_RELEASE_TEST(shell_env_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_export_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_sleep_zero);
+    JARVIS_REGISTER_RELEASE_TEST(shell_clear_command);
+    JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
+    JARVIS_REGISTER_TEST(shell_key_via_decoder_seam);
+}
+#endif // CONFIG_ARCH_X86_64

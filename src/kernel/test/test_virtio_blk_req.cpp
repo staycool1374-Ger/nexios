@@ -19,6 +19,7 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/driver/virtio_blk.hpp>
 #include <kernel/arch/virtio.hpp>
 #include <kernel/memory/address.hpp>
@@ -648,9 +649,13 @@ void timeout_worker_task_entry() {
 // pump, the armed wait expires via the wheel, returns false, leaves no
 // stuck waiter, and the ring stays usable for the next request.  The
 // block happens in a worker task — the test task itself must never
-// BLOCK (its scheduler slot is the harness's own control plane).
+// BLOCK (its scheduler slot is the harness's own control plane).  The
+// wait is budgeted in GUEST ticks (5x the wheel timeout, issue #391):
+// a fixed CPU-spin budget exhausts first under TCG while the retirement
+// it awaits is paced by timer ticks.
 // Input: init + simulated arming; worker-task read_sector (no pump).
-// Expect: false; a subsequent driven request still succeeds.
+// Expect: false within the guest-tick budget; a subsequent driven request
+// still succeeds.
 // Depends: block::VirtioBlkDriver
 JARVIS_TEST(virtio_blk_irq_timeout_retires, "PRE: iocd | POST: none") {
     JARVIS_ASSERT(init_driver());
@@ -665,16 +670,29 @@ JARVIS_TEST(virtio_blk_irq_timeout_retires, "PRE: iocd | POST: none") {
     }
     auto *original = Scheduler::current_task();
     Scheduler::reschedule();
+    // Guest-time-calibrated wait (issue #391): the awaited retirement fires
+    // on the timer wheel, paced by guest ticks, while a fixed CPU-spin is
+    // paced by host speed — under TCG the spin exhausts first. Bound the wait
+    // at 5x the wheel timeout in guest ticks, hlt-parked between polls; the
+    // iteration cap is only a fail-safe so a dead timer still fails fast.
+    constexpr uint64_t TIMEOUT_TICKS =
+        block::VIRTIO_BLK_WAIT_TIMEOUT_US / 1000 + 1;
+    constexpr uint64_t WAIT_BUDGET_TICKS = 5 * TIMEOUT_TICKS;
+    constexpr int WAIT_ITER_CAP = 200000000;
+    const uint64_t wait_start = arch::Timer::ticks();
     bool worker_done = false;
-    for (int i = 0; i < 20000000; ++i) {
+    for (int i = 0; i < WAIT_ITER_CAP; ++i) {
         __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
-                         __ATOMIC_RELEASE);
+                          __ATOMIC_RELEASE);
         if (worker->state == TaskState::TERMINATED ||
             !TaskControlBlock::is_valid(worker)) {
             worker_done = true;
             break;
         }
-        arch::pause();
+        if (arch::Timer::ticks() - wait_start >= WAIT_BUDGET_TICKS) {
+            break;
+        }
+        arch::hlt();
     }
     bool ok = worker_done && !g_submit.ok;
     Scheduler::set_current(*original);

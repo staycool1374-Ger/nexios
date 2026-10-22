@@ -337,4 +337,109 @@ void register_pci_tests() {
     JARVIS_REGISTER_TEST(pci_print_tree_output);
 }
 
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+
+#include <test.hpp>
+#include <logger.hpp>
+#include <kernel/arch/pci.hpp>
+
+using namespace kernel;
+
+// Runmode: kernel
+// Testidea: ECAM discovery regression (issues #216 + #354): the boot
+// latched base must equal the DTB pcie-ecam-generic reg (no mismatch
+// fallback), pinning the #216 base fix against silent drift. The test
+// only reads the latch — a boot wiring regression fails loudly here.
+// Input: arch::pci_ecam_info().
+// Expect: dt_found; !dt_mismatch; phys_base == dt_phys_base;
+//         size == PCI_ECAM_WINDOW_SIZE.
+// Depends: arch::pci_ecam_discover (boot), DTB pcie node
+JARVIS_TEST(pci_ecam_discovery_validated, "PRE: iocd | POST: none") {
+    const arch::PciEcamInfo &info = arch::pci_ecam_info();
+    JARVIS_ASSERT(info.dt_found);
+    JARVIS_ASSERT(!info.dt_mismatch);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(info.dt_phys_base),
+                     static_cast<uint64_t>(info.phys_base));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(arch::PCI_ECAM_WINDOW_SIZE),
+                     static_cast<uint64_t>(info.size));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The ECAM window decodes bus 0 — the QEMU virt host bridge at
+// 00:00.0 answers with a real vendor ID (proves mapping + decode, not
+// just the discovery latch).
+// Input: full bus-0 scan (32 devices x 8 functions) via
+//        pci_device_exists; vendor read at 00:00.0.
+// Expect: at least one device present; 00:00.0 vendor != 0xFFFF and != 0.
+// Depends: arch unified PCI config access (ECAM off-x86)
+JARVIS_TEST(pci_ecam_host_bridge_present, "PRE: iocd | POST: none") {
+    size_t found = 0;
+    for (uint32_t dev = 0; dev < 32; ++dev) {
+        for (uint32_t fn = 0; fn < 8; ++fn) {
+            arch::PciBdf bdf = {
+                0, static_cast<uint8_t>(dev), static_cast<uint8_t>(fn)};
+            if (arch::pci_device_exists(bdf))
+                ++found;
+        }
+    }
+    arch::PciBdf host = {0, 0, 0};
+    uint16_t vendor = arch::pci_read_vendor(host);
+    JARVIS_ASSERT(found > 0);
+    JARVIS_ASSERT(vendor != 0xFFFF);
+    JARVIS_ASSERT(vendor != 0);
+    JARVIS_ASSERT(arch::pci_device_exists(host));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Phantom-device reject (issue #354): unpopulated ECAM slots
+// read all-ones and report absent — probing them never faults and never
+// fabricates a device. Bus 255 is unreachable on single-root QEMU virt
+// (no bridge forwards there), so both slots are structural phantoms.
+// Input: vendor/exists reads at {255,31,7} and {255,0,0}.
+// Expect: vendor == 0xFFFF and exists == false for both.
+// Depends: arch unified PCI config access (ECAM off-x86)
+JARVIS_TEST(pci_ecam_phantom_rejects, "PRE: iocd | POST: none") {
+    arch::PciBdf ghost_a = {255, 31, 7};
+    arch::PciBdf ghost_b = {255, 0, 0};
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0xFFFF),
+                     static_cast<uint64_t>(
+                         arch::pci_read_vendor(ghost_a)));
+    JARVIS_ASSERT(!arch::pci_device_exists(ghost_a));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0xFFFF),
+                     static_cast<uint64_t>(
+                         arch::pci_read_vendor(ghost_b)));
+    JARVIS_ASSERT(!arch::pci_device_exists(ghost_b));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Vendor/device read coherence on the host bridge: the dword
+// read equals the two word reads composed (catches lane-shift or
+// endianness faults in the config accessor layer).
+// Input: config_readl, read_vendor, read_device at 00:00.0.
+// Expect: dword == (device << 16) | vendor.
+// Depends: arch unified PCI config access (ECAM off-x86)
+JARVIS_TEST(pci_ecam_vendor_device_consistent, "PRE: iocd | POST: none") {
+    arch::PciBdf host = {0, 0, 0};
+    uint16_t vendor = arch::pci_read_vendor(host);
+    uint16_t device = arch::pci_read_device(host);
+    uint32_t combined =
+        arch::pci_config_readl(arch::pci_make_addr(host, arch::PCI_VENDOR_ID));
+    uint32_t expect =
+        (static_cast<uint32_t>(device) << 16) | vendor;
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(expect),
+                     static_cast<uint64_t>(combined));
+    JARVIS_TEST_PASS();
+}
+
+void register_pci_tests() {
+    Logger::info("Registering PCI tests");
+    JARVIS_REGISTER_TEST(pci_ecam_discovery_validated);
+    JARVIS_REGISTER_TEST(pci_ecam_host_bridge_present);
+    JARVIS_REGISTER_TEST(pci_ecam_phantom_rejects);
+    JARVIS_REGISTER_TEST(pci_ecam_vendor_device_consistent);
+}
+
 #endif // CONFIG_ARCH_X86_64

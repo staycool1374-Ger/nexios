@@ -281,4 +281,386 @@ void register_keyboard_decode_tests() {
     JARVIS_REGISTER_TEST(kbd_read_drains_fifo);
     JARVIS_REGISTER_TEST(kbd_flush_clears_ring);
 }
+#elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+#include <test.hpp>
+#include <logger.hpp>
+#include <kernel/arch/keyboard.hpp>
+#include <kernel/arch/serial.hpp>
+#include <kernel/arch/io.hpp>
+#include <kernel/input/serial_input.hpp>
+#include <string.hpp>
+
+using namespace kernel;
+using arch::Keyboard;
+using arch::Serial;
+
+// Runmode: kernel
+// Testidea: Serial-injected printable bytes arrive in order through the
+// decoder facade (issue #355: UART is the only input source off-x86).
+// Input: Keyboard::init(); inject_serial("hello", 5).
+// Expect: 5 accepted; read() returns 5 with "hello";
+//         ring empty afterwards.
+// Depends: arch::Keyboard::inject_serial/read
+JARVIS_TEST(kbd_dec_inject_printable_read, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    size_t accepted = Keyboard::inject_serial("hello", 5);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(5),
+                     static_cast<uint64_t>(accepted));
+    char buf[8] = {};
+    size_t n = Keyboard::read(buf, sizeof(buf));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(5),
+                     static_cast<uint64_t>(n));
+    JARVIS_ASSERT(memcmp(buf, "hello", 5) == 0);
+    char extra = 0;
+    JARVIS_ASSERT(!Keyboard::getchar(extra));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Decoder normalization (issue #355): CR and LF both become
+// newline; BS and DEL both become backspace; TAB passes through.
+// Input: inject "\r\n\x08\x7F\tA" (6 bytes).
+// Expect: pops '\n','\n','\b','\b','\t','A' in order.
+// Depends: arch::Keyboard::inject_serial/getchar
+JARVIS_TEST(kbd_dec_crlf_normalize, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    const char seq[6] = {'\r', '\n', '\b', '\x7F', '\t', 'A'};
+    size_t accepted = Keyboard::inject_serial(seq, sizeof(seq));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(6),
+                     static_cast<uint64_t>(accepted));
+    const char want[6] = {'\n', '\n', '\b', '\b', '\t', 'A'};
+    for (int i = 0; i < 6; ++i) {
+        char c = 0;
+        JARVIS_ASSERT(Keyboard::getchar(c));
+        JARVIS_ASSERT_EQ(want[i], c);
+    }
+    char extra = 0;
+    JARVIS_ASSERT(!Keyboard::getchar(extra));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: NUL is never a key — it is dropped and counts as dropped,
+// while surrounding bytes are unaffected (issue #355).
+// Input: inject "a\0b" (3 bytes, one NUL).
+// Expect: 2 accepted; dropped delta 1; pops 'a','b'.
+// Depends: input::serial::dropped_count
+JARVIS_TEST(kbd_dec_nul_dropped_counts, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    size_t dropped_before = kernel::input::serial::dropped_count();
+    const char seq[3] = {'a', 0x00, 'b'};
+    size_t accepted = Keyboard::inject_serial(seq, sizeof(seq));
+    size_t dropped_after = kernel::input::serial::dropped_count();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                     static_cast<uint64_t>(accepted));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1), dropped_after - dropped_before);
+    char c = 0;
+    JARVIS_ASSERT(Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ('a', c);
+    JARVIS_ASSERT(Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ('b', c);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: High bytes pass through verbatim — a UART has no modifier
+// channel, so 0x80..0xFF are data, never control (issue #355).
+// Input: inject 0x80, 0xFF, 0x41.
+// Expect: 3 accepted; read returns the identical bytes.
+// Depends: arch::Keyboard::inject_serial/read
+JARVIS_TEST(kbd_dec_high_bytes_verbatim, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    const uint8_t seq[3] = {0x80, 0xFF, 0x41};
+    size_t accepted = Keyboard::inject_serial(
+        reinterpret_cast<const char *>(seq), sizeof(seq));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3),
+                     static_cast<uint64_t>(accepted));
+    uint8_t buf[4] = {};
+    size_t n = Keyboard::read(reinterpret_cast<char *>(buf), sizeof(buf));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3),
+                     static_cast<uint64_t>(n));
+    JARVIS_ASSERT(memcmp(buf, seq, sizeof(seq)) == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: The 256-slot SPSC ring holds 255 keys (one slot sacrificed
+// for the full/empty distinction); the remainder counts as dropped and
+// the drain preserves FIFO order (issue #355 H4: 255+45).
+// Input: inject 255 x's; inject 45 y's; drain.
+// Expect: 255 then 0 accepted; dropped delta 45; 255 pops, all 'x'.
+// Depends: arch::Keyboard::inject_serial/getchar
+JARVIS_TEST(kbd_dec_ring_full_drops_remainder, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    char fill[255];
+    for (int i = 0; i < 255; ++i)
+        fill[i] = 'x';
+    size_t accepted_fill =
+        Keyboard::inject_serial(fill, sizeof(fill));
+    size_t dropped_before = kernel::input::serial::dropped_count();
+    char extra[45];
+    for (int i = 0; i < 45; ++i)
+        extra[i] = 'y';
+    size_t accepted_extra =
+        Keyboard::inject_serial(extra, sizeof(extra));
+    size_t dropped_after = kernel::input::serial::dropped_count();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(255),
+                     static_cast<uint64_t>(accepted_fill));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     static_cast<uint64_t>(accepted_extra));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(45),
+                     dropped_after - dropped_before);
+    for (int i = 0; i < 255; ++i) {
+        char c = 0;
+        JARVIS_ASSERT(Keyboard::getchar(c));
+        JARVIS_ASSERT_EQ('x', c);
+    }
+    char tail = 0;
+    JARVIS_ASSERT(!Keyboard::getchar(tail));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Modifiers are always false off-x86 — a UART has no modifier
+// channel (Ctrl arrives as 0x01-0x1A, never sticky; issue #355).
+// Input: poll is_shifted/is_ctrl/is_alt.
+// Expect: all false, before and after injecting a control byte.
+// Depends: arch::Keyboard modifiers
+JARVIS_TEST(kbd_dec_modifiers_always_false, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    JARVIS_ASSERT(!Keyboard::is_shifted());
+    JARVIS_ASSERT(!Keyboard::is_ctrl());
+    JARVIS_ASSERT(!Keyboard::is_alt());
+    const char ctrl = 0x03; // ETX — would be Ctrl-C on a terminal
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1),
+                     static_cast<uint64_t>(
+                         Keyboard::inject_serial(&ctrl, 1)));
+    JARVIS_ASSERT(!Keyboard::is_shifted());
+    JARVIS_ASSERT(!Keyboard::is_ctrl());
+    JARVIS_ASSERT(!Keyboard::is_alt());
+    char c = 0;
+    JARVIS_ASSERT(Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ(0x03, c);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: flush() discards queued keys and later injects still decode
+// (flush must not wedge the ring).
+// Input: inject "ab"; flush(); inject "c".
+// Expect: getchar false after flush; then 'c'.
+// Depends: arch::Keyboard::flush
+JARVIS_TEST(kbd_dec_flush_clears_ring, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                     static_cast<uint64_t>(
+                         Keyboard::inject_serial("ab", 2)));
+    Keyboard::flush();
+    char c = 0;
+    JARVIS_ASSERT(!Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1),
+                     static_cast<uint64_t>(
+                         Keyboard::inject_serial("c", 1)));
+    JARVIS_ASSERT(Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ('c', c);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: read() drains multiple queued keys in FIFO order and reports
+// the exact count.
+// Input: inject "help"; read into an 8-byte buffer.
+// Expect: returns 4, buffer holds "help".
+// Depends: arch::Keyboard::read
+JARVIS_TEST(kbd_dec_read_drains_fifo, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(4),
+                     static_cast<uint64_t>(
+                         Keyboard::inject_serial("help", 4)));
+    char buf[8] = {};
+    size_t n = Keyboard::read(buf, sizeof(buf));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(4),
+                     static_cast<uint64_t>(n));
+    JARVIS_ASSERT(memcmp(buf, "help", 4) == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: handle_irq is a contract-parity no-op off-x86 — no UART IRQ
+// exists, so it must neither consume nor produce keys (issue #355).
+// Input: inject "q"; handle_irq(); read.
+// Expect: the key survives; exactly one pop.
+// Depends: arch::Keyboard::handle_irq
+JARVIS_TEST(kbd_dec_irq_is_noop, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1),
+                     static_cast<uint64_t>(
+                         Keyboard::inject_serial("q", 1)));
+    Keyboard::handle_irq();
+    char c = 0;
+    JARVIS_ASSERT(Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ('q', c);
+    JARVIS_ASSERT(!Keyboard::getchar(c));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: init() resets the decoder — queued keys and drop counters
+// clear, so every test starts from a clean slate (self-cleanup rule).
+// Input: inject "zz"; init(); poll.
+// Expect: ring empty; a fresh inject decodes afterwards.
+// Depends: arch::Keyboard::init
+JARVIS_TEST(kbd_dec_init_resets_decoder, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                     static_cast<uint64_t>(
+                         Keyboard::inject_serial("zz", 2)));
+    Keyboard::init();
+    char c = 0;
+    JARVIS_ASSERT(!Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(1),
+                     static_cast<uint64_t>(
+                         Keyboard::inject_serial("w", 1)));
+    JARVIS_ASSERT(Keyboard::getchar(c));
+    JARVIS_ASSERT_EQ('w', c);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: pump_serial on an idle UART returns 0 and leaves the ring
+// empty — the shell nap loop must observe no phantom keys (issue #355).
+// The RX FIFO is drained first (bounded), so the test is independent of
+// run order within the hal aggregate.
+// Input: drain RX via poll_getchar (bounded 64); pump_serial().
+// Expect: 0 pushed; ring empty.
+// Depends: arch::Keyboard::pump_serial, arch::Serial::poll_getchar
+JARVIS_TEST(kbd_dec_pump_idle_returns_zero, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    for (int i = 0; i < 64; ++i) {
+        char junk = 0;
+        if (!Serial::poll_getchar(junk))
+            break;
+    }
+    size_t pushed = Keyboard::pump_serial();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     static_cast<uint64_t>(pushed));
+    char c = 0;
+    JARVIS_ASSERT(!Keyboard::getchar(c));
+    JARVIS_TEST_PASS();
+}
+
+#if defined(CONFIG_ARCH_RISCV64)
+// Runmode: kernel
+// Testidea: pump_serial consumes real looped UART bytes through the
+// decoder (issue #355 H4, riscv-only: PL011 has no loopback mode).
+// pump() is contractually inert inside the loopback window, so this
+// test drives MCR LOOP manually OUTSIDE the window protocol: set LOOP,
+// SBI-transmit, bounded pump retries, pops, then unconditional MCR
+// restore + RX drain with every assert after the restore (a mid-window
+// assert would strand LOOP and silence the suite). Registered in debug
+// builds only (loopback is a debug facility).
+// Input: manual LOOP; putchar("hi"); bounded pump retries; pops;
+//        manual restore + drain.
+// Expect: 2 total pushed; pops 'h','i'; ring empty; MCR restored.
+// Depends: arch::Serial MCR accessors, arch::Keyboard::pump_serial
+JARVIS_TEST(kbd_dec_pump_consumes_loopback_bytes,
+            "PRE: iocd | POST: none") {
+    Keyboard::init();
+    uint8_t pre = Serial::uart_mcr();
+    Serial::uart_mcr_set(
+        static_cast<uint8_t>(pre | arch::Serial::UART_MCR_LOOP));
+    bool loop_set = (Serial::uart_mcr() & arch::Serial::UART_MCR_LOOP) != 0;
+    size_t pushed_total = 0;
+    if (loop_set) {
+        Serial::putchar('h');
+        Serial::putchar('i');
+        for (int i = 0; i < 1000 && pushed_total < 2; ++i) {
+            pushed_total += Keyboard::pump_serial();
+            arch::pause();
+        }
+    }
+    char first = 0;
+    char second = 0;
+    bool got_both = false;
+    if (loop_set) {
+        got_both = Keyboard::getchar(first) && Keyboard::getchar(second);
+    }
+    Serial::uart_mcr_set(pre);
+    Serial::uart_drain_rx();
+    uint8_t post = Serial::uart_mcr();
+    char tail = 0;
+    bool drained = !Keyboard::getchar(tail);
+    JARVIS_ASSERT(loop_set);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2), pushed_total);
+    JARVIS_ASSERT(got_both);
+    JARVIS_ASSERT_EQ('h', first);
+    JARVIS_ASSERT_EQ('i', second);
+    JARVIS_ASSERT(drained);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(pre),
+                     static_cast<uint64_t>(post));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: pump() is inert while the loopback window owns the UART —
+// the window suspends capture so test traffic never enters the decoder
+// ring (issue #355 Slice C contract).
+// Input: loopback_begin; putchar('X'); pump_serial(); loopback_end.
+// Expect: pump returns 0; ring empty after the window closes.
+// Depends: input::serial loopback window
+JARVIS_TEST(kbd_dec_pump_inert_while_loopback, "PRE: iocd | POST: none") {
+    Keyboard::init();
+    bool entered = kernel::input::serial::loopback_begin();
+    size_t pushed = 0;
+    if (entered) {
+        Serial::putchar('X');
+        pushed = Keyboard::pump_serial();
+    }
+    kernel::input::serial::loopback_end();
+    char c = 0;
+    bool empty = !Keyboard::getchar(c);
+    JARVIS_ASSERT(entered);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0),
+                     static_cast<uint64_t>(pushed));
+    JARVIS_ASSERT(empty);
+    JARVIS_TEST_PASS();
+}
+#else
+// Runmode: kernel
+// Testidea: The riscv loopback window is unavailable on aarch64 (PL011
+// has no loopback mode) — loopback_begin must refuse fail-closed
+// (issue #355 Slice C).
+// Input: loopback_begin().
+// Expect: false; no window state latched.
+// Depends: input::serial::loopback_begin
+JARVIS_TEST(kbd_dec_loopback_unsupported_fail_closed,
+            "PRE: iocd | POST: none") {
+    JARVIS_ASSERT(!kernel::input::serial::loopback_begin());
+    JARVIS_ASSERT(!kernel::input::serial::loopback_active());
+    JARVIS_TEST_PASS();
+}
+#endif
+
+void register_keyboard_decode_tests() {
+    Logger::info("Registering keyboard decode tests");
+    JARVIS_REGISTER_TEST(kbd_dec_inject_printable_read);
+    JARVIS_REGISTER_TEST(kbd_dec_crlf_normalize);
+    JARVIS_REGISTER_TEST(kbd_dec_nul_dropped_counts);
+    JARVIS_REGISTER_TEST(kbd_dec_high_bytes_verbatim);
+    JARVIS_REGISTER_TEST(kbd_dec_ring_full_drops_remainder);
+    JARVIS_REGISTER_TEST(kbd_dec_modifiers_always_false);
+    JARVIS_REGISTER_TEST(kbd_dec_flush_clears_ring);
+    JARVIS_REGISTER_TEST(kbd_dec_read_drains_fifo);
+    JARVIS_REGISTER_TEST(kbd_dec_irq_is_noop);
+    JARVIS_REGISTER_TEST(kbd_dec_init_resets_decoder);
+    JARVIS_REGISTER_TEST(kbd_dec_pump_idle_returns_zero);
+#if defined(CONFIG_ARCH_RISCV64)
+#if defined(CONFIG_DEBUG)
+    JARVIS_REGISTER_TEST(kbd_dec_pump_consumes_loopback_bytes);
+    JARVIS_REGISTER_TEST(kbd_dec_pump_inert_while_loopback);
+#endif
+#else
+    JARVIS_REGISTER_TEST(kbd_dec_loopback_unsupported_fail_closed);
+#endif
+}
 #endif // CONFIG_ARCH_X86_64

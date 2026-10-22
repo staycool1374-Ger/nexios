@@ -24,11 +24,8 @@
 
 #include <logger.hpp>
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_pci_tests() {
-    kernel::Logger::info(
-        "Skipped: register_pci_tests (not supported on this arch)");
-}
+// Issue #354: register_pci_tests is defined by test_pci.cpp (ECAM
+// regression port).
 
 /// @brief Stub — PML4 page-table tests are x86_64-specific.
 void register_pml4_clone_tests() {
@@ -72,11 +69,8 @@ void register_fpu_xmm_all_tests() {
         "Skipped: register_fpu_xmm_all_tests (not supported on this arch)");
 }
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_task_tests() {
-    kernel::Logger::info(
-        "Skipped: register_task_tests (not supported on this arch)");
-}
+// Issue #356: register_task_tests is defined by test_task.cpp (TCB
+// lifecycle port).
 
 /// @brief Stub — not supported on non-x86 architectures.
 void register_process_tests() {
@@ -104,17 +98,11 @@ void register_pic_tests() {
 
 // Issue #355 H2: register_rtc_tests is defined by test_rtc.cpp (shared).
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_shell_interaction_tests() {
-    kernel::Logger::info(
-        "Skipped: register_shell_interaction_tests (not supported on this arch)");
-}
+// Issue #355 H3: register_shell_interaction_tests is defined by
+// test_shell_interaction.cpp (capture-based port).
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_buildsystem_tests() {
-    kernel::Logger::info(
-        "Skipped: register_buildsystem_tests (not supported on this arch)");
-}
+// Issue #357: register_buildsystem_tests is defined by
+// test_buildsystem.cpp (arch-identity port).
 
 /// @brief Stub — not supported on non-x86 architectures.
 void register_block_device_tests() {

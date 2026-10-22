@@ -946,20 +946,37 @@ JARVIS_TEST(shell_version_meminfo_and_vfs_error,
 
 // Runmode: kernel
 // Testidea: cpuinfo renders every contracted section (issue #172).
+// x86_64 prints CPUID labels (Vendor/Family/Model/Stepping/Brand/
+// Features); off-x86 there is no CPUID so the shell prints an explicit
+// unknown-vendor line plus the arch tag, with the shared table contract
+// (APIC/STATUS/CURRENT TASK/TICKS/BSP/--/Uptime) on all arches (#357).
 // Input: Shell::execute("cpuinfo") with terminal capture.
-// Expect: Vendor/Family/Model/Stepping/Brand/Features labels, APIC +
+// Expect: x86: Vendor/Family/Model/Stepping/Brand/Features labels, APIC +
 //         STATUS + CURRENT TASK + TICKS columns, Uptime footer, BSP row,
 //         and "--" IDLE% on the very first call (no baseline yet).
+//         non-x86: arch tag + unknown-vendor line + same table contract.
 // Depends: service::Shell, arch cpuid helpers
 JARVIS_TEST(shell_cpuinfo_fields_present, "PRE: none | POST: none") {
     char out[4096];
     run_shell("cpuinfo", out, sizeof(out));
+#if defined(CONFIG_ARCH_X86_64)
     bool ok = has(out, "Vendor") && has(out, "Family") &&
               has(out, "Model") && has(out, "Stepping") &&
               has(out, "Brand") && has(out, "Features") &&
               has(out, "APIC") && has(out, "STATUS") &&
               has(out, "CURRENT TASK") && has(out, "TICKS") &&
               has(out, "Uptime") && has(out, "BSP") && has(out, "--");
+#else
+    bool ok = has(out, "Vendor") && has(out, "(unknown, non-x86_64)") &&
+#if defined(CONFIG_ARCH_AARCH64)
+              has(out, "aarch64") &&
+#elif defined(CONFIG_ARCH_RISCV64)
+              has(out, "riscv64") &&
+#endif
+              has(out, "APIC") && has(out, "STATUS") &&
+              has(out, "CURRENT TASK") && has(out, "TICKS") &&
+              has(out, "Uptime") && has(out, "BSP") && has(out, "--");
+#endif
     JARVIS_ASSERT(ok);
     JARVIS_TEST_PASS();
 }

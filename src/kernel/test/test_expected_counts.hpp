@@ -26,7 +26,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"basic_atomic",         12,    0,       0      },  // atomic RMW ops, litmus, acquire/release
 
     // configuration
-    {"configuration_build",  10,    0,       0      },  // buildsystem + compile-time config sanity (v0.3.7)
+    {"configuration_build",  10,   8,       8      },  // buildsystem + compile-time config sanity (v0.3.7); off-x86 arch-identity port (issue #357: toolchain/debug/config-arch; x86-only CPUID/CR3/ARCH-default tests stay x86)
     {"release_build",         2,    0,       0      },  // actual -O2/-g/no-NDEBUG contract, TF_RELEASE (#303)
 
     // data_structures
@@ -59,7 +59,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"scheduler_hrt",         4,    0,       0      },  // hard-RT time assertions on real dispatch (issue #102): rdtsc canary + IPC/semaphore wake latency + release jitter
 
     // task
-    {"task_core",             7,    0,       0      },  // TCB cleanup/page tables/clone + recent-ring claim (#264)
+    {"task_core",             7,    4,       4      },  // TCB cleanup/page tables/clone + recent-ring claim (#264); off-x86: cleanup/create_user/elf-ipc/ring live, 3 synthetic-parent clone tests x86-gated pending kernel verdict (issue #356 QE note)
     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
     {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
     {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
@@ -92,8 +92,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator + sub-range carve/child split (issue #1)
     {"cap_mmio",              20,   0,       0      },  // MMIO caps + I/O delegation (0.4.2 issue #3) + revocation-closure (issue #8)
     {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry (0.4.2 issue #8)
-    {"cap_irq",               12,   0,       0      },  // IRQ caps + user-space delivery (0.4.2 issue #2)
-    {"cap_irq_notify",        7,   0,       0      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7)
+    {"cap_irq",               12,   11,      11     },  // IRQ caps + user-space delivery (0.4.2 issue #2); off-x86 window geometry via try-claim probe (issue #354; x86-only delivery_ack_pic excluded)
+    {"cap_irq_notify",        7,   6,       6      },  // IRQ→IPC Notify bridge, NOTIFY mode (0.4.2 issue #7); already arch-neutral, x86-only 7th excluded off-x86
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery (0.4.2 issue #10)
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection (0.4.2 issue #4)
     {"iommu_live",            6,    0,       0      },  // Live VT-d enablement (0.4.2 issue #9; q35+intel-iommu variant only)
@@ -108,10 +108,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"vfs_procfs_ops",         6,   0,       0      },  // procfs per-node op contracts (issue #124): root byte-op rejection, meminfo/pci readonly, self dir, pid dir, pid stat
     {"vfs_initrd_fs",          9,   0,       0      },  // initrd filesystem vnodes (issue #124 + #329): root dir/fail-closed lseek/readdir, lookup build, file readonly/lseek/close, root tops-only + subdir dedup
     {"vfs_errors",             6,   0,       0      },  // VfsError *_err API (issue #124): fdtable codes, resolve, find_fs, mount, mkdir/create/unlink, init/set_root
-    {"hal_rtc_datetime",       6,   0,       0      },  // RTC date arithmetic (issue #116): tm mapping, composition, stability, BCD edges/roundtrip/contract
-    {"hal_keyboard_decode",   10,   0,       0      },  // keyboard decode (issue #110): tables, shift/ctrl/alt, break, unknown, control keys, caps XOR, read, flush
-    {"hal_gdt_layout",         8,   0,       0      },  // GDT layout (issue #115): gdtr, null, code/data, user ring3, TSS base/limit, IOPB, live selectors
-    {"hal_serial_logic",       7,   0,       0      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar + poll_getchar loopback (issue #245)
+    {"hal_rtc_datetime",       6,    5,       5      },  // RTC date arithmetic (issue #116): tm mapping, composition, stability, BCD edges/roundtrip/contract + non-x86 source/monotonic/ranges/fallback/composition (issue #355 H4: PL031/Goldfish, no BCD off-x86)
+    {"hal_keyboard_decode",   10,   12,     13      },  // keyboard decode (issue #110): tables, shift/ctrl/alt, break, unknown, control keys, caps XOR, read, flush + non-x86 serial-injected decoder facade (issue #355 H4: normalize/ring/modifiers/pump; riscv loopback pair instead of aarch64 fail-closed pin)
+    {"hal_serial_logic",       7,    2,       3      },  // UART logic (issue #118): init regs, FIFO, loopback roundtrip, newline, puts/count, idle getchar + poll_getchar loopback (issue #245) + non-x86 init-state readback (aarch64 PL011 x2, issue #355 H4) + riscv 16550 snapshot/loopback/fail-closed (x3)
     {"acpi_parse",             5,   0,       0      },  // ACPI/DMAR discovery (issue #113): default contract, fail-closed scan, purity + mb2 zero-size bound + scan repeat (#180)
     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery (issue #25 Phase B1): default contract, BSP listed, purity
     {"smp_ipi",                2,   0,       0      },  // APIC IPI path (issue #25 Phase B2): absent-target INIT/SIPI accepted, self FIXED delivered
@@ -216,7 +215,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // drivers
     {"drivers_core",          8,    0,       0      },  // driver registry, IOCD boots, keyboard/serial, MMIO caps + FLAW-08/10 bounded waits
         {"drivers_block",            12,   0,       0      },  // block device, ATA_PIO, AHCI
-    {"drivers_pci",          16,    0,       0      },  // PCI enumeration/MSI/BARs (bounded-time test commented out)
+    {"drivers_pci",          16,    4,       4      },  // PCI enumeration/MSI/BARs (bounded-time test commented out) + off-x86 ECAM regression (issue #354: discovery/host-bridge/phantom/coherence)
     {"drivers_virtio",       11,    0,       0      },  // VirtIO probe/feature/queue + FLAW-03 net lock
     {"drivers_dma",          19,    0,       0      },  // DMA buffer/SG/PRD + FLAW-01/02 engine locking
 
@@ -224,7 +223,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"network_core",          18,   0,       0      },  // MAC/IPv4/ARP/checksum + mock-NIC RX dispatch + ICMP wire-order request (#138, #179) + malformed-length/version/truncation rejection (#178) + UDP build/poll/set_reply
 
     // shell / ui
-    {"shell_interaction",    20,    0,       0      },  // shell commands (+ tasks memory columns) + P2 key-delivery seam test (#303 item 3)
+    {"shell_interaction",    20,   20,      20     },  // shell commands (+ tasks memory columns) + P2 key-delivery seam test (#303 item 3); x86 via COM1 loopback, off-x86 via Terminal capture + decoder seam (issue #355 H3)
     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
     {"shell_textutils",       1,    0,       0      },  // text utilities
     {"debug_dump",            8,    0,       0      },  // diagnostic dump smoke (issue #128): scheduler info, task info live+missing, all-tasks walk, cpu registers + 4 first-chance raw tests (#308)
@@ -308,12 +307,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cross_boundary",        3,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only) + iocd keyboard-read delivery (#340 P0)
     {"storage",             167,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333) + 1 readdir mount overlay (#346)
     {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
-    {"drivers",             107,  0,       0      },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342)
-    {"hal",                 123,    0,       0      },  // hal_* + exc_table(5, +1 exception_name #131 +1 first-chance raw ordering #308) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274
+    {"drivers",             107,   62,      62     },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342) + off-x86 ECAM regression (issue #354: +4 both arches) + #391 fixes
+    {"hal",                 123,   76,      78     },  // hal_* + exc_table(5, +1 exception_name #131 +1 first-chance raw ordering #308) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274 + off-x86 H4 groups (issue #355: aarch64 +19, riscv64 +21)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
     {"deadline",            147,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 validate-id-range-gate (#374) + 1 pre-existing aggregate drift at HEAD
-    {"ui",                  78,    0,       0      },  // shell_* + framebuffer + debug_dump(+4 first-chance raw #308) + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); row stale at 72, measured actual 73 pre-#274 (no ui registration change in #274)
+    {"ui",                  78,   78,      78     },  // shell_* + framebuffer + debug_dump(+4 first-chance raw #308) + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); off-x86 via #394 backend (fb) + #355 H3 (shell) + H4 (serial/kb/rtc)
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
     {"bench",               28,   0,       0      },  // bench_* + bench_wcet_memory, TF_BENCH-only (issue #173) + 4 ipc_throughput + 1 cs_bench (#303) + 1 path_tracer overhead (#347-E)

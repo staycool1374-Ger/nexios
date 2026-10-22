@@ -228,18 +228,64 @@ static void pp_chain_cb(uint64_t ctx, dma::DmaBuffer *buf, bool success) {
     (void)success;
 }
 
+#if !defined(CONFIG_ARCH_X86_64)
+// Off-x86 arch::inb is a stub returning 0, so BmDmaChannel::is_busy() can
+// never observe BMSTAT_ACTIVE and DmaEngine::is_busy() is identically false
+// (issue #391). Scripted stand-in with the same fail-closed shape (rejects
+// empty tables) so the engine orchestration assertions stay meaningful on
+// all arches without touching production code.
+class FakeDmaChannel final : public dma::DmaChannel {
+  public:
+    FakeDmaChannel() : busy_(false) {
+    }
+    bool init() override {
+        return true;
+    }
+    bool start(dma::PrdTable &prd, dma::Direction) override {
+        if (prd.count == 0) {
+            return false;
+        }
+        busy_ = true;
+        return true;
+    }
+    bool is_busy() override {
+        return busy_;
+    }
+    bool handle_irq() override {
+        if (!busy_) {
+            return false;
+        }
+        busy_ = false;
+        return true;
+    }
+    void abort() override {
+        busy_ = false;
+    }
+
+  private:
+    bool busy_;
+};
+#endif
+
 // Runmode: kernel
-// Testidea: Verifies DmaEngine + BmDmaChannel API: init, start_transfer,
-// is_busy, handle_irq, callback invocation, and abort.
-// Input: Create BmDmaChannel with mock I/O base, alloc buffer, build SG/PRD.
+// Testidea: Verifies DmaEngine + DmaChannel API: init, start_transfer,
+// is_busy, handle_irq, callback invocation, and abort. x86 drives the real
+// BmDmaChannel (QEMU port 0xFF00 reads back 0xFF); off-x86 port I/O is a
+// zero-stub so the same engine assertions run on a scripted FakeDmaChannel
+// (issue #391: BmDmaChannel::is_busy() is identically false off-x86).
+// Input: Create channel, alloc buffer, build SG/PRD.
 // Expect: start_transfer succeeds, is_busy reflects state, handle_irq
 // acknowledges and invokes callback, abort stops the engine.
-// Depends: dma::DmaEngine, dma::BmDmaChannel, dma::alloc_buffer, prd_from_sg
+// Depends: dma::DmaEngine, dma::DmaChannel (BmDmaChannel on x86)
 JARVIS_TEST(dma_completion_interrupt, "PRE: iocd | POST: none") {
     g_dma_cb_fired = false;
     g_dma_cb_ctx = 0;
 
+#if defined(CONFIG_ARCH_X86_64)
     dma::BmDmaChannel channel(0xFF00);
+#else
+    FakeDmaChannel channel;
+#endif
     JARVIS_ASSERT(channel.init());
     dma::DmaEngine engine(channel);
 
