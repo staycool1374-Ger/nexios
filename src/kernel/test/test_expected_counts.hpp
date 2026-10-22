@@ -46,12 +46,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex+semaphore
 
     // scheduler
-    {"scheduler_core",       21,    0,       0      },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249) + 1 evict-backstop test (issue #250) + 1 starvation-breaker test (issue #242)
+    {"scheduler_core",       21,    21,      21     },  // reschedule/remove/reap/quantum/waitpid/FIFO + loadavg EMA math (issue #172) + 2 stranded-READY rescue tests (issue #249) + 1 evict-backstop test (issue #250) + 1 starvation-breaker test (issue #242)
     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server scheduling policy
     {"scheduler_idle",       40,    0,       0      },  // idle_task(10) + idle_cleanup(1) + idle_monitor(29, issues #282/#283/#284/#285/#294)
-    {"scheduler_zombie",      5,    0,       0      },  // zombie_cleanup(4) + wcet_cleanup(1)
+    {"scheduler_zombie",      5,    5,       5      },  // zombie_cleanup(4) + wcet_cleanup(1)
     {"scheduler_preemption", 13,    0,       0      },  // preemption(7) + preemption_under_syscall(4) + 2 block-arm tests (issue #212)
     {"scheduler_budget",      6,    0,       0      },  // task budget accounting
     {"scheduler_cpu_load",    5,    0,       0      },  // idle/CPU load metrics
@@ -61,13 +61,13 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // task
     {"task_core",             7,    7,       7      },  // TCB cleanup/page tables/clone + recent-ring claim (#264); all arches: 3 clone tests use real create_user parents + ScopedCurrentTask impersonation (no dispatch) per #399 verdict, fixture parked BLOCKED before scope exit
     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
-    {"task_fpu",              0,    5,       5      },  // x86 files excluded from build (GCC 16); off-x86 FPU context (issue #353: detect/basic/sweep/clone/switch-area); x86 stays 0 (pre-existing empty-class stall)
+    {"task_fpu",              0,    7,       7      },  // x86 files excluded from build (GCC 16); off-x86 FPU context (issue #353: detect/basic/sweep/clone/switch-area) + user-task persist/isolate (Phase 2 vehicle); x86 stays 0 (pre-existing empty-class stall)
     {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
 
     // syscall
-    {"syscall_core",         33,    0,       0      },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
+    {"syscall_core",         33,    30,      30     },  // syscall interface (exit test disabled in source) + 9 user-task probe/dispatch tests (#143, #127, #134: open, exec, klog) + 4 affinity tests (issue #61) + error_string map + 3 x86 ABI bridge tests (issue #30) + 1 ABI surface test (#69/#70)
     {"syscall_fuzz",          4,    0,       0      },  // syscall fuzzing
     {"syscall_fastpath",      5,    0,       0      },  // tiered FAST/FULL dispatch (issue #92): mask, correctness, canary skip/full-validate, latency
     {"debug_syscall",         29,   29,      29     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2) + 3 death-publish guards (#379); arch-neutral, x86_64 measured via TCOUNT
@@ -138,7 +138,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue/priority/notify/eventgroup/sync roundtrip
     {"ipc_blocking",          4,    0,       0      },  // IPC blocking send_sync/handshake tests
-    {"ipc_timeout",           7,    0,       0      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
+    {"ipc_timeout",           7,    7,       7      },  // wheel-armed bounded receive: fastpath/timeout/msg-wins/forever/kill/stale/full (issue #18)
     {"ipc_extended",          13,   0,       0      },  // size limits, mid-queue removal, timeout, inversion + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317)
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
     {"ipc_robustness",       11,    0,       0      },  // misformed/wraparound/concurrent/cleanup (+ IpcPriorityOrderedWake, issue #106 Part A) + 4 send_sync reply-matching regressions (issue #296; mid-wait DestDeath skipped, see test)

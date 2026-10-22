@@ -177,6 +177,7 @@ void register_fpu_multi_tests();
 void register_fpu_xmm_all_tests();
 #if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
 void register_fpu_context_tests();
+void register_fpu_context_user_tests();
 #endif
 void register_random_vfs_write_tests();
 void register_ipc_lock_free_tests();
@@ -726,6 +727,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          register_fpu_xmm_all_tests();
 #else
          register_fpu_context_tests();
+         register_fpu_context_user_tests();
 #endif
      }},
     {"task_init", []() { run_task_init_group(); }},
