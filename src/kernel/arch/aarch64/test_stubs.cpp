@@ -39,46 +39,14 @@ void register_virtio_tests() {
         "Skipped: register_virtio_tests (not supported on this arch)");
 }
 
-/// @brief Stub — FPU tests are not supported on non-x86_64 architectures.
-void register_fpu_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_tests (not supported on this arch)");
-}
-
-/// @brief Stub — FPU/SSE tests are not supported on non-x86_64 architectures.
-void register_fpu_sse_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_sse_tests (not supported on this arch)");
-}
-
-/// @brief Stub — FPU clone tests are not supported on non-x86_64 architectures.
-void register_fpu_clone_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_clone_tests (not supported on this arch)");
-}
-
-/// @brief Stub — FPU multi-tasking tests are not supported on non-x86_64
-/// architectures.
-void register_fpu_multi_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_multi_tests (not supported on this arch)");
-}
-
-/// @brief Stub — FPU XMM register tests are not supported on non-x86_64
-/// architectures.
-void register_fpu_xmm_all_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_xmm_all_tests (not supported on this arch)");
-}
+// Issue #353: FPU groups are defined by test_fpu_context.cpp (per-arch
+// real tests); the x86-named stubs are retired.
 
 // Issue #356: register_task_tests is defined by test_task.cpp (TCB
 // lifecycle port).
 
-/// @brief Stub — Process tests are not supported on non-x86_64 architectures.
-void register_process_tests() {
-    kernel::Logger::info(
-        "Skipped: register_process_tests (not supported on this arch)");
-}
+// Issue #356: register_process_tests is defined by test_process.cpp
+// (bookkeeping port; clone tests x86-gated pending #399).
 
 /// @brief Stub — GDT tests are not supported on non-x86_64 architectures.
 void register_gdt_tests() {

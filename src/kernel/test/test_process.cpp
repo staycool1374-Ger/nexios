@@ -17,9 +17,13 @@
  */
 
 /// @file test_process.cpp
-/// @brief Process lifecycle tests.
+/// @brief Process (parent/child hierarchy) tests. Bookkeeping tests are
+/// arch-neutral (issue #356); clone tests that dispatch flag-flipped
+/// synthetic user parents are x86-only pending the #399 kernel verdict
+/// (they hang both QEMU virt arches deterministically).
 
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -316,6 +320,9 @@ JARVIS_TEST(process_remove_last_child, "PRE: none | POST: none") {
 //        its lambda calls TaskControlBlock::clone(regs).
 // Expect: parent->num_children == 1, child is in parent's list, child->parent_id ==
 // parent->id Depends: test, scheduler, task
+// NOTE (issue #356 QE): off-x86 gated — synthetic-parent clone hangs both
+// QEMU virt arches (see #399).
+#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(process_clone_adds_child, "PRE: none | POST: none") {
     static uint64_t g_child_num = 0;
     static uint64_t g_child_id = 0;
@@ -357,6 +364,7 @@ JARVIS_TEST(process_clone_adds_child, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(1ULL, g_found);
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_ARCH_X86_64 (synthetic-parent clone hangs off-x86; see #399)
 
 // Runmode: kernel
 // Testidea: Validates that cleanup() removes the task from its parent's child
@@ -457,6 +465,9 @@ JARVIS_TEST(process_remove_child_clears_parent_id, "PRE: none | POST: none") {
 // leaf; after child cleanup the parent's leaf still resolves to the original
 // frame.
 // Depends: test, scheduler, task, VMM, PMM
+// NOTE (issue #356 QE): off-x86 gated — synthetic-parent clone hangs both
+// QEMU virt arches (see #399).
+#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
     static uint64_t g_pt_diff = 0;
     static uint64_t g_leaf_diff = 0;
@@ -516,6 +527,7 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
     // The parent's cleanup reclaimed the USER-owned leaf via free_user_pages.
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_ARCH_X86_64 (synthetic-parent clone hangs off-x86; see #399)
 
 // Runmode: kernel
 // Testidea: v0.4.0 MP-7 — driven-cookbook teardown: clone + child cleanup +
@@ -523,6 +535,9 @@ JARVIS_TEST(process_clone_child_table_independent, "PRE: none | POST: none") {
 // Input: parent with a USER page; lambda clones + cleans the child; drain.
 // Expect: PMM::free_pages_ref() delta == 0 across the whole cycle.
 // Depends: test, scheduler, task, VMM, PMM
+// NOTE (issue #356 QE): off-x86 gated — synthetic-parent clone hangs both
+// QEMU virt arches (see #399).
+#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(process_clone_teardown_zero_delta, "PRE: none | POST: none") {
     static uint64_t g_ran = 0;
     constexpr uint64_t PROBE_VA = 0x20001000;
@@ -561,14 +576,18 @@ JARVIS_TEST(process_clone_teardown_zero_delta, "PRE: none | POST: none") {
                       (long)(PMM::free_pages_ref() - free_before));
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_ARCH_X86_64 (synthetic-parent clone hangs off-x86; see #399)
 
 // Runmode: kernel
 // Testidea: v0.4.0 MP-1 — a kernel task owns a private kernel-half PML4:
 // non-zero, distinct from the boot kernel PML4, kernel entries copied by
-// value, user half empty.
+// value, user half empty — except riscv64 L0[0], which is the shared
+// kernel identity/MMIO window by design (clone_kernel_pml4 deep-copies
+// the subtree, U=0; #205/#221).
 // Input: TaskControlBlock::create().
-// Expect: page_table_ != 0 != kernel PML4; user entries zero; kernel entries
-// match the kernel PML4; is_user_ == false.
+// Expect: page_table_ != 0 != kernel PML4; user entries zero (riscv64:
+//         entry 0 present-but-U==0, rest zero); kernel entries match;
+//         is_user_ == false.
 // Depends: test, task, VMM
 JARVIS_TEST(process_kernel_half_private, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 5, 10);
@@ -585,9 +604,21 @@ JARVIS_TEST(process_kernel_half_private, "PRE: none | POST: none") {
                                               (t->get_page_table() & ~0xFFFULL));
     auto *kern = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
     for (size_t i = 0; i < arch::PML4_USER_COUNT; ++i) {
         JARVIS_ASSERT(priv[i] == 0);
     }
+#else
+    // riscv64 L0[0]: shared kernel identity/MMIO window (present, never
+    // user-accessible); the rest of the user half is empty. Sv39 PTE U
+    // bit is 1<<4 (mirrors private VMM::PAGE_USER; vmm.hpp riscv64 block).
+    constexpr uint64_t kSv39PteUser = 1ULL << 4;
+    JARVIS_ASSERT(priv[0] != 0);
+    JARVIS_ASSERT((priv[0] & kSv39PteUser) == 0);
+    for (size_t i = 1; i < arch::PML4_USER_COUNT; ++i) {
+        JARVIS_ASSERT(priv[i] == 0);
+    }
+#endif
     for (size_t i = arch::PML4_KERNEL_START; i < arch::PML4_ENTRIES; ++i) {
         JARVIS_ASSERT(priv[i] == kern[i]);
     }
@@ -602,8 +633,11 @@ JARVIS_TEST(process_kernel_half_private, "PRE: none | POST: none") {
 // child over-releases at teardown and a refcounted pipe buffer is disposed
 // twice (or its ResourceTracker delta goes negative).
 // Input: Kernel task creates a pipe, clones a child (fd table copied with
-//        vnode_ref_inc), then both ends are closed in parent + child.
+// vnode_ref_inc), then both ends are closed in parent + child.
 // Expect: pipe closes cleanly exactly once, zero ResourceTracker delta.
+// NOTE (issue #356 QE): off-x86 gated — synthetic-parent clone hangs both
+// QEMU virt arches (see #399).
+#if defined(CONFIG_ARCH_X86_64)
 JARVIS_TEST(process_clone_pipe_fd_refcount, "PRE: vfsd, iocd | POST: none") {
     static volatile int g_ret = -1;
 
@@ -648,6 +682,7 @@ JARVIS_TEST(process_clone_pipe_fd_refcount, "PRE: vfsd, iocd | POST: none") {
     JARVIS_ASSERT_EQ(0, static_cast<int>(g_ret));
     JARVIS_TEST_PASS();
 }
+#endif // CONFIG_ARCH_X86_64 (synthetic-parent clone hangs off-x86; see #399)
 
 void register_process_tests() {
     Logger::info("Registering process tests");
@@ -659,14 +694,20 @@ void register_process_tests() {
     JARVIS_REGISTER_TEST(process_remove_first_child);
     JARVIS_REGISTER_TEST(process_remove_middle_child);
     JARVIS_REGISTER_TEST(process_remove_last_child);
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(process_clone_adds_child);
+#endif
     JARVIS_REGISTER_TEST(process_cleanup_removes_from_parent);
     JARVIS_REGISTER_TEST(process_remove_child_twice_no_underflow);
     JARVIS_REGISTER_TEST(process_remove_child_clears_parent_id);
     // v0.4.0 MP-1/MP-7 driven-cookbook additions.
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(process_clone_child_table_independent);
     JARVIS_REGISTER_TEST(process_clone_teardown_zero_delta);
+#endif
     JARVIS_REGISTER_TEST(process_kernel_half_private);
+#if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(process_clone_pipe_fd_refcount);
+#endif
 }
 #endif

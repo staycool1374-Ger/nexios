@@ -47,7 +47,9 @@
 
 using namespace kernel;
 
-#if !defined(CONFIG_ARCH_RISCV64)
+// Issue #356 QE note: the pre-v0.3.10 riscv64 exclusion was lifted after
+// the #387 fork fix (re-verify per run; restore the gate with evidence
+// if riscv64-specific failures reappear).
 
 namespace {
 void release_task(TaskControlBlock *t) {
@@ -1223,5 +1225,4 @@ void register_vfsd_authorization_tests() {
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop
-#endif
 #endif

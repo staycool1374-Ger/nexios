@@ -61,7 +61,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // task
     {"task_core",             7,    4,       4      },  // TCB cleanup/page tables/clone + recent-ring claim (#264); off-x86: cleanup/create_user/elf-ipc/ring live, 3 synthetic-parent clone tests x86-gated pending kernel verdict (issue #356 QE note)
     {"task_lifecycle",        9,    0,       0      },  // exit/zombie/reparent
-    {"task_fpu",              0,    0,       0      },  // FPU test files excluded from x86_64 build (GCC 16); reserved home
+    {"task_fpu",              0,    5,       5      },  // x86 files excluded from build (GCC 16); off-x86 FPU context (issue #353: detect/basic/sweep/clone/switch-area); x86 stays 0 (pre-existing empty-class stall)
     {"task_init",             5,    0,       0      },  // init task exists/reparents + reaper notify/IPC wake (issue #155)
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants (issue #93 + #151): no-alloc, nesting-impossible, alignment, own-arm no-clobber, percpu-reset
@@ -73,7 +73,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"debug_syscall",         29,   29,      29     },  // debugger syscalls (#225/#226: 12 attach/codec/park/mem/stop) + 5 grant (#239, previously unrecorded) + 3 grantor-death/sel9/session (#232) + 3 launch-handoff (#231) + 1 entry-trap (#295) + 2 snapshot-budget (#186 Goal 2) + 3 death-publish guards (#379); arch-neutral, x86_64 measured via TCOUNT
 
     // process
-    {"process_lifecycle",    16,    0,       0      },  // process lifecycle, child table (12 + 4 MP-1/7)
+    {"process_lifecycle",    16,   12,      12     },  // process lifecycle, child table (12 + 4 MP-1/7); off-x86: 12 bookkeeping + kernel-half (arch-aware L0[0] check); 4 synthetic-parent clone tests x86-gated pending #399
     {"process_elf",           9,    0,       0      },  // ELF loader validation/segments
     {"elf_loader",            25,   0,       0      },  // background chunked ELF loader (success/errors/cancel/cycles/yield + initrd vnode-leak pin #77 + issue #46 authenticity quartet + #270 fault-dump gate + #311 3-arg main/envp + #271 P0 RO-perm pin + P1 retention/balance + P2 byte-identity/refusals + P3 decay/canary/supersede/fork + BSS-only DATA-canary live-E2E follow-up)
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support (issue #95)
@@ -153,7 +153,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // servers
     {"servers_vfsd",         18,    0,       0      },  // VFS daemon kernel-bypass ops/auth (crash-restart tests disabled in source)
-    {"servers_vfsd_auth",     27,   0,       0      },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332) + stable-ino gate/fat32-open (#333)
+    {"servers_vfsd_auth",    27,   27,      27     },  // VFS daemon authorization + dup/dup2/pipe + fs handlers mkdir/unlink/rmdir/lseek/ioctl/readdir + kernel-task delivery fstat/stat/readdir (#134, #175) + bogus-whence rejection (#176) + initrd-open/identity-gate (#332) + stable-ino gate/fat32-open (#333); pre-v0.3.10 riscv64 exclusion lifted as stale post-#387 (issue #356)
     {"servers_iocd",          7,    0,       0      },  // IOCD daemon boots/IRQ/MMIO/affinity (crash-restart disabled in source)
     {"servers_daemon_restart", 2,    0,       0      },  // unknown-daemon rejection + terminate/ensure resurrect cycle (issue #135); crash test stays #if 0-disabled
     {"servers_health",        5,    0,       0      },  // SYS_HEALTH_STATUS metrics/procfs
@@ -306,7 +306,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"libc_syscall",          4,    0,       0      },  // image size + getpid + write-cross + no-corruption (#303, x86_64-only)
     {"cross_boundary",        3,    0,       0      },  // ring3 vfsd chain + iocd register/forward (#303, x86_64-only) + iocd keyboard-read delivery (#340 P0)
     {"storage",             167,  0,       0      },  // all vfs_* + initrd_parser (issue #173) + vnode release quartet (#268) + /bin resolve (#274) + ramdisk (7, #275/#318: +pristine-zero) + ramdisk_fs (7, #314/#318: +CRC corruption) + 2 initrd tops-only/subdir-dedup (#329, aggregate bump missed in e7923e38b) + 2 fat32 stable-ino pins (#333) + 1 readdir mount overlay (#346)
-    {"servers",             66,   0,       0      },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333)
+    {"servers",             66,   66,      66     },  // servers_* + services_framework (#173): vfsd_auth grew 5->19 (#134), +1 daemon rejection (#135); row was stale at 57, actual 62 pre-#332, +2 initrd-open/identity-gate (#332), +2 stable-gate/fat32-open (#333); off-x86 now green incl. vfsd_auth 27 (issue #356)
     {"drivers",             107,   62,      62     },  // drivers_* + virtio_blk_req + ahci_deep + net (issue #173) + 13 pre-existing aggregate drift at HEAD (member fine rows all match the dump: 8+12+16+11+19+13+10+18; aggregate never re-reconciled; reconciled #342) + off-x86 ECAM regression (issue #354: +4 both arches) + #391 fixes
     {"hal",                 123,   76,      78     },  // hal_* + exc_table(5, +1 exception_name #131 +1 first-chance raw ordering #308) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274 + off-x86 H4 groups (issue #355: aarch64 +19, riscv64 +21)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)

@@ -39,44 +39,14 @@ void register_virtio_tests() {
         "Skipped: register_virtio_tests (not supported on this arch)");
 }
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_fpu_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_tests (not supported on this arch)");
-}
-
-/// @brief Stub — not supported on non-x86 architectures.
-void register_fpu_sse_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_sse_tests (not supported on this arch)");
-}
-
-/// @brief Stub — not supported on non-x86 architectures.
-void register_fpu_clone_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_clone_tests (not supported on this arch)");
-}
-
-/// @brief Stub — not supported on non-x86 architectures.
-void register_fpu_multi_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_multi_tests (not supported on this arch)");
-}
-
-/// @brief Stub — not supported on non-x86 architectures.
-void register_fpu_xmm_all_tests() {
-    kernel::Logger::info(
-        "Skipped: register_fpu_xmm_all_tests (not supported on this arch)");
-}
+// Issue #353: FPU groups are defined by test_fpu_context.cpp (per-arch
+// real tests); the x86-named stubs are retired.
 
 // Issue #356: register_task_tests is defined by test_task.cpp (TCB
 // lifecycle port).
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_process_tests() {
-    kernel::Logger::info(
-        "Skipped: register_process_tests (not supported on this arch)");
-}
+// Issue #356: register_process_tests is defined by test_process.cpp
+// (bookkeeping port; clone tests x86-gated pending #399).
 
 /// @brief Stub — not supported on non-x86 architectures.
 void register_gdt_tests() {
@@ -110,11 +80,8 @@ void register_block_device_tests() {
         "Skipped: register_block_device_tests (not supported on this arch)");
 }
 
-/// @brief Stub — not supported on non-x86 architectures.
-void register_vfsd_authorization_tests() {
-    kernel::Logger::info(
-        "Skipped: register_vfsd_authorization_tests (not supported on this arch)");
-}
+// Issue #356: register_vfsd_authorization_tests is defined by
+// test_vfsd_auth.cpp (pre-v0.3.10 riscv64 exclusion lifted).
 
 /// @brief Stub — not supported on non-x86 architectures.
 void register_buffer_pool_tests() {

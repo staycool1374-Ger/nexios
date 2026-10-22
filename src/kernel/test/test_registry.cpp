@@ -175,6 +175,9 @@ void register_fpu_sse_tests();
 void register_fpu_clone_tests();
 void register_fpu_multi_tests();
 void register_fpu_xmm_all_tests();
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+void register_fpu_context_tests();
+#endif
 void register_random_vfs_write_tests();
 void register_ipc_lock_free_tests();
 void register_locking_tests();
@@ -715,11 +718,15 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"task_lifecycle", []() { run_task_lifecycle_group(); }},
     {"task_fpu",
      []() {
+#if defined(CONFIG_ARCH_X86_64)
          register_fpu_tests();
          register_fpu_sse_tests();
          register_fpu_clone_tests();
          register_fpu_multi_tests();
          register_fpu_xmm_all_tests();
+#else
+         register_fpu_context_tests();
+#endif
      }},
     {"task_init", []() { run_task_init_group(); }},
 
