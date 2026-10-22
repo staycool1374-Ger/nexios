@@ -261,8 +261,8 @@ ui {78,78,78}, servers {66,66,66}, storage {167,167,167}, hal
 | Arch | Artifact | List |
 |---|---|---|
 | x86_64 | `make release` ISO (+ `release/.baked-test-config`) | measured 24-class TF_RELEASE set |
-| aarch64 | `make release-elf` → `build/kernel.elf` (+ `build/.baked-test-config-aarch64`) | TF_RELEASE subsets per B1 census; `none` E2E pending (unblocked: #393 closed 2026-10-20) |
-| riscv64 | `make release-elf` → `build/kernel-riscv64-release.bin` (+ stamp) | TF_RELEASE subsets per B1 census; `none` E2E pending (unblocked: #393 closed 2026-10-20) |
+| aarch64 | `make test-full aarch64 release` = `core_basic storage ui` (`TEST_FULL_CLASSES_aarch64_release`); `make release-elf` → `build/kernel.elf` (+ `build/.baked-test-config-aarch64`) | Measured 2026-10-22: core_basic 17/17, storage 40/40, ui 19/19; H6-release `version` E2E SMOKE: PASS (`Type: release`, shell-smoke.exp unmodified) |
+| riscv64 | `make test-full riscv64 release` = `storage ui` (`TEST_FULL_CLASSES_riscv64_release`); `make release-elf` → `build/kernel-riscv64-release.bin` (+ stamp) | Measured 2026-10-22: storage 40/40, ui 19/19; H6-release `version` E2E SMOKE: PASS (`Type: release`, shell-smoke.exp unmodified) |
 
 `make release` stays x86_64-only (UEFI ISO is an x86 boot concept).
 Stale baked configs fail loud (`build/.baked-test-config-<arch>`
@@ -276,3 +276,8 @@ aarch64 `arch_aarch64 configuration_build hal hal_timer
 irq_early_std memory_page_tables memory_vmm timing_core`; riscv64
 `configuration_build hal_timer irq_early_std memory_page_tables
 memory_vmm timing_core scheduler_zombie`.
+
+Release selftest off-x86 fails loud by design: every selftest-listed
+class measured PLANNED:0 in release mode on 2026-10-22 (no TF_RELEASE
+tests), so `execute-test <arch> release selftest` errors instead of
+printing a vacuous 0/0 PASS — use `test-full <arch> release`.

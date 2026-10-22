@@ -78,7 +78,7 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
 - Incremental: x86_64 release interactive reuses existing ISO if present (skip rebuild)
 - Arch switching via `make run-*-mode <new-arch>` triggers `make clean` automatically via `check-arch` stamp
 - Positional arguments consumed by match-all `%:: @true` at end of Makefile
-- Per-arch gates (issue #357): the Makefile owns `TEST_FULL_CLASSES_<arch>` / `SELFTEST_CLASSES_<arch>` (measured-only green lists); `make test-full` consumes them via `NEXIOS_TEST_CLASSES` (loud error when missing); `selftest` boots one class per `SELFTEST_CLASSES` entry off-x86 (`safe` on x86); baked release configs live at `build/.baked-test-config-<arch>` and are asserted before QEMU (never boot a stale suite).
+- Per-arch gates (issue #357): the Makefile owns `TEST_FULL_CLASSES_<arch>` / `SELFTEST_CLASSES_<arch>` (measured-only green lists) plus `TEST_FULL_CLASSES_<arch>_release` (release-measured subsets: aarch64 `core_basic storage ui`, riscv64 `storage ui`); `make test-full` consumes them via `NEXIOS_TEST_CLASSES` (loud error when missing); `selftest` boots one class per `SELFTEST_CLASSES` entry off-x86 (`safe` on x86), and release selftest off-x86 fails loud by design (measured empty — use `test-full <arch> release`); baked release configs live at `build/.baked-test-config-<arch>` and are asserted before QEMU (never boot a stale suite).
 
 **Examples:**
 ```

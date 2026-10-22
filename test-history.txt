@@ -4528,3 +4528,66 @@ SUMMARY: total=24 ok=24 fail=0
 2026-10-22 14:47:42 process_lifecycle PASSED: 12 FAILED: 0 TIME: 393ms
 2026-10-22 14:48:13 hal PASSED: 78 FAILED: 0 TIME: 2195ms
 2026-10-22 14:52:06 servers PASSED: 66 FAILED: 0 TIME: 4493ms
+2026-10-22 15:20:51 core_basic PASSED: 17 FAILED: 0 TIME: 7ms STATUS: release-census-aarch64
+2026-10-22 15:20:59 core_syscall PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:21:07 core_tracing PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:21:27 ipc PASSED: 0 FAILED: 0 TIME: 3ms STATUS: release-census-aarch64
+2026-10-22 15:21:35 hal PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:21:43 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:21:51 random PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:22:05 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:22:13 storage PASSED: 40 FAILED: 0 TIME: 20ms STATUS: release-census-aarch64
+2026-10-22 15:22:21 drivers PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:22:29 ui PASSED: 19 FAILED: 0 TIME: 302ms STATUS: release-census-aarch64
+2026-10-22 15:22:44 servers PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:22:52 task_fpu PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:23:00 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:23:08 task_core PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:23:22 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:23:30 shell_interaction PASSED: 19 FAILED: 0 TIME: 304ms STATUS: release-census-aarch64
+2026-10-22 15:23:38 cap_irq PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:23:46 cap_irq_notify PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:23:54 testrunner PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-aarch64
+2026-10-22 15:25:10 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:25:18 scheduler_zombie PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:25:27 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:25:35 memory_vmm PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:25:50 memory_page_tables PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:25:58 timing_core PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:26:07 hal_timer PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:26:15 irq_early_std PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:26:29 storage PASSED: 40 FAILED: 0 TIME: 33ms STATUS: release-census-riscv64
+2026-10-22 15:26:37 drivers PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:26:46 ui PASSED: 19 FAILED: 0 TIME: 246ms STATUS: release-census-riscv64
+2026-10-22 15:26:54 servers PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:27:07 task_fpu PASSED: 0 FAILED: 0 TIME: 1ms STATUS: release-census-riscv64
+2026-10-22 15:27:15 shell_interaction PASSED: 19 FAILED: 0 TIME: 246ms STATUS: release-census-riscv64
+2026-10-22 15:27:24 cap_irq PASSED: 0 FAILED: 0 TIME: 1ms STATUS: release-census-riscv64
+2026-10-22 15:27:32 cap_irq_notify PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:27:45 task_core PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:27:54 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:28:02 hal PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-census-riscv64
+2026-10-22 15:28:29 arch_aarch64 PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-selftest-aarch64
+2026-10-22 15:28:37 hal_timer PASSED: 0 FAILED: 0 TIME: 3ms STATUS: release-selftest-aarch64
+2026-10-22 15:28:45 irq_early_std PASSED: 0 FAILED: 0 TIME: 3ms STATUS: release-selftest-aarch64
+2026-10-22 15:28:53 memory_page_tables PASSED: 0 FAILED: 0 TIME: 3ms STATUS: release-selftest-aarch64
+2026-10-22 15:29:06 memory_vmm PASSED: 0 FAILED: 0 TIME: 3ms STATUS: release-selftest-aarch64
+2026-10-22 15:29:14 timing_core PASSED: 0 FAILED: 0 TIME: 3ms STATUS: release-selftest-aarch64
+2026-10-22 15:29:22 hal PASSED: 0 FAILED: 0 TIME: 3ms STATUS: release-selftest-aarch64
+2026-10-22 15:29:30 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-selftest-aarch64
+2026-10-22 15:30:16 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-selftest-riscv64
+2026-10-22 15:30:24 hal_timer PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-selftest-riscv64
+2026-10-22 15:30:33 irq_early_std PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-selftest-riscv64
+2026-10-22 15:30:41 memory_page_tables PASSED: 0 FAILED: 0 TIME: 1ms STATUS: release-selftest-riscv64
+2026-10-22 15:30:56 memory_vmm PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-selftest-riscv64
+2026-10-22 15:31:05 timing_core PASSED: 0 FAILED: 0 TIME: 1ms STATUS: release-selftest-riscv64
+2026-10-22 15:31:14 scheduler_zombie PASSED: 0 FAILED: 0 TIME: 0ms STATUS: release-selftest-riscv64
+2026-10-22 17:43:38 core_basic PASSED: 17 FAILED: 0 TIME: 6ms
+2026-10-22 17:43:46 storage PASSED: 40 FAILED: 0 TIME: 20ms
+2026-10-22 17:43:55 ui PASSED: 19 FAILED: 0 TIME: 300ms
+
+SUMMARY: total=3 ok=3 fail=0 ARCH=aarch64
+2026-10-22 17:44:08 storage PASSED: 40 FAILED: 0 TIME: 31ms
+2026-10-22 17:44:17 ui PASSED: 19 FAILED: 0 TIME: 245ms
+
+SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
