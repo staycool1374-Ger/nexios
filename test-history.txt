@@ -4657,6 +4657,11 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-10-22 20:16:00 scheduler_zombie PASSED: 5 FAILED: 0 TIME: 1851ms STATUS: #353-aarch64-vehicle-regression
 2026-10-22 20:17:00 syscall_core PASSED: 30 FAILED: 0 TIME: 925ms STATUS: #353-riscv64-vehicle-regression
 2026-10-22 20:17:00 syscall_core PASSED: 30 FAILED: 0 TIME: 895ms STATUS: #353-aarch64-vehicle-regression
+2026-10-22 20:20:00 servers_iocd PASSED: 7 FAILED: 0 TIME: 241ms STATUS: #303-aarch64-MMIO-live-verify
+2026-10-22 20:20:00 servers_iocd PASSED: 7 FAILED: 0 TIME: 244ms STATUS: #303-riscv64-MMIO-live-verify
+2026-10-22 20:21:00 debug_syscall PASSED: 29 FAILED: 0 TIME: 1037ms STATUS: #238-aarch64-flake-watch-run1
+2026-10-22 20:22:00 debug_syscall PASSED: 29 FAILED: 0 TIME: 1039ms STATUS: #238-aarch64-flake-watch-run2
+2026-10-22 20:22:00 debug_syscall PASSED: 29 FAILED: 0 TIME: 1055ms STATUS: #238-aarch64-flake-watch-run3
 2026-10-22 19:50:00 pt_merge PASSED: 6 FAILED: 0 TIME: 400ms STATUS: #352-x86_64-codec-port-rerun-stable
 2026-10-22 19:51:00 pt_merge PASSED: 6 FAILED: 0 TIME: 177ms STATUS: #352-aarch64-codec-port-rerun-stable
 2026-10-22 19:51:00 pt_merge PASSED: 5 FAILED: 1 TIME: 0 STATUS: #352-riscv64-late-mapping-2M-align-take1-time-uncaptured
