@@ -37,6 +37,8 @@ var searchData=
   ['irq_5flatency_5fhistogram_2ecpp_34',['irq_latency_histogram.cpp',['../irq__latency__histogram_8cpp.html',1,'']]],
   ['irq_5flatency_5fhistogram_2ehpp_35',['irq_latency_histogram.hpp',['../hal_2irq__latency__histogram_8hpp.html',1,'(Global Namespace)'],['../irq__latency__histogram_8hpp.html',1,'(Global Namespace)']]],
   ['irq_5fspinlock_5fguard_2ehpp_36',['irq_spinlock_guard.hpp',['../irq__spinlock__guard_8hpp.html',1,'']]],
-  ['irq_5fthread_2ecpp_37',['irq_thread.cpp',['../irq__thread_8cpp.html',1,'']]],
-  ['irq_5fthread_2ehpp_38',['irq_thread.hpp',['../arch_2irq__thread_8hpp.html',1,'(Global Namespace)'],['../irq__thread_8hpp.html',1,'(Global Namespace)']]]
+  ['irq_5fstorm_2ehpp_37',['irq_storm.hpp',['../irq__storm_8hpp.html',1,'']]],
+  ['irq_5fthread_2ecpp_38',['irq_thread.cpp',['../irq__thread_8cpp.html',1,'']]],
+  ['irq_5fthread_2ehpp_39',['irq_thread.hpp',['../arch_2irq__thread_8hpp.html',1,'(Global Namespace)'],['../irq__thread_8hpp.html',1,'(Global Namespace)']]],
+  ['irq_5fvectors_2ehpp_40',['irq_vectors.hpp',['../irq__vectors_8hpp.html',1,'']]]
 ];

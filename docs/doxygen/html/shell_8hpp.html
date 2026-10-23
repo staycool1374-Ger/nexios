@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -126,7 +126,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('shell_8hpp.htm
 Include dependency graph for shell.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="shell_8hpp__incl.png" border="0" usemap="#asrc_2services_2shell_8hpp" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<map name="asrc_2services_2shell_8hpp" id="asrc_2services_2shell_8hpp">
+<area shape="rect" title="Interactive command&#45;line shell with built&#45;in and user commands." alt="" coords="5,5,154,32"/>
+<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="40,80,119,107"/>
+<area shape="poly" title=" " alt="" coords="81,31,82,65,77,64,78,35"/>
+</map>
 </div>
 </div><div class="textblock"><div class="dynheader">
 This graph shows which files directly or indirectly include this file:</div>
@@ -157,7 +161,15 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a16d3f7f60ab906f01523bd7c58625a76" id="r_a16d3f7f60ab906f01523bd7c58625a76"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespaceservice.html#a16d3f7f60ab906f01523bd7c58625a76">service::shell_try_get_key</a> (char &amp;out)</td></tr>
-<tr class="memdesc:a16d3f7f60ab906f01523bd7c58625a76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll above.  <br /></td></tr>
+<tr class="memdesc:a16d3f7f60ab906f01523bd7c58625a76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (RX ring → iocd daemon → hardware ring). Pumps the UART (bounded) first.  <br /></td></tr>
+<tr class="memitem:a442b0f762af4a2351a70aa361bd08f56" id="r_a442b0f762af4a2351a70aa361bd08f56"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespaceservice.html#a442b0f762af4a2351a70aa361bd08f56">service::shell_peek_input</a> (const char *&amp;data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;len)</td></tr>
+<tr class="memdesc:a442b0f762af4a2351a70aa361bd08f56"><td class="mdescLeft">&#160;</td><td class="mdescRight">Peek the next contiguous decoded input run without consuming (issue #407: readline fast path + test seam). Pumps the UART (bounded) then exposes the ring run; consume strictly last.  <br /></td></tr>
+<tr class="memitem:ad2ba229f96facfefd623ae304541e5a1" id="r_ad2ba229f96facfefd623ae304541e5a1"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespaceservice.html#ad2ba229f96facfefd623ae304541e5a1">service::shell_consume_input</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> count)</td></tr>
+<tr class="memdesc:ad2ba229f96facfefd623ae304541e5a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consume a previously peeked input run (issue #407). Delegates to the RX ring; clamps to the readable count.  <br /></td></tr>
+<tr class="memitem:a441052bbf94bab8c95a7814768f00850" id="r_a441052bbf94bab8c95a7814768f00850"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespaceservice.html#a441052bbf94bab8c95a7814768f00850">service::shell_flush_urcs_for_test</a> ()</td></tr>
+<tr class="memdesc:a441052bbf94bab8c95a7814768f00850"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #407 item 2): drive the production URC drain (flush_urcs) so a shell-level test pins framing, the drop notice, and the per-pass drain bound. Zero-logic pass-through.  <br /></td></tr>
+<tr class="memitem:a9da472c5c2e2d3ac98b959c0e34e904a" id="r_a9da472c5c2e2d3ac98b959c0e34e904a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespaceservice.html#a9da472c5c2e2d3ac98b959c0e34e904a">service::shell_redraw_for_test</a> (const char *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len, int exit_code)</td></tr>
+<tr class="memdesc:a9da472c5c2e2d3ac98b959c0e34e904a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #407 item 2): drive the production redraw.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Interactive command-line shell with built-in and user commands. </p>

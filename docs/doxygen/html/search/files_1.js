@@ -12,5 +12,6 @@ var searchData=
   ['bootparams_2ehpp_9',['bootparams.hpp',['../bootparams_8hpp.html',1,'']]],
   ['buffer_5fpool_2ecpp_10',['buffer_pool.cpp',['../buffer__pool_8cpp.html',1,'']]],
   ['buffer_5fpool_2ehpp_11',['buffer_pool.hpp',['../buffer__pool_8hpp.html',1,'']]],
-  ['buffer_5fpool_5ferrors_2ehpp_12',['buffer_pool_errors.hpp',['../buffer__pool__errors_8hpp.html',1,'']]]
+  ['buffer_5fpool_5ferrors_2ehpp_12',['buffer_pool_errors.hpp',['../buffer__pool__errors_8hpp.html',1,'']]],
+  ['build_5finfo_2ehpp_13',['build_info.hpp',['../build__info_8hpp.html',1,'']]]
 ];

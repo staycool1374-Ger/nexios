@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -152,6 +152,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:aca50fe995582fa2e7697f4b241bf54ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to its physical address with error code.  <br /></td></tr>
 <tr class="memitem:a76ece689da1d37a1ff4c78d747035edf" id="r_a76ece689da1d37a1ff4c78d747035edf"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a76ece689da1d37a1ff4c78d747035edf">current_pml4</a> ()</td></tr>
 <tr class="memdesc:a76ece689da1d37a1ff4c78d747035edf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the physical address of the current PML4 table.  <br /></td></tr>
+<tr class="memitem:a7d5545bc151a7c9769696e1129ac086f" id="r_a7d5545bc151a7c9769696e1129ac086f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7d5545bc151a7c9769696e1129ac086f">smp_tlb_shootdown_hook</a> (uint64_t va, uint16_t context_id, bool all)</td></tr>
+<tr class="memdesc:a7d5545bc151a7c9769696e1129ac086f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU shootdown hook, overridden by SMP ports (issue #352). Weak no-op default: single-CPU runs need only the local invalidate in tlb_shootdown. SMP enablement replaces this (tracked separately — not #386, which owns globals).  <br /></td></tr>
+<tr class="memitem:a6694e81169de0e456fd29aadc0688e62" id="r_a6694e81169de0e456fd29aadc0688e62"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6694e81169de0e456fd29aadc0688e62">tlb_shootdown</a> (uint64_t va, uint16_t context_id, bool all)</td></tr>
+<tr class="memdesc:a6694e81169de0e456fd29aadc0688e62"><td class="mdescLeft">&#160;</td><td class="mdescRight">Invalidate TLB state for an address space (issue #352): local arch invalidate (full flush for all=true, else VA+context-ID targeted) followed by the SMP hook above. Test-facing entry point for shootdown-hook invocation coverage. No callers yet — unmap/teardown paths keep their existing local invalidates until QE adopts this choke point.  <br /></td></tr>
 <tr class="memitem:a385de660f1f7a0aab86ad1a31cb4971b" id="r_a385de660f1f7a0aab86ad1a31cb4971b"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a385de660f1f7a0aab86ad1a31cb4971b">clone_kernel_pml4</a> ()</td></tr>
 <tr class="memdesc:a385de660f1f7a0aab86ad1a31cb4971b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Creates a fresh PML4: zeroes user entries (0-255), copies kernel entries (256-511). Used during exec/load — NOT for fork (which needs parent user entries).  <br /></td></tr>
 <tr class="memitem:a05dddb595ff91d7b1c0ed494e503b205" id="r_a05dddb595ff91d7b1c0ed494e503b205"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a05dddb595ff91d7b1c0ed494e503b205">clone_kernel_pml4_err</a> (uint64_t &amp;out_pml4_phys)</td></tr>
@@ -183,7 +187,7 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a41f6aadd3a5d784d8324a8b1e0e11789" id="r_a41f6aadd3a5d784d8324a8b1e0e11789"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a41f6aadd3a5d784d8324a8b1e0e11789">get_kernel_pml4</a> ()</td></tr>
 <tr class="memdesc:a41f6aadd3a5d784d8324a8b1e0e11789"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the physical address of the kernel PML4 table.  <br /></td></tr>
 <tr class="memitem:a14814ba2ea03a0fef26664c62410c8de" id="r_a14814ba2ea03a0fef26664c62410c8de"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a14814ba2ea03a0fef26664c62410c8de">deep_copy_user_pages</a> (uint64_t src_pml4, uint64_t dst_pml4)</td></tr>
-<tr class="memdesc:a14814ba2ea03a0fef26664c62410c8de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check) — v0.4.0 MP-7: no task shares another's user entries, so this is always the full teardown of a private address space.  <br /></td></tr>
+<tr class="memdesc:a14814ba2ea03a0fef26664c62410c8de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check) — v0.4.0 MP-7: no task shares another's user entries, so this is always the full teardown of a private address space. Defensive block sites (1 GiB / 2 MiB) validate level alignment via decode_block_base and skip misaligned entries, never freeing them: no in-tree producer creates user huge/block leaves (#365).  <br /></td></tr>
 <tr class="memitem:ab204c9d0ee0ad66661be51ce72280bff" id="r_ab204c9d0ee0ad66661be51ce72280bff"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab204c9d0ee0ad66661be51ce72280bff">free_user_pages</a> (uint64_t pml4_phys)</td></tr>
 <tr class="memdesc:ab204c9d0ee0ad66661be51ce72280bff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free all user-space pages and page tables owned by a user PML4. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check).  <br /></td></tr>
 <tr class="memitem:ac75e4a39be64ad3c364d4321c1a621e1" id="r_ac75e4a39be64ad3c364d4321c1a621e1"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac75e4a39be64ad3c364d4321c1a621e1">free_user_pages_err</a> (uint64_t pml4_phys)</td></tr>
@@ -482,7 +486,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check) — v0.4.0 MP-7: no task shares another's user entries, so this is always the full teardown of a private address space. </p>
+<p>Frees all user-space pages and page tables from a user PML4. Used during exec() to clean up the old address space. Skips kernel-owned pages (<a class="el" href="classkernel_1_1_p_m_m.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership.">PMM::is_user_page</a> owner-bit check) — v0.4.0 MP-7: no task shares another's user entries, so this is always the full teardown of a private address space. Defensive block sites (1 GiB / 2 MiB) validate level alignment via decode_block_base and skip misaligned entries, never freeing them: no in-tree producer creates user huge/block leaves (#365). </p>
 <p>Deep-copy user-space page tables from src_pml4 to dst_pml4. Allocates new PDPT/PD/PT pages and copies data page content. dst_pml4 must already have kernel entries populated. Worst-case: PML4_USER_COUNT (256) × 512 × 512 × 512 leaf visits, each doing a 4 KiB memcpy. Yields every 64 leaf entries.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -497,7 +501,7 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>true on success, false on OOM or on a user-range huge/block entry (issue #325-E: by-value copy would alias one writable page parent/child — fail closed instead). Partial state may remain on false, but every installed table and data page is USER-owned, so the caller MUST destroy the child (<a class="el" href="structkernel_1_1_task_control_block.html#ab52ff8402135c9d2a8ac6df1c5346f5e" title="Destroys a TCB and returns its MemPool block (H-5: single pool-aware teardown path replacing raw dele...">TaskControlBlock::destroy</a> → cleanup → free_user_pages reclaims all partials — <a class="el" href="task_8cpp.html" title="TaskControlBlock lifecycle: creation, initialisation, cloning, and cleanup.">task.cpp</a> documents this invariant). Leaf flags (USER/write/dirty/accessed/NX) copy verbatim; non-RAM frames are skipped (child leaf stays unmapped). </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true on success, false on OOM or on a user-OWNED huge/block entry (issue #325-E: by-value copy would alias one writable page parent/child — fail closed instead; issue #387: kernel-owned blocks reachable in the user index range — riscv64 L0[0] low-half MMIO/identity from clone_kernel_pml4 — are inherited BY VALUE, never a fork failure, U=0 kept). Partial state may remain on false, but every installed TABLE page is USER-owned and every inherited BLOCK is kernel-owned U=0 (skipped by every free_user_pages block site on all arches), so the caller MUST destroy the child (<a class="el" href="structkernel_1_1_task_control_block.html#ab52ff8402135c9d2a8ac6df1c5346f5e" title="Destroys a TCB and returns its MemPool block (H-5: single pool-aware teardown path replacing raw dele...">TaskControlBlock::destroy</a> → cleanup → free_user_pages reclaims all partials — <a class="el" href="task_8cpp.html" title="TaskControlBlock lifecycle: creation, initialisation, cloning, and cleanup.">task.cpp</a> documents this invariant). Leaf flags (USER/write/dirty/accessed/NX) copy verbatim; non-RAM frames are skipped (child leaf stays unmapped). </dd></dl>
 <dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none (VMM-internal; <a class="el" href="structkernel_1_1_task_control_block.html#a1443c8caa63e4d8af39ad150f91d413d" title="Clones the current task — creates a child with copied context.">TaskControlBlock::clone</a> runs without IrqGuard here). Context: kernel-only (fork path). SMP: source and destination are not live on any CPU (pre-publish window); the caller MUST destroy the child on false (see above).</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>true on success, false on OOM. </dd></dl>
 <div class="dynheader">
@@ -1745,6 +1749,43 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a7d5545bc151a7c9769696e1129ac086f" name="a7d5545bc151a7c9769696e1129ac086f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7d5545bc151a7c9769696e1129ac086f">&#9670;&#160;</a></span>smp_tlb_shootdown_hook()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::smp_tlb_shootdown_hook </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>context_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>all</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Cross-CPU shootdown hook, overridden by SMP ports (issue #352). Weak no-op default: single-CPU runs need only the local invalidate in tlb_shootdown. SMP enablement replaces this (tracked separately — not #386, which owns globals). </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract: Lock: none. Context: any-task. SMP: N/A (default body). </dd></dl>
+
+</div>
+</div>
 <a id="aaea3e29ad09f4191bd7ad1bf1fcfdeb9" name="aaea3e29ad09f4191bd7ad1bf1fcfdeb9"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aaea3e29ad09f4191bd7ad1bf1fcfdeb9">&#9670;&#160;</a></span>snapshot_kernel_template()</h2>
 
@@ -1867,6 +1908,49 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a6694e81169de0e456fd29aadc0688e62" name="a6694e81169de0e456fd29aadc0688e62"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6694e81169de0e456fd29aadc0688e62">&#9670;&#160;</a></span>tlb_shootdown()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::VMM::tlb_shootdown </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>context_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>all</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Invalidate TLB state for an address space (issue #352): local arch invalidate (full flush for all=true, else VA+context-ID targeted) followed by the SMP hook above. Test-facing entry point for shootdown-hook invocation coverage. No callers yet — unmap/teardown paths keep their existing local invalidates until QE adopts this choke point. </p>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract (issue #366): Lock: none. Context: any-task. SMP: local-only + hook. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_a6694e81169de0e456fd29aadc0688e62_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a6694e81169de0e456fd29aadc0688e62_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 19 -->
+</div>
+
+</div>
+</div>
 <a id="a9d3b6e67113f63864a37d28320a7bc28" name="a9d3b6e67113f63864a37d28320a7bc28"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a9d3b6e67113f63864a37d28320a7bc28">&#9670;&#160;</a></span>unmap_frame_from_cap()</h2>
 
@@ -1910,7 +1994,7 @@ Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only. SMP:
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1962,7 +2046,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_addd04cbcf116823799ad42392fe20c45_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_addd04cbcf116823799ad42392fe20c45_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -2015,7 +2099,7 @@ Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only. SMP:
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -2067,7 +2151,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_ac3620fa463b4b1321bf9296e4bfd35e4_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_ac3620fa463b4b1321bf9296e4bfd35e4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -2114,7 +2198,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -2163,7 +2247,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -2208,7 +2292,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a87e909fad18b6d7d49eb348c5183cbca_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a87e909fad18b6d7d49eb348c5183cbca_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -2254,7 +2338,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a818b86723c8492766747bd3dade54dc6_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a818b86723c8492766747bd3dade54dc6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -2303,7 +2387,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a21f16b2e0bd481ac0584f2a27fb1887a_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a21f16b2e0bd481ac0584f2a27fb1887a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -2358,7 +2442,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -2469,7 +2553,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 30 -->
 </div>
 
 </div>

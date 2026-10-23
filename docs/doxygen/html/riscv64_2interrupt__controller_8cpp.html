@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -119,12 +119,17 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('riscv64_2inter
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &lt;<a class="el" href="interrupt__controller_8hpp_source.html">kernel/arch/interrupt_controller.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__delivery_8hpp_source.html">kernel/irq_delivery.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="idt_8hpp_source.html">kernel/arch/idt.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="plic_8hpp_source.html">kernel/arch/riscv64/hal/plic.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__storm_8hpp_source.html">kernel/arch/hal/irq_storm.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="timer_8hpp_source.html">kernel/arch/timer.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="scheduler_8hpp_source.html">kernel/task/scheduler.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="debug__stop_8hpp_source.html">kernel/debug/debug_stop.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="crash__dump_8hpp_source.html">kernel/debug/crash_dump.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__guard_8hpp_source.html">kernel/arch/irq_guard.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="signal_8hpp_source.html">signal.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
@@ -142,7 +147,8 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:abcb80cfbe5c335ca7659697f28452a7b" id="r_abcb80cfbe5c335ca7659697f28452a7b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#abcb80cfbe5c335ca7659697f28452a7b">arch::handle_plic_trap</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> scause, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sepc, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *regs)</td></tr>
-<tr class="memitem:ade82e23d3659eed529a27355052fcdac" id="r_ade82e23d3659eed529a27355052fcdac"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ade82e23d3659eed529a27355052fcdac">arch::handle_kernel_exception</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sepc, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> scause, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> stval)</td></tr>
+<tr class="memitem:aa8b1a91c0b864176494c1d844f21da2e" id="r_aa8b1a91c0b864176494c1d844f21da2e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#aa8b1a91c0b864176494c1d844f21da2e">arch::handle_kernel_exception</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sepc, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> scause, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> stval, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sp)</td></tr>
+<tr class="memdesc:aa8b1a91c0b864176494c1d844f21da2e"><td class="mdescLeft">&#160;</td><td class="mdescRight">S-mode kernel-fault handler (issue #308 first-chance path): raw register frame over SBI console transport, then halt - no Logger formatting (Logger may be the casualty), no recovery, no SBI shutdown (preserves post-mortem). Transport stays raw SBI console_putchar (a7=1), extended with SP + SATP.  <br /></td></tr>
 <tr class="memitem:ae334d0e2cfa3562725380393b13ad72f" id="r_ae334d0e2cfa3562725380393b13ad72f"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ae334d0e2cfa3562725380393b13ad72f">arch::riscv64_u_fault_handler</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *frame)</td></tr>
 <tr class="memdesc:ae334d0e2cfa3562725380393b13ad72f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Terminate a U-mode faulting task (issue #206 M2, mirrors aarch64_el0_fault_handler). Runs IRQ-masked from the trap entry; must not re-enable IRQs and must NOT call Scheduler::terminate (ISR-unsafe) — marks TERMINATED, wakes a waitpid parent, and arms the deferred switch via switch_away_from_terminating. The asm return path applies the pending switch. Parks only when there is no live user task to kill.  <br /></td></tr>
 <tr class="memitem:a00d3887d8d39eb243c45eb49577ee7cb" id="r_a00d3887d8d39eb243c45eb49577ee7cb"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a00d3887d8d39eb243c45eb49577ee7cb">arch::riscv64_last_u_scause</a> ()</td></tr>
@@ -154,8 +160,8 @@ Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
-<tr class="memitem:ab590e0485f5d482d57eb19d3262cf29a" id="r_ab590e0485f5d482d57eb19d3262cf29a"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ab590e0485f5d482d57eb19d3262cf29a">arch::PLIC_MAX_IRQ</a> = 32</td></tr>
-<tr class="memdesc:ab590e0485f5d482d57eb19d3262cf29a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window for mask/unmask (issue #198): QEMU virt exposes a single 32-line enable word; lines &gt;= 32 have no defined register and must not touch MMIO.  <br /></td></tr>
+<tr class="memitem:a00855e4a190d92d37b3f3edcbd56998c" id="r_a00855e4a190d92d37b3f3edcbd56998c"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a00855e4a190d92d37b3f3edcbd56998c">arch::PLIC_MAX_IRQ</a> = <a class="el" href="namespacearch.html#ad2568b9c1aac835e738c348ab3e0b2cb">PLIC_MAX_SOURCES</a></td></tr>
+<tr class="memdesc:a00855e4a190d92d37b3f3edcbd56998c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Valid IRQ window: S-context words 0-2 cover sources 0-95. Lines &gt;= 96 have no defined register and must not touch MMIO.  <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

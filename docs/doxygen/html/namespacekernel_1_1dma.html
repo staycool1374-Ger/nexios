@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -161,6 +161,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a4ac8093b599e8f148c0873cb8657e7c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset a PRD table.  <br /></td></tr>
 <tr class="memitem:a7c295e7cd57137a154f6ce5fe0bbde68" id="r_a7c295e7cd57137a154f6ce5fe0bbde68"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7c295e7cd57137a154f6ce5fe0bbde68">pci_set_bus_master</a> (<a class="el" href="structarch_1_1_pci_bdf.html">arch::PciBdf</a> bdf, bool enable)</td></tr>
 <tr class="memitem:ae58a5d89d2f598db6a1aec1d6b9fa27e" id="r_ae58a5d89d2f598db6a1aec1d6b9fa27e"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_entry.html">kernel::dma::PrdEntry</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae58a5d89d2f598db6a1aec1d6b9fa27e">__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:ad2972f42bbe9eb29a1217004b780ca29" id="r_ad2972f42bbe9eb29a1217004b780ca29"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad2972f42bbe9eb29a1217004b780ca29">bm_prd_addr_ok</a> (uint64_t prd_phys)</td></tr>
+<tr class="memdesc:ad2972f42bbe9eb29a1217004b780ca29"><td class="mdescLeft">&#160;</td><td class="mdescRight">True iff a PRD table base fits the controller's address register.  <br /></td></tr>
 <tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9ed9bda8444aa6fed65a4d02bb7157d9">alloc_buffer</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
 <tr class="memitem:aa9108fb6f9a44d1546323ec20a06c334" id="r_aa9108fb6f9a44d1546323ec20a06c334"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aa9108fb6f9a44d1546323ec20a06c334">sg_from_buffer</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, const <a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> offset=0, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> length=0)</td></tr>
 <tr class="memitem:a6d426c4def3e0e077f11e5f5617ea809" id="r_a6d426c4def3e0e077f11e5f5617ea809"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6d426c4def3e0e077f11e5f5617ea809">sg_from_virt</a> (<a class="el" href="structkernel_1_1dma_1_1_sg_list.html">SgList</a> &amp;sg, uint64_t virt_addr, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> length)</td></tr>
@@ -171,6 +173,8 @@ Variables</h2></td></tr>
 <tr class="memdesc:aad354cd855e6380b46c7779471e09172"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum entries in a scatter-gather list or PRD table.  <br /></td></tr>
 <tr class="memitem:a575880390445bddafd86f288a579b60c" id="r_a575880390445bddafd86f288a579b60c"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a575880390445bddafd86f288a579b60c">DMA_MAX_PRD_ENTRIES</a> = 256</td></tr>
 <tr class="memitem:a66632527972301cb54ea7447f4c7bb59" id="r_a66632527972301cb54ea7447f4c7bb59"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_table.html">kernel::dma::PrdTable</a>&#160;</td><td class="memItemRight"><a class="el" href="#a66632527972301cb54ea7447f4c7bb59">__attribute__</a></td></tr>
+<tr class="memitem:a32c84d9be40c1d7b8827e98abbfa754e" id="r_a32c84d9be40c1d7b8827e98abbfa754e"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a32c84d9be40c1d7b8827e98abbfa754e">DMA_BM_PRD_ADDR_LIMIT</a> = 0x100000000ULL</td></tr>
+<tr class="memdesc:a32c84d9be40c1d7b8827e98abbfa754e"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA PRD address limit (issue #307): the 32-bit PRDTPR register cannot represent a table base &gt;= 4 GiB — fail closed, never truncate. Public + header-inline so QE can unit-test the predicate.  <br /></td></tr>
 <tr class="memitem:a56b2daba79fabb19559a7e49fb7d4253" id="r_a56b2daba79fabb19559a7e49fb7d4253"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a56b2daba79fabb19559a7e49fb7d4253">BMCMD_START</a> = 0x01</td></tr>
 <tr class="memdesc:a56b2daba79fabb19559a7e49fb7d4253"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA command register bits.  <br /></td></tr>
 <tr class="memitem:a77febcce08bec5fcf61e8a5973b8ff38" id="r_a77febcce08bec5fcf61e8a5973b8ff38"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a77febcce08bec5fcf61e8a5973b8ff38">BMCMD_STOP</a> = 0x00</td></tr>
@@ -292,7 +296,40 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html" title="A physically contiguous DMA buffer.">DmaBuffer</a> (phys_addr=0 on failure). </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html" title="A physically contiguous DMA buffer.">DmaBuffer</a> (phys_addr=0 on failure). Cache contract (issue #354): the zeroed range is clean+invalidated on return; <span class="tt"><a class="el" href="#ae63cca35e8ce0810d35364b5e21a252d" title="Free a previously allocated DMA buffer.">free_buffer</a></span> invalidates before release. Transfer DATA ranges are caller-owned: clean the SG range before a device-read (<a class="el" href="#a84e8c46b4e33b83d66f7b0ff078eaeac" title="DMA direction.">Direction</a>:: READ) and invalidate after a device-write (<a class="el" href="#a84e8c46b4e33b83d66f7b0ff078eaeacad4b9e47f65b6e79b010582f15785867e">Direction::WRITE</a>) before the CPU reads it, via arch::cache_* (<a class="el" href="cache_8hpp.html" title="Data-cache maintenance for DMA (issue #354 Slice C). Clean (write-back) before a device reads memory,...">arch/hal/cache.hpp</a>). The channel cleans the PRD table itself at start(); the table lives in caller memory and stays valid until completion. x86_64 and QEMU virt are DMA-coherent so the helpers are exact there; non-coherent silicon stays a #307 residual. There is no DMA_ATTR_NONCACHEABLE/attribute word in the <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> map API (map_page* take virt/phys/user/executable only), so explicit maintenance is the sole mechanism; a future non-cacheable attribute must assert this contract before rings are published. </dd></dl>
+
+</div>
+</div>
+<a id="ad2972f42bbe9eb29a1217004b780ca29" name="ad2972f42bbe9eb29a1217004b780ca29"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2972f42bbe9eb29a1217004b780ca29">&#9670;&#160;</a></span>bm_prd_addr_ok()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::dma::bm_prd_addr_ok </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>prd_phys</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True iff a PRD table base fits the controller's address register. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">prd_phys</td><td>Physical address of the PRD table. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -378,7 +415,8 @@ Here is the call graph for this function:</div>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Build a PRD table from a scatter-gather list. ATA bus master PRD format: 32-bit phys addr, 16-bit byte count-1, 16-bit flags. The table is suitable for programming a PCI bus master controller. </p><dl class="params"><dt>Parameters</dt><dd>
+<p>Build a PRD table from a scatter-gather list. ATA bus master PRD format: 32-bit phys addr, 16-bit byte count-1, 16-bit flags. The table is suitable for programming a PCI bus master controller.</p>
+<p>Fail-closed contract (issue #354): each entry must be 32-bit addressable (phys &lt;= 0xFFFFFFFF), non-empty, &lt;= 64 KiB, 2-byte aligned, and must not cross a 4 KiB boundary — a violating entry zeroes the table count and returns 0 (callers treat 0 as failure; a truncated entry would DMA-write the wrong physical address). See docs/specs/drivers.md §2. </p><dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">prd</td><td>Output PRD table (must have backing memory accessible by device). </td></tr>
     <tr><td class="paramname">sg</td><td>Input scatter-gather list. </td></tr>
@@ -386,7 +424,7 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>Number of PRD entries written. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of PRD entries written (0 = rejected, fail closed). </dd></dl>
 
 </div>
 </div>
@@ -698,6 +736,30 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a32c84d9be40c1d7b8827e98abbfa754e" name="a32c84d9be40c1d7b8827e98abbfa754e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32c84d9be40c1d7b8827e98abbfa754e">&#9670;&#160;</a></span>DMA_BM_PRD_ADDR_LIMIT</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::dma::DMA_BM_PRD_ADDR_LIMIT = 0x100000000ULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>BMDMA PRD address limit (issue #307): the 32-bit PRDTPR register cannot represent a table base &gt;= 4 GiB — fail closed, never truncate. Public + header-inline so QE can unit-test the predicate. </p>
 
 </div>
 </div>

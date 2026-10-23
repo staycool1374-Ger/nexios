@@ -19,13 +19,14 @@ var searchData=
   ['wdog_5fgen_16',['wdog_gen',['../structkernel_1_1_scheduler_1_1_task_fields.html#a0a5dd270fdea04a47b50f1c2cf3b92ff',1,'kernel::Scheduler::TaskFields::wdog_gen'],['../structkernel_1_1_task_control_block.html#a36d553158c3a1005c754e8a21b69e06a',1,'kernel::TaskControlBlock::wdog_gen']]],
   ['wdog_5flast_5fkick_5ftick_17',['wdog_last_kick_tick',['../structkernel_1_1_scheduler_1_1_task_fields.html#ad372df8c32cfd696190e98187eca3064',1,'kernel::Scheduler::TaskFields::wdog_last_kick_tick'],['../structkernel_1_1_task_control_block.html#ab3e64bf60d66eef6d2abd01bd3725e32',1,'kernel::TaskControlBlock::wdog_last_kick_tick']]],
   ['wdog_5fperiod_5fticks_18',['wdog_period_ticks',['../structkernel_1_1_scheduler_1_1_task_fields.html#a2ff6d826a817bffdcf95b5c7cc5c86fb',1,'kernel::Scheduler::TaskFields::wdog_period_ticks'],['../structkernel_1_1_task_control_block.html#a445779a670a077b284afbe401bdfbbf5',1,'kernel::TaskControlBlock::wdog_period_ticks']]],
-  ['width_19',['width',['../structservice_1_1_framebuffer_info.html#a580af621e2f16f41bc64ac03ba5807d3',1,'service::FramebufferInfo']]],
-  ['wrapped_20',['wrapped',['../structkernel_1_1_idle_scan_progress.html#ad2090828106e6cd9637b0eecaf9620c0',1,'kernel::IdleScanProgress']]],
-  ['writable_21',['writable',['../structkernel_1_1elf_1_1_map_out.html#a2c973ceb5fb56d243f3c94fcb8d1ff6e',1,'kernel::elf::MapOut']]],
-  ['writable_5fmask_22',['writable_mask',['../structkernel_1_1elf_1_1_loaded_library.html#ad3c9f0e00640f613d8a764be34fa94bc',1,'kernel::elf::LoadedLibrary']]],
-  ['write_23',['WRITE',['../structkernel_1_1_page_flags.html#a32377706ca7ee536f8e1e9e9577a1f08',1,'kernel::PageFlags']]],
-  ['write_24',['write',['../structkernel_1_1vfs_1_1_vnode_ops.html#a5e42f52b7158b486942cd73a275fed26',1,'kernel::vfs::VnodeOps']]],
-  ['write_5fclosed_25',['write_closed',['../structkernel_1_1vfs_1_1_pipe_buffer.html#a6d680699587040ef5d23eff5093940e4',1,'kernel::vfs::PipeBuffer']]],
-  ['write_5fpos_26',['write_pos',['../structkernel_1_1vfs_1_1_pipe_buffer.html#af552d711224e3c2fd4dcaef1a489eda7',1,'kernel::vfs::PipeBuffer']]],
-  ['writer_5ftask_5fid_27',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
+  ['width_19',['width',['../structkernel_1_1gpu_1_1_gpu_rect.html#a8b06ba1241426aac07f1cd760e9e6113',1,'kernel::gpu::GpuRect::width'],['../structkernel_1_1gpu_1_1_gpu_create2d.html#a02df14f55a2711d4bc52048166e5f2d5',1,'kernel::gpu::GpuCreate2d::width'],['../structservice_1_1_framebuffer_info.html#a580af621e2f16f41bc64ac03ba5807d3',1,'service::FramebufferInfo::width'],['../virtio__gpu_8hpp.html#a325272ddd9a962f05deb905101d25cbd',1,'width:&#160;virtio_gpu.hpp']]],
+  ['width_5fbe_20',['width_be',['../structkernel_1_1ramfb_1_1_ramfb_config.html#aedc953a067234ef8b49d883b8f1dd64f',1,'kernel::ramfb::RamfbConfig::width_be'],['../ramfb_8hpp.html#a716b922b735f4e56ec132819dc430abd',1,'width_be:&#160;ramfb.hpp']]],
+  ['wrapped_21',['wrapped',['../structkernel_1_1_idle_scan_progress.html#ad2090828106e6cd9637b0eecaf9620c0',1,'kernel::IdleScanProgress']]],
+  ['writable_22',['writable',['../structkernel_1_1elf_1_1_map_out.html#a2c973ceb5fb56d243f3c94fcb8d1ff6e',1,'kernel::elf::MapOut']]],
+  ['writable_5fmask_23',['writable_mask',['../structkernel_1_1elf_1_1_loaded_library.html#ad3c9f0e00640f613d8a764be34fa94bc',1,'kernel::elf::LoadedLibrary']]],
+  ['write_24',['WRITE',['../structkernel_1_1_page_flags.html#a32377706ca7ee536f8e1e9e9577a1f08',1,'kernel::PageFlags']]],
+  ['write_25',['write',['../structkernel_1_1vfs_1_1_vnode_ops.html#a5e42f52b7158b486942cd73a275fed26',1,'kernel::vfs::VnodeOps']]],
+  ['write_5fclosed_26',['write_closed',['../structkernel_1_1vfs_1_1_pipe_buffer.html#a6d680699587040ef5d23eff5093940e4',1,'kernel::vfs::PipeBuffer']]],
+  ['write_5fpos_27',['write_pos',['../structkernel_1_1vfs_1_1_pipe_buffer.html#af552d711224e3c2fd4dcaef1a489eda7',1,'kernel::vfs::PipeBuffer']]],
+  ['writer_5ftask_5fid_28',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
 ];

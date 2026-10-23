@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -136,6 +136,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>pci_device_count()&#160;:&#160;<a class="el" href="namespacearch.html#a9409db147e4855832856d485ddfc9ac3">arch</a></li>
 <li>pci_devices()&#160;:&#160;<a class="el" href="namespacearch.html#ad0eacdfd4f0fbf174271a31b0aee7bd6">arch</a></li>
 <li>pci_dump_tree()&#160;:&#160;<a class="el" href="namespacearch.html#a11748e0603d0f9b77d1198c4e14fd224">arch</a></li>
+<li>pci_ecam_discover()&#160;:&#160;<a class="el" href="namespacearch.html#ad3d99a7e474cab3a76f23b358052d6fe">arch</a></li>
+<li>pci_ecam_info()&#160;:&#160;<a class="el" href="namespacearch.html#a1006eef2991681cab2be76527b4877e3">arch</a></li>
 <li>pci_enable_msi()&#160;:&#160;<a class="el" href="namespacearch.html#af1db3b0c561e94a99c8f3f6d020093f5">arch</a></li>
 <li>pci_enable_msix()&#160;:&#160;<a class="el" href="namespacearch.html#ab8a3d0ed72e0355f607878da738a53e4">arch</a></li>
 <li>pci_find_capability()&#160;:&#160;<a class="el" href="namespacearch.html#adc4b509b8ba2e26aae708fff98409565">arch</a></li>
@@ -161,7 +163,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>pcid_tag()&#160;:&#160;<a class="el" href="namespacearch.html#a26f0cec80cb2aa23810e6f3b3a1afad1">arch</a></li>
 <li>pcid_test_force()&#160;:&#160;<a class="el" href="namespacearch.html#a6ca9469d1ae1f5c05c3a228e52059fb9">arch</a></li>
 <li>pcid_test_reset()&#160;:&#160;<a class="el" href="namespacearch.html#a6a7ecf8ae48d16d94a24a43addc6ea79">arch</a></li>
+<li>peek_slice()&#160;:&#160;<a class="el" href="namespacekernel_1_1input_1_1serial.html#a313624464d47a2eb39d266a9bb874817">kernel::input::serial</a></li>
 <li>peer_stale()&#160;:&#160;<a class="el" href="namespacekernel_1_1sync.html#a190178f3cbd3c7a1e5c5f9609cb6fa32">kernel::sync</a></li>
+<li>pending()&#160;:&#160;<a class="el" href="namespacekernel_1_1console_1_1urc.html#a9a0ee278d7b0e2e679886fc2c97b5524">kernel::console::urc</a></li>
 <li>per_cpu&#160;:&#160;<a class="el" href="namespacearch.html#a74ee5e38b6239c12f5cadd479e625d7d">arch</a></li>
 <li>percpu_init_ap()&#160;:&#160;<a class="el" href="namespacearch.html#ae41ccc115f18da2b4a867210a1a99cd0">arch</a></li>
 <li>percpu_init_bsp()&#160;:&#160;<a class="el" href="namespacearch.html#aa083df7d97e20366e210c1f978abed5d">arch</a></li>
@@ -170,23 +174,47 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>PF_X&#160;:&#160;<a class="el" href="namespacekernel_1_1elf.html#ac020a77569b055084f1684573d2bc1a8a996883b1572a79a37bbc6945cae280d6">kernel::elf</a></li>
 <li>phys_to_virt()&#160;:&#160;<a class="el" href="namespacearch_1_1kernel.html#a4793ddf07e93583f1a7eabd519a69f11">arch::kernel</a>, <a class="el" href="namespacekernel.html#a39f9dcd4db2a052fd3f980499660a022">kernel</a></li>
 <li>PL031_BASE&#160;:&#160;<a class="el" href="namespacearch.html#a8330daf1138ba3f2466d81406d1ab6c0">arch</a></li>
+<li>PL031_CR&#160;:&#160;<a class="el" href="namespacearch.html#a3b08e88cc9225aa4b6535bd5ff929db1">arch</a></li>
+<li>PL031_CR_RTCEN&#160;:&#160;<a class="el" href="namespacearch.html#a0aa89267eeebbae381ee068d1ae6f685">arch</a></li>
 <li>PL031_DATA&#160;:&#160;<a class="el" href="namespacearch.html#a585a77a747cf6637b9dfc9119564b96f">arch</a></li>
+<li>PL031_ID_MAGIC&#160;:&#160;<a class="el" href="namespacearch.html#acf3b694a89e02cbc76b62a14d5798227">arch</a></li>
+<li>PL031_ID_MASK&#160;:&#160;<a class="el" href="namespacearch.html#a7261c9f48b7d413f2a28aba5217a1c95">arch</a></li>
+<li>PL031_PERIPHID0&#160;:&#160;<a class="el" href="namespacearch.html#a84eaca7ce2d6a1666c0656274162e6fa">arch</a></li>
+<li>PL031_PERIPHID1&#160;:&#160;<a class="el" href="namespacearch.html#a83d54cef0b30df59c3a851a462ffe7fd">arch</a></li>
+<li>PL031_PERIPHID2&#160;:&#160;<a class="el" href="namespacearch.html#a5590f0007fae666e20599bced50ec6cd">arch</a></li>
+<li>PL031_PERIPHID3&#160;:&#160;<a class="el" href="namespacearch.html#abb06bae0e2044101d1687848bd3e3f37">arch</a></li>
+<li>PL031_REGION_SIZE&#160;:&#160;<a class="el" href="namespacearch.html#a3d2c48625c64558f5f9b6104108e257c">arch</a></li>
+<li>PL031_WINDOW_BASE&#160;:&#160;<a class="el" href="namespacearch.html#a5e458f808e96f9b2a2800be1fb8c26ee">arch</a></li>
+<li>PL031_WINDOW_SIZE&#160;:&#160;<a class="el" href="namespacearch.html#ac55d8f85abe25296d12a1a40f03b6db7">arch</a></li>
 <li>PLIC_BASE&#160;:&#160;<a class="el" href="namespacearch.html#a430ef23b1e75c1574e6b7147df85da0a">arch</a></li>
 <li>PLIC_CLAIM&#160;:&#160;<a class="el" href="namespacearch.html#a67baa3c64948cd27a41e80f35d8f805a">arch</a></li>
 <li>plic_claim()&#160;:&#160;<a class="el" href="namespacearch.html#ad8cf1975e657fd548aa97fd3c37f812e">arch</a></li>
+<li>PLIC_CLAIM_S&#160;:&#160;<a class="el" href="namespacearch.html#ad35ebc948e642e03a45fe89c82c9511c">arch</a></li>
+<li>plic_claim_s()&#160;:&#160;<a class="el" href="namespacearch.html#a3cb78a7a28f7e308e1fd8ed7d5c5ec49">arch</a></li>
 <li>plic_complete()&#160;:&#160;<a class="el" href="namespacearch.html#a8dcc3bc98dc325b9ed085730ea58aaec">arch</a></li>
+<li>plic_complete_s()&#160;:&#160;<a class="el" href="namespacearch.html#a9c334ce3c7ea35a00c604492d02160b9">arch</a></li>
 <li>PLIC_ENABLE&#160;:&#160;<a class="el" href="namespacearch.html#af9db2f057762c54d6bbfcd3fd786e766">arch</a></li>
 <li>plic_enable_reg()&#160;:&#160;<a class="el" href="namespacearch.html#a6807f252e313e023fb6310b60223e4f6">arch</a></li>
-<li>PLIC_MAX_IRQ&#160;:&#160;<a class="el" href="namespacearch.html#ab590e0485f5d482d57eb19d3262cf29a">arch</a></li>
+<li>plic_enable_reg_s()&#160;:&#160;<a class="el" href="namespacearch.html#aed679467ed9b227cf3eb048566d95e97">arch</a></li>
+<li>PLIC_ENABLE_S&#160;:&#160;<a class="el" href="namespacearch.html#a9f7169774bef19cf12f3f02566847b2a">arch</a></li>
+<li>plic_get_priority()&#160;:&#160;<a class="el" href="namespacearch.html#a6210f80e68fff9073e328894b263a203">arch</a></li>
+<li>plic_get_threshold()&#160;:&#160;<a class="el" href="namespacearch.html#a44799b8d9cc9fb2948887af119812cf7">arch</a></li>
+<li>PLIC_MAX_IRQ&#160;:&#160;<a class="el" href="namespacearch.html#a00855e4a190d92d37b3f3edcbd56998c">arch</a></li>
+<li>PLIC_MAX_SOURCES&#160;:&#160;<a class="el" href="namespacearch.html#ad2568b9c1aac835e738c348ab3e0b2cb">arch</a></li>
 <li>PLIC_PENDING&#160;:&#160;<a class="el" href="namespacearch.html#abb1979d1597b729886beeba2e2bf02e9">arch</a></li>
 <li>PLIC_PRIORITY&#160;:&#160;<a class="el" href="namespacearch.html#abf2e1f00c3daa866f33b06562a43f162">arch</a></li>
 <li>plic_priority_reg()&#160;:&#160;<a class="el" href="namespacearch.html#ae035b7cc5b725012469b59d037ab15b7">arch</a></li>
+<li>PLIC_S_CONTEXT&#160;:&#160;<a class="el" href="namespacearch.html#a4556777c1d38fd35f51482c4888a8030">arch</a></li>
+<li>plic_set_priority()&#160;:&#160;<a class="el" href="namespacearch.html#ac7af0d9af24b6d0067e8deb19bff2404">arch</a></li>
+<li>plic_set_threshold()&#160;:&#160;<a class="el" href="namespacearch.html#acf2202c3651c1f2a99e5c2650c7341c3">arch</a></li>
 <li>PLIC_THRESHOLD&#160;:&#160;<a class="el" href="namespacearch.html#a3933704bb1a46f6e6f4bd8e4bb66294a">arch</a></li>
+<li>PLIC_THRESHOLD_S&#160;:&#160;<a class="el" href="namespacearch.html#a08d0f1184159bb46a90e0ddabfa14312">arch</a></li>
 <li>PML4_ENTRIES&#160;:&#160;<a class="el" href="namespacearch.html#aee9618915c006922ecd2deb239616abd">arch</a></li>
 <li>PML4_KERNEL_START&#160;:&#160;<a class="el" href="namespacearch.html#a0876344ab29527d09bf26d08ea69d620">arch</a></li>
 <li>PML4_USER_COUNT&#160;:&#160;<a class="el" href="namespacearch.html#a99106776d58225cbe472f60fefc21958">arch</a></li>
 <li>PMM_ERROR_CODES&#160;:&#160;<a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63a8fef701d2ece7d021dc9a812df30dcbc">kernel::errors</a></li>
 <li>PmmError&#160;:&#160;<a class="el" href="namespacekernel_1_1errors.html#afa35d54dec63a101ca7d8eae809c4f63">kernel::errors</a></li>
+<li>pop()&#160;:&#160;<a class="el" href="namespacekernel_1_1console_1_1urc.html#adeb29fba93ea0b4fa60e3f3755ecf4b5">kernel::console::urc</a>, <a class="el" href="namespacekernel_1_1input_1_1serial.html#a4bbb5d9422b5afe5d89c823a07e7996b">kernel::input::serial</a></li>
 <li>PORT_BASE&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a0e88f978eb1957a80f43a98603ab444a">kernel::ahci</a></li>
 <li>PORT_CI&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a48d30b4ee43345ff662e99e4516f40f0">kernel::ahci</a></li>
 <li>PORT_CLB&#160;:&#160;<a class="el" href="namespacekernel_1_1ahci.html#a42228bd2136da6a79fda7dd500c6b10a">kernel::ahci</a></li>
@@ -248,6 +276,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacemembe
 <li>PT_NULL&#160;:&#160;<a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a1beec79abed6ad657d663fa56209b414">kernel::elf</a></li>
 <li>PT_PHDR&#160;:&#160;<a class="el" href="namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7ad93d86832c835403b548ec32e11c71a9">kernel::elf</a></li>
 <li>publish_scheduler_ready()&#160;:&#160;<a class="el" href="namespacekernel_1_1smp.html#ae4fc4bdd31c0c6cd357ec5d46f55289a">kernel::smp</a></li>
+<li>pump()&#160;:&#160;<a class="el" href="namespacekernel_1_1input_1_1serial.html#aec84cf49210555b530fe96495030a85a">kernel::input::serial</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

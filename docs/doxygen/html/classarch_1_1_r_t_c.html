@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -165,6 +165,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:af3c7cf627b65e67189a8f6a3f45c104e" id="r_af3c7cf627b65e67189a8f6a3f45c104e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af3c7cf627b65e67189a8f6a3f45c104e">init</a> ()</td></tr>
 <tr class="memitem:ad8ad45a31b638ede20f2de5dd83f3b6b" id="r_ad8ad45a31b638ede20f2de5dd83f3b6b"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad8ad45a31b638ede20f2de5dd83f3b6b">read_seconds</a> ()</td></tr>
 <tr class="memitem:aee7d7c99dea3263237ae9a403b7cd365" id="r_aee7d7c99dea3263237ae9a403b7cd365"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#aee7d7c99dea3263237ae9a403b7cd365">read_time</a> (<a class="el" href="structtm.html">tm</a> *out)</td></tr>
+<tr class="memitem:ad1465aaa190316a10ac11fb1bd9bbef4" id="r_ad1465aaa190316a10ac11fb1bd9bbef4"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ad1465aaa190316a10ac11fb1bd9bbef4">available</a> ()</td></tr>
+<tr class="memdesc:ad1465aaa190316a10ac11fb1bd9bbef4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether a wall-clock source was discovered at boot. <span class="tt"><a class="el" href="#ad1465aaa190316a10ac11fb1bd9bbef4" title="Whether a wall-clock source was discovered at boot. available() == false ⇒ read_seconds() is the docu...">available()</a> == <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span> ⇒ <span class="tt"><a class="el" href="#a87ff11aebc86b7f1665ba2fe370dee64" title="Read the current UNIX timestamp (seconds since epoch).">read_seconds()</a></span> is the documented uptime fallback (NOT wall clock).  <br /></td></tr>
+<tr class="memitem:a365f1036a769d05cf56cb97fff5d2e30" id="r_a365f1036a769d05cf56cb97fff5d2e30"><td class="memItemLeft">static const char *&#160;</td><td class="memItemRight"><a class="el" href="#a365f1036a769d05cf56cb97fff5d2e30">source_name</a> ()</td></tr>
+<tr class="memdesc:a365f1036a769d05cf56cb97fff5d2e30"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wall-clock source identity (non-null static storage): <span class="tt">"pl031"</span> (aarch64), <span class="tt">"goldfish"</span> or <span class="tt">"mtime-fallback"</span> (riscv64).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-attribs" class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -175,7 +179,7 @@ Static Public Attributes</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>x86-64 CMOS <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> driver. </p>
-<p>Platform <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> driver for AArch64/RISC-V. </p>
+<p>Platform <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> driver for AArch64/RISC-V (issue #355). </p>
 </div><a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Member Enumeration Documentation</h2>
 <a id="adbb6b6387e9290772332ee7ffa193df5" name="adbb6b6387e9290772332ee7ffa193df5"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#adbb6b6387e9290772332ee7ffa193df5">&#9670;&#160;</a></span>Register</h2>
@@ -207,6 +211,34 @@ Static Public Attributes</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="ad1465aaa190316a10ac11fb1bd9bbef4" name="ad1465aaa190316a10ac11fb1bd9bbef4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1465aaa190316a10ac11fb1bd9bbef4">&#9670;&#160;</a></span>available()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::RTC::available </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether a wall-clock source was discovered at boot. <span class="tt"><a class="el" href="#ad1465aaa190316a10ac11fb1bd9bbef4" title="Whether a wall-clock source was discovered at boot. available() == false ⇒ read_seconds() is the docu...">available()</a> == <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></span> ⇒ <span class="tt"><a class="el" href="#a87ff11aebc86b7f1665ba2fe370dee64" title="Read the current UNIX timestamp (seconds since epoch).">read_seconds()</a></span> is the documented uptime fallback (NOT wall clock). </p>
+<p>PL031 is boot-mapped by construction (2 MiB Device leaf). </p>
+
+</div>
+</div>
 <a id="a85b4b133932ee04419d31069530bf30a" name="a85b4b133932ee04419d31069530bf30a"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a85b4b133932ee04419d31069530bf30a">&#9670;&#160;</a></span>bcd_to_bin()</h2>
 
@@ -293,7 +325,7 @@ Static Public Attributes</h2></td></tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -324,7 +356,15 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Initialise the <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> (enable periodic interrupt if needed). </p>
-<p>Initialise the <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a>. Configures 24-hour mode and binary (non-BCD) format, disables periodic and update-ended interrupts, and clears Status <a class="el" href="#adbb6b6387e9290772332ee7ffa193df5" title="CMOS register addresses.">Register</a> C. </p>
+<p>Initialise the <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a>. Configures 24-hour mode and binary (non-BCD) format, disables periodic and update-ended interrupts, and clears Status <a class="el" href="#adbb6b6387e9290772332ee7ffa193df5" title="CMOS register addresses.">Register</a> C.</p>
+<p>Discover the Goldfish <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> from the DTB, validate, and probe. Idempotent; never panics; fail-loud (one WARN) to mtime fallback.</p>
+<p>Probe the PL031 signature, start the counter, latch the base. Idempotent: the first successful (or failed) probe wins; the base is published once. Never fails closed into a panic — worst case the counter reads while stopped (still monotonic from the reset value). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_r_t_c_ad72105d46ca3c367b284ca91aa97ce54_cgraph.png" border="0" usemap="#aclassarch_1_1_r_t_c_ad72105d46ca3c367b284ca91aa97ce54_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -378,15 +418,13 @@ Static Public Attributes</h2></td></tr>
 
 <p>Read the current UNIX timestamp (seconds since epoch). </p>
 <p>Read the current <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> time as a Unix timestamp.</p>
-<p>Read uptime seconds (mtime ticks / frequency) rendered from a 1970 epoch for tm conversion. NOT wall-clock time.</p>
+<p>Read seconds: Goldfish wall clock when available, else mtime uptime rendered from the 1970 epoch (documented fallback).</p>
 <p>Read the wall-clock time in seconds since the Unix epoch.</p>
 <dl class="section return"><dt>Returns</dt><dd>Seconds since 1970-01-01 00:00:00.</dd>
 <dd>
 Seconds since 1970-01-01 (Unix epoch).</dd>
 <dd>
-Seconds since boot (epoch 1970-01-01 rendering). </dd></dl>
-<dl class="section note"><dt>Note</dt><dd>Uses the QEMU virt default mtime frequency of 10 MHz.</dd></dl>
-<dl class="section return"><dt>Returns</dt><dd>Seconds since 1970-01-01 00:00:00 UTC, or 0 on failure. </dd></dl>
+Seconds since 1970-01-01 00:00:00 UTC, or 0 on failure. </dd></dl>
 
 </div>
 </div>
@@ -440,7 +478,7 @@ Seconds since boot (epoch 1970-01-01 rendering). </dd></dl>
 
 <p>Read the current time into a broken-down tm structure. </p>
 <p>Read the current <a class="el" href="classarch_1_1_r_t_c.html" title="x86-64 CMOS RTC driver.">RTC</a> time into a standard tm structure.</p>
-<p>Populate a tm structure from the mtime CSR.</p>
+<p>Populate a tm structure (goldfish or mtime seconds).</p>
 <p>Read and decompose the current time into a tm structure.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -455,8 +493,35 @@ Seconds since boot (epoch 1970-01-01 rendering). </dd></dl>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classarch_1_1_r_t_c_a9be74104f56af741680f39411b0df7d9_cgraph.png" border="0" usemap="#aclassarch_1_1_r_t_c_a9be74104f56af741680f39411b0df7d9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
+
+</div>
+</div>
+<a id="a365f1036a769d05cf56cb97fff5d2e30" name="a365f1036a769d05cf56cb97fff5d2e30"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a365f1036a769d05cf56cb97fff5d2e30">&#9670;&#160;</a></span>source_name()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * arch::RTC::source_name </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Wall-clock source identity (non-null static storage): <span class="tt">"pl031"</span> (aarch64), <span class="tt">"goldfish"</span> or <span class="tt">"mtime-fallback"</span> (riscv64). </p>
 
 </div>
 </div>

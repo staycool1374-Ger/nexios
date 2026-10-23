@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -130,12 +130,14 @@ Directories</h2></td></tr>
 <tr class="memitem:arch" id="r_arch"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_76e3dd4d2fa719e8d3b096e9aa563982.html">arch</a></td></tr>
 <tr class="memitem:boot" id="r_boot"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_9ce04d50843a1c6deabf03dde7251630.html">boot</a></td></tr>
 <tr class="memitem:cap" id="r_cap"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_eec9422a89819eb2d89f922ce14850b0.html">cap</a></td></tr>
+<tr class="memitem:console" id="r_console"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_808fbcec9426c4d375cb426dfbe3457d.html">console</a></td></tr>
 <tr class="memitem:core" id="r_core"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_bec13d53859e967dc83fcb104ab0b9fd.html">core</a></td></tr>
 <tr class="memitem:daemon" id="r_daemon"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_70a15a4b871b1f726496f66e89f440c8.html">daemon</a></td></tr>
 <tr class="memitem:debug" id="r_debug"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_f2d2daf3e7e7133833e8ca3e96c20a92.html">debug</a></td></tr>
 <tr class="memitem:driver" id="r_driver"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_97ddee6994ce82fd2a76b10ba4d7572d.html">driver</a></td></tr>
 <tr class="memitem:elf" id="r_elf"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_a3ed1f598272af857136c72554a501e4.html">elf</a></td></tr>
 <tr class="memitem:gcov" id="r_gcov"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_72ec2b1d9856b1a620fc5007f3fa17ec.html">gcov</a></td></tr>
+<tr class="memitem:input" id="r_input"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_047708158bd13a8909fc551010643d99.html">input</a></td></tr>
 <tr class="memitem:iommu" id="r_iommu"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_12185306261a1adb32bb8238d8a736a9.html">iommu</a></td></tr>
 <tr class="memitem:ipc" id="r_ipc"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_e6831a010a70b45193b3a12653a74c5e.html">ipc</a></td></tr>
 <tr class="memitem:log" id="r_log"><td class="memItemLeft"><span class="iconfolder"><div class="folder-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dir_9292ec01c084bdf1c45f7481a0aba272.html">log</a></td></tr>
@@ -155,6 +157,8 @@ Directories</h2></td></tr>
 Files</h2></td></tr>
 <tr class="memitem:bootparams_2Ecpp" id="r_bootparams_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="bootparams_8cpp.html">bootparams.cpp</a></td></tr>
 <tr class="memitem:bootparams_2Ehpp" id="r_bootparams_2Ehpp"><td class="memItemLeft"><a href="bootparams_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="bootparams_8hpp.html">bootparams.hpp</a></td></tr>
+<tr class="memitem:build_5Finfo_2Ehpp" id="r_build_5Finfo_2Ehpp"><td class="memItemLeft"><a href="build__info_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="build__info_8hpp.html">build_info.hpp</a></td></tr>
+<tr class="memdesc:build__info_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compile-time build identity (issue #357): architecture, build type, debug flag, pointer width, and framebuffer backend. Values arrive as bare preprocessor tokens from the Makefile (<span class="tt">-DNEXIOS_ARCH_NAME=$(ARCH)</span>, <span class="tt">-DBUILD_TYPE=debug|release</span> — never quoted, per the #244 rule) and are stringified here. Constexpr-only: no runtime state, no thread interaction. <br /></td></tr>
 <tr class="memitem:irq_5Fdelivery_2Ecpp" id="r_irq_5Fdelivery_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="irq__delivery_8cpp.html">irq_delivery.cpp</a></td></tr>
 <tr class="memdesc:irq__delivery_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-space IRQ delivery table (issues #2/#7). A static bounded table of armed IRQ vectors mapping to their recipient task. All state transitions serialize on the per-slot SpinLock: the ISR and the syscall/teardown paths share one lock, so a pending IRQ is never lost between the pending-check and waiter registration, and a blocked sys_irq_wait is woken exactly once (never left BLOCKED forever). Issue #7 adds the NOTIFY delivery mode: the ISR transforms the interrupt into an IPC notification on the recipient's Notify object (capability-backed, no Ring 0 driver execution). The mode is read/written only under the slot lock. <br /></td></tr>
 <tr class="memitem:irq_5Fdelivery_2Ehpp" id="r_irq_5Fdelivery_2Ehpp"><td class="memItemLeft"><a href="irq__delivery_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="irq__delivery_8hpp.html">irq_delivery.hpp</a></td></tr>

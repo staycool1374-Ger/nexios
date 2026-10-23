@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -176,6 +176,7 @@ Macros</h2></td></tr>
 <tr class="memitem:adae856c7e79cb395586e5ae9ddb5b0cc" id="r_adae856c7e79cb395586e5ae9ddb5b0cc"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adae856c7e79cb395586e5ae9ddb5b0cc">CONFIG_MAX_PRIORITY</a>&#160;&#160;&#160;128</td></tr>
 <tr class="memitem:a1f0f6f5cc7c492c7681e37388246ba52" id="r_a1f0f6f5cc7c492c7681e37388246ba52"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a1f0f6f5cc7c492c7681e37388246ba52">CONFIG_SPORADIC_SERVER_MAX_TASKS</a>&#160;&#160;&#160;8</td></tr>
 <tr class="memitem:a31b2fca43fed672f65115a92304475a2" id="r_a31b2fca43fed672f65115a92304475a2"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a31b2fca43fed672f65115a92304475a2">CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a1724992e23586633d727657f3b0b4c6b" id="r_a1724992e23586633d727657f3b0b4c6b"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a1724992e23586633d727657f3b0b4c6b">CONFIG_IRQ_STORM_LIMIT</a>&#160;&#160;&#160;256</td></tr>
 <tr class="memitem:ad42f27563c0dabc8e3f69851bbbe9f9f" id="r_ad42f27563c0dabc8e3f69851bbbe9f9f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad42f27563c0dabc8e3f69851bbbe9f9f">CONFIG_PML4_USER_COUNT</a>&#160;&#160;&#160;256</td></tr>
 <tr class="memitem:aa345b3c812d23b1ef0f9ae26d6005f64" id="r_aa345b3c812d23b1ef0f9ae26d6005f64"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa345b3c812d23b1ef0f9ae26d6005f64">CONFIG_STACK_SIZE</a>&#160;&#160;&#160;65536</td></tr>
 <tr class="memitem:ae22e3ae7b4c39d839d5e02455b5a3aac" id="r_ae22e3ae7b4c39d839d5e02455b5a3aac"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae22e3ae7b4c39d839d5e02455b5a3aac">CONFIG_MIN_STACK_SIZE</a>&#160;&#160;&#160;4096</td></tr>
@@ -239,6 +240,7 @@ Macros</h2></td></tr>
 <tr class="memitem:adb1a44e12231914498173d371ade590f" id="r_adb1a44e12231914498173d371ade590f"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adb1a44e12231914498173d371ade590f">CONFIG_SYSCALL_COUNT</a></td></tr>
 <tr class="memitem:a95ce8c171faeb012773cd4f72a0f2935" id="r_a95ce8c171faeb012773cd4f72a0f2935"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a95ce8c171faeb012773cd4f72a0f2935">CONFIG_HAS_MPU</a>&#160;&#160;&#160;0</td></tr>
 <tr class="memitem:a835305cb9a116e1c539f8f2a6b880848" id="r_a835305cb9a116e1c539f8f2a6b880848"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a835305cb9a116e1c539f8f2a6b880848">CONFIG_HAS_HPET</a>&#160;&#160;&#160;0</td></tr>
+<tr class="memitem:a8199ea46dda5a76ea73f7c55d3bc5e2c" id="r_a8199ea46dda5a76ea73f7c55d3bc5e2c"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a8199ea46dda5a76ea73f7c55d3bc5e2c">CONFIG_TCG_BARRIERS</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a700f59f32dcea3aeefaee7407867065a" id="r_a700f59f32dcea3aeefaee7407867065a"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a700f59f32dcea3aeefaee7407867065a">CONFIG_HRT_NS_WIDTH</a>&#160;&#160;&#160;64</td></tr>
 <tr class="memitem:a0600363aeeff028f814836fef3e54621" id="r_a0600363aeeff028f814836fef3e54621"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0600363aeeff028f814836fef3e54621">CONFIG_HRT_CALIBRATION_RETRIES</a>&#160;&#160;&#160;12</td></tr>
 <tr class="memitem:a05b47d11f3b104e148d4aace9059e921" id="r_a05b47d11f3b104e148d4aace9059e921"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a05b47d11f3b104e148d4aace9059e921">CONFIG_HRT_CALIBRATION_TIMEOUT_MS</a>&#160;&#160;&#160;500</td></tr>
@@ -1754,6 +1756,20 @@ Variables</h2></td></tr>
 
 </div>
 </div>
+<a id="a1724992e23586633d727657f3b0b4c6b" name="a1724992e23586633d727657f3b0b4c6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1724992e23586633d727657f3b0b4c6b">&#9670;&#160;</a></span>CONFIG_IRQ_STORM_LIMIT</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_IRQ_STORM_LIMIT&#160;&#160;&#160;256</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a2526193a2bf2cb59e84e1d640af1a29f" name="a2526193a2bf2cb59e84e1d640af1a29f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2526193a2bf2cb59e84e1d640af1a29f">&#9670;&#160;</a></span>CONFIG_KERNEL_PRIV_DATA_BASE</h2>
 
@@ -2501,6 +2517,20 @@ Variables</h2></td></tr>
       <table class="memname">
         <tr>
           <td class="memname">#define CONFIG_TASK_NAME_LEN&#160;&#160;&#160;16</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8199ea46dda5a76ea73f7c55d3bc5e2c" name="a8199ea46dda5a76ea73f7c55d3bc5e2c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8199ea46dda5a76ea73f7c55d3bc5e2c">&#9670;&#160;</a></span>CONFIG_TCG_BARRIERS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define CONFIG_TCG_BARRIERS&#160;&#160;&#160;1</td>
         </tr>
       </table>
 </div><div class="memdoc">

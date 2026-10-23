@@ -1,7 +1,9 @@
 var dir_8ecc0c9fce4a533bbde14794104582f2 =
 [
     [ "bits.hpp", "bits_8hpp.html", null ],
+    [ "cache.hpp", "cache_8hpp.html", "cache_8hpp" ],
     [ "context.hpp", "hal_2context_8hpp.html", "hal_2context_8hpp" ],
+    [ "context_id.hpp", "context__id_8hpp.html", "context__id_8hpp" ],
     [ "cpuid.hpp", "hal_2cpuid_8hpp.html", null ],
     [ "early_init.hpp", "hal_2early__init_8hpp.html", "hal_2early__init_8hpp" ],
     [ "gdt.hpp", "hal_2gdt_8hpp.html", "hal_2gdt_8hpp" ],
@@ -11,6 +13,8 @@ var dir_8ecc0c9fce4a533bbde14794104582f2 =
     [ "iopb.hpp", "iopb_8hpp.html", "iopb_8hpp" ],
     [ "irq_guard.hpp", "hal_2irq__guard_8hpp.html", "hal_2irq__guard_8hpp" ],
     [ "irq_latency_histogram.hpp", "hal_2irq__latency__histogram_8hpp.html", null ],
+    [ "irq_storm.hpp", "irq__storm_8hpp.html", "irq__storm_8hpp" ],
+    [ "irq_vectors.hpp", "irq__vectors_8hpp.html", "irq__vectors_8hpp" ],
     [ "keyboard.hpp", "hal_2keyboard_8hpp.html", "hal_2keyboard_8hpp" ],
     [ "msr.hpp", "hal_2msr_8hpp.html", null ],
     [ "page_flags.hpp", "page__flags_8hpp.html", "page__flags_8hpp" ],

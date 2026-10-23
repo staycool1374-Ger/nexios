@@ -10,6 +10,7 @@ var test__sched__admission_8cpp =
     [ "JARVIS_TEST", "test__sched__admission_8cpp.html#a678ea8de4ea3db424c97fe78301de4e4", null ],
     [ "JARVIS_TEST", "test__sched__admission_8cpp.html#a8ad23204cc4ac4ee9692b8e65daa59db", null ],
     [ "JARVIS_TEST", "test__sched__admission_8cpp.html#a988bbb450a1672bd450d3bf09fa6bcf1", null ],
+    [ "JARVIS_TEST", "test__sched__admission_8cpp.html#ac71705b921046aab2ca278876da63081", null ],
     [ "JARVIS_TEST", "test__sched__admission_8cpp.html#a507c70b27bb3c3dfdebc9d7e32f434c1", null ],
     [ "register_sched_admission_tests", "test__sched__admission_8cpp.html#a241f5d3005e6a0c7c8df5c10e5cde8fa", null ]
 ];

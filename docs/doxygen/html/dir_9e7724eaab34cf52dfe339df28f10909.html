@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -127,10 +127,19 @@ Directory dependency graph for hal:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
+<tr class="memitem:asid_2Ecpp" id="r_asid_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2asid_8cpp.html">asid.cpp</a></td></tr>
+<tr class="memdesc:riscv64_2hal_2asid_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Address-space identifier allocator (issue #352, riscv64 only). <br /></td></tr>
+<tr class="memitem:asid_2Ehpp" id="r_asid_2Ehpp"><td class="memItemLeft"><a href="riscv64_2hal_2asid_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2asid_8hpp.html">asid.hpp</a></td></tr>
+<tr class="memdesc:riscv64_2hal_2asid_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Address-space identifier allocator (issue #352, riscv64 only). <br /></td></tr>
 <tr class="memitem:cpuid_5Fimpl_2Ehpp" id="r_cpuid_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="riscv64_2hal_2cpuid__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2cpuid__impl_8hpp.html">cpuid_impl.hpp</a></td></tr>
 <tr class="memdesc:riscv64_2hal_2cpuid__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 CPU identification — reads MISA CSR for FPU detection; stub for x86-derived CPUID leaves and RNG feature checks. <br /></td></tr>
+<tr class="memitem:fpu_2Ecpp" id="r_fpu_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2fpu_8cpp.html">fpu.cpp</a></td></tr>
+<tr class="memdesc:riscv64_2hal_2fpu_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V 64 FP (F/D extensions) context support (issue #353). <br /></td></tr>
+<tr class="memitem:fpu_2Ehpp" id="r_fpu_2Ehpp"><td class="memItemLeft"><a href="riscv64_2hal_2fpu_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2fpu_8hpp.html">fpu.hpp</a></td></tr>
+<tr class="memdesc:riscv64_2hal_2fpu_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V 64 FP (F/D extensions) context support (issue #353). <br /></td></tr>
 <tr class="memitem:io_5Fimpl_2Ehpp" id="r_io_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="riscv64_2hal_2io__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2io__impl_8hpp.html">io_impl.hpp</a></td></tr>
 <tr class="memdesc:riscv64_2hal_2io__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 I/O HAL — MMIO load/store, CSR access, WFI, FPU enable, and stub x86 port I/O. <br /></td></tr>
+<tr class="memitem:memmap_2Ehpp" id="r_memmap_2Ehpp"><td class="memItemLeft"><a href="memmap_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="memmap_8hpp.html">memmap.hpp</a></td></tr>
 <tr class="memitem:msr_5Fimpl_2Ehpp" id="r_msr_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="riscv64_2hal_2msr__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2msr__impl_8hpp.html">msr_impl.hpp</a></td></tr>
 <tr class="memdesc:riscv64_2hal_2msr__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 MSR stubs — RISC-V has no x86-style MSRs; all implementations are no-ops returning 0. <br /></td></tr>
 <tr class="memitem:page_5Ftable_5Fimpl_2Ehpp" id="r_page_5Ftable_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="riscv64_2hal_2page__table__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2page__table__impl_8hpp.html">page_table_impl.hpp</a></td></tr>
@@ -140,6 +149,7 @@ Files</h2></td></tr>
 <tr class="memitem:plic_2Ehpp" id="r_plic_2Ehpp"><td class="memItemLeft"><a href="plic_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="plic_8hpp.html">plic.hpp</a></td></tr>
 <tr class="memitem:rand_5Fimpl_2Ehpp" id="r_rand_5Fimpl_2Ehpp"><td class="memItemLeft"><a href="riscv64_2hal_2rand__impl_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2hal_2rand__impl_8hpp.html">rand_impl.hpp</a></td></tr>
 <tr class="memdesc:riscv64_2hal_2rand__impl_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 hardware random-number stubs — no x86 RDRAND/RDSEED equivalents; always return false. <br /></td></tr>
+<tr class="memitem:uart_2Ehpp" id="r_uart_2Ehpp"><td class="memItemLeft"><a href="uart_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="uart_8hpp.html">uart.hpp</a></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

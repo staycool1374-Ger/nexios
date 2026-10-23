@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -147,7 +147,7 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a58047bd493007205cfdffbaebb83b030 pub_methods_classkernel_1_1dma_1_1_dma_channel" id="r_a58047bd493007205cfdffbaebb83b030"><td class="memItemLeft">virtual&#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1dma_1_1_dma_channel.html#a58047bd493007205cfdffbaebb83b030">~DmaChannel</a> ()=default</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>BMDMA channel implementation via PCI port I/O (kernel mode). Accesses the BMDMA controller registers at the given I/O base. </p>
+<div class="textblock"><p>BMDMA channel implementation via PCI port I/O (kernel mode). Accesses the BMDMA controller registers at the given I/O base. The channel API doubles as the DMA engine's mock-port test harness off-x86 (test_dma drives a mock base through it); no real device can bind here off-x86 (PCI MSI programming fails closed, issue #354 Slice A). </p>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a2283b2a4f6e408e1f7f95e69af05fc90" name="a2283b2a4f6e408e1f7f95e69af05fc90"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2283b2a4f6e408e1f7f95e69af05fc90">&#9670;&#160;</a></span>BmDmaChannel()</h2>
@@ -328,7 +328,7 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>true if the transfer was started. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true if the transfer was started. Implementations must fail closed (return false) when the table base is not representable in the controller's address register; never truncate (BMDMA: 32-bit PRDTPR, issue #307). </dd></dl>
 
 <p>Implements <a class="el" href="classkernel_1_1dma_1_1_dma_channel.html#a89de60c2c9e61df782e1aa4f2ef3b15a">kernel::dma::DmaChannel</a>.</p>
 <div class="dynheader">

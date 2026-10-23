@@ -1,5 +1,27 @@
 # Completed Roadmap Items
 
+## v0.5.5 — Full Compatibility & Functional State for AARCH64 and RISCV64 (RELEASED 2026-10-23)
+
+**Purpose:** Bring AARCH64 and RISCV64 to full functional parity with
+x86_64 — adopt the TACT framework's host automation and console
+discipline, fix FPU inheritance on fork, and gate all three arches
+green. Milestone "v0.5.5 Full compatibility and functional state for
+AARCH64 and RISCV64" (milestone 26): 0 open issues at release (28
+closed).
+
+- **TACT adoption** (#407: config range guards, declarative
+  test-policy table, host chain runner with panic-capture/ring-dump/
+  shell-smoke chains, poll-fed RX ring with zero-copy shell slices,
+  prefix-registered URC console discipline drained at prompt redraw
+  plus the prompt-loop early-exit fix; kernel halves SIL 3 APPROVED,
+  test halves verified 3-arch).
+- **FPU fork inheritance** (#403: parent FP state flushed on the
+  non-x86 clone path, all arches green).
+- **Full gates green:** debug x86_64 26/26 (1862/1862), aarch64
+  22/22, riscv64 19/19; release x86_64 24/24 (89/89); `make build`
+  Errors 0 (one exit-record flake + one TCG stall-recovery, both
+  cleared by clean reruns).
+
 ## v0.5.4 — Stabilization & Bugfixing (RELEASED 2026-10-18)
 
 **Purpose:** Stabilize the kernel after the v0.5.3 feature push —

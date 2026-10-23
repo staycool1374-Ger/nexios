@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -160,6 +160,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a6b5ee8c17a9a6bdac4152aff1443b58b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Warn (once per boot) when a test touches kernel-half tables.  <br /></td></tr>
 <tr class="memitem:af888157a072690618fcf43fcc15dce42" id="r_af888157a072690618fcf43fcc15dce42"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#af888157a072690618fcf43fcc15dce42">kernel::arm_test_touch_flags</a> (bool arm_hhdm, bool arm_identity)</td></tr>
 <tr class="memdesc:af888157a072690618fcf43fcc15dce42"><td class="mdescLeft">&#160;</td><td class="mdescRight">Arm the HHDM/identity modification flags for the snapshot backend.  <br /></td></tr>
+<tr class="memitem:a2c1af52df799ad9c3ecc0fe77551ffff" id="r_a2c1af52df799ad9c3ecc0fe77551ffff"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a2c1af52df799ad9c3ecc0fe77551ffff">kernel::decode_block_base</a> (uint64_t phys, uint64_t offset_mask, uint64_t &amp;out_base) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a2c1af52df799ad9c3ecc0fe77551ffff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validate an arch-decoded block base against level alignment.  <br /></td></tr>
 <tr class="memitem:a58d591caf1b230899994e1ab11a29415" id="r_a58d591caf1b230899994e1ab11a29415"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a58d591caf1b230899994e1ab11a29415">kernel::write_hex_debugcon</a> (uint64_t val)</td></tr>
 <tr class="memdesc:a58d591caf1b230899994e1ab11a29415"><td class="mdescLeft">&#160;</td><td class="mdescRight">Hex-value diagnostic writer (debugcon port IO only).  <br /></td></tr>
 <tr class="memitem:affaa475d1e0ac61cef604410e598aef5" id="r_affaa475d1e0ac61cef604410e598aef5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#affaa475d1e0ac61cef604410e598aef5">kernel::note_silent_drop_once</a> (const char *tag, uint64_t val)</td></tr>
@@ -171,7 +173,8 @@ Variables</h2></td></tr>
 <tr class="memitem:a0baae30bc1ab6a716e981544f012ba23" id="r_a0baae30bc1ab6a716e981544f012ba23"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a0baae30bc1ab6a716e981544f012ba23">kernel::kPageOffsetMask</a> = 0xFFFULL</td></tr>
 <tr class="memitem:a79b9c49a1501eb20faeb4246d49efd33" id="r_a79b9c49a1501eb20faeb4246d49efd33"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a79b9c49a1501eb20faeb4246d49efd33">kernel::kHuge2MOffsetMask</a> = 0x1FFFFFULL</td></tr>
 <tr class="memitem:ac9d6bb3792d15a7c10c6556f89a9ed78" id="r_ac9d6bb3792d15a7c10c6556f89a9ed78"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ac9d6bb3792d15a7c10c6556f89a9ed78">kernel::kHuge2MBaseMask</a> = ~0x1FFFFFULL</td></tr>
-<tr class="memitem:ae1135d0af9e02c614b5cca60f39c14c0" id="r_ae1135d0af9e02c614b5cca60f39c14c0"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ae1135d0af9e02c614b5cca60f39c14c0">kernel::kPdptBlockBaseMask</a> = ~0x3FFFFFULL</td></tr>
+<tr class="memitem:a6b3dbf9e4d0df67e9c2efe2f8912353b" id="r_a6b3dbf9e4d0df67e9c2efe2f8912353b"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6b3dbf9e4d0df67e9c2efe2f8912353b">kernel::kBlock1GOffsetMask</a> = 0x3FFFFFFFULL</td></tr>
+<tr class="memitem:ac219c87e9e0aaf5fd3d66deaac079bec" id="r_ac219c87e9e0aaf5fd3d66deaac079bec"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ac219c87e9e0aaf5fd3d66deaac079bec">kernel::kBlock1GBaseMask</a> = ~<a class="el" href="namespacekernel.html#a6b3dbf9e4d0df67e9c2efe2f8912353b">kBlock1GOffsetMask</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>VMM translation-unit-shared internals (issue #363): test-time kernel-VA touch notifiers, throttled-diagnostic helpers, the Sv39 HHDM slot constant, and page-offset/base masks. Single definitions live in <a class="el" href="vmm_8cpp.html">vmm.cpp</a>; the other vmm_*.cpp TUs link against these declarations. </p>

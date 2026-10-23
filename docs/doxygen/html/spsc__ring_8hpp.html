@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -143,6 +143,8 @@ This graph shows which files directly or indirectly include this file:</div>
 Data Structures</h2></td></tr>
 <tr class="memitem:SPSCRing_3C_20T_2C_20N_20_3E" id="r_SPSCRing_3C_20T_2C_20N_20_3E"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="class_s_p_s_c_ring.html">SPSCRing&lt; T, N &gt;</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lock-free single-producer single-consumer ring buffer.  <a href="class_s_p_s_c_ring.html#details">More...</a><br /></td></tr>
+<tr class="memitem:SPSCRing_3C_20T_2C_20N_20_3E_3A_3ASlice" id="r_SPSCRing_3C_20T_2C_20N_20_3E_3A_3ASlice"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="struct_s_p_s_c_ring_1_1_slice.html">SPSCRing&lt; T, N &gt;::Slice</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Zero-copy view into the readable region (issue #407). @field data Pointer to the first readable element (contiguous run only — a wrapped region needs two peeks with a consume between them). @field len Number of readable elements from data (0 when empty).  <a href="struct_s_p_s_c_ring_1_1_slice.html#details">More...</a><br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Lock-free single-producer single-consumer ring buffer template. </p>

@@ -20,9 +20,11 @@ var searchData=
   ['copy_17',['COPY',['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ae8606d021da140a92c7eba8d9b8af84f',1,'kernel::cap']]],
   ['copying_5fsegments_18',['COPYING_SEGMENTS',['../namespacekernel_1_1elf.html#a8f59bba1cd5bc9a93b5bd73e7c43bce5a712317846d9b1ee3d1def3c7be3905e9',1,'kernel::elf']]],
   ['corrupted_19',['CORRUPTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a079c6dcd1b1ee137ecf0244d4f8bad01',1,'kernel']]],
-  ['create_20',['CREATE',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d',1,'kernel::time']]],
-  ['create_5fmailbox_21',['CREATE_MAILBOX',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a491be84e80b2d9ee558a7c0ab3d9b7d6',1,'kernel']]],
-  ['ctrl_5fprobe_5ffailed_22',['CTRL_PROBE_FAILED',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2',1,'arch']]],
-  ['ctrl_5ftimeout_23',['CTRL_TIMEOUT',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620',1,'arch']]],
-  ['cycle_24',['CYCLE',['../namespacekernel_1_1elf.html#a6144be63a5e267b596cd679825c192c7a11729ccb73dc5f4f62d40435e8a0c078',1,'kernel::elf']]]
+  ['count_20',['Count',['../namespacekernel_1_1console_1_1urc.html#a1ebb5fcaf91581ca07139a047f678513ae93f994f01c537c4e2f7d8528c3eb5e9',1,'kernel::console::urc']]],
+  ['cpu_5fexception_21',['CPU_EXCEPTION',['../namespacekernel_1_1debug.html#a6a77ee8959c25a54a2872f4078614067a37298dc562de568248d3adf8db9a9c77',1,'kernel::debug']]],
+  ['create_22',['CREATE',['../namespacekernel_1_1time.html#ab13778b383b7889160470c87141ea20aa294ce20cdefa29be3be0735cb62e715d',1,'kernel::time']]],
+  ['create_5fmailbox_23',['CREATE_MAILBOX',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a491be84e80b2d9ee558a7c0ab3d9b7d6',1,'kernel']]],
+  ['ctrl_5fprobe_5ffailed_24',['CTRL_PROBE_FAILED',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a6f81a1adcd2d412efa339f924886d2d2',1,'arch']]],
+  ['ctrl_5ftimeout_25',['CTRL_TIMEOUT',['../namespacearch.html#aecd76646787c7d438e3d8c235ca1c2f0a86ee23012059305a75b5206c832d2620',1,'arch']]],
+  ['cycle_26',['CYCLE',['../namespacekernel_1_1elf.html#a6144be63a5e267b596cd679825c192c7a11729ccb73dc5f4f62d40435e8a0c078',1,'kernel::elf']]]
 ];

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -142,6 +142,10 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a3254f6b5ff56ae412a82bce90cfa484e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unmask (enable) a specific IRQ line.  <br /></td></tr>
 <tr class="memitem:a9f7ae62eee0caa50cb5d7f931853b83a" id="r_a9f7ae62eee0caa50cb5d7f931853b83a"><td class="memItemLeft">static <a class="el" href="structarch_1_1_irq_state.html">IrqState</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9f7ae62eee0caa50cb5d7f931853b83a">snapshot</a> ()</td></tr>
 <tr class="memdesc:a9f7ae62eee0caa50cb5d7f931853b83a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Snapshot the current PIC mask state.  <br /></td></tr>
+<tr class="memitem:af08003bc6f4017ff53d9c1c8acb81099" id="r_af08003bc6f4017ff53d9c1c8acb81099"><td class="memItemLeft">static <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af08003bc6f4017ff53d9c1c8acb81099">max_vector</a> ()</td></tr>
+<tr class="memdesc:af08003bc6f4017ff53d9c1c8acb81099"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest user-observable vector (PIC window, issue #354).  <br /></td></tr>
+<tr class="memitem:a78843a9d100466e65c0aeaab1f596855" id="r_a78843a9d100466e65c0aeaab1f596855"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a78843a9d100466e65c0aeaab1f596855">line_enabled</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memdesc:a78843a9d100466e65c0aeaab1f596855"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when PIC line <code class="param">irq</code> (0–15) is currently unmasked.  <br /></td></tr>
 <tr class="memitem:ad42b9fb25c4deedf744135d76a194bb8" id="r_ad42b9fb25c4deedf744135d76a194bb8"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad42b9fb25c4deedf744135d76a194bb8">restore</a> (const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;state)</td></tr>
 <tr class="memdesc:ad42b9fb25c4deedf744135d76a194bb8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore a previously saved PIC mask state.  <br /></td></tr>
 <tr class="memitem:abffeda20ad3d371c21b00b4749064b60" id="r_abffeda20ad3d371c21b00b4749064b60"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abffeda20ad3d371c21b00b4749064b60">init</a> ()</td></tr>
@@ -150,12 +154,20 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:ae45ebdb73c93f701d34183eb82489ee1" id="r_ae45ebdb73c93f701d34183eb82489ee1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae45ebdb73c93f701d34183eb82489ee1">unmask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
 <tr class="memitem:a3f2bf4b249890d0966275e1881f95c2c" id="r_a3f2bf4b249890d0966275e1881f95c2c"><td class="memItemLeft">static <a class="el" href="structarch_1_1_irq_state.html">IrqState</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3f2bf4b249890d0966275e1881f95c2c">snapshot</a> ()</td></tr>
 <tr class="memitem:a6621770c8517ef8faae80a6430b8c164" id="r_a6621770c8517ef8faae80a6430b8c164"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6621770c8517ef8faae80a6430b8c164">restore</a> (const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;state)</td></tr>
+<tr class="memitem:a43726323ba51529d87750d6cc9c529b2" id="r_a43726323ba51529d87750d6cc9c529b2"><td class="memItemLeft">static <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a43726323ba51529d87750d6cc9c529b2">max_vector</a> ()</td></tr>
+<tr class="memdesc:a43726323ba51529d87750d6cc9c529b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest programmed INTID (TYPER-clamped window − 1, ≤ 255).  <br /></td></tr>
+<tr class="memitem:adf950ca14187242626ac9e39f03c9c43" id="r_adf950ca14187242626ac9e39f03c9c43"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#adf950ca14187242626ac9e39f03c9c43">line_enabled</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memdesc:adf950ca14187242626ac9e39f03c9c43"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when INTID <code class="param">irq</code> is currently enabled (ISENABLER bit).  <br /></td></tr>
 <tr class="memitem:abffeda20ad3d371c21b00b4749064b60" id="r_abffeda20ad3d371c21b00b4749064b60"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#abffeda20ad3d371c21b00b4749064b60">init</a> ()</td></tr>
 <tr class="memitem:a1ef84c4cd2e97d83789c527505559ff6" id="r_a1ef84c4cd2e97d83789c527505559ff6"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a1ef84c4cd2e97d83789c527505559ff6">eoi</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> vector)</td></tr>
 <tr class="memitem:afb45f40268b3aca2f1fb4146b7402e5f" id="r_afb45f40268b3aca2f1fb4146b7402e5f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afb45f40268b3aca2f1fb4146b7402e5f">mask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
 <tr class="memitem:ae45ebdb73c93f701d34183eb82489ee1" id="r_ae45ebdb73c93f701d34183eb82489ee1"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ae45ebdb73c93f701d34183eb82489ee1">unmask</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
 <tr class="memitem:a3f2bf4b249890d0966275e1881f95c2c" id="r_a3f2bf4b249890d0966275e1881f95c2c"><td class="memItemLeft">static <a class="el" href="structarch_1_1_irq_state.html">IrqState</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3f2bf4b249890d0966275e1881f95c2c">snapshot</a> ()</td></tr>
 <tr class="memitem:a6621770c8517ef8faae80a6430b8c164" id="r_a6621770c8517ef8faae80a6430b8c164"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6621770c8517ef8faae80a6430b8c164">restore</a> (const <a class="el" href="structarch_1_1_irq_state.html">IrqState</a> &amp;state)</td></tr>
+<tr class="memitem:a43726323ba51529d87750d6cc9c529b2" id="r_a43726323ba51529d87750d6cc9c529b2"><td class="memItemLeft">static <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a43726323ba51529d87750d6cc9c529b2">max_vector</a> ()</td></tr>
+<tr class="memdesc:a43726323ba51529d87750d6cc9c529b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest PLIC source (PLIC_MAX_SOURCES − 1).  <br /></td></tr>
+<tr class="memitem:adf950ca14187242626ac9e39f03c9c43" id="r_adf950ca14187242626ac9e39f03c9c43"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#adf950ca14187242626ac9e39f03c9c43">line_enabled</a> (<a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> irq)</td></tr>
+<tr class="memdesc:adf950ca14187242626ac9e39f03c9c43"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when PLIC source <code class="param">irq</code> is enabled in S-context.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>x86-64 PIC (8259A) interrupt controller driver. </p>
@@ -319,7 +331,94 @@ Static Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Initialise both PICs in cascade mode with vector offsets. </p>
-<p>Initialise the GIC distributor, CPU interface, and redistributor. Detects GICv2 vs GICv3 from GICD_TYPER. Enables Group 1 interrupts and the timer PPI (INTID 30). Performs full distributor reset. </p>
+<p>Initialise the GIC distributor, CPU interface, and redistributor. Full GICv2 bring-up: version from GICD_PIDR2 (TYPER holds no version), distributor reset, priority/target/edge programming, timer PPI enable. BOOT_ONLY: repeat calls return without touching live state. </p>
+
+</div>
+</div>
+<a id="adf950ca14187242626ac9e39f03c9c43" name="adf950ca14187242626ac9e39f03c9c43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adf950ca14187242626ac9e39f03c9c43">&#9670;&#160;</a></span>line_enabled() <span class="overload">[1/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::ArchInterruptController::line_enabled </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when PLIC source <code class="param">irq</code> is enabled in S-context. </p>
+
+</div>
+</div>
+<a id="adf950ca14187242626ac9e39f03c9c43" name="adf950ca14187242626ac9e39f03c9c43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adf950ca14187242626ac9e39f03c9c43">&#9670;&#160;</a></span>line_enabled() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::ArchInterruptController::line_enabled </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when INTID <code class="param">irq</code> is currently enabled (ISENABLER bit). </p>
+
+</div>
+</div>
+<a id="a78843a9d100466e65c0aeaab1f596855" name="a78843a9d100466e65c0aeaab1f596855"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78843a9d100466e65c0aeaab1f596855">&#9670;&#160;</a></span>line_enabled() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::ArchInterruptController::line_enabled </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a></td>          <td class="paramname"><span class="paramname"><em>irq</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when PIC line <code class="param">irq</code> (0–15) is currently unmasked. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">irq</td><td>IRQ line number (out-of-range reads false). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -403,6 +502,88 @@ Static Public Member Functions</h2></td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a43726323ba51529d87750d6cc9c529b2" name="a43726323ba51529d87750d6cc9c529b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43726323ba51529d87750d6cc9c529b2">&#9670;&#160;</a></span>max_vector() <span class="overload">[1/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::ArchInterruptController::max_vector </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Highest PLIC source (PLIC_MAX_SOURCES − 1). </p>
+
+</div>
+</div>
+<a id="a43726323ba51529d87750d6cc9c529b2" name="a43726323ba51529d87750d6cc9c529b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43726323ba51529d87750d6cc9c529b2">&#9670;&#160;</a></span>max_vector() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::ArchInterruptController::max_vector </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Highest programmed INTID (TYPER-clamped window − 1, ≤ 255). </p>
+
+</div>
+</div>
+<a id="af08003bc6f4017ff53d9c1c8acb81099" name="af08003bc6f4017ff53d9c1c8acb81099"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af08003bc6f4017ff53d9c1c8acb81099">&#9670;&#160;</a></span>max_vector() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> arch::ArchInterruptController::max_vector </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Highest user-observable vector (PIC window, issue #354). </p>
+<dl class="section return"><dt>Returns</dt><dd>47 (vectors 33–47 are IRQ1–15; MSI-X handled separately). </dd></dl>
 
 </div>
 </div>

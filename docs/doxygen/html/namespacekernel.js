@@ -3,10 +3,27 @@ var namespacekernel =
     [ "acpi", "namespacekernel_1_1acpi.html", "namespacekernel_1_1acpi" ],
     [ "ahci", "namespacekernel_1_1ahci.html", "namespacekernel_1_1ahci" ],
     [ "block", "namespacekernel_1_1block.html", "namespacekernel_1_1block" ],
+    [ "boot", "namespacekernel_1_1boot.html", [
+      [ "dtb_find_compatible_nodes", "namespacekernel_1_1boot.html#a02e7a0e863a39279a7065850c07cd847", null ],
+      [ "dtb_from_boot_info", "namespacekernel_1_1boot.html#ab30e6ea1b60311595c77042da157e17b", null ],
+      [ "dtb_node_cells", "namespacekernel_1_1boot.html#a1e83e8f48dcaf073fd7e5b40dbfaa6a2", null ],
+      [ "dtb_node_reg", "namespacekernel_1_1boot.html#abae969bafca4e0421b27619f80a785fb", null ],
+      [ "DTB_MAX_MATCHES", "namespacekernel_1_1boot.html#aeee9cf4f6581a67535fe081f33c7087d", null ]
+    ] ],
+    [ "build_info", "namespacekernel_1_1build__info.html", [
+      [ "streq", "namespacekernel_1_1build__info.html#a900b54238d72a49b195cc62c01629444", null ],
+      [ "arch_name", "namespacekernel_1_1build__info.html#ae70eb122ad1863db1328b6f2a447c096", null ],
+      [ "bits", "namespacekernel_1_1build__info.html#ab3d9004335f7e0efa54dceabeb3bb1b7", null ],
+      [ "build_type", "namespacekernel_1_1build__info.html#a06e916e46ab2925d5ed49a85c8cf8067", null ],
+      [ "debug_build", "namespacekernel_1_1build__info.html#a91d12baede0af0632c56c2095b3b7ec6", null ],
+      [ "fb_backend", "namespacekernel_1_1build__info.html#a299344e43dfee7fb2fc2c816f3ecb6b8", null ],
+      [ "fb_compiled_in", "namespacekernel_1_1build__info.html#a2624651ad76bafa5e7448248ce9692ed", null ]
+    ] ],
     [ "cache", "namespacekernel_1_1cache.html", [
       [ "color_of", "namespacekernel_1_1cache.html#a73ec3fc0b065a58526639da49f802c4c", null ]
     ] ],
     [ "cap", "namespacekernel_1_1cap.html", "namespacekernel_1_1cap" ],
+    [ "console", "namespacekernel_1_1console.html", "namespacekernel_1_1console" ],
     [ "daemon", "namespacekernel_1_1daemon.html", "namespacekernel_1_1daemon" ],
     [ "debug", "namespacekernel_1_1debug.html", "namespacekernel_1_1debug" ],
     [ "diag", "namespacekernel_1_1diag.html", "namespacekernel_1_1diag" ],
@@ -65,7 +82,27 @@ var namespacekernel =
       [ "from_vmm_error", "namespacekernel_1_1errors.html#aed4796f260eb85ffdafcbbe966d2cf8e", null ]
     ] ],
     [ "fat32", "namespacekernel_1_1fat32.html", "namespacekernel_1_1fat32" ],
+    [ "fb", "namespacekernel_1_1fb.html", [
+      [ "backing_bytes", "namespacekernel_1_1fb.html#af972b20e06f4065e69b5ecedeb73b948", null ],
+      [ "backing_init", "namespacekernel_1_1fb.html#a00b3c9e6e9a38171b6a0810152abafb5", null ],
+      [ "backing_pages", "namespacekernel_1_1fb.html#afc035247bc64712a8bd7403c354a5dfd", null ],
+      [ "backing_phys", "namespacekernel_1_1fb.html#a2e0e92c6a441b80dc15477a1587ed472", null ],
+      [ "backing_ptr", "namespacekernel_1_1fb.html#a4eb151f6365af975aa6117fef86c93cc", null ],
+      [ "backing_release", "namespacekernel_1_1fb.html#ab5af1e9d6047208af47b47ebd5145d74", null ],
+      [ "FB_MAX_BPP", "namespacekernel_1_1fb.html#abeae626cdd7484088660833860dfc939", null ],
+      [ "FB_MAX_BYTES", "namespacekernel_1_1fb.html#aa9166746aafcdfb165a0460332c6c40d", null ],
+      [ "FB_MAX_HEIGHT", "namespacekernel_1_1fb.html#ab462c44539db527f0042b39fd46ef8d6", null ],
+      [ "FB_MAX_PAGES", "namespacekernel_1_1fb.html#a0c41dcdb5fca13b3bfaf6dff8f887db9", null ],
+      [ "FB_MAX_WIDTH", "namespacekernel_1_1fb.html#a97aa8072be98c268a5573afe1aee971a", null ]
+    ] ],
+    [ "fwcfg", "namespacekernel_1_1fwcfg.html", [
+      [ "fw_cfg_dma_write", "namespacekernel_1_1fwcfg.html#a31ac00b968daae12537ee639b4ea5838", null ],
+      [ "fw_cfg_find_file", "namespacekernel_1_1fwcfg.html#af7fbb4df5ba9ff132ee6132c03a03192", null ],
+      [ "fw_cfg_probe", "namespacekernel_1_1fwcfg.html#aa1882c497013b122dc10a3f9fc34721b", null ]
+    ] ],
+    [ "gpu", "namespacekernel_1_1gpu.html", "namespacekernel_1_1gpu" ],
     [ "gs", "namespacekernel_1_1gs.html", "namespacekernel_1_1gs" ],
+    [ "input", "namespacekernel_1_1input.html", "namespacekernel_1_1input" ],
     [ "integrity", "namespacekernel_1_1integrity.html", [
       [ "__attribute__", "namespacekernel_1_1integrity.html#a724916b89c64153438c5a6846413e6bb", null ],
       [ "__attribute__", "namespacekernel_1_1integrity.html#ad4f4daecf4c772e52a8221ff985e39e8", null ],
@@ -111,6 +148,7 @@ var namespacekernel =
       [ "regrant", "namespacekernel_1_1ramdiskd.html#a2470dc94f6491a4f071d38f86aa94b73", null ],
       [ "set_ramdiskd_pid", "namespacekernel_1_1ramdiskd.html#a6596be5d5c7bfbb3ee58fc96ffb1c237", null ]
     ] ],
+    [ "ramfb", "namespacekernel_1_1ramfb.html", "namespacekernel_1_1ramfb" ],
     [ "sched_admission", "namespacekernel_1_1sched__admission.html", [
       [ "server_budget_for_admission", "namespacekernel_1_1sched__admission.html#a09b6c2dcc0e5095ec08803c3770bcd51", null ],
       [ "LIU_LEYLAND_BOUNDS", "namespacekernel_1_1sched__admission.html#afb951a0a8f6e63af6dd190d0bd0b2a8b", null ],
@@ -263,7 +301,8 @@ var namespacekernel =
     ] ],
     [ "IrqSlotKind", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3", [
       [ "PIC", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2", null ],
-      [ "MSIX", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301", null ]
+      [ "MSIX", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301", null ],
+      [ "PLATFORM", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a8b55a44b49368262df89fd0e17b1a181", null ]
     ] ],
     [ "LogLevel", "namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2", [
       [ "DEBUG", "namespacekernel.html#a608b4a9ee1c4d240362c930be12ae9f2adc30ec20708ef7b0f641ef78b7880a15", null ],
@@ -470,6 +509,7 @@ var namespacekernel =
       [ "Done", "namespacekernel.html#a746bd09a61cf9ab0f4fc4ba88c9f84e2af92965e2c8a7afb3c1b9a5c09a263636", null ]
     ] ],
     [ "__attribute__", "namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885", null ],
+    [ "__attribute__", "namespacekernel.html#af334ed97cac304999841e5e01a7cdfb6", null ],
     [ "__attribute__", "namespacekernel.html#aadf277954fd86eeba0a08c68e1f25c06", null ],
     [ "admission_boot_selftest", "namespacekernel.html#a5f757c7023bc8616bb0fd21b7c6d8f9f", null ],
     [ "arm_test_touch_flags", "namespacekernel.html#af888157a072690618fcf43fcc15dce42", null ],
@@ -508,6 +548,7 @@ var namespacekernel =
     [ "current_sp", "namespacekernel.html#ae08151937cfd0817884fe2c500925389", null ],
     [ "current_sp", "namespacekernel.html#ae08151937cfd0817884fe2c500925389", null ],
     [ "debug_data_begin", "namespacekernel.html#a90086829567f6b5bf9c0730a8f3d7b08", null ],
+    [ "decode_block_base", "namespacekernel.html#a2c1af52df799ad9c3ecc0fe77551ffff", null ],
     [ "dispatch_step", "namespacekernel.html#ae5d48d078d93dfa08b5cbf031809c099", null ],
     [ "dispatch_step", "namespacekernel.html#a3a7f1bcc985d92d3fd4933485ae502f4", null ],
     [ "edf_earlier", "namespacekernel.html#a80f5333030c1e7cb1fb735503ceeb2b0", null ],
@@ -695,12 +736,13 @@ var namespacekernel =
     [ "k_vmm_map_reject_expected", "namespacekernel.html#a91ef5b873fdfbb3c94843801b39e433c", null ],
     [ "k_vmm_map_rollback_expected", "namespacekernel.html#a6ff1bbbb697bdc4402042f780d62023b", null ],
     [ "k_vmm_map_success_expected", "namespacekernel.html#a84219b243e0fd692681ffa98181afbfb", null ],
+    [ "kBlock1GBaseMask", "namespacekernel.html#ac219c87e9e0aaf5fd3d66deaac079bec", null ],
+    [ "kBlock1GOffsetMask", "namespacekernel.html#a6b3dbf9e4d0df67e9c2efe2f8912353b", null ],
     [ "kFupSkipLogCap", "namespacekernel.html#a1369d42060e8bc15128adcdb3a63a570", null ],
     [ "kHuge2MBaseMask", "namespacekernel.html#ac9d6bb3792d15a7c10c6556f89a9ed78", null ],
     [ "kHuge2MOffsetMask", "namespacekernel.html#a79b9c49a1501eb20faeb4246d49efd33", null ],
     [ "kIrqNotifyRevoked", "namespacekernel.html#ab596ed6f93b40b1636ef3dfcf39ebd1e", null ],
     [ "kPageOffsetMask", "namespacekernel.html#a0baae30bc1ab6a716e981544f012ba23", null ],
-    [ "kPdptBlockBaseMask", "namespacekernel.html#ae1135d0af9e02c614b5cca60f39c14c0", null ],
     [ "kTaskExitRingDepth", "namespacekernel.html#aee5d1a5418bf1d00cf1dc061ff2832b8", null ],
     [ "LIU_LEYLAND_BOUNDS", "namespacekernel.html#afb951a0a8f6e63af6dd190d0bd0b2a8b", null ],
     [ "LIU_LEYLAND_BOUNDS", "namespacekernel.html#afb951a0a8f6e63af6dd190d0bd0b2a8b", null ],

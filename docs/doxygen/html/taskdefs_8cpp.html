@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -166,7 +166,7 @@ Functions</h2></td></tr>
 <tr class="memdesc:a134c6b74e9d9bc36270fd82a843ea357"><td class="mdescLeft">&#160;</td><td class="mdescRight">Single-entry server-params rule (issue #24): the same predicate the compile-time table check enforces, callable at runtime for negative tests (e.g. BACKGROUND with non-idle bg priority).  <br /></td></tr>
 <tr class="memitem:acecadff66d32071ad6d02265945cc76a" id="r_acecadff66d32071ad6d02265945cc76a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#acecadff66d32071ad6d02265945cc76a">kernel::task::taskdefs_valid</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:acecadff66d32071ad6d02265945cc76a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whole-table validation at runtime (mirrors the static_assert).  <br /></td></tr>
-<tr class="memitem:a23341a25427d54ae2f91ec33bb133c24" id="r_a23341a25427d54ae2f91ec33bb133c24"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a23341a25427d54ae2f91ec33bb133c24">kernel::task::reboot_from_table</a> () <a class="el" href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a>((noreturn))</td></tr>
+<tr class="memitem:a23341a25427d54ae2f91ec33bb133c24" id="r_a23341a25427d54ae2f91ec33bb133c24"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1task.html#a23341a25427d54ae2f91ec33bb133c24">kernel::task::reboot_from_table</a> () <a class="el" href="namespacekernel.html#af334ed97cac304999841e5e01a7cdfb6">__attribute__</a>((noreturn))</td></tr>
 <tr class="memdesc:a23341a25427d54ae2f91ec33bb133c24"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kills all tasks (except idle), spawns the system from g_task_defs[], then enters the idle loop. Never returns.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>

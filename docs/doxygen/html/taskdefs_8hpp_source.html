@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('taskdefs_8hpp_
 <div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>};</div>
 </div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span></div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1task.html#a23341a25427d54ae2f91ec33bb133c24">reboot_from_table</a>() <a class="code hl_function" href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a>((noreturn));</div>
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1task.html#a23341a25427d54ae2f91ec33bb133c24">reboot_from_table</a>() <a class="code hl_function" href="namespacekernel.html#af334ed97cac304999841e5e01a7cdfb6">__attribute__</a>((noreturn));</div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span></div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span><span class="keywordtype">size_t</span> <a class="code hl_function" href="namespacekernel_1_1task.html#adc36214616607d88fa61adf5386788e4">taskdefs_count</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
 <div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>const <a class="code hl_struct" href="structkernel_1_1task_1_1_task_def.html">TaskDef</a> *<a class="code hl_function" href="namespacekernel_1_1task.html#a6c2e4859b68a0571d2f50dda0efba2a8">taskdefs_at</a>(<span class="keywordtype">size_t</span> i) <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>; <span class="comment">// nullptr when out of range</span></div>
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('taskdefs_8hpp_
 <div class="ttc" id="anamespacekernel_1_1task_html_afe20b357887445ef77f145177213ee11acd249b6e7fadaba2533c7e79e653ce90"><div class="ttname"><a href="namespacekernel_1_1task.html#afe20b357887445ef77f145177213ee11acd249b6e7fadaba2533c7e79e653ce90">kernel::task::TaskType::USER_ELF</a></div><div class="ttdeci">@ USER_ELF</div><div class="ttdoc">user-space ELF from initrd, elf::load()</div><div class="ttdef"><b>Definition</b> taskdefs.hpp:33</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
-<div class="ttc" id="anamespacekernel_html_aef2c5f8888b21de09ec3a76f5b964885"><div class="ttname"><a href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">kernel::__attribute__</a></div><div class="ttdeci">__attribute__((noinline)) static uint64_t bucket_of(const TaskControlBlock *t</div><div class="ttdoc">Find the priority bucket a node currently lives in. A task&#39;s stored t-&gt;priority may have been changed...</div></div>
+<div class="ttc" id="anamespacekernel_html_af334ed97cac304999841e5e01a7cdfb6"><div class="ttname"><a href="namespacekernel.html#af334ed97cac304999841e5e01a7cdfb6">kernel::__attribute__</a></div><div class="ttdeci">__attribute__((weak)) void VMM</div><div class="ttdef"><b>Definition</b> vmm.cpp:547</div></div>
 <div class="ttc" id="asporadic__server_8hpp_html"><div class="ttname"><a href="sporadic__server_8hpp.html">sporadic_server.hpp</a></div><div class="ttdoc">Sporadic Server budget management for aperiodic daemons (vfsd, iocd). Implements POSIX....</div></div>
 <div class="ttc" id="astructkernel_1_1task_1_1_task_def_html"><div class="ttname"><a href="structkernel_1_1task_1_1_task_def.html">kernel::task::TaskDef</a></div><div class="ttdoc">Single entry in the boot-time task-definition table. Entries are validated at compile time against ne...</div><div class="ttdef"><b>Definition</b> taskdefs.hpp:40</div></div>
 <div class="ttc" id="astructkernel_1_1task_1_1_task_def_html_a321ed3db831c432f007858645bd56aab"><div class="ttname"><a href="structkernel_1_1task_1_1_task_def.html#a321ed3db831c432f007858645bd56aab">kernel::task::TaskDef::ss_bg_prio</a></div><div class="ttdeci">uint64_t ss_bg_prio</div><div class="ttdef"><b>Definition</b> taskdefs.hpp:59</div></div>

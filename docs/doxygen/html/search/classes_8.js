@@ -29,10 +29,11 @@ var searchData=
   ['irqregistration_26',['IrqRegistration',['../structkernel_1_1_irq_registration.html',1,'kernel']]],
   ['irqspinlockguard_27',['IrqSpinLockGuard',['../classkernel_1_1sync_1_1_irq_spin_lock_guard.html',1,'kernel::sync']]],
   ['irqstate_28',['IrqState',['../structarch_1_1_irq_state.html',1,'arch']]],
-  ['is_5fintegral_29',['is_integral',['../structis__integral.html',1,'']]],
-  ['is_5fpod_30',['is_pod',['../structis__pod.html',1,'']]],
-  ['is_5fsame_31',['is_same',['../structis__same.html',1,'']]],
-  ['is_5fsame_3c_20t_2c_20t_20_3e_32',['is_same&lt; T, T &gt;',['../structis__same_3_01_t_00_01_t_01_4.html',1,'']]],
-  ['itimerspec_33',['itimerspec',['../structitimerspec.html',1,'']]],
-  ['itimerspecu_34',['ItimerspecU',['../structkernel_1_1time_1_1_itimerspec_u.html',1,'kernel::time']]]
+  ['irqstormlimiter_29',['IrqStormLimiter',['../classarch_1_1_irq_storm_limiter.html',1,'arch']]],
+  ['is_5fintegral_30',['is_integral',['../structis__integral.html',1,'']]],
+  ['is_5fpod_31',['is_pod',['../structis__pod.html',1,'']]],
+  ['is_5fsame_32',['is_same',['../structis__same.html',1,'']]],
+  ['is_5fsame_3c_20t_2c_20t_20_3e_33',['is_same&lt; T, T &gt;',['../structis__same_3_01_t_00_01_t_01_4.html',1,'']]],
+  ['itimerspec_34',['itimerspec',['../structitimerspec.html',1,'']]],
+  ['itimerspecu_35',['ItimerspecU',['../structkernel_1_1time_1_1_itimerspec_u.html',1,'kernel::time']]]
 ];

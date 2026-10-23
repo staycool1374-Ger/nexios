@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -130,6 +130,11 @@ Collaboration diagram for SPSCRing&lt; T, N &gt;:</div>
 <!-- MAP 0 -->
 </div>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:Slice" id="r_Slice"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="struct_s_p_s_c_ring_1_1_slice.html">Slice</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Zero-copy view into the readable region (issue #407). @field data Pointer to the first readable element (contiguous run only — a wrapped region needs two peeks with a consume between them). @field len Number of readable elements from data (0 when empty).  <a href="struct_s_p_s_c_ring_1_1_slice.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a81616fdd3faf3c96f3489183f1f7bc4d" id="r_a81616fdd3faf3c96f3489183f1f7bc4d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a81616fdd3faf3c96f3489183f1f7bc4d">try_push</a> (const T &amp;item)</td></tr>
@@ -138,6 +143,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:aa23a0ba676b8f4f87dae0c26493fff40"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pop an item (no-op if empty).  <br /></td></tr>
 <tr class="memitem:a16b7c28cc6138d3a714bd69a573e0e5d" id="r_a16b7c28cc6138d3a714bd69a573e0e5d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a16b7c28cc6138d3a714bd69a573e0e5d">empty</a> () const</td></tr>
 <tr class="memdesc:a16b7c28cc6138d3a714bd69a573e0e5d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check whether the buffer is empty.  <br /></td></tr>
+<tr class="memitem:ab01d32c2628959d63cf3a8219e24aeef" id="r_ab01d32c2628959d63cf3a8219e24aeef"><td class="memItemLeft"><a class="el" href="struct_s_p_s_c_ring_1_1_slice.html">Slice</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab01d32c2628959d63cf3a8219e24aeef">peek_slice</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> max_len) const</td></tr>
+<tr class="memdesc:ab01d32c2628959d63cf3a8219e24aeef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Peek the next contiguous readable run without consuming (issue #407: readline fast path — scan + bulk copy, no per-byte pop). Consumer-only. The returned region stays valid only until the next consume/try_pop/push-side wrap: the producer never writes inside [tail, head), so the view is stable while the consumer holds it without advancing.  <br /></td></tr>
+<tr class="memitem:ad9500526d971bc7142ee286198fc7f73" id="r_ad9500526d971bc7142ee286198fc7f73"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad9500526d971bc7142ee286198fc7f73">consume</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> count)</td></tr>
+<tr class="memdesc:ad9500526d971bc7142ee286198fc7f73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Advance the consumer past count elements (issue #407). Consumer-only. Clamps to the readable count — never asserts on caller error (reachable over-consumption is a drop, not an invariant violation).  <br /></td></tr>
 <tr class="memitem:aee423335954c345b27244c25499d90db" id="r_aee423335954c345b27244c25499d90db"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aee423335954c345b27244c25499d90db">reset</a> ()</td></tr>
 <tr class="memdesc:aee423335954c345b27244c25499d90db"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reset to empty state. QUIESCENT-ONLY — must not be called while either side is active (the head/tail pair is not published atomically together).  <br /></td></tr>
 </table>
@@ -152,6 +161,48 @@ class SPSCRing&lt; T, N &gt;</div><p>Lock-free single-producer single-consumer r
   </dd>
 </dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="ad9500526d971bc7142ee286198fc7f73" name="ad9500526d971bc7142ee286198fc7f73"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad9500526d971bc7142ee286198fc7f73">&#9670;&#160;</a></span>consume()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kernel::TriviallyCopiable</a> T, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> N&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> <a class="el" href="class_s_p_s_c_ring.html">SPSCRing</a>&lt; T, N &gt;::consume </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>count</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Advance the consumer past count elements (issue #407). Consumer-only. Clamps to the readable count — never asserts on caller error (reachable over-consumption is a drop, not an invariant violation). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">count</td><td>Elements to drop (e.g. a scanned slice run). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Elements actually consumed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="class_s_p_s_c_ring_ad9500526d971bc7142ee286198fc7f73_cgraph.png" border="0" usemap="#aclass_s_p_s_c_ring_ad9500526d971bc7142ee286198fc7f73_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
 <a id="a16b7c28cc6138d3a714bd69a573e0e5d" name="a16b7c28cc6138d3a714bd69a573e0e5d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a16b7c28cc6138d3a714bd69a573e0e5d">&#9670;&#160;</a></span>empty()</h2>
 
@@ -182,7 +233,49 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="class_s_p_s_c_ring_a16b7c28cc6138d3a714bd69a573e0e5d_cgraph.png" border="0" usemap="#aclass_s_p_s_c_ring_a16b7c28cc6138d3a714bd69a573e0e5d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="ab01d32c2628959d63cf3a8219e24aeef" name="ab01d32c2628959d63cf3a8219e24aeef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab01d32c2628959d63cf3a8219e24aeef">&#9670;&#160;</a></span>peek_slice()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kernel::TriviallyCopiable</a> T, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> N&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="struct_s_p_s_c_ring_1_1_slice.html">Slice</a> <a class="el" href="class_s_p_s_c_ring.html">SPSCRing</a>&lt; T, N &gt;::peek_slice </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>max_len</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Peek the next contiguous readable run without consuming (issue #407: readline fast path — scan + bulk copy, no per-byte pop). Consumer-only. The returned region stays valid only until the next consume/try_pop/push-side wrap: the producer never writes inside [tail, head), so the view is stable while the consumer holds it without advancing. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">max_len</td><td>Upper bound on the reported run (bounds the scan). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd><a class="el" href="struct_s_p_s_c_ring_1_1_slice.html" title="Zero-copy view into the readable region (issue #407). @field data Pointer to the first readable eleme...">Slice</a> with len 0 and data nullptr when empty. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="class_s_p_s_c_ring_ab01d32c2628959d63cf3a8219e24aeef_cgraph.png" border="0" usemap="#aclass_s_p_s_c_ring_ab01d32c2628959d63cf3a8219e24aeef_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -217,7 +310,7 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="class_s_p_s_c_ring_aee423335954c345b27244c25499d90db_cgraph.png" border="0" usemap="#aclass_s_p_s_c_ring_aee423335954c345b27244c25499d90db_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -253,7 +346,7 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="class_s_p_s_c_ring_aa23a0ba676b8f4f87dae0c26493fff40_cgraph.png" border="0" usemap="#aclass_s_p_s_c_ring_aa23a0ba676b8f4f87dae0c26493fff40_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -289,7 +382,7 @@ template&lt;<a class="el" href="conceptkernel_1_1_trivially_copiable.html">kerne
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="class_s_p_s_c_ring_a81616fdd3faf3c96f3489183f1f7bc4d_cgraph.png" border="0" usemap="#aclass_s_p_s_c_ring_a81616fdd3faf3c96f3489183f1f7bc4d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 6 -->
 </div>
 
 </div>

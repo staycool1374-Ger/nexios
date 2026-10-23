@@ -4,6 +4,8 @@ var pci_8cpp =
     [ "arch::pci_device_count", "namespacearch.html#a9409db147e4855832856d485ddfc9ac3", null ],
     [ "arch::pci_devices", "namespacearch.html#ad0eacdfd4f0fbf174271a31b0aee7bd6", null ],
     [ "arch::pci_dump_tree", "namespacearch.html#a11748e0603d0f9b77d1198c4e14fd224", null ],
+    [ "arch::pci_ecam_discover", "namespacearch.html#ad3d99a7e474cab3a76f23b358052d6fe", null ],
+    [ "arch::pci_ecam_info", "namespacearch.html#a1006eef2991681cab2be76527b4877e3", null ],
     [ "arch::pci_enable_msi", "namespacearch.html#af1db3b0c561e94a99c8f3f6d020093f5", null ],
     [ "arch::pci_enable_msix", "namespacearch.html#ab8a3d0ed72e0355f607878da738a53e4", null ],
     [ "arch::pci_find_capability", "namespacearch.html#adc4b509b8ba2e26aae708fff98409565", null ],

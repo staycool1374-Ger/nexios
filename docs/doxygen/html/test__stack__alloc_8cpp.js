@@ -13,5 +13,5 @@ var test__stack__alloc_8cpp =
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#ac37b7a387bcde57916fc552db0e69b84", null ],
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#ae67f8eb9aed06e2d81ec60c1f4c65d22", null ],
     [ "register_stack_alloc_tests", "test__stack__alloc_8cpp.html#a465d0a1793fbe7178f27f6bf4c16445c", null ],
-    [ "stack_overflow_hook", "test__stack__alloc_8cpp.html#aebf9c76b4ca8fb2a8e32ca3fd1679fea", null ]
+    [ "stack_overflow_hook", "test__stack__alloc_8cpp.html#a31ca687659b8dd5a38b9f8bf3c3bfc05", null ]
 ];

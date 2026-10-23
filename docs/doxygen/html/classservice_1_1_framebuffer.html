@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -152,6 +152,12 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:ac5ad150a28e39fb8c2ea5b54ef472f73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the full framebuffer info structure.  <br /></td></tr>
 <tr class="memitem:ae27774c06353b1de3ea70262f75ef023" id="r_ae27774c06353b1de3ea70262f75ef023"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ae27774c06353b1de3ea70262f75ef023">available</a> ()</td></tr>
 <tr class="memdesc:ae27774c06353b1de3ea70262f75ef023"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns whether the framebuffer was successfully initialised.  <br /></td></tr>
+<tr class="memitem:a42497877d8c0e3c98c5113740aeb199a" id="r_a42497877d8c0e3c98c5113740aeb199a"><td class="memItemLeft">static const char *&#160;</td><td class="memItemRight"><a class="el" href="#a42497877d8c0e3c98c5113740aeb199a">backend_name</a> ()</td></tr>
+<tr class="memdesc:a42497877d8c0e3c98c5113740aeb199a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Backend name (issue #394: runtime-selected, was compile-time-only in #357). "multiboot2" on x86_64; on other arches the init chain selects "virtio-gpu" then "ramfb", else "none".  <br /></td></tr>
+<tr class="memitem:ad02c314a5101015bc51e7cc8d5e27b19" id="r_ad02c314a5101015bc51e7cc8d5e27b19"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ad02c314a5101015bc51e7cc8d5e27b19">present</a> ()</td></tr>
+<tr class="memdesc:ad02c314a5101015bc51e7cc8d5e27b19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Flushes dirty rows to the host scanout (issue #394). No-op for backends without host presentation (multiboot2 writes real RAM directly; ramfb points the host at guest RAM directly). Safe to call when unavailable (returns immediately).  <br /></td></tr>
+<tr class="memitem:ac25b551b9980d4786f3971f4412fa1dc" id="r_ac25b551b9980d4786f3971f4412fa1dc"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ac25b551b9980d4786f3971f4412fa1dc">invalidate</a> ()</td></tr>
+<tr class="memdesc:ac25b551b9980d4786f3971f4412fa1dc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Marks the whole framebuffer dirty (issue #394). Call after direct framebuffer writes that bypass put_pixel (<a class="el" href="classservice_1_1_terminal.html" title="Text terminal with cursor, scrolling, and line editing.">Terminal</a> clear/scroll fast paths) and before the next <a class="el" href="#ad02c314a5101015bc51e7cc8d5e27b19" title="Flushes dirty rows to the host scanout (issue #394). No-op for backends without host presentation (mu...">present()</a>.  <br /></td></tr>
 <tr class="memitem:a6d27abd512bf6375e04acc5e7518a7d8" id="r_a6d27abd512bf6375e04acc5e7518a7d8"><td class="memItemLeft">static uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a6d27abd512bf6375e04acc5e7518a7d8">get_pixel</a> (uint32_t x, uint32_t y)</td></tr>
 <tr class="memdesc:a6d27abd512bf6375e04acc5e7518a7d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reads one pixel back (issue #269 test oracle).  <br /></td></tr>
 </table>
@@ -186,6 +192,34 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a42497877d8c0e3c98c5113740aeb199a" name="a42497877d8c0e3c98c5113740aeb199a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a42497877d8c0e3c98c5113740aeb199a">&#9670;&#160;</a></span>backend_name()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char * service::Framebuffer::backend_name </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Backend name (issue #394: runtime-selected, was compile-time-only in #357). "multiboot2" on x86_64; on other arches the init chain selects "virtio-gpu" then "ramfb", else "none". </p>
+<dl class="section return"><dt>Returns</dt><dd>Backend name string (stable pointer, never null). </dd></dl>
+
+</div>
+</div>
 <a id="a1274c42c1bd5ce66854ba171f64a8e82" name="a1274c42c1bd5ce66854ba171f64a8e82"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a1274c42c1bd5ce66854ba171f64a8e82">&#9670;&#160;</a></span>clear()</h2>
 
@@ -216,6 +250,12 @@ Static Public Member Functions</h2></td></tr>
   </table>
   </dd>
 </dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classservice_1_1_framebuffer_a1274c42c1bd5ce66854ba171f64a8e82_cgraph.png" border="0" usemap="#aclassservice_1_1_framebuffer_a1274c42c1bd5ce66854ba171f64a8e82_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
 
 </div>
 </div>
@@ -376,7 +416,7 @@ Static Public Member Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classservice_1_1_framebuffer_a21e2237e699ed029130bec158efd8935_cgraph.png" border="0" usemap="#aclassservice_1_1_framebuffer_a21e2237e699ed029130bec158efd8935_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -498,8 +538,35 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classservice_1_1_framebuffer_a0c48217dc149beadf1749e6a351f4d8b_cgraph.png" border="0" usemap="#aclassservice_1_1_framebuffer_a0c48217dc149beadf1749e6a351f4d8b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 3 -->
 </div>
+
+</div>
+</div>
+<a id="ac25b551b9980d4786f3971f4412fa1dc" name="ac25b551b9980d4786f3971f4412fa1dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac25b551b9980d4786f3971f4412fa1dc">&#9670;&#160;</a></span>invalidate()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void service::Framebuffer::invalidate </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Marks the whole framebuffer dirty (issue #394). Call after direct framebuffer writes that bypass put_pixel (<a class="el" href="classservice_1_1_terminal.html" title="Text terminal with cursor, scrolling, and line editing.">Terminal</a> clear/scroll fast paths) and before the next <a class="el" href="#ad02c314a5101015bc51e7cc8d5e27b19" title="Flushes dirty rows to the host scanout (issue #394). No-op for backends without host presentation (mu...">present()</a>. </p>
 
 </div>
 </div>
@@ -528,6 +595,39 @@ Here is the call graph for this function:</div>
 
 <p>Returns the framebuffer pitch (bytes per row). </p>
 <dl class="section return"><dt>Returns</dt><dd>Pitch in bytes. </dd></dl>
+
+</div>
+</div>
+<a id="ad02c314a5101015bc51e7cc8d5e27b19" name="ad02c314a5101015bc51e7cc8d5e27b19"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad02c314a5101015bc51e7cc8d5e27b19">&#9670;&#160;</a></span>present()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void service::Framebuffer::present </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Flushes dirty rows to the host scanout (issue #394). No-op for backends without host presentation (multiboot2 writes real RAM directly; ramfb points the host at guest RAM directly). Safe to call when unavailable (returns immediately). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classservice_1_1_framebuffer_ad02c314a5101015bc51e7cc8d5e27b19_cgraph.png" border="0" usemap="#aclassservice_1_1_framebuffer_ad02c314a5101015bc51e7cc8d5e27b19_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
 
 </div>
 </div>

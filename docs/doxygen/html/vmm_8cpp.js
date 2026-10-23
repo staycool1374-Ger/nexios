@@ -1,5 +1,6 @@
 var vmm_8cpp =
 [
+    [ "kernel::__attribute__", "namespacekernel.html#af334ed97cac304999841e5e01a7cdfb6", null ],
     [ "kernel::arm_test_touch_flags", "namespacekernel.html#af888157a072690618fcf43fcc15dce42", null ],
     [ "kernel::note_silent_drop_once", "namespacekernel.html#affaa475d1e0ac61cef604410e598aef5", null ],
     [ "kernel::warn_test_kernel_touch", "namespacekernel.html#a6b5ee8c17a9a6bdac4152aff1443b58b", null ],

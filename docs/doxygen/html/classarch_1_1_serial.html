@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -143,7 +143,7 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a46ee5ade7378701ed69f936fdbea2039" id="r_a46ee5ade7378701ed69f936fdbea2039"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a46ee5ade7378701ed69f936fdbea2039">puts</a> (const char *str)</td></tr>
 <tr class="memdesc:a46ee5ade7378701ed69f936fdbea2039"><td class="mdescLeft">&#160;</td><td class="mdescRight">Transmit a null-terminated string.  <br /></td></tr>
 <tr class="memitem:a3ce38f76c842430834231b7188b3a251" id="r_a3ce38f76c842430834231b7188b3a251"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3ce38f76c842430834231b7188b3a251">write_count</a> () noexcept</td></tr>
-<tr class="memdesc:a3ce38f76c842430834231b7188b3a251"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the number of characters written to the serial console since boot. The interactive shell snapshots this value before drawing its prompt; if it advanced while the shell waits for input, a background task wrote to the console and the shell redraws its prompt on a fresh line (prevents async output such as the ELF loader's "completed" event from gluing onto the prompt).  <br /></td></tr>
+<tr class="memdesc:a3ce38f76c842430834231b7188b3a251"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the number of characters written to the serial console since boot. The interactive shell snapshots this before drawing its prompt; if it advanced while the shell waits for input, a background task wrote to the console and the shell redraws its prompt on a fresh line (prevents async output such as the ELF loader's "completed" event from gluing onto the prompt).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p><a class="el" href="classarch_1_1_serial.html" title="Serial port (UART) driver — architecture-agnostic interface.">Serial</a> port (UART) driver — architecture-agnostic interface. </p>
@@ -210,7 +210,7 @@ The received character, or '\0' when no data arrives within the bounded wait (FL
 
 <p>Initialise the serial port hardware. </p>
 <p>Initialise the serial port (COM1) at 115200 baud, 8N1.</p>
-<p>Initialize the serial port (no-op on RISC-V64). The virt 16550A divisor is pre-initialized by OpenSBI/QEMU; reprogramming it risks breaking the S-mode SBI TX path, so RX-only polling attaches to the live configuration (issue #247).</p>
+<p>Initialize the serial port (no-op on RISC-V64). The virt 16550A divisor is pre-initialized by OpenSBI/QEMU; reprogramming it risks breaking the S-mode SBI TX path, so RX-only polling attaches to the live configuration (issue #247). The kernel never writes IER — RX is polled, never interrupt-driven.</p>
 <p>Initialise the PL011 UART at 115200 baud (default QEMU virt config). Disables UART, clears pending interrupts, sets baud rate, enables TX/RX. </p>
 
 </div>
@@ -372,7 +372,7 @@ The received character, or '\0' when no data arrives within the bounded wait (FL
 </table>
 </div><div class="memdoc">
 
-<p>Returns the number of characters written to the serial console since boot. The interactive shell snapshots this value before drawing its prompt; if it advanced while the shell waits for input, a background task wrote to the console and the shell redraws its prompt on a fresh line (prevents async output such as the ELF loader's "completed" event from gluing onto the prompt). </p>
+<p>Returns the number of characters written to the serial console since boot. The interactive shell snapshots this before drawing its prompt; if it advanced while the shell waits for input, a background task wrote to the console and the shell redraws its prompt on a fresh line (prevents async output such as the ELF loader's "completed" event from gluing onto the prompt). </p>
 <p>Total characters written to the serial console since boot.</p>
 <p>Returns the number of characters written to the serial console since boot.</p>
 <dl class="section return"><dt>Returns</dt><dd>Character write count. </dd></dl>

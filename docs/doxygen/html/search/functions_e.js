@@ -21,13 +21,14 @@ var searchData=
   ['next_5ftask_5fid_18',['next_task_id',['../structkernel_1_1_scheduler_1_1_sw_slots.html#a08af57e0db53661a6990cc8d06273bce',1,'kernel::Scheduler::SwSlots']]],
   ['note_5fdebug_5ftick_5fpc_19',['note_debug_tick_pc',['../classkernel_1_1_scheduler.html#a01e7b9700c1fa1a21a5d20d1618c85ce',1,'kernel::Scheduler']]],
   ['note_5flaunched_20',['note_launched',['../classkernel_1_1elf_1_1_elf_loader.html#a7c1cbe4243b154e2e504455bd6584b6d',1,'kernel::elf::ElfLoader']]],
-  ['note_5fsilent_5fdrop_5fonce_21',['note_silent_drop_once',['../namespacekernel.html#affaa475d1e0ac61cef604410e598aef5',1,'kernel']]],
-  ['note_5ftask_5fend_22',['note_task_end',['../classkernel_1_1elf_1_1_elf_loader.html#a9241a9a2968d9c2a01710b04505ec8b4',1,'kernel::elf::ElfLoader']]],
-  ['notify_23',['Notify',['../classkernel_1_1sync_1_1_notify.html#a05adaea041b37192b2d0ee678d73fd97',1,'kernel::sync::Notify']]],
-  ['notify_24',['notify',['../classkernel_1_1sync_1_1_notify.html#a7f78509dfc82409073a6a539bc5d7adb',1,'kernel::sync::Notify']]],
-  ['notify_5fdeath_25',['notify_death',['../namespacekernel_1_1daemon.html#a7e16eb8619c9f04be9b9404c2d939644',1,'kernel::daemon']]],
-  ['notify_5ferr_26',['notify_err',['../classkernel_1_1sync_1_1_notify.html#a38a64ff48c7afcaf1e0d53545dcef60b',1,'kernel::sync::Notify']]],
-  ['ns_27',['ns',['../classarch_1_1_timer.html#a4980b13e865193d67c4e87029c642be2',1,'arch::Timer::ns()'],['../classarch_1_1_timer.html#a7c7819bd54efd6543347f73162bdbde3',1,'arch::Timer::ns()'],['../classarch_1_1_timer.html#a7c7819bd54efd6543347f73162bdbde3',1,'arch::Timer::ns()']]],
-  ['ns_5fmonotonic_28',['ns_monotonic',['../classarch_1_1_timer.html#ab2e39495db2cfed30977436fe7316b10',1,'arch::Timer::ns_monotonic()'],['../classarch_1_1_timer.html#a47e0e4cc370bc5ca79bb6a3a0129a02e',1,'arch::Timer::ns_monotonic()'],['../classarch_1_1_timer.html#a47e0e4cc370bc5ca79bb6a3a0129a02e',1,'arch::Timer::ns_monotonic()']]],
-  ['ns_5fto_5ftimespec_29',['ns_to_timespec',['../classkernel_1_1time_1_1_posix_time.html#a20bec68fe8955ca5b07f79c26091e144',1,'kernel::time::PosixTime']]]
+  ['note_5fmasked_21',['note_masked',['../classarch_1_1_irq_storm_limiter.html#a2c3a0c739ad02a0444c92fbd97169440',1,'arch::IrqStormLimiter']]],
+  ['note_5fsilent_5fdrop_5fonce_22',['note_silent_drop_once',['../namespacekernel.html#affaa475d1e0ac61cef604410e598aef5',1,'kernel']]],
+  ['note_5ftask_5fend_23',['note_task_end',['../classkernel_1_1elf_1_1_elf_loader.html#a9241a9a2968d9c2a01710b04505ec8b4',1,'kernel::elf::ElfLoader']]],
+  ['notify_24',['Notify',['../classkernel_1_1sync_1_1_notify.html#a05adaea041b37192b2d0ee678d73fd97',1,'kernel::sync::Notify']]],
+  ['notify_25',['notify',['../classkernel_1_1sync_1_1_notify.html#a7f78509dfc82409073a6a539bc5d7adb',1,'kernel::sync::Notify']]],
+  ['notify_5fdeath_26',['notify_death',['../namespacekernel_1_1daemon.html#a7e16eb8619c9f04be9b9404c2d939644',1,'kernel::daemon']]],
+  ['notify_5ferr_27',['notify_err',['../classkernel_1_1sync_1_1_notify.html#a38a64ff48c7afcaf1e0d53545dcef60b',1,'kernel::sync::Notify']]],
+  ['ns_28',['ns',['../classarch_1_1_timer.html#a4980b13e865193d67c4e87029c642be2',1,'arch::Timer::ns()'],['../classarch_1_1_timer.html#a7c7819bd54efd6543347f73162bdbde3',1,'arch::Timer::ns()'],['../classarch_1_1_timer.html#a7c7819bd54efd6543347f73162bdbde3',1,'arch::Timer::ns()']]],
+  ['ns_5fmonotonic_29',['ns_monotonic',['../classarch_1_1_timer.html#ab2e39495db2cfed30977436fe7316b10',1,'arch::Timer::ns_monotonic()'],['../classarch_1_1_timer.html#a47e0e4cc370bc5ca79bb6a3a0129a02e',1,'arch::Timer::ns_monotonic()'],['../classarch_1_1_timer.html#a47e0e4cc370bc5ca79bb6a3a0129a02e',1,'arch::Timer::ns_monotonic()']]],
+  ['ns_5fto_5ftimespec_30',['ns_to_timespec',['../classkernel_1_1time_1_1_posix_time.html#a20bec68fe8955ca5b07f79c26091e144',1,'kernel::time::PosixTime']]]
 ];

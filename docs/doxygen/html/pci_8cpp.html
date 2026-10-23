@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('pci_8cpp.html'
 <p>PCI bus enumeration — arch-independent (uses HAL config space access).  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="pci_8hpp_source.html">kernel/arch/pci.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dtb_8hpp_source.html">kernel/boot/dtb.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="vmm__errors_8hpp_source.html">kernel/memory/vmm_errors.hpp</a>&gt;</code><br />
@@ -141,6 +142,8 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a1006eef2991681cab2be76527b4877e3" id="r_a1006eef2991681cab2be76527b4877e3"><td class="memItemLeft">const PciEcamInfo &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a1006eef2991681cab2be76527b4877e3">arch::pci_ecam_info</a> ()</td></tr>
+<tr class="memitem:ad3d99a7e474cab3a76f23b358052d6fe" id="r_ad3d99a7e474cab3a76f23b358052d6fe"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ad3d99a7e474cab3a76f23b358052d6fe">arch::pci_ecam_discover</a> ()</td></tr>
 <tr class="memitem:adf555b81d7d72b5c61d212eaf1aa1e69" id="r_adf555b81d7d72b5c61d212eaf1aa1e69"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#adf555b81d7d72b5c61d212eaf1aa1e69">arch::pci_scan_all</a> ()</td></tr>
 <tr class="memitem:a11748e0603d0f9b77d1198c4e14fd224" id="r_a11748e0603d0f9b77d1198c4e14fd224"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a11748e0603d0f9b77d1198c4e14fd224">arch::pci_dump_tree</a> ()</td></tr>
 <tr class="memitem:a4191f59246c41e7a68abf50fc57f2da9" id="r_a4191f59246c41e7a68abf50fc57f2da9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a4191f59246c41e7a68abf50fc57f2da9">arch::pci_print_tree</a> (char *buffer, <a class="el" href="namespacearch.html#ab14cee44c8235473f34c47e6a358dd52">size_t</a> size)</td></tr>

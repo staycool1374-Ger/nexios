@@ -48,8 +48,9 @@ var searchData=
   ['msgs_45',['msgs',['../structkernel_1_1_message_queue.html#a83249920b380e779a5be6fe72df2f0a4',1,'kernel::MessageQueue']]],
   ['msix_5fcfg_46',['msix_cfg',['../test__virtio__blk__req_8cpp.html#a541efc78aea7dd192e3905e49095c556',1,'test_virtio_blk_req.cpp']]],
   ['msix_5fvector_5fmax_47',['MSIX_VECTOR_MAX',['../namespacekernel.html#a92ff3aab226103aecc5cee29134cd925',1,'kernel']]],
-  ['mtimecmp_5fdisarmed_48',['MTIMECMP_DISARMED',['../namespacearch.html#aea1d2d632f96e8d9538233984e274d99',1,'arch']]],
-  ['multiboot_5finfo_49',['multiboot_info',['../struct_boot_info.html#aa65aad7d7c3fe3cdc5cec24cffff691f',1,'BootInfo']]],
-  ['multiboot_5finfo_5fptr_50',['multiboot_info_ptr',['../global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9',1,'global_state.cpp']]],
-  ['multiboot_5fmagic_51',['multiboot_magic',['../struct_boot_info.html#a3d5ea67834f4cea4956f680a6dc7a16e',1,'BootInfo::multiboot_magic'],['../global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a',1,'multiboot_magic:&#160;global_state.cpp']]]
+  ['mtime_5ffreq_5fhz_48',['MTIME_FREQ_HZ',['../namespacearch.html#a3d7b1a23b546014c8a7556f9066ea89e',1,'arch']]],
+  ['mtimecmp_5fdisarmed_49',['MTIMECMP_DISARMED',['../namespacearch.html#aea1d2d632f96e8d9538233984e274d99',1,'arch']]],
+  ['multiboot_5finfo_50',['multiboot_info',['../struct_boot_info.html#aa65aad7d7c3fe3cdc5cec24cffff691f',1,'BootInfo']]],
+  ['multiboot_5finfo_5fptr_51',['multiboot_info_ptr',['../global__state_8cpp.html#a2e435e25065d40cbea1df681ebafede9',1,'global_state.cpp']]],
+  ['multiboot_5fmagic_52',['multiboot_magic',['../struct_boot_info.html#a3d5ea67834f4cea4956f680a6dc7a16e',1,'BootInfo::multiboot_magic'],['../global__state_8cpp.html#a16fea7346fbc792334a098eb9b61c77a',1,'multiboot_magic:&#160;global_state.cpp']]]
 ];

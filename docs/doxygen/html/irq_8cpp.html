@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq_8cpp.html'
 <p>IrqCap implementation (issue #2). Bound by CONFIG_CAP_MAX_IRQ via a TU-local live counter (<a class="el" href="mmio_8cpp.html" title="MmioCap implementation (issue #3/#8). Bound by CONFIG_CAP_MAX_MMIO via a TU-local live counter (untyp...">mmio.cpp</a> pattern); folds into the existing cap_objects ResourceTracker counter. The delivery-table slot is claimed at create() time (single-owner per vector) and released at dispose/revoke.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="irq_8hpp_source.html">kernel/cap/irq.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__vectors_8hpp_source.html">kernel/arch/hal/irq_vectors.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__delivery_8hpp_source.html">kernel/irq_delivery.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mempool_8hpp_source.html">kernel/memory/mempool.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="resource__tracker_8hpp_source.html">kernel/test/resource_tracker.hpp</a>&gt;</code><br />

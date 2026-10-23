@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -165,6 +165,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a3dc3c21ce4d1220b25ddaab403b23140"><td class="mdescLeft">&#160;</td><td class="mdescRight">Exec-style live swap (issue #377): replaces a live table. The caller frees the old table (exec frees after the swap so the running task never observes a dead root).  <br /></td></tr>
 <tr class="memitem:a320b02df232a268b3a99f938e5812e00" id="r_a320b02df232a268b3a99f938e5812e00"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a320b02df232a268b3a99f938e5812e00">clear_page_table</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a320b02df232a268b3a99f938e5812e00"><td class="mdescLeft">&#160;</td><td class="mdescRight">Teardown clear (issue #377): the caller freed the table.  <br /></td></tr>
+<tr class="memitem:a8ff03bb4cc6b9550491b6aea351e1207" id="r_a8ff03bb4cc6b9550491b6aea351e1207"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a8ff03bb4cc6b9550491b6aea351e1207">context_id</a> () const <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a8ff03bb4cc6b9550491b6aea351e1207"><td class="mdescLeft">&#160;</td><td class="mdescRight">Generic context-ID accessor (issue #352). The stored <span class="tt"><a class="el" href="#a3841792e113d81489083a6d822daf7fb" title="Context identifier for TLB tagging (issue #156 x86_64 PCID, generalized issue #352: aarch64/riscv64 A...">pcid_</a></span> field carries the PCID on x86_64 and the ASID on aarch64/riscv64; 0 means untagged on every arch.  <br /></td></tr>
 <tr class="memitem:a4c342fe350f642a64460f9130185880e" id="r_a4c342fe350f642a64460f9130185880e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4c342fe350f642a64460f9130185880e">has_signal_handler</a> (uint64_t sig) const</td></tr>
 <tr class="memdesc:a4c342fe350f642a64460f9130185880e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checks if the task has a handler registered for a signal.  <br /></td></tr>
 <tr class="memitem:ac01961e7ed10f1efbc39de08b7cf25be" id="r_ac01961e7ed10f1efbc39de08b7cf25be"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac01961e7ed10f1efbc39de08b7cf25be">set_signal_handler</a> (uint64_t sig, <a class="el" href="namespacekernel.html#ae89f8530616ba6e58eebc1f5104f6e5c">sighandler_t</a> handler)</td></tr>
@@ -207,7 +209,7 @@ Public Member Functions</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:af323200712a5e6f52ef61e227937d788" id="r_af323200712a5e6f52ef61e227937d788"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#af323200712a5e6f52ef61e227937d788">is_kernel_address</a> (uint64_t addr) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:af323200712a5e6f52ef61e227937d788"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if <span class="tt"><a class="el" href="ether_8hpp.html#a8f7d34f0706997ac57fd475518fa9cb5" title="Octets in network order.">addr</a></span> lies in the kernel address half (issue #323: arch-independent pointer compare). The kernel base is the arch-dependent CONFIG_HHDM_OFFSET. Mirrors the kernel-half test in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>. (Other subsystems still carry raw arch-literal HHDM comparisons — e.g. <a class="el" href="address_8hpp.html" title="Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant).">memory/address.hpp</a>; their migration is tracked under #323.).  <br /></td></tr>
+<tr class="memdesc:af323200712a5e6f52ef61e227937d788"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if <span class="tt"><a class="el" href="virtio__gpu_8hpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></span> lies in the kernel address half (issue #323: arch-independent pointer compare). The kernel base is the arch-dependent CONFIG_HHDM_OFFSET. Mirrors the kernel-half test in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>. (Other subsystems still carry raw arch-literal HHDM comparisons — e.g. <a class="el" href="address_8hpp.html" title="Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant).">memory/address.hpp</a>; their migration is tracked under #323.).  <br /></td></tr>
 <tr class="memitem:a79658af4f1e4b36dd76f4ea1ac7b5fa3" id="r_a79658af4f1e4b36dd76f4ea1ac7b5fa3"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a79658af4f1e4b36dd76f4ea1ac7b5fa3">is_kernel_pointer</a> (const void *p) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a79658af4f1e4b36dd76f4ea1ac7b5fa3"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if <span class="tt">p</span> lies in the kernel address half (see <a class="el" href="#af323200712a5e6f52ef61e227937d788" title="True if addr lies in the kernel address half (issue #323: arch-independent pointer compare)....">is_kernel_address()</a>).  <br /></td></tr>
 <tr class="memitem:ad0f74cc38a41728c771a0a5a052c9904" id="r_ad0f74cc38a41728c771a0a5a052c9904"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#ad0f74cc38a41728c771a0a5a052c9904">is_valid</a> (const <a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *t) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
@@ -287,7 +289,7 @@ Data Fields</h2></td></tr>
 <tr class="memitem:aa550e222c9c2fc30c4ac41ff33ed21b2" id="r_aa550e222c9c2fc30c4ac41ff33ed21b2"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aa550e222c9c2fc30c4ac41ff33ed21b2">kstack_slot_size_</a></td></tr>
 <tr class="memdesc:aa550e222c9c2fc30c4ac41ff33ed21b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Total slot size (stack + guard page). 0 if HHDM.  <br /></td></tr>
 <tr class="memitem:a3841792e113d81489083a6d822daf7fb" id="r_a3841792e113d81489083a6d822daf7fb"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a3841792e113d81489083a6d822daf7fb">pcid_</a></td></tr>
-<tr class="memdesc:a3841792e113d81489083a6d822daf7fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process-context identifier for TLB tagging (issue #156, x86_64 only). 0 = untagged (kernel tasks + unsupported CPUs); user tasks hold an allocated 1..4095. Owned by the TCB (not the PML4): survives exec PML4 swaps, dies with the task so IDs are never reused while live.  <br /></td></tr>
+<tr class="memdesc:a3841792e113d81489083a6d822daf7fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Context identifier for TLB tagging (issue #156 x86_64 PCID, generalized issue #352: aarch64/riscv64 ASID). 0 = untagged (kernel tasks + unsupported CPUs); user tasks hold an allocated ID. Owned by the TCB (not the PML4): survives exec PML4 swaps, dies with the task so IDs are never reused while live.  <br /></td></tr>
 <tr class="memitem:a3ceaa370cd26d918c7cb88094eb4c8b1" id="r_a3ceaa370cd26d918c7cb88094eb4c8b1"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3ceaa370cd26d918c7cb88094eb4c8b1">stack_pdpt_phys_</a></td></tr>
 <tr class="memdesc:a3ceaa370cd26d918c7cb88094eb4c8b1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Physical address of the private PDPT page allocated in <a class="el" href="#a1443c8caa63e4d8af39ad150f91d413d" title="Clones the current task — creates a child with copied context.">clone()</a> for the user stack region. Zero when not applicable. Used by <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> to free the private PDPT and its child PD/PT pages that would otherwise leak.  <br /></td></tr>
 <tr class="memitem:a2888326289461dff4d14a39ff05894b6" id="r_a2888326289461dff4d14a39ff05894b6"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2888326289461dff4d14a39ff05894b6">user_stack_</a></td></tr>
@@ -302,10 +304,10 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a93a5704dcb7c25a444004df2d26b60da" id="r_a93a5704dcb7c25a444004df2d26b60da"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a93a5704dcb7c25a444004df2d26b60da">canary_installed</a></td></tr>
 <tr class="memdesc:a93a5704dcb7c25a444004df2d26b60da"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitmask: bit i set when segment i's canaries are installed; bit CANARY_SEGMENTS set when the kernel-stack canary is armed.  <br /></td></tr>
 <tr class="memitem:a5380de5fe240aa3981111d27910029a4" id="r_a5380de5fe240aa3981111d27910029a4"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5380de5fe240aa3981111d27910029a4">fpu_used</a></td></tr>
-<tr class="memdesc:a5380de5fe240aa3981111d27910029a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes). 64-byte aligned (issue #93; FXSAVE requires 16, 64 avoids split-line stores and matches docs/specs/fpu-context.md §3.3). Zeroed on task creation; populated lazily via #NM handler. INV-FPU1: this is the ONLY FPU save location — never allocated at IRQ time.  <br /></td></tr>
+<tr class="memdesc:a5380de5fe240aa3981111d27910029a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">FPU save area (issue #353): x86 FXSAVE/FXRSTOR 512 bytes; aarch64 NEON (Q0-Q31 + FPCR/FPSR) or riscv64 F/D (f0-f31 + fcsr) via <a class="el" href="namespacearch.html#a31425c73373ccc2d2e3339e0a3083473" title="FP/SIMD save-area size in bytes (528).">arch::FPU_STATE_AREA_SIZE</a>. 64-byte aligned (issue #93; avoids split-line stores; matches docs/specs/fpu-context.md §3.3). Zeroed on task creation; populated lazily (x86 #NM) or eagerly (non-x86 switch). INV-FPU1: this is the ONLY FPU save location — never allocated at IRQ time.  <br /></td></tr>
 <tr class="memitem:a5e0b6f234687aebce3edddf5ec228297" id="r_a5e0b6f234687aebce3edddf5ec228297"><td class="memItemLeft">uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a5e0b6f234687aebce3edddf5ec228297">fpu_state_gen</a></td></tr>
 <tr class="memdesc:a5e0b6f234687aebce3edddf5ec228297"><td class="mdescLeft">&#160;</td><td class="mdescRight">Debug/invariant generation counter, bumped on every fxsave of this task's state (issue #93). 0 = never saved. Unconditional (not CONFIG_DEBUG-gated) to preserve debug/release symmetry.  <br /></td></tr>
-<tr class="memitem:aba3ff95154bfac73cab9a2830ac7b133" id="r_aba3ff95154bfac73cab9a2830ac7b133"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aba3ff95154bfac73cab9a2830ac7b133">fpu_state</a> [512]</td></tr>
+<tr class="memitem:a8de713df6ba4aa50b6eade5b1018ee4d" id="r_a8de713df6ba4aa50b6eade5b1018ee4d"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a8de713df6ba4aa50b6eade5b1018ee4d">fpu_state</a> [<a class="el" href="namespacearch.html#a31425c73373ccc2d2e3339e0a3083473">arch::FPU_STATE_AREA_SIZE</a>]</td></tr>
 <tr class="memitem:ad028cbe71e850f7d7cf4ffac2393c830" id="r_ad028cbe71e850f7d7cf4ffac2393c830"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ad028cbe71e850f7d7cf4ffac2393c830">program_break</a></td></tr>
 <tr class="memitem:aed37b7e4cadb4dbf18313d95a47d94fd" id="r_aed37b7e4cadb4dbf18313d95a47d94fd"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#aed37b7e4cadb4dbf18313d95a47d94fd">program_break_start</a></td></tr>
 <tr class="memitem:ae086b270450b4eedeade4398637edb4b" id="r_ae086b270450b4eedeade4398637edb4b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae086b270450b4eedeade4398637edb4b">kstack_low_water_</a></td></tr>
@@ -728,14 +730,14 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Clones the current task — creates a child with copied context. </p>
-<p>Clones the current task (fork). Allocates a new TCB and kernel stack, copies parent's fd table, FPU state, signal handlers, and process hierarchy. For user tasks, clones the page table and copies user stack contents with COW semantics for code/data pages.</p>
+<p>Clones the current task (fork). Allocates a new TCB and kernel stack, copies parent's fd table, FPU state, signal handlers, and process hierarchy. For user tasks, clones the page table and copies user stack contents with COW semantics for code/data pages. On non-x86_64 the parent's live FP/SIMD registers are flushed into parent-&gt;fpu_state before the child copy (issue #403: eager-switch arches have no trap-time save); on x86_64 the lazy owner check is unchanged.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">regs</td><td>Register save area from the interrupt (to copy RIP/RSP/regs). </td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to the new child <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>, or nullptr on failure.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to the new child <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>, or nullptr on failure. A user-marked parent must own a live, page-aligned <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> USER block of user_stack_size_ bytes (issue #400); synthetic parents fail closed with nullptr and zero side effects.</dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">regs</td><td>Pointer to the saved register frame from the fork syscall. </td></tr>
@@ -830,6 +832,39 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a8ff03bb4cc6b9550491b6aea351e1207" name="a8ff03bb4cc6b9550491b6aea351e1207"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ff03bb4cc6b9550491b6aea351e1207">&#9670;&#160;</a></span>context_id()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint16_t kernel::TaskControlBlock::context_id </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Generic context-ID accessor (issue #352). The stored <span class="tt"><a class="el" href="#a3841792e113d81489083a6d822daf7fb" title="Context identifier for TLB tagging (issue #156 x86_64 PCID, generalized issue #352: aarch64/riscv64 A...">pcid_</a></span> field carries the PCID on x86_64 and the ASID on aarch64/riscv64; 0 means untagged on every arch. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_task_control_block_a8ff03bb4cc6b9550491b6aea351e1207_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a8ff03bb4cc6b9550491b6aea351e1207_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
 <a id="a82a06cb63bdaa30a038a40e5632fbe9d" name="a82a06cb63bdaa30a038a40e5632fbe9d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a82a06cb63bdaa30a038a40e5632fbe9d">&#9670;&#160;</a></span>create()</h2>
 
@@ -867,7 +902,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a82a06cb63bdaa30a038a40e5632fbe9d_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a82a06cb63bdaa30a038a40e5632fbe9d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -924,7 +959,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a5970a87b395499a88856bb6bf9c1cd57_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a5970a87b395499a88856bb6bf9c1cd57_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -982,7 +1017,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_ac1a2ba759b6c98d3c734d755a5380b3f_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_ac1a2ba759b6c98d3c734d755a5380b3f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -1045,7 +1080,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_aef2b708bdbeae5ee1d520a8a7f91325b_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_aef2b708bdbeae5ee1d520a8a7f91325b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -1078,7 +1113,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_ab52ff8402135c9d2a8ac6df1c5346f5e_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_ab52ff8402135c9d2a8ac6df1c5346f5e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -1175,7 +1210,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a8422d326842cf1fb8f471a312996e95f_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a8422d326842cf1fb8f471a312996e95f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -1208,7 +1243,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a1a0b0c99fcacedaf0d60e51d87466052_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a1a0b0c99fcacedaf0d60e51d87466052_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -1322,7 +1357,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a5c8c3da12f183005dbfe5563e39cb39c_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a5c8c3da12f183005dbfe5563e39cb39c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -1397,23 +1432,22 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Allocates and initialises a SporadicServer for this task (e.g. a Ring 3 daemon like vfsd / iocd). </p>
-<p>Trampoline wrapper for kernel task entry points. Set as RIP in the ISR save frame; RDI (first argument) is set to the actual entry function. After <a class="el" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370" title="Virtual address of entry point.">entry()</a> returns, the task is terminated so its state transitions to TERMINATED and any waiter (e.g. a test harness spinning on task-&gt;state) observes completion. Previously this fell into an infinite hlt loop, leaving the task RUNNING forever and deadlocking any caller that waits for termination (ipc_blocking test hang).</p>
+<p>Allocates and initialises a SporadicServer for a daemon task from the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. Idempotent (returns early if already set).</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">budget_c</td><td>Execution budget per period (ticks). </td></tr>
     <tr><td class="paramname">period_t</td><td>Replenishment period (ticks). </td></tr>
     <tr><td class="paramname">bg_prio</td><td>Priority level when budget exhausted. </td></tr>
     <tr><td class="paramname">budget_granularity</td><td>Ticks per budget unit (default: CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY). </td></tr>
-    <tr><td class="paramname">mode</td><td>Replenishment discipline (issue #22; default SPORADIC keeps existing callers unchanged).</td></tr>
+    <tr><td class="paramname">mode</td><td>Replenishment discipline (issue #22; default SPORADIC keeps existing callers unchanged). </td></tr>
   </table>
   </dd>
 </dl>
-<p>Allocates and initialises a SporadicServer for a daemon task from the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. Idempotent (returns early if already set). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_aa64afb86912fa0ccc43e1470a1ba830b_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_aa64afb86912fa0ccc43e1470a1ba830b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -1478,7 +1512,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>True if <span class="tt"><a class="el" href="ether_8hpp.html#a8f7d34f0706997ac57fd475518fa9cb5" title="Octets in network order.">addr</a></span> lies in the kernel address half (issue #323: arch-independent pointer compare). The kernel base is the arch-dependent CONFIG_HHDM_OFFSET. Mirrors the kernel-half test in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>. (Other subsystems still carry raw arch-literal HHDM comparisons — e.g. <a class="el" href="address_8hpp.html" title="Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant).">memory/address.hpp</a>; their migration is tracked under #323.). </p>
+<p>True if <span class="tt"><a class="el" href="virtio__gpu_8hpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></span> lies in the kernel address half (issue #323: arch-independent pointer compare). The kernel base is the arch-dependent CONFIG_HHDM_OFFSET. Mirrors the kernel-half test in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>. (Other subsystems still carry raw arch-literal HHDM comparisons — e.g. <a class="el" href="address_8hpp.html" title="Type-safe physical and virtual address wrappers (MISRA C++ 2023 compliant).">memory/address.hpp</a>; their migration is tracked under #323.). </p>
 
 </div>
 </div>
@@ -1510,7 +1544,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a79658af4f1e4b36dd76f4ea1ac7b5fa3_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a79658af4f1e4b36dd76f4ea1ac7b5fa3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -1543,7 +1577,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_ad0f74cc38a41728c771a0a5a052c9904_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_ad0f74cc38a41728c771a0a5a052c9904_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -1576,7 +1610,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a9cdd124650c5b54d901b0a704fa4c723_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a9cdd124650c5b54d901b0a704fa4c723_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -1611,7 +1645,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a56a69234e3f9c078f2eab4f896ef2e7c_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a56a69234e3f9c078f2eab4f896ef2e7c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -1644,7 +1678,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a121ed14dd4f6a9632642bf0dea75416b_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a121ed14dd4f6a9632642bf0dea75416b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1683,7 +1717,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a02994288d778ac145ce6758472227cec_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a02994288d778ac145ce6758472227cec_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -2556,14 +2590,14 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="aba3ff95154bfac73cab9a2830ac7b133" name="aba3ff95154bfac73cab9a2830ac7b133"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aba3ff95154bfac73cab9a2830ac7b133">&#9670;&#160;</a></span>fpu_state</h2>
+<a id="a8de713df6ba4aa50b6eade5b1018ee4d" name="a8de713df6ba4aa50b6eade5b1018ee4d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8de713df6ba4aa50b6eade5b1018ee4d">&#9670;&#160;</a></span>fpu_state</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">uint8_t kernel::TaskControlBlock::fpu_state[512]</td>
+          <td class="memname">uint8_t kernel::TaskControlBlock::fpu_state[<a class="el" href="namespacearch.html#a31425c73373ccc2d2e3339e0a3083473">arch::FPU_STATE_AREA_SIZE</a>]</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2598,7 +2632,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>FPU/SSE save area (FXSAVE/FXRSTOR — 512 bytes). 64-byte aligned (issue #93; FXSAVE requires 16, 64 avoids split-line stores and matches docs/specs/fpu-context.md §3.3). Zeroed on task creation; populated lazily via #NM handler. INV-FPU1: this is the ONLY FPU save location — never allocated at IRQ time. </p>
+<p>FPU save area (issue #353): x86 FXSAVE/FXRSTOR 512 bytes; aarch64 NEON (Q0-Q31 + FPCR/FPSR) or riscv64 F/D (f0-f31 + fcsr) via <a class="el" href="namespacearch.html#a31425c73373ccc2d2e3339e0a3083473" title="FP/SIMD save-area size in bytes (528).">arch::FPU_STATE_AREA_SIZE</a>. 64-byte aligned (issue #93; avoids split-line stores; matches docs/specs/fpu-context.md §3.3). Zeroed on task creation; populated lazily (x86 #NM) or eagerly (non-x86 switch). INV-FPU1: this is the ONLY FPU save location — never allocated at IRQ time. </p>
 
 </div>
 </div>
@@ -3246,7 +3280,7 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
-<p>Process-context identifier for TLB tagging (issue #156, x86_64 only). 0 = untagged (kernel tasks + unsupported CPUs); user tasks hold an allocated 1..4095. Owned by the TCB (not the PML4): survives exec PML4 swaps, dies with the task so IDs are never reused while live. </p>
+<p>Context identifier for TLB tagging (issue #156 x86_64 PCID, generalized issue #352: aarch64/riscv64 ASID). 0 = untagged (kernel tasks + unsupported CPUs); user tasks hold an allocated ID. Owned by the TCB (not the PML4): survives exec PML4 swaps, dies with the task so IDs are never reused while live. </p>
 
 </div>
 </div>

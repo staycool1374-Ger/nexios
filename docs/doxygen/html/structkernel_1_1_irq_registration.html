@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -133,9 +133,7 @@ Collaboration diagram for kernel::IrqRegistration:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
 <tr class="memitem:a66a7b11e6369f0a2421678670ddd682e" id="r_a66a7b11e6369f0a2421678670ddd682e"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a66a7b11e6369f0a2421678670ddd682e">vector</a> = 0</td></tr>
-<tr class="memdesc:a66a7b11e6369f0a2421678670ddd682e"><td class="mdescLeft">&#160;</td><td class="mdescRight">hardware vector (PIC 33–47 or MSI-X 48–255)  <br /></td></tr>
 <tr class="memitem:ab27aecc80d0acc7c1f0b262683cb814d" id="r_ab27aecc80d0acc7c1f0b262683cb814d"><td class="memItemLeft"><a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3">IrqSlotKind</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab27aecc80d0acc7c1f0b262683cb814d">kind</a> = <a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2">IrqSlotKind::PIC</a></td></tr>
-<tr class="memdesc:ab27aecc80d0acc7c1f0b262683cb814d"><td class="mdescLeft">&#160;</td><td class="mdescRight">PIC vs MSI-X (kind-gated masks).  <br /></td></tr>
 <tr class="memitem:a4bea632436b97b6b1166f4469935acc8" id="r_a4bea632436b97b6b1166f4469935acc8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4bea632436b97b6b1166f4469935acc8">occupied</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memdesc:a4bea632436b97b6b1166f4469935acc8"><td class="mdescLeft">&#160;</td><td class="mdescRight">slot in use  <br /></td></tr>
 <tr class="memitem:a444176bd4c4a05a4488d608909cb4154" id="r_a444176bd4c4a05a4488d608909cb4154"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a444176bd4c4a05a4488d608909cb4154">armed</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
@@ -205,8 +203,7 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-
-<p>PIC vs MSI-X (kind-gated masks). </p>
+<p>PIC vs MSI-X vs PLATFORM (kind-gated masks) </p>
 
 </div>
 </div>
@@ -333,8 +330,7 @@ Data Fields</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-
-<p>hardware vector (PIC 33–47 or MSI-X 48–255) </p>
+<p>hardware vector (PIC 33–47, MSI-X 48–255, or PLATFORM: GIC 32–255 / PLIC 1–95) </p>
 
 </div>
 </div>

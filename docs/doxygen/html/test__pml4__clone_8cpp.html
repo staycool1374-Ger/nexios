@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -138,9 +138,724 @@ Include dependency graph for test_pml4_clone.cpp:</div>
 <div class="center"><img src="test__pml4__clone_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2test_2test__pml4__clone_8cpp" loading="lazy" alt=""/></div>
 <!-- MAP 0 -->
 </div>
-</div><a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+</div><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a980ab9b02295a63fb05dd2c833810f81" id="r_a980ab9b02295a63fb05dd2c833810f81"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a980ab9b02295a63fb05dd2c833810f81">index_of</a> (uint64_t va, unsigned level)</td></tr>
+<tr class="memdesc:a980ab9b02295a63fb05dd2c833810f81"><td class="mdescLeft">&#160;</td><td class="mdescRight">Level index of va (level 0 = top). riscv64 uses the public <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> Sv39 geometry (no ArchPageTable index helpers there by design).  <br /></td></tr>
+<tr class="memitem:aac8339c00f0812157818a08a23c3fba6" id="r_aac8339c00f0812157818a08a23c3fba6"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#aac8339c00f0812157818a08a23c3fba6">entry_present</a> (uint64_t e)</td></tr>
+<tr class="memdesc:aac8339c00f0812157818a08a23c3fba6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Present bit (bit 0: P on x86, valid on aarch64, V on Sv39).  <br /></td></tr>
+<tr class="memitem:a267f388de3a070a3ab23e8770b62698a" id="r_a267f388de3a070a3ab23e8770b62698a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a267f388de3a070a3ab23e8770b62698a">entry_is_table</a> (uint64_t e)</td></tr>
+<tr class="memdesc:a267f388de3a070a3ab23e8770b62698a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Table-vs-leaf classifier, mirroring vmm_arch_is_table per arch.  <br /></td></tr>
+<tr class="memitem:ab899742000b8865194ad84ff0589e253" id="r_ab899742000b8865194ad84ff0589e253"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab899742000b8865194ad84ff0589e253">entry_table_child</a> (uint64_t e)</td></tr>
+<tr class="memdesc:ab899742000b8865194ad84ff0589e253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Child-table phys from a table entry (never call on a leaf: raw masking leaks NX/UXN/PXN and mis-decodes Sv39 PPNs).  <br /></td></tr>
+<tr class="memitem:a2a54040cbb9f0caafacc321515410322" id="r_a2a54040cbb9f0caafacc321515410322"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2a54040cbb9f0caafacc321515410322">entry_leaf_frame</a> (uint64_t e)</td></tr>
+<tr class="memdesc:a2a54040cbb9f0caafacc321515410322"><td class="mdescLeft">&#160;</td><td class="mdescRight">Child-table phys from a table entry (never call on a leaf: raw masking leaks NX/UXN/PXN and mis-decodes Sv39 PPNs).  <br /></td></tr>
+<tr class="memitem:a7131de9012511804c208aeb99c939382" id="r_a7131de9012511804c208aeb99c939382"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a7131de9012511804c208aeb99c939382">entry_has_user_flag</a> (uint64_t e)</td></tr>
+<tr class="memdesc:a7131de9012511804c208aeb99c939382"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether an entry marks user-accessible memory (for the #387 inheritance rule: kernel-owned leaves are inherited by value and must be skipped by independence walks).  <br /></td></tr>
+<tr class="memitem:a240e6208972297c2a2d9bfb8cc00c906" id="r_a240e6208972297c2a2d9bfb8cc00c906"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a240e6208972297c2a2d9bfb8cc00c906">entry_is_user_owned</a> (uint64_t e)</td></tr>
+<tr class="memdesc:a240e6208972297c2a2d9bfb8cc00c906"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether an entry is user-owned: U-flagged, or a frame from the user pool (covers flag-less kernel leaves mapping user frames).  <br /></td></tr>
+<tr class="memitem:af3308b9fb7629f2beaf613be630b0dc2" id="r_af3308b9fb7629f2beaf613be630b0dc2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af3308b9fb7629f2beaf613be630b0dc2">entry_is_meaningful</a> (uint64_t e, unsigned level)</td></tr>
+<tr class="memdesc:af3308b9fb7629f2beaf613be630b0dc2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Whether a present entry is a meaningful mapping at this level. Only Sv39 has reserved present-but-meaningless encodings: a V-only entry at the leaf level (L2) is an invalid non-leaf (#206) — neither a mapping to compare nor a table to descend.  <br /></td></tr>
+<tr class="memitem:ac86e9cf1f240da60284e23046e0b243e" id="r_ac86e9cf1f240da60284e23046e0b243e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ac86e9cf1f240da60284e23046e0b243e">JARVIS_TEST</a> (pml4_clone_clears_user_entries, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a5580d3316b45f808f80a734c5f5d7da3" id="r_a5580d3316b45f808f80a734c5f5d7da3"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5580d3316b45f808f80a734c5f5d7da3">JARVIS_TEST</a> (pml4_clone_kernel_entries_match, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:ad1927355a0b862a79b8cc2e7095745fa" id="r_ad1927355a0b862a79b8cc2e7095745fa"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad1927355a0b862a79b8cc2e7095745fa">JARVIS_TEST</a> (pml4_fork_user_entries_match, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:ad2c3e9e95eec0e30ccce7ec7b2f1d5bb" id="r_ad2c3e9e95eec0e30ccce7ec7b2f1d5bb"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad2c3e9e95eec0e30ccce7ec7b2f1d5bb">JARVIS_TEST</a> (pml4_fork_no_child_corrupt_parent, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a939d33a280e6054cf266cabf38b9a038" id="r_a939d33a280e6054cf266cabf38b9a038"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a939d33a280e6054cf266cabf38b9a038">JARVIS_TEST</a> (pml4_deep_copy_no_alias, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:ad2a10f84d8104c88c39bba78f567c334" id="r_ad2a10f84d8104c88c39bba78f567c334"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ad2a10f84d8104c88c39bba78f567c334">JARVIS_TEST</a> (pml4_free_user_pages_shared_safe, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a1682e1b109b861a4c86283c5a1380f92" id="r_a1682e1b109b861a4c86283c5a1380f92"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1682e1b109b861a4c86283c5a1380f92">JARVIS_TEST</a> (pml4_dump_no_user_entries, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a32e920f1e2ec96c8baf9f660b111338e" id="r_a32e920f1e2ec96c8baf9f660b111338e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a32e920f1e2ec96c8baf9f660b111338e">JARVIS_TEST</a> (fork_deep_copy_child_tables_independent, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a1cde1384b71323b79329e8efbcbe69f8" id="r_a1cde1384b71323b79329e8efbcbe69f8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1cde1384b71323b79329e8efbcbe69f8">JARVIS_TEST</a> (fork_free_user_pages_child_deepcopy, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:aa808db44680fb44b47c56fef1763706b" id="r_aa808db44680fb44b47c56fef1763706b"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aa808db44680fb44b47c56fef1763706b">JARVIS_TEST</a> (fork_page_table_shared_flag_absent, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a8883b8816293072145d293770c0f1081" id="r_a8883b8816293072145d293770c0f1081"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a8883b8816293072145d293770c0f1081">JARVIS_TEST</a> (fork_deep_copy_flag_parity, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a51636ec3feba4a0b30980049b895e9e9" id="r_a51636ec3feba4a0b30980049b895e9e9"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a51636ec3feba4a0b30980049b895e9e9">JARVIS_TEST</a> (fork_deep_copy_huge_fails_closed, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a52ec6e6314ebbc501ae42c6c688dbac7" id="r_a52ec6e6314ebbc501ae42c6c688dbac7"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a52ec6e6314ebbc501ae42c6c688dbac7">JARVIS_TEST</a> (fork_deep_copy_oom_reclaimed, &quot;PRE: none | POST: none&quot;)</td></tr>
+<tr class="memitem:a2b41d9f576be42172aedb0dc6f4743c4" id="r_a2b41d9f576be42172aedb0dc6f4743c4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2b41d9f576be42172aedb0dc6f4743c4">register_pml4_clone_tests</a> ()</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:adbef84a521b001ae676d8c44958aa4e4" id="r_adbef84a521b001ae676d8c44958aa4e4"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
+<tr class="memitem:adbef84a521b001ae676d8c44958aa4e4 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#adbef84a521b001ae676d8c44958aa4e4">has_page_table_shared_v</a> = requires(T *t) { t-&gt;page_table_shared_; }</td></tr>
+<tr class="memitem:a8677cb40dd0c473bbdb653c79d99577a" id="r_a8677cb40dd0c473bbdb653c79d99577a"><td class="memItemLeft">constexpr unsigned&#160;</td><td class="memItemRight"><a class="el" href="#a8677cb40dd0c473bbdb653c79d99577a">kLevels</a> = 4</td></tr>
+<tr class="memitem:a426b6be04e2184c1dce12998091f5a60" id="r_a426b6be04e2184c1dce12998091f5a60"><td class="memItemLeft">constexpr unsigned&#160;</td><td class="memItemRight"><a class="el" href="#a426b6be04e2184c1dce12998091f5a60">kEntries</a> = 512</td></tr>
+</table>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>PML4 page-table clone (fork) tests. </p>
-</div></div><!-- contents -->
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a7131de9012511804c208aeb99c939382" name="a7131de9012511804c208aeb99c939382"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7131de9012511804c208aeb99c939382">&#9670;&#160;</a></span>entry_has_user_flag()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool entry_has_user_flag </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether an entry marks user-accessible memory (for the #387 inheritance rule: kernel-owned leaves are inherited by value and must be skipped by independence walks). </p>
+
+</div>
+</div>
+<a id="af3308b9fb7629f2beaf613be630b0dc2" name="af3308b9fb7629f2beaf613be630b0dc2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af3308b9fb7629f2beaf613be630b0dc2">&#9670;&#160;</a></span>entry_is_meaningful()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool entry_is_meaningful </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned</td>          <td class="paramname"><span class="paramname"><em>level</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether a present entry is a meaningful mapping at this level. Only Sv39 has reserved present-but-meaningless encodings: a V-only entry at the leaf level (L2) is an invalid non-leaf (#206) — neither a mapping to compare nor a table to descend. </p>
+
+</div>
+</div>
+<a id="a267f388de3a070a3ab23e8770b62698a" name="a267f388de3a070a3ab23e8770b62698a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a267f388de3a070a3ab23e8770b62698a">&#9670;&#160;</a></span>entry_is_table()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool entry_is_table </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Table-vs-leaf classifier, mirroring vmm_arch_is_table per arch. </p>
+
+</div>
+</div>
+<a id="a240e6208972297c2a2d9bfb8cc00c906" name="a240e6208972297c2a2d9bfb8cc00c906"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a240e6208972297c2a2d9bfb8cc00c906">&#9670;&#160;</a></span>entry_is_user_owned()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool entry_is_user_owned </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Whether an entry is user-owned: U-flagged, or a frame from the user pool (covers flag-less kernel leaves mapping user frames). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a240e6208972297c2a2d9bfb8cc00c906_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a240e6208972297c2a2d9bfb8cc00c906_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a2a54040cbb9f0caafacc321515410322" name="a2a54040cbb9f0caafacc321515410322"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a54040cbb9f0caafacc321515410322">&#9670;&#160;</a></span>entry_leaf_frame()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t entry_leaf_frame </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Child-table phys from a table entry (never call on a leaf: raw masking leaks NX/UXN/PXN and mis-decodes Sv39 PPNs). </p>
+
+</div>
+</div>
+<a id="aac8339c00f0812157818a08a23c3fba6" name="aac8339c00f0812157818a08a23c3fba6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac8339c00f0812157818a08a23c3fba6">&#9670;&#160;</a></span>entry_present()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool entry_present </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Present bit (bit 0: P on x86, valid on aarch64, V on Sv39). </p>
+
+</div>
+</div>
+<a id="ab899742000b8865194ad84ff0589e253" name="ab899742000b8865194ad84ff0589e253"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab899742000b8865194ad84ff0589e253">&#9670;&#160;</a></span>entry_table_child()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t entry_table_child </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>e</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Child-table phys from a table entry (never call on a leaf: raw masking leaks NX/UXN/PXN and mis-decodes Sv39 PPNs). </p>
+
+</div>
+</div>
+<a id="a980ab9b02295a63fb05dd2c833810f81" name="a980ab9b02295a63fb05dd2c833810f81"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a980ab9b02295a63fb05dd2c833810f81">&#9670;&#160;</a></span>index_of()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> index_of </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned</td>          <td class="paramname"><span class="paramname"><em>level</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Level index of va (level 0 = top). riscv64 uses the public <a class="el" href="classkernel_1_1_v_m_m.html" title="Virtual memory manager — maps virtual to physical pages.">VMM</a> Sv39 geometry (no ArchPageTable index helpers there by design). </p>
+
+</div>
+</div>
+<a id="a32e920f1e2ec96c8baf9f660b111338e" name="a32e920f1e2ec96c8baf9f660b111338e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32e920f1e2ec96c8baf9f660b111338e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_deep_copy_child_tables_independent</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a32e920f1e2ec96c8baf9f660b111338e_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a32e920f1e2ec96c8baf9f660b111338e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="a8883b8816293072145d293770c0f1081" name="a8883b8816293072145d293770c0f1081"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8883b8816293072145d293770c0f1081">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_deep_copy_flag_parity</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a8883b8816293072145d293770c0f1081_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a8883b8816293072145d293770c0f1081_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="a51636ec3feba4a0b30980049b895e9e9" name="a51636ec3feba4a0b30980049b895e9e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a51636ec3feba4a0b30980049b895e9e9">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_deep_copy_huge_fails_closed</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a51636ec3feba4a0b30980049b895e9e9_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a51636ec3feba4a0b30980049b895e9e9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a52ec6e6314ebbc501ae42c6c688dbac7" name="a52ec6e6314ebbc501ae42c6c688dbac7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a52ec6e6314ebbc501ae42c6c688dbac7">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_deep_copy_oom_reclaimed</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a52ec6e6314ebbc501ae42c6c688dbac7_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a52ec6e6314ebbc501ae42c6c688dbac7_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="a1cde1384b71323b79329e8efbcbe69f8" name="a1cde1384b71323b79329e8efbcbe69f8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1cde1384b71323b79329e8efbcbe69f8">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_free_user_pages_child_deepcopy</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a1cde1384b71323b79329e8efbcbe69f8_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a1cde1384b71323b79329e8efbcbe69f8_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
+<a id="aa808db44680fb44b47c56fef1763706b" name="aa808db44680fb44b47c56fef1763706b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa808db44680fb44b47c56fef1763706b">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">fork_page_table_shared_flag_absent</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_aa808db44680fb44b47c56fef1763706b_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_aa808db44680fb44b47c56fef1763706b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a id="ac86e9cf1f240da60284e23046e0b243e" name="ac86e9cf1f240da60284e23046e0b243e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac86e9cf1f240da60284e23046e0b243e">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[7/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_clone_clears_user_entries</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_ac86e9cf1f240da60284e23046e0b243e_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_ac86e9cf1f240da60284e23046e0b243e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 8 -->
+</div>
+
+</div>
+</div>
+<a id="a5580d3316b45f808f80a734c5f5d7da3" name="a5580d3316b45f808f80a734c5f5d7da3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5580d3316b45f808f80a734c5f5d7da3">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[8/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_clone_kernel_entries_match</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a5580d3316b45f808f80a734c5f5d7da3_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a5580d3316b45f808f80a734c5f5d7da3_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 9 -->
+</div>
+
+</div>
+</div>
+<a id="a939d33a280e6054cf266cabf38b9a038" name="a939d33a280e6054cf266cabf38b9a038"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a939d33a280e6054cf266cabf38b9a038">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[9/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_deep_copy_no_alias</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a939d33a280e6054cf266cabf38b9a038_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a939d33a280e6054cf266cabf38b9a038_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
+</div>
+
+</div>
+</div>
+<a id="a1682e1b109b861a4c86283c5a1380f92" name="a1682e1b109b861a4c86283c5a1380f92"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1682e1b109b861a4c86283c5a1380f92">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[10/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_dump_no_user_entries</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a1682e1b109b861a4c86283c5a1380f92_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a1682e1b109b861a4c86283c5a1380f92_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="ad2c3e9e95eec0e30ccce7ec7b2f1d5bb" name="ad2c3e9e95eec0e30ccce7ec7b2f1d5bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2c3e9e95eec0e30ccce7ec7b2f1d5bb">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[11/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_fork_no_child_corrupt_parent</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_ad2c3e9e95eec0e30ccce7ec7b2f1d5bb_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_ad2c3e9e95eec0e30ccce7ec7b2f1d5bb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="ad1927355a0b862a79b8cc2e7095745fa" name="ad1927355a0b862a79b8cc2e7095745fa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1927355a0b862a79b8cc2e7095745fa">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[12/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_fork_user_entries_match</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_ad1927355a0b862a79b8cc2e7095745fa_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_ad1927355a0b862a79b8cc2e7095745fa_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
+
+</div>
+</div>
+<a id="ad2a10f84d8104c88c39bba78f567c334" name="ad2a10f84d8104c88c39bba78f567c334"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2a10f84d8104c88c39bba78f567c334">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[13/13]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">pml4_free_user_pages_shared_safe</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: none | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_ad2a10f84d8104c88c39bba78f567c334_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_ad2a10f84d8104c88c39bba78f567c334_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 14 -->
+</div>
+
+</div>
+</div>
+<a id="a2b41d9f576be42172aedb0dc6f4743c4" name="a2b41d9f576be42172aedb0dc6f4743c4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2b41d9f576be42172aedb0dc6f4743c4">&#9670;&#160;</a></span>register_pml4_clone_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_pml4_clone_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__pml4__clone_8cpp_a2b41d9f576be42172aedb0dc6f4743c4_cgraph.png" border="0" usemap="#atest__pml4__clone_8cpp_a2b41d9f576be42172aedb0dc6f4743c4_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 15 -->
+</div>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="adbef84a521b001ae676d8c44958aa4e4" name="adbef84a521b001ae676d8c44958aa4e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adbef84a521b001ae676d8c44958aa4e4">&#9670;&#160;</a></span>has_page_table_shared_v</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T&gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool has_page_table_shared_v = requires(T *t) { t-&gt;page_table_shared_; }</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a426b6be04e2184c1dce12998091f5a60" name="a426b6be04e2184c1dce12998091f5a60"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a426b6be04e2184c1dce12998091f5a60">&#9670;&#160;</a></span>kEntries</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">unsigned kEntries = 512</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8677cb40dd0c473bbdb653c79d99577a" name="a8677cb40dd0c473bbdb653c79d99577a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8677cb40dd0c473bbdb653c79d99577a">&#9670;&#160;</a></span>kLevels</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">unsigned kLevels = 4</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

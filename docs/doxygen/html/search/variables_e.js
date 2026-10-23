@@ -20,12 +20,13 @@ var searchData=
   ['noexcept_17',['noexcept',['../namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8',1,'kernel']]],
   ['notifies_18',['notifies',['../structkernel_1_1test_1_1_resource_counters.html#ab9b9548a06c39c6a31bc16cdf75317c5',1,'kernel::test::ResourceCounters']]],
   ['notify_19',['notify',['../structkernel_1_1_task_control_block.html#a9bd3bafef673bfd3f200607b8677829a',1,'kernel::TaskControlBlock']]],
-  ['nsec_20',['nsec',['../structkernel_1_1time_1_1_timespec_u.html#a27ede550456d676bb2163a34316f660e',1,'kernel::time::TimespecU']]],
-  ['nt_5freserved_21',['nt_reserved',['../structkernel_1_1fat32_1_1_dir_entry_raw.html#a02c7cdec658daaeb2d9129709a54febf',1,'kernel::fat32::DirEntryRaw::nt_reserved'],['../fat32_8hpp.html#a992ff2d0deb8405d966fd4fa822ad12b',1,'nt_reserved:&#160;fat32.hpp']]],
-  ['num_5fbuffers_22',['num_buffers',['../structkernel_1_1net_1_1_virtio_net_hdr.html#adc18d37f8f4bd682614a633fd7848aea',1,'kernel::net::VirtioNetHdr::num_buffers'],['../virtio__net_8hpp.html#a0bf152e518744753fff6e6bc6c7b7f9e',1,'num_buffers:&#160;virtio_net.hpp']]],
-  ['num_5fchildren_23',['num_children',['../structkernel_1_1_task_control_block.html#ad3d674b76bc6e80d1572bf2b95dfbac0',1,'kernel::TaskControlBlock']]],
-  ['num_5fmem_5fregions_24',['num_mem_regions',['../struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29',1,'BootInfo']]],
-  ['num_5fphys_5fpages_25',['num_phys_pages',['../structkernel_1_1elf_1_1_loaded_library.html#a2f824419ce0702ba2c23de9ad41263f6',1,'kernel::elf::LoadedLibrary']]],
-  ['num_5fqueues_26',['num_queues',['../test__virtio__blk__req_8cpp.html#ac20f81e6e6e25be0c750b5b6796aa00d',1,'test_virtio_blk_req.cpp']]],
-  ['nx_27',['NX',['../structkernel_1_1_page_flags.html#a83b7e1265b8a7966a05e4ec6ecc6f2a9',1,'kernel::PageFlags']]]
+  ['nr_5fentries_20',['nr_entries',['../structkernel_1_1gpu_1_1_gpu_attach_backing.html#a606d0c0e255d15be36c18846a42c3b78',1,'kernel::gpu::GpuAttachBacking::nr_entries'],['../virtio__gpu_8hpp.html#a70e42fabedca0ed11cbeda2ff608c5a5',1,'nr_entries:&#160;virtio_gpu.hpp']]],
+  ['nsec_21',['nsec',['../structkernel_1_1time_1_1_timespec_u.html#a27ede550456d676bb2163a34316f660e',1,'kernel::time::TimespecU']]],
+  ['nt_5freserved_22',['nt_reserved',['../structkernel_1_1fat32_1_1_dir_entry_raw.html#a02c7cdec658daaeb2d9129709a54febf',1,'kernel::fat32::DirEntryRaw::nt_reserved'],['../fat32_8hpp.html#a992ff2d0deb8405d966fd4fa822ad12b',1,'nt_reserved:&#160;fat32.hpp']]],
+  ['num_5fbuffers_23',['num_buffers',['../structkernel_1_1net_1_1_virtio_net_hdr.html#adc18d37f8f4bd682614a633fd7848aea',1,'kernel::net::VirtioNetHdr::num_buffers'],['../virtio__net_8hpp.html#a0bf152e518744753fff6e6bc6c7b7f9e',1,'num_buffers:&#160;virtio_net.hpp']]],
+  ['num_5fchildren_24',['num_children',['../structkernel_1_1_task_control_block.html#ad3d674b76bc6e80d1572bf2b95dfbac0',1,'kernel::TaskControlBlock']]],
+  ['num_5fmem_5fregions_25',['num_mem_regions',['../struct_boot_info.html#ab7ac4be9120a76462d2c12204ae42b29',1,'BootInfo']]],
+  ['num_5fphys_5fpages_26',['num_phys_pages',['../structkernel_1_1elf_1_1_loaded_library.html#a2f824419ce0702ba2c23de9ad41263f6',1,'kernel::elf::LoadedLibrary']]],
+  ['num_5fqueues_27',['num_queues',['../test__virtio__blk__req_8cpp.html#ac20f81e6e6e25be0c750b5b6796aa00d',1,'test_virtio_blk_req.cpp']]],
+  ['nx_28',['NX',['../structkernel_1_1_page_flags.html#a83b7e1265b8a7966a05e4ec6ecc6f2a9',1,'kernel::PageFlags']]]
 ];

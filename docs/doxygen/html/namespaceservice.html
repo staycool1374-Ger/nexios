@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -144,7 +144,15 @@ Enumerations</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a16d3f7f60ab906f01523bd7c58625a76" id="r_a16d3f7f60ab906f01523bd7c58625a76"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a16d3f7f60ab906f01523bd7c58625a76">shell_try_get_key</a> (char &amp;out)</td></tr>
-<tr class="memdesc:a16d3f7f60ab906f01523bd7c58625a76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll above.  <br /></td></tr>
+<tr class="memdesc:a16d3f7f60ab906f01523bd7c58625a76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (RX ring → iocd daemon → hardware ring). Pumps the UART (bounded) first.  <br /></td></tr>
+<tr class="memitem:a442b0f762af4a2351a70aa361bd08f56" id="r_a442b0f762af4a2351a70aa361bd08f56"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a442b0f762af4a2351a70aa361bd08f56">shell_peek_input</a> (const char *&amp;data, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;len)</td></tr>
+<tr class="memdesc:a442b0f762af4a2351a70aa361bd08f56"><td class="mdescLeft">&#160;</td><td class="mdescRight">Peek the next contiguous decoded input run without consuming (issue #407: readline fast path + test seam). Pumps the UART (bounded) then exposes the ring run; consume strictly last.  <br /></td></tr>
+<tr class="memitem:ad2ba229f96facfefd623ae304541e5a1" id="r_ad2ba229f96facfefd623ae304541e5a1"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad2ba229f96facfefd623ae304541e5a1">shell_consume_input</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> count)</td></tr>
+<tr class="memdesc:ad2ba229f96facfefd623ae304541e5a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consume a previously peeked input run (issue #407). Delegates to the RX ring; clamps to the readable count.  <br /></td></tr>
+<tr class="memitem:a441052bbf94bab8c95a7814768f00850" id="r_a441052bbf94bab8c95a7814768f00850"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a441052bbf94bab8c95a7814768f00850">shell_flush_urcs_for_test</a> ()</td></tr>
+<tr class="memdesc:a441052bbf94bab8c95a7814768f00850"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #407 item 2): drive the production URC drain (flush_urcs) so a shell-level test pins framing, the drop notice, and the per-pass drain bound. Zero-logic pass-through.  <br /></td></tr>
+<tr class="memitem:a9da472c5c2e2d3ac98b959c0e34e904a" id="r_a9da472c5c2e2d3ac98b959c0e34e904a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9da472c5c2e2d3ac98b959c0e34e904a">shell_redraw_for_test</a> (const char *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> len, int exit_code)</td></tr>
+<tr class="memdesc:a9da472c5c2e2d3ac98b959c0e34e904a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test seam (issue #407 item 2): drive the production redraw.  <br /></td></tr>
 <tr class="memitem:ac166acc18384f5d391e098a0a4a85840" id="r_ac166acc18384f5d391e098a0a4a85840"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac166acc18384f5d391e098a0a4a85840">top_render_frame</a> (uint64_t delay_secs)</td></tr>
 </table>
 <a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
@@ -178,6 +186,132 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="ad2ba229f96facfefd623ae304541e5a1" name="ad2ba229f96facfefd623ae304541e5a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2ba229f96facfefd623ae304541e5a1">&#9670;&#160;</a></span>shell_consume_input()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> service::shell_consume_input </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>count</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Consume a previously peeked input run (issue #407). Delegates to the RX ring; clamps to the readable count. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">count</td><td>Bytes to drop. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Bytes actually consumed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespaceservice_ad2ba229f96facfefd623ae304541e5a1_cgraph.png" border="0" usemap="#anamespaceservice_ad2ba229f96facfefd623ae304541e5a1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a441052bbf94bab8c95a7814768f00850" name="a441052bbf94bab8c95a7814768f00850"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a441052bbf94bab8c95a7814768f00850">&#9670;&#160;</a></span>shell_flush_urcs_for_test()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool service::shell_flush_urcs_for_test </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Test seam (issue #407 item 2): drive the production URC drain (flush_urcs) so a shell-level test pins framing, the drop notice, and the per-pass drain bound. Zero-logic pass-through. </p>
+<dl class="section return"><dt>Returns</dt><dd>True iff the production drain printed anything. </dd></dl>
+
+</div>
+</div>
+<a id="a442b0f762af4a2351a70aa361bd08f56" name="a442b0f762af4a2351a70aa361bd08f56"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a442b0f762af4a2351a70aa361bd08f56">&#9670;&#160;</a></span>shell_peek_input()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool service::shell_peek_input </td>
+          <td>(</td>
+          <td class="paramtype">const char *&amp;</td>          <td class="paramname"><span class="paramname"><em>data</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>len</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Peek the next contiguous decoded input run without consuming (issue #407: readline fast path + test seam). Pumps the UART (bounded) then exposes the ring run; consume strictly last. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">data</td><td>Receives the run pointer (valid until next ring update). </td></tr>
+    <tr><td class="paramname">len</td><td>Receives the run length (0 when empty). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true iff a non-empty run is exposed. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespaceservice_a442b0f762af4a2351a70aa361bd08f56_cgraph.png" border="0" usemap="#anamespaceservice_a442b0f762af4a2351a70aa361bd08f56_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a9da472c5c2e2d3ac98b959c0e34e904a" name="a9da472c5c2e2d3ac98b959c0e34e904a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9da472c5c2e2d3ac98b959c0e34e904a">&#9670;&#160;</a></span>shell_redraw_for_test()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void service::shell_redraw_for_test </td>
+          <td>(</td>
+          <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>buf</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>len</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>exit_code</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Test seam (issue #407 item 2): drive the production redraw. </p>
+<p>Test seam (issue #407 item 2): drive the production prompt redraw (redraw_after_async). Zero-logic pass-through.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">buf</td><td>Already-typed line buffer to reprint. </td></tr>
+    <tr><td class="paramname">len</td><td>Bytes of buf to reprint. </td></tr>
+    <tr><td class="paramname">exit_code</td><td>Exit status the prompt glyph reflects. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
 <a id="a16d3f7f60ab906f01523bd7c58625a76" name="a16d3f7f60ab906f01523bd7c58625a76"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a16d3f7f60ab906f01523bd7c58625a76">&#9670;&#160;</a></span>shell_try_get_key()</h2>
 
@@ -193,8 +327,14 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll above. </p>
-<p>Test seam (issue #303 item 3): P2 central keyboard/serial input poll (serial → iocd daemon → hardware ring). Zero-logic wrapper over the internal poll; lets a shell-level test drive the exact production path including daemon delivery. </p>
+<p>Test seam (issue #303 item 3): P2 key-delivery poll exposed so a shell-level test can drive the exact production path (RX ring → iocd daemon → hardware ring). Pumps the UART (bounded) first. </p>
+<p>Test seam (issue #303 item 3): P2 central keyboard/serial input poll (RX ring → iocd daemon → hardware ring, issue #407). Pumps the UART (bounded) before polling. Zero-logic wrapper over the internal poll; lets a shell-level test drive the exact production path including daemon delivery. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespaceservice_a16d3f7f60ab906f01523bd7c58625a76_cgraph.png" border="0" usemap="#anamespaceservice_a16d3f7f60ab906f01523bd7c58625a76_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
 
 </div>
 </div>
@@ -216,7 +356,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespaceservice_ac166acc18384f5d391e098a0a4a85840_cgraph.png" border="0" usemap="#anamespaceservice_ac166acc18384f5d391e098a0a4a85840_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<!-- MAP 3 -->
 </div>
 
 </div>

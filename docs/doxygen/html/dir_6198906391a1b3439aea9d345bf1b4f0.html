@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -253,6 +253,10 @@ Files</h2></td></tr>
 <tr class="memdesc:test__fpu_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">FPU context switch tests. <br /></td></tr>
 <tr class="memitem:test_5Ffpu_5Fclone_2Ecpp" id="r_test_5Ffpu_5Fclone_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__fpu__clone_8cpp.html">test_fpu_clone.cpp</a></td></tr>
 <tr class="memdesc:test__fpu__clone_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">FPU state preservation across fork/clone tests. <br /></td></tr>
+<tr class="memitem:test_5Ffpu_5Fcontext_2Ecpp" id="r_test_5Ffpu_5Fcontext_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__fpu__context_8cpp.html">test_fpu_context.cpp</a></td></tr>
+<tr class="memdesc:test__fpu__context_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">FPU/SIMD context tests for non-x86 arches (issue #353 QE track). Covers detection, basic execution, full register-file sweep via the kernel save/restore primitives, clone-area inheritance and the fpu_switch_area choke-point helper — without user-task dispatch (interleaved-switch integration needs the #356 user-task vehicle and stays tracked there). <br /></td></tr>
+<tr class="memitem:test_5Ffpu_5Fcontext_5Fuser_2Ecpp" id="r_test_5Ffpu_5Fcontext_5Fuser_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__fpu__context__user_8cpp.html">test_fpu_context_user.cpp</a></td></tr>
+<tr class="memdesc:test__fpu__context__user_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Phase-2 FPU/SIMD user-task tests (issue #353): prove interleaved user-task FP isolation + multi-task interference through the REAL eager-switch path (which fires only for user tasks, so kernel-task tests cannot cover it). <br /></td></tr>
 <tr class="memitem:test_5Ffpu_5Finv_2Ecpp" id="r_test_5Ffpu_5Finv_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__fpu__inv_8cpp.html">test_fpu_inv.cpp</a></td></tr>
 <tr class="memdesc:test__fpu__inv_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">FPU/SIMD context invariants (issue #93) — INV-FPU1..3 tests. <br /></td></tr>
 <tr class="memitem:test_5Ffpu_5Fmulti_2Ecpp" id="r_test_5Ffpu_5Fmulti_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__fpu__multi_8cpp.html">test_fpu_multi.cpp</a></td></tr>
@@ -425,7 +429,7 @@ Files</h2></td></tr>
 <tr class="memitem:test_5Fpriority_5Finheritance_2Ecpp" id="r_test_5Fpriority_5Finheritance_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__priority__inheritance_8cpp.html">test_priority_inheritance.cpp</a></td></tr>
 <tr class="memdesc:test__priority__inheritance_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Phase 6 tests: Priority Inheritance Protocol — single-level and transitive priority donation across Mutex and Semaphore. <br /></td></tr>
 <tr class="memitem:test_5Fprocess_2Ecpp" id="r_test_5Fprocess_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__process_8cpp.html">test_process.cpp</a></td></tr>
-<tr class="memdesc:test__process_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process lifecycle tests. <br /></td></tr>
+<tr class="memdesc:test__process_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Process (parent/child hierarchy) tests. Bookkeeping tests are arch-neutral (issue #356); clone tests use REAL create_user parents impersonated via ScopedCurrentTask (no dispatch) per the #399 verdict — synthetic flag-flipped parents are unsupported and hang QEMU virt. <br /></td></tr>
 <tr class="memitem:test_5Fprocfs_5Fops_2Ecpp" id="r_test_5Fprocfs_5Fops_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__procfs__ops_8cpp.html">test_procfs_ops.cpp</a></td></tr>
 <tr class="memdesc:test__procfs__ops_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">procfs operation-contract tests (milestone v0.4.10 issue #124). <a class="el" href="test__vfs__procfs_8cpp.html" title="procfs tests (milestone v0.4.3 issue #109): readdir enumeration, fstat, lookup resolution,...">test_vfs_procfs.cpp</a> covers the <em>content</em> paths (read/fstat/ readdir/lookup); the remaining 36 functions — every open/close, every not-supported write/ioctl/readdir/lookup and the per-node lseek implementations — were never entered. This class drives each of them on the real proc_fs vnodes. <br /></td></tr>
 <tr class="memitem:test_5Fprofiler_5Fsampler_2Ecpp" id="r_test_5Fprofiler_5Fsampler_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__profiler__sampler_8cpp.html">test_profiler_sampler.cpp</a></td></tr>
@@ -544,7 +548,7 @@ Files</h2></td></tr>
 <tr class="memitem:test_5Fsyscall_5Ffuzz_2Ecpp" id="r_test_5Fsyscall_5Ffuzz_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__syscall__fuzz_8cpp.html">test_syscall_fuzz.cpp</a></td></tr>
 <tr class="memdesc:test__syscall__fuzz_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">System call fuzz testing. <br /></td></tr>
 <tr class="memitem:test_5Ftask_2Ecpp" id="r_test_5Ftask_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__task_8cpp.html">test_task.cpp</a></td></tr>
-<tr class="memdesc:test__task_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task control block tests. <br /></td></tr>
+<tr class="memdesc:test__task_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task control block tests (arch-neutral TCB lifecycle; issue #356 ported off-x86: create/cleanup, create_user, clone deep-copy and teardown, ELF IPC init, recent-ring claim). <br /></td></tr>
 <tr class="memitem:test_5Ftask_5Flifecycle_2Ecpp" id="r_test_5Ftask_5Flifecycle_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__task__lifecycle_8cpp.html">test_task_lifecycle.cpp</a></td></tr>
 <tr class="memdesc:test__task__lifecycle_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task creation/termination lifecycle tests. <br /></td></tr>
 <tr class="memitem:test_5Ftask_5Fmetering_2Ecpp" id="r_test_5Ftask_5Fmetering_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="test__task__metering_8cpp.html">test_task_metering.cpp</a></td></tr>

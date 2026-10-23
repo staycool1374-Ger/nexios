@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -247,6 +247,8 @@ Variables</h2></td></tr>
 <tr class="memitem:adb50110880ce45345185d1204eaf4fef" id="r_adb50110880ce45345185d1204eaf4fef"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a>&#160;</td><td class="memItemRight"><a class="el" href="#adb50110880ce45345185d1204eaf4fef">fat32_fs</a></td></tr>
 <tr class="memdesc:adb50110880ce45345185d1204eaf4fef"><td class="mdescLeft">&#160;</td><td class="mdescRight">VFS filesystem descriptor for FAT32.  <br /></td></tr>
 <tr class="memitem:a7ef3281549b66c34c3500a7b5156718b" id="r_a7ef3281549b66c34c3500a7b5156718b"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7ef3281549b66c34c3500a7b5156718b">initrd_fs</a></td></tr>
+<tr class="memitem:a98fa741e4ae69cd4b407401d10286f5d" id="r_a98fa741e4ae69cd4b407401d10286f5d"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a98fa741e4ae69cd4b407401d10286f5d">kMaxSeekPos</a> = 0x7FFF'FFFF'FFFF'FFFFULL</td></tr>
+<tr class="memdesc:a98fa741e4ae69cd4b407401d10286f5d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum seek position (INT64_MAX; no &lt;limits&gt; provider in tree).  <br /></td></tr>
 <tr class="memitem:a8049afbb25873d95c723f015f6c61856" id="r_a8049afbb25873d95c723f015f6c61856"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8049afbb25873d95c723f015f6c61856">proc_fs</a></td></tr>
 <tr class="memitem:a9cbd594b0a8bec4a9857e01f0b325803" id="r_a9cbd594b0a8bec4a9857e01f0b325803"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9cbd594b0a8bec4a9857e01f0b325803">ramdisk_fs</a></td></tr>
 <tr class="memitem:a2b378cb7928ca3f7781737c9987aa29d" id="r_a2b378cb7928ca3f7781737c9987aa29d"><td class="memItemLeft"><a class="el" href="structkernel_1_1vfs_1_1_filesystem.html">Filesystem</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2b378cb7928ca3f7781737c9987aa29d">tmpfs_fs</a></td></tr>
@@ -1235,6 +1237,30 @@ Here is the call graph for this function:</div>
 <div class="line">    initrd_get_root,</div>
 <div class="line">}</div>
 </div><!-- fragment -->
+</div>
+</div>
+<a id="a98fa741e4ae69cd4b407401d10286f5d" name="a98fa741e4ae69cd4b407401d10286f5d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98fa741e4ae69cd4b407401d10286f5d">&#9670;&#160;</a></span>kMaxSeekPos</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::vfs::kMaxSeekPos = 0x7FFF'FFFF'FFFF'FFFFULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Maximum seek position (INT64_MAX; no &lt;limits&gt; provider in tree). </p>
+
 </div>
 </div>
 <a id="a8049afbb25873d95c723f015f6c61856" name="a8049afbb25873d95c723f015f6c61856"></a>

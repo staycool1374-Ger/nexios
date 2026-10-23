@@ -19,6 +19,7 @@ var annotated_dup =
       [ "IDTEntry", "structarch_1_1_i_d_t_entry.html", "structarch_1_1_i_d_t_entry" ],
       [ "IrqGuard", "classarch_1_1_irq_guard.html", "classarch_1_1_irq_guard" ],
       [ "IrqState", "structarch_1_1_irq_state.html", "structarch_1_1_irq_state" ],
+      [ "IrqStormLimiter", "classarch_1_1_irq_storm_limiter.html", "classarch_1_1_irq_storm_limiter" ],
       [ "Keyboard", "classarch_1_1_keyboard.html", "classarch_1_1_keyboard" ],
       [ "PciBdf", "structarch_1_1_pci_bdf.html", "structarch_1_1_pci_bdf" ],
       [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
@@ -78,6 +79,7 @@ var annotated_dup =
         [ "DaemonEntry", "structkernel_1_1daemon_1_1_daemon_entry.html", "structkernel_1_1daemon_1_1_daemon_entry" ]
       ] ],
       [ "debug", "namespacekernel_1_1debug.html", [
+        [ "FirstChanceFrame", "structkernel_1_1debug_1_1_first_chance_frame.html", "structkernel_1_1debug_1_1_first_chance_frame" ],
         [ "StopEvent", "structkernel_1_1debug_1_1_stop_event.html", "structkernel_1_1debug_1_1_stop_event" ]
       ] ],
       [ "diag", "namespacekernel_1_1diag.html", [
@@ -114,6 +116,19 @@ var annotated_dup =
         [ "Fat32Partition", "classkernel_1_1fat32_1_1_fat32_partition.html", "classkernel_1_1fat32_1_1_fat32_partition" ],
         [ "DirEntryRaw", "structkernel_1_1fat32_1_1_dir_entry_raw.html", "structkernel_1_1fat32_1_1_dir_entry_raw" ],
         [ "DirEntry", "structkernel_1_1fat32_1_1_dir_entry.html", "structkernel_1_1fat32_1_1_dir_entry" ]
+      ] ],
+      [ "gpu", "namespacekernel_1_1gpu.html", [
+        [ "GpuCtrlHdr", "structkernel_1_1gpu_1_1_gpu_ctrl_hdr.html", "structkernel_1_1gpu_1_1_gpu_ctrl_hdr" ],
+        [ "GpuRect", "structkernel_1_1gpu_1_1_gpu_rect.html", "structkernel_1_1gpu_1_1_gpu_rect" ],
+        [ "GpuDisplayOne", "structkernel_1_1gpu_1_1_gpu_display_one.html", "structkernel_1_1gpu_1_1_gpu_display_one" ],
+        [ "GpuDisplayInfo", "structkernel_1_1gpu_1_1_gpu_display_info.html", "structkernel_1_1gpu_1_1_gpu_display_info" ],
+        [ "GpuCreate2d", "structkernel_1_1gpu_1_1_gpu_create2d.html", "structkernel_1_1gpu_1_1_gpu_create2d" ],
+        [ "GpuAttachBacking", "structkernel_1_1gpu_1_1_gpu_attach_backing.html", "structkernel_1_1gpu_1_1_gpu_attach_backing" ],
+        [ "GpuMemEntry", "structkernel_1_1gpu_1_1_gpu_mem_entry.html", "structkernel_1_1gpu_1_1_gpu_mem_entry" ],
+        [ "GpuSetScanout", "structkernel_1_1gpu_1_1_gpu_set_scanout.html", "structkernel_1_1gpu_1_1_gpu_set_scanout" ],
+        [ "GpuTransfer", "structkernel_1_1gpu_1_1_gpu_transfer.html", "structkernel_1_1gpu_1_1_gpu_transfer" ],
+        [ "GpuFlush", "structkernel_1_1gpu_1_1_gpu_flush.html", "structkernel_1_1gpu_1_1_gpu_flush" ],
+        [ "GpuUnref", "structkernel_1_1gpu_1_1_gpu_unref.html", "structkernel_1_1gpu_1_1_gpu_unref" ]
       ] ],
       [ "gs", "namespacekernel_1_1gs.html", [
         [ "WriteContext", "structkernel_1_1gs_1_1_write_context.html", "structkernel_1_1gs_1_1_write_context" ]
@@ -157,6 +172,9 @@ var annotated_dup =
       ] ],
       [ "profiling", "namespacekernel_1_1profiling.html", [
         [ "Sampler", "classkernel_1_1profiling_1_1_sampler.html", null ]
+      ] ],
+      [ "ramfb", "namespacekernel_1_1ramfb.html", [
+        [ "RamfbConfig", "structkernel_1_1ramfb_1_1_ramfb_config.html", "structkernel_1_1ramfb_1_1_ramfb_config" ]
       ] ],
       [ "sched_queue", "namespacekernel_1_1sched__queue.html", [
         [ "EdfReadyList", "structkernel_1_1sched__queue_1_1_edf_ready_list.html", "structkernel_1_1sched__queue_1_1_edf_ready_list" ]
@@ -299,6 +317,7 @@ var annotated_dup =
     [ "BenchResult", "struct_bench_result.html", "struct_bench_result" ],
     [ "BootInfo", "struct_boot_info.html", "struct_boot_info" ],
     [ "DefaultDeleter", "struct_default_deleter.html", "struct_default_deleter" ],
+    [ "FakeDmaChannel", "class_fake_dma_channel.html", "class_fake_dma_channel" ],
     [ "Fat32TestFixture", "struct_fat32_test_fixture.html", "struct_fat32_test_fixture" ],
     [ "fdt_header", "structfdt__header.html", "structfdt__header" ],
     [ "fdt_node_header", "structfdt__node__header.html", "structfdt__node__header" ],

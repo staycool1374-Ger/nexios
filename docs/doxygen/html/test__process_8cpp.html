@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__process_
 </div><!--header-->
 <div class="contents">
 
-<p>Process lifecycle tests.  
+<p>Process (parent/child hierarchy) tests. Bookkeeping tests are arch-neutral (issue #356); clone tests use REAL create_user parents impersonated via ScopedCurrentTask (no dispatch) per the #399 verdict — synthetic flag-flipped parents are unsupported and hang QEMU virt.  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Process lifecycle tests. </p>
+<div class="textblock"><p>Process (parent/child hierarchy) tests. Bookkeeping tests are arch-neutral (issue #356); clone tests use REAL create_user parents impersonated via ScopedCurrentTask (no dispatch) per the #399 verdict — synthetic flag-flipped parents are unsupported and hang QEMU virt. </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

@@ -14,6 +14,7 @@ var searchData=
   ['virtio_5fblk_5ft_5fflush_11',['VIRTIO_BLK_T_FLUSH',['../namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3ac15f8cfa6a966c44bd850dac6a3dda3d',1,'kernel::block']]],
   ['virtio_5fblk_5ft_5fin_12',['VIRTIO_BLK_T_IN',['../namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3af6426ba276b201c84082f50995f35028',1,'kernel::block']]],
   ['virtio_5fblk_5ft_5fout_13',['VIRTIO_BLK_T_OUT',['../namespacekernel_1_1block.html#adf5dbe3e60c5de5cfebd65e8303367b3a2d1e65aa48eb46505250b4ea949bbe24',1,'kernel::block']]],
-  ['vmm_14',['VMM',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aaa7170792bc4a2bfbe1d1946911eb1d15',1,'kernel::log']]],
-  ['vmm_5ferror_5fcodes_15',['VMM_ERROR_CODES',['../namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074da6317a158a3baf1810a442eafb77a6998',1,'kernel::errors']]]
+  ['virtiogpu_14',['VirtioGpu',['../namespacekernel_1_1gpu.html#ab7b99ca3483528d76276c345492be483a3902f13e486bf3ed368dff56a752661e',1,'kernel::gpu']]],
+  ['vmm_15',['VMM',['../namespacekernel_1_1log.html#a0a15565ea32d9d5ddb218c71e3f3c44aaa7170792bc4a2bfbe1d1946911eb1d15',1,'kernel::log']]],
+  ['vmm_5ferror_5fcodes_16',['VMM_ERROR_CODES',['../namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074da6317a158a3baf1810a442eafb77a6998',1,'kernel::errors']]]
 ];

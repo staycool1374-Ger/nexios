@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -154,10 +154,15 @@ Macros</h2></td></tr>
 <tr class="memitem:aa276d7f3088179b283530d41750ff5e4" id="r_aa276d7f3088179b283530d41750ff5e4"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa276d7f3088179b283530d41750ff5e4">FDT_ERR_BADOVERLAY</a>&#160;&#160;&#160;16</td></tr>
 <tr class="memitem:a7dbda231b96112ab9cd6d2eca9b42bfb" id="r_a7dbda231b96112ab9cd6d2eca9b42bfb"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a7dbda231b96112ab9cd6d2eca9b42bfb">FDT_ERR_NOPHANDLES</a>&#160;&#160;&#160;17</td></tr>
 <tr class="memitem:a417a0f3083b9e164446262d59e89cd5a" id="r_a417a0f3083b9e164446262d59e89cd5a"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a417a0f3083b9e164446262d59e89cd5a">FDT_ERR_MAX</a>&#160;&#160;&#160;17</td></tr>
+<tr class="memitem:abd65527d87598e082030efc9aab8b443" id="r_abd65527d87598e082030efc9aab8b443"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#abd65527d87598e082030efc9aab8b443">FDT_MAX_TOTALSIZE</a>&#160;&#160;&#160;(2u * 1024u * 1024u)</td></tr>
+<tr class="memitem:a96b373f5e58bbec90ad7bd42e4167fb9" id="r_a96b373f5e58bbec90ad7bd42e4167fb9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a96b373f5e58bbec90ad7bd42e4167fb9">FDT_MAX_NODES</a>&#160;&#160;&#160;4096</td></tr>
+<tr class="memitem:a0aa8dd934ea503f51bd086add8409b88" id="r_a0aa8dd934ea503f51bd086add8409b88"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a0aa8dd934ea503f51bd086add8409b88">FDT_MAX_DEPTH</a>&#160;&#160;&#160;32</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a2359dff8b66918e18ba70baab42f2cf1" id="r_a2359dff8b66918e18ba70baab42f2cf1"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a2359dff8b66918e18ba70baab42f2cf1">fdt_check_header</a> (const void *fdt)</td></tr>
+<tr class="memitem:a7aae470d8131301974e2b2d4cd828814" id="r_a7aae470d8131301974e2b2d4cd828814"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a7aae470d8131301974e2b2d4cd828814">fdt_check_layout</a> (const void *fdt)</td></tr>
+<tr class="memitem:a92a944ce389621ef63a64b4db84c7573" id="r_a92a944ce389621ef63a64b4db84c7573"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a92a944ce389621ef63a64b4db84c7573">fdt_check_structure</a> (const void *fdt)</td></tr>
 <tr class="memitem:a79fa5b76564c75c9fb00fe8ca3ba3eee" id="r_a79fa5b76564c75c9fb00fe8ca3ba3eee"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a79fa5b76564c75c9fb00fe8ca3ba3eee">fdt_num_mem_rsv</a> (const void *fdt)</td></tr>
 <tr class="memitem:a48548359fd68dc484bc0b07d89d75012" id="r_a48548359fd68dc484bc0b07d89d75012"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a48548359fd68dc484bc0b07d89d75012">fdt_get_mem_rsv</a> (const void *fdt, int n, uint64_t *addr, uint64_t *size)</td></tr>
 <tr class="memitem:a2080ed4d49df36321d5fe6785febf517" id="r_a2080ed4d49df36321d5fe6785febf517"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a2080ed4d49df36321d5fe6785febf517">fdt_first_child</a> (const void *fdt, int parentoffset)</td></tr>
@@ -424,6 +429,48 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a0aa8dd934ea503f51bd086add8409b88" name="a0aa8dd934ea503f51bd086add8409b88"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0aa8dd934ea503f51bd086add8409b88">&#9670;&#160;</a></span>FDT_MAX_DEPTH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define FDT_MAX_DEPTH&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a96b373f5e58bbec90ad7bd42e4167fb9" name="a96b373f5e58bbec90ad7bd42e4167fb9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a96b373f5e58bbec90ad7bd42e4167fb9">&#9670;&#160;</a></span>FDT_MAX_NODES</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define FDT_MAX_NODES&#160;&#160;&#160;4096</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abd65527d87598e082030efc9aab8b443" name="abd65527d87598e082030efc9aab8b443"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abd65527d87598e082030efc9aab8b443">&#9670;&#160;</a></span>FDT_MAX_TOTALSIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define FDT_MAX_TOTALSIZE&#160;&#160;&#160;(2u * 1024u * 1024u)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a2359dff8b66918e18ba70baab42f2cf1" name="a2359dff8b66918e18ba70baab42f2cf1"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2359dff8b66918e18ba70baab42f2cf1">&#9670;&#160;</a></span>fdt_check_header()</h2>
@@ -439,6 +486,52 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7aae470d8131301974e2b2d4cd828814" name="a7aae470d8131301974e2b2d4cd828814"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7aae470d8131301974e2b2d4cd828814">&#9670;&#160;</a></span>fdt_check_layout()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int fdt_check_layout </td>
+          <td>(</td>
+          <td class="paramtype">const void *</td>          <td class="paramname"><span class="paramname"><em>fdt</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="libfdt_8h_a7aae470d8131301974e2b2d4cd828814_cgraph.png" border="0" usemap="#alibfdt_8h_a7aae470d8131301974e2b2d4cd828814_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="a92a944ce389621ef63a64b4db84c7573" name="a92a944ce389621ef63a64b4db84c7573"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92a944ce389621ef63a64b4db84c7573">&#9670;&#160;</a></span>fdt_check_structure()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int fdt_check_structure </td>
+          <td>(</td>
+          <td class="paramtype">const void *</td>          <td class="paramname"><span class="paramname"><em>fdt</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="libfdt_8h_a92a944ce389621ef63a64b4db84c7573_cgraph.png" border="0" usemap="#alibfdt_8h_a92a944ce389621ef63a64b4db84c7573_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
 
 </div>
 </div>
@@ -464,7 +557,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_a2080ed4d49df36321d5fe6785febf517_cgraph.png" border="0" usemap="#alibfdt_8h_a2080ed4d49df36321d5fe6785febf517_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -527,7 +620,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_a43937fb226554bcff64aa7370046cd82_cgraph.png" border="0" usemap="#alibfdt_8h_a43937fb226554bcff64aa7370046cd82_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -564,7 +657,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_a3cab270a9b378f353f098d4acb494eb9_cgraph.png" border="0" usemap="#alibfdt_8h_a3cab270a9b378f353f098d4acb494eb9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -601,7 +694,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_af3a25becc5f5f4a1ee88fadf84429028_cgraph.png" border="0" usemap="#alibfdt_8h_af3a25becc5f5f4a1ee88fadf84429028_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -628,7 +721,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_a792a17aeb7f47dedaa2445a0a784e42d_cgraph.png" border="0" usemap="#alibfdt_8h_a792a17aeb7f47dedaa2445a0a784e42d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -655,7 +748,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_acc373b28d3daa598bc3aa9a131224773_cgraph.png" border="0" usemap="#alibfdt_8h_acc373b28d3daa598bc3aa9a131224773_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -697,7 +790,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_a99d317b082102ce9a3eea47e86ab5757_cgraph.png" border="0" usemap="#alibfdt_8h_a99d317b082102ce9a3eea47e86ab5757_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -758,7 +851,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_ab41aa230a8200cab4c89876f850a2929_cgraph.png" border="0" usemap="#alibfdt_8h_ab41aa230a8200cab4c89876f850a2929_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -795,7 +888,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="libfdt_8h_a92756de14074ac915bd5b1056453e04c_cgraph.png" border="0" usemap="#alibfdt_8h_a92756de14074ac915bd5b1056453e04c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 12 -->
 </div>
 
 </div>

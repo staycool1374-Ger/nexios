@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -123,6 +123,8 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('aarch64_2rtc_8
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="rtc_8hpp_source.html">kernel/arch/rtc.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="hal_2io_8hpp_source.html">kernel/arch/hal/io.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="dmesg_8hpp_source.html">kernel/log/dmesg.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="constants_8hpp_source.html">constants.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for rtc.cpp:</div>
@@ -141,6 +143,19 @@ Variables</h2></td></tr>
 <tr class="memitem:a8330daf1138ba3f2466d81406d1ab6c0" id="r_a8330daf1138ba3f2466d81406d1ab6c0"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a8330daf1138ba3f2466d81406d1ab6c0">arch::PL031_BASE</a> = 0x09010000ULL</td></tr>
 <tr class="memitem:a585a77a747cf6637b9dfc9119564b96f" id="r_a585a77a747cf6637b9dfc9119564b96f"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a585a77a747cf6637b9dfc9119564b96f">arch::PL031_DATA</a> = 0x0000</td></tr>
 <tr class="memdesc:a585a77a747cf6637b9dfc9119564b96f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current time (Unix secs).  <br /></td></tr>
+<tr class="memitem:a3b08e88cc9225aa4b6535bd5ff929db1" id="r_a3b08e88cc9225aa4b6535bd5ff929db1"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a3b08e88cc9225aa4b6535bd5ff929db1">arch::PL031_CR</a> = 0x00C</td></tr>
+<tr class="memdesc:a3b08e88cc9225aa4b6535bd5ff929db1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Control register.  <br /></td></tr>
+<tr class="memitem:a0aa89267eeebbae381ee068d1ae6f685" id="r_a0aa89267eeebbae381ee068d1ae6f685"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a0aa89267eeebbae381ee068d1ae6f685">arch::PL031_CR_RTCEN</a> = 1u &lt;&lt; 0</td></tr>
+<tr class="memitem:a84eaca7ce2d6a1666c0656274162e6fa" id="r_a84eaca7ce2d6a1666c0656274162e6fa"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a84eaca7ce2d6a1666c0656274162e6fa">arch::PL031_PERIPHID0</a> = 0xFE0</td></tr>
+<tr class="memitem:a83d54cef0b30df59c3a851a462ffe7fd" id="r_a83d54cef0b30df59c3a851a462ffe7fd"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a83d54cef0b30df59c3a851a462ffe7fd">arch::PL031_PERIPHID1</a> = 0xFE4</td></tr>
+<tr class="memitem:a5590f0007fae666e20599bced50ec6cd" id="r_a5590f0007fae666e20599bced50ec6cd"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a5590f0007fae666e20599bced50ec6cd">arch::PL031_PERIPHID2</a> = 0xFE8</td></tr>
+<tr class="memitem:abb06bae0e2044101d1687848bd3e3f37" id="r_abb06bae0e2044101d1687848bd3e3f37"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#abb06bae0e2044101d1687848bd3e3f37">arch::PL031_PERIPHID3</a> = 0xFEC</td></tr>
+<tr class="memitem:acf3b694a89e02cbc76b62a14d5798227" id="r_acf3b694a89e02cbc76b62a14d5798227"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#acf3b694a89e02cbc76b62a14d5798227">arch::PL031_ID_MAGIC</a> = 0x00041031</td></tr>
+<tr class="memitem:a7261c9f48b7d413f2a28aba5217a1c95" id="r_a7261c9f48b7d413f2a28aba5217a1c95"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a7261c9f48b7d413f2a28aba5217a1c95">arch::PL031_ID_MASK</a> = 0xFF0FFFFFU</td></tr>
+<tr class="memitem:a5e458f808e96f9b2a2800be1fb8c26ee" id="r_a5e458f808e96f9b2a2800be1fb8c26ee"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a5e458f808e96f9b2a2800be1fb8c26ee">arch::PL031_WINDOW_BASE</a> = 0x09000000ULL</td></tr>
+<tr class="memitem:ac55d8f85abe25296d12a1a40f03b6db7" id="r_ac55d8f85abe25296d12a1a40f03b6db7"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac55d8f85abe25296d12a1a40f03b6db7">arch::PL031_WINDOW_SIZE</a> = 0x200000ULL</td></tr>
+<tr class="memitem:a3d2c48625c64558f5f9b6104108e257c" id="r_a3d2c48625c64558f5f9b6104108e257c"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a3d2c48625c64558f5f9b6104108e257c">arch::PL031_REGION_SIZE</a> = 0x1000ULL</td></tr>
+<tr class="memitem:a8b26b2ffacf4e6deff5577034d5c0499" id="r_a8b26b2ffacf4e6deff5577034d5c0499"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a8b26b2ffacf4e6deff5577034d5c0499">arch::kDmesgDriverRtcSource</a> = 950</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>AArch64 RTC driver using the PL031 wall-clock RTC (QEMU virt). </p>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -187,13 +187,13 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a81ca5eb4960ad072e858e6914c949383" id="r_a81ca5eb4960ad072e858e6914c949383"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a81ca5eb4960ad072e858e6914c949383">set_ticks_for_test</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> value)</td></tr>
 <tr class="memdesc:a81ca5eb4960ad072e858e6914c949383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Override the tick counter (test support).  <br /></td></tr>
 <tr class="memitem:a108cceda803fe53ed4126327f6688eb9" id="r_a108cceda803fe53ed4126327f6688eb9"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a108cceda803fe53ed4126327f6688eb9">oneshot</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ticks_from_now)</td></tr>
-<tr class="memdesc:a108cceda803fe53ed4126327f6688eb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Schedule a one-shot timer interrupt.  <br /></td></tr>
+<tr class="memdesc:a108cceda803fe53ed4126327f6688eb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Schedule a one-shot timer interrupt after coarse ticks. Converts coarse ticks (BootParams::timer_hz) to an absolute CNTP_CVAL_EL0 deadline. 0 disarms (CTL=0); the periodic tick is not preserved across a one-shot (re-arm explicitly).  <br /></td></tr>
 <tr class="memitem:a2d07e8c3c3afdeedba3c96fa4b0beb73" id="r_a2d07e8c3c3afdeedba3c96fa4b0beb73"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2d07e8c3c3afdeedba3c96fa4b0beb73">periodic</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> period_ticks)</td></tr>
-<tr class="memdesc:a2d07e8c3c3afdeedba3c96fa4b0beb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Configure a periodic timer interrupt.  <br /></td></tr>
+<tr class="memdesc:a2d07e8c3c3afdeedba3c96fa4b0beb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Configure a periodic timer interrupt. Latches the converted interval so <a class="el" href="#aaf09570e9110d9a964561ca08a1627c4" title="Handle a timer interrupt (increment tick count).">handle_irq()</a> persists the period.  <br /></td></tr>
 <tr class="memitem:aeb51c24398d92e3d16daf323f66bcb73" id="r_aeb51c24398d92e3d16daf323f66bcb73"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb51c24398d92e3d16daf323f66bcb73">remaining</a> ()</td></tr>
-<tr class="memdesc:aeb51c24398d92e3d16daf323f66bcb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the remaining ticks on the current timer.  <br /></td></tr>
+<tr class="memdesc:aeb51c24398d92e3d16daf323f66bcb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the remaining time in coarse scheduler ticks (ceil).  <br /></td></tr>
 <tr class="memitem:a908d7562d4735cc177cd25ac15882704" id="r_a908d7562d4735cc177cd25ac15882704"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a908d7562d4735cc177cd25ac15882704">remaining_ns</a> ()</td></tr>
-<tr class="memdesc:a908d7562d4735cc177cd25ac15882704"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sub-tick nanoseconds remaining on the current timer.  <br /></td></tr>
+<tr class="memdesc:a908d7562d4735cc177cd25ac15882704"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sub-tick nanoseconds remaining on the armed deadline.  <br /></td></tr>
 <tr class="memitem:a951ad5d20304e7759704fbbaf0591e1c" id="r_a951ad5d20304e7759704fbbaf0591e1c"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a951ad5d20304e7759704fbbaf0591e1c">tsc_freq_hz</a> ()</td></tr>
 <tr class="memdesc:a951ad5d20304e7759704fbbaf0591e1c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return the calibrated counter frequency in Hz (x86 TSC alias).  <br /></td></tr>
 <tr class="memitem:a44727d7bdfa513b96c021fa87c6b621f" id="r_a44727d7bdfa513b96c021fa87c6b621f"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a44727d7bdfa513b96c021fa87c6b621f">raw_counter</a> ()</td></tr>
@@ -221,11 +221,11 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a81ca5eb4960ad072e858e6914c949383" id="r_a81ca5eb4960ad072e858e6914c949383"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a81ca5eb4960ad072e858e6914c949383">set_ticks_for_test</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> value)</td></tr>
 <tr class="memdesc:a81ca5eb4960ad072e858e6914c949383"><td class="mdescLeft">&#160;</td><td class="mdescRight">Override the tick count (test support).  <br /></td></tr>
 <tr class="memitem:a108cceda803fe53ed4126327f6688eb9" id="r_a108cceda803fe53ed4126327f6688eb9"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a108cceda803fe53ed4126327f6688eb9">oneshot</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ticks_from_now)</td></tr>
-<tr class="memdesc:a108cceda803fe53ed4126327f6688eb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Schedule a one-shot timer interrupt.  <br /></td></tr>
+<tr class="memdesc:a108cceda803fe53ed4126327f6688eb9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Schedule a one-shot timer via SBI (absolute mtime deadline). Converts coarse ticks (BootParams::timer_hz) via now + interval. 0 parks mtimecmp at the maximum (disarm; STIP cannot be cleared).  <br /></td></tr>
 <tr class="memitem:a2d07e8c3c3afdeedba3c96fa4b0beb73" id="r_a2d07e8c3c3afdeedba3c96fa4b0beb73"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a2d07e8c3c3afdeedba3c96fa4b0beb73">periodic</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> period_ticks)</td></tr>
-<tr class="memdesc:a2d07e8c3c3afdeedba3c96fa4b0beb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Configure a periodic timer interrupt.  <br /></td></tr>
+<tr class="memdesc:a2d07e8c3c3afdeedba3c96fa4b0beb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Configure a periodic timer via SBI. Latches the converted interval so <a class="el" href="#aaf09570e9110d9a964561ca08a1627c4" title="Handle a timer interrupt (increment tick count).">handle_irq()</a> persists the period.  <br /></td></tr>
 <tr class="memitem:aeb51c24398d92e3d16daf323f66bcb73" id="r_aeb51c24398d92e3d16daf323f66bcb73"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeb51c24398d92e3d16daf323f66bcb73">remaining</a> ()</td></tr>
-<tr class="memdesc:aeb51c24398d92e3d16daf323f66bcb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the remaining ticks on the current timer.  <br /></td></tr>
+<tr class="memdesc:aeb51c24398d92e3d16daf323f66bcb73"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the remaining time (always 0: mtimecmp unreadable in S-mode).  <br /></td></tr>
 <tr class="memitem:a908d7562d4735cc177cd25ac15882704" id="r_a908d7562d4735cc177cd25ac15882704"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a908d7562d4735cc177cd25ac15882704">remaining_ns</a> ()</td></tr>
 <tr class="memdesc:a908d7562d4735cc177cd25ac15882704"><td class="mdescLeft">&#160;</td><td class="mdescRight">Sub-tick nanoseconds remaining (0: mtimecmp unreadable).  <br /></td></tr>
 <tr class="memitem:a951ad5d20304e7759704fbbaf0591e1c" id="r_a951ad5d20304e7759704fbbaf0591e1c"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a951ad5d20304e7759704fbbaf0591e1c">tsc_freq_hz</a> ()</td></tr>
@@ -580,7 +580,7 @@ Static Public Member Functions</h2></td></tr>
 <p>Handle a timer interrupt (increment tick count). </p>
 <p>PIT IRQ handler — increments the tick counter.</p>
 <p>Handle a timer interrupt: increment tick count and re-arm via SBI.</p>
-<p>Handle a timer interrupt: increment tick count and re-arm the timer. The compare value must be pushed into the future again, otherwise the level-asserted interrupt re-pends immediately after EOI (IRQ storm).</p>
+<p>Handle a timer interrupt: increment tick count and re-arm the timer. Re-arms via an absolute CVAL deadline (now + latched interval) so a delayed handler cannot program the past and storm on a level-asserted line. Saturating tick count (no wrap).</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">ip</td><td>Instruction pointer from interrupt frame (RIP on x86_64).</td></tr>
@@ -893,7 +893,13 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Schedule a one-shot timer interrupt. </p>
+<p>Schedule a one-shot timer via SBI (absolute mtime deadline). Converts coarse ticks (BootParams::timer_hz) via now + interval. 0 parks mtimecmp at the maximum (disarm; STIP cannot be cleared). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">ticks_from_now</td><td>Coarse scheduler ticks (0 = disarm). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -920,7 +926,13 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Schedule a one-shot timer interrupt. </p>
+<p>Schedule a one-shot timer interrupt after coarse ticks. Converts coarse ticks (BootParams::timer_hz) to an absolute CNTP_CVAL_EL0 deadline. 0 disarms (CTL=0); the periodic tick is not preserved across a one-shot (re-arm explicitly). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">ticks_from_now</td><td>Number of coarse scheduler ticks (0 = disarm). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -953,8 +965,8 @@ Here is the call graph for this function:</div>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">ticks_from_now</td><td>Number of coarse ticks from now (0 = disarm).</td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">ticks_from_now</td><td>Number of scheduler ticks (ms) from now.</td></tr>
-    <tr><td class="paramdir"></td><td class="paramname">ticks_from_now</td><td>Number of milliseconds from now to fire (0 = disarm: mtimecmp is parked at the maximum — S-mode cannot clear a pending STIP, only push its deadline out). </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">ticks_from_now</td><td>Number of scheduler ticks from now. Converts coarse ticks (BootParams::timer_hz, fallback CONFIG_TICK_HZ) to counter ticks and arms an absolute CVAL deadline. Saturating math: oversized requests clamp to the maximum deadline, never wrap. 0 disarms (CTL=0); <a class="el" href="#a461062976b4ef7cf80104bae22ae80d8" title="Get the remaining ticks on the armed deadline.">remaining()</a> then reads 0.</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">ticks_from_now</td><td>Coarse scheduler ticks from now (0 = disarm: mtimecmp is parked at the maximum — S-mode cannot clear a pending STIP, only push its deadline out). </td></tr>
   </table>
   </dd>
 </dl>
@@ -984,7 +996,13 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Configure a periodic timer interrupt. </p>
+<p>Configure a periodic timer via SBI. Latches the converted interval so <a class="el" href="#aaf09570e9110d9a964561ca08a1627c4" title="Handle a timer interrupt (increment tick count).">handle_irq()</a> persists the period. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">period_ticks</td><td>Period in coarse scheduler ticks (0 = disarm). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -1011,7 +1029,13 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Configure a periodic timer interrupt. </p>
+<p>Configure a periodic timer interrupt. Latches the converted interval so <a class="el" href="#aaf09570e9110d9a964561ca08a1627c4" title="Handle a timer interrupt (increment tick count).">handle_irq()</a> persists the period. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">period_ticks</td><td>Period in coarse scheduler ticks (0 = disarm). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -1044,8 +1068,8 @@ Here is the call graph for this function:</div>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">period_ticks</td><td>Period in coarse ticks (0 = disarm).</td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">period_ticks</td><td>Interval in scheduler ticks (ms).</td></tr>
-    <tr><td class="paramdir"></td><td class="paramname">period_ticks</td><td>Period in ticks (Hz). 0 = disarm (deadline parked at the maximum); otherwise the handle_irq re-arm interval is latched so the period persists across ticks. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">period_ticks</td><td>Period in scheduler ticks (not Hz). Converts to counter ticks at BootParams::timer_hz and latches the interval so the ISR re-arms the same period. 0 disarms (CTL=0).</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">period_ticks</td><td>Period in coarse scheduler ticks (0 = disarm). Latches the converted interval so <a class="el" href="#aaf09570e9110d9a964561ca08a1627c4" title="Handle a timer interrupt (increment tick count).">handle_irq()</a> persists the period. </td></tr>
   </table>
   </dd>
 </dl>
@@ -1237,7 +1261,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Get the remaining ticks on the current timer. </p>
+<p>Get the remaining time (always 0: mtimecmp unreadable in S-mode). </p>
+<dl class="section return"><dt>Returns</dt><dd>0. </dd></dl>
 
 </div>
 </div>
@@ -1264,7 +1289,8 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Get the remaining ticks on the current timer. </p>
+<p>Get the remaining time in coarse scheduler ticks (ceil). </p>
+<dl class="section return"><dt>Returns</dt><dd>Remaining ticks (0 when disarmed or expired). </dd></dl>
 
 </div>
 </div>
@@ -1293,10 +1319,10 @@ Here is the call graph for this function:</div>
 
 <p>Get the remaining ticks on the armed deadline. </p>
 <p>Return time remaining on the current timer.</p>
-<p>Read the remaining time on the timer (CNTP_TVAL_EL0).</p>
+<p>Read the remaining time on the timer in coarse scheduler ticks.</p>
 <dl class="section return"><dt>Returns</dt><dd>Remaining coarse ticks (0 when disarmed or expired).</dd>
 <dd>
-Remaining timer value in counter ticks.</dd>
+Remaining whole+partial ticks (ceil), 0 when disarmed/expired.</dd>
 <dd>
 Always 0 (mtimecmp is not readable from S-mode). </dd></dl>
 <dl class="section note"><dt>Note</dt><dd>This is a known limitation of S-mode on RISC-V. </dd></dl>
@@ -1327,6 +1353,7 @@ Always 0 (mtimecmp is not readable from S-mode). </dd></dl>
 </div><div class="memdoc">
 
 <p>Sub-tick nanoseconds remaining (0: mtimecmp unreadable). </p>
+<dl class="section return"><dt>Returns</dt><dd>0. </dd></dl>
 
 </div>
 </div>
@@ -1353,7 +1380,8 @@ Always 0 (mtimecmp is not readable from S-mode). </dd></dl>
 </table>
 </div><div class="memdoc">
 
-<p>Sub-tick nanoseconds remaining on the current timer. </p>
+<p>Sub-tick nanoseconds remaining on the armed deadline. </p>
+<dl class="section return"><dt>Returns</dt><dd>Remaining nanoseconds (0 when disarmed or expired). </dd></dl>
 
 </div>
 </div>
@@ -1382,12 +1410,6 @@ Always 0 (mtimecmp is not readable from S-mode). </dd></dl>
 
 <p>Sub-tick nanoseconds remaining on the armed deadline. </p>
 <dl class="section return"><dt>Returns</dt><dd>Remaining nanoseconds (0 when disarmed or expired). </dd></dl>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="classarch_1_1_timer_af9a65638073dbf45c08769fabde22bc8_cgraph.png" border="0" usemap="#aclassarch_1_1_timer_af9a65638073dbf45c08769fabde22bc8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
-</div>
 
 </div>
 </div>
@@ -1470,7 +1492,7 @@ Here is the call graph for this function:</div>
 
 <p>Change the tick frequency at runtime. </p>
 <p>Program the PIT to fire at a given frequency.</p>
-<p>Set the timer compare value to achieve a given frequency. Reads CNTFRQ_EL0 to calculate the interval and writes it to CNTP_TVAL_EL0.</p>
+<p>Set the timer compare value to achieve a given frequency. Programs an absolute CNTP_CVAL_EL0 deadline (now + interval) so a late re-arm cannot land in the past and storm. Re-arming uses CVAL, not the relative TVAL window.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">frequency_hz</td><td>New tick rate in Hz.</td></tr>

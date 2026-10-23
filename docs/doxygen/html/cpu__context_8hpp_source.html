@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('cpu__context_8
 <div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>} <span class="comment">// namespace kernel</span></div>
 </div>
 <div class="ttc" id="aaarch64_2serial_8cpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div></div>
-<div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:35</div></div>
+<div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:37</div></div>
 <div class="ttc" id="anamespacearch_html_a74ee5e38b6239c12f5cadd479e625d7d"><div class="ttname"><a href="namespacearch.html#a74ee5e38b6239c12f5cadd479e625d7d">arch::per_cpu</a></div><div class="ttdeci">PerCpu per_cpu[CONFIG_MAX_CPUS]</div><div class="ttdef"><b>Definition</b> percpu.cpp:9</div></div>
 <div class="ttc" id="anamespacearch_html_ac53772566e53832b14ccedb8d6ae2d4e"><div class="ttname"><a href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a></div><div class="ttdeci">uint64_t cpu_index() noexcept</div><div class="ttdoc">Current CPU index — single-core archs are always CPU 0.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:31</div></div>
 <div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('cpu__context_8
 <div class="ttc" id="astructkernel_1_1_cpu_context_html_a01ddf0f07e15307e0251a3414a25aec5"><div class="ttname"><a href="structkernel_1_1_cpu_context.html#a01ddf0f07e15307e0251a3414a25aec5">kernel::CpuContext::ticks</a></div><div class="ttdeci">uint64_t ticks</div><div class="ttdoc">Per-CPU tick counter (timer ISR RMW; readers use atomic load).</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:60</div></div>
 <div class="ttc" id="astructkernel_1_1_cpu_context_html_a6fc2e17fe50ebb47643b65870bbfa109"><div class="ttname"><a href="structkernel_1_1_cpu_context.html#a6fc2e17fe50ebb47643b65870bbfa109">kernel::CpuContext::current</a></div><div class="ttdeci">TaskControlBlock * current</div><div class="ttdoc">The physically-running task (per-CPU cache). INV-1: the RSP-ownership scan in switch_to_task remains ...</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:58</div></div>
 <div class="ttc" id="astructkernel_1_1_cpu_context_html_a85714e17216d98d919ac6223f1559a6b"><div class="ttname"><a href="structkernel_1_1_cpu_context.html#a85714e17216d98d919ac6223f1559a6b">kernel::CpuContext::last_switch_tick</a></div><div class="ttdeci">uint64_t last_switch_tick</div><div class="ttdoc">Last tick an actual context switch ran (debug).</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:62</div></div>
-<div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:227</div></div>
+<div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:232</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

@@ -1,7 +1,12 @@
 var kernel_8cpp =
 [
+    [ "BootPost", "kernel_8cpp.html#a49db45e3e978eb37d31ed943e5e1a49b", [
+      [ "ENTRY", "kernel_8cpp.html#a49db45e3e978eb37d31ed943e5e1a49ba5d5fa847ba846e56023955fb50c7f803", null ],
+      [ "BOOT_STATE", "kernel_8cpp.html#a49db45e3e978eb37d31ed943e5e1a49baca7322e74d5f3803d988168c5065caf1", null ],
+      [ "KERNEL_STACK", "kernel_8cpp.html#a49db45e3e978eb37d31ed943e5e1a49bad5d45a7ce06938b321ae8597adc2d1b0", null ]
+    ] ],
     [ "__attribute__", "kernel_8cpp.html#a6773415358edda571fb1be7fb810a2c2", null ],
-    [ "__attribute__", "kernel_8cpp.html#ae2bf43943abd1cc6ac00d36b17a973c3", null ],
+    [ "__attribute__", "kernel_8cpp.html#adff7bd657f9fc4b8614f70510286e89b", null ],
     [ "kernel::boot_entry_raw", "namespacekernel.html#ae369e3a5b4081280571e619d0877856d", null ],
     [ "kernel::boot_stage_delta", "namespacekernel.html#ad2597cced737d422c403d4c25437f61e", null ],
     [ "kernel::boot_stage_mark", "namespacekernel.html#afe82421db302cf9007f1bfe16cff939d", null ],

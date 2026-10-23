@@ -1,5 +1,7 @@
 var dir_f2d2daf3e7e7133833e8ca3e96c20a92 =
 [
+    [ "crash_dump.cpp", "crash__dump_8cpp.html", "crash__dump_8cpp" ],
+    [ "crash_dump.hpp", "crash__dump_8hpp.html", "crash__dump_8hpp" ],
     [ "debug_bind.hpp", "debug__bind_8hpp.html", "debug__bind_8hpp" ],
     [ "debug_regs.cpp", "debug__regs_8cpp.html", "debug__regs_8cpp" ],
     [ "debug_regs.hpp", "debug__regs_8hpp.html", "debug__regs_8hpp" ],

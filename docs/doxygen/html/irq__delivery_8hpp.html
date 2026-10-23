@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -161,8 +161,9 @@ Enumerations</h2></td></tr>
 <tr class="memdesc:a39a8b332edefebba052488078097a45b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Delivery mode of an armed IRQ slot (issue #7). Bound atomically at arm() time under the slot lock; immutable for the arm lifetime.  <a href="namespacekernel.html#a39a8b332edefebba052488078097a45b">More...</a><br /></td></tr>
 <tr class="memitem:a6ead49c66ec3252aefe08e87743e2bb3" id="r_a6ead49c66ec3252aefe08e87743e2bb3"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3">kernel::IrqSlotKind</a> : uint8_t { <a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2">kernel::PIC</a> = 0
 , <a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301">kernel::MSIX</a> = 1
+, <a class="el" href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a8b55a44b49368262df89fd0e17b1a181">kernel::PLATFORM</a> = 2
  }</td></tr>
-<tr class="memdesc:a6ead49c66ec3252aefe08e87743e2bb3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source kind of a claimed delivery slot (issue #10). The PIC (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore state; MSI-X vectors (48–255) mask/unmask their table entry instead. All mask logic is gated on this kind — a MSI-X vector must never run the PIC <span class="tt">vector - 32</span> line arithmetic (would mask the wrong IRQ line).  <a href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3">More...</a><br /></td></tr>
+<tr class="memdesc:a6ead49c66ec3252aefe08e87743e2bb3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Source kind of a claimed delivery slot (issue #10). The PIC (x86_64 IRQ lines 0–15 → vectors 33–47) has line-mask snapshot/restore state; MSI-X vectors (48–255) mask/unmask their table entry instead. All mask logic is gated on this kind — a MSI-X vector must never run the <span class="tt">vector - 32</span> line arithmetic (it would mask a wrong IRQ line). Issue #354 adds PLATFORM: off-x86 (GIC SPI / PLIC source) vectors mask/unmask the controller line directly (mask ownership: the delivery table owns the line for the arm lifetime; the storm limiter may mask independently and the table re-unmasks on release only when it unmasked at arm).  <a href="namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3">More...</a><br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>User-space IRQ delivery table (v0.4.2, issues #2/#7). A static, bounded set of slots (CONFIG_CAP_MAX_IRQ) that maps an armed IRQ vector to the task registered to receive it. The ISR entry is invoked from handle_interrupt_c BEFORE the threaded-IRQ path; it EOI-acks, records a pending IRQ and wakes a blocked sys_irq_wait waiter under the slot lock (no lost wakeup, no double delivery). Issue #7 adds a NOTIFY delivery mode that transforms the incoming interrupt into a capability-backed IPC notification (the recipient task's Notify object) instead of the blocking sys_irq_wait wait — eliminating Ring 0 driver execution for notification-driven user-space drivers. </p>

@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['zeroinit_0',['ZeroInit',['../namespacekernel.html#a8e0521a953489d8395e005169ebe917ca43830abb2f67293961d0d86a32b47c07',1,'kernel']]]
+  ['yield_0',['YIELD',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a18e25ac6cc28c2b91bce1fbe629b682a',1,'kernel']]]
 ];

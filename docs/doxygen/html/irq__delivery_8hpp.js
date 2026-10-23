@@ -8,6 +8,7 @@ var irq__delivery_8hpp =
     ] ],
     [ "kernel::IrqSlotKind", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3", [
       [ "kernel::IrqSlotKind::PIC", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3acd85be631dff7b97697be7dc0a2f07f2", null ],
-      [ "kernel::IrqSlotKind::MSIX", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301", null ]
+      [ "kernel::IrqSlotKind::MSIX", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a04dafbcfaf114b77eddbf596c9d2e301", null ],
+      [ "kernel::IrqSlotKind::PLATFORM", "namespacekernel.html#a6ead49c66ec3252aefe08e87743e2bb3a8b55a44b49368262df89fd0e17b1a181", null ]
     ] ]
 ];

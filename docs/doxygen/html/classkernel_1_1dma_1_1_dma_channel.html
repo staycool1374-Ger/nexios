@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -198,7 +198,7 @@ Public Member Functions</h2></td></tr>
 
 <p>Abort any in-progress transfer. </p>
 
-<p>Implemented in <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#af710128318ec4f28ed5bb297fe52814d">kernel::dma::BmDmaChannel</a>.</p>
+<p>Implemented in <a class="el" href="class_fake_dma_channel.html#a9a0b3d3d2ac4330162aa7d8e8e932ad0">FakeDmaChannel</a>, and <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#af710128318ec4f28ed5bb297fe52814d">kernel::dma::BmDmaChannel</a>.</p>
 
 </div>
 </div>
@@ -226,7 +226,7 @@ Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 <p>Handle a DMA completion interrupt. Acknowledges the interrupt and returns completion status. </p><dl class="section return"><dt>Returns</dt><dd>true if the transfer completed successfully. </dd></dl>
 
-<p>Implemented in <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#ace5bd2260e716704d06c274036537f54">kernel::dma::BmDmaChannel</a>.</p>
+<p>Implemented in <a class="el" href="class_fake_dma_channel.html#a36207116164a15f8d12dddcc4572f995">FakeDmaChannel</a>, and <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#ace5bd2260e716704d06c274036537f54">kernel::dma::BmDmaChannel</a>.</p>
 
 </div>
 </div>
@@ -254,7 +254,7 @@ Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 <p>Initialize the channel. </p><dl class="section return"><dt>Returns</dt><dd>true if the channel is ready. </dd></dl>
 
-<p>Implemented in <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#aab53663c45c47e3fa3bbe1c99394bb2c">kernel::dma::BmDmaChannel</a>.</p>
+<p>Implemented in <a class="el" href="class_fake_dma_channel.html#aa39f12a0ba889969cf780658b6c4a056">FakeDmaChannel</a>, and <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#aab53663c45c47e3fa3bbe1c99394bb2c">kernel::dma::BmDmaChannel</a>.</p>
 
 </div>
 </div>
@@ -283,7 +283,7 @@ Public Member Functions</h2></td></tr>
 
 <p>Poll whether the channel is busy. </p>
 
-<p>Implemented in <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#a03e266c811970fd4d54790f3d7d1c813">kernel::dma::BmDmaChannel</a>.</p>
+<p>Implemented in <a class="el" href="class_fake_dma_channel.html#adc6a6b4724123bc2181ffdea60c67552">FakeDmaChannel</a>, and <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#a03e266c811970fd4d54790f3d7d1c813">kernel::dma::BmDmaChannel</a>.</p>
 
 </div>
 </div>
@@ -320,9 +320,9 @@ Public Member Functions</h2></td></tr>
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>true if the transfer was started. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>true if the transfer was started. Implementations must fail closed (return false) when the table base is not representable in the controller's address register; never truncate (BMDMA: 32-bit PRDTPR, issue #307). </dd></dl>
 
-<p>Implemented in <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#a9d655e4a78f45b87e70393d72e5b862b">kernel::dma::BmDmaChannel</a>.</p>
+<p>Implemented in <a class="el" href="class_fake_dma_channel.html#ab96e0d8672235df27f55a696c4af2d83">FakeDmaChannel</a>, and <a class="el" href="classkernel_1_1dma_1_1_bm_dma_channel.html#a9d655e4a78f45b87e70393d72e5b862b">kernel::dma::BmDmaChannel</a>.</p>
 
 </div>
 </div>

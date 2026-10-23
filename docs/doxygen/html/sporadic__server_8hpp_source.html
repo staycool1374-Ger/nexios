@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -317,7 +317,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('sporadic__serv
 <div class="line"><a id="l00257" name="l00257"></a><span class="lineno">  257</span>              <span class="stringliteral">&quot;SporadicServer::Replenishment must fit in 16 bytes&quot;</span>);</div>
 <div class="line"><a id="l00258" name="l00258"></a><span class="lineno">  258</span> </div>
 <div class="line"><a id="l00259" name="l00259"></a><span class="lineno">  259</span><span class="preprocessor">#if CONFIG_SPORADIC_SERVER_DEADLINE_HOOK</span></div>
-<div class="line"><a id="l00266" name="l00266"></a><span class="lineno">  266</span><a class="code hl_function" href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">__attribute__</a>((weak)) <span class="keywordtype">void</span></div>
+<div class="line"><a id="l00266" name="l00266"></a><span class="lineno">  266</span><a class="code hl_function" href="namespacekernel.html#af334ed97cac304999841e5e01a7cdfb6">__attribute__</a>((weak)) <span class="keywordtype">void</span></div>
 <div class="line"><a id="l00267" name="l00267"></a><span class="lineno">  267</span>sporadic_server_deadline_handler(<a class="code hl_class" href="classkernel_1_1task_1_1_sporadic_server.html">SporadicServer</a> *ss, uint64_t reason) <span class="keyword">noexcept</span>;</div>
 <div class="line"><a id="l00268" name="l00268"></a><span class="lineno">  268</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00269" name="l00269"></a><span class="lineno">  269</span> </div>
@@ -361,7 +361,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('sporadic__serv
 <div class="ttc" id="anamespacekernel_1_1time_html"><div class="ttname"><a href="namespacekernel_1_1time.html">kernel::time</a></div><div class="ttdef"><b>Definition</b> posix_time.cpp:31</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
 <div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
-<div class="ttc" id="anamespacekernel_html_aef2c5f8888b21de09ec3a76f5b964885"><div class="ttname"><a href="namespacekernel.html#aef2c5f8888b21de09ec3a76f5b964885">kernel::__attribute__</a></div><div class="ttdeci">__attribute__((noinline)) static uint64_t bucket_of(const TaskControlBlock *t</div><div class="ttdoc">Find the priority bucket a node currently lives in. A task&#39;s stored t-&gt;priority may have been changed...</div></div>
+<div class="ttc" id="anamespacekernel_html_af334ed97cac304999841e5e01a7cdfb6"><div class="ttname"><a href="namespacekernel.html#af334ed97cac304999841e5e01a7cdfb6">kernel::__attribute__</a></div><div class="ttdeci">__attribute__((weak)) void VMM</div><div class="ttdef"><b>Definition</b> vmm.cpp:547</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="astructkernel_1_1task_1_1_sporadic_server_1_1_replenishment_html"><div class="ttname"><a href="structkernel_1_1task_1_1_sporadic_server_1_1_replenishment.html">kernel::task::SporadicServer::Replenishment</a></div><div class="ttdoc">A single scheduled replenishment event.</div><div class="ttdef"><b>Definition</b> sporadic_server.hpp:85</div></div>
 <div class="ttc" id="astructkernel_1_1task_1_1_sporadic_server_1_1_replenishment_html_a1843710c17e0b19586d5e7df4c2ef19f"><div class="ttname"><a href="structkernel_1_1task_1_1_sporadic_server_1_1_replenishment.html#a1843710c17e0b19586d5e7df4c2ef19f">kernel::task::SporadicServer::Replenishment::time</a></div><div class="ttdeci">uint64_t time</div><div class="ttdoc">System tick when this replenishment fires.</div><div class="ttdef"><b>Definition</b> sporadic_server.hpp:86</div></div>

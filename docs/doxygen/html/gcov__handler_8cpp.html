@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -144,12 +144,12 @@ Variables</h2></td></tr>
 <p>Registration IS the coverage signal: a function appears in the dump if and only if it was entered at least once. The "not covered" set is derived host-side from the ELF symbol universe (tools/coverage_report.py), because a kernel cannot know which functions exist in files it never executes.</p>
 <p>Wire format (all little-endian) — see docs/specs/coverage.md: </p><div class="fragment"><div class="line"><span class="stringliteral">&quot;\n@@COVBEGIN@@\n&quot;</span></div>
 <div class="line"><span class="stringliteral">&quot;FUNC&quot;</span> u32 count</div>
-<div class="line">count * (u64 <a class="code hl_variable" href="ether_8hpp.html#a8f7d34f0706997ac57fd475518fa9cb5">addr</a>, u8 called)      <span class="comment">// called is always 1 (wire compat)</span></div>
+<div class="line">count * (u64 <a class="code hl_variable" href="virtio__gpu_8hpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a>, u8 called)      <span class="comment">// called is always 1 (wire compat)</span></div>
 <div class="line"><span class="stringliteral">&quot;STAT&quot;</span> u32 registered u32 dropped u32 <a class="code hl_variable" href="icmp_8hpp.html#a6796c847bbd16253ce2538754c250bd6">checksum</a></div>
 <div class="line"><span class="stringliteral">&quot;END!&quot;</span></div>
 <div class="line"><span class="stringliteral">&quot;\n@@COVEND@@\n&quot;</span></div>
-<div class="ttc" id="aether_8hpp_html_a8f7d34f0706997ac57fd475518fa9cb5"><div class="ttname"><a href="ether_8hpp.html#a8f7d34f0706997ac57fd475518fa9cb5">addr</a></div><div class="ttdeci">uint8_t addr[ETH_ADDR_LEN]</div><div class="ttdoc">Octets in network order.</div><div class="ttdef"><b>Definition</b> ether.hpp:0</div></div>
 <div class="ttc" id="aicmp_8hpp_html_a6796c847bbd16253ce2538754c250bd6"><div class="ttname"><a href="icmp_8hpp.html#a6796c847bbd16253ce2538754c250bd6">checksum</a></div><div class="ttdeci">uint16_t checksum</div><div class="ttdoc">ICMP header + data checksum (big-endian).</div><div class="ttdef"><b>Definition</b> icmp.hpp:2</div></div>
+<div class="ttc" id="avirtio__gpu_8hpp_html_a0e89cf6b9f6cd3125470b1bed2b823df"><div class="ttname"><a href="virtio__gpu_8hpp.html#a0e89cf6b9f6cd3125470b1bed2b823df">addr</a></div><div class="ttdeci">uint64_t addr</div><div class="ttdef"><b>Definition</b> virtio_gpu.hpp:0</div></div>
 </div><!-- fragment --><p> A capture is only valid when both sentinels and the checksum are intact; a truncated dump emits "@@COVABORT@@" instead of the end sentinel. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a418792426ac0fbd26d287400e52595b7" name="a418792426ac0fbd26d287400e52595b7"></a>

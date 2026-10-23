@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__stack__a
 <code>#include &lt;<a class="el" href="vmm_8hpp_source.html">kernel/memory/vmm.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="io_8hpp_source.html">kernel/arch/io.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="test__isolate_8hpp_source.html">kernel/test/test_isolate.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="crash__dump_8hpp_source.html">kernel/debug/crash_dump.hpp</a>&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for test_stack_alloc.cpp:</div>
 <div class="dyncontent">
@@ -142,7 +143,7 @@ Functions</h2></td></tr>
 <tr class="memitem:ae67f8eb9aed06e2d81ec60c1f4c65d22" id="r_ae67f8eb9aed06e2d81ec60c1f4c65d22"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ae67f8eb9aed06e2d81ec60c1f4c65d22">JARVIS_TEST</a> (stack_alloc_user_task_has_guard_page, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a02d38f1c38acb0313e71b219486d5855" id="r_a02d38f1c38acb0313e71b219486d5855"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a02d38f1c38acb0313e71b219486d5855">JARVIS_TEST</a> (stack_alloc_stack_alignment, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a335fa9a945a9c45b11facbf05a9a9c09" id="r_a335fa9a945a9c45b11facbf05a9a9c09"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a335fa9a945a9c45b11facbf05a9a9c09">JARVIS_TEST</a> (stack_alloc_multiple_tasks_distinct_stacks, &quot;PRE: none | POST: none&quot;)</td></tr>
-<tr class="memitem:aebf9c76b4ca8fb2a8e32ca3fd1679fea" id="r_aebf9c76b4ca8fb2a8e32ca3fd1679fea"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aebf9c76b4ca8fb2a8e32ca3fd1679fea">stack_overflow_hook</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> *task)</td></tr>
+<tr class="memitem:a31ca687659b8dd5a38b9f8bf3c3bfc05" id="r_a31ca687659b8dd5a38b9f8bf3c3bfc05"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a31ca687659b8dd5a38b9f8bf3c3bfc05">stack_overflow_hook</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, const <a class="el" href="structkernel_1_1debug_1_1_first_chance_frame.html">kernel::debug::FirstChanceFrame</a> &amp;frame)</td></tr>
 <tr class="memitem:a1e45607a7acecd47342f058bebe54290" id="r_a1e45607a7acecd47342f058bebe54290"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1e45607a7acecd47342f058bebe54290">JARVIS_TEST</a> (stack_alloc_overflow_hook_weak_symbol, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a5f6f8aac9529154596367ace6432c43e" id="r_a5f6f8aac9529154596367ace6432c43e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5f6f8aac9529154596367ace6432c43e">JARVIS_TEST</a> (kstack_guard_base_unmapped, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ade624542ad80dbf8c870dc2774c68dd8" id="r_ade624542ad80dbf8c870dc2774c68dd8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ade624542ad80dbf8c870dc2774c68dd8">JARVIS_TEST</a> (kstack_overflow_invokes_hook, &quot;PRE: none | POST: none&quot;)</td></tr>
@@ -488,24 +489,28 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="aebf9c76b4ca8fb2a8e32ca3fd1679fea" name="aebf9c76b4ca8fb2a8e32ca3fd1679fea"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aebf9c76b4ca8fb2a8e32ca3fd1679fea">&#9670;&#160;</a></span>stack_overflow_hook()</h2>
+<a id="a31ca687659b8dd5a38b9f8bf3c3bfc05" name="a31ca687659b8dd5a38b9f8bf3c3bfc05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31ca687659b8dd5a38b9f8bf3c3bfc05">&#9670;&#160;</a></span>stack_overflow_hook()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void stack_overflow_hook </td>
+          <td class="memname">bool stack_overflow_hook </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>task</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>task</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1debug_1_1_first_chance_frame.html">kernel::debug::FirstChanceFrame</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>frame</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="test__stack__alloc_8cpp_aebf9c76b4ca8fb2a8e32ca3fd1679fea_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_aebf9c76b4ca8fb2a8e32ca3fd1679fea_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="test__stack__alloc_8cpp_a31ca687659b8dd5a38b9f8bf3c3bfc05_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a31ca687659b8dd5a38b9f8bf3c3bfc05_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 12 -->
 </div>
 

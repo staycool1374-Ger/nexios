@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -146,10 +146,44 @@ Data Structures</h2></td></tr>
 Namespaces</h2></td></tr>
 <tr class="memitem:arch" id="r_arch"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html">arch</a></td></tr>
 <tr class="memdesc:namespacearch"><td class="mdescLeft">&#160;</td><td class="mdescRight">AArch64 GICv2/v3 register definitions and accessors. <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a0e2dc4db2b80f75d3ae0d027006fa8ab" id="r_a0e2dc4db2b80f75d3ae0d027006fa8ab"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a0e2dc4db2b80f75d3ae0d027006fa8ab">pci_msi_supported</a> ()</td></tr>
+<tr class="memdesc:a0e2dc4db2b80f75d3ae0d027006fa8ab"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when the platform programs MSI/MSI-X into PCI devices.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>PCI config space access — CF8/CFC port I/O (x86_64) and ECAM (AArch64, RISC-V). </p>
-</div></div><!-- contents -->
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a0e2dc4db2b80f75d3ae0d027006fa8ab" name="a0e2dc4db2b80f75d3ae0d027006fa8ab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0e2dc4db2b80f75d3ae0d027006fa8ab">&#9670;&#160;</a></span>pci_msi_supported()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool pci_msi_supported </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True when the platform programs MSI/MSI-X into PCI devices. </p>
+<dl class="section return"><dt>Returns</dt><dd>x86_64 only. aarch64 (GICv2, no ITS) and riscv64 (PLIC, no MSI endpoint) fail MSI programming closed and deliver via INTx/platform lines (documented gap, issue #354 Q1). </dd></dl>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -121,9 +121,217 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__serial__
 
 <p>UART (16550 COM1) driver logic tests (milestone v0.4.3 #118): init register state (FIFO enable, DLAB, baud divisor) verified by register readback on the real QEMU 16550, and TX→RX loopback round-trips through Serial::putchar/getchar (16550 MCR loopback mode — bytes stay inside the UART, never reach the host console).  
 <a href="#details">More...</a></p>
+<div class="textblock"><code>#include &lt;<a class="el" href="test_8hpp_source.html">test.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="logger_8hpp_source.html">logger.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="serial__input_8hpp_source.html">kernel/input/serial_input.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="string_8hpp_source.html">string.hpp</a>&gt;</code><br />
+</div><div class="textblock"><div class="dynheader">
+Include dependency graph for test_serial_logic.cpp:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp__incl.png" border="0" usemap="#asrc_2kernel_2test_2test__serial__logic_8cpp" loading="lazy" alt=""/></div>
+<!-- MAP 0 -->
+</div>
+</div><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a25dcf5434958b4dc30bb7f75d08ffab1" id="r_a25dcf5434958b4dc30bb7f75d08ffab1"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a25dcf5434958b4dc30bb7f75d08ffab1">JARVIS_TEST</a> (rx_ring_slice_contiguous, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a4008f6fa9834a279448d2c92a3874c27" id="r_a4008f6fa9834a279448d2c92a3874c27"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a4008f6fa9834a279448d2c92a3874c27">JARVIS_TEST</a> (rx_ring_slice_wrap_split, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a794b6ab714850e07975424b573b40817" id="r_a794b6ab714850e07975424b573b40817"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a794b6ab714850e07975424b573b40817">JARVIS_TEST</a> (rx_ring_slice_control_boundary, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:af72c29c9d0264a1ebf1cd9848c9a45d9" id="r_af72c29c9d0264a1ebf1cd9848c9a45d9"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#af72c29c9d0264a1ebf1cd9848c9a45d9">JARVIS_TEST</a> (rx_ring_overrun_drop_counted, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:ae1a383674ce408dc2e756f434fe4f6db" id="r_ae1a383674ce408dc2e756f434fe4f6db"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ae1a383674ce408dc2e756f434fe4f6db">JARVIS_TEST</a> (rx_ring_consume_clamps, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:a9c5e69028942a011e9cceb1e2f8e1e9a" id="r_a9c5e69028942a011e9cceb1e2f8e1e9a"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a9c5e69028942a011e9cceb1e2f8e1e9a">JARVIS_TEST</a> (rx_decode_parity_all_bytes, &quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;)</td></tr>
+<tr class="memitem:aca49d035b146a2830fc1c3d17daf504a" id="r_aca49d035b146a2830fc1c3d17daf504a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aca49d035b146a2830fc1c3d17daf504a">register_serial_rx_tests</a> ()</td></tr>
+</table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>UART (16550 COM1) driver logic tests (milestone v0.4.3 #118): init register state (FIFO enable, DLAB, baud divisor) verified by register readback on the real QEMU 16550, and TX→RX loopback round-trips through Serial::putchar/getchar (16550 MCR loopback mode — bytes stay inside the UART, never reach the host console). </p>
-</div></div><!-- contents -->
+<p>UART (16550 COM1) driver logic tests (milestone v0.4.3 #118): init register state (FIFO enable, DLAB, baud divisor) verified by register readback on the real QEMU 16550, and TX→RX loopback round-trips through Serial::putchar/getchar (16550 MCR loopback mode — bytes stay inside the UART, never reach the host console). Shared RX-ring block (issue #407, unguarded — the decoder core compiles on all three arches): slice/consume/overrun/parity contract of <a class="el" href="namespacekernel_1_1input_1_1serial.html">kernel::input::serial</a>.</p>
+</div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a9c5e69028942a011e9cceb1e2f8e1e9a" name="a9c5e69028942a011e9cceb1e2f8e1e9a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9c5e69028942a011e9cceb1e2f8e1e9a">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[1/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">rx_decode_parity_all_bytes</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp_a9c5e69028942a011e9cceb1e2f8e1e9a_cgraph.png" border="0" usemap="#atest__serial__logic_8cpp_a9c5e69028942a011e9cceb1e2f8e1e9a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="ae1a383674ce408dc2e756f434fe4f6db" name="ae1a383674ce408dc2e756f434fe4f6db"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1a383674ce408dc2e756f434fe4f6db">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[2/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">rx_ring_consume_clamps</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp_ae1a383674ce408dc2e756f434fe4f6db_cgraph.png" border="0" usemap="#atest__serial__logic_8cpp_ae1a383674ce408dc2e756f434fe4f6db_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="af72c29c9d0264a1ebf1cd9848c9a45d9" name="af72c29c9d0264a1ebf1cd9848c9a45d9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af72c29c9d0264a1ebf1cd9848c9a45d9">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[3/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">rx_ring_overrun_drop_counted</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp_af72c29c9d0264a1ebf1cd9848c9a45d9_cgraph.png" border="0" usemap="#atest__serial__logic_8cpp_af72c29c9d0264a1ebf1cd9848c9a45d9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="a25dcf5434958b4dc30bb7f75d08ffab1" name="a25dcf5434958b4dc30bb7f75d08ffab1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a25dcf5434958b4dc30bb7f75d08ffab1">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[4/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">rx_ring_slice_contiguous</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp_a25dcf5434958b4dc30bb7f75d08ffab1_cgraph.png" border="0" usemap="#atest__serial__logic_8cpp_a25dcf5434958b4dc30bb7f75d08ffab1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a794b6ab714850e07975424b573b40817" name="a794b6ab714850e07975424b573b40817"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a794b6ab714850e07975424b573b40817">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[5/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">rx_ring_slice_control_boundary</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp_a794b6ab714850e07975424b573b40817_cgraph.png" border="0" usemap="#atest__serial__logic_8cpp_a794b6ab714850e07975424b573b40817_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
+</div>
+
+</div>
+</div>
+<a id="a4008f6fa9834a279448d2c92a3874c27" name="a4008f6fa9834a279448d2c92a3874c27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4008f6fa9834a279448d2c92a3874c27">&#9670;&#160;</a></span>JARVIS_TEST() <span class="overload">[6/6]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">JARVIS_TEST </td>
+          <td>(</td>
+          <td class="paramtype">rx_ring_slice_wrap_split</td>          <td class="paramname"><span class="paramname"><em></em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&quot;PRE: <a class="el" href="namespacekernel_1_1iocd.html">iocd</a> | POST: none&quot;</td>          <td class="paramname"><span class="paramname"><em></em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp_a4008f6fa9834a279448d2c92a3874c27_cgraph.png" border="0" usemap="#atest__serial__logic_8cpp_a4008f6fa9834a279448d2c92a3874c27_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 6 -->
+</div>
+
+</div>
+</div>
+<a id="aca49d035b146a2830fc1c3d17daf504a" name="aca49d035b146a2830fc1c3d17daf504a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aca49d035b146a2830fc1c3d17daf504a">&#9670;&#160;</a></span>register_serial_rx_tests()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void register_serial_rx_tests </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="test__serial__logic_8cpp_aca49d035b146a2830fc1c3d17daf504a_cgraph.png" border="0" usemap="#atest__serial__logic_8cpp_aca49d035b146a2830fc1c3d17daf504a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+</div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

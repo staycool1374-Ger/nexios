@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -177,6 +177,8 @@ Enumerations</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:ae58a5d89d2f598db6a1aec1d6b9fa27e" id="r_ae58a5d89d2f598db6a1aec1d6b9fa27e"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_entry.html">kernel::dma::PrdEntry</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ae58a5d89d2f598db6a1aec1d6b9fa27e">kernel::dma::__attribute__</a> ((packed))</td></tr>
+<tr class="memitem:ad2972f42bbe9eb29a1217004b780ca29" id="r_ad2972f42bbe9eb29a1217004b780ca29"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ad2972f42bbe9eb29a1217004b780ca29">kernel::dma::bm_prd_addr_ok</a> (uint64_t prd_phys)</td></tr>
+<tr class="memdesc:ad2972f42bbe9eb29a1217004b780ca29"><td class="mdescLeft">&#160;</td><td class="mdescRight">True iff a PRD table base fits the controller's address register.  <br /></td></tr>
 <tr class="memitem:a9ed9bda8444aa6fed65a4d02bb7157d9" id="r_a9ed9bda8444aa6fed65a4d02bb7157d9"><td class="memItemLeft"><a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9">kernel::dma::alloc_buffer</a> (<a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
 <tr class="memitem:ae63cca35e8ce0810d35364b5e21a252d" id="r_ae63cca35e8ce0810d35364b5e21a252d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#ae63cca35e8ce0810d35364b5e21a252d">kernel::dma::free_buffer</a> (<a class="el" href="structkernel_1_1dma_1_1_dma_buffer.html">DmaBuffer</a> &amp;buf)</td></tr>
 <tr class="memdesc:ae63cca35e8ce0810d35364b5e21a252d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Free a previously allocated DMA buffer.  <br /></td></tr>
@@ -199,6 +201,8 @@ Variables</h2></td></tr>
 <tr class="memitem:a773b39d480759f67926cb18ae2219281" id="r_a773b39d480759f67926cb18ae2219281"><td class="memItemLeft">uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a773b39d480759f67926cb18ae2219281">flags</a></td></tr>
 <tr class="memdesc:a773b39d480759f67926cb18ae2219281"><td class="mdescLeft">&#160;</td><td class="mdescRight">Segment flags (PF_R, PF_W, PF_X).  <br /></td></tr>
 <tr class="memitem:a66632527972301cb54ea7447f4c7bb59" id="r_a66632527972301cb54ea7447f4c7bb59"><td class="memItemLeft">struct <a class="el" href="structkernel_1_1dma_1_1_prd_table.html">kernel::dma::PrdTable</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a66632527972301cb54ea7447f4c7bb59">kernel::dma::__attribute__</a></td></tr>
+<tr class="memitem:a32c84d9be40c1d7b8827e98abbfa754e" id="r_a32c84d9be40c1d7b8827e98abbfa754e"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a32c84d9be40c1d7b8827e98abbfa754e">kernel::dma::DMA_BM_PRD_ADDR_LIMIT</a> = 0x100000000ULL</td></tr>
+<tr class="memdesc:a32c84d9be40c1d7b8827e98abbfa754e"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA PRD address limit (issue #307): the 32-bit PRDTPR register cannot represent a table base &gt;= 4 GiB — fail closed, never truncate. Public + header-inline so QE can unit-test the predicate.  <br /></td></tr>
 <tr class="memitem:a56b2daba79fabb19559a7e49fb7d4253" id="r_a56b2daba79fabb19559a7e49fb7d4253"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a56b2daba79fabb19559a7e49fb7d4253">kernel::dma::BMCMD_START</a> = 0x01</td></tr>
 <tr class="memdesc:a56b2daba79fabb19559a7e49fb7d4253"><td class="mdescLeft">&#160;</td><td class="mdescRight">BMDMA command register bits.  <br /></td></tr>
 <tr class="memitem:a77febcce08bec5fcf61e8a5973b8ff38" id="r_a77febcce08bec5fcf61e8a5973b8ff38"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1dma.html#a77febcce08bec5fcf61e8a5973b8ff38">kernel::dma::BMCMD_STOP</a> = 0x00</td></tr>

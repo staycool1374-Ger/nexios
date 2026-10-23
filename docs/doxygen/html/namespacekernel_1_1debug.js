@@ -1,8 +1,18 @@
 var namespacekernel_1_1debug =
 [
+    [ "FirstChanceFrame", "structkernel_1_1debug_1_1_first_chance_frame.html", "structkernel_1_1debug_1_1_first_chance_frame" ],
     [ "StopEvent", "structkernel_1_1debug_1_1_stop_event.html", "structkernel_1_1debug_1_1_stop_event" ],
     [ "L", "namespacekernel_1_1debug.html#a516d263e9a9dd5318b938067a1e3b353", null ],
     [ "S", "namespacekernel_1_1debug.html#a4c63317d15f89eed657007431bb35cb9", null ],
+    [ "FirstChanceArch", "namespacekernel_1_1debug.html#a4b5d5344fe82b4841733783b048448b6", [
+      [ "X86_64", "namespacekernel_1_1debug.html#a4b5d5344fe82b4841733783b048448b6a840030b2e70cfe0155e29ee926dbd8ae", null ],
+      [ "AARCH64", "namespacekernel_1_1debug.html#a4b5d5344fe82b4841733783b048448b6a036a8f756db6f6db7e1ed8f22a9f641e", null ],
+      [ "RISCV64", "namespacekernel_1_1debug.html#a4b5d5344fe82b4841733783b048448b6aafaf0bad004e6a71e15785a0e5089263", null ]
+    ] ],
+    [ "FirstChanceCause", "namespacekernel_1_1debug.html#a6a77ee8959c25a54a2872f4078614067", [
+      [ "CPU_EXCEPTION", "namespacekernel_1_1debug.html#a6a77ee8959c25a54a2872f4078614067a37298dc562de568248d3adf8db9a9c77", null ],
+      [ "STACK_OVERFLOW", "namespacekernel_1_1debug.html#a6a77ee8959c25a54a2872f4078614067aaf5dcc114f4d3618802f0cd7bad2ccd8", null ]
+    ] ],
     [ "StopKind", "namespacekernel_1_1debug.html#a7d0517c41ce6d04323f7b0a3e74d388f", [
       [ "BREAKPOINT", "namespacekernel_1_1debug.html#a7d0517c41ce6d04323f7b0a3e74d388fafd14a8e38e53a8241e49cfbe48095de3", null ],
       [ "STEP", "namespacekernel_1_1debug.html#a7d0517c41ce6d04323f7b0a3e74d388fa522f694f92e679d874a1cc2b2616c3d7", null ],
@@ -44,9 +54,17 @@ var namespacekernel_1_1debug =
     [ "dump_scheduler_info", "namespacekernel_1_1debug.html#a9c80a5a9a3a6f52efef1fabf4192ab72", null ],
     [ "dump_task_info", "namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b", null ],
     [ "find_entry_owner", "namespacekernel_1_1debug.html#a094fd17ebd41a3d23a3ac83dbab61387", null ],
+    [ "first_chance_emit", "namespacekernel_1_1debug.html#a1f41e30d669929a99277152aa45142f6", null ],
+    [ "first_chance_frame_here", "namespacekernel_1_1debug.html#a7e8c5060f68afb6b680f8e4b6299da99", null ],
+    [ "first_chance_halt", "namespacekernel_1_1debug.html#a9e6e2eca1ec22fe796a58403ab66c6ab", null ],
     [ "fmt_str", "namespacekernel_1_1debug.html#adc744b33c8c6fcc879f99b6094f3a8ae", null ],
     [ "fmt_u64", "namespacekernel_1_1debug.html#abfe4175e0b1de7e6d86961cee076ef9d", null ],
+    [ "format_first_chance", "namespacekernel_1_1debug.html#aae02385707d2d441aebdc782bc897f5d", null ],
+    [ "make_aarch64_frame", "namespacekernel_1_1debug.html#a9643eb8eb1fd2de0ad5970f3c3fcb3e1", null ],
+    [ "make_riscv_frame", "namespacekernel_1_1debug.html#a9a9632d9c9055aab1bc5b104fe9fd719", null ],
+    [ "make_x86_frame", "namespacekernel_1_1debug.html#ae45fb0a2cf36c5e14900dc6898bd91c5", null ],
     [ "record_task_entry", "namespacekernel_1_1debug.html#ae301850b7dcbeb7beaeb3dc92d909ddf", null ],
     [ "trace", "namespacekernel_1_1debug.html#ad4e746d8bc125cec09030517a74f8180", null ],
+    [ "x86_fault_sp", "namespacekernel_1_1debug.html#a78ceb286f35845817ddabda339e7f357", null ],
     [ "DEBUG_STOP_PULSE", "namespacekernel_1_1debug.html#a5e5df53bd66d0f3c153ecca098da7850", null ]
 ];

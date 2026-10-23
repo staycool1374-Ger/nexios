@@ -14,8 +14,10 @@ var searchData=
   ['apic_2ehpp_11',['apic.hpp',['../apic_8hpp.html',1,'(Global Namespace)'],['../x86__64_2hal_2apic_8hpp.html',1,'(Global Namespace)']]],
   ['arp_2ecpp_12',['arp.cpp',['../arp_8cpp.html',1,'']]],
   ['arp_2ehpp_13',['arp.hpp',['../arp_8hpp.html',1,'']]],
-  ['assert_2ehpp_14',['assert.hpp',['../assert_8hpp.html',1,'']]],
-  ['ata_5fpio_2ecpp_15',['ata_pio.cpp',['../ata__pio_8cpp.html',1,'']]],
-  ['ata_5fpio_2ehpp_16',['ata_pio.hpp',['../ata__pio_8hpp.html',1,'']]],
-  ['atomic_2ehpp_17',['atomic.hpp',['../atomic_8hpp.html',1,'']]]
+  ['asid_2ecpp_14',['asid.cpp',['../aarch64_2hal_2asid_8cpp.html',1,'(Global Namespace)'],['../riscv64_2hal_2asid_8cpp.html',1,'(Global Namespace)']]],
+  ['asid_2ehpp_15',['asid.hpp',['../aarch64_2hal_2asid_8hpp.html',1,'(Global Namespace)'],['../riscv64_2hal_2asid_8hpp.html',1,'(Global Namespace)']]],
+  ['assert_2ehpp_16',['assert.hpp',['../assert_8hpp.html',1,'']]],
+  ['ata_5fpio_2ecpp_17',['ata_pio.cpp',['../ata__pio_8cpp.html',1,'']]],
+  ['ata_5fpio_2ehpp_18',['ata_pio.hpp',['../ata__pio_8hpp.html',1,'']]],
+  ['atomic_2ehpp_19',['atomic.hpp',['../atomic_8hpp.html',1,'']]]
 ];

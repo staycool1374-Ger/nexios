@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -137,17 +137,37 @@ Data Fields</h2></td></tr>
 <tr class="memitem:a015a045f2e342852c008901cd30beba8" id="r_a015a045f2e342852c008901cd30beba8"><td class="memItemLeft"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a015a045f2e342852c008901cd30beba8">pic2_mask</a></td></tr>
 <tr class="memdesc:a015a045f2e342852c008901cd30beba8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Mask register of PIC #2 (slave).  <br /></td></tr>
 <tr class="memitem:a01c4746174d2cbb4a5a393a95f3650e5" id="r_a01c4746174d2cbb4a5a393a95f3650e5"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a01c4746174d2cbb4a5a393a95f3650e5">gic_mask</a></td></tr>
-<tr class="memdesc:a01c4746174d2cbb4a5a393a95f3650e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">GIC interrupt mask.  <br /></td></tr>
+<tr class="memdesc:a01c4746174d2cbb4a5a393a95f3650e5"><td class="mdescLeft">&#160;</td><td class="mdescRight">GIC distributor enable banks 0-1 (INTIDs 0-63).  <br /></td></tr>
+<tr class="memitem:ad47425c287705937205e0b4515317311" id="r_ad47425c287705937205e0b4515317311"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad47425c287705937205e0b4515317311">gic_enable_hi</a> [7]</td></tr>
+<tr class="memdesc:ad47425c287705937205e0b4515317311"><td class="mdescLeft">&#160;</td><td class="mdescRight">GIC distributor enable banks 2-7 (INTIDs 64-255).  <br /></td></tr>
 <tr class="memitem:a13e0079dd91755e42306bc5fa898d144" id="r_a13e0079dd91755e42306bc5fa898d144"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a13e0079dd91755e42306bc5fa898d144">plic_threshold</a></td></tr>
 <tr class="memdesc:a13e0079dd91755e42306bc5fa898d144"><td class="mdescLeft">&#160;</td><td class="mdescRight">PLIC priority threshold.  <br /></td></tr>
 <tr class="memitem:a0ac179056acd3c92f9999ac43e096493" id="r_a0ac179056acd3c92f9999ac43e096493"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0ac179056acd3c92f9999ac43e096493">plic_enable_first</a></td></tr>
 <tr class="memdesc:a0ac179056acd3c92f9999ac43e096493"><td class="mdescLeft">&#160;</td><td class="mdescRight">PLIC enable word for IRQ lines 0–31.  <br /></td></tr>
+<tr class="memitem:a0c1b0d987cf80b356150c824ea331ed7" id="r_a0c1b0d987cf80b356150c824ea331ed7"><td class="memItemLeft"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a0c1b0d987cf80b356150c824ea331ed7">plic_enable_hi</a> [2]</td></tr>
+<tr class="memdesc:a0c1b0d987cf80b356150c824ea331ed7"><td class="mdescLeft">&#160;</td><td class="mdescRight">PLIC S-context enable words 1-2 (lines 32-95).  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Snapshot of the x86-64 PIC mask registers. </p>
-<p>Snapshot of the RISC-V PLIC threshold + first enable word.</p>
-<p>Snapshot of the AArch64 GIC mask state. </p>
+<p>Snapshot of the RISC-V PLIC threshold + S-context enable words.</p>
+<p>Snapshot of the AArch64 GIC mask state (full 256-INTID window). </p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Field Documentation</h2>
+<a id="ad47425c287705937205e0b4515317311" name="ad47425c287705937205e0b4515317311"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad47425c287705937205e0b4515317311">&#9670;&#160;</a></span>gic_enable_hi</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::IrqState::gic_enable_hi[7]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>GIC distributor enable banks 2-7 (INTIDs 64-255). </p>
+
+</div>
+</div>
 <a id="a01c4746174d2cbb4a5a393a95f3650e5" name="a01c4746174d2cbb4a5a393a95f3650e5"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a01c4746174d2cbb4a5a393a95f3650e5">&#9670;&#160;</a></span>gic_mask</h2>
 
@@ -160,7 +180,7 @@ Data Fields</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>GIC interrupt mask. </p>
+<p>GIC distributor enable banks 0-1 (INTIDs 0-63). </p>
 
 </div>
 </div>
@@ -209,6 +229,22 @@ Data Fields</h2></td></tr>
 </div><div class="memdoc">
 
 <p>PLIC enable word for IRQ lines 0–31. </p>
+
+</div>
+</div>
+<a id="a0c1b0d987cf80b356150c824ea331ed7" name="a0c1b0d987cf80b356150c824ea331ed7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c1b0d987cf80b356150c824ea331ed7">&#9670;&#160;</a></span>plic_enable_hi</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::IrqState::plic_enable_hi[2]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>PLIC S-context enable words 1-2 (lines 32-95). </p>
 
 </div>
 </div>

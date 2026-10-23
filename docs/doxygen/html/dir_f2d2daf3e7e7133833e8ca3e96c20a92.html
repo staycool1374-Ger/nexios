@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -127,6 +127,10 @@ Directory dependency graph for debug:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-files" class="groupheader"><a id="files" name="files"></a>
 Files</h2></td></tr>
+<tr class="memitem:crash_5Fdump_2Ecpp" id="r_crash_5Fdump_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="crash__dump_8cpp.html">crash_dump.cpp</a></td></tr>
+<tr class="memdesc:crash__dump_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">First-chance raw crash dump (issue #308): bounded formatter (no Logger/libc), <a class="el" href="classarch_1_1_serial.html" title="Serial port (UART) driver — architecture-agnostic interface.">arch::Serial</a> emitter, weak halt default. <br /></td></tr>
+<tr class="memitem:crash_5Fdump_2Ehpp" id="r_crash_5Fdump_2Ehpp"><td class="memItemLeft"><a href="crash__dump_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="crash__dump_8hpp.html">crash_dump.hpp</a></td></tr>
+<tr class="memdesc:crash__dump_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">First-chance raw crash dump (issue #308, debugd §8.3): raw polled register dump to UART + halt, with no Logger formatting (Logger may be the casualty) and no recovery attempts. Terminal path only. <br /></td></tr>
 <tr class="memitem:debug_5Fbind_2Ehpp" id="r_debug_5Fbind_2Ehpp"><td class="memItemLeft"><a href="debug__bind_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="debug__bind_8hpp.html">debug_bind.hpp</a></td></tr>
 <tr class="memdesc:debug__bind_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Debugger-handle binding helpers (issue #226). The binding table itself stays owned by <a class="el" href="syscall__handlers__debug_8cpp.html" title="Debugger syscalls (issue #225, spec docs/specs/debugd.md §3–§4). Five slots (86–90): attach (selector...">syscall_handlers_debug.cpp</a> (issue #225); this header exposes the narrow cross-module queries the stop router (<a class="el" href="debug__stop_8cpp.html" title="Debugger stop-event routing + kernel breakpoint shadows (issue #226, spec docs/specs/debugd....">debug_stop.cpp</a>) and task cleanup need: ownership lookup without liveness (death events stay pollable), the debugger-death drain, and the test-isolation reset. <br /></td></tr>
 <tr class="memitem:debug_5Fregs_2Ecpp" id="r_debug_5Fregs_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="debug__regs_8cpp.html">debug_regs.cpp</a></td></tr>

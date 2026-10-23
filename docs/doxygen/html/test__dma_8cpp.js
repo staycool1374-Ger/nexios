@@ -1,5 +1,6 @@
 var test__dma_8cpp =
 [
+    [ "FakeDmaChannel", "class_fake_dma_channel.html", "class_fake_dma_channel" ],
     [ "JARVIS_TEST", "test__dma_8cpp.html#ad70713643a5d3125367b10de2e482e1f", null ],
     [ "JARVIS_TEST", "test__dma_8cpp.html#ad58e24faf8c5916e506b094460344257", null ],
     [ "JARVIS_TEST", "test__dma_8cpp.html#ac42c681bf4e2ea2e0c981f69ef6ac313", null ],

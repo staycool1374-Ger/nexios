@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -129,6 +129,10 @@ Directory dependency graph for boot:</div>
 Files</h2></td></tr>
 <tr class="memitem:bootinfo_2Ehpp" id="r_bootinfo_2Ehpp"><td class="memItemLeft"><a href="bootinfo_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="bootinfo_8hpp.html">bootinfo.hpp</a></td></tr>
 <tr class="memdesc:bootinfo_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Boot information structure — memory regions, DTB, multiboot, command line. <br /></td></tr>
+<tr class="memitem:dtb_2Ecpp" id="r_dtb_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="dtb_8cpp.html">dtb.cpp</a></td></tr>
+<tr class="memdesc:dtb_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validated device-tree access (issue #350). See <a class="el" href="dtb_8hpp.html" title="Validated device-tree access (issue #350) — the DTB is firmware input, so every accessor fail-closes ...">dtb.hpp</a>. <br /></td></tr>
+<tr class="memitem:dtb_2Ehpp" id="r_dtb_2Ehpp"><td class="memItemLeft"><a href="dtb_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="dtb_8hpp.html">dtb.hpp</a></td></tr>
+<tr class="memdesc:dtb_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validated device-tree access (issue #350) — the DTB is firmware input, so every accessor fail-closes to null/false on absent or malformed data. No allocation; all walks bounded. <br /></td></tr>
 </table>
 </div><!-- contents -->
 </div><!-- doc-content -->

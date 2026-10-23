@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -168,6 +168,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a50cec1566f383b8fba919b11eb9e50b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shows the boot splash screen (version, build type) centered on the framebuffer.  <br /></td></tr>
 <tr class="memitem:a6fea6970b6feea416b83d0bfcc429e20" id="r_a6fea6970b6feea416b83d0bfcc429e20"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6fea6970b6feea416b83d0bfcc429e20">set_cursor_visible</a> (bool visible)</td></tr>
 <tr class="memdesc:a6fea6970b6feea416b83d0bfcc429e20"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shows or hides a block cursor at the current text cursor position (framebuffer only).  <br /></td></tr>
+<tr class="memitem:a66f9c488c6b799351eec302b5d59fd94" id="r_a66f9c488c6b799351eec302b5d59fd94"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a66f9c488c6b799351eec302b5d59fd94">at_line_start</a> ()</td></tr>
+<tr class="memdesc:a66f9c488c6b799351eec302b5d59fd94"><td class="mdescLeft">&#160;</td><td class="mdescRight">True iff the framebuffer cursor is at a line start. Read-only: no serial, framebuffer, or capture side effect. Lets the shell decide whether a drained async block needs a leading newline (issue #407 item 2).  <br /></td></tr>
 <tr class="memitem:a98c58178497a4bcf08d1175f7b1d2280" id="r_a98c58178497a4bcf08d1175f7b1d2280"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a98c58178497a4bcf08d1175f7b1d2280">capture_begin</a> (char *buf, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
 <tr class="memdesc:a98c58178497a4bcf08d1175f7b1d2280"><td class="mdescLeft">&#160;</td><td class="mdescRight">Begin capturing serial output into a buffer (for shell redirection).  <br /></td></tr>
 <tr class="memitem:a4157043e77656172164a5fe524386fd0" id="r_a4157043e77656172164a5fe524386fd0"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a4157043e77656172164a5fe524386fd0">capture_end</a> ()</td></tr>
@@ -184,6 +186,34 @@ Static Public Attributes</h2></td></tr>
 <div class="textblock"><p>Text terminal with cursor, scrolling, and line editing. </p>
 <dl class="section note"><dt>Note</dt><dd>Renders to the framebuffer using the built-in bitmap font. </dd></dl>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
+<a id="a66f9c488c6b799351eec302b5d59fd94" name="a66f9c488c6b799351eec302b5d59fd94"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66f9c488c6b799351eec302b5d59fd94">&#9670;&#160;</a></span>at_line_start()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool service::Terminal::at_line_start </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>True iff the framebuffer cursor is at a line start. Read-only: no serial, framebuffer, or capture side effect. Lets the shell decide whether a drained async block needs a leading newline (issue #407 item 2). </p>
+<dl class="section return"><dt>Returns</dt><dd>True when uninitialised or cursor_x_ == 0. </dd></dl>
+
+</div>
+</div>
 <a id="a98c58178497a4bcf08d1175f7b1d2280" name="a98c58178497a4bcf08d1175f7b1d2280"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a98c58178497a4bcf08d1175f7b1d2280">&#9670;&#160;</a></span>capture_begin()</h2>
 

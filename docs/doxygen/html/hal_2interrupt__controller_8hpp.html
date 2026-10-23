@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -155,7 +155,7 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:ac7375681b455a01cbd2c161dbb0409c2" id="r_ac7375681b455a01cbd2c161dbb0409c2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac7375681b455a01cbd2c161dbb0409c2">arch::gic_redist_ready</a> ()</td></tr>
-<tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when no redistributor exists (GICv2 path). Polarity follows the GICv3 spec (online = 1); the pre-#198 poll loop tested the inverted bit.  <br /></td></tr>
+<tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when the GICv2 path read-back proves the distributor and CPU interface are enabled.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Interrupt controller abstraction — PIC (x86_64), GIC (AArch64), PLIC (RISC-V). </p>

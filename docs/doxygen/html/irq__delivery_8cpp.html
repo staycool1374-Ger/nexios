@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('irq__delivery_
 <p>User-space IRQ delivery table (issues #2/#7). A static bounded table of armed IRQ vectors mapping to their recipient task. All state transitions serialize on the per-slot SpinLock: the ISR and the syscall/teardown paths share one lock, so a pending IRQ is never lost between the pending-check and waiter registration, and a blocked sys_irq_wait is woken exactly once (never left BLOCKED forever). Issue #7 adds the NOTIFY delivery mode: the ISR transforms the interrupt into an IPC notification on the recipient's Notify object (capability-backed, no Ring 0 driver execution). The mode is read/written only under the slot lock.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;<a class="el" href="irq__delivery_8hpp_source.html">kernel/irq_delivery.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="irq__vectors_8hpp_source.html">kernel/arch/hal/irq_vectors.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq_8hpp_source.html">kernel/cap/irq.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="msix_8hpp_source.html">kernel/cap/msix.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task_8hpp_source.html">kernel/task/task.hpp</a>&gt;</code><br />

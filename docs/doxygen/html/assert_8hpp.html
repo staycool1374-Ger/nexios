@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -128,7 +128,11 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('assert_8hpp.ht
 Include dependency graph for assert.hpp:</div>
 <div class="dyncontent">
 <div class="center"><img src="assert_8hpp__incl.png" border="0" usemap="#asrc_2lib_2assert_8hpp" loading="lazy" alt=""/></div>
-<!-- MAP 0 -->
+<map name="asrc_2lib_2assert_8hpp" id="asrc_2lib_2assert_8hpp">
+<area shape="rect" title="Debug assertion macros and the panic handler declaration." alt="" coords="5,5,127,32"/>
+<area shape="rect" href="types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="27,80,105,107"/>
+<area shape="poly" title=" " alt="" coords="68,31,69,65,63,64,64,35"/>
+</map>
 </div>
 </div>
 <p><a href="assert_8hpp_source.html">Go to the source code of this file.</a></p>
@@ -142,9 +146,9 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
-<tr class="memitem:a6df1d22fb5f09eccc23b9f399670cfd7" id="r_a6df1d22fb5f09eccc23b9f399670cfd7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6df1d22fb5f09eccc23b9f399670cfd7">STRINGIFY</a>(x)</td></tr>
+<tr class="memitem:a6df1d22fb5f09eccc23b9f399670cfd7" id="r_a6df1d22fb5f09eccc23b9f399670cfd7"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a6df1d22fb5f09eccc23b9f399670cfd7">STRINGIFY</a>(<a class="el" href="virtio__gpu_8hpp.html#aae8a40a17c0be29c1f06ca6b4f9e2235">x</a>)</td></tr>
 <tr class="memdesc:a6df1d22fb5f09eccc23b9f399670cfd7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Helper: stringify without macro expansion (single level).  <br /></td></tr>
-<tr class="memitem:af404f8f49103651e90d404acdae3ffc4" id="r_af404f8f49103651e90d404acdae3ffc4"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af404f8f49103651e90d404acdae3ffc4">EXPAND_AND_STRINGIFY</a>(x)</td></tr>
+<tr class="memitem:af404f8f49103651e90d404acdae3ffc4" id="r_af404f8f49103651e90d404acdae3ffc4"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#af404f8f49103651e90d404acdae3ffc4">EXPAND_AND_STRINGIFY</a>(<a class="el" href="virtio__gpu_8hpp.html#aae8a40a17c0be29c1f06ca6b4f9e2235">x</a>)</td></tr>
 <tr class="memdesc:af404f8f49103651e90d404acdae3ffc4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Helper: expand then stringify (two levels so <b>LINE</b> expands first).  <br /></td></tr>
 <tr class="memitem:aed6cb01692023fc3b2bd46d82db8a3be" id="r_aed6cb01692023fc3b2bd46d82db8a3be"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aed6cb01692023fc3b2bd46d82db8a3be">ENSURE</a>(cond)</td></tr>
 <tr class="memdesc:aed6cb01692023fc3b2bd46d82db8a3be"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fatal invariant check — panics if the condition is false. Use this for conditions that should <em>never</em> fail.  <br /></td></tr>
@@ -222,13 +226,14 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define EXPAND_AND_STRINGIFY</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>x</em></span></td><td>)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="virtio__gpu_8hpp.html#aae8a40a17c0be29c1f06ca6b4f9e2235">x</a></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a6df1d22fb5f09eccc23b9f399670cfd7">STRINGIFY</a>(x)</div>
+<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_define" href="#a6df1d22fb5f09eccc23b9f399670cfd7">STRINGIFY</a>(<a class="code hl_variable" href="virtio__gpu_8hpp.html#aae8a40a17c0be29c1f06ca6b4f9e2235">x</a>)</div>
 <div class="ttc" id="aassert_8hpp_html_a6df1d22fb5f09eccc23b9f399670cfd7"><div class="ttname"><a href="#a6df1d22fb5f09eccc23b9f399670cfd7">STRINGIFY</a></div><div class="ttdeci">#define STRINGIFY(x)</div><div class="ttdoc">Helper: stringify without macro expansion (single level).</div><div class="ttdef"><b>Definition</b> assert.hpp:41</div></div>
+<div class="ttc" id="avirtio__gpu_8hpp_html_aae8a40a17c0be29c1f06ca6b4f9e2235"><div class="ttname"><a href="virtio__gpu_8hpp.html#aae8a40a17c0be29c1f06ca6b4f9e2235">x</a></div><div class="ttdeci">uint32_t x</div><div class="ttdef"><b>Definition</b> virtio_gpu.hpp:0</div></div>
 </div><!-- fragment -->
 <p>Helper: expand then stringify (two levels so <b>LINE</b> expands first). </p>
 
@@ -243,7 +248,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="memname">#define STRINGIFY</td>
           <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>x</em></span></td><td>)</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="virtio__gpu_8hpp.html#aae8a40a17c0be29c1f06ca6b4f9e2235">x</a></em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -276,30 +281,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="assert_8hpp_ae22655ba6f328217f1ebd6248ed82727_cgraph.png" border="0" usemap="#aassert_8hpp_ae22655ba6f328217f1ebd6248ed82727_cgraph" loading="lazy" alt=""/></div>
-<map name="aassert_8hpp_ae22655ba6f328217f1ebd6248ed82727_cgraph" id="aassert_8hpp_ae22655ba6f328217f1ebd6248ed82727_cgraph">
-<area shape="rect" title="Triggers a kernel panic with a message (noreturn)." alt="" coords="5,115,58,141"/>
-<area shape="rect" href="namespacearch.html#a73ff844e6d887445b626a7d9160241c6" title="Clears the interrupt flag (disables interrupts)." alt="" coords="140,5,208,32"/>
-<area shape="poly" title=" " alt="" coords="39,113,66,78,104,42,127,31,124,35,107,46,70,81,44,115"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a174337cfc9a31a6333b723019fe7c940" title=" " alt="" coords="106,56,242,83"/>
-<area shape="poly" title=" " alt="" coords="57,114,105,92,122,87,119,91,107,97,60,118"/>
-<area shape="rect" href="classservice_1_1Terminal.html#a218b0fead5d0e1ee9b29ae73d357d168" title="Returns the singleton terminal instance." alt="" coords="110,107,238,149"/>
-<area shape="poly" title=" " alt="" coords="57,126,96,126,92,130,59,130"/>
-<area shape="rect" href="classservice_1_1Terminal.html#a4712348be841488fabef531ac46c963a" title="Sets the foreground (text) color." alt="" coords="110,173,238,216"/>
-<area shape="poly" title=" " alt="" coords="58,137,115,165,111,168,58,143"/>
-<area shape="rect" href="classservice_1_1Terminal.html#af69ff19b8c2a30f67c02701775fdc285" title="Writes a null&#45;terminated string to the terminal." alt="" coords="110,240,238,283"/>
-<area shape="poly" title=" " alt="" coords="41,139,68,182,86,205,107,226,112,231,107,231,104,230,82,209,64,185,40,145"/>
-<area shape="rect" href="classkernel_1_1Logger.html#a12794441edd7245c8a81bfe5b9a6dd14" title=" " alt="" coords="290,56,433,83"/>
-<area shape="poly" title=" " alt="" coords="242,67,277,68,272,70,243,72"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ad2aea07eb751fad2fb738fe4123c7e7b" title=" " alt="" coords="481,31,646,57"/>
-<area shape="poly" title=" " alt="" coords="433,58,468,55,463,57,435,63"/>
-<area shape="rect" href="classkernel_1_1Logger.html#ae7f9fd488685463ec9810c40d6f907c7" title=" " alt="" coords="481,81,646,108"/>
-<area shape="poly" title=" " alt="" coords="433,76,468,82,463,83,434,81"/>
-<area shape="rect" href="classservice_1_1Terminal.html#a2cdeef541005d6fe951835a03107ee48" title="Writes a single character to the terminal." alt="" coords="298,240,426,283"/>
-<area shape="poly" title=" " alt="" coords="238,259,285,261,280,261,238,264"/>
-<area shape="poly" title=" " alt="" coords="326,238,324,230,330,221,343,215,362,213,382,216,396,225,390,224,380,221,362,219,344,221,334,225,329,231,330,241"/>
-<area shape="rect" href="classservice_1_1Framebuffer.html#a2eb3d827aa6446d0f95621283041fcb7" title="Renders a character using the bitmap font." alt="" coords="493,240,634,283"/>
-<area shape="poly" title=" " alt="" coords="426,259,480,261,475,261,426,264"/>
-</map>
+<!-- MAP 0 -->
 </div>
 
 </div>

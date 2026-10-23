@@ -17,6 +17,7 @@ var namespacekernel_1_1dma =
     [ "__attribute__", "namespacekernel_1_1dma.html#ae58a5d89d2f598db6a1aec1d6b9fa27e", null ],
     [ "alloc_buffer", "namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9", null ],
     [ "alloc_buffer", "namespacekernel_1_1dma.html#a9ed9bda8444aa6fed65a4d02bb7157d9", null ],
+    [ "bm_prd_addr_ok", "namespacekernel_1_1dma.html#ad2972f42bbe9eb29a1217004b780ca29", null ],
     [ "free_buffer", "namespacekernel_1_1dma.html#ae63cca35e8ce0810d35364b5e21a252d", null ],
     [ "pci_set_bus_master", "namespacekernel_1_1dma.html#a7c295e7cd57137a154f6ce5fe0bbde68", null ],
     [ "prd_from_sg", "namespacekernel_1_1dma.html#a2b0e39f4a2f3d6d1eb72850767919d44", null ],
@@ -33,6 +34,7 @@ var namespacekernel_1_1dma =
     [ "BMSTAT_ACTIVE", "namespacekernel_1_1dma.html#a3b83bc74ca08bbb1dfaf6612d697eb98", null ],
     [ "BMSTAT_ERROR", "namespacekernel_1_1dma.html#ade4a1588cc0e752b16b201a058d11318", null ],
     [ "BMSTAT_INTR", "namespacekernel_1_1dma.html#ae8a94e472ff9ada3416d4504f6cb05be", null ],
+    [ "DMA_BM_PRD_ADDR_LIMIT", "namespacekernel_1_1dma.html#a32c84d9be40c1d7b8827e98abbfa754e", null ],
     [ "DMA_MAX_PRD_ENTRIES", "namespacekernel_1_1dma.html#a575880390445bddafd86f288a579b60c", null ],
     [ "DMA_MAX_SG_ENTRIES", "namespacekernel_1_1dma.html#aad354cd855e6380b46c7779471e09172", null ]
 ];

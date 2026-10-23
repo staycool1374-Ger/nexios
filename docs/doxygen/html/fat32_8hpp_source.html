@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('fat32_8hpp_sou
 <div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>                      <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code hl_variable" href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a>, DirEntry &amp;<a class="code hl_variable" href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370">entry</a>, uint64_t &amp;out_index);</div>
 <div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span></div>
 <div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>int64_t <a class="code hl_function" href="namespacekernel_1_1fat32.html#ab2b90c3fd678120edc03be6e4d00a917">read_file</a>(Fat32Partition &amp;fs, uint32_t cluster, uint32_t <a class="code hl_variable" href="fat32_8hpp.html#acfc905fb689f590842c0152e3b8cd92e">file_size</a>,</div>
-<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>                  uint64_t <a class="code hl_variable" href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>, uint64_t count, uint8_t *buffer);</div>
+<div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span>                  uint64_t <a class="code hl_variable" href="virtio__gpu_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a>, uint64_t count, uint8_t *buffer);</div>
 <div class="line"><a id="l00204" name="l00204"></a><span class="lineno">  204</span></div>
 <div class="line"><a id="l00206" name="l00206"></a><span class="lineno">  206</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1fat32.html#ad96c400fa4e603f70ae0ecd41241cbbf">format_short_name</a>(<span class="keyword">const</span> uint8_t raw_name[11], <span class="keywordtype">char</span> *out, <span class="keywordtype">size_t</span> out_size);</div>
 <div class="line"><a id="l00207" name="l00207"></a><span class="lineno">  207</span></div>
@@ -327,7 +327,6 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('fat32_8hpp_sou
 <div class="ttc" id="aclasskernel_1_1fat32_1_1_fat32_partition_html_aefa293e58a91f006733c18672237bf00"><div class="ttname"><a href="classkernel_1_1fat32_1_1_fat32_partition.html#aefa293e58a91f006733c18672237bf00">kernel::fat32::Fat32Partition::cluster_to_lba</a></div><div class="ttdeci">uint64_t cluster_to_lba(uint32_t cluster) const</div><div class="ttdoc">Convert a cluster number to the first sector&#39;s LBA.</div><div class="ttdef"><b>Definition</b> fat32.cpp:178</div></div>
 <div class="ttc" id="aclasskernel_1_1fat32_1_1_fat32_partition_html_af72e0e26cca6fd357f0b5c82c7b0907d"><div class="ttname"><a href="classkernel_1_1fat32_1_1_fat32_partition.html#af72e0e26cca6fd357f0b5c82c7b0907d">kernel::fat32::Fat32Partition::mount</a></div><div class="ttdeci">bool mount()</div><div class="ttdoc">Attempt to mount the device by scanning for a FAT32 partition.</div><div class="ttdef"><b>Definition</b> fat32.cpp:143</div></div>
 <div class="ttc" id="aclasskernel_1_1fat32_1_1_fat32_partition_html_afa29e3ea6fae53e70d686c1ad53817b0"><div class="ttname"><a href="classkernel_1_1fat32_1_1_fat32_partition.html#afa29e3ea6fae53e70d686c1ad53817b0">kernel::fat32::Fat32Partition::find_free_cluster</a></div><div class="ttdeci">bool find_free_cluster(uint32_t start_cluster, uint32_t &amp;out_cluster)</div><div class="ttdoc">Find a free cluster in the FAT.</div><div class="ttdef"><b>Definition</b> fat32.cpp:532</div></div>
-<div class="ttc" id="aelf_8hpp_html_a612bb2807d848cca89ea1437cceea886"><div class="ttname"><a href="elf_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a></div><div class="ttdeci">uint64_t offset</div><div class="ttdoc">Offset in file.</div><div class="ttdef"><b>Definition</b> elf.hpp:2</div></div>
 <div class="ttc" id="aelf_8hpp_html_a6aac0a1a7d70f8270f9bb1222445f370"><div class="ttname"><a href="elf_8hpp.html#a6aac0a1a7d70f8270f9bb1222445f370">entry</a></div><div class="ttdeci">uint64_t entry</div><div class="ttdoc">Virtual address of entry point.</div><div class="ttdef"><b>Definition</b> elf.hpp:4</div></div>
 <div class="ttc" id="afat32_8hpp_html_a30308c9b983377042fd2cc8900454fb1"><div class="ttname"><a href="fat32_8hpp.html#a30308c9b983377042fd2cc8900454fb1">name</a></div><div class="ttdeci">uint8_t name[11]</div><div class="ttdoc">8.3 short name (space-padded).</div><div class="ttdef"><b>Definition</b> fat32.hpp:0</div></div>
 <div class="ttc" id="afat32_8hpp_html_acfc905fb689f590842c0152e3b8cd92e"><div class="ttname"><a href="fat32_8hpp.html#acfc905fb689f590842c0152e3b8cd92e">file_size</a></div><div class="ttdeci">uint32_t file_size</div><div class="ttdoc">File size in bytes.</div><div class="ttdef"><b>Definition</b> fat32.hpp:11</div></div>
@@ -380,6 +379,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('fat32_8hpp_sou
 <div class="ttc" id="astructkernel_1_1fat32_1_1_mbr_partition_html_ab39c8a4f90e6fab934744fdd61040db6"><div class="ttname"><a href="structkernel_1_1fat32_1_1_mbr_partition.html#ab39c8a4f90e6fab934744fdd61040db6">kernel::fat32::MbrPartition::status</a></div><div class="ttdeci">uint8_t status</div><div class="ttdoc">Partition status byte (0x80 = active).</div><div class="ttdef"><b>Definition</b> fat32.hpp:34</div></div>
 <div class="ttc" id="astructkernel_1_1fat32_1_1_mbr_partition_html_adfb0a4590657a328742f33e10cdb2475"><div class="ttname"><a href="structkernel_1_1fat32_1_1_mbr_partition.html#adfb0a4590657a328742f33e10cdb2475">kernel::fat32::MbrPartition::valid</a></div><div class="ttdeci">bool valid</div><div class="ttdoc">Whether this entry is valid.</div><div class="ttdef"><b>Definition</b> fat32.hpp:38</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
+<div class="ttc" id="avirtio__gpu_8hpp_html_a612bb2807d848cca89ea1437cceea886"><div class="ttname"><a href="virtio__gpu_8hpp.html#a612bb2807d848cca89ea1437cceea886">offset</a></div><div class="ttdeci">uint64_t offset</div><div class="ttdef"><b>Definition</b> virtio_gpu.hpp:2</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

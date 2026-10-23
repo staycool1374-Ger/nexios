@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -131,6 +131,8 @@ Include dependency graph for fdt_ro.cpp:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a2359dff8b66918e18ba70baab42f2cf1" id="r_a2359dff8b66918e18ba70baab42f2cf1"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a2359dff8b66918e18ba70baab42f2cf1">fdt_check_header</a> (const void *fdt)</td></tr>
+<tr class="memitem:a7aae470d8131301974e2b2d4cd828814" id="r_a7aae470d8131301974e2b2d4cd828814"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a7aae470d8131301974e2b2d4cd828814">fdt_check_layout</a> (const void *fdt)</td></tr>
+<tr class="memitem:a92a944ce389621ef63a64b4db84c7573" id="r_a92a944ce389621ef63a64b4db84c7573"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a92a944ce389621ef63a64b4db84c7573">fdt_check_structure</a> (const void *fdt)</td></tr>
 <tr class="memitem:a79fa5b76564c75c9fb00fe8ca3ba3eee" id="r_a79fa5b76564c75c9fb00fe8ca3ba3eee"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a79fa5b76564c75c9fb00fe8ca3ba3eee">fdt_num_mem_rsv</a> (const void *fdt)</td></tr>
 <tr class="memitem:a48548359fd68dc484bc0b07d89d75012" id="r_a48548359fd68dc484bc0b07d89d75012"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a48548359fd68dc484bc0b07d89d75012">fdt_get_mem_rsv</a> (const void *fdt, int n, uint64_t *addr, uint64_t *size)</td></tr>
 <tr class="memitem:ab41aa230a8200cab4c89876f850a2929" id="r_ab41aa230a8200cab4c89876f850a2929"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#ab41aa230a8200cab4c89876f850a2929">fdt_string</a> (const void *fdt, int stroffset)</td></tr>
@@ -161,6 +163,52 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a7aae470d8131301974e2b2d4cd828814" name="a7aae470d8131301974e2b2d4cd828814"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7aae470d8131301974e2b2d4cd828814">&#9670;&#160;</a></span>fdt_check_layout()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int fdt_check_layout </td>
+          <td>(</td>
+          <td class="paramtype">const void *</td>          <td class="paramname"><span class="paramname"><em>fdt</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="fdt__ro_8cpp_a7aae470d8131301974e2b2d4cd828814_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a7aae470d8131301974e2b2d4cd828814_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a92a944ce389621ef63a64b4db84c7573" name="a92a944ce389621ef63a64b4db84c7573"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92a944ce389621ef63a64b4db84c7573">&#9670;&#160;</a></span>fdt_check_structure()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int fdt_check_structure </td>
+          <td>(</td>
+          <td class="paramtype">const void *</td>          <td class="paramname"><span class="paramname"><em>fdt</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="fdt__ro_8cpp_a92a944ce389621ef63a64b4db84c7573_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a92a944ce389621ef63a64b4db84c7573_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
 <a id="a2080ed4d49df36321d5fe6785febf517" name="a2080ed4d49df36321d5fe6785febf517"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2080ed4d49df36321d5fe6785febf517">&#9670;&#160;</a></span>fdt_first_child()</h2>
 
@@ -183,7 +231,7 @@ Functions</h2></td></tr>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_a2080ed4d49df36321d5fe6785febf517_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a2080ed4d49df36321d5fe6785febf517_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -246,7 +294,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_a43937fb226554bcff64aa7370046cd82_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a43937fb226554bcff64aa7370046cd82_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -283,7 +331,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_a3cab270a9b378f353f098d4acb494eb9_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a3cab270a9b378f353f098d4acb494eb9_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -320,7 +368,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_af3a25becc5f5f4a1ee88fadf84429028_cgraph.png" border="0" usemap="#afdt__ro_8cpp_af3a25becc5f5f4a1ee88fadf84429028_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -347,7 +395,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_a792a17aeb7f47dedaa2445a0a784e42d_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a792a17aeb7f47dedaa2445a0a784e42d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -374,7 +422,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_acc373b28d3daa598bc3aa9a131224773_cgraph.png" border="0" usemap="#afdt__ro_8cpp_acc373b28d3daa598bc3aa9a131224773_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -416,7 +464,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_a99d317b082102ce9a3eea47e86ab5757_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a99d317b082102ce9a3eea47e86ab5757_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -460,7 +508,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_ab41aa230a8200cab4c89876f850a2929_cgraph.png" border="0" usemap="#afdt__ro_8cpp_ab41aa230a8200cab4c89876f850a2929_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -497,7 +545,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="fdt__ro_8cpp_a92756de14074ac915bd5b1056453e04c_cgraph.png" border="0" usemap="#afdt__ro_8cpp_a92756de14074ac915bd5b1056453e04c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 11 -->
 </div>
 
 </div>

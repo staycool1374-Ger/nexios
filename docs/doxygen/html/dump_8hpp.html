@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -146,9 +146,9 @@ Namespaces</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a9c80a5a9a3a6f52efef1fabf4192ab72" id="r_a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#a9c80a5a9a3a6f52efef1fabf4192ab72">kernel::debug::dump_scheduler_info</a> ()</td></tr>
-<tr class="memdesc:a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print three hex key-value pairs.  <br /></td></tr>
+<tr class="memdesc:a9c80a5a9a3a6f52efef1fabf4192ab72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump scheduler indices, counts, flags, and deferred-switch globals.  <br /></td></tr>
 <tr class="memitem:a8e339ab3b15cf62caa047c7c770b1b21" id="r_a8e339ab3b15cf62caa047c7c770b1b21"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#a8e339ab3b15cf62caa047c7c770b1b21">kernel::debug::dump_cpu_regs</a> ()</td></tr>
-<tr class="memdesc:a8e339ab3b15cf62caa047c7c770b1b21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU general-purpose registers + CR0/CR2/CR3/CR4.  <br /></td></tr>
+<tr class="memdesc:a8e339ab3b15cf62caa047c7c770b1b21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU general-purpose registers + control state. x86_64: GPRs + CR0/CR2/CR3/CR4. aarch64: x0-x30 + SP + ELR/SPSR/FAR.  <br /></td></tr>
 <tr class="memitem:ade0bc324da03fcc112cdb93eb35f220b" id="r_ade0bc324da03fcc112cdb93eb35f220b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#ade0bc324da03fcc112cdb93eb35f220b">kernel::debug::dump_task_info</a> (uint64_t task_id)</td></tr>
 <tr class="memdesc:ade0bc324da03fcc112cdb93eb35f220b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dump all CPU GPRs + CR0/CR2/CR3/CR4 (x86_64); stub on other archs.  <br /></td></tr>
 <tr class="memitem:a70b0bd6c79eac81164d116b1c7b780d7" id="r_a70b0bd6c79eac81164d116b1c7b780d7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1debug.html#a70b0bd6c79eac81164d116b1c7b780d7">kernel::debug::dump_all_tasks</a> ()</td></tr>

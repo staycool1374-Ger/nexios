@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.4</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
    </div>
   </td>
  </tr>
@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__int
 <div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>} <span class="comment">// namespace sched_verify</span></div>
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span> </div>
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>} <span class="comment">// namespace kernel</span></div>
-<div class="ttc" id="akernel_8cpp_html_a1fa277715dbc259c4bd045c128015845"><div class="ttname"><a href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a></div><div class="ttdeci">uint64_t uint64_t rip</div><div class="ttdef"><b>Definition</b> kernel.cpp:1825</div></div>
+<div class="ttc" id="akernel_8cpp_html_a1fa277715dbc259c4bd045c128015845"><div class="ttname"><a href="kernel_8cpp.html#a1fa277715dbc259c4bd045c128015845">rip</a></div><div class="ttdeci">uint64_t uint64_t rip</div><div class="ttdef"><b>Definition</b> kernel.cpp:1929</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__verify_html"><div class="ttname"><a href="namespacekernel_1_1sched__verify.html">kernel::sched_verify</a></div><div class="ttdoc">Scheduler integrity / context-switch validation (issue #323). Everything that answers &quot;is this a safe...</div><div class="ttdef"><b>Definition</b> scheduler_integrity.cpp:33</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__verify_html_a1f51afdf6eb18cf270d66e3b2b9caab7"><div class="ttname"><a href="namespacekernel_1_1sched__verify.html#a1f51afdf6eb18cf270d66e3b2b9caab7">kernel::sched_verify::report_corruption</a></div><div class="ttdeci">void report_corruption(const char *label)</div><div class="ttdoc">Bump scheduler_corruption_count and (in DEBUG) fail loudly. Called by the scheduler when a validator ...</div><div class="ttdef"><b>Definition</b> scheduler_integrity.cpp:133</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__verify_html_a5a9a7c774022e7605815d09c99ee81e9"><div class="ttname"><a href="namespacekernel_1_1sched__verify.html#a5a9a7c774022e7605815d09c99ee81e9">kernel::sched_verify::task_stack_ptr</a></div><div class="ttdeci">uint64_t &amp; task_stack_ptr(TaskControlBlock *t) noexcept</div><div class="ttdoc">Architecture-aware stack pointer access. Returns a reference so the address-of usage &amp;task_stack_ptr(...</div><div class="ttdef"><b>Definition</b> scheduler_integrity.hpp:41</div></div>
@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__int
 <div class="ttc" id="anamespacekernel_1_1sched__verify_html_aa88e0052c5b03b3f6fa2ba0b74abf305"><div class="ttname"><a href="namespacekernel_1_1sched__verify.html#aa88e0052c5b03b3f6fa2ba0b74abf305">kernel::sched_verify::rsp_in_stack_range</a></div><div class="ttdeci">bool rsp_in_stack_range(uint64_t rsp, const TaskControlBlock *t, const char *label)</div><div class="ttdoc">True when rsp lies within t&#39;s kernel-stack range [base, top]. Returns false (without logging) when rs...</div><div class="ttdef"><b>Definition</b> scheduler_integrity.cpp:35</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__verify_html_ab9b0463d6f66f45d95a2900f42c93be1"><div class="ttname"><a href="namespacekernel_1_1sched__verify.html#ab9b0463d6f66f45d95a2900f42c93be1">kernel::sched_verify::validate_task_ptr</a></div><div class="ttdeci">bool validate_task_ptr(const TaskControlBlock *t, const char *label) noexcept</div><div class="ttdoc">Validate a task pointer at a Scheduler:: entry point (issue #369 T1a: the common non-null + higher-ha...</div><div class="ttdef"><b>Definition</b> scheduler_integrity.cpp:141</div></div>
 <div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
-<div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:227</div></div>
+<div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:232</div></div>
 <div class="ttc" id="atask_8hpp_html"><div class="ttname"><a href="task_8hpp.html">task.hpp</a></div><div class="ttdoc">Task control block and state definitions for the kernel scheduler.</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->

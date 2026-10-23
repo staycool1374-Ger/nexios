@@ -1,6 +1,7 @@
 var structkernel_1_1net_1_1_virtio_net_device =
 [
     [ "~VirtioNetDevice", "structkernel_1_1net_1_1_virtio_net_device.html#abbc29bb89817f4f25288d5240e3da453", null ],
+    [ "legacy_queue_chunks_", "structkernel_1_1net_1_1_virtio_net_device.html#a71a1598b070606ed10a68ce7894f4e77", null ],
     [ "lock_", "structkernel_1_1net_1_1_virtio_net_device.html#af64ae38ea0e7f2c8d89efaa8c12ddbff", null ],
     [ "nic", "structkernel_1_1net_1_1_virtio_net_device.html#a6199ae0688ef23c1acf0a537ddcd0ce6", null ],
     [ "queue_size", "structkernel_1_1net_1_1_virtio_net_device.html#a56c285ebe0937050b6663e369b8caf03", null ],

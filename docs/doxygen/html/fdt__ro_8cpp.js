@@ -1,6 +1,8 @@
 var fdt__ro_8cpp =
 [
     [ "fdt_check_header", "fdt__ro_8cpp.html#a2359dff8b66918e18ba70baab42f2cf1", null ],
+    [ "fdt_check_layout", "fdt__ro_8cpp.html#a7aae470d8131301974e2b2d4cd828814", null ],
+    [ "fdt_check_structure", "fdt__ro_8cpp.html#a92a944ce389621ef63a64b4db84c7573", null ],
     [ "fdt_first_child", "fdt__ro_8cpp.html#a2080ed4d49df36321d5fe6785febf517", null ],
     [ "fdt_get_mem_rsv", "fdt__ro_8cpp.html#a48548359fd68dc484bc0b07d89d75012", null ],
     [ "fdt_get_name", "fdt__ro_8cpp.html#a43937fb226554bcff64aa7370046cd82", null ],

@@ -1,6 +1,17 @@
 var test__pml4__clone_8cpp =
 [
+    [ "entry_has_user_flag", "test__pml4__clone_8cpp.html#a7131de9012511804c208aeb99c939382", null ],
+    [ "entry_is_meaningful", "test__pml4__clone_8cpp.html#af3308b9fb7629f2beaf613be630b0dc2", null ],
+    [ "entry_is_table", "test__pml4__clone_8cpp.html#a267f388de3a070a3ab23e8770b62698a", null ],
+    [ "entry_is_user_owned", "test__pml4__clone_8cpp.html#a240e6208972297c2a2d9bfb8cc00c906", null ],
+    [ "entry_leaf_frame", "test__pml4__clone_8cpp.html#a2a54040cbb9f0caafacc321515410322", null ],
+    [ "entry_present", "test__pml4__clone_8cpp.html#aac8339c00f0812157818a08a23c3fba6", null ],
+    [ "entry_table_child", "test__pml4__clone_8cpp.html#ab899742000b8865194ad84ff0589e253", null ],
+    [ "index_of", "test__pml4__clone_8cpp.html#a980ab9b02295a63fb05dd2c833810f81", null ],
     [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#a32e920f1e2ec96c8baf9f660b111338e", null ],
+    [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#a8883b8816293072145d293770c0f1081", null ],
+    [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#a51636ec3feba4a0b30980049b895e9e9", null ],
+    [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#a52ec6e6314ebbc501ae42c6c688dbac7", null ],
     [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#a1cde1384b71323b79329e8efbcbe69f8", null ],
     [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#aa808db44680fb44b47c56fef1763706b", null ],
     [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#ac86e9cf1f240da60284e23046e0b243e", null ],
@@ -11,5 +22,7 @@ var test__pml4__clone_8cpp =
     [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#ad1927355a0b862a79b8cc2e7095745fa", null ],
     [ "JARVIS_TEST", "test__pml4__clone_8cpp.html#ad2a10f84d8104c88c39bba78f567c334", null ],
     [ "register_pml4_clone_tests", "test__pml4__clone_8cpp.html#a2b41d9f576be42172aedb0dc6f4743c4", null ],
-    [ "has_page_table_shared_v", "test__pml4__clone_8cpp.html#adbef84a521b001ae676d8c44958aa4e4", null ]
+    [ "has_page_table_shared_v", "test__pml4__clone_8cpp.html#adbef84a521b001ae676d8c44958aa4e4", null ],
+    [ "kEntries", "test__pml4__clone_8cpp.html#a426b6be04e2184c1dce12998091f5a60", null ],
+    [ "kLevels", "test__pml4__clone_8cpp.html#a8677cb40dd0c473bbdb653c79d99577a", null ]
 ];

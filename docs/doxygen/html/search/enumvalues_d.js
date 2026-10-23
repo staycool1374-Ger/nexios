@@ -9,11 +9,12 @@ var searchData=
   ['nomem_6',['NOMEM',['../namespacekernel_1_1elf.html#a6144be63a5e267b596cd679825c192c7a83f7ae7510d4a2108ba2c0dba5d2ae1d',1,'kernel::elf']]],
   ['nonblock_7',['NONBLOCK',['../namespacekernel.html#acf26df622e6621b8e36d62ce14d07809aafc3203b70037086fb9aa7f2ced7a9f0',1,'kernel']]],
   ['none_8',['NONE',['../classkernel_1_1_scheduler.html#aafa9966e76c491b9409a666d5dfd260dab50339a10e1de285ac99d4c3990b8693',1,'kernel::Scheduler::NONE'],['../namespacekernel_1_1cap.html#a8b99d584dbea5c2c8a8d071e2923f5e5ab50339a10e1de285ac99d4c3990b8693',1,'kernel::cap::NONE'],['../namespacekernel.html#acf26df622e6621b8e36d62ce14d07809ab50339a10e1de285ac99d4c3990b8693',1,'kernel::NONE']]],
-  ['not_5ffound_9',['NOT_FOUND',['../namespacekernel_1_1elf.html#a6144be63a5e267b596cd679825c192c7a8c02547a8a3b02382bac3557bcb2280d',1,'kernel::elf::NOT_FOUND'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a8c02547a8a3b02382bac3557bcb2280d',1,'kernel::NOT_FOUND']]],
-  ['not_5fimplemented_10',['NOT_IMPLEMENTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a3e860a081575fc82cc7b6ed2ca602947',1,'kernel']]],
-  ['not_5floading_11',['NOT_LOADING',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796a42769f5c0b640211e86c29a70b3ad295',1,'kernel::elf']]],
-  ['notify_12',['NOTIFY',['../namespacekernel.html#a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761',1,'kernel::NOTIFY'],['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a9d087bfb809874e1b3e9adcbae8ca761',1,'kernel::NOTIFY']]],
-  ['notify_13',['Notify',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704aaaf9ed605d0193362321ba0def15c9b7',1,'kernel']]],
-  ['notify_5fwait_14',['NOTIFY_WAIT',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3f6169628af7f81a8313e2a08a7c06e6',1,'kernel']]],
-  ['null_15',['Null',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99abbb93ef26e3c101ff11cdd21cab08a94',1,'kernel::cap']]]
+  ['none_9',['None',['../namespacekernel_1_1gpu.html#ab7b99ca3483528d76276c345492be483a6adf97f83acf6453d4a6a4b1070f3754',1,'kernel::gpu']]],
+  ['not_5ffound_10',['NOT_FOUND',['../namespacekernel_1_1elf.html#a6144be63a5e267b596cd679825c192c7a8c02547a8a3b02382bac3557bcb2280d',1,'kernel::elf::NOT_FOUND'],['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a8c02547a8a3b02382bac3557bcb2280d',1,'kernel::NOT_FOUND']]],
+  ['not_5fimplemented_11',['NOT_IMPLEMENTED',['../namespacekernel.html#a1cb7b5e6d84a69536a1605c81098f106a3e860a081575fc82cc7b6ed2ca602947',1,'kernel']]],
+  ['not_5floading_12',['NOT_LOADING',['../namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796a42769f5c0b640211e86c29a70b3ad295',1,'kernel::elf']]],
+  ['notify_13',['NOTIFY',['../namespacekernel.html#a39a8b332edefebba052488078097a45ba9d087bfb809874e1b3e9adcbae8ca761',1,'kernel::NOTIFY'],['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a9d087bfb809874e1b3e9adcbae8ca761',1,'kernel::NOTIFY']]],
+  ['notify_14',['Notify',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704aaaf9ed605d0193362321ba0def15c9b7',1,'kernel']]],
+  ['notify_5fwait_15',['NOTIFY_WAIT',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a3f6169628af7f81a8313e2a08a7c06e6',1,'kernel']]],
+  ['null_16',['Null',['../namespacekernel_1_1cap.html#a4bea603a315495a20341a4cc2519eb99abbb93ef26e3c101ff11cdd21cab08a94',1,'kernel::cap']]]
 ];
