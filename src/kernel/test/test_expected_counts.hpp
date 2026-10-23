@@ -21,8 +21,8 @@ struct ExpectedCounts {
 
 static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
-    {"safe",                150,    0,       0      },  // curated debug/release smoke subset
-    {"selftest",            150,    0,       0      },  // same as safe
+    {"safe",                157,    0,       0      },  // curated debug/release smoke subset
+    {"selftest",            157,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness, freelist, infra, expected-panic
 
     // basic
@@ -227,7 +227,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"network_core",          18,   0,       0      },  // MAC/IPv4/ARP/checksum, mock-NIC RX, ICMP/UDP, malformed rejection
 
     // shell / ui
-    {"shell_interaction",    22,   22,      22     },  // shell commands, key-delivery seam, RX slice seams
+    {"shell_interaction",    29,   29,      29     },  // shell commands, key-delivery seam, RX slice + URC seams
     {"shell_redirect",        3,    0,       0      },  // shell I/O redirection
     {"shell_textutils",       1,    0,       0      },  // text utilities
     {"debug_dump",            8,    0,       0      },  // diagnostic dump smoke + first-chance raw
@@ -316,7 +316,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain (2-CPU)
     {"deadline",            148,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time
-    {"ui",                  80,   80,      80     },  // shell_* + framebuffer + debug_dump + sampler
+    {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov
     {"random",              17,   0,       0      },  // random_*
     {"bench",               28,   0,       0      },  // bench_* (TF_BENCH)

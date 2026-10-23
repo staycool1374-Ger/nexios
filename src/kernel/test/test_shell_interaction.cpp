@@ -29,6 +29,7 @@
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/driver/iocd.hpp>
 #include <kernel/input/serial_input.hpp>
+#include <kernel/console/urc.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <constants.hpp>
 
@@ -63,6 +64,44 @@ static bool serial_contains(const char *buf, const char *needle) {
             return true;
     }
     return false;
+}
+
+static constexpr size_t kSubstrNotFound = static_cast<size_t>(-1);
+
+// Index of the first occurrence of needle in buf, or kSubstrNotFound.
+static size_t substr_index(const char *buf, const char *needle) {
+    for (size_t start = 0; buf[start] != '\0'; ++start) {
+        size_t offset = 0;
+        for (; needle[offset] != '\0'; ++offset) {
+            if (buf[start + offset] != needle[offset])
+                break;
+        }
+        if (needle[offset] == '\0')
+            return start;
+    }
+    return kSubstrNotFound;
+}
+
+// Non-overlapping occurrence count of needle in buf.
+static size_t count_occurrences(const char *buf, const char *needle) {
+    size_t found = 0;
+    size_t needle_len = 0;
+    while (needle[needle_len] != '\0')
+        ++needle_len;
+    if (needle_len == 0)
+        return 0;
+    for (size_t pos = 0; buf[pos] != '\0';) {
+        size_t offset = 0;
+        while (offset < needle_len && buf[pos + offset] == needle[offset])
+            ++offset;
+        if (offset == needle_len) {
+            ++found;
+            pos += needle_len;
+        } else {
+            ++pos;
+        }
+    }
+    return found;
 }
 
 JARVIS_TEST(shell_loopback_manual_string, "PRE: vfsd, iocd | POST: none") {
@@ -647,6 +686,257 @@ JARVIS_TEST(shell_slice_normalized_newline, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: URC queue preserves FIFO order with per-tag prefixes (#407-2).
+// Input: urc reset; emit Elf/Kill/Test; pop x4.
+// Expect: "[ELF] a", "[KILL] b", "[TST] c" in order; 4th pop false;
+//         all counters zero, queue not pending.
+// Depends: console::urc emit/pop (issue #407)
+JARVIS_TEST(urc_emit_pop_fifo, "PRE: none | POST: none") {
+    console::urc::reset();
+    bool queued_elf = console::urc::emit(console::urc::Tag::Elf, "a");
+    bool queued_kill = console::urc::emit(console::urc::Tag::Kill, "b");
+    bool queued_test = console::urc::emit(console::urc::Tag::Test, "c");
+    bool order_ok = queued_elf && queued_kill && queued_test;
+    char line_buf[console::urc::kLineMax] = {};
+    order_ok = order_ok && console::urc::pop(line_buf, sizeof(line_buf));
+    order_ok = order_ok && memcmp(line_buf, "[ELF] a", 8) == 0;
+    order_ok = order_ok && console::urc::pop(line_buf, sizeof(line_buf));
+    order_ok = order_ok && memcmp(line_buf, "[KILL] b", 9) == 0;
+    order_ok = order_ok && console::urc::pop(line_buf, sizeof(line_buf));
+    order_ok = order_ok && memcmp(line_buf, "[TST] c", 8) == 0;
+    bool drained = !console::urc::pop(line_buf, sizeof(line_buf));
+    bool counters_clean = console::urc::dropped_count() == 0 &&
+                          console::urc::truncated_count() == 0 &&
+                          console::urc::rejected_count() == 0;
+    bool queue_idle = !console::urc::pending();
+    console::urc::reset();
+    JARVIS_ASSERT(order_ok);
+    JARVIS_ASSERT(drained);
+    JARVIS_ASSERT(counters_clean);
+    JARVIS_ASSERT(queue_idle);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: oversize payloads truncate with "..." and count once (#407-2).
+// Input: urc reset; emit one 199-char payload; pop.
+// Expect: popped len kLineMax-1, starts "[ELF] ", ends "...",
+//         truncated_count 1.
+// Depends: console::urc emit/pop (issue #407)
+JARVIS_TEST(urc_payload_truncation_counted, "PRE: none | POST: none") {
+    console::urc::reset();
+    char long_payload[200] = {};
+    for (size_t fill = 0; fill < sizeof(long_payload) - 1; ++fill)
+        long_payload[fill] = 'x';
+    bool queued = console::urc::emit(console::urc::Tag::Elf, long_payload);
+    char line_buf[console::urc::kLineMax] = {};
+    bool popped = console::urc::pop(line_buf, sizeof(line_buf));
+    size_t line_len = 0;
+    while (line_buf[line_len] != '\0' && line_len < sizeof(line_buf))
+        ++line_len;
+    bool head_ok = memcmp(line_buf, "[ELF] ", 6) == 0;
+    bool tail_ok = line_len == console::urc::kLineMax - 1 &&
+                   line_buf[line_len - 1] == '.' &&
+                   line_buf[line_len - 2] == '.' &&
+                   line_buf[line_len - 3] == '.';
+    bool counted_once = console::urc::truncated_count() == 1;
+    console::urc::reset();
+    JARVIS_ASSERT(queued);
+    JARVIS_ASSERT(popped);
+    JARVIS_ASSERT(head_ok);
+    JARVIS_ASSERT(tail_ok);
+    JARVIS_ASSERT(counted_once);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: full queue drops newest, keeps order, counts drops (#407-2).
+// Input: urc reset; emit kQueueDepth+3 single-char lines; drain.
+// Expect: dropped_count 3; first 16 pop in emission order;
+//         17th pop false.
+// Depends: console::urc emit/pop (issue #407)
+JARVIS_TEST(urc_overflow_drop_newest_keeps_order, "PRE: none | POST: none") {
+    console::urc::reset();
+    for (size_t emit_idx = 0;
+         emit_idx < console::urc::kQueueDepth + 3; ++emit_idx) {
+        char payload[2] = {static_cast<char>('A' + emit_idx), '\0'};
+        (void)console::urc::emit(console::urc::Tag::Test, payload);
+    }
+    bool drops_counted = console::urc::dropped_count() == 3;
+    bool order_kept = true;
+    char line_buf[console::urc::kLineMax] = {};
+    for (size_t pop_idx = 0; pop_idx < console::urc::kQueueDepth; ++pop_idx) {
+        char want[8] = {'[', 'T', 'S', 'T', ']', ' ', '?', '\0'};
+        want[6] = static_cast<char>('A' + pop_idx);
+        if (!console::urc::pop(line_buf, sizeof(line_buf)) ||
+            memcmp(line_buf, want, sizeof(want)) != 0)
+            order_kept = false;
+    }
+    bool drained = !console::urc::pop(line_buf, sizeof(line_buf));
+    console::urc::reset();
+    JARVIS_ASSERT(drops_counted);
+    JARVIS_ASSERT(order_kept);
+    JARVIS_ASSERT(drained);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: seal() freezes the prefix table; known tags still queue,
+// unknown ids and late registration are counted rejects (#407-2).
+// Input: urc reset; seal; register "NEW"; emit Elf; emit id 0xFE.
+// Expect: register returns kNoPrefix; Elf queues and pops;
+//         rejected_count 2 (late register + unknown id).
+// Depends: console::urc seal/register/emit (issue #407)
+JARVIS_TEST(urc_seal_rejects_new_prefix, "PRE: none | POST: none") {
+    console::urc::reset();
+    console::urc::seal();
+    bool was_sealed = console::urc::sealed();
+    uint8_t late_id = console::urc::register_prefix("NEW");
+    bool late_rejected = late_id == console::urc::kNoPrefix;
+    bool known_queues = console::urc::emit(console::urc::Tag::Elf, "ok");
+    bool unknown_rejected =
+        !console::urc::emit(static_cast<console::urc::Tag>(0xFE), "bad");
+    bool rejects_counted = console::urc::rejected_count() == 2;
+    char line_buf[console::urc::kLineMax] = {};
+    bool known_pops = console::urc::pop(line_buf, sizeof(line_buf)) &&
+                      memcmp(line_buf, "[ELF] ok", 9) == 0;
+    bool drained = !console::urc::pop(line_buf, sizeof(line_buf));
+    console::urc::reset();
+    bool seal_cleared = !console::urc::sealed();
+    JARVIS_ASSERT(was_sealed);
+    JARVIS_ASSERT(late_rejected);
+    JARVIS_ASSERT(known_queues);
+    JARVIS_ASSERT(unknown_rejected);
+    JARVIS_ASSERT(rejects_counted);
+    JARVIS_ASSERT(known_pops);
+    JARVIS_ASSERT(drained);
+    JARVIS_ASSERT(seal_cleared);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: the production drain prints a drop notice plus at most
+// kDrainMaxPerPass lines per pass, oldest first (#407-2).
+// Input: urc reset; capture; emit 10 lines; flush; flush; capture end.
+// Expect: first flush true, contains line0..line7 in order, no
+//         line8/line9; pending true; second flush drains 2, pending
+//         false. Overflow leg: 17 emits, flush shows "[URC] 1 dropped"
+//         before the first payload line.
+// Depends: shell_flush_urcs_for_test + console::urc (issue #407)
+JARVIS_TEST(urc_flush_frames_and_bounds, "PRE: none | POST: none") {
+    console::urc::reset();
+    char capture[1024] = {};
+    service::Terminal::capture_begin(capture, sizeof(capture));
+    for (size_t line_idx = 0; line_idx < 10; ++line_idx) {
+        char payload[8] = {'l', 'i', 'n', 'e', '?', '\0', '\0', '\0'};
+        payload[4] = static_cast<char>('0' + line_idx);
+        (void)console::urc::emit(console::urc::Tag::Test, payload);
+    }
+    bool flushed = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    bool bound_ok = flushed;
+    size_t prev_pos = 0;
+    for (size_t want_idx = 0; want_idx < 8 && bound_ok; ++want_idx) {
+        char want[7] = {'l', 'i', 'n', 'e', '?', '\0', '\0'};
+        want[4] = static_cast<char>('0' + want_idx);
+        size_t found_at = substr_index(capture, want);
+        bound_ok = found_at != kSubstrNotFound && found_at >= prev_pos;
+        prev_pos = found_at;
+    }
+    bound_ok = bound_ok && !serial_contains(capture, "line8");
+    bound_ok = bound_ok && !serial_contains(capture, "line9");
+    bool still_pending = console::urc::pending();
+    char capture_second[512] = {};
+    service::Terminal::capture_begin(capture_second, sizeof(capture_second));
+    bool flushed_rest = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    bool rest_ok = flushed_rest && !console::urc::pending() &&
+                   serial_contains(capture_second, "line8") &&
+                   serial_contains(capture_second, "line9");
+    console::urc::reset();
+    for (size_t emit_idx = 0; emit_idx < console::urc::kQueueDepth + 1;
+         ++emit_idx) {
+        char payload[8] = {'o', 'v', 'f', '?', '\0', '\0', '\0', '\0'};
+        payload[3] = static_cast<char>('a' + emit_idx);
+        (void)console::urc::emit(console::urc::Tag::Elf, payload);
+    }
+    char capture_over[1024] = {};
+    service::Terminal::capture_begin(capture_over, sizeof(capture_over));
+    bool flushed_over = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    size_t notice_at = substr_index(capture_over, "[URC] 1 dropped");
+    size_t first_line_at = substr_index(capture_over, "ovfa");
+    bool notice_ok = flushed_over && notice_at != kSubstrNotFound &&
+                     first_line_at != kSubstrNotFound &&
+                     notice_at < first_line_at;
+    console::urc::reset();
+    JARVIS_ASSERT(bound_ok);
+    JARVIS_ASSERT(still_pending);
+    JARVIS_ASSERT(rest_ok);
+    JARVIS_ASSERT(notice_ok);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: empty-queue drain prints nothing and asks for no redraw —
+// pins the prompt-loop fix (commit 2d2695233): the prompt sitting
+// mid-line is normal state, not async output (#407-2).
+// Input: urc reset; capture; flush; capture end.
+// Expect: flush false, capture empty.
+// Depends: shell_flush_urcs_for_test (issue #407)
+JARVIS_TEST(urc_empty_flush_prints_nothing, "PRE: none | POST: none") {
+    console::urc::reset();
+    char capture[256] = {};
+    service::Terminal::capture_begin(capture, sizeof(capture));
+    bool flushed = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    console::urc::reset();
+    JARVIS_ASSERT(!flushed);
+    JARVIS_ASSERT(capture[0] == '\0');
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: prompt redraw after a drain reprints the typed buffer
+// exactly once below the async text (#407-2).
+// Input: urc reset; emit Kill line; capture; flush; redraw "abc".
+// Expect: URC text above the final prompt; tail holds "$ " before
+//         exactly one "abc".
+// Depends: shell_flush/redraw_for_test seams (issue #407)
+JARVIS_TEST(urc_redraw_keeps_typed_buffer, "PRE: none | POST: none") {
+    console::urc::reset();
+    (void)console::urc::emit(console::urc::Tag::Kill, "reaped");
+    char capture[1024] = {};
+    service::Terminal::capture_begin(capture, sizeof(capture));
+    bool flushed = service::shell_flush_urcs_for_test();
+    service::shell_redraw_for_test("abc", 3, 0);
+    service::Terminal::capture_end();
+    size_t scan = 0;
+    size_t last_nl = kSubstrNotFound;
+    while (capture[scan] != '\0') {
+        if (capture[scan] == '\n')
+            last_nl = scan;
+        ++scan;
+    }
+    bool has_block = last_nl != kSubstrNotFound;
+    bool urc_above =
+        has_block && substr_index(capture, "reaped") < last_nl;
+    const char *tail = has_block ? capture + last_nl + 1 : capture;
+    size_t prompt_at = substr_index(tail, "$ ");
+    size_t buffer_at = substr_index(tail, "abc");
+    bool order_ok = prompt_at != kSubstrNotFound &&
+                    buffer_at != kSubstrNotFound && prompt_at < buffer_at;
+    bool buffer_once = count_occurrences(tail, "abc") == 1;
+    console::urc::reset();
+    JARVIS_ASSERT(flushed);
+    JARVIS_ASSERT(has_block);
+    JARVIS_ASSERT(urc_above);
+    JARVIS_ASSERT(order_ok);
+    JARVIS_ASSERT(buffer_once);
+    JARVIS_TEST_PASS();
+}
+
 void register_shell_interaction_tests() {
     Logger::info("Registering shell interaction tests");
     JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
@@ -671,6 +961,13 @@ void register_shell_interaction_tests() {
     JARVIS_REGISTER_TEST(shell_key_delivery_via_seam);
     JARVIS_REGISTER_TEST(shell_peek_slice_seam); // issue #407
     JARVIS_REGISTER_TEST(shell_slice_normalized_newline); // issue #407
+    JARVIS_REGISTER_TEST(urc_emit_pop_fifo); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_payload_truncation_counted); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_overflow_drop_newest_keeps_order); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_seal_rejects_new_prefix); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_flush_frames_and_bounds); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_empty_flush_prints_nothing); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_redraw_keeps_typed_buffer); // issue #407 item 2
 }
 #elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
 #include <test.hpp>
@@ -680,6 +977,7 @@ void register_shell_interaction_tests() {
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/arch/serial.hpp>
 #include <kernel/input/serial_input.hpp>
+#include <kernel/console/urc.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/timer.hpp>
 #include <string.hpp>
@@ -699,6 +997,44 @@ static bool serial_contains(const char *buf, const char *needle) {
             return true;
     }
     return false;
+}
+
+static constexpr size_t kSubstrNotFound = static_cast<size_t>(-1);
+
+// Index of the first occurrence of needle in buf, or kSubstrNotFound.
+static size_t substr_index(const char *buf, const char *needle) {
+    for (size_t start = 0; buf[start] != '\0'; ++start) {
+        size_t offset = 0;
+        for (; needle[offset] != '\0'; ++offset) {
+            if (buf[start + offset] != needle[offset])
+                break;
+        }
+        if (needle[offset] == '\0')
+            return start;
+    }
+    return kSubstrNotFound;
+}
+
+// Non-overlapping occurrence count of needle in buf.
+static size_t count_occurrences(const char *buf, const char *needle) {
+    size_t found = 0;
+    size_t needle_len = 0;
+    while (needle[needle_len] != '\0')
+        ++needle_len;
+    if (needle_len == 0)
+        return 0;
+    for (size_t pos = 0; buf[pos] != '\0';) {
+        size_t offset = 0;
+        while (offset < needle_len && buf[pos + offset] == needle[offset])
+            ++offset;
+        if (offset == needle_len) {
+            ++found;
+            pos += needle_len;
+        } else {
+            ++pos;
+        }
+    }
+    return found;
 }
 
 // Runmode: kernel
@@ -1166,6 +1502,257 @@ JARVIS_TEST(shell_slice_normalized_newline, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: URC queue preserves FIFO order with per-tag prefixes (#407-2).
+// Input: urc reset; emit Elf/Kill/Test; pop x4.
+// Expect: "[ELF] a", "[KILL] b", "[TST] c" in order; 4th pop false;
+//         all counters zero, queue not pending.
+// Depends: console::urc emit/pop (issue #407)
+JARVIS_TEST(urc_emit_pop_fifo, "PRE: none | POST: none") {
+    console::urc::reset();
+    bool queued_elf = console::urc::emit(console::urc::Tag::Elf, "a");
+    bool queued_kill = console::urc::emit(console::urc::Tag::Kill, "b");
+    bool queued_test = console::urc::emit(console::urc::Tag::Test, "c");
+    bool order_ok = queued_elf && queued_kill && queued_test;
+    char line_buf[console::urc::kLineMax] = {};
+    order_ok = order_ok && console::urc::pop(line_buf, sizeof(line_buf));
+    order_ok = order_ok && memcmp(line_buf, "[ELF] a", 8) == 0;
+    order_ok = order_ok && console::urc::pop(line_buf, sizeof(line_buf));
+    order_ok = order_ok && memcmp(line_buf, "[KILL] b", 9) == 0;
+    order_ok = order_ok && console::urc::pop(line_buf, sizeof(line_buf));
+    order_ok = order_ok && memcmp(line_buf, "[TST] c", 8) == 0;
+    bool drained = !console::urc::pop(line_buf, sizeof(line_buf));
+    bool counters_clean = console::urc::dropped_count() == 0 &&
+                          console::urc::truncated_count() == 0 &&
+                          console::urc::rejected_count() == 0;
+    bool queue_idle = !console::urc::pending();
+    console::urc::reset();
+    JARVIS_ASSERT(order_ok);
+    JARVIS_ASSERT(drained);
+    JARVIS_ASSERT(counters_clean);
+    JARVIS_ASSERT(queue_idle);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: oversize payloads truncate with "..." and count once (#407-2).
+// Input: urc reset; emit one 199-char payload; pop.
+// Expect: popped len kLineMax-1, starts "[ELF] ", ends "...",
+//         truncated_count 1.
+// Depends: console::urc emit/pop (issue #407)
+JARVIS_TEST(urc_payload_truncation_counted, "PRE: none | POST: none") {
+    console::urc::reset();
+    char long_payload[200] = {};
+    for (size_t fill = 0; fill < sizeof(long_payload) - 1; ++fill)
+        long_payload[fill] = 'x';
+    bool queued = console::urc::emit(console::urc::Tag::Elf, long_payload);
+    char line_buf[console::urc::kLineMax] = {};
+    bool popped = console::urc::pop(line_buf, sizeof(line_buf));
+    size_t line_len = 0;
+    while (line_buf[line_len] != '\0' && line_len < sizeof(line_buf))
+        ++line_len;
+    bool head_ok = memcmp(line_buf, "[ELF] ", 6) == 0;
+    bool tail_ok = line_len == console::urc::kLineMax - 1 &&
+                   line_buf[line_len - 1] == '.' &&
+                   line_buf[line_len - 2] == '.' &&
+                   line_buf[line_len - 3] == '.';
+    bool counted_once = console::urc::truncated_count() == 1;
+    console::urc::reset();
+    JARVIS_ASSERT(queued);
+    JARVIS_ASSERT(popped);
+    JARVIS_ASSERT(head_ok);
+    JARVIS_ASSERT(tail_ok);
+    JARVIS_ASSERT(counted_once);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: full queue drops newest, keeps order, counts drops (#407-2).
+// Input: urc reset; emit kQueueDepth+3 single-char lines; drain.
+// Expect: dropped_count 3; first 16 pop in emission order;
+//         17th pop false.
+// Depends: console::urc emit/pop (issue #407)
+JARVIS_TEST(urc_overflow_drop_newest_keeps_order, "PRE: none | POST: none") {
+    console::urc::reset();
+    for (size_t emit_idx = 0;
+         emit_idx < console::urc::kQueueDepth + 3; ++emit_idx) {
+        char payload[2] = {static_cast<char>('A' + emit_idx), '\0'};
+        (void)console::urc::emit(console::urc::Tag::Test, payload);
+    }
+    bool drops_counted = console::urc::dropped_count() == 3;
+    bool order_kept = true;
+    char line_buf[console::urc::kLineMax] = {};
+    for (size_t pop_idx = 0; pop_idx < console::urc::kQueueDepth; ++pop_idx) {
+        char want[8] = {'[', 'T', 'S', 'T', ']', ' ', '?', '\0'};
+        want[6] = static_cast<char>('A' + pop_idx);
+        if (!console::urc::pop(line_buf, sizeof(line_buf)) ||
+            memcmp(line_buf, want, sizeof(want)) != 0)
+            order_kept = false;
+    }
+    bool drained = !console::urc::pop(line_buf, sizeof(line_buf));
+    console::urc::reset();
+    JARVIS_ASSERT(drops_counted);
+    JARVIS_ASSERT(order_kept);
+    JARVIS_ASSERT(drained);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: seal() freezes the prefix table; known tags still queue,
+// unknown ids and late registration are counted rejects (#407-2).
+// Input: urc reset; seal; register "NEW"; emit Elf; emit id 0xFE.
+// Expect: register returns kNoPrefix; Elf queues and pops;
+//         rejected_count 2 (late register + unknown id).
+// Depends: console::urc seal/register/emit (issue #407)
+JARVIS_TEST(urc_seal_rejects_new_prefix, "PRE: none | POST: none") {
+    console::urc::reset();
+    console::urc::seal();
+    bool was_sealed = console::urc::sealed();
+    uint8_t late_id = console::urc::register_prefix("NEW");
+    bool late_rejected = late_id == console::urc::kNoPrefix;
+    bool known_queues = console::urc::emit(console::urc::Tag::Elf, "ok");
+    bool unknown_rejected =
+        !console::urc::emit(static_cast<console::urc::Tag>(0xFE), "bad");
+    bool rejects_counted = console::urc::rejected_count() == 2;
+    char line_buf[console::urc::kLineMax] = {};
+    bool known_pops = console::urc::pop(line_buf, sizeof(line_buf)) &&
+                      memcmp(line_buf, "[ELF] ok", 9) == 0;
+    bool drained = !console::urc::pop(line_buf, sizeof(line_buf));
+    console::urc::reset();
+    bool seal_cleared = !console::urc::sealed();
+    JARVIS_ASSERT(was_sealed);
+    JARVIS_ASSERT(late_rejected);
+    JARVIS_ASSERT(known_queues);
+    JARVIS_ASSERT(unknown_rejected);
+    JARVIS_ASSERT(rejects_counted);
+    JARVIS_ASSERT(known_pops);
+    JARVIS_ASSERT(drained);
+    JARVIS_ASSERT(seal_cleared);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: the production drain prints a drop notice plus at most
+// kDrainMaxPerPass lines per pass, oldest first (#407-2).
+// Input: urc reset; capture; emit 10 lines; flush; flush; capture end.
+// Expect: first flush true, contains line0..line7 in order, no
+//         line8/line9; pending true; second flush drains 2, pending
+//         false. Overflow leg: 17 emits, flush shows "[URC] 1 dropped"
+//         before the first payload line.
+// Depends: shell_flush_urcs_for_test + console::urc (issue #407)
+JARVIS_TEST(urc_flush_frames_and_bounds, "PRE: none | POST: none") {
+    console::urc::reset();
+    char capture[1024] = {};
+    service::Terminal::capture_begin(capture, sizeof(capture));
+    for (size_t line_idx = 0; line_idx < 10; ++line_idx) {
+        char payload[8] = {'l', 'i', 'n', 'e', '?', '\0', '\0', '\0'};
+        payload[4] = static_cast<char>('0' + line_idx);
+        (void)console::urc::emit(console::urc::Tag::Test, payload);
+    }
+    bool flushed = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    bool bound_ok = flushed;
+    size_t prev_pos = 0;
+    for (size_t want_idx = 0; want_idx < 8 && bound_ok; ++want_idx) {
+        char want[7] = {'l', 'i', 'n', 'e', '?', '\0', '\0'};
+        want[4] = static_cast<char>('0' + want_idx);
+        size_t found_at = substr_index(capture, want);
+        bound_ok = found_at != kSubstrNotFound && found_at >= prev_pos;
+        prev_pos = found_at;
+    }
+    bound_ok = bound_ok && !serial_contains(capture, "line8");
+    bound_ok = bound_ok && !serial_contains(capture, "line9");
+    bool still_pending = console::urc::pending();
+    char capture_second[512] = {};
+    service::Terminal::capture_begin(capture_second, sizeof(capture_second));
+    bool flushed_rest = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    bool rest_ok = flushed_rest && !console::urc::pending() &&
+                   serial_contains(capture_second, "line8") &&
+                   serial_contains(capture_second, "line9");
+    console::urc::reset();
+    for (size_t emit_idx = 0; emit_idx < console::urc::kQueueDepth + 1;
+         ++emit_idx) {
+        char payload[8] = {'o', 'v', 'f', '?', '\0', '\0', '\0', '\0'};
+        payload[3] = static_cast<char>('a' + emit_idx);
+        (void)console::urc::emit(console::urc::Tag::Elf, payload);
+    }
+    char capture_over[1024] = {};
+    service::Terminal::capture_begin(capture_over, sizeof(capture_over));
+    bool flushed_over = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    size_t notice_at = substr_index(capture_over, "[URC] 1 dropped");
+    size_t first_line_at = substr_index(capture_over, "ovfa");
+    bool notice_ok = flushed_over && notice_at != kSubstrNotFound &&
+                     first_line_at != kSubstrNotFound &&
+                     notice_at < first_line_at;
+    console::urc::reset();
+    JARVIS_ASSERT(bound_ok);
+    JARVIS_ASSERT(still_pending);
+    JARVIS_ASSERT(rest_ok);
+    JARVIS_ASSERT(notice_ok);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: empty-queue drain prints nothing and asks for no redraw —
+// pins the prompt-loop fix (commit 2d2695233): the prompt sitting
+// mid-line is normal state, not async output (#407-2).
+// Input: urc reset; capture; flush; capture end.
+// Expect: flush false, capture empty.
+// Depends: shell_flush_urcs_for_test (issue #407)
+JARVIS_TEST(urc_empty_flush_prints_nothing, "PRE: none | POST: none") {
+    console::urc::reset();
+    char capture[256] = {};
+    service::Terminal::capture_begin(capture, sizeof(capture));
+    bool flushed = service::shell_flush_urcs_for_test();
+    service::Terminal::capture_end();
+    console::urc::reset();
+    JARVIS_ASSERT(!flushed);
+    JARVIS_ASSERT(capture[0] == '\0');
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: prompt redraw after a drain reprints the typed buffer
+// exactly once below the async text (#407-2).
+// Input: urc reset; emit Kill line; capture; flush; redraw "abc".
+// Expect: URC text above the final prompt; tail holds "$ " before
+//         exactly one "abc".
+// Depends: shell_flush/redraw_for_test seams (issue #407)
+JARVIS_TEST(urc_redraw_keeps_typed_buffer, "PRE: none | POST: none") {
+    console::urc::reset();
+    (void)console::urc::emit(console::urc::Tag::Kill, "reaped");
+    char capture[1024] = {};
+    service::Terminal::capture_begin(capture, sizeof(capture));
+    bool flushed = service::shell_flush_urcs_for_test();
+    service::shell_redraw_for_test("abc", 3, 0);
+    service::Terminal::capture_end();
+    size_t scan = 0;
+    size_t last_nl = kSubstrNotFound;
+    while (capture[scan] != '\0') {
+        if (capture[scan] == '\n')
+            last_nl = scan;
+        ++scan;
+    }
+    bool has_block = last_nl != kSubstrNotFound;
+    bool urc_above =
+        has_block && substr_index(capture, "reaped") < last_nl;
+    const char *tail = has_block ? capture + last_nl + 1 : capture;
+    size_t prompt_at = substr_index(tail, "$ ");
+    size_t buffer_at = substr_index(tail, "abc");
+    bool order_ok = prompt_at != kSubstrNotFound &&
+                    buffer_at != kSubstrNotFound && prompt_at < buffer_at;
+    bool buffer_once = count_occurrences(tail, "abc") == 1;
+    console::urc::reset();
+    JARVIS_ASSERT(flushed);
+    JARVIS_ASSERT(has_block);
+    JARVIS_ASSERT(urc_above);
+    JARVIS_ASSERT(order_ok);
+    JARVIS_ASSERT(buffer_once);
+    JARVIS_TEST_PASS();
+}
+
 void register_shell_interaction_tests() {
     Logger::info("Registering shell interaction tests");
     JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
@@ -1190,5 +1777,12 @@ void register_shell_interaction_tests() {
     JARVIS_REGISTER_TEST(shell_key_via_decoder_seam);
     JARVIS_REGISTER_TEST(shell_peek_slice_seam); // issue #407
     JARVIS_REGISTER_TEST(shell_slice_normalized_newline); // issue #407
+    JARVIS_REGISTER_TEST(urc_emit_pop_fifo); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_payload_truncation_counted); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_overflow_drop_newest_keeps_order); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_seal_rejects_new_prefix); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_flush_frames_and_bounds); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_empty_flush_prints_nothing); // issue #407 item 2
+    JARVIS_REGISTER_TEST(urc_redraw_keeps_typed_buffer); // issue #407 item 2
 }
 #endif // CONFIG_ARCH_X86_64
