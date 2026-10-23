@@ -26,6 +26,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/elf/elf_loader.hpp>
+#include <kernel/input/serial_input.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/timer.hpp>
@@ -132,31 +133,22 @@ void shell_input_timeout_fire(void *context) {
     shell_input_notify().notify(1);
 }
 
-// Issue #340 P2: central keyboard/serial input poll. Order: serial
-// (separate source, always first) → iocd daemon (keyboard bytes routed
-// there when owned) → hardware ring, but ONLY when the daemon is down
-// (pid 0 or send_sync refused): when the daemon is up the ring is empty
-// by the single-ownership invariant, and draining it would risk double
-// delivery. Never blocks on the daemon beyond one send_sync round-trip
-// (fail-open); shell liveness never depends on iocd.
+// Issue #340 P2 central input poll (issue #407: ring-first). Order: RX
+// ring (the sole UART RX consumer — pumped by the caller, never polled
+// raw here, preserving the single-reader LSR/RBR proof) → iocd daemon
+// (keyboard bytes routed there when owned) → hardware ring, but ONLY on
+// x86_64 when the daemon is down (pid 0 or send_sync refused): when the
+// daemon is up the ring is empty by the single-ownership invariant, and
+// draining it would risk double delivery. Off-x86 has no hardware ring
+// tail (PS/2 does not exist there). Never blocks on the daemon beyond
+// one send_sync round-trip (fail-open); shell liveness never depends
+// on iocd.
 // Issue #303 item 3: service::-scope test seam (declared in shell.hpp)
 // so the P2 key-delivery path is automatable by a shell-level test.
 // Zero logic change on the move out of the anonymous namespace.
-bool shell_try_get_key_impl(char &out) {
-#if defined(CONFIG_ARCH_X86_64)
-    if (arch::Serial::poll_getchar(out))
+bool shell_try_get_key_after_pump(char &out) {
+    if (kernel::input::serial::pop(out))
         return true;
-#else
-    // Issue #355: decoder-first on non-x86. Serial-first would let raw
-    // bytes bypass normalization and split one keystroke stream between
-    // two sources — the decoder owns the UART when healthy; the raw
-    // poll below is the fail-open fallback only.
-    (void)arch::Keyboard::pump_serial();
-    if (arch::Keyboard::getchar(out))
-        return true;
-    if (arch::Serial::poll_getchar(out))
-        return true;
-#endif
     uint64_t pid = kernel::iocd::get_iocd_pid();
     if (pid != 0) {
         kernel::iocd::Msg req{};
@@ -181,7 +173,11 @@ bool shell_try_get_key_impl(char &out) {
         }
         // send_sync refused (daemon dying): fall through to hardware.
     }
+#if defined(CONFIG_ARCH_X86_64)
     return arch::Keyboard::getchar(out);
+#else
+    return false;
+#endif
 }
 
 void shell_idle_nap(uint64_t timeout_us) {
@@ -220,11 +216,20 @@ void shell_idle_nap(uint64_t timeout_us) {
 } // namespace
 
 /// @brief Test seam (issue #303 item 3): P2 key-delivery poll exposed so a
-///        shell-level test can drive the exact production path (serial →
-///        iocd daemon → hardware ring). Zero-logic wrapper over the
-///        internal poll above.
+///        shell-level test can drive the exact production path (RX ring →
+///        iocd daemon → hardware ring). Pumps the UART (bounded) first.
 bool shell_try_get_key(char &out) {
-    return shell_try_get_key_impl(out);
+    (void)kernel::input::serial::pump();
+    return shell_try_get_key_after_pump(out);
+}
+
+bool shell_peek_input(const char *&data, size_t &len) {
+    (void)kernel::input::serial::pump();
+    return kernel::input::serial::peek_slice(data, len);
+}
+
+size_t shell_consume_input(size_t count) {
+    return kernel::input::serial::consume(count);
 }
 
 static void background_task_wrapper() {
@@ -530,6 +535,8 @@ static void draw_prompt(int exit_code) {
 }
 
 static bool readline(char* buf, size_t max_len, int exit_code) {
+    if (buf == nullptr || max_len == 0)
+        return false;
     size_t pos = 0;
     static uint64_t last_blink = 0;
     static bool cursor_on = false;
@@ -554,11 +561,45 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
         }
 
         char c = 0;
-        // Input order (issues #245/#340/#355): decoder-owned UART first
-        // on aarch64/riscv64 (Keyboard pump + ring), raw Serial poll as
-        // fail-open fallback, then the iocd-routed keyboard, then the
-        // hardware ring fallback. x86: serial → iocd → ring (unchanged).
-        bool got_char = shell_try_get_key(c);
+        // Input order (issues #245/#340/#355/#407): bounded pump, then
+        // the zero-copy slice fast path (bulk-consume the next
+        // contiguous decoded run; the scan stops at line/edit control
+        // bytes), then the single-char path. x86 serial flows through
+        // the ring like every arch (no raw COM1 bypass).
+        bool got_char = false;
+        const char *slice = nullptr;
+        size_t slice_len = 0;
+        if (shell_peek_input(slice, slice_len)) {
+            size_t run = 0;
+            while (run < slice_len && slice[run] != '\n' &&
+                   slice[run] != '\r' && slice[run] != '\b' &&
+                   slice[run] != 0x7F)
+                ++run;
+            if (run > 0) {
+                redraw_cursor(true);
+                const size_t limit = max_len - 1;
+                const size_t room = pos < limit ? limit - pos : 0;
+                const size_t copy = run < room ? run : room;
+                __builtin_memcpy(buf + pos, slice, copy);
+                for (size_t idx = 0; idx < copy; ++idx) {
+                    Terminal::putchar(slice[idx]);
+                    // Issue #248: this echo is ours, not async
+                    // background output — re-sync per character.
+                    prompt_serial = arch::Serial::write_count();
+                }
+                pos += copy;
+                // Consume the whole scanned run, including any
+                // over-capacity tail (matches the single-char drop
+                // when the line buffer is full).
+                shell_consume_input(run);
+                continue;
+            }
+            // Control byte at the ring head: single-char path below.
+            // Already pumped — no second pump.
+            got_char = shell_try_get_key_after_pump(c);
+        } else {
+            got_char = shell_try_get_key(c);
+        }
 
         if (!got_char) {
             // Async background output arrived?  Move to a fresh line and
@@ -732,6 +773,14 @@ void Shell::shell_task_main() {
         draw_prompt(last_exit_code_);
 
         arch::Keyboard::flush();
+#if defined(CONFIG_ARCH_X86_64)
+        // Issue #407: x86 prompt-time type-ahead parity. Non-x86
+        // flush() already resets the ring through the Keyboard facade;
+        // x86 owns the i8042 Keyboard, so reset the serial ring here
+        // explicitly (matches the pre-#407 raw-COM1 behavior where each
+        // prompt started with a drained UART).
+        kernel::input::serial::reset();
+#endif
         if (readline(line, BUF_SIZE, last_exit_code_)) {
             last_exit_code_ = parse_and_exec(line);
             update_status_bar();

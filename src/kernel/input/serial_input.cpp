@@ -17,17 +17,21 @@
  */
 
 /// @file serial_input.cpp
-/// @brief Serial-injected key decoder (issue #355). See serial_input.hpp.
-/// Empty TU on x86_64 (the i8042 Keyboard owns input there).
+/// @brief Serial-injected key decoder (issues #355, #407). Ring core is
+///        compiled on all arches (x86_64 included since #407: the shell
+///        consumes UART RX through the ring everywhere); only the
+///        arch::Keyboard facade stays non-x86 (x86_64 owns the i8042
+///        Keyboard implementation).
 
 #include <kernel/input/serial_input.hpp>
-
-#if !defined(CONFIG_ARCH_X86_64)
-
-#include <kernel/arch/hal/keyboard.hpp>
 #include <kernel/arch/hal/serial.hpp>
 #include <kernel/nexios_config.h>
 #include <kernel/sync/spsc_ring.hpp>
+#include <logger.hpp>
+
+#if !defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/hal/keyboard.hpp>
+#endif
 
 namespace kernel::input::serial {
 
@@ -38,6 +42,7 @@ namespace {
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 static SPSCRing<char, kRingSize> s_ring;
 static size_t s_dropped = 0;
+static size_t s_overrun = 0;
 static bool s_loopback_active = false;
 #if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_RISCV64)
 static uint8_t s_mcr_saved = 0;
@@ -65,8 +70,18 @@ void push_decoded(uint8_t byte) {
         ++s_dropped;
         return;
     }
-    if (!s_ring.try_push(out))
+    if (!s_ring.try_push(out)) {
+        // Reachable exhaustion (paste burst over 255 while the shell naps):
+        // fail-closed drop + count, never block, never ENSURE. Throttled
+        // log: first drop, then every 256th (task context only — pump()
+        // never runs in an ISR, and Logger::warn is ring-buffered).
         ++s_dropped;
+        ++s_overrun;
+        static constexpr size_t kOverrunLogEvery = 256;
+        if ((s_overrun & (kOverrunLogEvery - 1)) == 1)
+            kernel::Logger::warn("serial rx overrun: dropped=%zu",
+                                 s_overrun);
+    }
 }
 
 } // namespace
@@ -74,6 +89,7 @@ void push_decoded(uint8_t byte) {
 void reset() {
     s_ring.reset();
     s_dropped = 0;
+    s_overrun = 0;
     s_loopback_active = false;
 }
 
@@ -112,6 +128,22 @@ bool pop(char &out) {
 
 size_t dropped_count() {
     return s_dropped;
+}
+
+size_t overrun_count() {
+    return s_overrun;
+}
+
+bool peek_slice(const char *&data, size_t &len) {
+    SPSCRing<char, kRingSize>::Slice slice =
+        s_ring.peek_slice(kRingSize);
+    data = slice.data;
+    len = slice.len;
+    return len != 0;
+}
+
+size_t consume(size_t count) {
+    return s_ring.consume(count);
 }
 
 bool loopback_begin() {
@@ -159,6 +191,7 @@ bool capture_suspended() {
 
 } // namespace kernel::input::serial
 
+#if !defined(CONFIG_ARCH_X86_64)
 // Non-x86 arch::Keyboard: one-line delegates onto the decoder (issue
 // #355). handle_irq is a contract-parity no-op — no UART IRQ exists on
 // these arches. Modifiers are always false: a UART has no modifier

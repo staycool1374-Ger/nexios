@@ -1,27 +1,15 @@
-diff --git a/src/kernel/driver/virtio_blk.cpp b/src/kernel/driver/virtio_blk.cpp
---- a/src/kernel/driver/virtio_blk.cpp
-+++ b/src/kernel/driver/virtio_blk.cpp
-@@ -651,13 +651,20 @@ bool VirtioBlkDriver::handle_irq() {
-             bool done = false;
-             match_completion(pos, static_cast<uint16_t>(pos + 1), entry_id,
-                              compl_.head_idx, &done);
-             if (!done)
-                 continue;
-             compl_.done = true;
--            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(
--                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE);
--            compl_.status = *status_ptr;
-+            // Cache contract (issue #307): invalidate before the load and latch
-+            // once - same contract as drain_used_ring_mmio and finish_request.
-+            // A stale cached 0 reads as VIRTIO_BLK_S_OK and would retire a
-+            // failed request as success. Address derived from dma_buf_
-+            // (volatile-to-const cast is forbidden).
-+            uint8_t *status_addr =
-+                dma_buf_ + sizeof(VirtioBlkReqHdr) + BLOCK_SIZE;
-+            arch::cache_invalidate(status_addr, sizeof(uint8_t));
-+            auto *status_ptr = reinterpret_cast<volatile uint8_t *>(status_addr);
-+            compl_.status = *status_ptr;
-             wake_task = compl_.waiter;
-             wake_gen = compl_.waiter_gen;
-             compl_.waiter = nullptr;
-             compl_.waiter_gen = 0;
+diff --git a/src/kernel/input/serial_input.cpp b/src/kernel/input/serial_input.cpp
+index cd383f930..e30699c33 100644
+--- a/src/kernel/input/serial_input.cpp
++++ b/src/kernel/input/serial_input.cpp
+@@ -79,8 +79,8 @@ void push_decoded(uint8_t byte) {
+         ++s_overrun;
+         static constexpr size_t kOverrunLogEvery = 256;
+         if ((s_overrun & (kOverrunLogEvery - 1)) == 1)
+-            kernel::Logger::warn("serial rx overrun: dropped=%u",
+-                                 static_cast<unsigned>(s_overrun));
++            kernel::Logger::warn("serial rx overrun: dropped=%zu",
++                                 s_overrun);
+     }
+ }
+ 

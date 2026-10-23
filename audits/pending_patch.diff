@@ -1,33 +1,426 @@
-diff --git a/docs/specs/memory.md b/docs/specs/memory.md
-index 5d9129a69..e02d5bb29 100644
---- a/docs/specs/memory.md
-+++ b/docs/specs/memory.md
-@@ -59,6 +59,12 @@ data pages).  `page_table_shared_ = false`.  COW deferred to a later version.
-    └─ kernel half shared read-only view
- ```
+diff --git a/src/kernel/input/serial_input.cpp b/src/kernel/input/serial_input.cpp
+index 386eef2af..e30699c33 100644
+--- a/src/kernel/input/serial_input.cpp
++++ b/src/kernel/input/serial_input.cpp
+@@ -17,17 +17,21 @@
+  */
  
-+- Leaf vs block inheritance (issue #401 Q2, intended contract): 4 KiB
-+  leaves are never inherited — a leaf pointing at a non-RAM frame
-+  (device MMIO) stays unmapped in the child (fail-closed absence, x86 PT
-+  arm and riscv64 L2 arm; issue #8 S2). Only huge/block entries inherit
-+  kernel-owned blocks by value (issue #387).
+ /// @file serial_input.cpp
+-/// @brief Serial-injected key decoder (issue #355). See serial_input.hpp.
+-/// Empty TU on x86_64 (the i8042 Keyboard owns input there).
++/// @brief Serial-injected key decoder (issues #355, #407). Ring core is
++///        compiled on all arches (x86_64 included since #407: the shell
++///        consumes UART RX through the ring everywhere); only the
++///        arch::Keyboard facade stays non-x86 (x86_64 owns the i8042
++///        Keyboard implementation).
+ 
+ #include <kernel/input/serial_input.hpp>
+-
+-#if !defined(CONFIG_ARCH_X86_64)
+-
+-#include <kernel/arch/hal/keyboard.hpp>
+ #include <kernel/arch/hal/serial.hpp>
+ #include <kernel/nexios_config.h>
+ #include <kernel/sync/spsc_ring.hpp>
++#include <logger.hpp>
 +
- ## 3. Kernel-Stack Provisioning & Guard Pages
++#if !defined(CONFIG_ARCH_X86_64)
++#include <kernel/arch/hal/keyboard.hpp>
++#endif
  
- ### 3.1 kslot window [IMPLEMENTED]
-diff --git a/src/kernel/memory/vmm_teardown.cpp b/src/kernel/memory/vmm_teardown.cpp
-index cab980bf9..8335a9c83 100644
---- a/src/kernel/memory/vmm_teardown.cpp
-+++ b/src/kernel/memory/vmm_teardown.cpp
-@@ -442,6 +442,11 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-                     continue;
+ namespace kernel::input::serial {
  
-                 // RISC-V leaf entries have V=1, R|W|X=1.
-+                // Contract (issue #401 Q2, intended): 4 KiB leaves are
-+                // never inherited — a non-RAM frame (device MMIO) stays
-+                // unmapped in the child (fail-closed absence, same as the
-+                // x86 PT arm and issue #8 S2). Only huge/block entries
-+                // inherit kernel-owned blocks by value (issue #387).
-                 if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
-                     uint64_t src_data =
-                         vmm_arch_block_base(src_l2[l2_idx], false);
+@@ -38,6 +42,7 @@ namespace {
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+ static SPSCRing<char, kRingSize> s_ring;
+ static size_t s_dropped = 0;
++static size_t s_overrun = 0;
+ static bool s_loopback_active = false;
+ #if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_RISCV64)
+ static uint8_t s_mcr_saved = 0;
+@@ -65,8 +70,18 @@ void push_decoded(uint8_t byte) {
+         ++s_dropped;
+         return;
+     }
+-    if (!s_ring.try_push(out))
++    if (!s_ring.try_push(out)) {
++        // Reachable exhaustion (paste burst over 255 while the shell naps):
++        // fail-closed drop + count, never block, never ENSURE. Throttled
++        // log: first drop, then every 256th (task context only — pump()
++        // never runs in an ISR, and Logger::warn is ring-buffered).
+         ++s_dropped;
++        ++s_overrun;
++        static constexpr size_t kOverrunLogEvery = 256;
++        if ((s_overrun & (kOverrunLogEvery - 1)) == 1)
++            kernel::Logger::warn("serial rx overrun: dropped=%zu",
++                                 s_overrun);
++    }
+ }
+ 
+ } // namespace
+@@ -74,6 +89,7 @@ void push_decoded(uint8_t byte) {
+ void reset() {
+     s_ring.reset();
+     s_dropped = 0;
++    s_overrun = 0;
+     s_loopback_active = false;
+ }
+ 
+@@ -114,6 +130,22 @@ size_t dropped_count() {
+     return s_dropped;
+ }
+ 
++size_t overrun_count() {
++    return s_overrun;
++}
++
++bool peek_slice(const char *&data, size_t &len) {
++    SPSCRing<char, kRingSize>::Slice slice =
++        s_ring.peek_slice(kRingSize);
++    data = slice.data;
++    len = slice.len;
++    return len != 0;
++}
++
++size_t consume(size_t count) {
++    return s_ring.consume(count);
++}
++
+ bool loopback_begin() {
+ #if !defined(CONFIG_DEBUG)
+     return false;
+@@ -159,6 +191,7 @@ bool capture_suspended() {
+ 
+ } // namespace kernel::input::serial
+ 
++#if !defined(CONFIG_ARCH_X86_64)
+ // Non-x86 arch::Keyboard: one-line delegates onto the decoder (issue
+ // #355). handle_irq is a contract-parity no-op — no UART IRQ exists on
+ // these arches. Modifiers are always false: a UART has no modifier
+diff --git a/src/kernel/input/serial_input.hpp b/src/kernel/input/serial_input.hpp
+index f07c7a2e1..8ab8eacd4 100644
+--- a/src/kernel/input/serial_input.hpp
++++ b/src/kernel/input/serial_input.hpp
+@@ -19,12 +19,14 @@
+  */
+ 
+ /// @file serial_input.hpp
+-/// @brief Serial-injected key decoder for architectures without PS/2
+-///        (issue #355). A static single-producer ring normalizes UART
+-///        bytes into key events: the shell task pumps the UART, the
+-///        harness injects bytes directly, consumers pop decoded keys.
+-///        Zero allocation, zero locks, polling only — no UART interrupt
+-///        exists on these arches and none is enabled here.
++/// @brief RX ring / key decoder for polled UART input (issues #355,
++///        #407). A static single-producer ring normalizes UART bytes
++///        into key events: the shell task pumps the UART, the harness
++///        injects bytes directly, consumers pop decoded keys or peek
++///        zero-copy slices. Compiled on x86_64/aarch64/riscv64 — the
++///        sole UART RX consumer. Zero allocation, zero locks, polling
++///        only — no UART RX interrupt exists on these arches and none
++///        is enabled here (IER/IMSC stay 0).
+ 
+ #include <types.hpp>
+ 
+@@ -52,9 +54,29 @@ size_t pump();
+ /// @return true with the oldest key iff the ring was non-empty.
+ bool pop(char &out);
+ 
++/// @brief Peek the next contiguous decoded run without consuming
++///        (issue #407: readline fast path). Pumps nothing — call pump()
++///        (or shell_peek_input) first. The view is valid only until the
++///        next consume/pop/pump; consume strictly last.
++/// @param data Receives the run pointer (valid until next ring update).
++/// @param len  Receives the run length (0 when empty).
++/// @return true iff a non-empty run is exposed.
++bool peek_slice(const char *&data, size_t &len);
++
++/// @brief Consume a previously peeked run (issue #407).
++///        Consumer-only; clamps to the readable count.
++/// @param count Bytes to drop.
++/// @return Bytes actually consumed.
++size_t consume(size_t count);
++
+ /// @brief Ring-full drops since boot (diagnostic, monotonic).
+ size_t dropped_count();
+ 
++/// @brief Ring-full overrun events since boot (issue #407: counts each
++///        dropped byte that arrived while the ring was full; diagnostic,
++///        monotonic, throttled-logged at the push site).
++size_t overrun_count();
++
+ /// @brief Enter the MCR loopback window (riscv64 debug builds only).
+ /// Fail-closed: false on other arches, in release, when already
+ /// active, on a foreign LOOP bit, or on read-back mismatch.
+diff --git a/src/kernel/sync/spsc_ring.hpp b/src/kernel/sync/spsc_ring.hpp
+index 69c32f236..6ada3e16e 100644
+--- a/src/kernel/sync/spsc_ring.hpp
++++ b/src/kernel/sync/spsc_ring.hpp
+@@ -35,6 +35,16 @@ template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
+     static constexpr size_t MASK = N - 1;
+ 
+   public:
++    /// @brief Zero-copy view into the readable region (issue #407).
++    /// @field data Pointer to the first readable element (contiguous run
++    ///         only — a wrapped region needs two peeks with a consume
++    ///         between them).
++    /// @field len  Number of readable elements from data (0 when empty).
++    struct Slice {
++        const T *data = nullptr;
++        size_t len = 0;
++    };
++
+     /// @brief Push an item (discards if full).
+     /// @return true on success.
+     bool try_push(const T &item) {
+@@ -66,6 +76,51 @@ template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
+                kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
+     }
+ 
++    /// @brief Peek the next contiguous readable run without consuming
++    ///        (issue #407: readline fast path — scan + bulk copy, no
++    ///        per-byte pop).
++    ///        Consumer-only. The returned region stays valid only until
++    ///        the next consume/try_pop/push-side wrap: the producer
++    ///        never writes inside [tail, head), so the view is stable
++    ///        while the consumer holds it without advancing.
++    /// @param max_len Upper bound on the reported run (bounds the scan).
++    /// @return Slice with len 0 and data nullptr when empty.
++    Slice peek_slice(size_t max_len) const {
++        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
++        size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
++        size_t used = (h + N - t) & MASK;
++        size_t contiguous = N - (t & MASK);
++        size_t len = used;
++        if (len > contiguous)
++            len = contiguous;
++        if (len > max_len)
++            len = max_len;
++        Slice out{};
++        if (len != 0) {
++            out.data = &data_[t & MASK];
++            out.len = len;
++        }
++        return out;
++    }
++
++    /// @brief Advance the consumer past count elements (issue #407).
++    ///        Consumer-only. Clamps to the readable count — never
++    ///        asserts on caller error (reachable over-consumption is a
++    ///        drop, not an invariant violation).
++    /// @param count Elements to drop (e.g. a scanned slice run).
++    /// @return Elements actually consumed.
++    size_t consume(size_t count) {
++        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
++        size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
++        size_t used = (h + N - t) & MASK;
++        if (count > used)
++            count = used;
++        if (count != 0)
++            kernel::atomic_store(&tail_, (t + count) & MASK,
++                                 __ATOMIC_RELEASE);
++        return count;
++    }
++
+     /// @brief Reset to empty state.  QUIESCENT-ONLY — must not be called
+     ///        while either side is active (the head/tail pair is not
+     ///        published atomically together).
+diff --git a/src/services/shell.cpp b/src/services/shell.cpp
+index e6c2cb35d..eb5724316 100644
+--- a/src/services/shell.cpp
++++ b/src/services/shell.cpp
+@@ -26,6 +26,7 @@
+ #include <kernel/task/task.hpp>
+ #include <kernel/core/global_state.hpp>
+ #include <kernel/elf/elf_loader.hpp>
++#include <kernel/input/serial_input.hpp>
+ #include <kernel/memory/pmm.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/arch/timer.hpp>
+@@ -132,31 +133,22 @@ void shell_input_timeout_fire(void *context) {
+     shell_input_notify().notify(1);
+ }
+ 
+-// Issue #340 P2: central keyboard/serial input poll. Order: serial
+-// (separate source, always first) → iocd daemon (keyboard bytes routed
+-// there when owned) → hardware ring, but ONLY when the daemon is down
+-// (pid 0 or send_sync refused): when the daemon is up the ring is empty
+-// by the single-ownership invariant, and draining it would risk double
+-// delivery. Never blocks on the daemon beyond one send_sync round-trip
+-// (fail-open); shell liveness never depends on iocd.
++// Issue #340 P2 central input poll (issue #407: ring-first). Order: RX
++// ring (the sole UART RX consumer — pumped by the caller, never polled
++// raw here, preserving the single-reader LSR/RBR proof) → iocd daemon
++// (keyboard bytes routed there when owned) → hardware ring, but ONLY on
++// x86_64 when the daemon is down (pid 0 or send_sync refused): when the
++// daemon is up the ring is empty by the single-ownership invariant, and
++// draining it would risk double delivery. Off-x86 has no hardware ring
++// tail (PS/2 does not exist there). Never blocks on the daemon beyond
++// one send_sync round-trip (fail-open); shell liveness never depends
++// on iocd.
+ // Issue #303 item 3: service::-scope test seam (declared in shell.hpp)
+ // so the P2 key-delivery path is automatable by a shell-level test.
+ // Zero logic change on the move out of the anonymous namespace.
+-bool shell_try_get_key_impl(char &out) {
+-#if defined(CONFIG_ARCH_X86_64)
+-    if (arch::Serial::poll_getchar(out))
+-        return true;
+-#else
+-    // Issue #355: decoder-first on non-x86. Serial-first would let raw
+-    // bytes bypass normalization and split one keystroke stream between
+-    // two sources — the decoder owns the UART when healthy; the raw
+-    // poll below is the fail-open fallback only.
+-    (void)arch::Keyboard::pump_serial();
+-    if (arch::Keyboard::getchar(out))
++bool shell_try_get_key_after_pump(char &out) {
++    if (kernel::input::serial::pop(out))
+         return true;
+-    if (arch::Serial::poll_getchar(out))
+-        return true;
+-#endif
+     uint64_t pid = kernel::iocd::get_iocd_pid();
+     if (pid != 0) {
+         kernel::iocd::Msg req{};
+@@ -181,7 +173,11 @@ bool shell_try_get_key_impl(char &out) {
+         }
+         // send_sync refused (daemon dying): fall through to hardware.
+     }
++#if defined(CONFIG_ARCH_X86_64)
+     return arch::Keyboard::getchar(out);
++#else
++    return false;
++#endif
+ }
+ 
+ void shell_idle_nap(uint64_t timeout_us) {
+@@ -220,11 +216,20 @@ void shell_idle_nap(uint64_t timeout_us) {
+ } // namespace
+ 
+ /// @brief Test seam (issue #303 item 3): P2 key-delivery poll exposed so a
+-///        shell-level test can drive the exact production path (serial →
+-///        iocd daemon → hardware ring). Zero-logic wrapper over the
+-///        internal poll above.
++///        shell-level test can drive the exact production path (RX ring →
++///        iocd daemon → hardware ring). Pumps the UART (bounded) first.
+ bool shell_try_get_key(char &out) {
+-    return shell_try_get_key_impl(out);
++    (void)kernel::input::serial::pump();
++    return shell_try_get_key_after_pump(out);
++}
++
++bool shell_peek_input(const char *&data, size_t &len) {
++    (void)kernel::input::serial::pump();
++    return kernel::input::serial::peek_slice(data, len);
++}
++
++size_t shell_consume_input(size_t count) {
++    return kernel::input::serial::consume(count);
+ }
+ 
+ static void background_task_wrapper() {
+@@ -530,6 +535,8 @@ static void draw_prompt(int exit_code) {
+ }
+ 
+ static bool readline(char* buf, size_t max_len, int exit_code) {
++    if (buf == nullptr || max_len == 0)
++        return false;
+     size_t pos = 0;
+     static uint64_t last_blink = 0;
+     static bool cursor_on = false;
+@@ -554,11 +561,45 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
+         }
+ 
+         char c = 0;
+-        // Input order (issues #245/#340/#355): decoder-owned UART first
+-        // on aarch64/riscv64 (Keyboard pump + ring), raw Serial poll as
+-        // fail-open fallback, then the iocd-routed keyboard, then the
+-        // hardware ring fallback. x86: serial → iocd → ring (unchanged).
+-        bool got_char = shell_try_get_key(c);
++        // Input order (issues #245/#340/#355/#407): bounded pump, then
++        // the zero-copy slice fast path (bulk-consume the next
++        // contiguous decoded run; the scan stops at line/edit control
++        // bytes), then the single-char path. x86 serial flows through
++        // the ring like every arch (no raw COM1 bypass).
++        bool got_char = false;
++        const char *slice = nullptr;
++        size_t slice_len = 0;
++        if (shell_peek_input(slice, slice_len)) {
++            size_t run = 0;
++            while (run < slice_len && slice[run] != '\n' &&
++                   slice[run] != '\r' && slice[run] != '\b' &&
++                   slice[run] != 0x7F)
++                ++run;
++            if (run > 0) {
++                redraw_cursor(true);
++                const size_t limit = max_len - 1;
++                const size_t room = pos < limit ? limit - pos : 0;
++                const size_t copy = run < room ? run : room;
++                __builtin_memcpy(buf + pos, slice, copy);
++                for (size_t idx = 0; idx < copy; ++idx) {
++                    Terminal::putchar(slice[idx]);
++                    // Issue #248: this echo is ours, not async
++                    // background output — re-sync per character.
++                    prompt_serial = arch::Serial::write_count();
++                }
++                pos += copy;
++                // Consume the whole scanned run, including any
++                // over-capacity tail (matches the single-char drop
++                // when the line buffer is full).
++                shell_consume_input(run);
++                continue;
++            }
++            // Control byte at the ring head: single-char path below.
++            // Already pumped — no second pump.
++            got_char = shell_try_get_key_after_pump(c);
++        } else {
++            got_char = shell_try_get_key(c);
++        }
+ 
+         if (!got_char) {
+             // Async background output arrived?  Move to a fresh line and
+@@ -732,6 +773,14 @@ void Shell::shell_task_main() {
+         draw_prompt(last_exit_code_);
+ 
+         arch::Keyboard::flush();
++#if defined(CONFIG_ARCH_X86_64)
++        // Issue #407: x86 prompt-time type-ahead parity. Non-x86
++        // flush() already resets the ring through the Keyboard facade;
++        // x86 owns the i8042 Keyboard, so reset the serial ring here
++        // explicitly (matches the pre-#407 raw-COM1 behavior where each
++        // prompt started with a drained UART).
++        kernel::input::serial::reset();
++#endif
+         if (readline(line, BUF_SIZE, last_exit_code_)) {
+             last_exit_code_ = parse_and_exec(line);
+             update_status_bar();
+diff --git a/src/services/shell.hpp b/src/services/shell.hpp
+index 07d998f4a..4cd906dd9 100644
+--- a/src/services/shell.hpp
++++ b/src/services/shell.hpp
+@@ -235,9 +235,24 @@ private:
+ };
+ 
+ /// @brief Test seam (issue #303 item 3): P2 central keyboard/serial input
+-///        poll (serial → iocd daemon → hardware ring). Zero-logic wrapper
+-///        over the internal poll; lets a shell-level test drive the exact
++///        poll (RX ring → iocd daemon → hardware ring, issue #407). Pumps
++///        the UART (bounded) before polling. Zero-logic wrapper over the
++///        internal poll; lets a shell-level test drive the exact
+ ///        production path including daemon delivery.
+ bool shell_try_get_key(char &out);
+ 
++/// @brief Peek the next contiguous decoded input run without consuming
++///        (issue #407: readline fast path + test seam). Pumps the UART
++///        (bounded) then exposes the ring run; consume strictly last.
++/// @param data Receives the run pointer (valid until next ring update).
++/// @param len  Receives the run length (0 when empty).
++/// @return true iff a non-empty run is exposed.
++bool shell_peek_input(const char *&data, size_t &len);
++
++/// @brief Consume a previously peeked input run (issue #407).
++///        Delegates to the RX ring; clamps to the readable count.
++/// @param count Bytes to drop.
++/// @return Bytes actually consumed.
++size_t shell_consume_input(size_t count);
++
+ } // namespace service

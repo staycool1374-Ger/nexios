@@ -235,9 +235,24 @@ private:
 };
 
 /// @brief Test seam (issue #303 item 3): P2 central keyboard/serial input
-///        poll (serial → iocd daemon → hardware ring). Zero-logic wrapper
-///        over the internal poll; lets a shell-level test drive the exact
+///        poll (RX ring → iocd daemon → hardware ring, issue #407). Pumps
+///        the UART (bounded) before polling. Zero-logic wrapper over the
+///        internal poll; lets a shell-level test drive the exact
 ///        production path including daemon delivery.
 bool shell_try_get_key(char &out);
+
+/// @brief Peek the next contiguous decoded input run without consuming
+///        (issue #407: readline fast path + test seam). Pumps the UART
+///        (bounded) then exposes the ring run; consume strictly last.
+/// @param data Receives the run pointer (valid until next ring update).
+/// @param len  Receives the run length (0 when empty).
+/// @return true iff a non-empty run is exposed.
+bool shell_peek_input(const char *&data, size_t &len);
+
+/// @brief Consume a previously peeked input run (issue #407).
+///        Delegates to the RX ring; clamps to the readable count.
+/// @param count Bytes to drop.
+/// @return Bytes actually consumed.
+size_t shell_consume_input(size_t count);
 
 } // namespace service

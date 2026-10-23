@@ -19,12 +19,14 @@
  */
 
 /// @file serial_input.hpp
-/// @brief Serial-injected key decoder for architectures without PS/2
-///        (issue #355). A static single-producer ring normalizes UART
-///        bytes into key events: the shell task pumps the UART, the
-///        harness injects bytes directly, consumers pop decoded keys.
-///        Zero allocation, zero locks, polling only — no UART interrupt
-///        exists on these arches and none is enabled here.
+/// @brief RX ring / key decoder for polled UART input (issues #355,
+///        #407). A static single-producer ring normalizes UART bytes
+///        into key events: the shell task pumps the UART, the harness
+///        injects bytes directly, consumers pop decoded keys or peek
+///        zero-copy slices. Compiled on x86_64/aarch64/riscv64 — the
+///        sole UART RX consumer. Zero allocation, zero locks, polling
+///        only — no UART RX interrupt exists on these arches and none
+///        is enabled here (IER/IMSC stay 0).
 
 #include <types.hpp>
 
@@ -52,8 +54,28 @@ size_t pump();
 /// @return true with the oldest key iff the ring was non-empty.
 bool pop(char &out);
 
+/// @brief Peek the next contiguous decoded run without consuming
+///        (issue #407: readline fast path). Pumps nothing — call pump()
+///        (or shell_peek_input) first. The view is valid only until the
+///        next consume/pop/pump; consume strictly last.
+/// @param data Receives the run pointer (valid until next ring update).
+/// @param len  Receives the run length (0 when empty).
+/// @return true iff a non-empty run is exposed.
+bool peek_slice(const char *&data, size_t &len);
+
+/// @brief Consume a previously peeked run (issue #407).
+///        Consumer-only; clamps to the readable count.
+/// @param count Bytes to drop.
+/// @return Bytes actually consumed.
+size_t consume(size_t count);
+
 /// @brief Ring-full drops since boot (diagnostic, monotonic).
 size_t dropped_count();
+
+/// @brief Ring-full overrun events since boot (issue #407: counts each
+///        dropped byte that arrived while the ring was full; diagnostic,
+///        monotonic, throttled-logged at the push site).
+size_t overrun_count();
 
 /// @brief Enter the MCR loopback window (riscv64 debug builds only).
 /// Fail-closed: false on other arches, in release, when already

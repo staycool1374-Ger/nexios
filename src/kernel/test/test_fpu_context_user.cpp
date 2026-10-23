@@ -415,6 +415,9 @@ void fpu_user_teardown(FpuUserWorker *workers, size_t n,
         ok = false;
 }
 
+} // namespace (helpers) — the JARVIS_TEST bodies below stay at global scope:
+// test_registry.gen.hpp declares them with external linkage.
+
 // Runmode: kernel
 // Testidea: A single user task keeps FP state across timer preemptions:
 // set Q0/Q1/Q2 (both lanes), block, get woken 3x, verify all lanes each
@@ -655,8 +658,6 @@ JARVIS_TEST(fpu_ctx_user_interleave_isolation, "PRE: none | POST: none") {
     JARVIS_ASSERT(teardown_ok);
     JARVIS_TEST_PASS();
 }
-
-} // namespace
 
 void register_fpu_context_user_tests() {
     Logger::info("Registering FPU user-task tests");

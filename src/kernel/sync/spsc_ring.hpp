@@ -35,6 +35,16 @@ template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
     static constexpr size_t MASK = N - 1;
 
   public:
+    /// @brief Zero-copy view into the readable region (issue #407).
+    /// @field data Pointer to the first readable element (contiguous run
+    ///         only — a wrapped region needs two peeks with a consume
+    ///         between them).
+    /// @field len  Number of readable elements from data (0 when empty).
+    struct Slice {
+        const T *data = nullptr;
+        size_t len = 0;
+    };
+
     /// @brief Push an item (discards if full).
     /// @return true on success.
     bool try_push(const T &item) {
@@ -64,6 +74,51 @@ template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
     bool empty() const {
         return kernel::atomic_load(&head_, __ATOMIC_ACQUIRE) ==
                kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
+    }
+
+    /// @brief Peek the next contiguous readable run without consuming
+    ///        (issue #407: readline fast path — scan + bulk copy, no
+    ///        per-byte pop).
+    ///        Consumer-only. The returned region stays valid only until
+    ///        the next consume/try_pop/push-side wrap: the producer
+    ///        never writes inside [tail, head), so the view is stable
+    ///        while the consumer holds it without advancing.
+    /// @param max_len Upper bound on the reported run (bounds the scan).
+    /// @return Slice with len 0 and data nullptr when empty.
+    Slice peek_slice(size_t max_len) const {
+        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
+        size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
+        size_t used = (h + N - t) & MASK;
+        size_t contiguous = N - (t & MASK);
+        size_t len = used;
+        if (len > contiguous)
+            len = contiguous;
+        if (len > max_len)
+            len = max_len;
+        Slice out{};
+        if (len != 0) {
+            out.data = &data_[t & MASK];
+            out.len = len;
+        }
+        return out;
+    }
+
+    /// @brief Advance the consumer past count elements (issue #407).
+    ///        Consumer-only. Clamps to the readable count — never
+    ///        asserts on caller error (reachable over-consumption is a
+    ///        drop, not an invariant violation).
+    /// @param count Elements to drop (e.g. a scanned slice run).
+    /// @return Elements actually consumed.
+    size_t consume(size_t count) {
+        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
+        size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
+        size_t used = (h + N - t) & MASK;
+        if (count > used)
+            count = used;
+        if (count != 0)
+            kernel::atomic_store(&tail_, (t + count) & MASK,
+                                 __ATOMIC_RELEASE);
+        return count;
     }
 
     /// @brief Reset to empty state.  QUIESCENT-ONLY — must not be called
