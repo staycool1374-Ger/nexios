@@ -1,181 +1,33 @@
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index 5b24b8012..329aa21e3 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -1481,6 +1481,41 @@ void TaskControlBlock::restore_context(uint64_t &rsp) noexcept {
- }
- #endif
+diff --git a/docs/specs/memory.md b/docs/specs/memory.md
+index 5d9129a69..e02d5bb29 100644
+--- a/docs/specs/memory.md
++++ b/docs/specs/memory.md
+@@ -59,6 +59,12 @@ data pages).  `page_table_shared_ = false`.  COW deferred to a later version.
+    └─ kernel half shared read-only view
+ ```
  
-+/// @brief Fail-closed admission check for clone() user parents (issue #400).
-+/// A user-marked parent must own a live, page-aligned PMM USER block of
-+/// user_stack_size_ bytes: exactly the pages the stack-copy loop reads via
-+/// HHDM. Synthetic shapes (flag-flipped kernel TCBs with a fake
-+/// user_stack_, issue #399 verdict) fault on the first copy iteration into
-+/// a silent halt, so they are rejected here with no allocation and no
-+/// teardown. PMM::free_page clears only the allocation bit, never the
-+/// owner bit, hence is_allocated() && is_user_page() (either alone admits
-+/// a freed page). Bounded: at most total_memory()/PAGE_SIZE iterations.
-+/// @param parent  Candidate user-marked parent.
-+/// @return true iff every stack page is a live PMM USER page.
-+static bool user_parent_stack_is_live(const TaskControlBlock &parent) noexcept {
-+    const uint64_t phys = parent.user_stack_;
-+    const uint64_t size = parent.user_stack_size_;
-+    if (phys == 0 || size == 0)
-+        return false;
-+    if ((phys % arch::PAGE_SIZE) != 0)
-+        return false;
-+    // Geometric bound: keeps the size math overflow-free and the stack
-+    // within the user address range.
-+    if (size > USER_SPACE_LIMIT - (mem::STACK_VADDR + arch::PAGE_SIZE))
-+        return false;
-+    const uint64_t pages = (size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-+    if (phys > PMM::total_memory())
-+        return false;
-+    if (pages > (PMM::total_memory() - phys) / arch::PAGE_SIZE)
-+        return false;
-+    for (uint64_t idx = 0; idx < pages; ++idx) {
-+        const uint64_t page = phys + idx * arch::PAGE_SIZE;
-+        if (!PMM::is_allocated(page) || !PMM::is_user_page(page))
-+            return false;
-+    }
-+    return true;
-+}
++- Leaf vs block inheritance (issue #401 Q2, intended contract): 4 KiB
++  leaves are never inherited — a leaf pointing at a non-RAM frame
++  (device MMIO) stays unmapped in the child (fail-closed absence, x86 PT
++  arm and riscv64 L2 arm; issue #8 S2). Only huge/block entries inherit
++  kernel-owned blocks by value (issue #387).
 +
- /// @brief Clones the current task (fork).
- /// Allocates a new TCB and kernel stack, copies parent's fd table, FPU state,
- /// signal handlers, and process hierarchy. For user tasks, clones the page
-@@ -1492,6 +1527,20 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     if (!parent)
-         return nullptr;
+ ## 3. Kernel-Stack Provisioning & Guard Pages
  
-+    const bool is_user_parent = parent->is_user_;
-+    if (is_user_parent && !user_parent_stack_is_live(*parent)) {
-+        // Issue #400: synthetic user parent (no live PMM user stack).
-+        // Nothing allocated yet, so no teardown — return nullptr with
-+        // zero side effects and zero PMM mutation.
-+        Logger::warn("TCB::clone: bad user parent stack %llu size %llu",
-+                     parent->user_stack_, parent->user_stack_size_);
-+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
-+                            log::kDmesgBase_TASK + 7, log::LogSeverity::ERROR,
-+                            "TCB::clone: bad user parent stack",
-+                            parent->user_stack_size_);
-+        return nullptr;
-+    }
-+
-     auto *tcb = static_cast<TaskControlBlock *>(
-         MemPool::alloc(sizeof(TaskControlBlock)));
-     if (!tcb)
-@@ -1522,7 +1571,6 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
-     // parent inherits as today, preserving the admission_fork_denied_no_leak
-     // contract (kernel forker).  deadline_ticks == 0 makes the child
-     // admission-exempt (admission_exempted, I-4).
--    const bool is_user_parent = parent->is_user_;
-     tcb->period_ticks = is_user_parent ? 0 : parent->period_ticks;
-     tcb->deadline_ticks = is_user_parent ? 0 : parent->deadline_ticks;
-     tcb->executed_ticks = 0;
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 2c0b050fe..966427bcb 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -976,7 +976,9 @@ struct TaskControlBlock {
-     /// @param regs Register save area from the interrupt (to copy
-     /// RIP/RSP/regs).
-     /// @return Pointer to the new child TaskControlBlock, or nullptr
--    /// on failure.
-+    /// on failure. A user-marked parent must own a live, page-aligned
-+    /// PMM USER block of user_stack_size_ bytes (issue #400); synthetic
-+    /// parents fail closed with nullptr and zero side effects.
-     static TaskControlBlock *clone(uint64_t *regs);
-     /// @brief Clones the current task with error code.
-     /// @param regs Register save area from the interrupt.
-diff --git a/src/kernel/test/test_sched_admission.cpp b/src/kernel/test/test_sched_admission.cpp
-index f10e4d609..da9397c12 100644
---- a/src/kernel/test/test_sched_admission.cpp
-+++ b/src/kernel/test/test_sched_admission.cpp
-@@ -262,7 +262,10 @@ JARVIS_TEST(admission_exemptions_untracked, "PRE: none | POST: none") {
- // Runmode: kernel
- // Testidea: a child forked from a USER parent is aperiodic/admission-exempt,
- //           so a runelf-launched user process can spawn children (issue #312).
--// Input: user parent (period 100, no WCET => implicit 100% periodic); clone().
-+// Input: REAL user parent (create_user: live PMM user stack + real user
-+//        page tables, never dispatched) impersonated via ScopedCurrentTask;
-+//        clone() in the test's own context (issue #400: synthetic
-+//        flag-flipped parents are rejected fail-closed, never dispatched).
- // Expect: child period/deadline/remaining == 0; admission_exempted true;
- //         add_task_err(child) == SCHED_ERR_OK.
- // Depends: TaskControlBlock::clone user-parent rule (issue #312)
-@@ -274,40 +277,41 @@ JARVIS_TEST(admission_fork_from_user_parent_admitted, "PRE: none | POST: none")
-     static volatile uint64_t g_child_admit = 0;
-     g_child_exempt = 0;
-     g_child_admit = 0;
--    auto *parent = TaskControlBlock::create(
--        []() {
--            uint64_t regs[37] = {};
--            test::make_synthetic_clone_frame(regs);
--            auto *child = TaskControlBlock::clone(regs);
--            if (child == nullptr)
--                return;
--            g_child_period = child->period_ticks;
--            g_child_deadline = child->deadline_ticks;
--            g_child_remaining = child->remaining_ticks;
--            g_child_exempt =
--                Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
--            // Prove admission literally: register under IRQ-off (no dispatch),
--            // capture the verdict, then roll back so nothing stays queued.
--            {
--                arch::IrqGuard ig;
--                errors::SchedulerError adm = Scheduler::add_task_err(*child);
--                g_child_admit =
--                    (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
--                if (adm == errors::SCHED_ERR_OK)
--                    Scheduler::remove_task(*child);
--            }
--            child->cleanup();
--            delete child;
--        },
--        11, 100);
-+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 11, 100,
-+                                                 32_KiB);
-     JARVIS_ASSERT(parent != nullptr);
--    parent->is_user_ = true; // simulate a runelf-launched user parent
--    parent->user_stack_ = 0x80000000;
--    parent->user_stack_size_ = 32_KiB;
--    Scheduler::add_task(*parent);
--    Scheduler::reschedule();
--    kernel::test::wait_for_termination_safe(parent);
--    Scheduler::drain_zombie_list();
-+    JARVIS_ASSERT(parent->is_user_);
-+    {
-+        test::ScopedCurrentTask scope(*parent);
-+        uint64_t regs[37] = {};
-+        test::make_synthetic_clone_frame(regs);
-+        auto *child = TaskControlBlock::clone(regs);
-+        if (child == nullptr)
-+            return;
-+        g_child_period = child->period_ticks;
-+        g_child_deadline = child->deadline_ticks;
-+        g_child_remaining = child->remaining_ticks;
-+        g_child_exempt =
-+            Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
-+        // Prove admission literally: register under IRQ-off (no dispatch),
-+        // capture the verdict, then roll back so nothing stays queued.
-+        {
-+            arch::IrqGuard ig;
-+            errors::SchedulerError adm = Scheduler::add_task_err(*child);
-+            g_child_admit =
-+                (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
-+            if (adm == errors::SCHED_ERR_OK)
-+                Scheduler::remove_task(*child);
-+        }
-+        child->cleanup();
-+        delete child;
-+        // Park the never-dispatched fixture BEFORE scope exit: set_current()
-+        // re-enqueues a READY/RUNNING outgoing current, which would dispatch
-+        // this fixture on the next tick. BLOCKED currents are left alone.
-+        parent->state = TaskState::BLOCKED;
-+    }
-+    parent->cleanup();
-+    delete parent;
-     JARVIS_ASSERT_EQ(0ULL, g_child_period);
-     JARVIS_ASSERT_EQ(0ULL, g_child_deadline);
-     JARVIS_ASSERT_EQ(0ULL, g_child_remaining);
+ ### 3.1 kslot window [IMPLEMENTED]
+diff --git a/src/kernel/memory/vmm_teardown.cpp b/src/kernel/memory/vmm_teardown.cpp
+index cab980bf9..8335a9c83 100644
+--- a/src/kernel/memory/vmm_teardown.cpp
++++ b/src/kernel/memory/vmm_teardown.cpp
+@@ -442,6 +442,11 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
+                     continue;
+ 
+                 // RISC-V leaf entries have V=1, R|W|X=1.
++                // Contract (issue #401 Q2, intended): 4 KiB leaves are
++                // never inherited — a non-RAM frame (device MMIO) stays
++                // unmapped in the child (fail-closed absence, same as the
++                // x86 PT arm and issue #8 S2). Only huge/block entries
++                // inherit kernel-owned blocks by value (issue #387).
+                 if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
+                     uint64_t src_data =
+                         vmm_arch_block_base(src_l2[l2_idx], false);

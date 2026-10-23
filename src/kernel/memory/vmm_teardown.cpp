@@ -442,6 +442,11 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
                     continue;
 
                 // RISC-V leaf entries have V=1, R|W|X=1.
+                // Contract (issue #401 Q2, intended): 4 KiB leaves are
+                // never inherited — a non-RAM frame (device MMIO) stays
+                // unmapped in the child (fail-closed absence, same as the
+                // x86 PT arm and issue #8 S2). Only huge/block entries
+                // inherit kernel-owned blocks by value (issue #387).
                 if (VMM::sv39_is_leaf(src_l2[l2_idx])) {
                     uint64_t src_data =
                         vmm_arch_block_base(src_l2[l2_idx], false);

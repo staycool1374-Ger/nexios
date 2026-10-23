@@ -59,6 +59,12 @@ data pages).  `page_table_shared_ = false`.  COW deferred to a later version.
    └─ kernel half shared read-only view
 ```
 
+- Leaf vs block inheritance (issue #401 Q2, intended contract): 4 KiB
+  leaves are never inherited — a leaf pointing at a non-RAM frame
+  (device MMIO) stays unmapped in the child (fail-closed absence, x86 PT
+  arm and riscv64 L2 arm; issue #8 S2). Only huge/block entries inherit
+  kernel-owned blocks by value (issue #387).
+
 ## 3. Kernel-Stack Provisioning & Guard Pages
 
 ### 3.1 kslot window [IMPLEMENTED]
