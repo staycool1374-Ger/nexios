@@ -275,8 +275,10 @@ JARVIS_TEST(admission_fork_from_user_parent_admitted, "PRE: none | POST: none") 
     static volatile uint64_t g_child_remaining = ~0ULL;
     static volatile uint64_t g_child_exempt = 0;
     static volatile uint64_t g_child_admit = 0;
+    static volatile uint64_t g_clone_refused = 0;
     g_child_exempt = 0;
     g_child_admit = 0;
+    g_clone_refused = 0;
     auto *parent = TaskControlBlock::create_user(test::forever_entry, 11, 100,
                                                  32_KiB);
     JARVIS_ASSERT(parent != nullptr);
@@ -286,37 +288,91 @@ JARVIS_TEST(admission_fork_from_user_parent_admitted, "PRE: none | POST: none") 
         uint64_t regs[37] = {};
         test::make_synthetic_clone_frame(regs);
         auto *child = TaskControlBlock::clone(regs);
-        if (child == nullptr)
-            return;
-        g_child_period = child->period_ticks;
-        g_child_deadline = child->deadline_ticks;
-        g_child_remaining = child->remaining_ticks;
-        g_child_exempt =
-            Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
-        // Prove admission literally: register under IRQ-off (no dispatch),
-        // capture the verdict, then roll back so nothing stays queued.
-        {
-            arch::IrqGuard ig;
-            errors::SchedulerError adm = Scheduler::add_task_err(*child);
-            g_child_admit =
-                (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
-            if (adm == errors::SCHED_ERR_OK)
-                Scheduler::remove_task(*child);
+        if (child == nullptr) {
+            // Issue #400 (QE hardening): nullptr is the fail-closed verdict
+            // for SYNTHETIC parents only — a real create_user parent must
+            // clone. Park + flag, fail loudly after scope exit: a bare
+            // `return` here would skip every end-of-test assert below AND
+            // leak the never-cleaned fixture (a vacuous pass + a misleading
+            // ResourceTracker delta instead of a clear clone verdict).
+            parent->state = TaskState::BLOCKED;
+            g_clone_refused = 1;
+        } else {
+            g_child_period = child->period_ticks;
+            g_child_deadline = child->deadline_ticks;
+            g_child_remaining = child->remaining_ticks;
+            g_child_exempt =
+                Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
+            // Prove admission literally: register under IRQ-off (no dispatch),
+            // capture the verdict, then roll back so nothing stays queued.
+            {
+                arch::IrqGuard ig;
+                errors::SchedulerError adm = Scheduler::add_task_err(*child);
+                g_child_admit =
+                    (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
+                if (adm == errors::SCHED_ERR_OK)
+                    Scheduler::remove_task(*child);
+            }
+            child->cleanup();
+            delete child;
+            // Park the never-dispatched fixture BEFORE scope exit: set_current()
+            // re-enqueues a READY/RUNNING outgoing current, which would dispatch
+            // this fixture on the next tick. BLOCKED currents are left alone.
+            parent->state = TaskState::BLOCKED;
         }
-        child->cleanup();
-        delete child;
-        // Park the never-dispatched fixture BEFORE scope exit: set_current()
-        // re-enqueues a READY/RUNNING outgoing current, which would dispatch
-        // this fixture on the next tick. BLOCKED currents are left alone.
-        parent->state = TaskState::BLOCKED;
     }
     parent->cleanup();
     delete parent;
+    JARVIS_ASSERT_EQ(0ULL, g_clone_refused);
     JARVIS_ASSERT_EQ(0ULL, g_child_period);
     JARVIS_ASSERT_EQ(0ULL, g_child_deadline);
     JARVIS_ASSERT_EQ(0ULL, g_child_remaining);
     JARVIS_ASSERT_EQ(1ULL, g_child_exempt);
     JARVIS_ASSERT_EQ(1ULL, g_child_admit);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: clone() fails closed on synthetic user parents (issue #400):
+//           a flag-flipped kernel TCB with a fake user_stack_ (the #399
+//           shape) is rejected with nullptr before any allocation, so the
+//           first stack-copy iteration can never fault into a silent halt.
+// Input: REAL kernel parent (create, never dispatched) with is_user_
+//        flipped + user_stack_ 0x80000000 / 32 KiB (never dispatched,
+//        ScopedCurrentTask impersonation only); clone() in the test's own
+//        context. is_user_ is restored before teardown so cleanup() takes
+//        the kernel path and never touches the fake stack.
+// Expect: child == nullptr; ResourceTracker/PMM zero-delta (no alloc, no
+//         teardown, warn + dmesg only); fixture fully cleaned.
+// Depends: TaskControlBlock::clone #400 guard (user_parent_stack_is_live)
+JARVIS_TEST(clone_synthetic_user_parent_rejected_no_leak,
+            "PRE: none | POST: none") {
+    auto *parent = TaskControlBlock::create(test::forever_entry, 11, 100);
+    JARVIS_ASSERT(parent != nullptr);
+    JARVIS_ASSERT(!parent->is_user_);
+    parent->is_user_ = true; // synthetic shape (issue #399): never dispatched
+    parent->user_stack_ = 0x80000000;
+    parent->user_stack_size_ = 32_KiB;
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
+        auto *child = TaskControlBlock::clone(regs);
+        // Fail-closed verdict: nullptr with zero side effects. Assert here
+        // (not after scope) so a guard regression fails on this line, not
+        // on a downstream delta.
+        JARVIS_ASSERT(child == nullptr);
+        // Park the never-dispatched fixture BEFORE scope exit: set_current()
+        // re-enqueues a READY/RUNNING outgoing current, which would dispatch
+        // this fixture on the next tick. BLOCKED currents are left alone.
+        parent->state = TaskState::BLOCKED;
+    }
+    // Restore the exact create() shape before teardown: cleanup() frees the
+    // user stack only when is_user_ (complete_teardown), so the fake stack
+    // must not be visible on the kernel teardown path.
+    parent->is_user_ = false;
+    parent->cleanup();
+    delete parent;
     JARVIS_TEST_PASS();
 }
 
@@ -456,5 +512,6 @@ void register_sched_admission_tests() {
     JARVIS_REGISTER_TEST(admission_exemptions_untracked);
     JARVIS_REGISTER_TEST(admission_fork_denied_no_leak);
     JARVIS_REGISTER_TEST(admission_fork_from_user_parent_admitted);
+    JARVIS_REGISTER_TEST(clone_synthetic_user_parent_rejected_no_leak);
     JARVIS_REGISTER_TEST(admission_memory_budget_denied_at_fork);
 }

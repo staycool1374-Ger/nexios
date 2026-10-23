@@ -280,7 +280,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"timer_wheel",           8,    0,       0      },  // event-timer wheel: arm/expire/cancel/stale-gen/exhaustion/pop-cap/cpu-isolation/reset/burst (issue #17)
     {"task_metering",         9,    0,       0      },  // per-task exec-ns metering: switch-delta/no-charge/period-reset/self/other+esrch/null/terminate (issue #21) + blocked-window reset/wcet-keep (#331)
     {"sched_edf",             7,    0,       0      },  // deadline-aware preemptive scheduling: dm-order/dm-clamp/edf-first/preempt/no-thrash/exempt/miss-recover (issue #19)
-    {"sched_admission",       10,   0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny/fork-user-parent-admitted (issues #20, #312) + budget-denied-at-fork (#328) + validate-id-range-gate (#374)
+    {"sched_admission",       11,   0,       0      },  // enforced admission: lub-deny/wcet-period/untracked-exempt/implicit-defer/budget-create/exemptions/fork-deny/fork-user-parent-admitted (issues #20, #312) + budget-denied-at-fork (#328) + validate-id-range-gate (#374) + synthetic-parent-rejected-no-leak (#400 QE)
     {"sched_admission_verify", 7,   0,       0      },  // admission journeys: taskdefs-budgets/defer-retry/mode-parity/bg-guard/percpu-epsilon/budget-roundtrip/boot-parity (issue #24)
     {"aperiodic_servers",     7,    0,       0      },  // DS/BG modes: idle-preserve/topup/bursts/bg-priority/no-edf/admission-budgets/compat-default (issue #22)
 
@@ -292,7 +292,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_sync",           93,   0,       0      },  // all synchronization_* incl. pip/pcp/pi_donation/err_api (#364; measured)
     {"core_sched",          112,  0,       0      },  // all scheduler_* (#364; measured)
     {"core_task",           52,   0,       0      },  // task_* + fpu_invariants + kernel_top + per_cpu (#364; measured)
-    {"core_memory",         120,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376) + boot W^X pins (#376)
+    {"core_memory",         124,  0,       0      },  // all memory_* (#364; measured) + kernel-half runtime NX (#376) + boot W^X pins (#376) + 4 measured via dump-counts 2026-10-23 (row was stale at 120; aggregate drift, warn-only)
     {"core_syscall",        85,   0,       0      },  // syscall_* + debug_syscall + tls (#364; measured)
     {"core_tracing",        25,   0,       0      },  // path_tracer + #347 slices B/C/D (#364; measured 20, +1 teardown chain test #324 Tick 13, +1 rollback injector test #361, +2 rollback fail-first/past-end, +1 destroy-after-teardown noop #373)
     {"ipc",                 87,   0,       0      },  // all ipc_* incl. fastpath + pipe_blocking (issue #173) + 2 arrival-wake gate tests (issue #208) + snapshot IPC-quiescence (issue #321) + send_sync reply-buffer (issue #317). Row previously stale at 81; reconciled through the observed count.
@@ -311,7 +311,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"hal",                 123,   76,      78     },  // hal_* + exc_table(5, +1 exception_name #131 +1 first-chance raw ordering #308) + acpi + arch_cross + irq_early_std (issues #173, #198, #199); row was stale at 121, actual 122 pre-#274 + off-x86 H4 groups (issue #355: aarch64 +19, riscv64 +21)
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb (issue #173)
     {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain-spare/remote-refuse/quiesce-nesting (issues #173, #197)
-    {"deadline",            147,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 validate-id-range-gate (#374) + 1 pre-existing aggregate drift at HEAD
+    {"deadline",            148,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time (issues #173, #76) +9 boot/watchdog stubs (#45/#41) +5 watchdog daemon (#277) +2 blocked-window metering (#331) + 2 stress_24h (#303) + 1 budget-denied-at-fork (#328) + 1 wall accuracy bound (#319) + 1 validate-id-range-gate (#374) + 1 synthetic-parent-rejected-no-leak (#400 QE) + 1 pre-existing aggregate drift at HEAD
     {"ui",                  78,   78,      78     },  // shell_* + framebuffer + debug_dump(+4 first-chance raw #308) + sampler (issue #173) + #269 pin + 2 runelf --debug flag pin (#231) + 1 P2 key-delivery seam test (#303 item 3); off-x86 via #394 backend (fb) + #355 H3 (shell) + H4 (serial/kb/rtc)
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov (issue #173) + 5 dmesg severity/catalog/render + 1 taxonomy (issue #234)
     {"random",              17,   0,       0      },  // random_* (issue #173)
