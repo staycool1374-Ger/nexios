@@ -28,6 +28,7 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/driver/iocd.hpp>
+#include <kernel/input/serial_input.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <constants.hpp>
 
@@ -582,6 +583,70 @@ JARVIS_TEST(shell_key_delivery_via_seam, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: shell_peek_input/shell_consume_input drive the exact
+// readline fast-path seam (pump + peek + consume): injected bytes
+// surface as one contiguous run and consume drops exactly that run.
+// Input: flush RX; ring reset; inject "abc"; shell_peek_input;
+//        shell_consume_input(3); shell_peek_input.
+// Expect: peek true, len 3, bytes "abc"; consume returns 3; second
+//         peek false.
+// Depends: service shell seam + input::serial ring (issue #407)
+JARVIS_TEST(shell_peek_slice_seam, "PRE: vfsd, iocd | POST: none") {
+    serial_flush_rx();
+    kernel::input::serial::reset();
+    size_t accepted = kernel::input::serial::inject("abc", 3);
+    const char *data = nullptr;
+    size_t len = 0;
+    bool exposed = service::shell_peek_input(data, len);
+    bool bytes_match = exposed && len == 3 && memcmp(data, "abc", 3) == 0;
+    size_t consumed = service::shell_consume_input(3);
+    const char *tail = nullptr;
+    size_t tail_len = 0;
+    bool empty = !service::shell_peek_input(tail, tail_len);
+    kernel::input::serial::reset();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3),
+                      static_cast<uint64_t>(accepted));
+    JARVIS_ASSERT(bytes_match);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3),
+                      static_cast<uint64_t>(consumed));
+    JARVIS_ASSERT(empty);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: CR normalizes to newline through the shell seam
+// (anti-#245): readline's scan stops at '\n'; a raw '\r' reaching the
+// echo path would trip the async-output guard (#248). The seam must
+// expose the decoded newline, never the raw carriage return.
+// Input: flush RX; ring reset; inject "a\r"; shell_peek_input;
+//        shell_consume_input(2); shell_peek_input.
+// Expect: peek true, len 2, bytes {'a','\n'}; consume returns 2;
+//         second peek false.
+// Depends: service shell seam + push_decoded (issue #407)
+JARVIS_TEST(shell_slice_normalized_newline, "PRE: vfsd, iocd | POST: none") {
+    serial_flush_rx();
+    kernel::input::serial::reset();
+    size_t accepted = kernel::input::serial::inject("a\r", 2);
+    const char *data = nullptr;
+    size_t len = 0;
+    bool exposed = service::shell_peek_input(data, len);
+    bool bytes_match = exposed && len == 2 && data[0] == 'a' &&
+                       data[1] == '\n';
+    size_t consumed = service::shell_consume_input(2);
+    const char *tail = nullptr;
+    size_t tail_len = 0;
+    bool empty = !service::shell_peek_input(tail, tail_len);
+    kernel::input::serial::reset();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                      static_cast<uint64_t>(accepted));
+    JARVIS_ASSERT(bytes_match);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                      static_cast<uint64_t>(consumed));
+    JARVIS_ASSERT(empty);
+    JARVIS_TEST_PASS();
+}
+
 void register_shell_interaction_tests() {
     Logger::info("Registering shell interaction tests");
     JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
@@ -604,6 +669,8 @@ void register_shell_interaction_tests() {
     JARVIS_REGISTER_RELEASE_TEST(shell_clear_command);
     JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
     JARVIS_REGISTER_TEST(shell_key_delivery_via_seam);
+    JARVIS_REGISTER_TEST(shell_peek_slice_seam); // issue #407
+    JARVIS_REGISTER_TEST(shell_slice_normalized_newline); // issue #407
 }
 #elif defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
 #include <test.hpp>
@@ -612,6 +679,7 @@ void register_shell_interaction_tests() {
 #include <services/terminal/terminal.hpp>
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/arch/serial.hpp>
+#include <kernel/input/serial_input.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/timer.hpp>
 #include <string.hpp>
@@ -1026,6 +1094,78 @@ JARVIS_TEST(shell_key_via_decoder_seam, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: shell_peek_input/shell_consume_input drive the exact
+// readline fast-path seam (pump + peek + consume): injected bytes
+// surface as one contiguous run and consume drops exactly that run.
+// Input: drain UART; ring reset; inject "abc"; shell_peek_input;
+//        shell_consume_input(3); shell_peek_input.
+// Expect: peek true, len 3, bytes "abc"; consume returns 3; second
+//         peek false.
+// Depends: service shell seam + input::serial ring (issue #407)
+JARVIS_TEST(shell_peek_slice_seam, "PRE: vfsd, iocd | POST: none") {
+    for (int i = 0; i < 64; ++i) {
+        char junk = 0;
+        if (!Serial::poll_getchar(junk))
+            break;
+    }
+    kernel::input::serial::reset();
+    size_t accepted = kernel::input::serial::inject("abc", 3);
+    const char *data = nullptr;
+    size_t len = 0;
+    bool exposed = service::shell_peek_input(data, len);
+    bool bytes_match = exposed && len == 3 && memcmp(data, "abc", 3) == 0;
+    size_t consumed = service::shell_consume_input(3);
+    const char *tail = nullptr;
+    size_t tail_len = 0;
+    bool empty = !service::shell_peek_input(tail, tail_len);
+    kernel::input::serial::reset();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3),
+                      static_cast<uint64_t>(accepted));
+    JARVIS_ASSERT(bytes_match);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(3),
+                      static_cast<uint64_t>(consumed));
+    JARVIS_ASSERT(empty);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: CR normalizes to newline through the shell seam
+// (anti-#245): readline's scan stops at '\n'; a raw '\r' reaching the
+// echo path would trip the async-output guard (#248). The seam must
+// expose the decoded newline, never the raw carriage return.
+// Input: drain UART; ring reset; inject "a\r"; shell_peek_input;
+//        shell_consume_input(2); shell_peek_input.
+// Expect: peek true, len 2, bytes {'a','\n'}; consume returns 2;
+//         second peek false.
+// Depends: service shell seam + push_decoded (issue #407)
+JARVIS_TEST(shell_slice_normalized_newline, "PRE: vfsd, iocd | POST: none") {
+    for (int i = 0; i < 64; ++i) {
+        char junk = 0;
+        if (!Serial::poll_getchar(junk))
+            break;
+    }
+    kernel::input::serial::reset();
+    size_t accepted = kernel::input::serial::inject("a\r", 2);
+    const char *data = nullptr;
+    size_t len = 0;
+    bool exposed = service::shell_peek_input(data, len);
+    bool bytes_match = exposed && len == 2 && data[0] == 'a' &&
+                       data[1] == '\n';
+    size_t consumed = service::shell_consume_input(2);
+    const char *tail = nullptr;
+    size_t tail_len = 0;
+    bool empty = !service::shell_peek_input(tail, tail_len);
+    kernel::input::serial::reset();
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                      static_cast<uint64_t>(accepted));
+    JARVIS_ASSERT(bytes_match);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(2),
+                      static_cast<uint64_t>(consumed));
+    JARVIS_ASSERT(empty);
+    JARVIS_TEST_PASS();
+}
+
 void register_shell_interaction_tests() {
     Logger::info("Registering shell interaction tests");
     JARVIS_REGISTER_RELEASE_TEST(shell_loopback_manual_string);
@@ -1048,5 +1188,7 @@ void register_shell_interaction_tests() {
     JARVIS_REGISTER_RELEASE_TEST(shell_clear_command);
     JARVIS_REGISTER_RELEASE_TEST(shell_tasks_memory_columns);
     JARVIS_REGISTER_TEST(shell_key_via_decoder_seam);
+    JARVIS_REGISTER_TEST(shell_peek_slice_seam); // issue #407
+    JARVIS_REGISTER_TEST(shell_slice_normalized_newline); // issue #407
 }
 #endif // CONFIG_ARCH_X86_64
