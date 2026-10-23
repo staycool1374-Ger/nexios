@@ -4742,3 +4742,5 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-10-23 16:57:30 arch_riscv64 PASSED: 31 FAILED: 0 TIME: 967ms
 2026-10-23 16:58:08 synchronization_irq_guard PASSED: 4 FAILED: 0 TIME: 271ms
 2026-10-23 16:58:50 ui PASSED: 19 FAILED: 0 TIME: 3183ms STATUS: x86_64-release
+2026-10-23 17:07:43 shell_interaction PASSED: 22 FAILED: 0 TIME: 3696ms STATUS: #407-item2-redraw-fix
+2026-10-23 17:08:14 selftest PASSED: 150 FAILED: 0 TIME: 12200ms STATUS: #407-item2-redraw-fix

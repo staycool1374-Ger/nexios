@@ -559,12 +559,17 @@ static void draw_prompt(int exit_code) {
 static bool flush_urcs() {
     using kernel::console::urc::kDrainMaxPerPass;
     using kernel::console::urc::kLineMax;
+    // Nothing queued and nothing dropped: the prompt sitting mid-line is
+    // normal state, not async output — return without printing so the
+    // idle branch does not redraw every pass (prompt loop).
+    const size_t dropped = kernel::console::urc::take_dropped();
+    if (!kernel::console::urc::pending() && dropped == 0)
+        return false;
     bool printed = false;
     if (!Terminal::at_line_start()) {
         Terminal::putchar('\n');
         printed = true;
     }
-    const size_t dropped = kernel::console::urc::take_dropped();
     if (dropped > 0) {
         // Bounded decimal render, no Logger (the drain path must not
         // recurse into queued producers).
