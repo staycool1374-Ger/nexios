@@ -4,25 +4,35 @@
 
 ### Interactive Session
 
-```bash
-make gdb
-```
-
-This builds the debug ISO and starts QEMU with the GDB stub on `:1234` (CPU frozen). In a second terminal:
+Build a steppable kernel, boot it to the shell, and freeze it on the
+GDB stub — exact commands in `docs/clion-setup.md` §4.1–4.2
+(`make debug NO_LTO=1`, `test-config.txt` to `none`, frozen QEMU with
+`-s -S`). In a second terminal:
 
 ```bash
 x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb
 ```
 
-The init script auto-connects and loads the kernel Python plugin.
+The init script auto-connects to `:1234` and loads the kernel Python
+plugin. Then `continue` to release the frozen CPU.
+
+Scripted alternative (boots to shell and types a command file):
+
+```bash
+make debug-shell x86_64 debug none tools/gdb/init.gdb <shell-commands-file>
+```
 
 ### Automated Panic Capture
 
 ```bash
-make test-gdb
+make debug-test x86_64 debug <class> tools/gdb/test-batch.gdb
 ```
 
-Runs the full test suite under GDB surveillance. If `panic()` is called, GDB captures the full backtrace, registers, and task state, then exits with error. If no panic occurs, exits cleanly.
+Builds the class, boots it under GDB surveillance with the stub on
+`:1234`, and runs the batch script. If `panic()` fires, GDB captures
+the full backtrace, registers, and task state
+(`build/gdb-panic-captured` is touched, exit code 1); serial goes to
+`build/gdb-serial.log`. Example: `class=testrunner`.
 
 ## Custom GDB Commands
 
@@ -54,7 +64,7 @@ The following types auto-format when printed with `p`:
 ### Debug a Kernel Panic
 
 ```bash
-make gdb
+# Terminal 1: frozen QEMU as in Quick Start above
 # Terminal 2:
 x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb
 (gdb) continue
@@ -104,8 +114,8 @@ The kernel maps all physical memory at `0xFFFF800000000000 + phys_addr` (HHDM). 
 
 | Location | File:Line | Purpose |
 |----------|-----------|---------|
-| `panic` | `kernel.cpp:344` | Kernel panic (any reason) |
-| `handle_interrupt_c` | `kernel.cpp:502` | All exceptions + interrupts |
+| `panic` | `kernel.cpp:1765` | Kernel panic (any reason) |
+| `handle_interrupt_c` | `kernel.cpp:2300` | All exceptions + interrupts |
 | `handle_interrupt_c if vector == 14` | — | Page fault only |
 | `handle_interrupt_c if vector == 13` | — | General protection fault |
 | `handle_interrupt_c if vector == 8` | — | Double fault |
