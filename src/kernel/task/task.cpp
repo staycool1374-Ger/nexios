@@ -1520,6 +1520,9 @@ static bool user_parent_stack_is_live(const TaskControlBlock &parent) noexcept {
 /// Allocates a new TCB and kernel stack, copies parent's fd table, FPU state,
 /// signal handlers, and process hierarchy. For user tasks, clones the page
 /// table and copies user stack contents with COW semantics for code/data pages.
+/// On non-x86_64 the parent's live FP/SIMD registers are flushed into
+/// parent->fpu_state before the child copy (issue #403: eager-switch arches
+/// have no trap-time save); on x86_64 the lazy owner check is unchanged.
 /// @param regs  Pointer to the saved register frame from the fork syscall.
 /// @return  Pointer to the new child TCB, or nullptr on failure.
 TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
@@ -1653,7 +1656,20 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         ++parent->fpu_state_gen;
     }
 #else
-    (void)parent;
+    // Issue #403: aarch64/riscv64 switch FP eagerly, and only inside
+    // scheduler_on_context_switch. A synchronous fork trap performs no
+    // switch, so the parent's live FP regs are still unflushed here;
+    // materialize them before the child copy (mirrors the x86 fxsave).
+    // The gate mirrors the eager switch (docs/specs/fpu-context.md §7):
+    // only user-side FP state is tracked (kernel code carries no FP
+    // instructions) and fpu_available() keeps the degraded, FP-absent
+    // path from executing save instructions.
+    if (parent->is_user_ && arch::fpu_available()) {
+        arch::fpu_ensure_enabled();
+        arch::fpu_save(parent->fpu_state);
+        parent->fpu_used = true;
+        ++parent->fpu_state_gen;
+    }
 #endif
     // Copy FPU state to child (full arch area, not hardcoded 512 —
     // issue #353: NEON needs 528, riscv F/D 272).

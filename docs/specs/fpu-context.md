@@ -86,7 +86,9 @@ Landed in `TaskControlBlock`:
 
 512 bytes × max tasks is bounded (e.g. 64 user tasks ⇒ 32 KiB); fork deep-copy
 copies the area by value like any other TCB field (task.cpp clone: memcpy 512
-+ fpu_state_gen copy).
++ fpu_state_gen copy). On the eager arches (§7) the parent's live registers
+are flushed into `fpu_state` at the top of `clone()` (issue #403) — the TCB
+area alone is stale between switches.
 
 ### 3.2 Reentrancy rule (landed)
 
@@ -154,7 +156,7 @@ x86 stays lazy (#NM + `fpu_owner` protocol, §0-§5 unchanged). aarch64
 | Area | 528 B: Q0-Q31 (512) + FPCR/FPSR (8) + reserved (8) | 272 B: f0-f31 (256) + fcsr (4) + reserved (12) |
 | Detect | `ID_AA64PFR0_EL1` FP+AdvSIMD (`has_fpu`) | sstatus.FS write test (MISA is M-mode-only) |
 | Enable | CPACR_EL1.FPEN=11b | sstatus.FS=11b |
-| Switch | `fpu_switch_area` in `scheduler_on_context_switch` (save old, restore new) iff either side is a user task | same |
+| Switch | `fpu_switch_area` in `scheduler_on_context_switch` (save old, restore new) iff either side is a user task; fork flushes the parent's live area (task.cpp `clone`, issue #403) | same |
 | Trap | EC=0x07 fires only when disabled/absent → terminate path (no resume surgery; enable is sticky-global) | illegal-insn with FS=0 → same |
 
 Soundness basis: the kernel image contains no FP/SIMD instructions
