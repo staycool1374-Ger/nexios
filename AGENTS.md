@@ -91,11 +91,18 @@ If the branch does not match the intended role, do not proceed.
 ## Cross-Arch Parity (MANDATORY — effective immediately)
 Every implementation ships on all three architectures (`x86_64`, `aarch64`, `riscv64`) in the same cycle — real implementation or documented arch-equivalent, in both directions. Single-arch-only work is not done: no deferring the other two arches to "later" without a tracked follow-up issue, and a follow-up issue does not substitute for shipping. Done means all three arches build and link green plus the arch test classes (`arch_aarch64`, `arch_riscv64`) exercised where the change touches arch-visible behavior. A planner plan scoped to one arch without the other two is rejected; an audit finding single-arch-only code without the above evidence is REJECTED.
 
-## Session Start
+## Session Start (MANDATORY — no step skippable by the agent)
+Execute every step below at the start of every session, without exception.
+No step may be skipped on self-authorized grounds — not for resumed context,
+prior familiarity, perceived redundancy, or a directly-given role. A role
+given directly by the user satisfies the ask-step only, never the
+read-steps. Do not delegate to any subagent, write/edit code, or run
+builds/tests until all reads below are loaded; confirm completion by naming
+each file read in the first response.
 - Determine current branch with `git branch --show-current`
-- Ask the user: **"Developer or Quality Engineer?"**
-- If `developer`: read `PROMPT-dev.md` for full role instructions
-- If `quality engineer` (`testbed` branch): read `PROMPT-testdev.md` for full role instructions
+- Ask the user: **"Developer or Quality Engineer?"** (skip only if the user already gave the role with the current request)
+- If `developer`: read `prompts/PROMPT-dev.md` for full role instructions (includes Test sanctity: test files are read-only, new tests land on `testbed` only)
+- If `quality engineer` (`testbed` branch): read `prompts/PROMPT-testdev.md` for full role instructions
 - If neither: halt
 - Also read `prompts/AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
 - Read `prompts/CODING_STYLE.md` — mandatory for all code changes in every role
