@@ -33,7 +33,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.5 — Full Compatibility & Functional State for AARCH64 and RISCV64 (1862 debug tests, 89 release tests: TACT framework adoption, RX ring + URC console discipline, FPU fork inheritance, 3-arch full gates)
+* **Status:** v0.5.5 — Full Compatibility & Functional State for AARCH64 and RISCV64, FPU fork inheritance
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -91,19 +91,12 @@ Done roadmap archived in `prompts/README_done.md`.
 ## Recent Release Highlights
 
 ### **v0.5.5 — Full Compatibility & Functional State for AARCH64 and RISCV64**
-* **TACT Framework Adoption (#407):** config range guards, declarative test-policy table, host chain runner (panic-capture/ring-dump/shell-smoke chains), poll-fed RX ring with zero-copy shell slices, prefix-registered URC console discipline drained at prompt redraw (+ prompt-loop fix).
 * **FPU & Multi-Arch Parity:** parent FP flush on non-x86 clone fork path (#403), 3-arch full gates green (x86_64 26/26, aarch64 22/22, riscv64 19/19), off-arch release documented as x86-only (#207).
 * **Harness & Docs:** shell-smoke E2E chain on release, dump-counts reconciliation, CLion native-Meson setup + live GDB-stub guide.
-* **Full Gates Green:** debug 26/26 (1862/1862), release 24/24 (89/89), `make build` Errors 0 (one core_sched exit-record flake + one hal TCG stall, both cleared by clean reruns).
 
 ### **v0.5.4 — Stabilization & Bugfixing**
 * **Scheduler Decomposition & Lifecycle:** scheduler split into 16 focused TUs (#323), task creation/lifecycle/cleanup audit with deferred-kill handshake (#324), scheduler post-split hardening (#369).
 * **Tracing & Modernization:** XOR→order-sensitive path-tracer fold (#347/#362), C++20 nodiscard/span/concepts sweep (#348), core aggregate split into 7 classes (#364), count reconciliation (#342).
-
-### **v0.5.3 — User Space Enhancements**
-* **Microkernel Services Live:** ramdiskd block service (8×2 MiB, chunked IPC, lazy mapping) with ramdisk_fs mount/file ops + loadelf/runelf support, 
-* **XMODEM Utilities:** host XMODEM/upload tooling, and the watchdogd supervision daemon.
-* **Userspace enhancements* initrd /bin hierarchy, sh PATH lookup + export, English shell strings + unified terminal core, and Rust no_std hello-world user ELF with pinned toolchain.
 
 ---
 
