@@ -1481,6 +1481,41 @@ void TaskControlBlock::restore_context(uint64_t &rsp) noexcept {
 }
 #endif
 
+/// @brief Fail-closed admission check for clone() user parents (issue #400).
+/// A user-marked parent must own a live, page-aligned PMM USER block of
+/// user_stack_size_ bytes: exactly the pages the stack-copy loop reads via
+/// HHDM. Synthetic shapes (flag-flipped kernel TCBs with a fake
+/// user_stack_, issue #399 verdict) fault on the first copy iteration into
+/// a silent halt, so they are rejected here with no allocation and no
+/// teardown. PMM::free_page clears only the allocation bit, never the
+/// owner bit, hence is_allocated() && is_user_page() (either alone admits
+/// a freed page). Bounded: at most total_memory()/PAGE_SIZE iterations.
+/// @param parent  Candidate user-marked parent.
+/// @return true iff every stack page is a live PMM USER page.
+static bool user_parent_stack_is_live(const TaskControlBlock &parent) noexcept {
+    const uint64_t phys = parent.user_stack_;
+    const uint64_t size = parent.user_stack_size_;
+    if (phys == 0 || size == 0)
+        return false;
+    if ((phys % arch::PAGE_SIZE) != 0)
+        return false;
+    // Geometric bound: keeps the size math overflow-free and the stack
+    // within the user address range.
+    if (size > USER_SPACE_LIMIT - (mem::STACK_VADDR + arch::PAGE_SIZE))
+        return false;
+    const uint64_t pages = (size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+    if (phys > PMM::total_memory())
+        return false;
+    if (pages > (PMM::total_memory() - phys) / arch::PAGE_SIZE)
+        return false;
+    for (uint64_t idx = 0; idx < pages; ++idx) {
+        const uint64_t page = phys + idx * arch::PAGE_SIZE;
+        if (!PMM::is_allocated(page) || !PMM::is_user_page(page))
+            return false;
+    }
+    return true;
+}
+
 /// @brief Clones the current task (fork).
 /// Allocates a new TCB and kernel stack, copies parent's fd table, FPU state,
 /// signal handlers, and process hierarchy. For user tasks, clones the page
@@ -1491,6 +1526,20 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     auto *parent = Scheduler::current_task();
     if (!parent)
         return nullptr;
+
+    const bool is_user_parent = parent->is_user_;
+    if (is_user_parent && !user_parent_stack_is_live(*parent)) {
+        // Issue #400: synthetic user parent (no live PMM user stack).
+        // Nothing allocated yet, so no teardown — return nullptr with
+        // zero side effects and zero PMM mutation.
+        Logger::warn("TCB::clone: bad user parent stack %llu size %llu",
+                     parent->user_stack_, parent->user_stack_size_);
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 7, log::LogSeverity::ERROR,
+                            "TCB::clone: bad user parent stack",
+                            parent->user_stack_size_);
+        return nullptr;
+    }
 
     auto *tcb = static_cast<TaskControlBlock *>(
         MemPool::alloc(sizeof(TaskControlBlock)));
@@ -1522,7 +1571,6 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     // parent inherits as today, preserving the admission_fork_denied_no_leak
     // contract (kernel forker).  deadline_ticks == 0 makes the child
     // admission-exempt (admission_exempted, I-4).
-    const bool is_user_parent = parent->is_user_;
     tcb->period_ticks = is_user_parent ? 0 : parent->period_ticks;
     tcb->deadline_ticks = is_user_parent ? 0 : parent->deadline_ticks;
     tcb->executed_ticks = 0;

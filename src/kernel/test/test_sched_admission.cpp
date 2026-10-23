@@ -262,7 +262,10 @@ JARVIS_TEST(admission_exemptions_untracked, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: a child forked from a USER parent is aperiodic/admission-exempt,
 //           so a runelf-launched user process can spawn children (issue #312).
-// Input: user parent (period 100, no WCET => implicit 100% periodic); clone().
+// Input: REAL user parent (create_user: live PMM user stack + real user
+//        page tables, never dispatched) impersonated via ScopedCurrentTask;
+//        clone() in the test's own context (issue #400: synthetic
+//        flag-flipped parents are rejected fail-closed, never dispatched).
 // Expect: child period/deadline/remaining == 0; admission_exempted true;
 //         add_task_err(child) == SCHED_ERR_OK.
 // Depends: TaskControlBlock::clone user-parent rule (issue #312)
@@ -274,40 +277,41 @@ JARVIS_TEST(admission_fork_from_user_parent_admitted, "PRE: none | POST: none") 
     static volatile uint64_t g_child_admit = 0;
     g_child_exempt = 0;
     g_child_admit = 0;
-    auto *parent = TaskControlBlock::create(
-        []() {
-            uint64_t regs[37] = {};
-            test::make_synthetic_clone_frame(regs);
-            auto *child = TaskControlBlock::clone(regs);
-            if (child == nullptr)
-                return;
-            g_child_period = child->period_ticks;
-            g_child_deadline = child->deadline_ticks;
-            g_child_remaining = child->remaining_ticks;
-            g_child_exempt =
-                Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
-            // Prove admission literally: register under IRQ-off (no dispatch),
-            // capture the verdict, then roll back so nothing stays queued.
-            {
-                arch::IrqGuard ig;
-                errors::SchedulerError adm = Scheduler::add_task_err(*child);
-                g_child_admit =
-                    (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
-                if (adm == errors::SCHED_ERR_OK)
-                    Scheduler::remove_task(*child);
-            }
-            child->cleanup();
-            delete child;
-        },
-        11, 100);
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 11, 100,
+                                                 32_KiB);
     JARVIS_ASSERT(parent != nullptr);
-    parent->is_user_ = true; // simulate a runelf-launched user parent
-    parent->user_stack_ = 0x80000000;
-    parent->user_stack_size_ = 32_KiB;
-    Scheduler::add_task(*parent);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(parent);
-    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT(parent->is_user_);
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
+        auto *child = TaskControlBlock::clone(regs);
+        if (child == nullptr)
+            return;
+        g_child_period = child->period_ticks;
+        g_child_deadline = child->deadline_ticks;
+        g_child_remaining = child->remaining_ticks;
+        g_child_exempt =
+            Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
+        // Prove admission literally: register under IRQ-off (no dispatch),
+        // capture the verdict, then roll back so nothing stays queued.
+        {
+            arch::IrqGuard ig;
+            errors::SchedulerError adm = Scheduler::add_task_err(*child);
+            g_child_admit =
+                (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
+            if (adm == errors::SCHED_ERR_OK)
+                Scheduler::remove_task(*child);
+        }
+        child->cleanup();
+        delete child;
+        // Park the never-dispatched fixture BEFORE scope exit: set_current()
+        // re-enqueues a READY/RUNNING outgoing current, which would dispatch
+        // this fixture on the next tick. BLOCKED currents are left alone.
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
     JARVIS_ASSERT_EQ(0ULL, g_child_period);
     JARVIS_ASSERT_EQ(0ULL, g_child_deadline);
     JARVIS_ASSERT_EQ(0ULL, g_child_remaining);

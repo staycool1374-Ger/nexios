@@ -976,7 +976,9 @@ struct TaskControlBlock {
     /// @param regs Register save area from the interrupt (to copy
     /// RIP/RSP/regs).
     /// @return Pointer to the new child TaskControlBlock, or nullptr
-    /// on failure.
+    /// on failure. A user-marked parent must own a live, page-aligned
+    /// PMM USER block of user_stack_size_ bytes (issue #400); synthetic
+    /// parents fail closed with nullptr and zero side effects.
     static TaskControlBlock *clone(uint64_t *regs);
     /// @brief Clones the current task with error code.
     /// @param regs Register save area from the interrupt.

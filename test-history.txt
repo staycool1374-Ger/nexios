@@ -4670,3 +4670,10 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-10-22 19:53:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 403ms STATUS: #352-aarch64-walk-port
 2026-10-22 19:53:00 process_pml4_clone PASSED: 9 FAILED: 4 TIME: 0 STATUS: #352-riscv64-allowlist-walk-take1-time-uncaptured
 2026-10-22 19:54:00 process_pml4_clone PASSED: 13 FAILED: 0 TIME: 465ms STATUS: #352-riscv64-walk-port-final
+2026-10-22 22:53:42 memory_vmm PASSED: 18 FAILED: 0 TIME: 4s STATUS: #365-post-merge-x86_64
+2026-10-22 22:54:14 memory_vmm PASSED: 15 FAILED: 0 TIME: 1s STATUS: #365-post-merge-aarch64
+2026-10-22 22:54:40 memory_vmm PASSED: 15 FAILED: 0 TIME: 1s STATUS: #365-post-merge-riscv64
+2026-10-23 00:24:05 sched_admission PASSED: 10 FAILED: 0 TIME: 4s STATUS: #400-guard-plus-fixture-port
+2026-10-23 00:24:26 task_core PASSED: 7 FAILED: 0 TIME: 3s STATUS: #400-guard
+2026-10-23 00:24:49 process_lifecycle PASSED: 16 FAILED: 0 TIME: 3s STATUS: #400-guard
+2026-10-23 00:25:16 elf_loader PASSED: 25 FAILED: 0 TIME: 5s STATUS: #400-guard

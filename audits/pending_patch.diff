@@ -1,224 +1,181 @@
-diff --git a/src/kernel/memory/vmm.hpp b/src/kernel/memory/vmm.hpp
-index 4d561ee64..75cb4a8ee 100644
---- a/src/kernel/memory/vmm.hpp
-+++ b/src/kernel/memory/vmm.hpp
-@@ -374,6 +374,9 @@ class VMM {
-     /// space. Skips kernel-owned pages (PMM::is_user_page owner-bit
-     /// check) — v0.4.0 MP-7: no task shares another's user entries, so
-     /// this is always the full teardown of a private address space.
-+    /// Defensive block sites (1 GiB / 2 MiB) validate level alignment
-+    /// via decode_block_base and skip misaligned entries, never freeing
-+    /// them: no in-tree producer creates user huge/block leaves (#365).
-     /// @param pml4_phys Physical address of the user PML4.
-     /// @brief Deep-copy user-space page tables from src_pml4 to dst_pml4.
-     ///        Allocates new PDPT/PD/PT pages and copies data page content.
-diff --git a/src/kernel/memory/vmm_internal.hpp b/src/kernel/memory/vmm_internal.hpp
-index 3f173def0..98c823881 100644
---- a/src/kernel/memory/vmm_internal.hpp
-+++ b/src/kernel/memory/vmm_internal.hpp
-@@ -76,24 +76,45 @@ void arm_test_touch_flags(bool arm_hhdm, bool arm_identity);
- // Cap for bounded throttled diagnostics (issue #254 H5: was a raw 24).
- inline constexpr uint64_t kFupSkipLogCap = 24;
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 5b24b8012..329aa21e3 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -1481,6 +1481,41 @@ void TaskControlBlock::restore_context(uint64_t &rsp) noexcept {
+ }
+ #endif
  
--// Page-offset / block-base masks (issue #363 checkbox 2): single named
--// definitions replacing inline 0xFFF/0x1FFFFF/0x3FFFFF literals. All arches
--// use 4 KiB base pages; x86_64/aarch64 split 2 MiB huge leaves, the PDPT
--// free path reasons about 1 GiB block bases.
-+// Page-offset / block-base masks (issue #363 checkbox 2, #365 1 GiB):
-+// single named definitions replacing inline 0xFFF/0x1FFFFF/0x3FFFFFFF
-+// literals. All arches use 4 KiB base pages; x86_64/aarch64 split 2 MiB
-+// huge leaves, the PDPT free path reasons about 1 GiB block bases.
- inline constexpr uint64_t kPageOffsetMask = 0xFFFULL;
- inline constexpr uint64_t kHuge2MOffsetMask = 0x1FFFFFULL;
- inline constexpr uint64_t kHuge2MBaseMask = ~0x1FFFFFULL;
--inline constexpr uint64_t kPdptBlockBaseMask = ~0x3FFFFFULL;
- static_assert(kPageOffsetMask + 1 == CONFIG_PAGE_SIZE,
-               "page offset mask must match the base page size");
- static_assert(kHuge2MOffsetMask == 512 * CONFIG_PAGE_SIZE - 1,
-               "2M offset mask must cover exactly one huge leaf");
- static_assert(kHuge2MBaseMask == ~kHuge2MOffsetMask,
-               "huge base mask must be the offset mask complement");
--// NOTE: kPdptBlockBaseMask preserves the pre-split 22-bit shape verbatim
--// (free_user_pages PDPT-block base). It is deliberately NOT re-derived
--// from 1 GiB geometry here — any reinterpretation needs an owner decision
--// (issue #363 follow-up), so no static_assert pins a geometry claim.
-+// 1 GiB block geometry (issue #365): the only multi-megabyte level the
-+// teardown free path reasons about. x86_64 PDPT and aarch64 L1 blocks
-+// share this level; riscv64 has no 1 GiB user leaf, only the defensive
-+// L0 site. Decoded bases come from the per-arch frame codec
-+// (vmm_arch_block_base / sv39_pte_phys) — never a raw PTE mask.
-+inline constexpr uint64_t kBlock1GOffsetMask = 0x3FFFFFFFULL;
-+inline constexpr uint64_t kBlock1GBaseMask = ~kBlock1GOffsetMask;
-+static_assert(kBlock1GOffsetMask + 1 == 512ULL * (kHuge2MOffsetMask + 1),
-+              "1 GiB block must be exactly 512 x 2 MiB");
-+static_assert(kBlock1GBaseMask == ~kBlock1GOffsetMask,
-+              "1 GiB base mask must be the offset complement");
-+
-+/// @brief Validate an arch-decoded block base against level alignment.
-+/// @param phys Already arch-decoded physical base (never a raw PTE).
-+/// @param offset_mask Level offset mask (kHuge2M/Block1GOffsetMask).
-+/// @param out_base Decoded base, written only when aligned.
-+/// @return True when phys is level-aligned; false means reject-before-use
-+///         — callers skip the entry, never free it (see #365).
-+[[nodiscard]] constexpr bool decode_block_base(uint64_t phys,
-+                                               uint64_t offset_mask,
-+                                               uint64_t &out_base) noexcept {
-+    if ((phys & offset_mask) != 0)
++/// @brief Fail-closed admission check for clone() user parents (issue #400).
++/// A user-marked parent must own a live, page-aligned PMM USER block of
++/// user_stack_size_ bytes: exactly the pages the stack-copy loop reads via
++/// HHDM. Synthetic shapes (flag-flipped kernel TCBs with a fake
++/// user_stack_, issue #399 verdict) fault on the first copy iteration into
++/// a silent halt, so they are rejected here with no allocation and no
++/// teardown. PMM::free_page clears only the allocation bit, never the
++/// owner bit, hence is_allocated() && is_user_page() (either alone admits
++/// a freed page). Bounded: at most total_memory()/PAGE_SIZE iterations.
++/// @param parent  Candidate user-marked parent.
++/// @return true iff every stack page is a live PMM USER page.
++static bool user_parent_stack_is_live(const TaskControlBlock &parent) noexcept {
++    const uint64_t phys = parent.user_stack_;
++    const uint64_t size = parent.user_stack_size_;
++    if (phys == 0 || size == 0)
 +        return false;
-+    out_base = phys & ~offset_mask;
++    if ((phys % arch::PAGE_SIZE) != 0)
++        return false;
++    // Geometric bound: keeps the size math overflow-free and the stack
++    // within the user address range.
++    if (size > USER_SPACE_LIMIT - (mem::STACK_VADDR + arch::PAGE_SIZE))
++        return false;
++    const uint64_t pages = (size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
++    if (phys > PMM::total_memory())
++        return false;
++    if (pages > (PMM::total_memory() - phys) / arch::PAGE_SIZE)
++        return false;
++    for (uint64_t idx = 0; idx < pages; ++idx) {
++        const uint64_t page = phys + idx * arch::PAGE_SIZE;
++        if (!PMM::is_allocated(page) || !PMM::is_user_page(page))
++            return false;
++    }
 +    return true;
 +}
++
+ /// @brief Clones the current task (fork).
+ /// Allocates a new TCB and kernel stack, copies parent's fd table, FPU state,
+ /// signal handlers, and process hierarchy. For user tasks, clones the page
+@@ -1492,6 +1527,20 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     if (!parent)
+         return nullptr;
  
- /// @brief Hex-value diagnostic writer (debugcon port IO only).
- void write_hex_debugcon(uint64_t val);
-diff --git a/src/kernel/memory/vmm_teardown.cpp b/src/kernel/memory/vmm_teardown.cpp
-index 1fcf298de..cab980bf9 100644
---- a/src/kernel/memory/vmm_teardown.cpp
-+++ b/src/kernel/memory/vmm_teardown.cpp
-@@ -43,6 +43,19 @@ namespace kernel {
- ///        code segments).  Yields every 64 leaf entries so higher-priority
- ///        tasks can run during teardown of large address spaces.
- void VMM::free_user_pages(uint64_t pml4_phys) {
-+    // v0.3.11: bounded diagnostic — log page-table pages skipped because
-+    // their owner bit is KERNEL or their block base is misaligned
-+    // (free_user_pages only frees USER-owned, level-aligned block bases).
-+    // Hoisted above the arch split so riscv64 shares the same diagnostic.
-+    static uint64_t s_fup_skip_log = 0;
-+    auto log_skip = [](const char *lvl, uint64_t phys) {
-+        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
-+            kFupSkipLogCap)
++    const bool is_user_parent = parent->is_user_;
++    if (is_user_parent && !user_parent_stack_is_live(*parent)) {
++        // Issue #400: synthetic user parent (no live PMM user stack).
++        // Nothing allocated yet, so no teardown — return nullptr with
++        // zero side effects and zero PMM mutation.
++        Logger::warn("TCB::clone: bad user parent stack %llu size %llu",
++                     parent->user_stack_, parent->user_stack_size_);
++        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
++                            log::kDmesgBase_TASK + 7, log::LogSeverity::ERROR,
++                            "TCB::clone: bad user parent stack",
++                            parent->user_stack_size_);
++        return nullptr;
++    }
++
+     auto *tcb = static_cast<TaskControlBlock *>(
+         MemPool::alloc(sizeof(TaskControlBlock)));
+     if (!tcb)
+@@ -1522,7 +1571,6 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+     // parent inherits as today, preserving the admission_fork_denied_no_leak
+     // contract (kernel forker).  deadline_ticks == 0 makes the child
+     // admission-exempt (admission_exempted, I-4).
+-    const bool is_user_parent = parent->is_user_;
+     tcb->period_ticks = is_user_parent ? 0 : parent->period_ticks;
+     tcb->deadline_ticks = is_user_parent ? 0 : parent->deadline_ticks;
+     tcb->executed_ticks = 0;
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 2c0b050fe..966427bcb 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -976,7 +976,9 @@ struct TaskControlBlock {
+     /// @param regs Register save area from the interrupt (to copy
+     /// RIP/RSP/regs).
+     /// @return Pointer to the new child TaskControlBlock, or nullptr
+-    /// on failure.
++    /// on failure. A user-marked parent must own a live, page-aligned
++    /// PMM USER block of user_stack_size_ bytes (issue #400); synthetic
++    /// parents fail closed with nullptr and zero side effects.
+     static TaskControlBlock *clone(uint64_t *regs);
+     /// @brief Clones the current task with error code.
+     /// @param regs Register save area from the interrupt.
+diff --git a/src/kernel/test/test_sched_admission.cpp b/src/kernel/test/test_sched_admission.cpp
+index f10e4d609..da9397c12 100644
+--- a/src/kernel/test/test_sched_admission.cpp
++++ b/src/kernel/test/test_sched_admission.cpp
+@@ -262,7 +262,10 @@ JARVIS_TEST(admission_exemptions_untracked, "PRE: none | POST: none") {
+ // Runmode: kernel
+ // Testidea: a child forked from a USER parent is aperiodic/admission-exempt,
+ //           so a runelf-launched user process can spawn children (issue #312).
+-// Input: user parent (period 100, no WCET => implicit 100% periodic); clone().
++// Input: REAL user parent (create_user: live PMM user stack + real user
++//        page tables, never dispatched) impersonated via ScopedCurrentTask;
++//        clone() in the test's own context (issue #400: synthetic
++//        flag-flipped parents are rejected fail-closed, never dispatched).
+ // Expect: child period/deadline/remaining == 0; admission_exempted true;
+ //         add_task_err(child) == SCHED_ERR_OK.
+ // Depends: TaskControlBlock::clone user-parent rule (issue #312)
+@@ -274,40 +277,41 @@ JARVIS_TEST(admission_fork_from_user_parent_admitted, "PRE: none | POST: none")
+     static volatile uint64_t g_child_admit = 0;
+     g_child_exempt = 0;
+     g_child_admit = 0;
+-    auto *parent = TaskControlBlock::create(
+-        []() {
+-            uint64_t regs[37] = {};
+-            test::make_synthetic_clone_frame(regs);
+-            auto *child = TaskControlBlock::clone(regs);
+-            if (child == nullptr)
+-                return;
+-            g_child_period = child->period_ticks;
+-            g_child_deadline = child->deadline_ticks;
+-            g_child_remaining = child->remaining_ticks;
+-            g_child_exempt =
+-                Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
+-            // Prove admission literally: register under IRQ-off (no dispatch),
+-            // capture the verdict, then roll back so nothing stays queued.
+-            {
+-                arch::IrqGuard ig;
+-                errors::SchedulerError adm = Scheduler::add_task_err(*child);
+-                g_child_admit =
+-                    (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
+-                if (adm == errors::SCHED_ERR_OK)
+-                    Scheduler::remove_task(*child);
+-            }
+-            child->cleanup();
+-            delete child;
+-        },
+-        11, 100);
++    auto *parent = TaskControlBlock::create_user(test::forever_entry, 11, 100,
++                                                 32_KiB);
+     JARVIS_ASSERT(parent != nullptr);
+-    parent->is_user_ = true; // simulate a runelf-launched user parent
+-    parent->user_stack_ = 0x80000000;
+-    parent->user_stack_size_ = 32_KiB;
+-    Scheduler::add_task(*parent);
+-    Scheduler::reschedule();
+-    kernel::test::wait_for_termination_safe(parent);
+-    Scheduler::drain_zombie_list();
++    JARVIS_ASSERT(parent->is_user_);
++    {
++        test::ScopedCurrentTask scope(*parent);
++        uint64_t regs[37] = {};
++        test::make_synthetic_clone_frame(regs);
++        auto *child = TaskControlBlock::clone(regs);
++        if (child == nullptr)
 +            return;
-+        __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
-+        arch::QemuDebugcon::write(lvl);
-+        write_hex_debugcon(phys);
-+    };
- #if defined(CONFIG_ARCH_RISCV64)
-     auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                             (pml4_phys & PAGE_TABLE_ADDR_MASK));
-@@ -52,9 +65,17 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-     for (int l0_idx = 0; l0_idx < 256; ++l0_idx) {
-         if (!(l0[l0_idx] & PAGE_PRESENT))
-             continue;
--        // Check for 1GB block at L0
-+        // Defensive 1 GiB block at L0 (riscv64 has no 1 GiB user-leaf
-+        // producer): Sv39 shift-codec decode, then 1 GiB alignment
-+        // validation (decode_block_base, issue #365) — misaligned
-+        // entries are skipped, never freed.
-         if ((l0[l0_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
--            uint64_t page = VMM::sv39_pte_phys(l0[l0_idx]);
-+            uint64_t raw = VMM::sv39_pte_phys(l0[l0_idx]);
-+            uint64_t page = 0;
-+            if (!decode_block_base(raw, kBlock1GOffsetMask, page)) {
-+                log_skip("[FUP-SKIP] blk1g ", raw);
-+                continue;
-+            }
-             if (!PMM::is_user_page(page))
-                 continue;
-             PMM::free_page(page);
-@@ -67,9 +88,16 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-         for (int l1_idx = 0; l1_idx < 512; ++l1_idx) {
-             if (!(l1[l1_idx] & PAGE_PRESENT))
-                 continue;
--            // Check for 2MB block at L1
-+            // 2 MiB block at L1: shift-codec decode + level alignment
-+            // (decode_block_base, issue #365) — misaligned entries are
-+            // skipped, never freed (same rationale as 1 GiB).
-             if ((l1[l1_idx] & (PAGE_READ | PAGE_WRITE | PAGE_EXEC))) {
--                uint64_t page = VMM::sv39_pte_phys(l1[l1_idx]);
-+                uint64_t raw = VMM::sv39_pte_phys(l1[l1_idx]);
-+                uint64_t page = 0;
-+                if (!decode_block_base(raw, kHuge2MOffsetMask, page)) {
-+                    log_skip("[FUP-SKIP] blk2m ", raw);
-+                    continue;
-+                }
-                 if (!PMM::is_user_page(page))
-                     continue;
-                 PMM::free_page(page);
-@@ -103,17 +131,6 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                               (pml4_phys & PAGE_TABLE_ADDR_MASK));
--    // v0.3.11: bounded diagnostic — log page-table pages skipped because their
--    // owner bit is KERNEL (free_user_pages only frees USER-owned table pages).
--    static uint64_t s_fup_skip_log = 0;
--    auto log_skip = [](const char *lvl, uint64_t phys) {
--        if (__atomic_load_n(&s_fup_skip_log, __ATOMIC_RELAXED) >=
--            kFupSkipLogCap)
--            return;
--        __atomic_fetch_add(&s_fup_skip_log, 1UL, __ATOMIC_RELAXED);
--        arch::QemuDebugcon::write(lvl);
--        write_hex_debugcon(phys);
--    };
-     for (int pml4_idx = 0; pml4_idx < static_cast<int>(arch::PML4_USER_COUNT);
-          ++pml4_idx) {
-         if (!(pml4[pml4_idx] & PAGE_PRESENT))
-@@ -129,11 +146,21 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-         for (int pdpt_idx = 0; pdpt_idx < 512; ++pdpt_idx) {
-             if (!(pdpt[pdpt_idx] & PAGE_PRESENT))
-                 continue;
--            // Block/leaf test via is_table_entry (issue #363 P2/P4). The
--            // 1 GiB base decode stays verbatim (issue #365 owns its
--            // cross-arch re-derivation — do NOT touch kPdptBlockBaseMask).
-+            // 1 GiB block at PDPT (x86_64) / L1 (aarch64): same level.
-+            // No in-tree producer creates user 1 GiB leaves, so this site
-+            // is defensive — the arch-decoded base must be 1 GiB-aligned
-+            // (decode_block_base, issue #365) or the entry is skipped,
-+            // never freed. A skip preserves integrity (at worst a 4 KiB
-+            // leak); halting a dead-task teardown path would trade a
-+            // defensive state for an availability fault.
-             if (!is_table_entry(pdpt[pdpt_idx], 1)) {
--                uint64_t page = pdpt[pdpt_idx] & kPdptBlockBaseMask;
-+                uint64_t raw =
-+                    vmm_arch_block_base(pdpt[pdpt_idx], /*huge=*/true);
-+                uint64_t page = 0;
-+                if (!decode_block_base(raw, kBlock1GOffsetMask, page)) {
-+                    log_skip("[FUP-SKIP] blk1g ", raw);
-+                    continue;
-+                }
-                 if (!PMM::is_user_page(page))
-                     continue;
-                 PMM::free_page(page);
-@@ -150,9 +177,16 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
-             for (int pd_idx = 0; pd_idx < 512; ++pd_idx) {
-                 if (!(pd[pd_idx] & PAGE_PRESENT))
-                     continue;
--                // Arch block-leaf test + frame decode (issue #363 P2).
-+                // 2 MiB block at PD: arch frame decode + level alignment
-+                // (decode_block_base, issue #365) — misaligned entries
-+                // are skipped, never freed (same rationale as 1 GiB).
-                 if (!is_table_entry(pd[pd_idx], 2)) {
--                    uint64_t page = vmm_arch_block_base(pd[pd_idx], true);
-+                    uint64_t raw = vmm_arch_block_base(pd[pd_idx], true);
-+                    uint64_t page = 0;
-+                    if (!decode_block_base(raw, kHuge2MOffsetMask, page)) {
-+                        log_skip("[FUP-SKIP] blk2m ", raw);
-+                        continue;
-+                    }
-                     if (!PMM::is_user_page(page))
-                         continue;
-                     PMM::free_page(page);
-@@ -240,8 +274,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-             // reachable here inherit by value (issue #387: U=0 preserved,
-             // no new privilege).  Arch leaf test via is_table_entry.
-             if (!is_table_entry(src_pdpt[pdpt_idx], 1)) {
--                // huge=true (2 MiB mask) ≡ kPdptBlockBaseMask (1 GiB mask)
--                // for aligned entries — same 4 KiB owner page either way.
-+                // Block base via the per-arch frame codec; teardown pins
-+                // the same level alignment (decode_block_base, #365) —
-+                // aligned entries decode to the identical owner page.
-                 if (vmm_leaf_is_user_owned(
-                         src_pdpt[pdpt_idx],
-                         vmm_arch_block_base(src_pdpt[pdpt_idx],
-@@ -273,9 +308,9 @@ bool VMM::deep_copy_user_pages(uint64_t src_pml4, uint64_t dst_pml4) {
-                 // rationale as above); kernel-owned inherits by value
-                 // (issue #387).
-                 if (!is_table_entry(src_pd[pd_idx], 2)) {
--                    // huge=true (2 MiB mask) matches the free_user_pages
--                    // decode: identical page for aligned entries, which all
--                    // block entries are by construction.
-+                    // Block base via the per-arch frame codec (decode
-+                    // symmetry with free_user_pages, issue #365): user
-+                    // ownership fails the fork closed either way.
-                     if (vmm_leaf_is_user_owned(
-                             src_pd[pd_idx],
-                             vmm_arch_block_base(src_pd[pd_idx],
++        g_child_period = child->period_ticks;
++        g_child_deadline = child->deadline_ticks;
++        g_child_remaining = child->remaining_ticks;
++        g_child_exempt =
++            Scheduler::admission_exempted(*child) ? 1ULL : 0ULL;
++        // Prove admission literally: register under IRQ-off (no dispatch),
++        // capture the verdict, then roll back so nothing stays queued.
++        {
++            arch::IrqGuard ig;
++            errors::SchedulerError adm = Scheduler::add_task_err(*child);
++            g_child_admit =
++                (adm == errors::SCHED_ERR_OK) ? 1ULL : 0ULL;
++            if (adm == errors::SCHED_ERR_OK)
++                Scheduler::remove_task(*child);
++        }
++        child->cleanup();
++        delete child;
++        // Park the never-dispatched fixture BEFORE scope exit: set_current()
++        // re-enqueues a READY/RUNNING outgoing current, which would dispatch
++        // this fixture on the next tick. BLOCKED currents are left alone.
++        parent->state = TaskState::BLOCKED;
++    }
++    parent->cleanup();
++    delete parent;
+     JARVIS_ASSERT_EQ(0ULL, g_child_period);
+     JARVIS_ASSERT_EQ(0ULL, g_child_deadline);
+     JARVIS_ASSERT_EQ(0ULL, g_child_remaining);
