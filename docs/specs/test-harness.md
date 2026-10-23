@@ -216,8 +216,9 @@ the guard keeps it that way.
   ACPI/shutdown ports, `qemu_debug_exit(result)`, keyboard reset, `hlt`.
 - **Host verdict** (`tools/run-test.exp`): PASS iff `PLANNED==EXECUTED &&
   FAILED==0`; expected-panic patterns → PASS; unexpected `KERNEL PANIC:` → FAIL;
-  timeout (`TEST_TIMEOUT_ALL=250s` for core/smp_multicpu/ahci_live/iommu_live, else `TEST_TIMEOUT_CLASS=120s`) → TIMEOUT; eof → QEMU_EXIT;
-  host stall-watchdog 220s of no serial growth → pkill.
+  timeout (table-driven: `tools/test-policy.tsv`, default 120 s, heavy
+  aggregates 250 s, riscv64 400 s; outer 600 s / 1200 s riscv64) → TIMEOUT;
+  eof → QEMU_EXIT; host stall-watchdog 220s of no serial growth → pkill.
 
 ## 7. Invariants (binding)
 

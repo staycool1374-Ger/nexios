@@ -1,0 +1,36 @@
+{
+  "name": "ring-dump",
+  "description": "Triage chain: attach to an externally started :1234 stub and dump the H2 deferred-switch ring. Requires `make execute-test x86_64 debug none` running first (QEMU adds -s for debug builds). The runner never starts or kills QEMU.",
+  "steps": [
+    {
+      "name": "wait-stub",
+      "type": "wait-port",
+      "host": "127.0.0.1",
+      "port": 1234,
+      "timeout": 30,
+      "on_error": "no-stub"
+    },
+    {
+      "name": "dump",
+      "type": "gdb-batch",
+      "script": "tools/gdb/h2-ring-dump.gdb",
+      "timeout": 60,
+      "expect_stdout": "g_h2_idx =",
+      "on_error": "no-ring"
+    },
+    {
+      "name": "no-stub",
+      "type": "shell-command",
+      "command": ["echo", "no GDB stub on :1234 — start `make execute-test x86_64 debug none` first"],
+      "timeout": 10,
+      "next": "fail"
+    },
+    {
+      "name": "no-ring",
+      "type": "shell-command",
+      "command": ["echo", "ring dump produced no g_h2_idx — see failed-step log"],
+      "timeout": 10,
+      "next": "fail"
+    }
+  ]
+}

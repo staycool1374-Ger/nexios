@@ -8,12 +8,26 @@
 #   (abnormal termination appends STATUS: <TIMEOUT|PANIC|NO_SUMMARY>)
 # Usage: bash scripts/run_all_classes.sh [arch] [build]
 #        (normally via `make test-full [arch] [build]`)
+# Per-class run policy (timeouts, retries, scopes, markers) comes from
+# tools/test-policy.tsv via tools/test-policy.awk — no literals here.
 # No debugging — only observe what works and what does not.
 set -u
 cd "$(dirname "$0")/.."
 
 ARCH="${1:-x86_64}"
 BUILD="${2:-debug}"
+
+# Run policy (issue #407 item 3): per-class timeouts, retries, scopes and
+# verdict markers live in tools/test-policy.tsv, resolved here ONLY through
+# tools/test-policy.awk. No policy literals below.
+POLICY_FILE=tools/test-policy.tsv
+POLICY_AWK=tools/test-policy.awk
+policy() { # <class> <key> — print resolved value, fail loud on empty
+    local out
+    out=$(awk -f "$POLICY_AWK" -v arch="$ARCH" -v class="$1" -v key="$2" "$POLICY_FILE") || { echo "ERROR: test-policy: no $2 for class=$1 ARCH=$ARCH" >&2; exit 1; }
+    if [ -z "$out" ]; then echo "ERROR: test-policy: no $2 for class=$1 ARCH=$ARCH" >&2; exit 1; fi
+    printf '%s' "$out"
+}
 
 # 22 aggregates + 4 standalone specials.  testrunner runs last: its
 # expected-panic test halts the kernel, so it gets its own boot at the
@@ -22,7 +36,8 @@ CLASSES="core_basic core_sync core_sched core_task core_memory core_syscall core
 
 # Issue #357: the Makefile owns the per-arch gate lists (measured rows
 # only) and passes them via NEXIOS_TEST_CLASSES; the script default
-# below is the x86_64 control list. X86_ONLY/DEBUG_ONLY stay as defense.
+# below is the x86_64 control list. Arch/build scoping is table-driven
+# (tools/test-policy.tsv) as defense.
 if [ -n "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="$NEXIOS_TEST_CLASSES"
 fi
@@ -36,44 +51,43 @@ if [ "$ARCH" = "riscv64" ] && [ -z "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="arch_riscv64 scheduler_zombie"
 fi
 
-# Per-class outer timeout covers the build (a cold arch switch rebuilds
-# everything) plus up to TEST_MAX_ATTEMPTS QEMU runs (issue #322 retries a
-# stalled class once, so the worst case is 2× the class expect-timeout).
-OUTER_TIMEOUT=600
-if [ "$ARCH" = "riscv64" ]; then
-    OUTER_TIMEOUT=1200
-fi
-
-# x86_64-only classes: no registry entry (smp, smp_multicpu) or no QEMU
-# machine (ahci_live, iommu_live) on other architectures.
-X86_ONLY="smp smp_multicpu ahci_live iommu_live"
-
-# Debug-only classes: the q35 hardware-variant boots (ahci_live, iommu_live)
-# hardcode the debug ISO in the Makefile and register zero TF_RELEASE
-# tests, so a release run would execute nothing even if it booted.
-DEBUG_ONLY="ahci_live iommu_live"
-
 RUN=""
 for c in $CLASSES; do
     skip=0
-    for x in $X86_ONLY; do
-        if [ "$c" = "$x" ] && [ "$ARCH" != "x86_64" ]; then
-            printf 'SKIP %s (x86_64-only, ARCH=%s)\n' "$c" "$ARCH"
-            skip=1
-            break
-        fi
-    done
-    if [ "$skip" -eq 0 ]; then
-        for x in $DEBUG_ONLY; do
-            if [ "$c" = "$x" ] && [ "$BUILD" != "debug" ]; then
-                printf 'SKIP %s (debug-only QEMU variant, BUILD=%s)\n' "$c" "$BUILD"
-                skip=1
-                break
-            fi
+    ascope=$(policy "$c" arch_scope)
+    if [ "$ascope" != "any" ]; then
+        hit=0
+        for x in $ascope; do
+            if [ "$ARCH" = "$x" ]; then hit=1; break; fi
         done
+        if [ "$hit" -eq 0 ]; then
+            printf 'SKIP %s (arch_scope=%s, ARCH=%s)\n' "$c" "$ascope" "$ARCH"
+            skip=1
+        fi
+    fi
+    if [ "$skip" -eq 0 ]; then
+        bscope=$(policy "$c" build_scope)
+        if [ "$bscope" != "any" ]; then
+            hit=0
+            for x in $bscope; do
+                if [ "$BUILD" = "$x" ]; then hit=1; break; fi
+            done
+            if [ "$hit" -eq 0 ]; then
+                printf 'SKIP %s (build_scope=%s, BUILD=%s)\n' "$c" "$bscope" "$BUILD"
+                skip=1
+            fi
+        fi
     fi
     if [ "$skip" -eq 0 ]; then RUN="$RUN $c"; fi
 done
+
+# Inspection mode: dump resolved policy per class, no QEMU, no history write.
+if [ -n "${NEXIOS_POLICY_DUMP:-}" ]; then
+    for c in $RUN; do
+        printf '%s|%s|%s|%s|%s|%s|%s\n' "$c" "$(policy "$c" outer_timeout)" "$(policy "$c" max_attempts)" "$(policy "$c" arch_scope)" "$(policy "$c" build_scope)" "$(policy "$c" expected_panic)" "$(policy "$c" expected_empty)"
+    done
+    exit 0
+fi
 
 # Fail fast when the q35 variants cannot boot: clear message instead of a
 # QEMU boot error deep in the loop.  Mirrors the Makefile OVMF_CODE guards
@@ -102,7 +116,8 @@ for c in $RUN; do
     pkill -9 -f "qemu-system.*-name jarvis-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')([^A-Za-z0-9_]|$)" 2>/dev/null || true
     log="$LOGDIR/$c.log"
     start=$(date +%s%N)
-    timeout "$OUTER_TIMEOUT" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
+    outer=$(policy "$c" outer_timeout)
+    timeout "$outer" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
     rc=$?
     end=$(date +%s%N)
     wall_ms=$(( (end - start) / 1000000 ))
@@ -115,16 +130,18 @@ for c in $RUN; do
     ts="$(date '+%Y-%m-%d %H:%M:%S')"
     status=""
     # Expected-panic classes (testrunner) end with "RESULT: PASS (expected
-    # panic: ...)" — that is a PASS, not a PANIC.  Detect it first.
+    # panic: ...)" — that is a PASS, not a PANIC.  Detect it first, gated
+    # on the table marker.
     expected_panic_pass=0
-    if grep -qE 'RESULT: PASS \(expected panic|PRESULT: PASS \(expected panic' "$log"; then
+    if [ "$(policy "$c" expected_panic)" = "1" ] && grep -qE 'RESULT: PASS \(expected panic|PRESULT: PASS \(expected panic' "$log"; then
         expected_panic_pass=1
     fi
     # Env-gated empty class (task_fpu: legacy test_fpu*.cpp filtered out of
     # the x86_64 build, expected count 0): a clean boot that registers
-    # nothing is the correct outcome, not a failure.
+    # nothing is the correct outcome, not a failure. Gated on the table
+    # marker (the task_fpu name check stays as defense).
     expected_empty_pass=0
-    if [ "$c" = "task_fpu" ] && grep -q "No tests registered" "$log" \
+    if [ "$(policy "$c" expected_empty)" = "1" ] && [ "$c" = "task_fpu" ] && grep -q "No tests registered" "$log" \
         && ! grep -qiE 'kernel panic|page fault|triple fault|#PF|PANIC:' "$log"; then
         expected_empty_pass=1
     fi

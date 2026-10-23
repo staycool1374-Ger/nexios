@@ -1,0 +1,15 @@
+{
+  "name": "shell-smoke",
+  "description": "Expect chain wrapping tools/shell-smoke.exp (run-release-mode x86_64). Warm-build precondition: the release ISO must already exist (the .exp's internal 150 s prompt wait covers boot, not the build).",
+  "steps": [
+    {
+      "name": "smoke",
+      "type": "expect-script",
+      "script": "tools/shell-smoke.exp",
+      "argv": ["run-release-mode", "x86_64"],
+      "timeout": 300,
+      "expect_stdout": "SMOKE: PASS",
+      "on_error": "fail"
+    }
+  ]
+}

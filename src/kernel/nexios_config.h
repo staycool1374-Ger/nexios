@@ -1182,4 +1182,225 @@ extern "C" void panic(const char *msg);
 #define CONFIG_IDLE_MONITOR_MEM_MIN_OPS 1
 #endif
 
+// ---------------------------------------------------------------------------
+// Compile-time guards (issue #407 item 5, TACT-style)
+// ---------------------------------------------------------------------------
+// Preprocessor-only range checks (#if/#error, no static_assert): this header
+// must stay usable from any preprocessor context. This block runs after all
+// defines and the CONFIG_COVERAGE override above, so guards see final values.
+// Scope: knobs with no tools/check-config.py rule and no use-site assert.
+// Deliberate exclusions are listed at the end of this block.
+
+// --- Scheduling tunables (no validator rule) ---
+#if CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY < 1
+#error "CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY must be >= 1 (default 1)"
+#endif
+#if CONFIG_IRQ_STORM_LIMIT < 1
+#error "CONFIG_IRQ_STORM_LIMIT must be >= 1 (default 256)"
+#endif
+
+// --- Memory layout (no validator rule) ---
+#if CONFIG_PAGE_TABLE_POOL_SIZE < 1
+#error "CONFIG_PAGE_TABLE_POOL_SIZE must be >= 1 (default 4096)"
+#endif
+
+// --- Per-task objects (no validator rule) ---
+#if CONFIG_MAX_PER_TASK_OBJECTS < 1
+#error "CONFIG_MAX_PER_TASK_OBJECTS must be >= 1 (default 32)"
+#endif
+
+// --- Capabilities / CSpace (no validator rule) ---
+// NOTE: a power of two is preferred for CONFIG_CSLOT_COUNT (slot index bits
+// are carved from the handle) but cap_slot_bits() rounds up and every use is
+// bounds-checked, so the preference stays documented-only. A hard error here
+// would over-constrain; a non-fatal check-config.py warning is the follow-up.
+#if CONFIG_CSLOT_COUNT < 1
+#error "CONFIG_CSLOT_COUNT must be >= 1 (default 64)"
+#endif
+#if CONFIG_CAP_MAX_DEPTH < 1
+#error "CONFIG_CAP_MAX_DEPTH must be >= 1 (default 8)"
+#endif
+#if CONFIG_CAP_MAX_UNTYPED < 1
+#error "CONFIG_CAP_MAX_UNTYPED must be >= 1 (default 16)"
+#endif
+#if CONFIG_CAP_MAX_MMIO < 1
+#error "CONFIG_CAP_MAX_MMIO must be >= 1 (default 16)"
+#endif
+#if CONFIG_CAP_MAX_IRQ < 1
+#error "CONFIG_CAP_MAX_IRQ must be >= 1 (default 16)"
+#endif
+#if CONFIG_CAP_MAX_MSIX < 1
+#error "CONFIG_CAP_MAX_MSIX must be >= 1 (default 8)"
+#endif
+#if CONFIG_CAP_MAX_WDOG < 1
+#error "CONFIG_CAP_MAX_WDOG must be >= 1 (default 8)"
+#endif
+#if CONFIG_WATCHDOG_GRACE_TICKS < 0
+#error "CONFIG_WATCHDOG_GRACE_TICKS must be >= 0 (default 500)"
+#endif
+#if CONFIG_IOPB_MAX_TASKS < 1
+#error "CONFIG_IOPB_MAX_TASKS must be >= 1 (default 4)"
+#endif
+#if CONFIG_IOPB_MAX_GRANTS < 1
+#error "CONFIG_IOPB_MAX_GRANTS must be >= 1 (default 8)"
+#endif
+#if CONFIG_CAP_MAX_DEATH_WATCHES < 1
+#error "CONFIG_CAP_MAX_DEATH_WATCHES must be >= 1 (default 16)"
+#endif
+#if CONFIG_DEBUG_MAX_STOPS < 1
+#error "CONFIG_DEBUG_MAX_STOPS must be >= 1 (default 16)"
+#endif
+#if CONFIG_DEBUG_MAX_BREAKS < 1
+#error "CONFIG_DEBUG_MAX_BREAKS must be >= 1 (default 64)"
+#endif
+#if CONFIG_CAP_MAX_PAGER_CLIENTS < 1
+#error "CONFIG_CAP_MAX_PAGER_CLIENTS must be >= 1 (default 8)"
+#endif
+#if CONFIG_PAGER_FAULT_TIMEOUT_TICKS < 1
+#error "CONFIG_PAGER_FAULT_TIMEOUT_TICKS must be > 0 (default 1000)"
+#endif
+#if CONFIG_PAGER_MAX_PAGES_PER_FAULT < 1
+#error "CONFIG_PAGER_MAX_PAGES_PER_FAULT must be >= 1 (default 4)"
+#endif
+#if CONFIG_PAGER_MAX_COMMITTED_PAGES < 1
+#error "CONFIG_PAGER_MAX_COMMITTED_PAGES must be >= 1 (default 16)"
+#endif
+#if CONFIG_CAP_MAX_IOMMU < 1
+#error "CONFIG_CAP_MAX_IOMMU must be >= 1 (default 16)"
+#endif
+#if CONFIG_IOMMU_MAX_DOMAINS < 1
+#error "CONFIG_IOMMU_MAX_DOMAINS must be >= 1 (default 8)"
+#endif
+#if CONFIG_IOMMU_MAX_MAPPINGS < 1
+#error "CONFIG_IOMMU_MAX_MAPPINGS must be >= 1 (default 32)"
+#endif
+#if CONFIG_IOMMU_MAX_BUSES < 1
+#error "CONFIG_IOMMU_MAX_BUSES must be >= 1 (default 8)"
+#endif
+#if CONFIG_IOMMU_MAX_KERNEL_DEVICES < 1
+#error "CONFIG_IOMMU_MAX_KERNEL_DEVICES must be >= 1 (default 16)"
+#endif
+#if (CONFIG_IOMMU_MMIO_BASE & 0xFFF) != 0
+#error "CONFIG_IOMMU_MMIO_BASE must be 4 KiB page-aligned (default 0xFED90000)"
+#endif
+
+// --- Policies (no validator rule) ---
+#if CONFIG_WATCHDOG_ACTION < 0 || CONFIG_WATCHDOG_ACTION > 4
+#error "CONFIG_WATCHDOG_ACTION must be in [0..4] (default 3)"
+#endif
+#if CONFIG_OOM_POLICY != 0 && CONFIG_OOM_POLICY != 1
+#error "CONFIG_OOM_POLICY must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_MEMORY_BUDGET != 0 && CONFIG_MEMORY_BUDGET != 1
+#error "CONFIG_MEMORY_BUDGET must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_STATIC_POOLS_ONLY != 0 && CONFIG_STATIC_POOLS_ONLY != 1
+#error "CONFIG_STATIC_POOLS_ONLY must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_PCID != 0 && CONFIG_PCID != 1
+#error "CONFIG_PCID must be 0 or 1 (default: x86_64 1, else 0)"
+#endif
+#if CONFIG_PAN != 0 && CONFIG_PAN != 1
+#error "CONFIG_PAN must be 0 or 1 (default: aarch64 1, else 0)"
+#endif
+#if CONFIG_ADMISSION_SELFTEST != 0 && CONFIG_ADMISSION_SELFTEST != 1
+#error "CONFIG_ADMISSION_SELFTEST must be 0 or 1 (default 1)"
+#endif
+
+// --- Idle monitors (no validator rule) ---
+#if CONFIG_IDLE_MONITOR_ENABLED != 0 && CONFIG_IDLE_MONITOR_ENABLED != 1
+#error "CONFIG_IDLE_MONITOR_ENABLED must be 0 or 1"
+#endif
+#if CONFIG_IDLE_MONITOR_STACK_CHECK != 0 && CONFIG_IDLE_MONITOR_STACK_CHECK != 1
+#error "CONFIG_IDLE_MONITOR_STACK_CHECK must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_IDLE_MONITOR_UTIL != 0 && CONFIG_IDLE_MONITOR_UTIL != 1
+#error "CONFIG_IDLE_MONITOR_UTIL must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_IDLE_MONITOR_STALL != 0 && CONFIG_IDLE_MONITOR_STALL != 1
+#error "CONFIG_IDLE_MONITOR_STALL must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_IDLE_MONITOR_MEM != 0 && CONFIG_IDLE_MONITOR_MEM != 1
+#error "CONFIG_IDLE_MONITOR_MEM must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_IDLE_MONITOR_CHUNK < 1
+#error "CONFIG_IDLE_MONITOR_CHUNK must be >= 1 (default 4)"
+#endif
+#if CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS < 1
+#error "CONFIG_IDLE_MONITOR_STALL_THRESHOLD_TICKS must be >= 1 (default 5000)"
+#endif
+#if CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS < 1
+#error "CONFIG_IDLE_MONITOR_ALU_TEST_PERIOD_MS must be >= 1 (default 1000)"
+#endif
+#if CONFIG_IDLE_MONITOR_MEM_PASSES < 1
+#error "CONFIG_IDLE_MONITOR_MEM_PASSES must be >= 1 (default 3)"
+#endif
+#if CONFIG_IDLE_MONITOR_MEM_MIN_OPS < 0
+#error "CONFIG_IDLE_MONITOR_MEM_MIN_OPS must be >= 0 (default 1)"
+#endif
+
+// --- Deadline / DM band (no validator rule) ---
+#if CONFIG_DM_PRIO_MIN < 2
+#error "CONFIG_DM_PRIO_MIN must be >= 2 (0-1 reserved, default 2)"
+#endif
+#if CONFIG_DM_PRIO_MAX > 120
+#error "CONFIG_DM_PRIO_MAX must be <= 120 (121-127 system, default 120)"
+#endif
+#if CONFIG_DM_PRIO_MIN > CONFIG_DM_PRIO_MAX
+#error "CONFIG_DM_PRIO_MIN must be <= CONFIG_DM_PRIO_MAX"
+#endif
+#if CONFIG_DM_PRIO_MAX > CONFIG_PRIORITY_CEILING
+#error "CONFIG_DM_PRIO_MAX must fit the bitmap (<= CONFIG_PRIORITY_CEILING)"
+#endif
+
+// --- Canary (no validator rule) ---
+#if (CONFIG_CANARY_SAMPLE_TICKS & (CONFIG_CANARY_SAMPLE_TICKS - 1)) != 0 || \
+    CONFIG_CANARY_SAMPLE_TICKS <= 1
+#error "CONFIG_CANARY_SAMPLE_TICKS must be a power of two >= 2 (default 64)"
+#endif
+
+// --- Boot / HRT (no validator rule) ---
+#if CONFIG_BOOT_BUDGET_MS < 0
+#error "CONFIG_BOOT_BUDGET_MS must be >= 0 (default 30000)"
+#endif
+#if CONFIG_HRT_NS_WIDTH != 64
+#error "CONFIG_HRT_NS_WIDTH must be 64 (default 64)"
+#endif
+#if CONFIG_HRT_CALIBRATION_RETRIES < 1 || CONFIG_HRT_CALIBRATION_RETRIES > 32
+#error "CONFIG_HRT_CALIBRATION_RETRIES must be in [1..32] (default 12)"
+#endif
+#if CONFIG_HRT_CALIBRATION_TIMEOUT_MS < 0
+#error "CONFIG_HRT_CALIBRATION_TIMEOUT_MS must be >= 0 (default 500)"
+#endif
+#if CONFIG_HRT_SOURCE_PREFERENCE < 0 || CONFIG_HRT_SOURCE_PREFERENCE > 2
+#error "CONFIG_HRT_SOURCE_PREFERENCE must be 0, 1, or 2 (default 1)"
+#endif
+
+// --- Zombie / kernel stacks (no validator rule) ---
+#if CONFIG_ZOMBIE_STARVATION_LIMIT < 0
+#error "CONFIG_ZOMBIE_STARVATION_LIMIT must be >= 0 (default 32)"
+#endif
+#if (CONFIG_KSTACK_WINDOW_BASE & 0xFFF) != 0
+#error "CONFIG_KSTACK_WINDOW_BASE must be 4 KiB page-aligned"
+#endif
+#if (CONFIG_KSTACK_WINDOW_SIZE % 4096) != 0 || \
+    CONFIG_KSTACK_WINDOW_SIZE < 4096 || CONFIG_KSTACK_WINDOW_SIZE > 16777216
+#error "CONFIG_KSTACK_WINDOW_SIZE must be a multiple of 4096, <= 16 MiB"
+#endif
+#if (CONFIG_KERNEL_PRIV_DATA_BASE & 0xFFF) != 0
+#error "CONFIG_KERNEL_PRIV_DATA_BASE must be 4 KiB page-aligned"
+#endif
+
+// --- Deliberately excluded (no guard) ---
+// CONFIG_CAP_MAX_MMIO_MAPS / CONFIG_CAP_MAX_FRAME_MAPS: already
+// static_assert(... > 0) at cap/mmio.cpp:67 and cap/frame_map.cpp:64, whose
+// window-fit asserts also need mem:: constants this header cannot reference.
+// CONFIG_STACK_SIZE_TABLE / CONFIG_MEMPOOL_BLOCK_SIZES /
+// CONFIG_MEMPOOL_BLOCK_COUNTS: brace/comma lists, not preprocessor
+// expressions; the C++ compiler validates their use at task.cpp:452.
+// CONFIG_VERSION_MAJOR/MINOR/PATCH/NUM: informational, no invariant.
+// CONFIG_SYSCALL_COUNT: derived aggregate.
+// CONFIG_INCLUDE_SYS_*: non-0/1 values would alter CONFIG_SYSCALL_COUNT;
+// residual follow-up, not fixed here.
+
 #endif // JARVIS_CONFIG_H

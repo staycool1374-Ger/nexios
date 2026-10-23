@@ -552,7 +552,7 @@ build/kernel/test/test_isolate.o: $(TEST_REGISTRY_GEN)
 # Phony targets
 # ------------------------------------------------------------------------------
 .PHONY: help all build check-style run-debug-mode run-release-mode \
-        execute-test debug-test debug-shell \
+        execute-test debug-test debug-shell test-policy test-policy-check \
         test symbols objdump debug release release-elf check-release-stamp profiling rr-record rr-replay \
         run-renode renode-test check-config config-summary test-registry-gen
 
@@ -600,6 +600,20 @@ config-summary:
 	@grep -h '#define CONFIG_' src/kernel/nexios_config.h | grep -v '//' | \
 	sed 's/#define /  /' | column -t
 
+# Test run policy (issue #407 item 3): single source of truth in
+# tools/test-policy.tsv, resolved by tools/test-policy.awk.
+test-policy:
+	@: $(eval _ae := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))) $(eval _ARCH := $(or $(filter $(SUPPORTED_ARCHS),$(call _map_arch,$(word 1,$(_ae)))),$(ARCH),x86_64)) $(eval _CLASS := $(or $(CLASS),$(word 2,$(_ae))))
+	@if [ -z "$(_CLASS)" ]; then \
+	    echo "Usage: make test-policy [<arch>] <class>"; \
+	    exit 1; \
+	fi; \
+	awk -f $(TEST_POLICY_AWK) -v arch="$(_ARCH)" -v class="$(_CLASS)" -v dump=1 $(TEST_POLICY_FILE)
+
+test-policy-check:
+	@printf '  %-7s %s\n' 'POLICY' 'Validating test run policy…'
+	@awk -f $(TEST_POLICY_AWK) -v validate=1 $(TEST_POLICY_FILE) && bash tools/test-policy-test.sh
+
 help:
 	@echo "Jarvis RTOS — Build Targets"
 	@echo ""
@@ -626,8 +640,10 @@ help:
 	@echo "                       capability proc_elf storage servers drivers"
 	@echo "                       hal smp smp_multicpu deadline ui"
 	@echo "                       logging_debug random bench testrunner),"
-	@echo "                       auto-shutdown (120s, 250s for core_*/smp_multicpu/ahci_live/iommu_live/deadline)"
+	@echo "                       auto-shutdown (per-class timeouts: tools/test-policy.tsv)"
 	@echo "           <name>   → specific test class, auto-shutdown (120s)"
+	@echo "  [A] make test-policy [<arch>] <class>  Print resolved run policy"
+	@echo "  [A] make test-policy-check            Validate table + equivalence oracle"
 	@echo "  [A] make test-full [<arch> <build>]  Full suite: all 22 aggregates +"
 	@echo "         4 specials (ahci_live iommu_live task_fpu task_tcb_log),"
 	@echo "         one reboot per class (issue #173, replaces 'all')"
@@ -1175,7 +1191,7 @@ _do_execute_test:
 	elif [ "$(CLASS)" = "dump-counts" ]; then \
 	    $(call _run_dump_counts_qemu); \
 	else \
-	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(if $(filter riscv64 riscv,$(ARCH)),$(TEST_TIMEOUT_RISCV),$(if $(filter core_basic core_sync core_sched core_task core_memory core_syscall core_tracing smp_multicpu ahci_live iommu_live deadline,$(CLASS)),$(TEST_TIMEOUT_ALL),$(TEST_TIMEOUT_CLASS)))); \
+	    $(call _run_test_qemu,Running $(BUILD) class=$(CLASS),$(call _policy_expect_timeout)); \
 	fi
 
 # Full suite (issue #173, replaces the removed `all` class): run every
@@ -1381,8 +1397,16 @@ QEMU_FLAGS_FILE = $(subst -mon chardev=dbg,-monitor none,$(subst -monitor charde
 #     frozen-but-still-emitting serial stream before expect's coarser timeout.
 #   WATCHDOG_STALL must be strictly less than the longest expect timeout (400),
 #   else the watchdog can never fire before expect gives up.
-TEST_TIMEOUT_ALL    := 250
-TEST_TIMEOUT_CLASS  := 120
+TEST_POLICY_FILE := tools/test-policy.tsv
+TEST_POLICY_AWK := tools/test-policy.awk
+# Resolver: value of KEY for CLASS on ARCH, fail-loud on empty (an empty
+# timeout must never reach expect — positional shift could fabricate PASS).
+_policy_raw = $(shell awk -f $(TEST_POLICY_AWK) -v arch="$(ARCH)" -v class="$(1)" -v key="$(2)" $(TEST_POLICY_FILE))
+_policy_get = $(if $(strip $(call _policy_raw,$(1),$(2))),$(call _policy_raw,$(1),$(2)),$(error test-policy: missing key '$(2)' for arch=$(ARCH) class='$(1)' in $(TEST_POLICY_FILE)))
+# Derived aliases (read-only): legacy names preserved for consumers. Values
+# come from the table via pseudo-classes (@default/@group:/@arch:).
+TEST_TIMEOUT_CLASS := $(call _policy_get,@default,expect_timeout)
+TEST_TIMEOUT_ALL := $(call _policy_get,@group:heavy,expect_timeout)
 # Issue #277: the deadline aggregate (139 tests incl. the stress_hrt
 # hammer) measures 44-185 s wall and outgrew the 120 s class window, so
 # it joins the 250 s list. Slow runs previously surfaced as TIMEOUT
@@ -1390,12 +1414,19 @@ TEST_TIMEOUT_CLASS  := 120
 # Issue #207: riscv64 classes run under QEMU TCG wall dilation — arch_riscv64
 # measures ~270 s wall (daemon boot + 24 tests).  Applies to every riscv64
 # class (only green-evidenced ones run there); x86_64 selection unchanged.
-TEST_TIMEOUT_RISCV  := 400
-WATCHDOG_STALL      := 220
+TEST_TIMEOUT_RISCV := $(call _policy_get,@arch:riscv64,expect_timeout)
+WATCHDOG_STALL := $(call _policy_get,@default,watchdog_stall)
 # Issue #322: attempts per class (1 = no retry, 2 = retry the identical binary
 # once).  Retry applies ONLY to the stall signatures (zero-S-line TIMEOUT /
 # QEMU_EXIT); a genuine test FAIL is never retried.
-TEST_MAX_ATTEMPTS   := 2
+TEST_MAX_ATTEMPTS := $(call _policy_get,@default,max_attempts)
+# Override chain: command-line TEST_TIMEOUT_OVERRIDE > per-name command-line
+# value > table. $(origin ...) is the gate (preserves the TEST_TIMEOUT_CLASS=2
+# stall-exercise technique). NOTE: a command-line TEST_TIMEOUT_ALL/_RISCV now
+# applies to every class (widening only); defaults are unchanged.
+_policy_expect_timeout = $(if $(filter command line,$(origin TEST_TIMEOUT_OVERRIDE)),$(TEST_TIMEOUT_OVERRIDE),$(if $(filter command line,$(origin TEST_TIMEOUT_CLASS)),$(TEST_TIMEOUT_CLASS),$(if $(filter command line,$(origin TEST_TIMEOUT_ALL)),$(TEST_TIMEOUT_ALL),$(if $(filter command line,$(origin TEST_TIMEOUT_RISCV)),$(TEST_TIMEOUT_RISCV),$(call _policy_get,$(CLASS),expect_timeout)))))
+_policy_attempts = $(if $(filter command line,$(origin TEST_MAX_ATTEMPTS)),$(TEST_MAX_ATTEMPTS),$(call _policy_get,$(CLASS),max_attempts))
+_policy_watchdog = $(if $(filter command line,$(origin WATCHDOG_STALL)),$(WATCHDOG_STALL),$(call _policy_get,$(CLASS),watchdog_stall))
 
 # Usage: $(call _run_test_qemu,<description>,<timeout_sec>)
 # Robust design:
@@ -1416,7 +1447,7 @@ define _run_test_qemu
 	if ! command -v $(QEMU_SYSTEM) >/dev/null 2>&1; then echo "QEMU missing."; echo $(PKG_HINT); exit 1; fi; \
 	if ! command -v expect >/dev/null 2>&1; then echo "expect missing."; exit 1; fi; \
 	printf '  %-7s %s\n'  'TEST'   '$(1)…'; \
-	MAX_ATTEMPTS=$(TEST_MAX_ATTEMPTS); \
+	MAX_ATTEMPTS=$(call _policy_attempts); \
 	ATTEMPT=0; \
 	STALL_SEEN=0; \
 	STALL_STATUS=""; \
@@ -1434,8 +1465,8 @@ define _run_test_qemu
 	            CUR_SIZE=$$(wc -c < "$(TEST_SERIAL_LOG)" 2>/dev/null || echo 0); \
 	            if [ "$$CUR_SIZE" = "$$LAST_SIZE" ]; then \
 	                STALL=$$((STALL + 1)); \
-	                if [ $$STALL -ge $(WATCHDOG_STALL) ]; then \
-                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(WATCHDOG_STALL) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
+	                if [ $$STALL -ge $(call _policy_watchdog) ]; then \
+                    echo "[HOST-WATCHDOG] Tests interrupted — no serial output for $(call _policy_watchdog) s" | tee -a "$(TEST_SERIAL_LOG)" "$(TEST_VERDICT_LOG)"; \
                     pkill -f "$(QEMU_SYSTEM).*[ -]name[ =]$(QEMU_TAG_ERE).*nexios-rtos|nexios-rtos.*[ -]name[ =]$(QEMU_TAG_ERE)" 2>/dev/null; \
 	                    exit 1; \
 	                fi; \
@@ -1459,23 +1490,23 @@ define _run_test_qemu
 	    else \
 	        VERDICT="RESULT: UNKNOWN (no verdict file — expect aborted)"; \
 	    fi; \
-	    case "$$VERDICT" in \
-	        RESULT:\ PASS*) \
-	            if [ $$STALL_SEEN -eq 1 ]; then STALL_STATUS="STALL-RECOVERED"; fi; \
-	            break ;; \
-	        RESULT:\ TIMEOUT*|RESULT:\ QEMU_EXIT*) \
-	            if [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; then \
-	                echo "[HOST] STALL attempt $$ATTEMPT/$$MAX_ATTEMPTS: $$VERDICT — retrying identical binary"; \
-	                STALL_SEEN=1; \
-	                continue; \
-	            else \
-	                STALL_STATUS="STALL-UNRECOVERED"; \
-	                VERDICT="RESULT: FAIL (stall unrecovered after $$MAX_ATTEMPTS attempts: $(2)s, zero-S-line TIMEOUT/QEMU_EXIT)"; \
-	                break; \
-	            fi ;; \
-	        *) \
-	            break ;; \
-	    esac; \
+    case "$$VERDICT" in \
+        RESULT:\ PASS*) \
+            if [ $$STALL_SEEN -eq 1 ]; then STALL_STATUS="STALL-RECOVERED"; fi; \
+            break ;; \
+        RESULT:\ $(subst $(comma),*|RESULT:\ ,$(call _policy_get,$(CLASS),stall_signatures))*) \
+            if [ $$ATTEMPT -lt $$MAX_ATTEMPTS ]; then \
+                echo "[HOST] STALL attempt $$ATTEMPT/$$MAX_ATTEMPTS: $$VERDICT — retrying identical binary"; \
+                STALL_SEEN=1; \
+                continue; \
+            else \
+                STALL_STATUS="STALL-UNRECOVERED"; \
+                VERDICT="RESULT: FAIL (stall unrecovered after $$MAX_ATTEMPTS attempts: $(2)s, zero-S-line TIMEOUT/QEMU_EXIT)"; \
+                break; \
+            fi ;; \
+        *) \
+            break ;; \
+    esac; \
 	done; \
 	echo "$$VERDICT"; \
 	START_S=$$(cat "$(TEST_START_TS)" 2>/dev/null || echo 0); \

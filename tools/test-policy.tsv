@@ -1,0 +1,35 @@
+# Test run policy table (issue #407 item 3) — single source of truth for
+# per-class QEMU run policy. Consumed ONLY via tools/test-policy.awk
+# (Makefile `$(shell ...)` + scripts/run_all_classes.sh); never parsed
+# anywhere else. `|` separator survives editors/formatters (no TABs).
+#
+# Format: scope|selector|key|value   (`#` lines are comments)
+# Tiers, lowest precedence first (later line wins within a tier):
+#   default < group < arch < class
+# An arch record beats a group record (riscv64 always 400 s, even heavy).
+# Keys: expect_timeout, outer_timeout, max_attempts, stall_signatures,
+#   watchdog_stall, expected_panic, expected_empty, arch_scope, build_scope.
+# `members` rows are resolver metadata (group membership), not policy.
+# Each row carries its originating issue as provenance.
+# Reserved: `requires|ovmf` key for q35 OVMF guards (deferred follow-up).
+default|*|expect_timeout|120
+default|*|outer_timeout|600
+default|*|max_attempts|2
+default|*|stall_signatures|TIMEOUT,QEMU_EXIT
+default|*|watchdog_stall|220
+default|*|expected_panic|0
+default|*|expected_empty|0
+default|*|arch_scope|any
+default|*|build_scope|any
+arch|riscv64|expect_timeout|400
+arch|riscv64|outer_timeout|1200
+group|heavy|members|core_basic core_sync core_sched core_task core_memory core_syscall core_tracing smp_multicpu ahci_live iommu_live deadline
+group|heavy|expect_timeout|250
+class|testrunner|expected_panic|1
+class|task_fpu|expected_empty|1
+class|smp|arch_scope|x86_64
+class|smp_multicpu|arch_scope|x86_64
+class|ahci_live|arch_scope|x86_64
+class|iommu_live|arch_scope|x86_64
+class|ahci_live|build_scope|debug
+class|iommu_live|build_scope|debug

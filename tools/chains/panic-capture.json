@@ -1,0 +1,30 @@
+{
+  "name": "panic-capture",
+  "description": "Port of `make debug-test x86_64 debug testrunner tools/gdb/test-batch.gdb`: QEMU owned by make debug-test; the GDB script breaks on panic, captures state, touches build/gdb-panic-captured and exits 1. make debug-test intentionally exits 1 on capture, so accept_exit [0,1] and the 'GDB PANIC CAPTURED' marker is the success oracle.",
+  "steps": [
+    {
+      "name": "capture",
+      "type": "shell-command",
+      "command": ["make", "debug-test", "x86_64", "debug", "testrunner", "tools/gdb/test-batch.gdb"],
+      "timeout_policy": {"class": "testrunner", "arch": "x86_64", "key": "outer_timeout"},
+      "accept_exit": [0, 1],
+      "expect_stdout": "GDB PANIC CAPTURED",
+      "on_error": "missing",
+      "next": "ok"
+    },
+    {
+      "name": "ok",
+      "type": "shell-command",
+      "command": ["echo", "panic captured and marker-verified"],
+      "timeout": 10,
+      "next": "stop"
+    },
+    {
+      "name": "missing",
+      "type": "shell-command",
+      "command": ["sh", "-c", "tail -n 40 \"$JARVIS_CHAIN_FAILED_LOG\"; exit 1"],
+      "timeout": 10,
+      "next": "fail"
+    }
+  ]
+}

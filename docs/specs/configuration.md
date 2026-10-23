@@ -214,3 +214,6 @@ Other actions must pass the class normally.  Kills leftover QEMU between runs.
   matrix runs `debug` with the trace OFF.
 - **`CONFIG_DEADLINE_ACTION=1 (PANIC)` is the only expected-fail row** — the
   other 47 must pass.
+- **Compile-time guard block** (`nexios_config.h`, issue #407 item 5):
+  `#if`/`#error` guards for knobs with no validator rule and no use-site
+  assert; `make check-config` is unchanged and still not part of `make build`.
