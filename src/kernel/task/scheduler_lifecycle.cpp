@@ -30,6 +30,7 @@
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/log/dmesg.hpp>
+#include <kernel/console/urc.hpp>
 #include <services/terminal/terminal.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
@@ -449,34 +450,45 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
 // Bounded stack buffer, no locks, no heap; write_fb early-outs on null
 // instance / disabled fb, so this is safe wherever the Logger line
 // itself is safe (incl. the reap loop under scheduler_lock_).
+// Issue #407 item 2: the formatter is extracted so the reap path can
+// enqueue the same byte-identical line as a URC (console deferral) while
+// fb_terminated_line keeps its pinned rendering (test_framebuffer pin).
+static void format_terminated_line(char *out, size_t cap, const char *name,
+                                   uint64_t id) {
+    if (out == nullptr || cap == 0)
+        return;
+    uint64_t written = 0;
+    const char *line_head = "Scheduler: task '";
+    while (*line_head && written < cap - 1)
+        out[written++] = *line_head++;
+    if (name) {
+        for (uint64_t name_idx = 0; name[name_idx] != '\0' &&
+                                    name_idx < CONFIG_TASK_NAME_LEN &&
+                                    written < cap - 1;
+              ++name_idx)
+            out[written++] = name[name_idx];
+    }
+    const char *line_mid = "' (ID=";
+    while (*line_mid && written < cap - 1)
+        out[written++] = *line_mid++;
+    char digit_buf[20];
+    uint64_t digit_pos = 0;
+    uint64_t remaining = id;
+    do {
+        digit_buf[digit_pos++] = static_cast<char>('0' + (remaining % 10));
+        remaining /= 10;
+    } while (remaining && digit_pos < sizeof(digit_buf));
+    while (digit_pos > 0 && written < cap - 1)
+        out[written++] = digit_buf[--digit_pos];
+    const char *line_tail = ") terminated";
+    while (*line_tail && written < cap - 1)
+        out[written++] = *line_tail++;
+    out[written] = '\0';
+}
+
 void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
     char line[160] = {};
-    uint64_t n = 0;
-    const char *p0 = "Scheduler: task '";
-    while (*p0 && n < sizeof(line) - 1)
-        line[n++] = *p0++;
-    if (name) {
-        for (uint64_t i = 0; name[i] != '\0' && i < CONFIG_TASK_NAME_LEN &&
-                             n < sizeof(line) - 1;
-             ++i)
-            line[n++] = name[i];
-    }
-    const char *p1 = "' (ID=";
-    while (*p1 && n < sizeof(line) - 1)
-        line[n++] = *p1++;
-    char rev[20];
-    uint64_t rp = 0;
-    uint64_t v = id;
-    do {
-        rev[rp++] = static_cast<char>('0' + (v % 10));
-        v /= 10;
-    } while (v && rp < sizeof(rev));
-    while (rp > 0 && n < sizeof(line) - 1)
-        line[n++] = rev[--rp];
-    const char *p2 = ") terminated";
-    while (*p2 && n < sizeof(line) - 1)
-        line[n++] = *p2++;
-    line[n] = '\0';
+    format_terminated_line(line, sizeof(line), name, id);
     service::Terminal::write_fb(line);
     service::Terminal::write_fb("\n");
 }
@@ -487,9 +499,22 @@ void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
 void Scheduler::note_termination_and_free(TaskControlBlock *t) noexcept {
     ENSURE(validate_task_ptr(t, "note_termination_and_free"));
     if (!suppress_terminated_log_) {
-        Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
-                     t->id);
-        fb_terminated_line(t->name, t->id); // issue #269
+        // Issue #407 item 2: the console line is a deferred URC, drained
+        // at the next prompt redraw.  The dmesg record (TASK+17) preserves
+        // the machine-readable notice; on queue overflow the legacy
+        // immediate pair keeps the line visible.  Lock order:
+        // scheduler_lock_ -> urc lock (leaf: bounded copy, no calls out).
+        char line[160] = {};
+        format_terminated_line(line, sizeof(line), t->name, t->id);
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 17,
+                            log::LogSeverity::INFO, line, 0);
+        if (!kernel::console::urc::emit(kernel::console::urc::Tag::Kill,
+                                        line)) {
+            Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
+                         t->id);
+            fb_terminated_line(t->name, t->id); // issue #269
+        }
     }
     t->cleanup();
     // Baseline-owned (pinned) blocks are never freed (see can_reap gate

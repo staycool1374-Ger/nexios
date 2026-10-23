@@ -49,7 +49,7 @@ Raw table codes and canonical numbers (`base + raw`) decode identically
 | DAEMON | 10000 | events: 1 exited ERROR, 2 restarted INFO, 3 ensured INFO, 4 terminated INFO, 5 restarting INFO, 6 up INFO, 7 restart-limit ERROR, 8 restart-failed ERROR |
 | PMM | 11000 | `PmmError` 0–4; all non-zero ERROR |
 | VMM | 12000 | `VmmError` 0–4; all non-zero ERROR |
-| TASK | 13000 | `TaskError` 0–9 (9 = TCB corruption, added #234); all non-zero ERROR |
+| TASK | 13000 | `TaskError` 0–9 (9 = TCB corruption, added #234); all non-zero ERROR; event 17 task-terminated INFO (console line deferred as URC, #407 item 2) |
 | BUFPOOL | 14000 | `BufPoolError` 0–7 (3 skipped upstream); all non-zero ERROR |
 | DRIVER | 15000 | `PciError` 0–4 (table) + events 1–10 (see §4) |
 | INIT | 16000 | events 1–17 (see §4) |
@@ -150,6 +150,8 @@ INIT 16001 rc-args WARN, 16002 rc-missing WARN, 16003 rc-invalid ERROR,
 TIMING 17001 deadline-missed ERROR, 17002 budget-exhausted ERROR,
 17003 admission-denied WARN, 17004 liu-leyland-exceed WARN, 17005 wcet-overrun WARN,
 17006 watchdog-expired ERROR.
+TASK 13017 task-terminated INFO (reap path, `note_termination_and_free`;
+console line deferred as URC, #407 item 2).
 TEST 18001 leak-detected ERROR, 18002 count-drift WARN.
 
 ## 5. Emission inventory (who pushes what)
@@ -162,6 +164,8 @@ would flood the ring; every occurrence stays on serial), TCB corruption
 (TASK 9 FATAL), idle OOM (TASK 1 ERROR), deferred-kill full (SCHED 1
 ERROR), terminate refusals (SCHED WARN).
 Task: TCB stack budget/PMM OOM (TASK 1 ERROR).
+Task death console line (TASK 17 INFO): deferred URC drained at prompt
+redraw (#407 item 2); the dmesg record stays the machine-readable notice.
 Daemon: exit/restart/ensure/terminate (DAEMON 1–4), limit (DAEMON 7),
 restart attempts (DAEMON 8).
 Init: rc loop (INIT 1–9), daemon timeout/missing (INIT 10/11),

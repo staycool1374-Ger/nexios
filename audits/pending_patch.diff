@@ -1,426 +1,681 @@
-diff --git a/src/kernel/input/serial_input.cpp b/src/kernel/input/serial_input.cpp
-index 386eef2af..e30699c33 100644
---- a/src/kernel/input/serial_input.cpp
-+++ b/src/kernel/input/serial_input.cpp
-@@ -17,17 +17,21 @@
-  */
- 
- /// @file serial_input.cpp
--/// @brief Serial-injected key decoder (issue #355). See serial_input.hpp.
--/// Empty TU on x86_64 (the i8042 Keyboard owns input there).
-+/// @brief Serial-injected key decoder (issues #355, #407). Ring core is
-+///        compiled on all arches (x86_64 included since #407: the shell
-+///        consumes UART RX through the ring everywhere); only the
-+///        arch::Keyboard facade stays non-x86 (x86_64 owns the i8042
-+///        Keyboard implementation).
- 
- #include <kernel/input/serial_input.hpp>
--
--#if !defined(CONFIG_ARCH_X86_64)
--
--#include <kernel/arch/hal/keyboard.hpp>
- #include <kernel/arch/hal/serial.hpp>
- #include <kernel/nexios_config.h>
- #include <kernel/sync/spsc_ring.hpp>
-+#include <logger.hpp>
+diff --git a/src/kernel/console/urc.cpp b/src/kernel/console/urc.cpp
+new file mode 100644
+index 000000000..0db039714
+--- /dev/null
++++ b/src/kernel/console/urc.cpp
+@@ -0,0 +1,226 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
 +
-+#if !defined(CONFIG_ARCH_X86_64)
-+#include <kernel/arch/hal/keyboard.hpp>
-+#endif
- 
- namespace kernel::input::serial {
- 
-@@ -38,6 +42,7 @@ namespace {
- // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
- static SPSCRing<char, kRingSize> s_ring;
- static size_t s_dropped = 0;
-+static size_t s_overrun = 0;
- static bool s_loopback_active = false;
- #if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_RISCV64)
- static uint8_t s_mcr_saved = 0;
-@@ -65,8 +70,18 @@ void push_decoded(uint8_t byte) {
-         ++s_dropped;
-         return;
-     }
--    if (!s_ring.try_push(out))
-+    if (!s_ring.try_push(out)) {
-+        // Reachable exhaustion (paste burst over 255 while the shell naps):
-+        // fail-closed drop + count, never block, never ENSURE. Throttled
-+        // log: first drop, then every 256th (task context only — pump()
-+        // never runs in an ISR, and Logger::warn is ring-buffered).
-         ++s_dropped;
-+        ++s_overrun;
-+        static constexpr size_t kOverrunLogEvery = 256;
-+        if ((s_overrun & (kOverrunLogEvery - 1)) == 1)
-+            kernel::Logger::warn("serial rx overrun: dropped=%zu",
-+                                 s_overrun);
++/// @file urc.cpp
++/// @brief Bounded prefix-registered async console queue (issue #407 item 2).
++///        FIFO of frozen "[PREFIX] payload" lines; producers emit (ISR-safe),
++///        only the shell task pops at prompt redraw.  Drop-newest on full
++///        with a counted notice; unknown tag / null line / sealed table
++///        are counted rejects, never ENSURE.  Static storage only.
++///        Lock order: urc lock is a leaf (scheduler_lock_ -> urc lock is
++///        the only allowed nesting; no call out of the guarded region).
++
++#include <kernel/console/urc.hpp>
++#include <kernel/sync/spinlock.hpp>
++#include <kernel/sync/irq_spinlock_guard.hpp>
++
++namespace kernel::console::urc {
++
++namespace {
++
++// One frozen line (content chars + NUL).
++struct Slot {
++    char text[kLineMax] = {};
++    uint8_t len = 0;
++    bool used = false;
++};
++
++// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
++static sync::SpinLock s_lock{};
++static Slot s_slots[kQueueDepth] = {};
++static size_t s_head = 0;
++static size_t s_tail = 0;
++static size_t s_count = 0;
++static char s_prefix[kMaxPrefixes][kPrefixMax] = {};
++static bool s_prefix_used[kMaxPrefixes] = {};
++static bool s_sealed = false;
++static size_t s_dropped = 0;
++static size_t s_dropped_seen = 0;
++static size_t s_truncated = 0;
++static size_t s_rejected = 0;
++
++/// @brief Seed the compile-time prefix table (idempotent).
++///        Must run under s_lock.
++void seed_prefixes() {
++    static const char *const kSeed[] = {"ELF", "KILL", "TST"};
++    static constexpr size_t kSeedCount = 3;
++    static_assert(kSeedCount <= static_cast<size_t>(Tag::Count),
++                  "urc seed table exceeds Tag::Count");
++    static_assert(kSeedCount <= kMaxPrefixes, "urc seeds exceed table");
++    for (size_t idx = 0; idx < kSeedCount; ++idx) {
++        size_t pos = 0;
++        for (const char *src = kSeed[idx];
++             *src != '\0' && pos < kPrefixMax - 1; ++src)
++            s_prefix[idx][pos++] = *src;
++        s_prefix[idx][pos] = '\0';
++        s_prefix_used[idx] = true;
 +    }
- }
- 
- } // namespace
-@@ -74,6 +89,7 @@ void push_decoded(uint8_t byte) {
- void reset() {
-     s_ring.reset();
-     s_dropped = 0;
-+    s_overrun = 0;
-     s_loopback_active = false;
- }
- 
-@@ -114,6 +130,22 @@ size_t dropped_count() {
-     return s_dropped;
- }
- 
-+size_t overrun_count() {
-+    return s_overrun;
 +}
 +
-+bool peek_slice(const char *&data, size_t &len) {
-+    SPSCRing<char, kRingSize>::Slice slice =
-+        s_ring.peek_slice(kRingSize);
-+    data = slice.data;
-+    len = slice.len;
-+    return len != 0;
-+}
++} // namespace
 +
-+size_t consume(size_t count) {
-+    return s_ring.consume(count);
-+}
-+
- bool loopback_begin() {
- #if !defined(CONFIG_DEBUG)
-     return false;
-@@ -159,6 +191,7 @@ bool capture_suspended() {
- 
- } // namespace kernel::input::serial
- 
-+#if !defined(CONFIG_ARCH_X86_64)
- // Non-x86 arch::Keyboard: one-line delegates onto the decoder (issue
- // #355). handle_irq is a contract-parity no-op — no UART IRQ exists on
- // these arches. Modifiers are always false: a UART has no modifier
-diff --git a/src/kernel/input/serial_input.hpp b/src/kernel/input/serial_input.hpp
-index f07c7a2e1..8ab8eacd4 100644
---- a/src/kernel/input/serial_input.hpp
-+++ b/src/kernel/input/serial_input.hpp
-@@ -19,12 +19,14 @@
-  */
- 
- /// @file serial_input.hpp
--/// @brief Serial-injected key decoder for architectures without PS/2
--///        (issue #355). A static single-producer ring normalizes UART
--///        bytes into key events: the shell task pumps the UART, the
--///        harness injects bytes directly, consumers pop decoded keys.
--///        Zero allocation, zero locks, polling only — no UART interrupt
--///        exists on these arches and none is enabled here.
-+/// @brief RX ring / key decoder for polled UART input (issues #355,
-+///        #407). A static single-producer ring normalizes UART bytes
-+///        into key events: the shell task pumps the UART, the harness
-+///        injects bytes directly, consumers pop decoded keys or peek
-+///        zero-copy slices. Compiled on x86_64/aarch64/riscv64 — the
-+///        sole UART RX consumer. Zero allocation, zero locks, polling
-+///        only — no UART RX interrupt exists on these arches and none
-+///        is enabled here (IER/IMSC stay 0).
- 
- #include <types.hpp>
- 
-@@ -52,9 +54,29 @@ size_t pump();
- /// @return true with the oldest key iff the ring was non-empty.
- bool pop(char &out);
- 
-+/// @brief Peek the next contiguous decoded run without consuming
-+///        (issue #407: readline fast path). Pumps nothing — call pump()
-+///        (or shell_peek_input) first. The view is valid only until the
-+///        next consume/pop/pump; consume strictly last.
-+/// @param data Receives the run pointer (valid until next ring update).
-+/// @param len  Receives the run length (0 when empty).
-+/// @return true iff a non-empty run is exposed.
-+bool peek_slice(const char *&data, size_t &len);
-+
-+/// @brief Consume a previously peeked run (issue #407).
-+///        Consumer-only; clamps to the readable count.
-+/// @param count Bytes to drop.
-+/// @return Bytes actually consumed.
-+size_t consume(size_t count);
-+
- /// @brief Ring-full drops since boot (diagnostic, monotonic).
- size_t dropped_count();
- 
-+/// @brief Ring-full overrun events since boot (issue #407: counts each
-+///        dropped byte that arrived while the ring was full; diagnostic,
-+///        monotonic, throttled-logged at the push site).
-+size_t overrun_count();
-+
- /// @brief Enter the MCR loopback window (riscv64 debug builds only).
- /// Fail-closed: false on other arches, in release, when already
- /// active, on a foreign LOOP bit, or on read-back mismatch.
-diff --git a/src/kernel/sync/spsc_ring.hpp b/src/kernel/sync/spsc_ring.hpp
-index 69c32f236..6ada3e16e 100644
---- a/src/kernel/sync/spsc_ring.hpp
-+++ b/src/kernel/sync/spsc_ring.hpp
-@@ -35,6 +35,16 @@ template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
-     static constexpr size_t MASK = N - 1;
- 
-   public:
-+    /// @brief Zero-copy view into the readable region (issue #407).
-+    /// @field data Pointer to the first readable element (contiguous run
-+    ///         only — a wrapped region needs two peeks with a consume
-+    ///         between them).
-+    /// @field len  Number of readable elements from data (0 when empty).
-+    struct Slice {
-+        const T *data = nullptr;
-+        size_t len = 0;
-+    };
-+
-     /// @brief Push an item (discards if full).
-     /// @return true on success.
-     bool try_push(const T &item) {
-@@ -66,6 +76,51 @@ template <kernel::TriviallyCopiable T, size_t N> class SPSCRing {
-                kernel::atomic_load(&tail_, __ATOMIC_ACQUIRE);
-     }
- 
-+    /// @brief Peek the next contiguous readable run without consuming
-+    ///        (issue #407: readline fast path — scan + bulk copy, no
-+    ///        per-byte pop).
-+    ///        Consumer-only. The returned region stays valid only until
-+    ///        the next consume/try_pop/push-side wrap: the producer
-+    ///        never writes inside [tail, head), so the view is stable
-+    ///        while the consumer holds it without advancing.
-+    /// @param max_len Upper bound on the reported run (bounds the scan).
-+    /// @return Slice with len 0 and data nullptr when empty.
-+    Slice peek_slice(size_t max_len) const {
-+        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
-+        size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
-+        size_t used = (h + N - t) & MASK;
-+        size_t contiguous = N - (t & MASK);
-+        size_t len = used;
-+        if (len > contiguous)
-+            len = contiguous;
-+        if (len > max_len)
-+            len = max_len;
-+        Slice out{};
-+        if (len != 0) {
-+            out.data = &data_[t & MASK];
-+            out.len = len;
++bool emit(Tag tag, const char *line) {
++    sync::IrqSpinLockGuard guard(s_lock);
++    if (!s_prefix_used[0])
++        seed_prefixes();
++    if (line == nullptr) {
++        ++s_rejected;
++        return false;
++    }
++    const auto id = static_cast<uint8_t>(tag);
++    if (id >= static_cast<uint8_t>(Tag::Count) || !s_prefix_used[id]) {
++        ++s_rejected;
++        return false;
++    }
++    if (s_count >= kQueueDepth) {
++        ++s_dropped; // drop-newest: the queued prefix of history survives
++        return false;
++    }
++    Slot *slot = &s_slots[s_tail];
++    size_t pos = 0;
++    slot->text[pos++] = '[';
++    for (size_t idx = 0; s_prefix[id][idx] != '\0' && pos < kLineMax - 1;
++         ++idx)
++        slot->text[pos++] = s_prefix[id][idx];
++    slot->text[pos++] = ']';
++    if (pos < kLineMax - 1)
++        slot->text[pos++] = ' ';
++    bool truncated = false;
++    for (const char *src = line; *src != '\0'; ++src) {
++        if (pos >= kLineMax - 1) {
++            truncated = true;
++            break;
 +        }
-+        return out;
++        slot->text[pos++] = *src;
 +    }
-+
-+    /// @brief Advance the consumer past count elements (issue #407).
-+    ///        Consumer-only. Clamps to the readable count — never
-+    ///        asserts on caller error (reachable over-consumption is a
-+    ///        drop, not an invariant violation).
-+    /// @param count Elements to drop (e.g. a scanned slice run).
-+    /// @return Elements actually consumed.
-+    size_t consume(size_t count) {
-+        size_t t = kernel::atomic_load(&tail_, __ATOMIC_RELAXED);
-+        size_t h = kernel::atomic_load(&head_, __ATOMIC_ACQUIRE);
-+        size_t used = (h + N - t) & MASK;
-+        if (count > used)
-+            count = used;
-+        if (count != 0)
-+            kernel::atomic_store(&tail_, (t + count) & MASK,
-+                                 __ATOMIC_RELEASE);
-+        return count;
++    if (truncated) {
++        slot->text[kLineMax - 2] = '.';
++        slot->text[kLineMax - 3] = '.';
++        slot->text[kLineMax - 4] = '.';
++        ++s_truncated;
 +    }
++    slot->text[pos < kLineMax ? pos : kLineMax - 1] = '\0';
++    slot->len = static_cast<uint8_t>(pos < kLineMax ? pos : kLineMax - 1);
++    slot->used = true;
++    s_tail = (s_tail + 1) % kQueueDepth;
++    ++s_count;
++    return true;
++}
 +
-     /// @brief Reset to empty state.  QUIESCENT-ONLY — must not be called
-     ///        while either side is active (the head/tail pair is not
-     ///        published atomically together).
++bool pop(char *out, size_t cap) {
++    if (out == nullptr || cap == 0)
++        return false;
++    sync::IrqSpinLockGuard guard(s_lock);
++    if (s_count == 0)
++        return false;
++    Slot *slot = &s_slots[s_head];
++    size_t take = slot->len;
++    if (take > cap - 1)
++        take = cap - 1;
++    for (size_t idx = 0; idx < take; ++idx)
++        out[idx] = slot->text[idx];
++    out[take] = '\0';
++    slot->used = false;
++    slot->len = 0;
++    s_head = (s_head + 1) % kQueueDepth;
++    --s_count;
++    return true;
++}
++
++bool pending() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    return s_count != 0;
++}
++
++size_t take_dropped() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    const size_t delta = s_dropped - s_dropped_seen;
++    s_dropped_seen = s_dropped;
++    return delta;
++}
++
++size_t dropped_count() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    return s_dropped;
++}
++
++size_t truncated_count() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    return s_truncated;
++}
++
++size_t rejected_count() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    return s_rejected;
++}
++
++uint8_t register_prefix(const char *prefix) {
++    if (prefix == nullptr)
++        return kNoPrefix;
++    sync::IrqSpinLockGuard guard(s_lock);
++    if (!s_prefix_used[0])
++        seed_prefixes();
++    if (s_sealed) {
++        ++s_rejected;
++        return kNoPrefix;
++    }
++    for (uint8_t id = 0; id < kMaxPrefixes; ++id) {
++        if (!s_prefix_used[id]) {
++            size_t pos = 0;
++            for (const char *src = prefix;
++                 *src != '\0' && pos < kPrefixMax - 1; ++src)
++                s_prefix[id][pos++] = *src;
++            s_prefix[id][pos] = '\0';
++            s_prefix_used[id] = true;
++            return id;
++        }
++    }
++    ++s_rejected;
++    return kNoPrefix;
++}
++
++void seal() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    s_sealed = true;
++}
++
++bool sealed() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    return s_sealed;
++}
++
++void reset() {
++    sync::IrqSpinLockGuard guard(s_lock);
++    s_head = 0;
++    s_tail = 0;
++    s_count = 0;
++    for (size_t idx = 0; idx < kQueueDepth; ++idx) {
++        s_slots[idx].used = false;
++        s_slots[idx].len = 0;
++    }
++    for (size_t idx = static_cast<size_t>(Tag::Count); idx < kMaxPrefixes;
++         ++idx)
++        s_prefix_used[idx] = false;
++    s_sealed = false;
++    s_dropped = 0;
++    s_dropped_seen = 0;
++    s_truncated = 0;
++    s_rejected = 0;
++}
++
++} // namespace kernel::console::urc
+diff --git a/src/kernel/console/urc.hpp b/src/kernel/console/urc.hpp
+new file mode 100644
+index 000000000..ea128e15d
+--- /dev/null
++++ b/src/kernel/console/urc.hpp
+@@ -0,0 +1,102 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file urc.hpp
++/// @brief Bounded prefix-registered async console queue (issue #407 item 2).
++///        Unsolicited result codes (URCs): background producers enqueue
++///        short text lines; only the shell task pops and prints them at
++///        prompt redraw, so async output never interleaves a typed line.
++///        FIFO, drop-newest on overflow with a counted notice, ISR-safe
++///        enqueue, static storage only (no ResourceTracker impact).
++
++#pragma once
++
++#include <types.hpp>
++
++namespace kernel::console::urc {
++
++// Payload line capacity (content chars, excluding the NUL).  Every loop
++// in this module is bounded by one of the constants below.
++static constexpr size_t kLineMax = 128;
++// Queued lines.  Full => drop-newest + dropped_count, never overwrite.
++static constexpr size_t kQueueDepth = 16;
++// Max lines the shell drains per prompt pass (keeps redraw bounded).
++static constexpr size_t kDrainMaxPerPass = 8;
++// Prefix registry slots (compile-time tags + late producers).
++static constexpr size_t kMaxPrefixes = 8;
++// Prefix text capacity (chars, excluding the NUL).
++static constexpr size_t kPrefixMax = 8;
++// register_prefix failure sentinel (no free slot, or sealed).
++static constexpr uint8_t kNoPrefix = 0xFF;
++
++/// @brief Producer tags.  Order matches the compile-time prefix table.
++enum class Tag : uint8_t {
++    Elf = 0, ///< ELF loader progress lines ("[ELF] ...").
++    Kill = 1, ///< Task-death notices ("[KILL] ...").
++    Test = 2, ///< Test seam lines ("[TST] ...").
++    Count = 3, ///< Tag count (not a producer).
++};
++
++/// @brief Enqueue one async line (ISR-safe, bounded, never blocks).
++///        The line is frozen at enqueue ("[PREFIX] " + payload,
++///        truncated with "..." past kLineMax-1).  Full queue drops the
++///        new line and counts it (drop-newest: the queued prefix of
++///        history survives).  Unknown tag or unregistered prefix is a
++///        counted reject, never ENSURE.
++/// @param tag Producer tag (< Tag::Count, prefix registered).
++/// @param line NUL-terminated payload (nullptr => counted reject).
++/// @return true iff the line was queued.
++[[nodiscard]] bool emit(Tag tag, const char *line);
++
++/// @brief Pop the oldest queued line (shell task only).
++/// @param out Receives the line (always NUL-terminated).
++/// @param cap Capacity of out in bytes (0/nullptr => false).
++/// @return true iff a line was available.
++bool pop(char *out, size_t cap);
++
++/// @brief True iff at least one line is queued.
++[[nodiscard]] bool pending();
++
++/// @brief Drops since the last call (consumes the delta).
++/// @return Number of lines dropped since the previous take_dropped().
++[[nodiscard]] size_t take_dropped();
++
++/// @brief Lifetime drops (monotonic, never reset except reset()).
++[[nodiscard]] size_t dropped_count();
++/// @brief Lifetime payload truncations (monotonic).
++[[nodiscard]] size_t truncated_count();
++/// @brief Lifetime rejects (null line, unknown tag, sealed/full table).
++[[nodiscard]] size_t rejected_count();
++
++/// @brief Register a late producer prefix (boot only, before seal()).
++/// @param prefix Short tag text (<= kPrefixMax-1 chars, clamped).
++/// @return Prefix id for emit, or kNoPrefix when sealed/full (counted).
++[[nodiscard]] uint8_t register_prefix(const char *prefix);
++
++/// @brief Freeze the prefix table (idempotent, shell boot path).
++void seal();
++/// @brief True once seal() has run.
++[[nodiscard]] bool sealed();
++
++/// @brief Quiescent-only reset (tests): drains the queue, zeroes
++///        indices/counters/seal, keeps the compile-time prefixes.
++///        NOT ISR-safe against concurrent emit — call only when no
++///        producer can fire.
++void reset();
++
++} // namespace kernel::console::urc
+diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
+index 944a1cd1d..cf8c566d3 100644
+--- a/src/kernel/elf/elf_loader.cpp
++++ b/src/kernel/elf/elf_loader.cpp
+@@ -29,6 +29,7 @@
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/vfs/vfs.hpp>
+ #include <kernel/log/dmesg.hpp>
++#include <kernel/console/urc.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
+ #include <kernel/arch/hal/irq_guard.hpp>
+ #include <kernel/syscall/syscall_helpers.hpp>
+@@ -1309,15 +1310,20 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
+         break;
+     }
+     log::dmesg_push_sev(log::ErrorSubsystem::ELF, canon, sev, slot, 0);
+-    kernel::Logger::info("%s", slot);
+-    // Live-session finding (#77 report): loader progress must ALSO reach
+-    // the framebuffer console — Logger serves serial/dmesg only, so
+-    // framebuffer users never saw completions.  write_fb renders pixels
+-    // without touching serial (no duplicate lines) or the shell capture
+-    // buffer (async loader text must not pollute redirections); the
+-    // shell's async-redraw guard already absorbs the interleaving.
+-    service::Terminal::write_fb(slot);
+-    service::Terminal::write_fb("\n");
++    // Issue #407 item 2: the console line is a deferred URC, drained at
++    // the next prompt redraw — no raw interleave with typed input.  The
++    // queue is bounded: on overflow the legacy immediate pair keeps the
++    // line visible, so no notice disappears.
++    if (!kernel::console::urc::emit(kernel::console::urc::Tag::Elf, slot)) {
++        kernel::Logger::info("%s", slot);
++        // Live-session finding (#77 report): loader progress must ALSO reach
++        // the framebuffer console — Logger serves serial/dmesg only, so
++        // framebuffer users never saw completions.  write_fb renders pixels
++        // without touching serial (no duplicate lines) or the shell capture
++        // buffer (async loader text must not pollute redirections).
++        service::Terminal::write_fb(slot);
++        service::Terminal::write_fb("\n");
++    }
+ }
+ 
+ void ElfLoader::cleanup_and_idle() {
+diff --git a/src/kernel/task/scheduler_lifecycle.cpp b/src/kernel/task/scheduler_lifecycle.cpp
+index b7e793c5c..8ebae303a 100644
+--- a/src/kernel/task/scheduler_lifecycle.cpp
++++ b/src/kernel/task/scheduler_lifecycle.cpp
+@@ -30,6 +30,7 @@
+ #include <kernel/memory/kernel_object.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/log/dmesg.hpp>
++#include <kernel/console/urc.hpp>
+ #include <services/terminal/terminal.hpp>
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/io.hpp>
+@@ -449,34 +450,45 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
+ // Bounded stack buffer, no locks, no heap; write_fb early-outs on null
+ // instance / disabled fb, so this is safe wherever the Logger line
+ // itself is safe (incl. the reap loop under scheduler_lock_).
+-void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
+-    char line[160] = {};
+-    uint64_t n = 0;
+-    const char *p0 = "Scheduler: task '";
+-    while (*p0 && n < sizeof(line) - 1)
+-        line[n++] = *p0++;
++// Issue #407 item 2: the formatter is extracted so the reap path can
++// enqueue the same byte-identical line as a URC (console deferral) while
++// fb_terminated_line keeps its pinned rendering (test_framebuffer pin).
++static void format_terminated_line(char *out, size_t cap, const char *name,
++                                   uint64_t id) {
++    if (out == nullptr || cap == 0)
++        return;
++    uint64_t written = 0;
++    const char *line_head = "Scheduler: task '";
++    while (*line_head && written < cap - 1)
++        out[written++] = *line_head++;
+     if (name) {
+-        for (uint64_t i = 0; name[i] != '\0' && i < CONFIG_TASK_NAME_LEN &&
+-                             n < sizeof(line) - 1;
+-             ++i)
+-            line[n++] = name[i];
++        for (uint64_t name_idx = 0; name[name_idx] != '\0' &&
++                                    name_idx < CONFIG_TASK_NAME_LEN &&
++                                    written < cap - 1;
++              ++name_idx)
++            out[written++] = name[name_idx];
+     }
+-    const char *p1 = "' (ID=";
+-    while (*p1 && n < sizeof(line) - 1)
+-        line[n++] = *p1++;
+-    char rev[20];
+-    uint64_t rp = 0;
+-    uint64_t v = id;
++    const char *line_mid = "' (ID=";
++    while (*line_mid && written < cap - 1)
++        out[written++] = *line_mid++;
++    char digit_buf[20];
++    uint64_t digit_pos = 0;
++    uint64_t remaining = id;
+     do {
+-        rev[rp++] = static_cast<char>('0' + (v % 10));
+-        v /= 10;
+-    } while (v && rp < sizeof(rev));
+-    while (rp > 0 && n < sizeof(line) - 1)
+-        line[n++] = rev[--rp];
+-    const char *p2 = ") terminated";
+-    while (*p2 && n < sizeof(line) - 1)
+-        line[n++] = *p2++;
+-    line[n] = '\0';
++        digit_buf[digit_pos++] = static_cast<char>('0' + (remaining % 10));
++        remaining /= 10;
++    } while (remaining && digit_pos < sizeof(digit_buf));
++    while (digit_pos > 0 && written < cap - 1)
++        out[written++] = digit_buf[--digit_pos];
++    const char *line_tail = ") terminated";
++    while (*line_tail && written < cap - 1)
++        out[written++] = *line_tail++;
++    out[written] = '\0';
++}
++
++void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
++    char line[160] = {};
++    format_terminated_line(line, sizeof(line), name, id);
+     service::Terminal::write_fb(line);
+     service::Terminal::write_fb("\n");
+ }
+@@ -487,9 +499,22 @@ void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
+ void Scheduler::note_termination_and_free(TaskControlBlock *t) noexcept {
+     ENSURE(validate_task_ptr(t, "note_termination_and_free"));
+     if (!suppress_terminated_log_) {
+-        Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
+-                     t->id);
+-        fb_terminated_line(t->name, t->id); // issue #269
++        // Issue #407 item 2: the console line is a deferred URC, drained
++        // at the next prompt redraw.  The dmesg record (TASK+17) preserves
++        // the machine-readable notice; on queue overflow the legacy
++        // immediate pair keeps the line visible.  Lock order:
++        // scheduler_lock_ -> urc lock (leaf: bounded copy, no calls out).
++        char line[160] = {};
++        format_terminated_line(line, sizeof(line), t->name, t->id);
++        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
++                            log::kDmesgBase_TASK + 17,
++                            log::LogSeverity::INFO, line, 0);
++        if (!kernel::console::urc::emit(kernel::console::urc::Tag::Kill,
++                                        line)) {
++            Logger::info("Scheduler: task '%s' (ID=%u) terminated", t->name,
++                         t->id);
++            fb_terminated_line(t->name, t->id); // issue #269
++        }
+     }
+     t->cleanup();
+     // Baseline-owned (pinned) blocks are never freed (see can_reap gate
 diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index e6c2cb35d..eb5724316 100644
+index eb5724316..22025fba9 100644
 --- a/src/services/shell.cpp
 +++ b/src/services/shell.cpp
-@@ -26,6 +26,7 @@
- #include <kernel/task/task.hpp>
+@@ -27,6 +27,7 @@
  #include <kernel/core/global_state.hpp>
  #include <kernel/elf/elf_loader.hpp>
-+#include <kernel/input/serial_input.hpp>
+ #include <kernel/input/serial_input.hpp>
++#include <kernel/console/urc.hpp>
  #include <kernel/memory/pmm.hpp>
  #include <kernel/memory/vmm.hpp>
  #include <kernel/arch/timer.hpp>
-@@ -132,31 +133,22 @@ void shell_input_timeout_fire(void *context) {
-     shell_input_notify().notify(1);
+@@ -232,6 +233,21 @@ size_t shell_consume_input(size_t count) {
+     return kernel::input::serial::consume(count);
  }
  
--// Issue #340 P2: central keyboard/serial input poll. Order: serial
--// (separate source, always first) → iocd daemon (keyboard bytes routed
--// there when owned) → hardware ring, but ONLY when the daemon is down
--// (pid 0 or send_sync refused): when the daemon is up the ring is empty
--// by the single-ownership invariant, and draining it would risk double
--// delivery. Never blocks on the daemon beyond one send_sync round-trip
--// (fail-open); shell liveness never depends on iocd.
-+// Issue #340 P2 central input poll (issue #407: ring-first). Order: RX
-+// ring (the sole UART RX consumer — pumped by the caller, never polled
-+// raw here, preserving the single-reader LSR/RBR proof) → iocd daemon
-+// (keyboard bytes routed there when owned) → hardware ring, but ONLY on
-+// x86_64 when the daemon is down (pid 0 or send_sync refused): when the
-+// daemon is up the ring is empty by the single-ownership invariant, and
-+// draining it would risk double delivery. Off-x86 has no hardware ring
-+// tail (PS/2 does not exist there). Never blocks on the daemon beyond
-+// one send_sync round-trip (fail-open); shell liveness never depends
-+// on iocd.
- // Issue #303 item 3: service::-scope test seam (declared in shell.hpp)
- // so the P2 key-delivery path is automatable by a shell-level test.
- // Zero logic change on the move out of the anonymous namespace.
--bool shell_try_get_key_impl(char &out) {
--#if defined(CONFIG_ARCH_X86_64)
--    if (arch::Serial::poll_getchar(out))
--        return true;
--#else
--    // Issue #355: decoder-first on non-x86. Serial-first would let raw
--    // bytes bypass normalization and split one keystroke stream between
--    // two sources — the decoder owns the UART when healthy; the raw
--    // poll below is the fail-open fallback only.
--    (void)arch::Keyboard::pump_serial();
--    if (arch::Keyboard::getchar(out))
-+bool shell_try_get_key_after_pump(char &out) {
-+    if (kernel::input::serial::pop(out))
-         return true;
--    if (arch::Serial::poll_getchar(out))
--        return true;
--#endif
-     uint64_t pid = kernel::iocd::get_iocd_pid();
-     if (pid != 0) {
-         kernel::iocd::Msg req{};
-@@ -181,7 +173,11 @@ bool shell_try_get_key_impl(char &out) {
-         }
-         // send_sync refused (daemon dying): fall through to hardware.
-     }
-+#if defined(CONFIG_ARCH_X86_64)
-     return arch::Keyboard::getchar(out);
-+#else
-+    return false;
-+#endif
- }
- 
- void shell_idle_nap(uint64_t timeout_us) {
-@@ -220,11 +216,20 @@ void shell_idle_nap(uint64_t timeout_us) {
- } // namespace
- 
- /// @brief Test seam (issue #303 item 3): P2 key-delivery poll exposed so a
--///        shell-level test can drive the exact production path (serial →
--///        iocd daemon → hardware ring). Zero-logic wrapper over the
--///        internal poll above.
-+///        shell-level test can drive the exact production path (RX ring →
-+///        iocd daemon → hardware ring). Pumps the UART (bounded) first.
- bool shell_try_get_key(char &out) {
--    return shell_try_get_key_impl(out);
-+    (void)kernel::input::serial::pump();
-+    return shell_try_get_key_after_pump(out);
++/// @brief Test seam (issue #407 item 2): drive the production URC drain.
++static bool flush_urcs();
++static void redraw_after_async(int exit_code, const char *buf, size_t len);
++
++bool shell_flush_urcs_for_test() {
++    return flush_urcs();
 +}
 +
-+bool shell_peek_input(const char *&data, size_t &len) {
-+    (void)kernel::input::serial::pump();
-+    return kernel::input::serial::peek_slice(data, len);
++/// @brief Test seam (issue #407 item 2): drive the production redraw.
++void shell_redraw_for_test(const char *buf, size_t len, int exit_code) {
++    if (buf == nullptr)
++        return;
++    redraw_after_async(exit_code, buf, len);
 +}
 +
-+size_t shell_consume_input(size_t count) {
-+    return kernel::input::serial::consume(count);
- }
- 
  static void background_task_wrapper() {
-@@ -530,6 +535,8 @@ static void draw_prompt(int exit_code) {
+     auto* task = kernel::Scheduler::current_task();
+     auto* entry = task ? reinterpret_cast<void (*)()>(task->user_data) : nullptr;
+@@ -534,6 +550,67 @@ static void draw_prompt(int exit_code) {
+     Terminal::write("$ ");
  }
  
++/// @brief Drain queued async (URC) lines to the console (issue #407 item 2).
++///        Prints a leading newline only when the cursor is mid-line, then a
++///        coalesced "[URC] N dropped" notice for queue overflow, then up to
++///        kDrainMaxPerPass queued lines.  No lock is held while printing:
++///        pop() copies each line out under the queue guard.
++/// @return True iff anything was printed (caller must redraw the prompt).
++static bool flush_urcs() {
++    using kernel::console::urc::kDrainMaxPerPass;
++    using kernel::console::urc::kLineMax;
++    bool printed = false;
++    if (!Terminal::at_line_start()) {
++        Terminal::putchar('\n');
++        printed = true;
++    }
++    const size_t dropped = kernel::console::urc::take_dropped();
++    if (dropped > 0) {
++        // Bounded decimal render, no Logger (the drain path must not
++        // recurse into queued producers).
++        char note[32] = {};
++        size_t note_pos = 0;
++        const char *notice_head = "[URC] ";
++        while (*notice_head != '\0' && note_pos < sizeof(note) - 1)
++            note[note_pos++] = *notice_head++;
++        char digit_buf[20] = {};
++        size_t digit_pos = 0;
++        size_t remaining = dropped;
++        do {
++            digit_buf[digit_pos++] = static_cast<char>('0' + (remaining % 10));
++            remaining /= 10;
++        } while (remaining != 0 && digit_pos < sizeof(digit_buf));
++        while (digit_pos > 0 && note_pos < sizeof(note) - 1)
++            note[note_pos++] = digit_buf[--digit_pos];
++        const char *notice_tail = " dropped";
++        while (*notice_tail != '\0' && note_pos < sizeof(note) - 1)
++            note[note_pos++] = *notice_tail++;
++        note[note_pos] = '\0';
++        Terminal::write(note);
++        Terminal::putchar('\n');
++        printed = true;
++    }
++    for (size_t idx = 0; idx < kDrainMaxPerPass; ++idx) {
++        char line[kLineMax] = {};
++        if (!kernel::console::urc::pop(line, sizeof(line)))
++            break;
++        Terminal::write(line);
++        Terminal::putchar('\n');
++        printed = true;
++    }
++    return printed;
++}
++
++/// @brief Reprint the prompt plus the already-typed buffer after async
++///        output was flushed (exact extraction of the former inline block).
++static void redraw_after_async(int exit_code, const char *buf, size_t len) {
++    if (!Terminal::at_line_start())
++        Terminal::putchar('\n');
++    draw_prompt(exit_code);
++    for (size_t i = 0; i < len; ++i)
++        Terminal::putchar(buf[i]);
++}
++
  static bool readline(char* buf, size_t max_len, int exit_code) {
-+    if (buf == nullptr || max_len == 0)
-+        return false;
-     size_t pos = 0;
-     static uint64_t last_blink = 0;
-     static bool cursor_on = false;
-@@ -554,11 +561,45 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
+     if (buf == nullptr || max_len == 0)
+         return false;
+@@ -602,13 +679,16 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
          }
- 
-         char c = 0;
--        // Input order (issues #245/#340/#355): decoder-owned UART first
--        // on aarch64/riscv64 (Keyboard pump + ring), raw Serial poll as
--        // fail-open fallback, then the iocd-routed keyboard, then the
--        // hardware ring fallback. x86: serial → iocd → ring (unchanged).
--        bool got_char = shell_try_get_key(c);
-+        // Input order (issues #245/#340/#355/#407): bounded pump, then
-+        // the zero-copy slice fast path (bulk-consume the next
-+        // contiguous decoded run; the scan stops at line/edit control
-+        // bytes), then the single-char path. x86 serial flows through
-+        // the ring like every arch (no raw COM1 bypass).
-+        bool got_char = false;
-+        const char *slice = nullptr;
-+        size_t slice_len = 0;
-+        if (shell_peek_input(slice, slice_len)) {
-+            size_t run = 0;
-+            while (run < slice_len && slice[run] != '\n' &&
-+                   slice[run] != '\r' && slice[run] != '\b' &&
-+                   slice[run] != 0x7F)
-+                ++run;
-+            if (run > 0) {
-+                redraw_cursor(true);
-+                const size_t limit = max_len - 1;
-+                const size_t room = pos < limit ? limit - pos : 0;
-+                const size_t copy = run < room ? run : room;
-+                __builtin_memcpy(buf + pos, slice, copy);
-+                for (size_t idx = 0; idx < copy; ++idx) {
-+                    Terminal::putchar(slice[idx]);
-+                    // Issue #248: this echo is ours, not async
-+                    // background output — re-sync per character.
-+                    prompt_serial = arch::Serial::write_count();
-+                }
-+                pos += copy;
-+                // Consume the whole scanned run, including any
-+                // over-capacity tail (matches the single-char drop
-+                // when the line buffer is full).
-+                shell_consume_input(run);
-+                continue;
-+            }
-+            // Control byte at the ring head: single-char path below.
-+            // Already pumped — no second pump.
-+            got_char = shell_try_get_key_after_pump(c);
-+        } else {
-+            got_char = shell_try_get_key(c);
-+        }
  
          if (!got_char) {
-             // Async background output arrived?  Move to a fresh line and
-@@ -732,6 +773,14 @@ void Shell::shell_task_main() {
+-            // Async background output arrived?  Move to a fresh line and
+-            // redraw the prompt + any input typed so far.
+-            if (arch::Serial::write_count() != prompt_serial) {
+-                Terminal::putchar('\n');
+-                draw_prompt(exit_code);
+-                for (size_t i = 0; i < pos; ++i)
+-                    Terminal::putchar(buf[i]);
++            // Async output arrived?  Drain the URC queue first (reliable
++            // on every arch — unlike the serial write-count guard, which
++            // is x86-blind), then fall back to the legacy guard for
++            // direct serial writers.  Either way, move to a fresh line
++            // and redraw the prompt + any input typed so far.
++            const bool urc_printed = flush_urcs();
++            const bool legacy_async =
++                arch::Serial::write_count() != prompt_serial;
++            if (urc_printed || legacy_async) {
++                redraw_after_async(exit_code, buf, pos);
+                 prompt_serial = arch::Serial::write_count();
+             }
+             // Idle nap instead of pause-spin (shell efficiency): sleep
+@@ -732,6 +812,11 @@ static void update_status_bar() {
+ void Shell::shell_task_main() {
+     if (!initialized_) init();
+ 
++    // Issue #407 item 2: freeze the URC prefix table once the shell is
++    // interactive — late producer registration past this point is a
++    // counted reject (boot-order mistake stays visible, never silent).
++    kernel::console::urc::seal();
++
+     // Enable dmesg recording now that the shell is interactive
+     // (release mode suppresses boot/test entries for a clean console).
+     kernel::log::DmesgService::instance().set_suppressed(false);
+@@ -770,6 +855,9 @@ void Shell::shell_task_main() {
+         }
+         update_status_bar();
+ 
++        // Issue #407 item 2: drain any lines queued since the last pass
++        // before drawing the prompt, so async output lands above it.
++        (void)flush_urcs();
          draw_prompt(last_exit_code_);
  
          arch::Keyboard::flush();
-+#if defined(CONFIG_ARCH_X86_64)
-+        // Issue #407: x86 prompt-time type-ahead parity. Non-x86
-+        // flush() already resets the ring through the Keyboard facade;
-+        // x86 owns the i8042 Keyboard, so reset the serial ring here
-+        // explicitly (matches the pre-#407 raw-COM1 behavior where each
-+        // prompt started with a drained UART).
-+        kernel::input::serial::reset();
-+#endif
-         if (readline(line, BUF_SIZE, last_exit_code_)) {
-             last_exit_code_ = parse_and_exec(line);
-             update_status_bar();
 diff --git a/src/services/shell.hpp b/src/services/shell.hpp
-index 07d998f4a..4cd906dd9 100644
+index 4cd906dd9..0bc263d06 100644
 --- a/src/services/shell.hpp
 +++ b/src/services/shell.hpp
-@@ -235,9 +235,24 @@ private:
- };
+@@ -255,4 +255,17 @@ bool shell_peek_input(const char *&data, size_t &len);
+ /// @return Bytes actually consumed.
+ size_t shell_consume_input(size_t count);
  
- /// @brief Test seam (issue #303 item 3): P2 central keyboard/serial input
--///        poll (serial → iocd daemon → hardware ring). Zero-logic wrapper
--///        over the internal poll; lets a shell-level test drive the exact
-+///        poll (RX ring → iocd daemon → hardware ring, issue #407). Pumps
-+///        the UART (bounded) before polling. Zero-logic wrapper over the
-+///        internal poll; lets a shell-level test drive the exact
- ///        production path including daemon delivery.
- bool shell_try_get_key(char &out);
- 
-+/// @brief Peek the next contiguous decoded input run without consuming
-+///        (issue #407: readline fast path + test seam). Pumps the UART
-+///        (bounded) then exposes the ring run; consume strictly last.
-+/// @param data Receives the run pointer (valid until next ring update).
-+/// @param len  Receives the run length (0 when empty).
-+/// @return true iff a non-empty run is exposed.
-+bool shell_peek_input(const char *&data, size_t &len);
++/// @brief Test seam (issue #407 item 2): drive the production URC drain
++///        (flush_urcs) so a shell-level test pins framing, the drop
++///        notice, and the per-pass drain bound. Zero-logic pass-through.
++/// @return True iff the production drain printed anything.
++bool shell_flush_urcs_for_test();
 +
-+/// @brief Consume a previously peeked input run (issue #407).
-+///        Delegates to the RX ring; clamps to the readable count.
-+/// @param count Bytes to drop.
-+/// @return Bytes actually consumed.
-+size_t shell_consume_input(size_t count);
++/// @brief Test seam (issue #407 item 2): drive the production prompt
++///        redraw (redraw_after_async). Zero-logic pass-through.
++/// @param buf Already-typed line buffer to reprint.
++/// @param len Bytes of buf to reprint.
++/// @param exit_code Exit status the prompt glyph reflects.
++void shell_redraw_for_test(const char *buf, size_t len, int exit_code);
 +
  } // namespace service
+diff --git a/src/services/terminal/terminal.hpp b/src/services/terminal/terminal.hpp
+index 053d3668f..ecb0ec721 100644
+--- a/src/services/terminal/terminal.hpp
++++ b/src/services/terminal/terminal.hpp
+@@ -99,6 +99,15 @@ public:
+     /// @param visible True to draw cursor, false to erase it.
+     static void set_cursor_visible(bool visible);
+ 
++    /// @brief True iff the framebuffer cursor is at a line start.
++    ///        Read-only: no serial, framebuffer, or capture side effect.
++    ///        Lets the shell decide whether a drained async block needs a
++    ///        leading newline (issue #407 item 2).
++    /// @return True when uninitialised or cursor_x_ == 0.
++    static bool at_line_start() {
++        return instance_ == nullptr || instance_->cursor_x_ == 0;
++    };
++
+     /// @brief Begin capturing serial output into a buffer (for shell redirection).
+     /// @param buf Buffer to write captured output into.
+     /// @param size Maximum bytes to capture (capture stops when full).

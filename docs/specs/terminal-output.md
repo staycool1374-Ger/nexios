@@ -40,3 +40,5 @@ no syscalls). First consumer: kernel-shell `top` rendering
 
 No ANSI parser/emitter, no scrollback buffer, no Logger/dmesg
 migration, no `userspace/top.c` rewrite (24-line stub stays).
+Async (URC) console discipline lives in `docs/specs/console-urc.md`
+(#407 item 2), not here.

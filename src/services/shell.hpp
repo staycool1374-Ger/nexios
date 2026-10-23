@@ -255,4 +255,17 @@ bool shell_peek_input(const char *&data, size_t &len);
 /// @return Bytes actually consumed.
 size_t shell_consume_input(size_t count);
 
+/// @brief Test seam (issue #407 item 2): drive the production URC drain
+///        (flush_urcs) so a shell-level test pins framing, the drop
+///        notice, and the per-pass drain bound. Zero-logic pass-through.
+/// @return True iff the production drain printed anything.
+bool shell_flush_urcs_for_test();
+
+/// @brief Test seam (issue #407 item 2): drive the production prompt
+///        redraw (redraw_after_async). Zero-logic pass-through.
+/// @param buf Already-typed line buffer to reprint.
+/// @param len Bytes of buf to reprint.
+/// @param exit_code Exit status the prompt glyph reflects.
+void shell_redraw_for_test(const char *buf, size_t len, int exit_code);
+
 } // namespace service

@@ -99,6 +99,15 @@ public:
     /// @param visible True to draw cursor, false to erase it.
     static void set_cursor_visible(bool visible);
 
+    /// @brief True iff the framebuffer cursor is at a line start.
+    ///        Read-only: no serial, framebuffer, or capture side effect.
+    ///        Lets the shell decide whether a drained async block needs a
+    ///        leading newline (issue #407 item 2).
+    /// @return True when uninitialised or cursor_x_ == 0.
+    static bool at_line_start() {
+        return instance_ == nullptr || instance_->cursor_x_ == 0;
+    };
+
     /// @brief Begin capturing serial output into a buffer (for shell redirection).
     /// @param buf Buffer to write captured output into.
     /// @param size Maximum bytes to capture (capture stops when full).

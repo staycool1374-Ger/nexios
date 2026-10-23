@@ -27,6 +27,7 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/input/serial_input.hpp>
+#include <kernel/console/urc.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/timer.hpp>
@@ -230,6 +231,21 @@ bool shell_peek_input(const char *&data, size_t &len) {
 
 size_t shell_consume_input(size_t count) {
     return kernel::input::serial::consume(count);
+}
+
+/// @brief Test seam (issue #407 item 2): drive the production URC drain.
+static bool flush_urcs();
+static void redraw_after_async(int exit_code, const char *buf, size_t len);
+
+bool shell_flush_urcs_for_test() {
+    return flush_urcs();
+}
+
+/// @brief Test seam (issue #407 item 2): drive the production redraw.
+void shell_redraw_for_test(const char *buf, size_t len, int exit_code) {
+    if (buf == nullptr)
+        return;
+    redraw_after_async(exit_code, buf, len);
 }
 
 static void background_task_wrapper() {
@@ -534,6 +550,67 @@ static void draw_prompt(int exit_code) {
     Terminal::write("$ ");
 }
 
+/// @brief Drain queued async (URC) lines to the console (issue #407 item 2).
+///        Prints a leading newline only when the cursor is mid-line, then a
+///        coalesced "[URC] N dropped" notice for queue overflow, then up to
+///        kDrainMaxPerPass queued lines.  No lock is held while printing:
+///        pop() copies each line out under the queue guard.
+/// @return True iff anything was printed (caller must redraw the prompt).
+static bool flush_urcs() {
+    using kernel::console::urc::kDrainMaxPerPass;
+    using kernel::console::urc::kLineMax;
+    bool printed = false;
+    if (!Terminal::at_line_start()) {
+        Terminal::putchar('\n');
+        printed = true;
+    }
+    const size_t dropped = kernel::console::urc::take_dropped();
+    if (dropped > 0) {
+        // Bounded decimal render, no Logger (the drain path must not
+        // recurse into queued producers).
+        char note[32] = {};
+        size_t note_pos = 0;
+        const char *notice_head = "[URC] ";
+        while (*notice_head != '\0' && note_pos < sizeof(note) - 1)
+            note[note_pos++] = *notice_head++;
+        char digit_buf[20] = {};
+        size_t digit_pos = 0;
+        size_t remaining = dropped;
+        do {
+            digit_buf[digit_pos++] = static_cast<char>('0' + (remaining % 10));
+            remaining /= 10;
+        } while (remaining != 0 && digit_pos < sizeof(digit_buf));
+        while (digit_pos > 0 && note_pos < sizeof(note) - 1)
+            note[note_pos++] = digit_buf[--digit_pos];
+        const char *notice_tail = " dropped";
+        while (*notice_tail != '\0' && note_pos < sizeof(note) - 1)
+            note[note_pos++] = *notice_tail++;
+        note[note_pos] = '\0';
+        Terminal::write(note);
+        Terminal::putchar('\n');
+        printed = true;
+    }
+    for (size_t idx = 0; idx < kDrainMaxPerPass; ++idx) {
+        char line[kLineMax] = {};
+        if (!kernel::console::urc::pop(line, sizeof(line)))
+            break;
+        Terminal::write(line);
+        Terminal::putchar('\n');
+        printed = true;
+    }
+    return printed;
+}
+
+/// @brief Reprint the prompt plus the already-typed buffer after async
+///        output was flushed (exact extraction of the former inline block).
+static void redraw_after_async(int exit_code, const char *buf, size_t len) {
+    if (!Terminal::at_line_start())
+        Terminal::putchar('\n');
+    draw_prompt(exit_code);
+    for (size_t i = 0; i < len; ++i)
+        Terminal::putchar(buf[i]);
+}
+
 static bool readline(char* buf, size_t max_len, int exit_code) {
     if (buf == nullptr || max_len == 0)
         return false;
@@ -602,13 +679,16 @@ static bool readline(char* buf, size_t max_len, int exit_code) {
         }
 
         if (!got_char) {
-            // Async background output arrived?  Move to a fresh line and
-            // redraw the prompt + any input typed so far.
-            if (arch::Serial::write_count() != prompt_serial) {
-                Terminal::putchar('\n');
-                draw_prompt(exit_code);
-                for (size_t i = 0; i < pos; ++i)
-                    Terminal::putchar(buf[i]);
+            // Async output arrived?  Drain the URC queue first (reliable
+            // on every arch — unlike the serial write-count guard, which
+            // is x86-blind), then fall back to the legacy guard for
+            // direct serial writers.  Either way, move to a fresh line
+            // and redraw the prompt + any input typed so far.
+            const bool urc_printed = flush_urcs();
+            const bool legacy_async =
+                arch::Serial::write_count() != prompt_serial;
+            if (urc_printed || legacy_async) {
+                redraw_after_async(exit_code, buf, pos);
                 prompt_serial = arch::Serial::write_count();
             }
             // Idle nap instead of pause-spin (shell efficiency): sleep
@@ -732,6 +812,11 @@ static void update_status_bar() {
 void Shell::shell_task_main() {
     if (!initialized_) init();
 
+    // Issue #407 item 2: freeze the URC prefix table once the shell is
+    // interactive — late producer registration past this point is a
+    // counted reject (boot-order mistake stays visible, never silent).
+    kernel::console::urc::seal();
+
     // Enable dmesg recording now that the shell is interactive
     // (release mode suppresses boot/test entries for a clean console).
     kernel::log::DmesgService::instance().set_suppressed(false);
@@ -770,6 +855,9 @@ void Shell::shell_task_main() {
         }
         update_status_bar();
 
+        // Issue #407 item 2: drain any lines queued since the last pass
+        // before drawing the prompt, so async output lands above it.
+        (void)flush_urcs();
         draw_prompt(last_exit_code_);
 
         arch::Keyboard::flush();

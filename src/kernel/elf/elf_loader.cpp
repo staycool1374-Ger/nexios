@@ -29,6 +29,7 @@
 #include <kernel/memory/mempool.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/log/dmesg.hpp>
+#include <kernel/console/urc.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
@@ -1309,15 +1310,20 @@ void ElfLoader::post_event(uint64_t code, const char *verb, uint64_t ticks,
         break;
     }
     log::dmesg_push_sev(log::ErrorSubsystem::ELF, canon, sev, slot, 0);
-    kernel::Logger::info("%s", slot);
-    // Live-session finding (#77 report): loader progress must ALSO reach
-    // the framebuffer console — Logger serves serial/dmesg only, so
-    // framebuffer users never saw completions.  write_fb renders pixels
-    // without touching serial (no duplicate lines) or the shell capture
-    // buffer (async loader text must not pollute redirections); the
-    // shell's async-redraw guard already absorbs the interleaving.
-    service::Terminal::write_fb(slot);
-    service::Terminal::write_fb("\n");
+    // Issue #407 item 2: the console line is a deferred URC, drained at
+    // the next prompt redraw — no raw interleave with typed input.  The
+    // queue is bounded: on overflow the legacy immediate pair keeps the
+    // line visible, so no notice disappears.
+    if (!kernel::console::urc::emit(kernel::console::urc::Tag::Elf, slot)) {
+        kernel::Logger::info("%s", slot);
+        // Live-session finding (#77 report): loader progress must ALSO reach
+        // the framebuffer console — Logger serves serial/dmesg only, so
+        // framebuffer users never saw completions.  write_fb renders pixels
+        // without touching serial (no duplicate lines) or the shell capture
+        // buffer (async loader text must not pollute redirections).
+        service::Terminal::write_fb(slot);
+        service::Terminal::write_fb("\n");
+    }
 }
 
 void ElfLoader::cleanup_and_idle() {
