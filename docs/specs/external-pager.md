@@ -537,7 +537,7 @@ is exercised via the live dispatcher.
 | `pager_classification_rejects` | P=1 (write-to-RO), I/D=1, RSVD, and kernel-mode #PFs are not delegated (real RO-write fault + probe-assisted frames) |
 | `pager_smap_canary_coexist` | canary sampling still fires for a pager-served task; `SYS_PAGER_MAP` refuses a canary-slot VA collision |
 
-Validation: `make execute-test x86_64 debug cap_pager`, then the regression
+Validation: `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_pager`, then the regression
 classes (cap_death, cap_shm, syscall_fastpath, cap_mmio_user, cap_irq_notify,
 cap_core, cap_lifecycle, cap_syscall, cap_untyped, ipc_robustness), then
 debug `all` + release `all`, test-history rows per AGENTS.md.

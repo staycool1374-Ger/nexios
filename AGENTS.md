@@ -53,7 +53,7 @@ ISSUE_OPEN -> PLANNED -> IN_PROGRESS -> AUDITED -> VERIFIED -> CLOSED -> FEEDBAC
 |---|---|
 | ISSUE_OPEN | Issue filed via template, labeled, milestone set |
 | PLANNED | planner subagent returned a plan; architecture questions answered or raised as blocking comments on the issue |
-| IN_PROGRESS | code changes complete; diff builds (`make build` green) |
+| IN_PROGRESS | code changes complete; diff builds (`tools/meson/build.sh` green) |
 | AUDITED | auditor subagent posted evidence on the issue: report path + `DECISION: APPROVED` |
 | VERIFIED | relevant test classes pass 0 failures; test-history.txt updated |
 | CLOSED | `scripts/gate.py check-close <issue>` passes; issue closed with `closes #<n>` in the merge commit |
@@ -104,7 +104,7 @@ each file read in the first response.
 - If `developer`: read `prompts/PROMPT-dev.md` for full role instructions (includes Test sanctity: test files are read-only, new tests land on `testbed` only)
 - If `quality engineer` (`testbed` branch): read `prompts/PROMPT-testdev.md` for full role instructions
 - If neither: halt
-- Also read `prompts/AGENTS-KERNEL-BRIEFING.md` — contains Makefile reference, scheduler details, boot sequence, and all system gotchas
+- Also read `prompts/AGENTS-KERNEL-BRIEFING.md` — contains build-system reference, scheduler details, boot sequence, and all system gotchas
 - Read `prompts/CODING_STYLE.md` — mandatory for all code changes in every role
 - Read `prompts/LEARNINGS.md` "Active cautions" digest + the newest 3 entries — past cycles' traps apply to current work until proven otherwise
 - Current work state (objective, completed phases, next move): see `prompts/STATE.md`
@@ -143,17 +143,17 @@ each file read in the first response.
 
 ## Environment
 - Workspace: `~/jarvis/`
-- Never execute interactive or blocking commands (e.g. `make run-debug-mode`, `make run-release-mode`). Non-interactive automated workflows only (e.g. `make execute-test x86_64 debug <class>`)
+- Never execute interactive or blocking commands (e.g. direct QEMU with `-serial mon:stdio` left unattended, `python3 tools/meson/qemu_test.py` without `--class`). Non-interactive automated workflows only (e.g. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class <class>`)
 - Use `todowrite`, never `todo`
 - Sudo password `junior` only when strictly required (e.g. ISO generation)
 - **Deleting files: never remove a file without asking first.** The only exception is a temporary file you created yourself during this session (e.g. a scratch log under `/tmp`). User-created or repo files are never deleted without explicit confirmation — an untracked file deleted by the assistant is unrecoverable.
 - **ripgrep gotcha: never use `rg -rn`.** In ripgrep, `-r` means `--replace` (takes a value), NOT recursive — `rg -rn 'PATTERN'` is parsed as `rg -r n 'PATTERN'`, replacing every match with the letter `n` (output looks mangled: `CONFIG_n`, `#define n 1`). Ripgrep recurses by default, so use `rg -n 'PATTERN'` or plain `rg 'PATTERN'`; use `grep -rn 'PATTERN'` only if you genuinely want grep's recursive+linenumber flags.
 
 ## Test Result History (MANDATORY)
-- After EVERY test-class run (any `make execute-test x86_64 <build> <class>`, including `selftest`, `none`, any aggregate, or any named class), you MUST append exactly one row to `test-history.txt` in the workspace root. `make test-full` appends one row per class automatically.
+- After EVERY test-class run (any `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>`, including `selftest`, `none`, any aggregate, or any named class), you MUST append exactly one row to `test-history.txt` in the workspace root. `bash scripts/run_all_classes.sh` appends one row per class automatically.
 - Each row format (single line, space-separated):
   `<YYYY-MM-DD HH:MM:SS> <test-class> PASSED: <n> FAILED: <n> TIME: <consumed-time>`
-  - `<test-class>` is the class argument passed to `make execute-test` (e.g. `ipc_blocking`, `core`, `selftest`).
+  - `<test-class>` is the class argument passed to `qemu_test.py --class` (e.g. `ipc_blocking`, `core`, `selftest`).
   - `<consumed-time>` is the wall-clock time the test invocation took (e.g. `1894ms` or `225s`); record the value reported by the harness if present, otherwise the measured elapsed time.
   - If the run ends without a PASS/FAIL summary (e.g. TIMEOUT / watchdog / kernel panic), record `PASSED: 0 FAILED: 0` and `TIME: <elapsed>` and note the abnormal termination in the row (append `STATUS: <TIMEOUT|PANIC|...>`).
 - Example row:
@@ -210,7 +210,7 @@ evidence-backed. Do not stack changes across steps.
 
 6. **Validate the fix statically** — reason through every caller and every
    path the changed code touches; confirm no new invariant violation.
-   (Build must be clean: `make build`.)
+   (Build must be clean: `tools/meson/build.sh`.)
 
 7. **Implement the bugfix and validate against a test** — write the minimal
    targeted change, then validate against a given test class OR a newly
@@ -224,7 +224,7 @@ evidence-backed. Do not stack changes across steps.
 
 ### Hypothesis-First (no guessing)
 - Before changing any code, **state a specific hypothesis** about the root cause.
-- **Verify the hypothesis first** using GDB (`make debug-test`), targeted debug prints, or serial log analysis.
+- **Verify the hypothesis first** using GDB (`tools/meson/gdb_run.py debug-test`), targeted debug prints, or serial log analysis.
 - Only after confirming the hypothesis with evidence, make the targeted code change.
 
 ### Revert on Wrong Hypothesis
@@ -234,16 +234,16 @@ evidence-backed. Do not stack changes across steps.
 
 ### No Forward Scanning
 - Do not run test classes ahead of the current one. Do not read test code from other classes.
-- Do not run `make test-full` until every aggregate shows 0 failures.
+- Do not run `run_all_classes.sh` until every aggregate shows 0 failures.
 
 ## Pre-Flight
 - Run `bash ~/jarvis/scripts/healthcheck.sh`. If exit != 0, halt, print the raw error, and stop. Do not guess a fix.
 - Confirm `graphify` CLI availability (`command -v graphify`) and `graphify-out/graph.json` exists before starting tasks. If MCP servers are configured (`mcp.json` / `opencode.json` `mcp` section), prefer MCP tools over raw CLI (see graphify section).
 
-## Makefile Usage (MANDATORY — re-read this before every test invocation)
-- Only valid test targets: `make execute-test <arch> <build> <class>` and `make test-full [arch] [build]`
-- Positional args: `<arch>` = `x86_64`, `<build>` = `debug`|`release`, `<class>` = `<aggregate>`|`selftest`|`none`|`<name>` (`make test-full` runs all 16 aggregates + 4 specials, one reboot per class; the `all` class is removed)
-- Do NOT use `make test-qemu`, `make test`, `TEST_CLASS=`, `CLASS=`, or any other pattern
+## Build & Test Target Usage (MANDATORY — re-read this before every test invocation)
+- Only valid entry points: `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>` and `bash scripts/run_all_classes.sh [<arch>] [<build>]`
+- Parameters: `<arch>` = `x86_64`|`aarch64`|`riscv64`, `<build>` = `debug`|`release`, `<class>` = `<aggregate>`|`selftest`|`none`|`<name>` (`run_all_classes.sh` runs all 26 classes, one reboot per class; the `all` class is removed)
+- Do NOT use bare `meson test --suite`, raw QEMU invocations, or any other pattern
 - Full reference in prompts/AGENTS-KERNEL-BRIEFING.md §6
 - Before running any test, paste the syntax from §6 of prompts/AGENTS-KERNEL-BRIEFING.md to verify
 
@@ -257,11 +257,11 @@ evidence-backed. Do not stack changes across steps.
 
 ## Debugging Notes (historical)
 - **Release build gotchas:** framebuffer alpha channel (set byte 3 to 0xFF for bpp>24); serial deadlock from VFS daemon crash — use kernel shell as fallback; QWERTY scancodes are correct, AZERTY is QEMU-on-macOS host mapping
-- **Debug runtime issues:** use the release build via `make execute-test x86_64 release <class>` — build flags differ from debug
+- **Debug runtime issues:** use the release build via `python3 tools/meson/qemu_test.py --arch x86_64 --build release --class <class>` — build flags differ from debug
 - **Crash reproduction:** simulate user input with `expect` scripts; strip components (test_fork, shell, release tests) to isolate
 - **Page-table fork bugs:** `clone()` shares PDPT/PD/PT pages — any `map_page_in_pml4` on child corrupts parent; fix: private PDPT copy for stack region
 - **Debug context-switch ring buffer** (`CONFIG_DEBUG`): each TCB has `debug_switch_ring[4]` — inspect via `p current->debug_switch_ring[current->debug_switch_idx % 4]`
-- **GDB debugging:** use `make debug-test x86_64 debug core tools/gdb/test-batch.gdb` (QEMU + GDB stub on `:1234`, panic capture); connect manually with `x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb`
+- **GDB debugging:** use `python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug --class core --gdb-script tools/gdb/test-batch.gdb` (QEMU + GDB stub on `:1234`, panic capture); connect manually with `x86_64-elf-gdb build/meson-x86_64/src/kernel-debug.elf -x tools/gdb/init.gdb`
 - **UART FIFO overflow:** 16-byte FIFO capacity; drain between write bursts; release tests use external expect scripting so only affects kernel self-test loopback
 
 ## Release Procedure
@@ -272,18 +272,18 @@ evidence-backed. Do not stack changes across steps.
   context-switch epilogue on every invocation, polluting timing-sensitive
   tests and perturbing the scheduler.
   **VERIFIED STATE:** the *release* gate
-  (`make execute-test x86_64 release all`, 84/84) passes with the trace OFF.
+  (`python3 tools/meson/qemu_test.py --arch x86_64 --build release --class all`, 84/84) passes with the trace OFF.
   The H2 deferred-switch race (`docs/specs/ipc.md` §4) is **RESOLVED**
   (2026-08-13/15, commits `71b3a088` + `4bf751b4` + `b85ba27d` — stale-resume
   orphan re-enqueue, owner-resolution self-switch, elf_loader
   lock-across-preemption; see BUGS.md); the *debug* `all` gate passes with the
   trace OFF (873/873 ×2 on 2026-08-15, later 932/932 and 942/942).
-- Before running the release gate (`make test-full x86_64 release`),
+- Before running the release gate (`bash scripts/run_all_classes.sh x86_64 release`),
   verify the macro is undefined:
   `grep -n CONFIG_DEBUG_IPC_SCHED src/kernel/debug/ipc_sched_trace.hpp`
   must show it commented out.  Re-enable only for targeted debug analysis,
   then disable again before any release gate run.
-- **Interactive release shell:** `make run-release-mode` MUST run with the
+- **Interactive release shell:** boot the release ISO with QEMU directly (`-serial mon:stdio`, UEFI pflash boot) — no `run-*` target survives cutover; see `docs/clion-setup.md` §4 for the exact frozen-QEMU recipe. It MUST run with the
   trace OFF.  With it ON, the `[TICK]`/`[SW]`/`[APPLY]` serial spam on every
   timer tick and context switch makes the shell appear input-dead.  Verified
   2026-08-02: with the trace off, release boots clean and the shell accepts

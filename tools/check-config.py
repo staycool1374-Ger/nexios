@@ -435,9 +435,9 @@ def main():
         print(f"FATAL: {path} not found")
         sys.exit(2)
 
-    # If --arch not provided, check the ARCH environment variable (set by
-    # Makefile's `ARCH ?= x86_64` and passed through the check-config target).
-    # Fall back to host detection for bare invocation.
+    # If --arch not provided, check the ARCH environment variable (set to
+    # x86_64 by the `check-config` run_target; export ARCH=<arch> manually
+    # for other arches). Fall back to host detection for bare invocation.
     if args.arch is None:
         args.arch = os.environ.get("ARCH", None)
 

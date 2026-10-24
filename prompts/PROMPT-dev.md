@@ -25,7 +25,7 @@ Safely implement, validate, and evolve the architecture under strict functional 
 - Parse `~/jarvis/prompts/ROADMAP.md` using targeted tool operations (e.g., grep for `-[ ]`) to locate ONLY the active milestone. Do not ingest completed sections ([x]) to preserve token economy.
 - Check `~/jarvis/prompts/BUGS.md`. **Rule:** Critical bugs must be 100% resolved before feature work.
 - Read `~/jarvis/project_structure.txt` to verify current workspace directory mappings and layout constraints.
-- Read `~/jarvis/Makefile`.
+- Read `~/jarvis/meson.build` (root build definition; `src/meson.build`, `packaging/meson.build`, `tests/meson.build` for details).
 - Retrieve specifications strictly through MCP graph query tools (`mcp__graphify__query "<feature>"`, `mcp__graphify__explain "<component>"`) to minimize context-window load — CLI `graphify query/path/explain` fallback only when MCP is unreachable. Never ingest raw spec files wholesale.
 - *Token Save:** Do not read full source files upfront; grep for specific functions/definitions as needed.
 
@@ -48,8 +48,8 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 ### 3. Test-Driven Implementation
 - Write/update Test Suite cases *before* altering kernel code.
 - **Order for new features:** First add stub tests (`JARVIS_TEST_PASS()`) for every test idea, then replace stubs with real test assertions, then implement the feature to make them pass.
-- **New tests are debug-only by default.** Use `JARVIS_REGISTER_TEST(name)` (debug target only). `make test-qemu` builds the debug target and runs ALL tests via `run_filtered(0)` (no TF_USER/TF_RELEASE filter). Only purely computational, zero-side-effect tests that have proven stable over many sessions may use `JARVIS_REGISTER_RELEASE_TEST(name)`. Release is a curated subset — `run_release()` calls `run_filtered(TF_RELEASE)` which runs only `JARVIS_REGISTER_RELEASE_TEST` tests (must invoke a shell in user task).
-- **testbed branch:** All new tests are developed on the `testbed` branch, never on `main`. `testbed` contains test code only — no production kernel changes. After all tests pass (`make test-qemu`), merge `testbed` into `main`. Tests that depend on unimplemented APIs remain stubs and merge as-is (they document intent without regressions).
+- **New tests are debug-only by default.** Use `JARVIS_REGISTER_TEST(name)` (debug builds run all registered tests; `python3 tools/meson/qemu_test.py --arch <arch> --build debug --class selftest` is the CI gate class). Only purely computational, zero-side-effect tests that have proven stable over many sessions may use `JARVIS_REGISTER_RELEASE_TEST(name)`. Release is a curated subset — `run_release()` calls `run_filtered(TF_RELEASE)` which runs only `JARVIS_REGISTER_RELEASE_TEST` tests (must invoke a shell in user task).
+- **testbed branch:** All new tests are developed on the `testbed` branch, never on `main`. `testbed` contains test code only — no production kernel changes. After all tests pass (`bash scripts/run_all_classes.sh <arch> debug`), merge `testbed` into `main`. Tests that depend on unimplemented APIs remain stubs and merge as-is (they document intent without regressions).
 - **Test sanctity:** All non-stub tests are **read-only**. Only modify a non-stub test if it is systemically *wrong*. Changing a test requires: (1) reading its `Testidea`, `Input`, `Expect`, `Depends` doc-block and implementation; (2) reviewing the corresponding kernel function under test; (3) changing both doc-block and implementation together. The doc-block extension must be meaningful, precise, and short — explaining *why* the test was changed. Stubs (`JARVIS_TEST_PASS()` only) may be freely replaced with real implementations.
 
 ### Pseudocode in Stub Tests
@@ -57,7 +57,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 * When writing new stub tests, a pseudocode block is required inside the test function to document the intended test flow.
 
 ### 4. Verification & QEMU Validation
-- Run automated test suites via `make test-full x86_64 debug` (or per-aggregate `make execute-test x86_64 debug <aggregate>`, `selftest` for CI gate).
+- Run automated test suites via `bash scripts/run_all_classes.sh <arch> <build>` (or per-class `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>`, `selftest` for CI gate).
 - See AGENTS.md for Circuit Breaker limits.
 
 ### 5. Bug Tracking & Documentation Updates
@@ -79,7 +79,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 
 **Pre-flight gate (abort on any failure):**
 - Verify `git status --porcelain` is clean
-- Run `make test-full x86_64 debug` — this launches the kernel in QEMU once per class and runs the full test base (22 aggregates + 4 specials, issues #173, #364). Every class must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the script SUMMARY shows all 26 runs ok.
+- Run `bash scripts/run_all_classes.sh x86_64 debug` — this launches the kernel in QEMU once per class and runs the full test base (22 aggregates + 4 specials, issues #173, #364). Every class must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the script SUMMARY shows all 26 runs ok.
 - Check `prompts/testcases-v$(KERNEL_VERSION).md` — if still `*Outline*` or any stubs remain, **abort**. If all tests implemented, delete the file.
 - Verify tag `v$(major).$(minor).$(patch)` does not exist: `git tag | grep "v$(major).$(minor).$(patch)"`
 
@@ -145,7 +145,7 @@ The auditor produces exactly two artifacts per audit iteration:
 - On `DECISION: REJECTED`: read ALL findings first (do not cherry-pick S1s and
   skip S2s). Apply `audits/rejected_patch.diff` with `git apply`; if it does not
   apply cleanly, implement the corrections manually following the findings.
-  Re-run your own verification (`make execute-test x86_64 debug <class>`),
+   Re-run your own verification (`python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class <class>`),
   regenerate `audits/pending_patch.diff`, and resubmit for a fresh audit
   (new iteration, goto step 1 of the PARALLEL AUDIT TRIGGER RULE).
 - Never delete or overwrite an existing `report-*.md` — reports are immutable
@@ -165,48 +165,60 @@ Test execution is driven by `initrd/tests/test-config.txt` (one class per line).
 - `all` — everything including benchmarks (~600+ tests)
 - Individual: `scheduler`, `memory`, `ipc`, `vfs`, `process`, `syscall`, `arch`, `device`, `shell`, `net`, `security`, `debug`, `integration`, `stress`, `init`, `build`, `bench`, `sporadic`
 
-## Unified Makefile Targets (mandatory usage — no other targets are allowed)
+## Unified Build & Test Entry Points (mandatory usage — no other entry points are allowed)
 
-All execution is driven by three parameterized targets. Positional arguments are
-silently consumed by a match-all rule at the end of the Makefile.
+All execution is driven by scripts under `tools/meson/` plus `scripts/run_all_classes.sh`.
+Builds live in `build/meson-<arch>[-nolto]` (Meson out-of-tree builddirs; `-Db_lto=false`
+twins are suffixed `-nolto`).
 
-| Target | Description |
-|--------|-------------|
-| `make execute-test <arch> <build> <class>` | Unified test runner (replaces all old test targets) |
-| `make debug-test <arch> <build> <class> <gdb-script>` | GDB batch surveillance with panic capture |
-| `make debug-shell <arch> <build> none <gdb-script> <shell-cmds>` | GDB + serial interaction from commands file |
+| Entry point | Description |
+|-------------|-------------|
+| `tools/meson/build.sh [--arch <arch>] [--nolto]` | Configure + build (default x86_64; add `--nolto` for the no-LTO twin) |
+| `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>` | Unified test runner (one QEMU boot per class; use `--class none` for an interactive shell) |
+| `python3 tools/meson/gdb_run.py debug-test --arch <arch> --build <build> --class <class> --gdb-script <script>` | GDB batch surveillance with panic capture |
+| `python3 tools/meson/gdb_run.py debug-shell --arch <arch> --build <build> --cmds <shell-cmds>` | GDB + serial interaction from commands file |
+| `bash scripts/run_all_classes.sh [<arch>] [<build>]` | Full suite (all classes, one reboot per class) |
 
 **Parameters:**
-- `<arch>` — `x86_64` (the only supported architecture; do not use `x86`, `arm`, or other values)
+- `<arch>` — `x86_64`|`aarch64`|`riscv64`
 - `<build>` — `debug`|`release`
-- `<class>` — `none` (interactive shell, no tests) | `selftest` (safe class, CI gate) | `all` (full suite) | `<name>` (specific class)
-- `<gdb-script>` — path to GDB batch script (e.g. `tools/gdb/test-batch.gdb`)
+- `<class>` — `none` (interactive shell, no tests) | `selftest` (CI gate) | `all` (full suite) | `<name>` (specific class)
+- `<script>` — path to GDB batch script (e.g. `tools/gdb/test-batch.gdb`)
 - `<shell-cmds>` — text file with one shell command per line
 
 **Examples:**
 ```
-make execute-test x86_64 debug none           # interactive QEMU
-make test-full x86_64 debug                   # full debug suite (26 runs)
-make test-full x86_64 release                 # full release suite (26 runs)
-make execute-test x86_64 debug selftest       # CI gate
-make execute-test x86_64 debug drivers        # specific aggregate
-make debug-test x86_64 debug core tools/gdb/test-batch.gdb  # GDB panic capture
-make debug-shell x86_64 debug none tools/gdb/init.gdb cmds.txt  # GDB + serial interaction
+tools/meson/build.sh                                            # build x86_64 (LTO per meson.options default)
+tools/meson/build.sh --arch aarch64 --nolto                     # aarch64 no-LTO twin
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class none      # interactive QEMU
+bash scripts/run_all_classes.sh x86_64 debug                    # full debug suite (26 runs)
+bash scripts/run_all_classes.sh x86_64 release                  # full release suite (26 runs)
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest   # CI gate
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class drivers   # specific aggregate
+python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug --class core --gdb-script tools/gdb/test-batch.gdb  # GDB panic capture
+python3 tools/meson/gdb_run.py debug-shell --arch x86_64 --build debug --cmds cmds.txt  # GDB + serial interaction
 ```
 
 ## Host-Side Watchdog
-All test targets run under `_run_test_qemu` in the Makefile, which launches a background monitor thread. If `/tmp/jarvis-serial.log` does not grow for `WATCHDOG_STALL` consecutive seconds (default 10), the monitor kills QEMU and appends a diagnostic. This catches hangs the in-kernel watchdog cannot detect (e.g., while interrupts are disabled during test execution).
+`qemu_test.py` embeds a stall monitor (mirrors the old Make monitor subshell): the
+serial stream is tee'd to a per-run log under `/tmp/jarvis-meson-<tag>/serial.log`; if
+the log stops growing for the stall limit, QEMU is killed, retried once, and a
+`[STALL]` diagnostic is appended (`STATUS: STALL` / `STALL-RECOVERED` / `STALL-UNRECOVERED`
+in the verdict block). This catches hangs the in-kernel watchdog cannot detect (e.g.,
+while interrupts are disabled during test execution). The trailing verdict block is
+Make-compatible (same `PASSED:`/`FAILED:`/`TIME:` shape) so `run_all_classes.sh` and
+`test_history.py` parse it unchanged.
 
-The serial log is captured via `tee` to `/tmp/jarvis-serial.log` for all automated runs. The first `tee` pipe exit code (`PIPESTATUS[0]`) is used for result propagation.
+## CI Pipeline (`.github/workflows/build-meson.yml`)
+| Step | Entry point | Timeout |
+|------|-------------|---------|
+| Build | `tools/meson/build.sh` | — |
+| Selftest gate | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` (safe class) | class timeout from test-history |
+| Full suite | `bash scripts/run_all_classes.sh x86_64 debug` (22 aggregates + 4 specials) | per-class timeout via script |
 
-## CI Pipeline (`.github/workflows/ci.yml`)
-| Step | Target | Timeout |
-|------|--------|---------|
-| Build | `make debug` | — |
-| Selftest gate | `make execute-test x86_64 debug selftest` (safe class) | `timeout 360` — Makefile expect timeout 120s |
-| Full suite | `make test-full x86_64 debug` (22 aggregates + 4 specials) | `timeout 300` per class via script |
-
-The full suite step runs only if selftest passes (`if: success()`). Both steps use the host-side watchdog and expect-based result parsing (extracts PLANNED/EXECUTED/FAILED from the TEST SUMMARY block).
+The full suite step runs only if selftest passes (`if: success()`). Both steps use the
+host-side stall monitor and verdict-block parsing (extracts PASSED/FAILED/TIME from the
+trailing verdict block).
 
 ## Output Format
 Fixed-column table (no ANSI colors; `S: ` prefix and `n/m: PASS|FAIL` tokens unchanged):
@@ -240,10 +252,10 @@ Summary block (after all tests; values aligned, labels/regex stable):
 Both `run_filtered()` and `run_registered()` drain the UART TX FIFO (wait for LSR bits 5&6) before QEMU exit to prevent report truncation.
 
 ## GDB Debugging
-- **Batch surveillance (CI):** `make debug-test x86_64 debug core tools/gdb/test-batch.gdb`
-- **Custom GDB script:** `make debug-test x86_64 debug <class> <path-to-gdb-script>`
-- **Interactive GDB + serial:** `make debug-shell x86_64 debug none tools/gdb/init.gdb cmds.txt`
-- **Manual (two terminals):** `make execute-test x86_64 debug none` in terminal 1, then `gdb build/kernel-debug.elf -ex 'target remote :1234' -x tools/gdb/init.gdb` in terminal 2
+- **Batch surveillance (CI):** `python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug --class core --gdb-script tools/gdb/test-batch.gdb`
+- **Custom GDB script:** `python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug --class <class> --gdb-script <path-to-gdb-script>`
+- **Interactive GDB + serial:** `python3 tools/meson/gdb_run.py debug-shell --arch x86_64 --build debug --cmds cmds.txt`
+- **Manual (two terminals):** `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class none` in terminal 1, then `x86_64-elf-gdb build/meson-x86_64/src/kernel-debug.elf -ex 'target remote :1234' -x tools/gdb/init.gdb` in terminal 2
 
 ## Known Test Patterns
 
@@ -270,7 +282,7 @@ All mandatory coding rules, safety constraints, and error-handling patterns are 
 
 # Diagnostic Verification
 If a test fails or a regression is detected:
-- Immediately inspect the `debug_switch_ring` state using the GDB panic surveillance target (`make debug-test x86_64 debug core tools/gdb/test-batch.gdb`) to extract `entry_addr`, `exit_rip`, and `consumed_ticks` of the faulting task sequence.
+- Immediately inspect the `debug_switch_ring` state using the GDB panic surveillance flow (`python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug --class core --gdb-script tools/gdb/test-batch.gdb`) to extract `entry_addr`, `exit_rip`, and `consumed_ticks` of the faulting task sequence.
 - Check for page-table leaks or memory corruption if the failure involves `clone()` or parent-child PML4 space isolation.
 
 # Test Execution Rules (MANDATORY)
@@ -284,10 +296,10 @@ If a test fails or a regression is detected:
 ## Choose the Right Test Target
 | Scenario | Target | Reason |
 |----------|--------|--------|
-| Kernel bugfix in subsystem X | `make execute-test x86_64 debug <class-X>` | Fastest feedback, isolates the subsystem |
-| Test harness / test-environment fix | `make execute-test x86_64 debug testrunner` | Validates harness integrity without kernel noise |
-| Release gate or full regression check | `make test-full x86_64 debug` | Only acceptable after per-aggregate passes |
-| CI / selftest | `make execute-test x86_64 debug selftest` | Matches CI pipeline |
+| Kernel bugfix in subsystem X | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class <class-X>` | Fastest feedback, isolates the subsystem |
+| Test harness / test-environment fix | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class testrunner` | Validates harness integrity without kernel noise |
+| Release gate or full regression check | `bash scripts/run_all_classes.sh x86_64 debug` | Only acceptable after per-aggregate passes |
+| CI / selftest | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` | Matches CI pipeline |
 
 **Never** use `all` or `run_all_classes.sh` during active bugfixing — both are too time-consuming.
 
@@ -297,4 +309,4 @@ If a test fails or a regression is detected:
 - When running a specific class, use the concrete timeout derived from `test-history.txt` as described above.
 - Never increase the timeout if the number of tests has not increased significantly (more than +10% tests or +50% new IPC-heavy tests).
 - If a test class times out at the expected timeout, diagnose the hang — do not blindly increase the timeout.
-- The default Makefile watchdog (10s stall detection) catches immediate freezes. Use the class-specific timeout as the overall `timeout` wrapper.
+- The default stall monitor in `qemu_test.py` catches immediate freezes. Use the class-specific timeout as the overall `timeout` wrapper.

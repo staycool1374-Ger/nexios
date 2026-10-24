@@ -1,0 +1,205 @@
+# NexIOS Meson CI (issue #170 Phase 7).
+#
+# Dual-period: runs alongside the legacy Make CI (ci.yml) until the
+# cutover flips required checks to these jobs. meson-aarch64 is already
+# REQUIRED (Q3 decision); the rest are advisory until cutover.
+# Meson pinned via pip (apt 1.3.2 fails the freestanding sanity check;
+# never apt-install meson). Toolchain: same linux-gnu triplets as the
+# Dockerfile, aliased to the committed cross-file -elf- names.
+
+name: NexIOS Meson CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  meson-x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Toolchain and Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential git make python3 python3-pip \
+          nasm xorriso mtools cpio dosfstools grub-common grub-pc-bin \
+          qemu-system-x86 ovmf expect wget gdb-multiarch \
+          gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
+          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
+          qemu-system-arm qemu-system-misc \
+          ninja-build
+        # Meson pinned via pip (issue #170: apt 1.3.2 fails the
+        # freestanding sanity check; never apt-install meson).
+        sudo pip3 install --break-system-packages 'meson==1.12.0'
+
+    - name: Locate OVMF firmware
+      id: ovmf
+      run: |
+        for cand in /usr/share/OVMF/OVMF.fd /usr/share/ovmf/OVMF.fd \
+                     /usr/share/qemu/OVMF.fd /usr/share/OVMF/OVMF_CODE.fd; do
+          if [ -f "$cand" ]; then
+            echo "firmware=$cand" >> "$GITHUB_OUTPUT"
+            echo "Using OVMF firmware: $cand"
+            exit 0
+          fi
+        done
+        echo "ERROR: no OVMF firmware found" >&2
+        exit 1
+
+    - name: Setup cross-toolchain symlinks
+      run: |
+        # Same -elf- aliases as the Dockerfile (match cross/*.txt triplets).
+        for tool in gcc g++ as ld ar objcopy objdump strip readelf gdb; do
+          sudo ln -sf /usr/bin/x86_64-linux-gnu-$tool /usr/local/bin/x86_64-elf-$tool
+        done
+
+    - name: Verify cross-compiler
+      run: x86_64-elf-gcc --version
+
+    - name: Meson setup (debug + no-LTO twin)
+      run: |
+        meson setup build/meson-x86_64 --cross-file cross/x86_64-elf.txt -Darch=x86_64
+        meson setup build/meson-x86_64-nolto --cross-file cross/x86_64-elf.txt -Darch=x86_64 -Db_lto=false
+
+    - name: Style gate + build
+      run: tools/meson/build.sh build/meson-x86_64
+
+    - name: Host parity tests
+      run: meson test -C build/meson-x86_64 --suite host
+
+    - name: Spot QEMU classes (harness smoke)
+      run: |
+        python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class logging_klog
+        python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class configuration_build
+
+    - name: Upload debug ISO
+      uses: actions/upload-artifact@v4
+      with:
+        name: nexios-x86_64-debug-iso-meson
+        path: build/meson-x86_64/src/nexios-rtos.iso
+
+  meson-aarch64:
+    # REQUIRED check (issue #170 Q3 decision).
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Toolchain and Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential git make python3 python3-pip \
+          qemu-system-arm ovmf expect gdb-multiarch \
+          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          ninja-build
+        sudo pip3 install --break-system-packages 'meson==1.12.0'
+
+    - name: Setup cross-toolchain symlinks
+      run: |
+        for tool in gcc g++ as ld ar objcopy objdump strip readelf gdb; do
+          sudo ln -sf /usr/bin/aarch64-linux-gnu-$tool /usr/local/bin/aarch64-elf-$tool
+        done
+
+    - name: Verify cross-compiler
+      run: aarch64-elf-gcc --version
+
+    - name: Meson setup + compile
+      run: |
+        meson setup build/meson-aarch64 --cross-file cross/aarch64-elf.txt -Darch=aarch64
+        meson compile -C build/meson-aarch64
+
+    - name: Host parity tests
+      run: meson test -C build/meson-aarch64 --suite host
+
+    - name: Spot QEMU class (harness smoke)
+      run: python3 tools/meson/qemu_test.py --arch aarch64 --build debug --class shell_interaction
+
+  meson-riscv64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Toolchain and Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential git make python3 python3-pip \
+          qemu-system-misc ovmf expect gdb-multiarch \
+          gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
+          ninja-build
+        sudo pip3 install --break-system-packages 'meson==1.12.0'
+        # -elf- aliases matching the committed cross files (issue #170).
+        for tool in gcc g++ as ld ar objcopy objdump strip readelf gdb; do
+          sudo ln -sf /usr/bin/riscv64-linux-gnu-$tool /usr/local/bin/riscv64-elf-$tool
+        done
+
+    - name: Verify cross-compiler
+      run: riscv64-elf-gcc --version
+
+    - name: Meson setup + compile
+      run: |
+        meson setup build/meson-riscv64 --cross-file cross/riscv64-elf.txt -Darch=riscv64
+        meson compile -C build/meson-riscv64
+        test -f build/meson-riscv64/src/kernel-riscv64.bin
+
+    - name: Host parity tests
+      run: meson test -C build/meson-riscv64 --suite host
+
+  meson-tests-x86_64:
+    # Host-side parity/policy suites (no QEMU): flags, registry, counts,
+    # LTO model, stage paths, policy timeouts, history lock, verdicts.
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Toolchain and Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential git make python3 python3-pip ninja-build \
+          gcc-x86-64-linux-gnu g++-x86-64-linux-gnu
+        sudo pip3 install --break-system-packages 'meson==1.12.0'
+        for tool in gcc g++ as ld ar objcopy objdump strip readelf gdb; do
+          sudo ln -sf /usr/bin/x86_64-linux-gnu-$tool /usr/local/bin/x86_64-elf-$tool
+        done
+
+    - name: Meson setup
+      run: meson setup build/meson-x86_64 --cross-file cross/x86_64-elf.txt -Darch=x86_64
+
+    - name: Host suites
+      run: meson test -C build/meson-x86_64 --suite host --print-errorlogs
+
+  parity-make-vs-meson:
+    # Dual-period parity evidence (advisory until cutover).
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Install Toolchain and Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential git make python3 python3-pip ninja-build
+        sudo pip3 install --break-system-packages 'meson==1.12.0'
+        for gnu in x86_64-linux-gnu aarch64-linux-gnu riscv64-linux-gnu; do
+          triplet="${gnu%-linux-gnu}-elf"
+          for tool in gcc g++ as ld ar objcopy objdump strip readelf gdb; do
+            sudo ln -sf /usr/bin/$gnu-$tool /usr/local/bin/$triplet-$tool
+          done
+        done
+
+    - name: Parity ledger report
+      run: |
+        python3 tools/check-parity.py --report
+        python3 tools/check_no_make_refs.sh

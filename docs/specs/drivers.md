@@ -507,7 +507,7 @@ Racy functions:
 ### Phase 1 — FLAW-01 DmaEngine (extend `drivers_dma`)
 - Files: `src/kernel/driver/dma.hpp`, `dma.cpp`, `src/kernel/test/test_dma.cpp`.
 - Tests (+4): `dma_engine_reject_when_busy`, `dma_engine_no_double_callback`, `dma_engine_abort_suppresses_callback`, `dma_engine_irqguard_roundtrip`.
-- Verify: `make execute-test x86_64 debug drivers_dma` → **16/16** (12→16).
+- Verify: `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class drivers_dma` → **16/16** (12→16).
 
 ### Phase 2 — FLAW-02 PingPongDma (extend `drivers_dma`)
 - Files: `dma.hpp`, `dma.cpp`, `test_dma.cpp`.
@@ -526,7 +526,7 @@ Racy functions:
 
 ### Phase 5 — Counts, docs, full gates
 - Counts (test_expected_counts.hpp): `drivers_dma` 12→**19**, `drivers_virtio` 9→**11**, `drivers_core` 6→**8**, `all` → **931**. Reconcile against observed baseline; `validate_all_consistency()` must not warn.
-- Verify: `make build` (0 errors); debug `all` → **931/931** (trace ON); release `all` → **84/84** (trace OFF); selftest → **132/132**.
+- Verify: `tools/meson/build.sh` (0 errors); debug `all` → **931/931** (trace ON); release `all` → **84/84** (trace OFF); selftest → **132/132**.
 - Update §8 ledger: FLAW-01/02/03/08/10 → RESOLVED (FLAW-04/05/06 remain OPEN). SIL 3 audit via diff-patch protocol.
 
 ## 9.4 SIL 3 Considerations
@@ -549,7 +549,7 @@ Racy functions:
 | 4 | FLAW-08/10 | `drivers_core` 6→8 | 8/8 |
 | 5 | Gates | `all` → **931** | debug all 931/931, release all 84/84, selftest 132/132 |
 
-Final: `make build` clean, SIL 3 auditor sign-off, zero ResourceTracker leak deltas, §8 ledger updated.
+Final: `tools/meson/build.sh` clean, SIL 3 auditor sign-off, zero ResourceTracker leak deltas, §8 ledger updated.
 
 ## 10. Console, input and RTC parity (issue #355)
 

@@ -1,0 +1,33 @@
+# Frozen per-TU flag set: x86_64 debug (issue #170).
+# Source: Makefile CXXFLAGS_COMMON + x86_64 block + debug target overrides.
+# One flag per line. test_flag_parity.py compares the real compile commands
+# against this (after normalizing Meson/ninja-injected noise, documented there).
+-std=c++20
+-ffreestanding
+-fno-exceptions
+-fno-rtti
+-nostdlib
+-nostdinc
+-fno-builtin
+-fno-stack-protector
+-fno-threadsafe-statics
+-Wall
+-Wextra
+-Werror
+-ffunction-sections
+-fdata-sections
+-DCONFIG_ARCH_X86_64
+-DNEXIOS_ARCH_NAME=x86_64
+-DPICOLIBC_VERSION_NUM=1.8.12
+-fno-pie
+-m64
+-mno-red-zone
+-mgeneral-regs-only
+-mcmodel=large
+-g
+-Og
+-DCONFIG_DEBUG
+-fno-omit-frame-pointer
+-fstack-usage
+-DBUILD_TYPE=debug
+-flto

@@ -1,0 +1,12 @@
+# Frozen per-TU C flags: aarch64 debug (issue #170).
+# Source: Makefile CCFLAGS aarch64 block + debug target overrides.
+-static
+-nostdlib
+-ffreestanding
+-O2
+-ffunction-sections
+-fdata-sections
+-g
+-Og
+-DCONFIG_DEBUG
+-fno-omit-frame-pointer

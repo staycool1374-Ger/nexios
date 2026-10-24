@@ -1,0 +1,21 @@
+# Meson cross file: freestanding riscv64-elf (issue #170 Phase 1).
+# Flags live in meson.build (add_project_arguments), not here.
+
+[binaries]
+c = 'riscv64-elf-gcc'
+cpp = 'riscv64-elf-g++'
+ar = 'riscv64-elf-ar'
+strip = 'riscv64-elf-strip'
+objcopy = 'riscv64-elf-objcopy'
+objdump = 'riscv64-elf-objdump'
+readelf = 'riscv64-elf-readelf'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'none'
+cpu_family = 'riscv64'
+cpu = 'riscv64'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true

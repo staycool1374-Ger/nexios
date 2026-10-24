@@ -1,0 +1,30 @@
+# Frozen per-TU flag set: riscv64 debug (issue #170).
+# Source: Makefile CXXFLAGS_COMMON + riscv64 block + debug target overrides.
+-std=c++20
+-ffreestanding
+-fno-exceptions
+-fno-rtti
+-nostdlib
+-nostdinc
+-fno-builtin
+-fno-stack-protector
+-fno-threadsafe-statics
+-Wall
+-Wextra
+-Werror
+-ffunction-sections
+-fdata-sections
+-DCONFIG_ARCH_RISCV64
+-DNEXIOS_ARCH_NAME=riscv64
+-DPICOLIBC_VERSION_NUM=1.8.12
+-march=rv64imafdc
+-mabi=lp64d
+-mcmodel=medany
+-fno-pie
+-g
+-Og
+-DCONFIG_DEBUG
+-fno-omit-frame-pointer
+-fstack-usage
+-DBUILD_TYPE=debug
+-flto

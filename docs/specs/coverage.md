@@ -15,19 +15,20 @@ subsystem.
 ## 2. How to run
 
 ```sh
-make coverage-build                 # build the instrumented kernel once
-make coverage-class CLASS=safe      # boot one class, capture its dump
-make coverage                       # build + run COVERAGE_CLASSES + report
+meson setup build/meson-x86_64-cov --cross-file cross/x86_64-elf.txt -Darch=x86_64 -Dprofile_mode=coverage_func  # instrumented builddir, x86_64 only
+meson compile coverage-build -C build/meson-x86_64-cov                 # build the instrumented kernel once
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class safe --builddir build/meson-x86_64-cov  # boot one class, capture its dump
+meson compile coverage -C build/meson-x86_64-cov                      # run COVERAGE_CLASSES + report
 ```
 
-Artifacts:
+Artifacts (under the coverage builddir, e.g. `build/meson-x86_64-cov/`):
 
 | Path | Content |
 |---|---|
-| `build/coverage/<class>/serial.raw` | serial capture of one class run |
-| `build/coverage/<class>/kernel.elf` | ELF of that run (addresses shift per relink) |
-| `build/coverage/report.md` | per-area / per-file tables, 0 % files |
-| `build/coverage/report.html` | same data as HTML |
+| `<cov>/coverage/<class>/serial.raw` | serial capture of one class run |
+| `<cov>/coverage/<class>/kernel.elf` | ELF of that run (addresses shift per relink) |
+| `<cov>/coverage/report.md` | per-area / per-file tables, 0 % files |
+| `<cov>/coverage/report.html` | same data as HTML |
 
 Tunables: `COVERAGE_CLASSES`, `COVERAGE_MAX_FUNCS` (default 16384),
 `COVERAGE_TIMEOUT` (default 300 s), `COVERAGE_EXCLUDES`.
@@ -113,14 +114,15 @@ once ARM bring-up (#28) provides a real DTB at boot.
   tiers); timing-sensitive classes (`*_hrt`, `wcet*`, `*latency*`,
   `bench_*`) are excluded from the default class list.
 - Assembly stubs, ISR entry paths and the boot loader are not attributed.
-- `make coverage-build` runs `clean`, which removes `build/` **including
-  previous captures**.
+- `meson compile coverage-build` wipes and rebuilds the coverage builddir,
+  which removes **previous captures**.
 
 ## 6. Phase A (implemented, issue #147)
 
-Single-class line coverage works end to end (`make coverage-build
-COVERAGE_PHASE=line`, `make coverage-class CLASS=<c>`, `python3
-tools/gcov_line_report.py --dir build/coverage --out build/coverage`):
+Single-class line coverage works end to end (`meson setup` with
+`-Dprofile_mode=coverage_line`, `meson compile coverage-build`,
+`python3 tools/meson/qemu_test.py --arch x86_64 --class <c> --builddir <cov-builddir>`, `python3
+tools/gcov_line_report.py --dir <cov-builddir>/coverage --out <cov-builddir>/coverage`):
 framed+checksummed dump over COM1, host reconstruction next to the
 `.gcno`s, `x86_64-elf-gcov` text parse as the authoritative numbers
 (`line-report.md`), plus `lcov`/`genhtml` best-effort HTML.

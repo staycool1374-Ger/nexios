@@ -119,8 +119,8 @@ Have questions about the architecture, CSpace capabilities, or real-time schedul
 docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.5
 docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.5
 # inside the container:
-make build
-make execute-test x86_64 debug debug_syscall
+tools/meson/build.sh
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
 ```
 
 > **Apple Silicon / arm64 hosts:** `docker pull` fetches the arm64 image
@@ -135,7 +135,7 @@ Run a gate directly without an interactive shell:
 
 ```bash
 docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.5 \
-    make execute-test x86_64 debug debug_syscall
+    python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
 ```
 
 Pin a different snapshot explicitly (default is the image's own tag):
@@ -147,12 +147,18 @@ docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.
 
 * **Interactive Debug Mode (Default x86_64):** Launches the kernel in QEMU with serial debug output active.
   ```bash
-  make run-debug-mode
+  tools/meson/build.sh build/meson-x86_64
+  qemu-system-x86_64 -cdrom build/meson-x86_64/src/nexios-rtos.iso -m 256M \
+      -serial mon:stdio -display none
   ```
-* **Cross-Architecture Targeting:** Append the target architecture (`x86`, `arm`, or `riscv`) to emulate other platforms:
+* **Cross-Architecture Targeting:** Build the arch builddir, then boot its kernel ELF directly (`x86`, `arm`, or `riscv` shorthands below are illustrative — use full arch names):
   ```bash
-  make run-release-mode arm    # Boots AArch64 target in QEMU
-  make run-release-mode riscv  # Boots RISC-V 64 target in QEMU
+  tools/meson/build.sh build/meson-aarch64    # Boots AArch64 target in QEMU
+  qemu-system-aarch64 -M virt -cpu cortex-a72 -kernel build/meson-aarch64/src/kernel-debug.elf \
+      -serial mon:stdio -display none
+  tools/meson/build.sh build/meson-riscv64    # Boots RISC-V 64 target in QEMU
+  qemu-system-riscv64 -M virt -kernel build/meson-riscv64/src/kernel-riscv64.bin \
+      -serial mon:stdio -display none
   ```
 
 #### Upload files into ramdisk (XMODEM)
@@ -164,7 +170,7 @@ IDE drive (see `docs/specs/xmodem.md`):
 
 ```bash
 # 1. Boot with TCP serial, then start the receiver once:
-qemu-system-x86_64 -cdrom debug/nexios-rtos.iso -m 256M \
+qemu-system-x86_64 -cdrom build/meson-x86_64/src/nexios-rtos.iso -m 256M \
   -serial tcp:127.0.0.1:4465,server,nowait -machine q35 -cpu max \
   -drive if=pflash,format=raw,readonly=on,file=<edk2-x86_64-code.fd> \
   -display none

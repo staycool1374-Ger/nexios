@@ -1,0 +1,36 @@
+# Meson options for NexIOS (issue #170). Backward-compatible names only;
+# kernel behavior is unchanged — these select build configuration.
+
+option('arch', type : 'combo',
+  choices : ['x86_64', 'aarch64', 'riscv64'],
+  value : 'x86_64',
+  description : 'Target architecture (must match the --cross-file)')
+
+option('test_class', type : 'string',
+  value : 'none',
+  description : 'Test class baked into test-config.txt (Phase 4 harness)')
+
+option('config_defs', type : 'array',
+  value : [],
+  description : 'Extra -D overrides, e.g. -Dconfig_defs=-DCONFIG_DEADLINE_ACTION=3')
+
+option('external_test_dir', type : 'string',
+  value : '',
+  description : 'External test source dir (selftest subset rule, Phase 3)')
+
+option('profile_mode', type : 'combo',
+  choices : ['none', 'sampling', 'gcov', 'coverage_func', 'coverage_line'],
+  value : 'none',
+  description : 'Coverage/profiling mode (host analysis only, Phase 6)')
+
+option('qemu_uefi', type : 'string',
+  value : '',
+  description : 'OVMF firmware path override (empty = auto-detect)')
+
+option('picolibc_version', type : 'string',
+  value : '1.8.12',
+  description : 'Picolibc version pin (pp-number, unquoted -D)')
+
+option('clang_tidy', type : 'boolean',
+  value : false,
+  description : 'Enable non-blocking clang-tidy run_target (Phase 6)')

@@ -110,18 +110,19 @@ MP-2.2). All user pointers cross `CheckedPtr`/`safe_copy` as today;
 errno mapping per §2. Coexists with existing `src/libc/*.c`
 (no flag-day for in-tree userspace ELFs).
 
-## 6. Build picolibc (#72) + Makefile integration (#73)
+## 6. Build picolibc (#72) + Meson integration (#73)
 
-- Meson builds pinned `PICOLIBC_VERSION` (Makefile variable; default
-  = newest stable verified at #72 implementation to build `x86_64-elf`
+- Meson builds pinned `PICOLIBC_VERSION` (`picolibc_version` combo option;
+  default = newest stable verified at #72 implementation to build `x86_64-elf`
   static — tag recorded in the #72 commit message + LEARNINGS, not
   invented here), static `libc.a` + `libm.a` only, freestanding flags,
   sysroot under `build/` (gitignored by rule).
-- Makefile: `picolibc` / `picolibc-clean` targets, sysroot path var,
+- Meson: `picolibc` run_target (`meson compile picolibc -C <builddir>` →
+  `tools/build-picolibc.sh`), sysroot custom_target with an explicit
   build-order edge (sysroot before userspace link), link rule for
   picolibc-based user programs; existing userspace ELFs unchanged.
-- Vendored tarball `third_party/picolibc-$(PICOLIBC_VERSION).tar.gz`
-  (new dir): no network fetch during `make build` (offline rule).
+- Vendored tarball `third_party/picolibc-$(picolibc_version).tar.xz`
+  (+ `.sha256`): no network fetch during `tools/meson/build.sh` (offline rule).
 
 ## 7. TLS on context switch (#74)
 

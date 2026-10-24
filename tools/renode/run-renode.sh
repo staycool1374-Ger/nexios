@@ -21,14 +21,14 @@ case "$ARCH" in
     build)
         echo "Building debug ISO..."
         cd "$WORKSPACE"
-        make debug
+        tools/meson/build.sh build/meson-x86_64
         echo "Done. Run without 'build' to launch Renode."
         exit 0
         ;;
     test)
         echo "Building debug ISO..."
         cd "$WORKSPACE"
-        make debug
+        tools/meson/build.sh build/meson-x86_64
         echo "Running Renode selftest..."
         renode --disable-xwt -e "i @tools/renode/jarvis-x86_64.resc; s;
             sysbus.cpu LOG_LEVEL INFO;

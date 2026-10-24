@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 #
 # deadline_matrix.sh — config-matrix runner for Phase 7 (P7a) deadline-miss
-# handler ACTION dispatch coverage.
+# handler ACTION dispatch coverage (Meson flow, issue #170).
 #
 # The deadline-miss handler action is selected at COMPILE TIME by
-# CONFIG_DEADLINE_ACTION. This script builds the kernel once per action value
-# (0=LOG_ONLY, 1=PANIC, 2=DEMOTE, 3=KILL, 4=NOTIFY_MONITOR) and runs the
-# `deadline_action` test class for each. PANIC is an expected-fail: the kernel
-# must halt, and we treat the presence of the "action=PANIC" message as the
-# success signal.
+# CONFIG_DEADLINE_ACTION (`#ifndef`-guarded in nexios_config.h, so a
+# command-line -D wins). This script builds the kernel once per action value
+# (0=LOG_ONLY, 1=PANIC, 2=DEMOTE, 3=KILL, 4=NOTIFY_MONITOR) in a dedicated
+# no-LTO matrix builddir and runs the `deadline_action` test class for each.
+# PANIC is an expected-fail: the kernel must halt, and we treat the presence
+# of the "action=PANIC" message as the success signal.
 #
 # Usage: tools/deadline_matrix.sh
 set -u
@@ -16,19 +17,28 @@ cd "$(dirname "$0")/.."
 
 ARCH=x86_64
 BUILD=debug
-# Per-checkout tag (issue #372): same basename+sed transform as the Makefile
-# CHECKOUT_TAG so this script watches the SAME namespaced serial log its
-# inner `make execute-test` writes, and its pkill only matches this
+# Dedicated matrix builddir (NO_LTO twin semantics: the old script always
+# passed NO_LTO=1; -Db_lto=false also keeps config_defs reconfigures cheap and
+# never poisons the developer's main builddir with ACTION overrides).
+MATRIX_BUILDDIR="build/meson-x86_64-matrix"
+# Per-checkout tag (issue #372): same basename+sed transform as
+# qemu_test.py:checkout_tag() so this script watches the SAME namespaced
+# serial log its inner qemu_test.py writes, and its pkill only matches this
 # checkout's QEMU (prefix trap: match requires a trailing non-identifier
 # char so tag `jarvis` never matches `jarvis_test` artifacts).
 TAG=$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')
 [ -n "$TAG" ] || TAG=checkout
-SERIAL=/tmp/jarvis-serial-$TAG.log
+SERIAL=/tmp/jarvis-meson-$TAG/serial.log
 MATRIX_BUILD_LOG=/tmp/jarvis-matrix-build-$TAG.log
 MATRIX_RUN_LOG=/tmp/jarvis-matrix-run-$TAG.log
 PASS=0
 FAIL=0
 MATRIX_FAILS=""
+
+if [ ! -f "$MATRIX_BUILDDIR/build.ninja" ]; then
+    meson setup "$MATRIX_BUILDDIR" --cross-file cross/x86_64-elf.txt \
+        -Darch=x86_64 -Db_lto=false || exit 2
+fi
 
 run_action() {
     local action="$1"
@@ -42,9 +52,13 @@ run_action() {
     pkill -9 -f "qemu-system-x86_64.*-name jarvis-$TAG([^A-Za-z0-9_]|$)" 2>/dev/null || true
     sleep 1
 
-    make clean >/dev/null 2>&1
-    if ! make "$BUILD" CONFIG_DEFS="-DCONFIG_DEADLINE_ACTION=$action" NO_LTO=1 \
-            >"$MATRIX_BUILD_LOG" 2>&1; then
+    # -D on the command line wins over the #ifndef-guarded header default;
+    # config_defs is the designed knob (meson.options: CONFIG_DEFS map 1:1;
+    # meson configure persists it in the builddir, full rebuild follows).
+    if ! meson configure "$MATRIX_BUILDDIR" \
+            "-Dconfig_defs=-DCONFIG_DEADLINE_ACTION=$action" \
+            >"$MATRIX_BUILD_LOG" 2>&1 \
+        || ! meson compile -C "$MATRIX_BUILDDIR" >>"$MATRIX_BUILD_LOG" 2>&1; then
         echo "[MATRIX]   BUILD FAILED — see $MATRIX_BUILD_LOG"
         FAIL=$((FAIL + 1))
         MATRIX_FAILS="$MATRIX_FAILS action$action(build)"
@@ -52,10 +66,12 @@ run_action() {
     fi
 
     # Cap the QEMU run; the PANIC case halts the kernel and the host-side
-    # watchdog eventually kills QEMU, so this must not block indefinitely.
-    timeout 180 make execute-test "$ARCH" "$BUILD" deadline_action NO_LTO=1 \
+    # stall monitor eventually kills QEMU, so this must not block indefinitely.
+    timeout 180 python3 tools/meson/qemu_test.py --arch "$ARCH" \
+            --build "$BUILD" --class deadline_action \
+            --builddir "$MATRIX_BUILDDIR" \
             >"$MATRIX_RUN_LOG" 2>&1
-    # Let the tee'd serial log fully flush before we grep it.
+    # Let the serial log fully flush before we grep it.
     sync; sleep 1
     cp "$SERIAL" "/tmp/matrix-action$action-$TAG.log" 2>/dev/null || true
 

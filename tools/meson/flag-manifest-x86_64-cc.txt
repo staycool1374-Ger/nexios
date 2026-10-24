@@ -1,0 +1,13 @@
+# Frozen per-TU C flags: x86_64 debug (issue #170).
+# Source: Makefile CCFLAGS x86_64 block + debug target overrides.
+-static
+-nostdlib
+-ffreestanding
+-O2
+-ffunction-sections
+-fdata-sections
+-m64
+-g
+-Og
+-DCONFIG_DEBUG
+-fno-omit-frame-pointer

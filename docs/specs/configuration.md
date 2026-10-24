@@ -12,10 +12,10 @@ deadline/WCET feature set, plus the `tools/check-config.py` validator.
         ▼
  tools/check-config.py  ── validates range / cross-dependency / arch per tuner
         ▼
- make build  (NO_LTO / debug / release) ── the chosen matrix row is baked in
+  tools/meson/build.sh (NO_LTO / debug / release) ── the chosen matrix row is baked in
         ▼
  matrix runners (run_config_matrix.sh / tools/deadline_matrix.sh)
-        │  set CONFIG_DEADLINE_* + CONFIG_SPORADIC_*  → clean build → execute-test
+        │  set CONFIG_DEADLINE_* + CONFIG_SPORADIC_*  → meson compile → qemu_test.py
         ▼
  verdict: PASS / FAIL / HANG([HOST-WATCHDOG]) / expected-PANIC(PASS)
         ▼
@@ -150,25 +150,26 @@ per (MONITOR, WCET, SPORADIC):          # 2 × 2 × 2 = 8 families
 ```
 
 Per combo (`run_one`):
-1. `restore_config` (from `jarvis_config.h.matrix_backup`),
-   then `sed`-set the five `CONFIG_DEADLINE_*`/`CONFIG_SPORADIC_*` defines.
-2. `make clean` + `make -jN`.
-3. `make execute-test x86_64 debug all TEST_SERIAL_LOG=$log`.
-4. **Verdict:** exit≠0 AND `[HOST-WATCHDOG]` in log → **HANG**; exit≠0 → **FAIL**;
+1. `meson configure build/meson-x86_64-matrix "-Dconfig_defs=-DCONFIG_...=..."` —
+   the five tunables are `#ifndef`-guarded, so per-combo overrides win without
+   touching the tracked header. The shared no-LTO builddir persists.
+2. `meson compile -C build/meson-x86_64-matrix` (reconfigure dirties the
+   tree; ninja rebuilds what the defines affect).
+3. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class all --builddir build/meson-x86_64-matrix`, then snapshot the shared serial log into the combo log (`cp` before the next run overwrites it).
+4. **Verdict:** exit≠0 AND `HOST-WATCHDOG` in log → **HANG** (stall monitor
+   appends `[HOST-WATCHDOG]` to serial.log); exit≠0 → **FAIL**;
    else **PASS**.
 5. Success logs purged; failures appended to `BUGS.md`
    (`## Config-Matrix Bugs – <date>`).
 
-**KNOWN ISSUE:** the script targets `src/kernel/jarvis_config.h`, which does
-**not exist** — the real header is `src/kernel/nexios_config.h`.  As written the
-`sed`/`restore_config` steps no-op or fail, so the matrix does not actually
-reconfigure the build.  **Fix required:** point `CONFIG_FILE` at
-`src/kernel/nexios_config.h` (and prefer `CONFIG_DEFS="-D..."` like
-`tools/deadline_matrix.sh` to avoid editing the tracked header).
+**RESOLVED:** the script no longer `sed`-edits the tracked header — the five
+tunables are `#ifndef`-guarded, so per-combo `meson configure
+-Dconfig_defs="..."` overrides win without touching the tree (fixes the old
+`jarvis_config.h` path issue; see `scripts/run_config_matrix.sh`).
 
 ### 2.2 `tools/deadline_matrix.sh` — CONFIG_DEADLINE_ACTION sweep
 
-Iterates `ACTION ∈ {0..4}` via `make CONFIG_DEFS="-DCONFIG_DEADLINE_ACTION=$action"`
+Iterates `ACTION ∈ {0..4}` via `meson configure build/meson-x86_64-matrix "-Dconfig_defs=-DCONFIG_DEADLINE_ACTION=$action"` + `meson compile`
 and runs the `deadline_action` class.  **PANIC (action=1) is an expected-fail**:
 the kernel must halt and print `action=PANIC`; its presence is the PASS signal.
 Other actions must pass the class normally.  Kills leftover QEMU between runs.
@@ -180,7 +181,7 @@ Other actions must pass the class normally.  Kills leftover QEMU between runs.
   `ARCH` env / host detection.
 - Validates per tuner: documented range, cross-dependencies, arch constraints.
 - Exit codes: **0** pass, **1** errors, **2** warnings.  Wired into
-  `make check-config` / the build gate.
+  `meson compile check-config -C <builddir>` / the build gate.
 
 **Validation rules that must hold for any matrix row:**
 1. Exactly one `CONFIG_ARCH_*` active; `PAGE_SIZE`/`HHDM_OFFSET`/
@@ -216,4 +217,4 @@ Other actions must pass the class normally.  Kills leftover QEMU between runs.
   other 47 must pass.
 - **Compile-time guard block** (`nexios_config.h`, issue #407 item 5):
   `#if`/`#error` guards for knobs with no validator rule and no use-site
-  assert; `make check-config` is unchanged and still not part of `make build`.
+   assert; `meson compile check-config` is unchanged and still not part of `tools/meson/build.sh`.

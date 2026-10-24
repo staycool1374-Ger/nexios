@@ -56,38 +56,35 @@ verifies OS and user ELF authenticity and runs diagnostic time measurements.
 - `MessageQueue` per task (allocated in `init_task_common`, freed in `cleanup`). Circular buffer, SpinLock-guarded.
 - **Each task has its own msg_queue** — vfsd and iocd receive on their own queues.
 
-## 6. Build System
-| Target | Description |
-|--------|-------------|
-| `make debug` | Debug build (CONFIG_DEBUG, -Og), `debug/jarvis-rtos.iso` |
-| `make release` | Release build (-O2, no CONFIG_DEBUG), `release/jarvis-rtos.iso` (x86_64 only) |
-| `make execute-test <arch> <build> <class>` | Unified test runner (replaces all old test targets) |
-| `make debug-test <arch> <build> <class> <gdb-script>` | GDB batch surveillance with panic capture |
-| `make debug-shell <arch> <build> none <gdb-script> <shell-cmds>` | GDB + serial interaction from commands file |
-| `make run-debug-mode [<arch>]` | Interactive debug QEMU (alias for execute-test debug none) |
-| `make run-release-mode [<arch>]` | Interactive release QEMU (alias for execute-test release none) |
+## 6. Build & Test Target Usage (MANDATORY — re-read this before every test invocation)
+| Entry point | Description |
+|-------------|-------------|
+| `tools/meson/build.sh [--arch <arch>] [--nolto]` | Configure + build; builddir `build/meson-<arch>[-nolto]` (debug: CONFIG_DEBUG, -Og; release: -O2, no CONFIG_DEBUG) |
+| `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>` | Unified test runner (one QEMU boot per class) |
+| `python3 tools/meson/gdb_run.py debug-test --arch <arch> --build <build> --class <class> --gdb-script <script>` | GDB batch surveillance with panic capture |
+| `bash scripts/run_all_classes.sh [<arch>] [<build>]` | Full suite (26 runs, one reboot each) |
+| `meson test -C build/meson-<arch>` | Registered `meson test` entries (host-side parity/policy tests; kernel gates run via qemu_test.py) |
 
 **Parameters:**
-- `<arch>` — `x86`|`x86_64`|`arm`|`aarch64`|`riscv`|`riscv64` (shorthand accepted, default: x86_64)
+- `<arch>` — `x86_64`|`aarch64`|`riscv64` (default: x86_64)
 - `<build>` — `debug`|`release`
-- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `<aggregate>` (22 structural classes, issues #173, #364) | `<name>` (specific class). Full suite (`all` class removed): `make test-full [arch] [build]`
+- `<class>` — `none` (interactive shell) | `selftest` (CI gate) | `all` (full suite) | `<aggregate>` (22 structural classes, issues #173, #364) | `<name>` (specific class)
+- Only valid entry points: the four commands above. Do NOT use bare `meson test --suite` for kernel classes, raw QEMU invocations, or any other pattern.
 
 **Key behaviours:**
-- Cross-arch: `run-release-mode arm` builds aarch64 release ELF and boots via `qemu-system-aarch64 -kernel`
-- x86_64 release: builds full GRUB ISO; non-x86 release builds ELF/binary booted via `-kernel`
-- Incremental: x86_64 release interactive reuses existing ISO if present (skip rebuild)
-- Arch switching via `make run-*-mode <new-arch>` triggers `make clean` automatically via `check-arch` stamp
-- Positional arguments consumed by match-all `%:: @true` at end of Makefile
-- Per-arch gates (issue #357): the Makefile owns `TEST_FULL_CLASSES_<arch>` / `SELFTEST_CLASSES_<arch>` (measured-only green lists) plus `TEST_FULL_CLASSES_<arch>_release` (release-measured subsets: aarch64 `core_basic storage ui`, riscv64 `storage ui`); `make test-full` consumes them via `NEXIOS_TEST_CLASSES` (loud error when missing); `selftest` boots one class per `SELFTEST_CLASSES` entry off-x86 (`safe` on x86), and release selftest off-x86 fails loud by design (measured empty — use `test-full <arch> release`); baked release configs live at `build/.baked-test-config-<arch>` and are asserted before QEMU (never boot a stale suite).
+- Out-of-tree builds: each `<arch>` × `{lto,nolto}` combo gets its own builddir; reconfiguring with a different `-Db_lto` wipes the builddir (fail-closed LTO rule).
+- x86_64 ISO (`nexios-rtos.iso`, `iso-image` target in builddir) boots via GRUB; aarch64/riscv64 boot the kernel ELF directly via `qemu-system-<arch> -kernel`.
+- Incremental: `build.sh` reconfigures only when `meson.options`/cross files change; no `clean` needed when switching arch (separate builddirs).
+- Per-arch gates: `scripts/run_all_classes.sh` consumes the same per-arch class lists (measured-only green lists; release-measured subsets off-x86); `selftest` boots `safe` on x86 and the per-arch entry lists off-x86; release selftest off-x86 fails loud by design (measured empty — use `run_all_classes.sh <arch> release`).
+- Quoting: always quote file paths containing spaces.
 
 **Examples:**
 ```
-make run-debug-mode                       # interactive x86_64 debug
-make run-release-mode                     # interactive x86_64 release
-make run-release-mode arm                 # interactive aarch64 release
-make run-release-mode riscv               # interactive riscv64 release
-make test-full x86 debug               # full debug suite (26 runs, one reboot each)
-make execute-test x86 release selftest    # CI gate
+tools/meson/build.sh                                                        # build x86_64 debug
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class none   # interactive x86_64 debug shell
+bash scripts/run_all_classes.sh x86_64 debug                                # full debug suite (26 runs, one reboot each)
+bash scripts/run_all_classes.sh x86_64 release                              # full release suite
+python3 tools/meson/qemu_test.py --arch x86_64 --build release --class selftest  # CI gate
 ```
 
 - CXXFLAGS: `-std=c++20 -ffreestanding -fno-exceptions -fno-rtti -mno-red-zone -mcmodel=large`
@@ -210,7 +207,7 @@ guarantees the block belongs to the TCB. Confirmed via lldb breakpoint at
 Attempt 9 for details.
 
 ### Rule D: Debugging Escalation
-First attempt: analyze source code and inject targeted instrumentation/logging. If the root cause remains unclear after 3 analysis iterations (going in circles), use GDB batch surveillance (`make debug-test`) to gather precise evidence — backtrace, register state, memory values. Do NOT switch back to source speculation once GDB is warranted.
+First attempt: analyze source code and inject targeted instrumentation/logging. If the root cause remains unclear after 3 analysis iterations (going in circles), use GDB batch surveillance (`python3 tools/meson/gdb_run.py debug-test ...`) to gather precise evidence — backtrace, register state, memory values. Do NOT switch back to source speculation once GDB is warranted.
 
 ### Rule D1: aarch64 GDB surveillance notes (#235/#236)
 `aarch64-elf-gdb` is NOT preinstalled (x86_64/riscv64 GDbs are) — `brew install aarch64-elf-gdb`. For targeted (non-panic) surveillance, launch QEMU manually (`-s -S`, serial to file) and drive `aarch64-elf-gdb build/kernel-debug.elf -batch -x <script>`: breakpoint `commands` with `silent` + `printf` + `continue` give live censuses (fault routes, map/unmap pairs, switch-slot snapshots); `monitor info registers` reads TTBR-era state the stub doesn't expose as registers. Schedule multi-minute `sleep`+poll wrappers — class runs under surveillance take 5-15 min. Do NOT use batch-mode hardware watchpoints on QEMU/aarch64 TCG (stalls the target with no output).
@@ -228,14 +225,14 @@ QEMU; use lldb instead.
 ## 14. Test Discipline for Kernel Development
 
 ### Targeted class verification (MANDATORY)
-- Verify kernel code changes using the **smallest applicable test class**, NOT `test-full`.
+- Verify kernel code changes using the **smallest applicable test class**, NOT `run_all_classes.sh`.
 - Examples: `storage` for VFS/IPC/daemon changes, `data_structures_buffer_pool` for buffer pool changes, `timing_core` for timer changes, etc.
-- `make test-full` runs 26 classes and takes **tens of minutes** — only use for full release validation.
+- `bash scripts/run_all_classes.sh` runs 26 classes and takes **tens of minutes** — only use for full release validation.
 
 ### Full-suite log capture (MANDATORY)
-- When running `make test-full`, always capture the full output:
+- When running `run_all_classes.sh`, always capture the full output:
   ```
-  make test-full x86_64 debug 2>&1 | tee /tmp/jarvis-full-$(date +%Y%m%d-%H%M%S).log
+  bash scripts/run_all_classes.sh x86_64 debug 2>&1 | tee /tmp/jarvis-full-$(date +%Y%m%d-%H%M%S).log
   ```
 - This preserves the complete test log for later inspection (failures, warnings, serial output).
 - Without a log file, a truncated terminal buffer forces re-runs — wasteful.

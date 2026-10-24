@@ -147,7 +147,7 @@ needs a FrameCap).
    FSTS is read-cleared; no fault-log walk, no task kill (follow-up).
 5. Kernel-DMA domain: kernel DMA stays passthrough (T=0) — routing kernel
    buffers through a translation domain is a follow-up.
-6. QEMU integration: `make execute-test x86_64 debug iommu_live` boots the
+6. QEMU integration: `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class iommu_live` boots the
    q35 machine with OVMF (UEFI) + `-device intel-iommu,intremap=off,
    dma-translation=on` and runs the disk-free `iommu_live` class (5 tests:
    probe / enable-TES / map-unmap-flush / fault-read-clear / idempotent).

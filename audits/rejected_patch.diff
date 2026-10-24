@@ -1,15 +1,250 @@
-diff --git a/src/kernel/input/serial_input.cpp b/src/kernel/input/serial_input.cpp
-index cd383f930..e30699c33 100644
---- a/src/kernel/input/serial_input.cpp
-+++ b/src/kernel/input/serial_input.cpp
-@@ -79,8 +79,8 @@ void push_decoded(uint8_t byte) {
-         ++s_overrun;
-         static constexpr size_t kOverrunLogEvery = 256;
-         if ((s_overrun & (kOverrunLogEvery - 1)) == 1)
--            kernel::Logger::warn("serial rx overrun: dropped=%u",
--                                 static_cast<unsigned>(s_overrun));
-+            kernel::Logger::warn("serial rx overrun: dropped=%zu",
-+                                 s_overrun);
-     }
- }
+--- a/packaging/meson.build
++++ b/packaging/meson.build
+@@ -59,9 +59,15 @@
+ foreach src : userspace_srcs
+   parts = src.split('/')
+   out_name = parts[parts.length() - 1] + '.elf'
+-  # errno/fork probes get explicit link+strip targets below (x86_64);
+-  # skip them here to avoid duplicate target names.
+-  if arch == 'x86_64' and (out_name == 'errno_probe.c.elf' or out_name == 'fork-marker.c.elf')
++  # Probes with explicit link+strip targets below are skipped here to
++  # avoid duplicate target names: errno_probe on x86_64 (embedded for
++  # the Ring-3 TLS test), fork-marker on aarch64/riscv64 (embedded for
++  # the EL0/U-mode smoke tests) — mirroring mk/rules.mk, where each
++  # probe is built only on the arch that embeds it.
++  if arch == 'x86_64' and out_name == 'errno_probe.c.elf'
++    continue
++  endif
++  if (arch == 'aarch64' or arch == 'riscv64') and out_name == 'fork-marker.c.elf'
+     continue
+   endif
+   if src.endswith('.S')
+@@ -142,9 +148,10 @@
+                arch_strip, '@INPUT@', '@OUTPUT@'],
+     build_by_default : true,
+   )
+-  # Errno + fork probes: same link shape, then stripped for embedding.
+-  # (Built explicitly (not via the generic loop) so the stripped variants
+-  # have stable target handles for the objcopy step in src/meson.build.)
++  # Errno probe: same link shape, then stripped for embedding.
++  # Built explicitly (not via the generic loop) so the stripped variant
++  # has a stable target handle for the objcopy step in src/meson.build.
++  # Staged to /bin unstripped, like Make's INITRD_BIN_ELF.
+   errno_elf = custom_target('errno_probe.c.elf',
+     input : [crt0_path, files('../userspace/errno_probe.c'), libc_a],
+     output : 'errno_probe.c.elf',
+@@ -161,6 +168,15 @@
+                arch_strip, '@INPUT@', '@OUTPUT@'],
+     build_by_default : true,
+   )
++  bin_elf_targets += [errno_elf]
++endif
++
++if arch == 'aarch64' or arch == 'riscv64'
++  # Fork-marker probe (mirrors FORK_MARKER_SRC/OBJ, mk/rules.mk:384-409):
++  # linked in the generic-rule shape against the in-tree libc, stripped
++  # with the arch strip, embedded by src/meson.build. Staged to /bin
++  # unstripped, like Make's INITRD_BIN_ELF (which carries every
++  # userspace ELF except the three root demos).
+   fork_elf = custom_target('fork-marker.c.elf',
+     input : [crt0_path, files('../userspace/fork-marker.c'), libc_a],
+     output : 'fork-marker.c.elf',
+@@ -177,6 +193,7 @@
+                arch_strip, '@INPUT@', '@OUTPUT@'],
+     build_by_default : true,
+   )
++  bin_elf_targets += [fork_elf]
+ endif
+ 
+ # --- initrd tree + cpio (mirrors the $(INITRD_CPIO) recipe) ---
+@@ -191,6 +208,7 @@
+     '--user-dir', meson.project_source_root() / 'userspace',
+     '--tools-dir', meson.project_source_root() / 'tools',
+     '--rust-hello', meson.project_source_root() / 'build' / 'user' / 'rust-hello.elf',
++    '--rust-targets', meson.project_source_root() / 'rust-targets',
+     '--libc-verify', meson.project_build_root() / 'packaging' / 'libc_verify.c.elf',
+     '--rust-sources', meson.project_source_root() / 'user' / 'rust-hello',
+   ],
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -224,12 +224,22 @@
+ )
+ blob_objs += [fat32_img_o]
+ 
+-if arch == 'x86_64'
+-  # Embedded probe ELFs (stripped; mirrors VERIFY/ERRNO/FORK_IMG_OBJ).
+-  # Stripped in packaging/; objcopied here with the kernel-visible names.
+-  foreach pair : [['libc_verify_stripped.elf', 'libc_verify_img'],
+-                  ['errno_probe_stripped.elf', 'errno_probe_img'],
+-                  ['fork_marker_stripped.elf', 'fork_marker_img']]
++# Embedded probe ELFs (stripped; mirrors VERIFY/ERRNO/FORK_IMG_OBJ).
++# Stripped in packaging/; objcopied here with the kernel-visible names.
++# The arch split mirrors mk/rules.mk exactly: verify+errno on x86_64
++# only (Ring-3 TLS proof is TCG-x86_64), fork-marker on aarch64+riscv64
++# only (EL0/U-mode smoke; test_aarch64/test_riscv64 reference it
++# unconditionally, so omitting it breaks the off-x86 link).
++if arch == 'x86_64'
++  probe_pairs = [['libc_verify_stripped.elf', 'libc_verify_img'],
++                 ['errno_probe_stripped.elf', 'errno_probe_img']]
++elif arch == 'aarch64' or arch == 'riscv64'
++  probe_pairs = [['fork_marker_stripped.elf', 'fork_marker_img']]
++else
++  probe_pairs = []
++endif
++if len(probe_pairs) > 0
++  foreach pair : probe_pairs
+     in_name = pair[0]
+     stem = pair[1]
+     # Relative command path (cwd=build root); rename source is the
+--- a/tools/meson/list_tests.py
++++ b/tools/meson/list_tests.py
+@@ -24,6 +24,16 @@
+                   "servers drivers hal smp smp_multicpu deadline ui "
+                   "logging_debug random bench task_tcb_log task_fpu "
+                   "ahci_live iommu_live testrunner").split()
++# aarch64 debug gate (issue #357): verbatim TEST_FULL_CLASSES_aarch64
++# (Makefile:1105) — B1 green aggregates + testrunner. The x86_64 list is
++# NOT a substitute: it omits the six aarch64-only classes below and
++# carries known-reds the gate excludes (core_sched STALL, core_memory
++# PANIC, capability STALL, deadline PANIC, bench fails).
++AARCH64_CLASSES = ("core_basic core_sync core_task core_syscall "
++                   "core_tracing ipc hal logging_debug random task_tcb_log "
++                   "storage drivers ui servers task_fpu configuration_build "
++                   "task_core process_lifecycle shell_interaction cap_irq "
++                   "cap_irq_notify testrunner").split()
+ RISCV64_CLASSES = ("arch_riscv64 scheduler_zombie configuration_build "
+                    "memory_vmm memory_page_tables timing_core hal_timer "
+                    "irq_early_std storage drivers ui servers task_fpu "
+@@ -68,6 +78,8 @@
+         classes = override
+     elif arch == "x86_64":
+         classes = list(X86_64_CLASSES)
++    elif arch == "aarch64":
++        classes = list(AARCH64_CLASSES)
+     elif arch == "riscv64":
+         classes = list(RISCV64_CLASSES)
+     else:
+--- a/tools/meson/postlink.py
++++ b/tools/meson/postlink.py
+@@ -89,7 +89,14 @@
+             [args.objcopy, "-O", "binary", str(out), str(riscv_bin)],
+             check=True,
+         )
+-        shutil.copy2(riscv_bin, legacy / "kernel-riscv64.bin")
++        # Make keeps debug/release BINs apart
++        # (build/kernel-riscv64{,-release}.bin, Makefile:833/842);
++        # collapsing them leaves release bits at the debug-ABI legacy
++        # path after a release build.
++        legacy_bin = ("kernel-riscv64-release.bin"
++                      if args.buildtype == "release"
++                      else "kernel-riscv64.bin")
++        shutil.copy2(riscv_bin, legacy / legacy_bin)
+     print("postlink OK: %s (%s, lto=%s, baked=%s)"
+           % (out, args.arch, args.lto, args.test_class))
+     return 0
+--- a/tools/meson/qemu_test.py
++++ b/tools/meson/qemu_test.py
+@@ -183,10 +183,8 @@
+         # disables): without a display the Terminal never initialises and
+         # capture stays dead.
+         args += _fb_devices()
+-        args += ["-machine", "virt", "-cpu", "cortex-a72",
+-                 "-display", "none", "-no-reboot",
+-                 "-dtb", paths["dtb"],
+-                 "-semihosting-config", "enable=on,target=native"]
++        # Single machine block (mirrors Makefile:431-435): -machine/-cpu/
++        # -display/-no-reboot/-dtb/-semihosting each exactly once.
+         args += ["-device", "virtio-rng-pci,disable-legacy=on",
+                  "-machine", "virt", "-cpu", "cortex-a72",
+                  "-display", "none", "-no-reboot",
+--- a/tools/meson/stage_initrd.py
++++ b/tools/meson/stage_initrd.py
+@@ -41,6 +41,8 @@
+     parser.add_argument("--user-dir", required=True)
+     parser.add_argument("--tools-dir", required=True)
+     parser.add_argument("--rust-hello", default=None)
++    parser.add_argument("--rust-targets", default=None,
++                        help="rust-targets dir holding x86_64-nexios.json")
+     parser.add_argument("--libc-verify", default=None)
+     parser.add_argument("--rust-sources", default=None)
+     args = parser.parse_args()
+@@ -70,9 +72,14 @@
+                     copy_if_present(src_dir / name, dest / name)
+                 copy_if_present(src_dir / "src" / "main.rs",
+                                 dest / "src" / "main.rs")
+-                copy_if_present(
+-                    Path("rust-targets/x86_64-nexios.json"),
+-                    dest / "rust-targets/x86_64-nexios.json")
++                # Absolute source path (custom_target commands run with
++                # cwd=build root, so a CWD-relative literal silently
++                # misses). Flat dest under rust-hello/, mirroring the
++                # Makefile cp.
++                if args.rust_targets is not None:
++                    copy_if_present(
++                        Path(args.rust_targets) / "x86_64-nexios.json",
++                        dest / "x86_64-nexios.json")
+         if args.libc_verify is not None:
+             copy_if_present(args.libc_verify,
+                             root / Path(args.libc_verify).name)
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -38,13 +38,39 @@
+   # Triplet packages install on every host arch (ports carry the cross
+   # toolchains, mirroring the unconditional aarch64/riscv64 lines above).
+   # as/strip were missing entirely although the .ini references them.
++  # -elf aliases cover every tool meson.build hard-requires per arch
++  # (triplet-gcc/objcopy/readelf/strip, required:true) plus the
++  # optional objdump and gdb (mirrors the build-meson.yml 9-tool loop).
+   && ln -sf /usr/bin/x86_64-linux-gnu-gcc /usr/local/bin/x86_64-elf-gcc \
+   && ln -sf /usr/bin/x86_64-linux-gnu-g++ /usr/local/bin/x86_64-elf-g++ \
+   && ln -sf /usr/bin/x86_64-linux-gnu-as /usr/local/bin/x86_64-elf-as \
+   && ln -sf /usr/bin/x86_64-linux-gnu-ld /usr/local/bin/x86_64-elf-ld \
+   && ln -sf /usr/bin/x86_64-linux-gnu-ar /usr/local/bin/x86_64-elf-ar \
+   && ln -sf /usr/bin/x86_64-linux-gnu-objcopy /usr/local/bin/x86_64-elf-objcopy \
++  && ln -sf /usr/bin/x86_64-linux-gnu-objdump /usr/local/bin/x86_64-elf-objdump \
+   && ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/local/bin/x86_64-elf-strip \
++  && ln -sf /usr/bin/x86_64-linux-gnu-readelf /usr/local/bin/x86_64-elf-readelf \
++  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/x86_64-elf-gdb \
++  && ln -sf /usr/bin/aarch64-linux-gnu-gcc /usr/local/bin/aarch64-elf-gcc \
++  && ln -sf /usr/bin/aarch64-linux-gnu-g++ /usr/local/bin/aarch64-elf-g++ \
++  && ln -sf /usr/bin/aarch64-linux-gnu-as /usr/local/bin/aarch64-elf-as \
++  && ln -sf /usr/bin/aarch64-linux-gnu-ld /usr/local/bin/aarch64-elf-ld \
++  && ln -sf /usr/bin/aarch64-linux-gnu-ar /usr/local/bin/aarch64-elf-ar \
++  && ln -sf /usr/bin/aarch64-linux-gnu-objcopy /usr/local/bin/aarch64-elf-objcopy \
++  && ln -sf /usr/bin/aarch64-linux-gnu-objdump /usr/local/bin/aarch64-elf-objdump \
++  && ln -sf /usr/bin/aarch64-linux-gnu-strip /usr/local/bin/aarch64-elf-strip \
++  && ln -sf /usr/bin/aarch64-linux-gnu-readelf /usr/local/bin/aarch64-elf-readelf \
++  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/aarch64-elf-gdb \
++  && ln -sf /usr/bin/riscv64-linux-gnu-gcc /usr/local/bin/riscv64-elf-gcc \
++  && ln -sf /usr/bin/riscv64-linux-gnu-g++ /usr/local/bin/riscv64-elf-g++ \
++  && ln -sf /usr/bin/riscv64-linux-gnu-as /usr/local/bin/riscv64-elf-as \
++  && ln -sf /usr/bin/riscv64-linux-gnu-ld /usr/local/bin/riscv64-elf-ld \
++  && ln -sf /usr/bin/riscv64-linux-gnu-ar /usr/local/bin/riscv64-elf-ar \
++  && ln -sf /usr/bin/riscv64-linux-gnu-objcopy /usr/local/bin/riscv64-elf-objcopy \
++  && ln -sf /usr/bin/riscv64-linux-gnu-objdump /usr/local/bin/riscv64-elf-objdump \
++  && ln -sf /usr/bin/riscv64-linux-gnu-strip /usr/local/bin/riscv64-elf-strip \
++  && ln -sf /usr/bin/riscv64-linux-gnu-readelf /usr/local/bin/riscv64-elf-readelf \
++  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/riscv64-elf-gdb \
+   && rm -rf /var/lib/apt/lists*
+ 
+ # x86 GRUB modules on arm64 hosts (issue #243, verified in-container):
+--- a/docs/clion-setup.md
++++ b/docs/clion-setup.md
+@@ -103,7 +103,7 @@
+ ```bash
+ python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug \
+   --class none --gdb-script tools/gdb/test-batch.gdb     # batch, exits on panic
+-python3 tools/meson/gdb_run.py debug-shell --arch x86_64 --build none \
++python3 tools/meson/gdb_run.py debug-shell --arch x86_64 --build debug \
+   --gdb-script tools/gdb/init.gdb --cmds cmds.txt        # scripted interactive
+ ```
+ 
+@@ -123,7 +123,7 @@
+   -cpu max \
+   -drive file=build/meson-x86_64-nolto/packaging/fat32.img,format=raw,if=ide,index=1,media=disk \
+   -netdev user,id=net0 -device virtio-net-pci,netdev=net0,disable-legacy=on \
+-  -device isa-debug-exit,iobase=0x4f,iosize=0x04 \
++  -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+   -serial mon:stdio -display none -no-reboot -s -S
+ ```
  

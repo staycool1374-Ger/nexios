@@ -1,0 +1,15 @@
+# Frozen per-TU C flags: riscv64 debug (issue #170).
+# Source: Makefile CCFLAGS riscv64 block + debug target overrides.
+-static
+-nostdlib
+-ffreestanding
+-O2
+-ffunction-sections
+-fdata-sections
+-DCONFIG_ARCH_RISCV64
+-mcmodel=medany
+-fno-pie
+-g
+-Og
+-DCONFIG_DEBUG
+-fno-omit-frame-pointer

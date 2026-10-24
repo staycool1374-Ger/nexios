@@ -1,6 +1,7 @@
 # tools/test-policy.awk — resolver + validator for tools/test-policy.tsv
-# The ONLY parser of the policy table (Makefile `$(shell ...)` and
-# scripts/run_all_classes.sh both call this; no parsing logic duplicated).
+# The ONLY parser of the policy table (tools/meson/qemu_test.py,
+# tools/meson/list_tests.py and scripts/run_all_classes.sh all call this;
+# no parsing logic duplicated).
 # POSIX awk only (BSD awk + gawk): no gensub, no length(array).
 #
 # Usage:

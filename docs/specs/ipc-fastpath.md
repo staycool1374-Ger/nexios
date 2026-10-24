@@ -27,8 +27,9 @@ r8, r9…").  This paper grounds every claim in the live source.  Four
 findings shape the design:
 
 1. **The mangled register list is a ghost of the dead `syscall_entry.asm`.**
-   Its argument shuffle (`mov rsi, rbx; mov rdx, rcx; mov rcx, rdx;
-   mov r8, rsi; mov r9, rdi`) is **DEAD CODE** (unassembled, `mk/rules.mk`;
+   Its argument shuffle (`   mov rsi, rbx; mov rdx, rcx; mov rcx, rdx;
+   mov r8, rsi; mov r9, rdi`) is **DEAD CODE** (unassembled — excluded in
+   `src/meson.build` alongside the arch `%` globs;
    the file's own header documents the P7/#6 LSTAR/GS-base landmine).
    The **live** entry is `int $0x80` → trap gate `isr_128` → `isr_common`
    → `handle_interrupt_c` → `syscall_handler` → `Syscall::handle`
@@ -439,7 +440,7 @@ zero-delta asserted).
 | `fast_latency_vs_full` | relative latency, #101/#102 methodology: `avg(SEND_FAST) ≤ avg(SEND) * 2` (fair fail-closed pair: both to an invalid dest → `-1`) with a magnitude-sanity canary; no absolute cycle bound (TCG quantization). |
 | `fast_hybrid_mixed_queue` | interleaved fast + full sends/receives on one mailbox preserve FIFO/priority order and both drain correctly. |
 
-Validation: `make execute-test x86_64 debug ipc_fastpath`, then the
+Validation: `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class ipc_fastpath`, then the
 regression classes (ipc_blocking, ipc_robustness, syscall_fastpath, cap_ipc,
 cap_pager, cap_death, cap_shm), then debug `all` + release `all`,
 test-history rows per AGENTS.md.

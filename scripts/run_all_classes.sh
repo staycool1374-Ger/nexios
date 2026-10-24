@@ -7,7 +7,7 @@
 #   <YYYY-MM-DD HH:MM:SS> <test-class> PASSED: <n> FAILED: <n> TIME: <consumed-time>
 #   (abnormal termination appends STATUS: <TIMEOUT|PANIC|NO_SUMMARY>)
 # Usage: bash scripts/run_all_classes.sh [arch] [build]
-#        (normally via `make test-full [arch] [build]`)
+#        (the full-suite entry point; per-class runs go through qemu_test.py)
 # Per-class run policy (timeouts, retries, scopes, markers) comes from
 # tools/test-policy.tsv via tools/test-policy.awk — no literals here.
 # No debugging — only observe what works and what does not.
@@ -34,10 +34,10 @@ policy() { # <class> <key> — print resolved value, fail loud on empty
 # end and deterministic log ordering.
 CLASSES="core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench task_tcb_log task_fpu ahci_live iommu_live testrunner"
 
-# Issue #357: the Makefile owns the per-arch gate lists (measured rows
-# only) and passes them via NEXIOS_TEST_CLASSES; the script default
-# below is the x86_64 control list. Arch/build scoping is table-driven
-# (tools/test-policy.tsv) as defense.
+# Issue #357: the per-arch gate lists live in tools/meson/list_tests.py
+# (measured rows only) and pass through NEXIOS_TEST_CLASSES; the script
+# default below is the x86_64 control list. Arch/build scoping is
+# table-driven (tools/test-policy.tsv) as defense.
 if [ -n "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="$NEXIOS_TEST_CLASSES"
 fi
@@ -46,7 +46,7 @@ fi
 # 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
 # aggregates are not gated on riscv64 (no evidence yet — wiring them in
 # blind would red the gate for unrelated pre-existing gaps).
-# Issue #357: skipped when the Makefile passes its measured list.
+# Issue #357: skipped when list_tests.py passes its measured list.
 if [ "$ARCH" = "riscv64" ] && [ -z "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="arch_riscv64 scheduler_zombie"
 fi
@@ -90,8 +90,8 @@ if [ -n "${NEXIOS_POLICY_DUMP:-}" ]; then
 fi
 
 # Fail fast when the q35 variants cannot boot: clear message instead of a
-# QEMU boot error deep in the loop.  Mirrors the Makefile OVMF_CODE guards
-# (which remain the authoritative per-class check inside execute-test).
+# QEMU boot error deep in the loop.  Mirrors the OVMF_CODE guards
+# (which remain the authoritative per-class check inside qemu_test.py).
 for c in $RUN; do
     if [ "$c" = "ahci_live" ] || [ "$c" = "iommu_live" ]; then
         OVMF_FW=$(find /opt/homebrew/Cellar/qemu /usr/share/qemu /usr/local/share/qemu -name 'edk2-x86_64-code.fd' 2>/dev/null | head -1)
@@ -110,14 +110,17 @@ total=0; passed_classes=0; failed_classes=0
 for c in $RUN; do
     total=$((total+1))
     # Scope cleanup to this checkout's QEMU (issue #372): the -name tag is
-    # added by the Makefile, with a trailing-delimiter guard so tag `jarvis`
+    # added by qemu_test.py, with a trailing-delimiter guard so tag `jarvis`
     # never matches `jarvis_test` artifacts. Never blanket-kill qemu-system:
     # a sibling checkout may be testing concurrently.
     pkill -9 -f "qemu-system.*-name jarvis-$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')([^A-Za-z0-9_]|$)" 2>/dev/null || true
     log="$LOGDIR/$c.log"
     start=$(date +%s%N)
     outer=$(policy "$c" outer_timeout)
-    timeout "$outer" make execute-test "$ARCH" "$BUILD" "$c" > "$log" 2>&1
+    # Meson runner (issue #170): qemu_test.py contract
+    # (same verdict tokens, same history format);
+    # --no-history because THIS script owns the history append below.
+    timeout "$outer" python3 tools/meson/qemu_test.py --arch "$ARCH" --build "$BUILD" --class "$c" --no-history > "$log" 2>&1
     rc=$?
     end=$(date +%s%N)
     wall_ms=$(( (end - start) / 1000000 ))
@@ -175,7 +178,7 @@ for c in $RUN; do
     # Issue #322: a run that stalled once and went green on the identical-binary
     # retry is a PASS, but the stall is recorded so the flake rate is visible.
     if [ -z "$status" ] && [ "${nfail:-0}" -eq 0 ] && grep -q 'STALL-RECOVERED' "$log"; then
-        row="$row STATUS: STALL_RECOVERED"
+        row="$row STATUS: STALL-RECOVERED"
     fi
 
     # Verdict: OK iff summary present or expected-panic/empty PASS, 0 fails, rc==0

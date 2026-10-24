@@ -1,6 +1,6 @@
 {
   "name": "ring-dump",
-  "description": "Triage chain: attach to an externally started :1234 stub and dump the H2 deferred-switch ring. Requires `make execute-test x86_64 debug none` running first (QEMU adds -s for debug builds). The runner never starts or kills QEMU.",
+  "description": "Triage chain: attach to an externally started :1234 stub and dump the H2 deferred-switch ring. Requires a stubbed QEMU running first (frozen-QEMU recipe in docs/clion-setup.md section 4.2, or `python3 tools/meson/gdb_run.py debug-shell ...` in another terminal — QEMU adds -s for debug builds). The runner never starts or kills QEMU.",
   "steps": [
     {
       "name": "wait-stub",
@@ -21,7 +21,7 @@
     {
       "name": "no-stub",
       "type": "shell-command",
-      "command": ["echo", "no GDB stub on :1234 — start `make execute-test x86_64 debug none` first"],
+      "command": ["echo", "no GDB stub on :1234 — start a stubbed QEMU first (docs/clion-setup.md section 4.2)"],
       "timeout": 10,
       "next": "fail"
     },

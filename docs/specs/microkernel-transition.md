@@ -228,7 +228,7 @@ SC→core binding; #168 SMMU extends DMA isolation to ARM.
    §7 per-server sequence (Kconfig default-OFF → parity → flip → fallback one
    milestone → delete after gate). No kernel deletion before its server gate.
 2. All §8 classes green, debug `test-full` 20/20 + release 18/18+2skips,
-   `make build` Errors 0, ResourceTracker delta 0 on restart cycles.
+   `tools/meson/build.sh` Errors 0, ResourceTracker delta 0 on restart cycles.
 3. Fault demo: kill any server → rest live, supervisor restarts, clients
    rebind (recorded serial log).
 4. IPC overhead ≤10% vs in-kernel path on send_sync-heavy load (LionsOS bar).

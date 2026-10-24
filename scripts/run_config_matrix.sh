@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_config_matrix.sh
+# run_config_matrix.sh (Meson flow, issue #170)
 # ------------------------------------------------------------
 # Executes the kernel test‑suite for every *meaningful* configuration
 # of the deadline/WCET feature set.
@@ -11,46 +11,38 @@
 #   CONFIG_SPORADIC_SERVER_DEADLINE_HOOK (0|1)
 #   CONFIG_DEADLINE_ACTION (0..4) – only relevant when
 #                                  CONFIG_DEADLINE_MISS_DETECTION==1
+#
+# Config mechanism: the five tunables are `#ifndef`-guarded in
+# src/kernel/nexios_config.h, so they are overridden per combo with
+# `meson configure -Dconfig_defs="..."` on a dedicated matrix builddir —
+# the tracked header is never edited (this also fixes the old script's
+# KNOWN ISSUE: it sed-edited src/kernel/jarvis_config.h, which does not
+# exist). The builddir is shared with tools/deadline_matrix.sh (never run
+# concurrently; leftover-QEMU cleanup between runs is owned by
+# qemu_test.py:scoped_pkill per attempt, checkout-scoped by tag).
 # ------------------------------------------------------------
 set -euo pipefail
 
-# -----------------------------------------------------------------
-# Parallelism within a single build (make -j).  Start with CPU cores,
-# cap at 6 as suggested by the user (adjustable).
-# -----------------------------------------------------------------
-JOBS="${JOBS:-6}"
-CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
-if (( JOBS > CPU_CORES )); then JOBS=$CPU_CORES; fi
+MATRIX_BUILDDIR="build/meson-x86_64-matrix"
+if [ ! -f "$MATRIX_BUILDDIR/build.ninja" ]; then
+    meson setup "$MATRIX_BUILDDIR" --cross-file cross/x86_64-elf.txt \
+        -Darch=x86_64 -Db_lto=false || exit 2
+fi
 
 # -----------------------------------------------------------------
 # Paths
 # -----------------------------------------------------------------
-CONFIG_FILE="src/kernel/jarvis_config.h"
-CONFIG_BACKUP="${CONFIG_FILE}.matrix_backup"
 BUGS_TMP="/tmp/jarvis_config_matrix_bugs.tmp"
 SUCCESS_LIST="/tmp/jarvis_config_matrix_success.tmp"
+TAG=$(basename "$PWD" | sed 's/[^A-Za-z0-9_]/_/g')
+[ -n "$TAG" ] || TAG=checkout
+SERIAL=/tmp/jarvis-meson-$TAG/serial.log
 
 # -----------------------------------------------------------------
 # Initialise scratch files
 # -----------------------------------------------------------------
 > "$BUGS_TMP"
 > "$SUCCESS_LIST"
-
-# -----------------------------------------------------------------
-# Backup original config (restored on exit / after matrix)
-# -----------------------------------------------------------------
-cp "$CONFIG_FILE" "$CONFIG_BACKUP"
-restore_config() { cp "$CONFIG_BACKUP" "$CONFIG_FILE"; }
-trap restore_config EXIT
-
-# -----------------------------------------------------------------
-# Helper: set a single #define in jarvis_config.h
-# -----------------------------------------------------------------
-set_define() {
-    local macro="$1" value="$2"
-    # BSD sed (macOS) and GNU sed compatible
-    sed -i '' "s/^#define ${macro} .*/#define ${macro} ${value}/" "$CONFIG_FILE"
-}
 
 # -----------------------------------------------------------------
 # Run one configuration combination
@@ -61,38 +53,35 @@ run_one() {
     local id="DMON${MONITOR}_DMISS${MISS}_WCET${WCET}_SPO${SPORADIC}_DACT${ACTION}"
     local log="/tmp/jarvis_config_matrix_${id}.log"
 
-    # ---- 1. Re‑configure jarvis_config.h ----
-    restore_config
-    set_define CONFIG_DEADLINE_MONITOR_TASK           "$MONITOR"
-    set_define CONFIG_DEADLINE_MISS_DETECTION         "$MISS"
-    set_define CONFIG_WCET_OVERRUN_DETECTION          "$WCET"
-    set_define CONFIG_SPORADIC_SERVER_DEADLINE_HOOK   "$SPORADIC"
-    set_define CONFIG_DEADLINE_ACTION                 "$ACTION"
-
+    # ---- 1. Re‑configure via the designed config_defs knob ----
     echo "[$id] Building …"
-
-    # ---- 2. Clean build ----
-    make clean > /dev/null 2>&1 || true
-    make -j"$JOBS" > /dev/null 2>&1 || {
+    if ! meson configure "$MATRIX_BUILDDIR" \
+            "-Dconfig_defs=-DCONFIG_DEADLINE_MONITOR_TASK=$MONITOR,-DCONFIG_DEADLINE_MISS_DETECTION=$MISS,-DCONFIG_WCET_OVERRUN_DETECTION=$WCET,-DCONFIG_SPORADIC_SERVER_DEADLINE_HOOK=$SPORADIC,-DCONFIG_DEADLINE_ACTION=$ACTION" \
+            > /dev/null 2>&1 \
+        || ! meson compile -C "$MATRIX_BUILDDIR" > /dev/null 2>&1; then
         echo "[$id] BUILD FAILED – skipping test"
         echo "- **$id**: BUILD FAILED – no test log" >> "$BUGS_TMP"
         return
-    }
+    fi
 
-    # ---- 3. Run tests ----
+    # ---- 2. Run tests ----
     echo "[$id] Testing …"
-    # TEST_SERIAL_LOG is the variable the Makefile's host‑watchdog monitors.
     # Use `||` to avoid `set -e` killing the script when a test fails.
+    # The full `all` class reboots once per class (same as the old flow).
     local status=0
-    make execute-test x86_64 debug all TEST_SERIAL_LOG="$log" > /dev/null 2>&1 || status=$?
+    python3 tools/meson/qemu_test.py --arch x86_64 --build debug \
+        --class all --builddir "$MATRIX_BUILDDIR" > /dev/null 2>&1 || status=$?
+    # Snapshot the shared serial log into this combo's log before the next
+    # run overwrites it.
+    cp "$SERIAL" "$log" 2>/dev/null || true
 
-    # ---- 4. Analyse result ----
-    if [ $status -ne 0 ] && grep -q "\[HOST-WATCHDOG\]" "$log" 2>/dev/null; then
-        # Watchdog fired → hang
+    # ---- 3. Analyse result ----
+    if [ $status -ne 0 ] && grep -q "HOST-WATCHDOG" "$log" 2>/dev/null; then
+        # Stall monitor fired → hang
         echo "[$id] HANG"
         echo "- **$id**: HANG – ${log}" >> "$BUGS_TMP"
     elif [ $status -ne 0 ]; then
-        # Non‑zero exit but no watchdog → test failure
+        # Non‑zero exit but no stall → test failure
         echo "[$id] FAIL"
         echo "- **$id**: FAIL – ${log}" >> "$BUGS_TMP"
     else
@@ -112,13 +101,13 @@ for MONITOR in 0 1; do
   for WCET in 0 1; do
     for SPORADIC in 0 1; do
       # ---- miss detection disabled: action is irrelevant, force 0 ----
-      ((counter++))
+      counter=$((counter + 1))
       echo "[$counter/$TOTAL] DMON${MONITOR}_DMISS0_WCET${WCET}_SPO${SPORADIC}_DACT0"
       run_one "$MONITOR" 0 "$WCET" "$SPORADIC" 0
 
       # ---- miss detection enabled: iterate actions 0..4 ----
       for ACTION in {0..4}; do
-        ((counter++))
+        counter=$((counter + 1))
         echo "[$counter/$TOTAL] DMON${MONITOR}_DMISS1_WCET${WCET}_SPO${SPORADIC}_DACT${ACTION}"
         run_one "$MONITOR" 1 "$WCET" "$SPORADIC" "$ACTION"
       done

@@ -44,7 +44,7 @@
 - Kernel pointer leaked to userspace detected and blocked
 
 ### Release Build — test_release_build.cpp
-- `make release` compiles without errors
+- `meson compile -C build/meson-x86_64-release` compiles without errors
 - Release build uses `-O3`, `-DNDEBUG`
 - Release binary is stripped of symbols
 - Release binary runs all release tests (`JARVIS_REGISTER_RELEASE_TEST`)

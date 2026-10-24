@@ -1,0 +1,21 @@
+# Meson cross file: freestanding aarch64-elf (issue #170 Phase 1).
+# Flags live in meson.build (add_project_arguments), not here.
+
+[binaries]
+c = 'aarch64-elf-gcc'
+cpp = 'aarch64-elf-g++'
+ar = 'aarch64-elf-ar'
+strip = 'aarch64-elf-strip'
+objcopy = 'aarch64-elf-objcopy'
+objdump = 'aarch64-elf-objdump'
+readelf = 'aarch64-elf-readelf'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'none'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true

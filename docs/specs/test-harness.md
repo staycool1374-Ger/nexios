@@ -6,7 +6,7 @@ leak detector, the registry/class system, and the watchdog/QEMU verdict
 protocol.  All file:line anchors verified against the current tree.
 
 ```
- Makefile execute-test <arch> <build> <class>
+ qemu_test.py --arch <arch> --build <build> --class <class>
    │ write class → initrd/tests/test-config.txt; build ISO; launch QEMU+expect
    ▼
  kernel_init → Registry::init → parse_test_config → register_class(name)
@@ -182,8 +182,8 @@ the guard keeps it that way.
   classes plus 16 structural aggregates (issue #173: `core ipc capability
   proc_elf storage servers drivers hal smp smp_multicpu deadline ui
   logging_debug random bench testrunner`) plus `safe`; the obsolete `all` /
-  `all-1` / `all-2` classes are removed, the scripted full run
-  (`make test-full` → `scripts/run_all_classes.sh`) replaces them.
+   `all-1` / `all-2` classes are removed, the scripted full run
+   (`scripts/run_all_classes.sh`, one reboot per class) replaces them.
 - `parse_test_config`: whitespace/`#`-separated class names; missing file →
   default `["safe"]`.
 - Entry points: `run_filtered(flags, isolation)`, `run_all()` (no isolation),
@@ -233,13 +233,13 @@ the guard keeps it that way.
 
 ## 8. Per-arch gate matrix (issue #357)
 
-Authoritative in-repo copy of the v0.5.5 per-arch gates; the Makefile
-owns the lists (`TEST_FULL_CLASSES_<arch>`, `SELFTEST_CLASSES_<arch>`),
+Authoritative in-repo copy of the v0.5.5 per-arch gates; the Meson flow
+owns the lists (`tools/meson/list_tests.py`: per-arch class tuples),
 `scripts/run_all_classes.sh` consumes them via `NEXIOS_TEST_CLASSES`.
 Per-class rows in `test-history.txt` are canonical; the SUMMARY line
 carries `ARCH=<arch>`. Counts are measured, never hand-summed.
 
-### Debug full gate (`make test-full <arch> debug`)
+### Debug full gate (`bash scripts/run_all_classes.sh <arch> debug`)
 
 | Arch | Runs | Green (FAILED: 0) | Excluded (with evidence) |
 |---|---|---|---|
@@ -261,15 +261,16 @@ ui {78,78,78}, servers {66,66,66}, storage {167,167,167}, hal
 
 | Arch | Artifact | List |
 |---|---|---|
-| x86_64 | `make release` ISO (+ `release/.baked-test-config`) | measured 24-class TF_RELEASE set |
-| aarch64 | `make test-full aarch64 release` = `core_basic storage ui` (`TEST_FULL_CLASSES_aarch64_release`); `make release-elf` → `build/kernel.elf` (+ `build/.baked-test-config-aarch64`) | Measured 2026-10-22: core_basic 17/17, storage 40/40, ui 19/19; H6-release `version` E2E SMOKE: PASS (`Type: release`, shell-smoke.exp unmodified) |
-| riscv64 | `make test-full riscv64 release` = `storage ui` (`TEST_FULL_CLASSES_riscv64_release`); `make release-elf` → `build/kernel-riscv64-release.bin` (+ stamp) | Measured 2026-10-22: storage 40/40, ui 19/19; H6-release `version` E2E SMOKE: PASS (`Type: release`, shell-smoke.exp unmodified) |
+| x86_64 | release ISO from a `-Dbuildtype=release` builddir (`meson compile iso-image -C build/meson-x86_64-release`) | measured 24-class TF_RELEASE set |
+| aarch64 | `bash scripts/run_all_classes.sh aarch64 release` = `core_basic storage ui`; release ELF at the builddir root | Measured 2026-10-22: core_basic 17/17, storage 40/40, ui 19/19; H6-release `version` E2E SMOKE: PASS (`Type: release`, shell-smoke.exp unmodified) |
+| riscv64 | `bash scripts/run_all_classes.sh riscv64 release` = `storage ui`; release BIN at the builddir root | Measured 2026-10-22: storage 40/40, ui 19/19; H6-release `version` E2E SMOKE: PASS (`Type: release`, shell-smoke.exp unmodified) |
 
-`make release` stays x86_64-only (UEFI ISO is an x86 boot concept).
-Stale baked configs fail loud (`build/.baked-test-config-<arch>`
-vs requested class; never boot the wrong suite).
+Release stays x86_64-only for the UEFI ISO (an x86 boot concept); off-x86
+release boots the kernel ELF/BIN directly via `-kernel`.
+Stale baked configs fail loud (`meson configure -Dtest_class=<list>` is
+re-asserted before every QEMU boot; never boot the wrong suite).
 
-### Selftest gate (`make execute-test <arch> debug|release selftest`)
+### Selftest gate (`python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class selftest`)
 
 x86_64 → `safe` class. aarch64/riscv64 → multi-class boot from
 `SELFTEST_CLASSES_<arch>` (whitespace-separated `test-config.txt`):
@@ -280,5 +281,5 @@ memory_vmm timing_core scheduler_zombie`.
 
 Release selftest off-x86 fails loud by design: every selftest-listed
 class measured PLANNED:0 in release mode on 2026-10-22 (no TF_RELEASE
-tests), so `execute-test <arch> release selftest` errors instead of
-printing a vacuous 0/0 PASS — use `test-full <arch> release`.
+tests), so `qemu_test.py --arch <arch> --build release --class selftest` errors instead of
+printing a vacuous 0/0 PASS — use `bash scripts/run_all_classes.sh <arch> release`.

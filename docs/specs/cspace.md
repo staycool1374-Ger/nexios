@@ -27,7 +27,7 @@ IRQ/MMIO caps remain deferred to v0.4.2+ (see §2.6).
 | MemPool | `src/kernel/memory/mempool.hpp` | Pool-backed objects freed via `MemPool::free` (see PipeBuffer). |
 | ResourceTracker | `src/kernel/test/resource_tracker.hpp:29-41` counters, track_* :52-131; `check()` impl `resource_tracker.cpp:78-224` | Existing counters: mempool[9], pmm, tasks, bufpool, msg_queues, notifies, event_groups, drivers, pipe_buffers, vnodes, open_fds. **No capability counters — to add.** |
 | Test isolation | `src/kernel/test/test_isolate.cpp:604-~720` | `snapshot_restore` runs under `IrqGuard`, drains zombies, then `ResourceTracker::check(baseline)` (:703) + `restore(baseline)` (:707). Every test must be leak-free at its end. |
-| Test registry | `src/kernel/test/test_registry.cpp:199-441` class table; `register_all_tests()` :444-581; counts `src/kernel/test/test_expected_counts.hpp:18-192` (`all` = 886 at :23) | New test .cpp files auto-discovered (`mk/rules.mk:15` find), auto-scanned (`tools/gen_test_registry.py`), registered by `register_<file>_tests()` forward-declared in test_registry.cpp. `register_class` validates counts (:736). |
+| Test registry | `src/kernel/test/test_registry.cpp:199-441` class table; `register_all_tests()` :444-581; counts `src/kernel/test/test_expected_counts.hpp:18-192` (`all` = 886 at :23) | New test .cpp files auto-discovered (`src/meson.build` `find`), auto-scanned (`tools/gen_test_registry.py`), registered by `register_<file>_tests()` forward-declared in test_registry.cpp. `register_class` validates counts (:736). |
 | Driven-test style | `src/kernel/test/test_pml4_clone.cpp`; helpers `src/kernel/test/test_sched_helpers.hpp` | Real tasks (`TaskControlBlock::create` + `Scheduler::add_task` + `reschedule` + `wait_for_termination_safe`), real `Syscall::handle` dispatch, `terminate_and_drain*`, `create_test_task`. |
 | Global state accessors | `src/kernel/core/global_state.{hpp,cpp}` (NOTE: under `core/`, not `memory/` as the brief stated) | Per-call verified setters. **No new cross-TU globals are needed for iteration-1 CSpace** (capability roots are per-task, kept on the object list) — avoid extending `gs::` unless a registry is added later. |
 
@@ -381,7 +381,7 @@ exactly their own sub-ranges; no frame is owned twice or by nobody.
 
 ### 2.8.3 Phased execution plan
 
-Per AGENTS.md: `make build` clean between phases; one class at a time; `test-history.txt` row after every run.
+Per AGENTS.md: `tools/meson/build.sh` clean between phases; one class at a time; `test-history.txt` row after every run.
 
 **Phase 1 — UntypedMem object + CapType + config + object tests (3 tests)**
 - MODIFY `src/kernel/cap/cap_types.hpp` — append `Untyped = 5` to `CapType`.
@@ -390,7 +390,7 @@ Per AGENTS.md: `make build` clean between phases; one class at a time; `test-his
 - MODIFY `src/kernel/test/test_registry.cpp` — register `cap_untyped` class (both halves).
 - MODIFY `src/kernel/test/test_expected_counts.hpp` — `{"cap_untyped", 3, 0, 0}`; `all` 932 → **935**.
 - NEW `src/kernel/test/test_cap_untyped.cpp` — tests 1–3.
-- Verify: `make execute-test x86_64 debug cap_untyped` → 3/3.
+- Verify: `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_untyped` → 3/3.
 
 **Phase 2 — retype() operation + end-to-end tests (3 tests)**
 - MODIFY `src/kernel/cap/cap.hpp` — declare `int retype(...)`.
@@ -422,7 +422,7 @@ Per AGENTS.md: `make build` clean between phases; one class at a time; `test-his
 
 ### 2.8.5 Gate / Definition of Done
 
-- [ ] `make build` green after every phase.
+- [ ] `tools/meson/build.sh` green after every phase.
 - [ ] Phase gates: `cap_untyped` 3/3 → 6/6 → 9/9, zero ResourceTracker delta each.
 - [ ] Regression: `cap_core` 10/10, `cap_lifecycle` 8/8, `cap_syscall` 8/8, `cap_ipc` 6/6, `memory_pmm` 5/5.
 - [ ] Debug `all` **941/941** (trace ON), release `all` **84/84** (trace OFF), `selftest` 132/132.
@@ -438,7 +438,7 @@ Per AGENTS.md: `make build` clean between phases; one class at a time; `test-his
 
 ## 3. Phased Execution Plan
 
-Each phase ends with a green class gate. Fix classes one at a time; per-class discipline, `make build` clean, `test-history.txt` row after every run (AGENTS.md rules).
+Each phase ends with a green class gate. Fix classes one at a time; per-class discipline, `tools/meson/build.sh` clean, `test-history.txt` row after every run (AGENTS.md rules).
 
 ### Phase 1 — CSpace core engine (CNode/CSlot/handle decode)
 
@@ -454,7 +454,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
 - **Tests:** NEW `src/kernel/test/test_cap_core.cpp` — class **`cap_core`**, 10 tests:
   `cslot_init_empty`, `cnode_install_acquires_ref`, `cnode_release_drops_ref`, `cnode_dispose_frees_pool_block`, `cnode_revoke_refuses_acquire`, `cnode_cascade_revoke_marks_children`, `handle_decode_valid`, `handle_decode_out_of_range_fails`, `handle_decode_stale_gen_fails`, `root_cnode_attached_to_task_teardown_frees`.
   Style: driven tests — real tasks via `TaskControlBlock::create` + `Scheduler::add_task` + `wait_for_termination_safe` where tasks are involved; stack-allocated CNode only where allowed (never pool-marked), otherwise `mark_pool_backed` + `MemPool` alloc/free balanced; every test ends at ResourceTracker baseline.
-- **Verify:** `make execute-test x86_64 debug cap_core` → 10/10, 0 failures, zero ResourceTracker delta.
+- **Verify:** `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_core` → 10/10, 0 failures, zero ResourceTracker delta.
 
 ### Phase 2 — Lifecycle primitives + Endpoint/Frame objects
 
@@ -468,7 +468,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
 - **Tests:** NEW `src/kernel/test/test_cap_lifecycle.cpp` — class **`cap_lifecycle`**, 8 tests:
   `grant_creates_slot_in_dest`, `copy_shares_refcount`, `revoke_removes_slot_and_releases`, `revoke_twice_idempotent`, `mint_reduces_rights`, `revoke_while_scopedref_pinned_delays_dispose`, `frame_cap_release_frees_pmm`, `endpoint_cap_release_disposes`.
   Each test must terminate/drain every created task and free every pool object before returning (snapshot_restore checks).
-- **Verify:** `make execute-test x86_64 debug cap_lifecycle` → 8/8.
+- **Verify:** `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_lifecycle` → 8/8.
 
 ### Phase 3 — SYS_CAP_* syscalls
 
@@ -479,7 +479,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
   - MODIFY `src/kernel/nexios_config.h` (`CONFIG_INCLUDE_SYS_CAP_*`, add to `CONFIG_SYSCALL_COUNT`).
 - **Tests:** NEW `src/kernel/test/test_cap_syscall.cpp` — class **`cap_syscall`**, 8 tests, **real `Syscall::handle()` dispatch** (mirror `test_syscall.cpp`):
   `sys_cap_grant_dispatch`, `sys_cap_copy_dispatch`, `sys_cap_revoke_dispatch`, `sys_cap_mint_dispatch`, `sys_cap_bad_handle_returns_minus1`, `sys_cap_wrong_type_returns_minus1`, `sys_cap_rights_denied_returns_minus1`, `sys_cap_revoke_cleanup_zero_delta`.
-- **Verify:** `make execute-test x86_64 debug cap_syscall` → 8/8.
+- **Verify:** `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_syscall` → 8/8.
 
 ### Phase 4 — Capability-gated IPC + frame mapping (integration)
 
@@ -489,7 +489,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
   - MODIFY `src/kernel/memory/vmm.hpp` / `vmm.cpp` — add `VMM::map_frame_from_cap(FrameCap*, va, flags, pml4)` (validates rights + `FrameCap::phys`), `VMM::unmap_frame_from_cap(...)`; revocation path unmaps via a per-frame mapping registry **only if one is introduced** — otherwise document that frame unmapping is the holder's duty and enforce it at task cleanup (walk object list).
 - **Tests:** NEW `src/kernel/test/test_cap_ipc.cpp` — class **`cap_ipc`**, 6 tests:
   `endpoint_send_recv_roundtrip` (real tasks, real blocking — driven style), `endpoint_revoked_send_fails`, `frame_cap_map_unmap_roundtrip`, `frame_cap_revoke_denies_map`, `send_without_endpoint_cap_denied`, `endpoint_teardown_no_leak`.
-- **Verify:** `make execute-test x86_64 debug cap_ipc` → 6/6.
+- **Verify:** `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_ipc` → 6/6.
 
 ### Phase 5 — Registry wiring, counts, full gates
 
@@ -499,13 +499,13 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
   - MODIFY `src/kernel/test/test_expected_counts.hpp` — add 4 rows:
     `{"cap_core", 10, 0, 0}`, `{"cap_lifecycle", 8, 0, 0}`, `{"cap_syscall", 8, 0, 0}`, `{"cap_ipc", 6, 0, 0}`; bump `all` 886 → **918** (adjust to `dump_class_counts` actual if it differs — the harness prints `[TCOUNT]` mismatches).
 - **Verify sequence (each with a `test-history.txt` row):**
-  1. `make execute-test x86_64 debug cap_core` → 10/10
-  2. `make execute-test x86_64 debug cap_lifecycle` → 8/8
-  3. `make execute-test x86_64 debug cap_syscall` → 8/8
-  4. `make execute-test x86_64 debug cap_ipc` → 6/6
-  5. `make execute-test x86_64 debug all` → **918/918** (trace ON per debug-gate rule)
-  6. `make execute-test x86_64 release all` → 84/84 (trace OFF — verify `CONFIG_DEBUG_IPC_SCHED` undefined first)
-  7. `make execute-test x86_64 debug selftest` → 132/132 (cap classes stay TF_KERNEL; safe class unchanged unless release-marked tests are deliberately added)
+  1. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_core` → 10/10
+  2. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_lifecycle` → 8/8
+  3. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_syscall` → 8/8
+  4. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_ipc` → 6/6
+  5. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class all` → **918/918** (trace ON per debug-gate rule)
+  6. `python3 tools/meson/qemu_test.py --arch x86_64 --build release --class all` → 84/84 (trace OFF — verify `CONFIG_DEBUG_IPC_SCHED` undefined first)
+  7. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` → 132/132 (cap classes stay TF_KERNEL; safe class unchanged unless release-marked tests are deliberately added)
 - **Regression:** re-run the touched subsystem classes (`ipc_core`, `memory_vmm`, `process_pml4_clone`, `syscall_core`) to prove no collateral.
 
 ---
@@ -533,7 +533,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
 
 ## 5. Gate / Definition of Done — v0.4.1 CSpace milestone
 
-- [ ] `make build` green (`check-style debug`: 0 errors).
+- [ ] `tools/meson/build.sh` green (style gate: 0 errors).
 - [ ] Debug class gates: `cap_core` 10/10, `cap_lifecycle` 8/8, `cap_syscall` 8/8, `cap_ipc` 6/6 — all with zero ResourceTracker delta.
 - [ ] Debug `all` **918/918** (trace ON), release `all` **84/84** (trace OFF — verify `CONFIG_DEBUG_IPC_SCHED` undefined), `selftest` 132/132.
 - [ ] `test-history.txt` rows appended for every gate run.
@@ -549,7 +549,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
 ## 6. Implementation Log (v0.4.1)
 
 All five phases landed 2026-08-15. Final gates: debug `all` 905/905 executed
-(920 registered), release `all` 84/84, selftest 132/132, `make check-style`
+(920 registered), release `all` 84/84, selftest 132/132, style gate
 0 errors.
 
 - **Phase 1** (`f58be694`) — `src/kernel/cap/cap_types.{hpp}`, `cap.{hpp,cpp}`:

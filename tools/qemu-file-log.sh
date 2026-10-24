@@ -11,7 +11,7 @@
 # Usage: qemu-file-log.sh <serial_log> <com1_log> <qemu> [qemu-args...]
 #   - <serial_log> must be the guest debugcon backend (Logger/S-lines/
 #     TEST SUMMARY/KERNEL PANIC all route there during test runs).
-#   - The caller (Makefile) substitutes file paths into the qemu args.
+#   - The caller (qemu_test.py) substitutes file paths into the qemu args.
 #   - Stdout = tail of <serial_log> (verdict matching); exit code = QEMU's.
 #     (QEMU death closes the tail and the wrapper, yielding expect's eof arm.)
 

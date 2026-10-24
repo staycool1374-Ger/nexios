@@ -1,0 +1,38 @@
+id	item	requirement	make_behavior	meson_solution	meson_target	ci_job	evidence_url	status
+T1	cross-x86_64	Freestanding x86_64-elf toolchain, exact flags	Makefile derives x86_64-elf-* triplets; arch flags at Makefile:749-756	cross/x86_64-elf.txt + add_project_arguments	meson setup build/meson-x86_64	meson-x86_64		open
+T2	cross-aarch64	Freestanding aarch64-elf toolchain, exact flags	Makefile ARCH=aarch64 flag block	cross/aarch64-elf.txt + add_project_arguments	meson setup build/meson-aarch64	meson-aarch64		open
+T3	cross-riscv64	Freestanding riscv64-elf toolchain, exact flags	Makefile ARCH=riscv64 flag block (-march=rv64imafdc -mabi=lp64d -mcmodel=medany)	cross/riscv64-elf.txt + add_project_arguments	meson setup build/meson-riscv64	meson-riscv64		open
+T4	no-default-flags	Meson injects no PIE/static-PIC/sanitizer/fortify into kernel objects	N/A (no Meson today)	b_pie=false b_staticpic=false, asserted by test_flag_parity	test_flag_parity	meson-x86_64		open
+T5	lto-model	LTO/NO_LTO never mix; mismatch wipes, never asserts-only	Makefile NO_LTO switch; known mixing trap	wipe+reconfigure on .lto-mode/buildtype mismatch	test_lto_mode	meson-x86_64		open
+G1	registry-gen	test_registry.gen.hpp byte-identical	tools/gen_test_registry.py via Makefile:515-543	custom_target same generator+ordering, builddir on include path	test_gen_registry	meson-x86_64		open
+G2	test-config	-Dtest_class rebuilds test-config and re-stages initrd/cpio/ISO; pre-QEMU baked-config gate	initrd/tests/test-config.txt baked by recursive make; stamp asserts	gen_test_config.py with dep edge + compat copy; qemu_test.py asserts .baked-test-config pre-QEMU	meson test <class>	meson-tests-x86_64		open
+G3	per-file-rules	No per-file rule emission needed; object-set equality	.gitignored mk/cpp-rules.*.gen.mk from find (mk/rules.mk:188-197)	No equivalent mechanism by design	test_source_set	meson-x86_64		open
+H1	test-runner	Single-class matrix runs identically (watchdog, verdict, history)	execute-test/_do_execute_test (Makefile:1123/1136), policy TSV, STATUS tagging	qemu_test.py verbatim port; test() per class, timeout=policy-outer-x2	test_policy_timeouts + test_verdict_parser	meson-tests-x86_64		open
+H2	fail-closed-verdict	Missing SUMMARY / zero S-lines / 0-0 never PASS	Harness RESULT: QEMU_EXIT path today	qemu_test.py fail-closed; 0/0 fail-loud; STALL-RECOVERED only on final PASS	test_verdict_parser	meson-tests-x86_64		open
+H3	history-append	Exactly one row per run, no torn lines under concurrency	test-history.txt append per run (AGENTS.md format)	mkdir-lock appender (atomic mkdir, stale timeout, trap cleanup)	test_history_lock	meson-tests-x86_64		open
+H4	tmp-namespacing	No cross-checkout PASS/FAIL misattribution	per-checkout tags + /tmp namespacing (issue #372)	/tmp by full-checkout hash; :1234 documented shared	meson-tests-x86_64	meson-tests-x86_64		open
+H5	gdb-targets	debug-test/debug-shell/rr-record/rr-replay parity	Makefile:1219/1555/1286/1292 (QEMU -s -S, stub wait, panic marker)	gdb_run.py ports the shell defines	meson run_target gdb flows	meson-x86_64		open
+P1	initrd-cpio	Byte-identical initrd tree + cpio	newc	cpio packaging in Makefile/packaging rules	packaging/meson.build reproduces tree + cpio -o -H newc -0	test_stage_paths	meson-x86_64	open
+P2	fat32	FAT32 image identical	tools/mkfat32img.py via Makefile	packaging custom_target same script	test_stage_paths	meson-x86_64		open
+P3	iso	GRUB ISO identical; x86_64-only; debug/release disjoint	grub-mkrescue staging to debug//release/ (Makefile)	package_iso.py builds root in builddir, stages legacy paths	test_stage_paths	meson-x86_64		open
+P4	elf-bin	Per-arch ELF bootable; riscv raw BIN distinct; no ELF/BIN mixup	ELF + riscv64 BIN outputs	postlink.py readelf assert + pinned per-arch QEMU artifact	test_stage_paths	meson-riscv64		open
+L1	style-gate	validate_style.py Errors>0 fails the gate	check-style:572	build.sh runs gate then compile; test('style') fast path	meson-x86_64	meson-x86_64		open
+L2	clang-tidy	Non-blocking, same checks	Makefile:1715 (|| true)	run_target, never test()/all	meson-x86_64	meson-x86_64		open
+L3	doxygen	Docs build preserved	doxygen-check:583 + Doxyfile	non-blocking run_target	meson-x86_64	meson-x86_64		open
+L4	config-lint	check-config/config-summary/test-policy-check preserved	Makefile:587/598/605/613	run_targets	meson-x86_64	meson-x86_64		open
+C1	coverage	coverage-build/class/coverage unchanged, x86_64-only	Makefile:994/1009/1038 (-Dprofile_mode)	same scripts via run_targets; off-x86 request fails loud	meson-x86_64	meson-x86_64		open
+C2	profiling	profiling/profile-class unchanged	Makefile:871/902	same env/cargo run_targets	meson-x86_64	meson-x86_64		open
+C3	stack-usage	stack-usage-report preserved	Makefile:1802	non-blocking run_target	meson-x86_64	meson-x86_64		open
+C4	host-tests	debugd RSP conformance preserved	test-debugd-host:1740	host test() entries	meson-x86_64	meson-x86_64		open
+D1	ide-crossfile	CLion opens the same configured builddir; never fresh native configure	N/A (make has no IDE configure)	committed cross/*.txt + one setup command; CLI source of truth	meson-x86_64	meson-x86_64		open
+D2	ide-codegen	Stable codegen output paths for Remote Debug symbols	Generated gen.mk/registry paths stable by make	Stable custom_target output names	meson-x86_64	meson-x86_64		open
+D3	ide-tests	CLion test UI + history tooling read the same stream	Expect scraping today	test()/run_target() keep SUMMARY tokens	meson-tests-x86_64	meson-tests-x86_64		open
+D4	ide-symbols	Symbol paths pinned (kernel ELF, riscv BIN)	build/ legacy paths	Compat staging layer; Remote Debug configs stay valid	test_stage_paths	meson-x86_64		open
+D5	ide-docs	clion-setup/debugging rewritten; every make line dies	make-based docs	Docs pass with Meson commands; live-debug flow UNCHANGED	meson-x86_64	meson-x86_64		open
+D6	ide-shim	clion/ retired pre-cutover (user decision; superseded by docs/clion-setup.md native-Meson flow)	CMake indexing shim until 2026-10-24 deletion	No shim remains; live-debug via clion-setup §4 recipe + gdb_run.py debug-shell	meson-x86_64	meson-x86_64		open
+CI1	m-ci-jobs	Meson jobs green alongside Make jobs (advisory then required)	ci.yml Make jobs required	build-meson.yml: x86_64 + aarch64-REQUIRED + riscv64 + tests + parity	build-meson.yml	build-meson.yml		open
+CI2	m-dogfood	Dual-runner dogfood bounded, retry-once retained	docker-release.yml make-only today	Advisory then required with date/budget + flake labels	docker-release.yml	docker-release.yml		open
+CI3	m-codeql	Default setup still covers Meson C++	No in-tree workflow (default setup)	Ledger row with evidence URL that autobuild sees Meson sources	default setup	default setup		open
+X1	freeze	Makefile freeze CI-enforced during dual	No freeze today	PR touching Makefile/mk/ without mirror/ledger-update fails	build-meson.yml	build-meson.yml		open
+X2	no-make-refs	No non-historical make references post-cutover	N/A	check_no_make_refs.sh required check (.exp/bug_report/healthcheck covered)	build-meson.yml	build-meson.yml		open
+X3	cutover-gate	Mechanical cutover: ledger + 3-arch gates	Manual today	check-parity --require-all + recorded full gates, single delete commit, green post-cutover main	build-meson.yml	build-meson.yml		open

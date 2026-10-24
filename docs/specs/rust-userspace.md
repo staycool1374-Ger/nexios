@@ -38,10 +38,10 @@ runtime, no kernel changes. `panic = "abort"` always (no unwinding).
   root via `--manifest-path`, and rustup discovers `rust-toolchain.toml`
   from the working directory — not the manifest path — so the crate pin
   alone does not select the nightly.
-- `make user-rust-hello ARCH=aarch64` (or riscv64) prints a skip and
-  succeeds — Rust is x86_64-only. WARNING: switching `ARCH` wipes
-  `build/` entirely (arch-change clean), including the Rust toolchain —
-  budget a re-download after any arch switch.
+- `meson compile user-rust-hello -C build/meson-aarch64` (or riscv64) prints a skip and
+  succeeds — Rust is x86_64-only. WARNING: switching builddirs never wipes
+  its siblings (one builddir per arch), but the Rust toolchain lives in the
+  shared `build/` tree — budget a re-download after a full `build/` purge.
 
 ## 3. Target spec (`rust-targets/x86_64-nexios.json`)
 
@@ -99,7 +99,7 @@ end `< HEAP_VADDR (0x60000000)` with a red-zone page to spare; heap
 ## 6. Build, stage, run
 
 ```bash
-make user-rust-hello          # → build/user/rust-hello.elf (904 B)
+meson compile user-rust-hello -C build/meson-x86_64   # → build/user/rust-hello.elf (904 B)
 ```
 
 Staging for the E2E used ephemeral initrd `/bin` residence (a temporary

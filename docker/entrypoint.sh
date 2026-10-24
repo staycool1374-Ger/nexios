@@ -19,15 +19,15 @@ if [ -z "${OVMF_CODE:-}" ]; then
     done
 fi
 
-# The x86_64 QEMU boot/test path consumes QEMU_UEFI (Makefile
-# QEMU_ARCH_FLAGS), not OVMF_CODE; without it the default is a macOS
-# Homebrew path absent on Ubuntu and QEMU aborts on the missing pflash
-# image. Feed the probe result to both variables.
+# The x86_64 QEMU boot/test path probes OVMF itself (qemu_test.py:find_ovmf
+# mirrors the old OVMF_CODE search); still export the probe result for
+# flows that honor QEMU_UEFI/OVMF_CODE (frozen Make targets, dogfood
+# images pinned to pre-cutover tags).
 if [ -z "${QEMU_UEFI:-}" ] && [ -n "${OVMF_CODE:-}" ]; then
     export QEMU_UEFI="$OVMF_CODE"
 fi
 
-echo "NEXIOS_TAG=$TAG OVMF_CODE=${OVMF_CODE:-<makefile-auto>} QEMU_UEFI=${QEMU_UEFI:-<makefile-default>}"
+echo "NEXIOS_TAG=$TAG OVMF_CODE=${OVMF_CODE:-<auto-probe>} QEMU_UEFI=${QEMU_UEFI:-<probe-default>}"
 if [ ! -d /work/nexios/.git ]; then
     rm -rf /work/nexios
     git clone --depth 1 --branch "$TAG" "$REPO" /work/nexios

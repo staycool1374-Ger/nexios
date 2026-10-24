@@ -1,8 +1,8 @@
 # NexIOS release test/run environment (issue #243).
-# Ubuntu 24.04 with the Linux-triplet cross toolchains the Makefile
+# Ubuntu 24.04 with the Linux-triplet cross toolchains the build
 # expects on Linux (X86_64/AARCH64/RISCV64_TRIPLET), QEMU + OVMF +
-# ISO tooling, gdb-multiarch, and a gtimeout shim (the Makefile
-# hard-requires `gtimeout`, a macOS-ism absent on Ubuntu).
+# ISO tooling, gdb-multiarch, and a gtimeout shim (legacy Make flows
+# hard-require `gtimeout`, a macOS-ism absent on Ubuntu).
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -38,13 +38,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   # Triplet packages install on every host arch (ports carry the cross
   # toolchains, mirroring the unconditional aarch64/riscv64 lines above).
   # as/strip were missing entirely although the .ini references them.
+  # -elf aliases cover every tool meson.build hard-requires per arch
+  # (triplet-gcc/objcopy/readelf/strip, required:true) plus the
+  # optional objdump and gdb (mirrors the build-meson.yml 9-tool loop).
   && ln -sf /usr/bin/x86_64-linux-gnu-gcc /usr/local/bin/x86_64-elf-gcc \
   && ln -sf /usr/bin/x86_64-linux-gnu-g++ /usr/local/bin/x86_64-elf-g++ \
   && ln -sf /usr/bin/x86_64-linux-gnu-as /usr/local/bin/x86_64-elf-as \
   && ln -sf /usr/bin/x86_64-linux-gnu-ld /usr/local/bin/x86_64-elf-ld \
   && ln -sf /usr/bin/x86_64-linux-gnu-ar /usr/local/bin/x86_64-elf-ar \
   && ln -sf /usr/bin/x86_64-linux-gnu-objcopy /usr/local/bin/x86_64-elf-objcopy \
+  && ln -sf /usr/bin/x86_64-linux-gnu-objdump /usr/local/bin/x86_64-elf-objdump \
   && ln -sf /usr/bin/x86_64-linux-gnu-strip /usr/local/bin/x86_64-elf-strip \
+  && ln -sf /usr/bin/x86_64-linux-gnu-readelf /usr/local/bin/x86_64-elf-readelf \
+  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/x86_64-elf-gdb \
+  && ln -sf /usr/bin/aarch64-linux-gnu-gcc /usr/local/bin/aarch64-elf-gcc \
+  && ln -sf /usr/bin/aarch64-linux-gnu-g++ /usr/local/bin/aarch64-elf-g++ \
+  && ln -sf /usr/bin/aarch64-linux-gnu-as /usr/local/bin/aarch64-elf-as \
+  && ln -sf /usr/bin/aarch64-linux-gnu-ld /usr/local/bin/aarch64-elf-ld \
+  && ln -sf /usr/bin/aarch64-linux-gnu-ar /usr/local/bin/aarch64-elf-ar \
+  && ln -sf /usr/bin/aarch64-linux-gnu-objcopy /usr/local/bin/aarch64-elf-objcopy \
+  && ln -sf /usr/bin/aarch64-linux-gnu-objdump /usr/local/bin/aarch64-elf-objdump \
+  && ln -sf /usr/bin/aarch64-linux-gnu-strip /usr/local/bin/aarch64-elf-strip \
+  && ln -sf /usr/bin/aarch64-linux-gnu-readelf /usr/local/bin/aarch64-elf-readelf \
+  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/aarch64-elf-gdb \
+  && ln -sf /usr/bin/riscv64-linux-gnu-gcc /usr/local/bin/riscv64-elf-gcc \
+  && ln -sf /usr/bin/riscv64-linux-gnu-g++ /usr/local/bin/riscv64-elf-g++ \
+  && ln -sf /usr/bin/riscv64-linux-gnu-as /usr/local/bin/riscv64-elf-as \
+  && ln -sf /usr/bin/riscv64-linux-gnu-ld /usr/local/bin/riscv64-elf-ld \
+  && ln -sf /usr/bin/riscv64-linux-gnu-ar /usr/local/bin/riscv64-elf-ar \
+  && ln -sf /usr/bin/riscv64-linux-gnu-objcopy /usr/local/bin/riscv64-elf-objcopy \
+  && ln -sf /usr/bin/riscv64-linux-gnu-objdump /usr/local/bin/riscv64-elf-objdump \
+  && ln -sf /usr/bin/riscv64-linux-gnu-strip /usr/local/bin/riscv64-elf-strip \
+  && ln -sf /usr/bin/riscv64-linux-gnu-readelf /usr/local/bin/riscv64-elf-readelf \
+  && ln -sf /usr/bin/gdb-multiarch /usr/local/bin/riscv64-elf-gdb \
   && rm -rf /var/lib/apt/lists*
 
 # x86 GRUB modules on arm64 hosts (issue #243, verified in-container):
@@ -85,4 +111,4 @@ RUN chmod +x /usr/local/bin/nexios-entrypoint.sh
 
 WORKDIR /work
 ENTRYPOINT ["/usr/local/bin/nexios-entrypoint.sh"]
-CMD ["bash", "-c", "echo 'NexIOS $NEXIOS_TAG ready. Try: make build, make execute-test x86_64 debug debug_syscall'; exec bash"]
+CMD ["bash", "-c", "echo 'NexIOS $NEXIOS_TAG ready. Try: meson setup build/meson-x86_64 --cross-file cross/x86_64-elf.txt -Darch=x86_64 && tools/meson/build.sh build/meson-x86_64 && python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall'; exec bash"]

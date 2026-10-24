@@ -1,6 +1,6 @@
 # Test run policy table (issue #407 item 3) — single source of truth for
 # per-class QEMU run policy. Consumed ONLY via tools/test-policy.awk
-# (Makefile `$(shell ...)` + scripts/run_all_classes.sh); never parsed
+# (tools/meson/qemu_test.py + scripts/run_all_classes.sh); never parsed
 # anywhere else. `|` separator survives editors/formatters (no TABs).
 #
 # Format: scope|selector|key|value   (`#` lines are comments)

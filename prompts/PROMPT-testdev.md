@@ -23,13 +23,13 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 * **Load Testcases:** Prior to implementation, load `prompts/testcases-v<target-version>.md` (e.g., `testcases-v0.2.10.md` for Phase 2 FAT32).
 * **Graph Context Retrieval:** Use `mcp__graphify__path` between the tested components (CLI `graphify path` fallback) to identify module interactions before writing tests.
 * **Vault Test Logs:** Write structured test logs back into the vault via MCP file tools (`mcp__obsidian__write_note`), bidirectionally linked (`[[...]]`) to the relevant spec/test-case notes.
-* **GitHub Coverage Tracker:** Each `prompts/testcases-*.md` has a corresponding GitHub Issue "Test coverage: <version>" (repo `staycool1374-Ger/nexios`, label `feature`). When a module's test file exists and all its assertions pass in `make execute-test x86_64 debug <class>`, tick the module's checkbox on that issue (`gh issue edit <n> -R staycool1374-Ger/nexios --body-file ...` or via API) and post the test-class result as a comment. The issue is closed only when ALL modules are checked and the full debug `all` gate passes. Do NOT modify the design content of `testcases-*.md` to track progress — GitHub Issues are the progress tracker; the files stay design documents.
+* **GitHub Coverage Tracker:** Each `prompts/testcases-*.md` has a corresponding GitHub Issue "Test coverage: <version>" (repo `staycool1374-Ger/nexios`, label `feature`). When a module's test file exists and all its assertions pass in `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class <class>`, tick the module's checkbox on that issue (`gh issue edit <n> -R staycool1374-Ger/nexios --body-file ...` or via API) and post the test-class result as a comment. The issue is closed only when ALL modules are checked and the full debug `all` gate passes. Do NOT modify the design content of `testcases-*.md` to track progress — GitHub Issues are the progress tracker; the files stay design documents.
 * **Sanctity Rule:** Non-stub tests are read-only. Modify only if systemically wrong. To change, you must update both the implementation and its `Testidea`/`Input`/`Expect`/`Depends` doc-block simultaneously. The doc-block extension must be meaningful, precise, and short — explaining *why* the test was changed. Stubs (`JARVIS_TEST_PASS()`) can be freely replaced.
 
 ### 2. Workflow & Branching
 * **Target:** All work occurs in `src/kernel/test/` on the `testbed` branch. No production code.
-* **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `make execute-test x86 debug selftest` (safe class, fast) or `make test-full x86 debug` (full suite).
- * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`make test-full x86 debug`). `testbed` is never deleted.
+* **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` (safe class, fast) or `bash scripts/run_all_classes.sh x86_64 debug` (full suite).
+ * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
 
 ### Pseudocode in Stub Tests
 * Some stub tests contain `/* Pseudocode: ... */` comments describing intended behavior — use these for insight when implementing.
@@ -38,7 +38,7 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 # Test Design & Architecture
 
 ### Principles
-0. **Debug-only by Default:** Use `JARVIS_REGISTER_TEST(name)`. The debug target (`make test-selftest`/`make test-all-debug`) runs all non-TF_USER tests via `run_filtered(0)`. Only promote to `JARVIS_REGISTER_RELEASE_TEST(name)` if the test is purely computational, has zero side-effects, and is proven stable over multiple sessions. The release target runs only `JARVIS_REGISTER_RELEASE_TEST` via `run_filtered(TF_RELEASE)` — a small curated subset that must invoke a shell in user task.
+0. **Debug-only by Default:** Use `JARVIS_REGISTER_TEST(name)`. Debug builds (`python3 tools/meson/qemu_test.py --arch <arch> --build debug --class <class>`) run all registered non-TF_USER tests via `run_filtered(0)`. Only promote to `JARVIS_REGISTER_RELEASE_TEST(name)` if the test is purely computational, has zero side-effects, and is proven stable over multiple sessions. The release target runs only `JARVIS_REGISTER_RELEASE_TEST` via `run_filtered(TF_RELEASE)` — a small curated subset that must invoke a shell in user task.
 1. **Boundaries & Inputs:** Test limit, limit-1, limit+1; unknown/malformed inputs, structs, and invalid syscalls.
 2. **Error Paths:** Absolute coverage of EFAULT, EINVAL, ENOSPC, EACCES, EBUSY, ENOENT.
 3. **State & Resource:** Validate invalid state transitions (e.g., TERMINATED to READY). Force resource exhaustion (max caps, FDs, tasks, full queues).
@@ -73,45 +73,51 @@ Summary block:
 
 **Leak details** appear only on FAIL lines. Resources tracked: MemPool0, PMM, Tasks, BufPool, MsgQueues, Notifies, EventGroups, Drivers, PipeBufs, VNodes, OpenFDs.
 
-### Unified Makefile Targets (mandatory — no other execution targets allowed)
+### Unified Build & Test Entry Points (mandatory — no other execution entry points allowed)
 
-Three parameterized targets replace all old test targets. Positional arguments
-are consumed by a match-all rule at the end of the Makefile.
+Builds live in `build/meson-<arch>[-nolto]` (Meson out-of-tree builddirs; `-Db_lto=false`
+twins are suffixed `-nolto`). Test execution is driven by `tools/meson/qemu_test.py`
+(one QEMU boot per class) and `scripts/run_all_classes.sh` (full suite, one reboot per
+class); GDB flows via `tools/meson/gdb_run.py`.
 
-| Target | Description |
-|--------|-------------|
-| `make execute-test <arch> <build> <class>` | Unified test runner |
-| `make debug-test <arch> <build> <class> <gdb-script>` | GDB batch surveillance |
-| `make debug-shell <arch> <build> none <gdb-script> <shell-cmds>` | GDB + serial interaction |
+| Entry point | Description |
+|-------------|-------------|
+| `tools/meson/build.sh [--arch <arch>] [--nolto]` | Configure + build |
+| `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>` | Unified test runner |
+| `python3 tools/meson/gdb_run.py debug-test --arch <arch> --build <build> --class <class> --gdb-script <script>` | GDB batch surveillance |
+| `python3 tools/meson/gdb_run.py debug-shell --arch <arch> --build <build> --cmds <shell-cmds>` | GDB + serial interaction |
 
 **Parameters:**
-- `<arch>` — `x86`|`x86_64`|`arm`|`aarch64`|`riscv`|`riscv64`
+- `<arch>` — `x86_64`|`aarch64`|`riscv64`
 - `<build>` — `debug`|`release`
 - `<class>` — `none`|`selftest`|`all`|`<name>`
-- `<gdb-script>` — path to GDB script (e.g. `tools/gdb/test-batch.gdb`)
+- `<script>` — path to GDB script (e.g. `tools/gdb/test-batch.gdb`)
 - `<shell-cmds>` — text file with one command per line
 
 **Examples:**
 ```
-make execute-test x86 debug selftest    # CI gate (safe class, fast)
-make test-full x86 debug                  # full debug suite (26 runs)
-make test-full x86 release                # full release suite (26 runs)
-make execute-test x86 debug drivers       # specific aggregate
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest  # CI gate (safe class, fast)
+bash scripts/run_all_classes.sh x86_64 debug                                    # full debug suite (26 runs)
+bash scripts/run_all_classes.sh x86_64 release                                  # full release suite (26 runs)
+python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class drivers    # specific aggregate
 ```
 
 ### Host-Side Watchdog
-Every test target uses `_run_test_qemu` in the Makefile, which launches a background monitor thread. If `/tmp/jarvis-serial.log` does not grow for `WATCHDOG_STALL` seconds (default 10), the monitor kills QEMU and appends a diagnostic. This catches hangs the in-kernel watchdog cannot detect (e.g., during interrupt-disabled test execution).
+`qemu_test.py` embeds a stall monitor: the serial stream is tee'd to a per-run log
+under `/tmp/jarvis-meson-<tag>/serial.log`; if the log stops growing for the stall
+limit, QEMU is killed, retried once, and a `[STALL]` diagnostic is appended. This
+catches hangs the in-kernel watchdog cannot detect (e.g., during interrupt-disabled
+test execution). The trailing verdict block stays Make-compatible (`PASSED:`/`FAILED:`/
+`TIME:`), so `run_all_classes.sh` and `test_history.py` parse it unchanged.
 
-The serial log is `tee`'d to `/tmp/jarvis-serial.log`; the first `tee` pipe exit code (`PIPESTATUS[0]`) propagates the result.
-
-### CI Pipeline (`.github/workflows/ci.yml`)
+### CI Pipeline (`.github/workflows/build-meson.yml`)
 | Step | Command |
 |------|---------|
-| Build | `make debug` |
-| Selftest gate | `timeout 360 make execute-test x86 debug selftest` (safe class) |
-| Full suite | `make test-full x86 debug` (if selftest passes) |
+| Build | `tools/meson/build.sh` |
+| Selftest gate | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` (safe class) |
+| Full suite | `bash scripts/run_all_classes.sh x86_64 debug` (if selftest passes) |
 
-Both test steps use the host-side watchdog and expect-based parsing of the `TEST SUMMARY` block.
+All steps use the host-side stall monitor and verdict-block parsing.
 
 ### Test Classes (defined in `test_registry.cpp`)
 Classes: `safe`, the 22 structural aggregates (`core_basic core_sync core_sched core_task core_memory core_syscall core_tracing ipc capability proc_elf storage servers drivers hal smp smp_multicpu deadline ui logging_debug random bench testrunner`, issues #173, #364), the 4 scripted specials (`ahci_live iommu_live task_fpu task_tcb_log`), plus fine-grained file classes.
@@ -136,7 +142,7 @@ The file `src/kernel/test/test_expected_counts.hpp` contains a constexpr table o
 
 **Consistency check:** `validate_all_consistency()` verifies every fine-grained class is covered by at least one aggregate or scripted special (overlap allowed and reported, e.g. hal_apic+apic_tpr in `hal`+`smp`), ensuring no test runs outside the scripted full suite.
 
-**Rebuilding the table:** Use `make execute-test <arch> debug dump-counts` to collect fresh per-class counts. The `dump-counts` class triggers `dump_class_counts()` then `qemu_debug_exit(0)` — no interactive shell.
+**Rebuilding the table:** Use `python3 tools/meson/qemu_test.py --arch <arch> --build debug --class dump-counts` to collect fresh per-class counts. The `dump-counts` class triggers `dump_class_counts()` then `qemu_debug_exit(0)` — no interactive shell.
 
 **x86_64 counts (current, issue #173 aggregates + specials, measured via dump-counts):**
 | Class | Count |

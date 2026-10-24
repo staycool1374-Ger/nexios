@@ -4,7 +4,7 @@
 Runs declarative debug-flow chains: named steps with success/error targets,
 per-step retry/timeout, loops, delays. Step types: shell-command, gdb-batch,
 expect-script, wait-port, delay, loop-start/loop-end. Host-only: owns no QEMU,
-never touches the kernel; steps either wrap `make debug-test/debug-shell`
+never touches the kernel; steps either wrap `gdb_run.py debug-test/debug-shell`
 (which own the QEMU lifecycle) or attach to an externally started stub.
 
 Usage:
@@ -600,7 +600,7 @@ def main(argv=None):
     ap.add_argument("--max-steps", type=int, default=10000)
     ap.add_argument("--tail", type=int, default=20)
     args = ap.parse_args(argv)
-    if not (REPO_ROOT / "Makefile").is_file() or not POLICY_AWK.is_file():
+    if not (REPO_ROOT / "meson.build").is_file() or not POLICY_AWK.is_file():
         print("chainrun: must run from the NexIOS checkout", file=sys.stderr)
         return EXIT_ENV
     try:

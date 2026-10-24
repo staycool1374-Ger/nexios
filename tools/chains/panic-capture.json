@@ -1,11 +1,11 @@
 {
   "name": "panic-capture",
-  "description": "Port of `make debug-test x86_64 debug testrunner tools/gdb/test-batch.gdb`: QEMU owned by make debug-test; the GDB script breaks on panic, captures state, touches build/gdb-panic-captured and exits 1. make debug-test intentionally exits 1 on capture, so accept_exit [0,1] and the 'GDB PANIC CAPTURED' marker is the success oracle.",
+  "description": "Port of the debug-test panic-capture flow (`python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug --class testrunner --gdb-script tools/gdb/test-batch.gdb`): QEMU owned by gdb_run.py debug-test; the GDB script breaks on panic, captures state, touches build/gdb-panic-captured and exits 1. gdb_run.py intentionally exits 1 on capture, so accept_exit [0,1] and the 'GDB PANIC CAPTURED' marker is the success oracle.",
   "steps": [
     {
       "name": "capture",
       "type": "shell-command",
-      "command": ["make", "debug-test", "x86_64", "debug", "testrunner", "tools/gdb/test-batch.gdb"],
+      "command": ["python3", "tools/meson/gdb_run.py", "debug-test", "--arch", "x86_64", "--build", "debug", "--class", "testrunner", "--gdb-script", "tools/gdb/test-batch.gdb"],
       "timeout_policy": {"class": "testrunner", "arch": "x86_64", "key": "outer_timeout"},
       "accept_exit": [0, 1],
       "expect_stdout": "GDB PANIC CAPTURED",

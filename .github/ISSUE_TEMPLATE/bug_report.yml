@@ -51,7 +51,7 @@ body:
       label: Reproduce
       description: |
         Exact commands, e.g.
-        `make execute-test x86_64 debug <class>` — repeat count, deterministic behavior, failing test name/number.
+        `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class <class>` — repeat count, deterministic behavior, failing test name/number.
     validations:
       required: true
   - type: textarea

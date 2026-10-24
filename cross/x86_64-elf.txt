@@ -1,0 +1,21 @@
+# Meson cross file: freestanding x86_64-elf (issue #170 Phase 1).
+# Flags live in meson.build (add_project_arguments), not here.
+
+[binaries]
+c = 'x86_64-elf-gcc'
+cpp = 'x86_64-elf-g++'
+ar = 'x86_64-elf-ar'
+strip = 'x86_64-elf-strip'
+objcopy = 'x86_64-elf-objcopy'
+objdump = 'x86_64-elf-objdump'
+readelf = 'x86_64-elf-readelf'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'none'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true

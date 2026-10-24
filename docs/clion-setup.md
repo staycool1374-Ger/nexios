@@ -1,14 +1,17 @@
 # CLion Setup + Live GDB Debugging
 
-How to open the NexIOS project in CLion (or any Makefile-aware IDE) and
-debug the running kernel live through QEMU's GDB stub. CLI-only flows
+How to open the NexIOS project in CLion (native Meson support since
+2023.3 — open `meson.build`, no Make plugin, no CMake indexing shim)
+and debug the running kernel live through QEMU's GDB stub. CLI-only flows
 (batch surveillance, panic capture, custom commands) stay in
-`docs/debugging.md` — read that first if you haven't.
+`docs/debugging.md` — read that first if you haven't. The live-debug flow
+(QEMU `-s -S` + Remote Debug) is UNCHANGED by the build-system switch —
+only the commands that produce the binaries changed.
 
 ## 1. Prerequisites
 
-Install once. The Makefile tells you exactly what it wants
-(`PKG_HINT`); the triplets below are what the build actually invokes.
+Install once. The table below is what the build actually invokes;
+`cross/<arch>-elf.txt` pins the same triplets for Meson.
 
 | Tool | macOS (Homebrew) | Linux (Debian/Ubuntu) | Used for |
 |------|------------------|------------------------|----------|
@@ -18,12 +21,14 @@ Install once. The Makefile tells you exactly what it wants
 | aarch64 toolchain | `aarch64-elf-gcc` | `gcc-aarch64-linux-gnu` | off-x86 builds |
 | riscv64 toolchain | `riscv64-elf-gcc` | `gcc-riscv64-linux-gnu` | off-x86 builds |
 | GDB per arch | `x86_64-elf-gdb aarch64-elf-gdb riscv64-elf-gdb` | `gdb-multiarch` | stub clients |
-| Helpers | `coreutils expect llvm` | `coreutils expect` | `gtimeout`, scripted runs, `clang-tidy` |
+| Helpers | `coreutils expect llvm` | `coreutils expect` | scripted runs, `clang-tidy` |
+| Meson + ninja | `pip install meson==1.12.0 ninja` | `pip install meson==1.12.0 ninja` (never apt: apt's 1.3.2 fails the freestanding sanity check) | build system |
 
 ```bash
 # macOS, one line:
 brew install qemu xorriso grub x86_64-elf-gcc aarch64-elf-gcc riscv64-elf-gcc \
   x86_64-elf-gdb aarch64-elf-gdb riscv64-elf-gdb nasm coreutils expect llvm
+pip install 'meson==1.12.0' 'ninja==1.13.2'
 ```
 
 Verify the three binaries your debug sessions will use:
@@ -36,31 +41,46 @@ which qemu-system-x86_64 x86_64-elf-gdb nc expect
 
 ```bash
 git clone <repo> nexios && cd nexios
-make build        # check-style gate + debug ISO + debug ELF
+meson setup build/meson-x86_64 --cross-file cross/x86_64-elf.txt -Darch=x86_64
+tools/meson/build.sh build/meson-x86_64   # style gate + compile + ISO
 ```
 
-This produces `debug/nexios-rtos.iso` and `build/kernel-debug.elf`.
-`make build` exiting 0 with `Errors: 0` is the definition of "it works" —
-see `prompts/AGENTS-KERNEL-BRIEFING.md` §6 for every build/test target.
+This produces `build/meson-x86_64/src/nexios-rtos.iso` and
+`build/meson-x86_64/src/kernel-debug.elf`.
+`build.sh` exiting 0 with `Errors: 0` is the definition of "it works" —
+see `prompts/AGENTS-KERNEL-BRIEFING.md` §6 for every build/test target
+and `tools/meson/build.sh --help` for the Meson command map.
+
+Repeat per arch with `cross/aarch64-elf.txt` (`build/meson-aarch64`)
+and `cross/riscv64-elf.txt` (`build/meson-riscv64`). One builddir per
+arch — never reconfigure a builddir to another arch in place.
 
 ## 3. Open the project in CLion
 
-1. **File → Open** → select the project folder. CLion detects the
-   `Makefile` project type automatically. Let indexing finish.
+1. **File → Open** → select `meson.build` (or the project folder with
+   the Meson plugin enabled). **Do not create a fresh native configure:**
+   CLion must open the *same configured builddir* you set up on the CLI
+   (Settings → Meson → existing build directory). A fresh IDE-side
+   configure without the cross file produces a native build that fails
+   confusingly — the CLI `meson setup --cross-file …` line above is the
+   source of truth, the IDE mirrors it.
 2. **Toolchain:** the default (Xcode clang on macOS) is fine for editing
-   and navigation. The real build always runs through `make` in a
-   terminal (built-in or external) — cross-compilation happens there,
+   and navigation. The real build runs through `meson compile`
+   (terminal or the Meson tool window) — cross-compilation happens there,
    not through the IDE toolchain.
 3. **Formatting:** the repo root `.clang-format` (80 cols, 4-space,
    Allman braces) is picked up by CLion automatically. Reformat before
    committing.
 4. **Red squiggles ≠ build errors.** CLion evaluates headers in one arch
    config at a time, so arch-gated code for the *other* arches shows
-   false errors. `make build` is the truth; only its `Errors:` count.
-5. **Running targets from the IDE** (optional): Run → Edit
-   Configurations → + → Makefile → Target: `build`. The full output and
-   test-history discipline live in the terminal workflows, so prefer
-   the terminal for anything beyond a quick build.
+   false errors. Open the matching `compile_commands.json`
+   (`build/meson-<arch>/compile_commands.json`) to silence the wrong-arch
+   noise — one of the concrete Meson wins over the old setup.
+5. **Running targets from the IDE** (optional): the Meson tool window
+   lists `check-style`, `debug-test`, `debug-shell` and the rest as
+   run targets. The full output and test-history discipline live in the
+   terminal workflows, so prefer the terminal for anything beyond a
+   quick build.
 
 ## 4. Live debugging through the GDB stub
 
@@ -72,32 +92,43 @@ to that stub — QEMU is the "remote", no `gdbserver` binary involved.
 ### 4.1 Build with debug info, no LTO
 
 ```bash
-make debug NO_LTO=1 ARCH=x86_64   # build/kernel-debug.elf, steppable code
+meson setup build/meson-x86_64-nolto --cross-file cross/x86_64-elf.txt \
+  -Darch=x86_64 -Db_lto=false
+meson compile -C build/meson-x86_64-nolto
 printf 'none\n' > initrd/tests/test-config.txt   # boot to shell, not a test
 ```
 
-`NO_LTO=1` is what `make debug-test` uses internally — LTO inlines and
+or the one-command equivalent:
+
+```bash
+python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug \
+  --class none --gdb-script tools/gdb/test-batch.gdb     # batch, exits on panic
+python3 tools/meson/gdb_run.py debug-shell --arch x86_64 --build debug \
+  --gdb-script tools/gdb/init.gdb --cmds cmds.txt        # scripted interactive
+```
+
+`NO_LTO` is what the GDB flows use internally — LTO inlines and
 reorders enough to make single-stepping misleading. Always debug
 NO_LTO builds.
 
 ### 4.2 Launch frozen QEMU (terminal 1)
 
-Same flags as interactive mode (`QEMU_FLAGS_INTERACTIVE`), plus stub,
-freeze, and a serial you can type into:
+Same flags as interactive mode (`QEMU_FLAGS_INTERACTIVE` equivalent),
+plus stub, freeze, and a serial you can type into:
 
 ```bash
-qemu-system-x86_64 -cdrom debug/nexios-rtos.iso -m 256M \
+qemu-system-x86_64 -cdrom build/meson-x86_64-nolto/src/nexios-rtos.iso -m 256M \
   -boot order=d \
   -drive if=pflash,format=raw,readonly=on,file=/opt/homebrew/share/qemu/edk2-x86_64-code.fd \
   -cpu max \
-  -drive file=build/fat32.img,format=raw,if=ide,index=1,media=disk \
+  -drive file=build/meson-x86_64-nolto/packaging/fat32.img,format=raw,if=ide,index=1,media=disk \
   -netdev user,id=net0 -device virtio-net-pci,netdev=net0,disable-legacy=on \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   -serial mon:stdio -display none -no-reboot -s -S
 ```
 
 The terminal now shows the QEMU monitor/serial mux and waits — the CPU
-is frozen. Confirm the stub is up (as the Makefile does):
+is frozen. Confirm the stub is up:
 
 ```bash
 nc -z localhost 1234 && echo STUB-UP
@@ -105,8 +136,8 @@ nc -z localhost 1234 && echo STUB-UP
 
 Notes:
 
-- There is **no host watchdog** on a manually launched QEMU (the 10 s
-  stall monitor only wraps `make`-driven runs), so you can sit on a
+- There is **no host watchdog** on a manually launched QEMU (the stall
+  monitor only wraps harness-driven runs), so you can sit on a
   breakpoint as long as you like.
 - `Ctrl-A` is the QEMU escape prefix on `mon:stdio` (`Ctrl-A x` quits).
 - To stop QEMU afterwards, kill it scoped to this checkout —
@@ -124,9 +155,9 @@ wants to upload-and-launch a userspace binary itself.
 2. **Debugger:** pick `x86_64-elf-gdb` (add under Settings → Build,
    Execution, Deployment → Toolchains as a custom GDB if missing).
    CLion's bundled multiarch GDB also works, but the cross GDB matches
-   the Makefile's `$(GDB)` exactly.
-3. **`'target remote' args`:** `127.0.0.1:1234`
-4. **Symbol file:** `$ProjectFileDir$/build/kernel-debug.elf`
+   the debug flow exactly.
+3. **`'target remote' args:** `127.0.0.1:1234`
+4. **Symbol file:** `$ProjectFileDir$/build/meson-x86_64-nolto/src/kernel-debug.elf`
    (absolute path works too). Rebuild → **reconnect**: this config
    does not sync files; a stale ELF means breakpoints land nowhere.
 5. **Run → Debug** (or Shift+F9). CLion connects; the guest is still
@@ -171,29 +202,28 @@ constant — the stub is always `:1234`):
 
 | Arch | QEMU launch (frozen, serial on stdio) | CLion Debugger | Symbol file |
 |------|----------------------------------------|----------------|-------------|
-| aarch64 | `qemu-system-aarch64 -machine virt -cpu cortex-a72 -kernel build/kernel-debug.elf -m 256M -serial mon:stdio -display none -s -S` | `aarch64-elf-gdb` (`brew install aarch64-elf-gdb`) | `build/kernel-debug.elf` |
-| riscv64 | `qemu-system-riscv64 -machine virt -bios default -kernel build/kernel-riscv64.bin -m 256M -serial mon:stdio -display none -s -S` | `riscv64-elf-gdb` | `build/kernel-debug.elf` (symbols always come from the ELF, even though QEMU loads the raw binary) |
+| aarch64 | `qemu-system-aarch64 -machine virt -cpu cortex-a72 -kernel build/meson-aarch64/src/kernel-debug.elf -m 256M -serial mon:stdio -display none -s -S` | `aarch64-elf-gdb` (`brew install aarch64-elf-gdb`) | `build/meson-aarch64/src/kernel-debug.elf` |
+| riscv64 | `qemu-system-riscv64 -machine virt -bios default -kernel build/meson-riscv64/src/kernel-riscv64.bin -m 256M -serial mon:stdio -display none -s -S` | `riscv64-elf-gdb` | `build/meson-riscv64/src/kernel-debug.elf` (symbols always come from the ELF, even though QEMU loads the raw binary) |
 
-Build each arch first (`make debug NO_LTO=1 ARCH=aarch64`, …), set
-`test-config.txt` to `none` as in §4.1. No batch-mode hardware
+Build each arch first (`tools/meson/build.sh build/meson-aarch64`, …),
+bake `test_class=none` as in §4.1. No batch-mode hardware
 watchpoints on TCG for either arch — same stall rule as x86_64.
 
 ## 6. Troubleshooting
 
 | Symptom | Cause → fix |
 |---------|-------------|
-| `nc -z localhost 1234` fails | QEMU died at startup — check the ISO exists (`ls debug/*.iso`), the edk2 path (§4.2), and free port 1234 (`lsof -i :1234`; two checkouts fight over one stub). |
-| CLion connects but breakpoints never hit | Stale symbol file (rebuild → reconnect), wrong-arch ELF, or code compiled with LTO — rebuild with `NO_LTO=1`. |
+| `nc -z localhost 1234` fails | QEMU died at startup — check the ISO exists (`ls build/meson-x86_64-nolto/src/*.iso`), the edk2 path (§4.2), and free port 1234 (`lsof -i :1234`; two checkouts fight over one stub). |
+| CLion connects but breakpoints never hit | Stale symbol file (rebuild → reconnect), wrong-arch ELF, wrong builddir (main vs `-nolto`), or code compiled with LTO — rebuild the NO_LTO twin. |
 | Guest runs but serial is silent | `test-config.txt` still names a test class, or a previous crashed run left the UART wedged — reset the file to `none`, restart QEMU. |
 | `source tools/gdb/kernel.py` errors in CLion console | Run it from the project root (relative path) or use the absolute path; needs GDB with Python (cross GDBs ship it). |
 | QEMU eats keystrokes / `Ctrl-C` kills the wrong thing | `mon:stdio` owns the terminal: `Ctrl-A` is the escape prefix, `Ctrl-A x` quits QEMU cleanly. |
-| `make gdb` / `make test-gdb` from old notes fail | Those targets no longer exist — use `make debug-test <arch> <build> <class> <script>` (batch) and `make debug-shell …` (scripted interactive). |
+| `gdb` / `test-gdb` shortcuts from old notes fail | Those Make targets are gone post-cutover — use `python3 tools/meson/gdb_run.py debug-test …` (batch) and `… debug-shell …` (scripted interactive). |
 
 ## 7. Further reading
 
 - `docs/debugging.md` — CLI flows, panic/page-fault recipes, breakpoint table.
 - `tools/gdb/test-batch.gdb` — what the automated surveillance asserts.
 - `tools/gdb/init.gdb` — CLI equivalent of §4 (auto-connect + helpers).
-- `tools/gdb/h2-ring-dump.gdb`, `tools/shell-smoke.exp` — ported as
-  `tools/chains/*.json` for `tools/chainrun.py`.
+- `tools/chains/*.json` — panic-capture, ring-dump, shell-smoke chains for `tools/chainrun.py`.
 - `prompts/AGENTS-KERNEL-BRIEFING.md` §6 — build/test target reference.

@@ -6,11 +6,11 @@
 
 Build a steppable kernel, boot it to the shell, and freeze it on the
 GDB stub — exact commands in `docs/clion-setup.md` §4.1–4.2
-(`make debug NO_LTO=1`, `test-config.txt` to `none`, frozen QEMU with
+(NO_LTO twin builddir, baked `test_class=none`, frozen QEMU with
 `-s -S`). In a second terminal:
 
 ```bash
-x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb
+x86_64-elf-gdb build/meson-x86_64-nolto/src/kernel-debug.elf -x tools/gdb/init.gdb
 ```
 
 The init script auto-connects to `:1234` and loads the kernel Python
@@ -19,20 +19,23 @@ plugin. Then `continue` to release the frozen CPU.
 Scripted alternative (boots to shell and types a command file):
 
 ```bash
-make debug-shell x86_64 debug none tools/gdb/init.gdb <shell-commands-file>
+python3 tools/meson/gdb_run.py debug-shell --arch x86_64 --build debug \
+  --cmds <shell-commands-file>
 ```
 
 ### Automated Panic Capture
 
 ```bash
-make debug-test x86_64 debug <class> tools/gdb/test-batch.gdb
+python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug \
+  --class <class> --gdb-script tools/gdb/test-batch.gdb
 ```
 
 Builds the class, boots it under GDB surveillance with the stub on
 `:1234`, and runs the batch script. If `panic()` fires, GDB captures
 the full backtrace, registers, and task state
 (`build/gdb-panic-captured` is touched, exit code 1); serial goes to
-`build/gdb-serial.log`. Example: `class=testrunner`.
+the per-run log under `/tmp/jarvis-meson-<tag>/serial.log`.
+Example: `--class testrunner`.
 
 ## Custom GDB Commands
 
@@ -66,7 +69,7 @@ The following types auto-format when printed with `p`:
 ```bash
 # Terminal 1: frozen QEMU as in Quick Start above
 # Terminal 2:
-x86_64-elf-gdb build/kernel-debug.elf -x tools/gdb/init.gdb
+x86_64-elf-gdb build/meson-x86_64-nolto/src/kernel-debug.elf -x tools/gdb/init.gdb
 (gdb) continue
 # ... wait for panic ...
 # On stop, GDB hook-stop auto-prints RIP + backtrace
