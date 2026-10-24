@@ -90,13 +90,16 @@ Done roadmap archived in `prompts/README_done.md`.
 
 ## Recent Release Highlights
 
-### **v0.5.5 — Full Compatibility & Functional State for AARCH64 and RISCV64**
-* **FPU & Multi-Arch Parity:** parent FP flush on non-x86 clone fork path (#403), 3-arch full gates green (x86_64 26/26, aarch64 22/22, riscv64 19/19), off-arch release documented as x86-only (#207).
-* **Harness & Docs:** shell-smoke E2E chain on release, dump-counts reconciliation, CLion native-Meson setup + live GDB-stub guide.
+### v0.5.5: Architecture Parity & Hardening
+* **Interrupt & Timer Subsystems:** Full parity across platforms, including GICv2 initialization (ARM) and PLIC S-context handling (RISC-V).
+* **Task Context & FPU:** Eager FPU switching, architecture-independent fork/clone paths.
+* **Security & Isolation:** Fail-closed contracts for DMA, hardware discovery, and synthetic parent-clone restrictions.
+* **Console Infrastructure:** Bounded URC (Unsolicited Result Code) console discipline and zero-copy shell slices.
+* **Harness & Docs:** shell-smoke E2E chain on release, dump-counts reconciliation.
 
 ### **v0.5.4 — Stabilization & Bugfixing**
-* **Scheduler Decomposition & Lifecycle:** scheduler split into 16 focused TUs (#323), task creation/lifecycle/cleanup audit with deferred-kill handshake (#324), scheduler post-split hardening (#369).
-* **Tracing & Modernization:** XOR→order-sensitive path-tracer fold (#347/#362), C++20 nodiscard/span/concepts sweep (#348), core aggregate split into 7 classes (#364), count reconciliation (#342).
+* **Scheduler Decomposition & Lifecycle:**  task creation/lifecycle/cleanup audit with deferred-kill handshake, scheduler post-split hardening.
+* **Tracing & Modernization:** XOR→order-sensitive path-tracer fold, C++20 nodiscard/span/concepts sweep.
 
 ---
 
