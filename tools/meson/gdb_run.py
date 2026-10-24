@@ -8,10 +8,14 @@ QEMU with `-s -S` on :1234, batch GDB with panic-capture semantics,
 and serial command files for the interactive shell.
 
 Usage:
-  gdb_run.py debug-test  --arch A --build B --class C --gdb-script G
-  gdb_run.py debug-shell --arch A --build B --gdb-script G --cmds F
+  gdb_run.py debug-test  --arch A --build B --class C --gdb-script G [--gdb-port P]
+  gdb_run.py debug-shell --arch A --build B --gdb-script G --cmds F [--gdb-port P]
   gdb_run.py rr-record   --arch A
-  gdb_run.py rr-replay   --arch A
+  gdb_run.py rr-replay   --arch A [--gdb-port P]
+
+GDB stub port (--gdb-port, default 1234): the requested port is used when
+free; when busy a free ephemeral port is auto-picked (NOTE printed).
+Default behavior is unchanged when 1234 is free.
 """
 
 import argparse
@@ -67,16 +71,72 @@ def build_nolto(arch, build, test_class):
     return builddir
 
 
-def wait_for_stub(timeout_secs=8):
-    """Wait until something listens on 127.0.0.1:1234."""
+def wait_for_stub(port, timeout_secs=8):
+    """Wait until something listens on 127.0.0.1:port."""
     import socket
     for _ in range(timeout_secs):
         try:
-            with socket.create_connection(("127.0.0.1", 1234), timeout=1):
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
                 return True
         except OSError:
             time.sleep(1)
     return False
+
+
+def pick_gdb_port(requested):
+    """Return (port, auto_picked): requested when free, else an ephemeral one.
+
+    NOTE: bind-probe-then-release has a benign TOCTOU race — if the picked
+    port is grabbed before QEMU binds it, QEMU fails loudly (no silent
+    misdirection to another stub).
+    """
+    import socket
+    probe = socket.socket()
+    try:
+        probe.bind(("127.0.0.1", requested))
+        return requested, False
+    except OSError:
+        pass
+    finally:
+        probe.close()
+    free = socket.socket()
+    try:
+        free.bind(("127.0.0.1", 0))
+        return free.getsockname()[1], True
+    finally:
+        free.close()
+
+
+def gdb_stub_argv(port):
+    """QEMU argv fragment for the GDB stub. `-s` is QEMU shorthand for
+    `-gdb tcp::1234`, so the default port keeps byte-identical argv."""
+    if port == 1234:
+        return ["-s", "-S"]
+    return ["-gdb", "tcp::%d" % port, "-S"]
+
+
+def gdb_script_for_port(script_path, port, logdir, tag):
+    """Return a GDB script path whose `target ... :1234` line uses port.
+
+    Default port: the caller's script itself (behavior unchanged).
+    Otherwise a temp copy with the target port substituted, so batch GDB
+    connects to the stub QEMU actually opened.
+    """
+    if port == 1234:
+        return script_path
+    import re
+    text = Path(script_path).read_text()
+    patched, n = re.subn(r"(target\s+\S+\s+:?)1234\b", r"\g<1>%d" % port,
+                         text)
+    if n == 0:
+        print("NOTE: GDB script has no `target ... :1234` line; "
+              "connect manually with `target remote :%d`" % port)
+        return script_path
+    out = Path(logdir) / ("gdb-script-%s-%d.gdb" % (tag, port))
+    out.write_text(patched)
+    print("NOTE: GDB script target port rewritten :1234 -> :%d (%s)"
+          % (port, out))
+    return str(out)
 
 
 def launch_qemu(qemu_cmd, serial_log):
@@ -125,23 +185,28 @@ def cmd_debug_test(args):
             return 1
         paths = dict(paths, iso=iso)
     qemu_cmd = harness.qemu_argv(args.arch, args.build, args.cls, paths, tag)
-    qemu_cmd = qemu_cmd + ["-s", "-S", "-serial",
-                           "file:%s" % paths["serial"]]
-    print("  %-7s %s" % ("QEMU", "Starting with GDB stub (:1234)..."))
+    port, auto_picked = pick_gdb_port(args.gdb_port)
+    if auto_picked:
+        print("NOTE: :%d busy, auto-picked free GDB stub port :%d"
+              % (args.gdb_port, port))
+    gdb_script = gdb_script_for_port(args.gdb_script, port, logdir, "test")
+    qemu_cmd = qemu_cmd + gdb_stub_argv(port) + ["-serial",
+                                                 "file:%s" % paths["serial"]]
+    print("  %-7s %s" % ("QEMU", "Starting with GDB stub (:%d)..." % port))
     proc = launch_qemu(qemu_cmd, paths["serial"])
     try:
-        print("Waiting for QEMU GDB stub (:1234)...")
-        if not wait_for_stub():
+        print("Waiting for QEMU GDB stub (:%d)..." % port)
+        if not wait_for_stub(port):
             print("ERROR: GDB stub never appeared")
             return 1
         gdb = find_gdb(args.arch)
         if gdb is None:
             return 2
-        print("  %-7s %s" % ("GDB", "Running %s..." % args.gdb_script))
+        print("  %-7s %s" % ("GDB", "Running %s..." % gdb_script))
         try:
             result = subprocess.run(
                 [gdb, str(builddir / "src" / "kernel-debug.elf"),
-                 "-batch", "-x", args.gdb_script],
+                 "-batch", "-x", gdb_script],
                 timeout=120)
             gdb_rc = result.returncode
         except subprocess.TimeoutExpired:
@@ -210,18 +275,23 @@ def cmd_debug_shell(args):
             return 1
         paths = dict(paths, iso=iso)
     qemu_cmd = harness.qemu_argv(args.arch, "debug", "none", paths, tag)
-    qemu_cmd = qemu_cmd + ["-s", "-S"]
+    port, auto_picked = pick_gdb_port(args.gdb_port)
+    if auto_picked:
+        print("NOTE: :%d busy, auto-picked free GDB stub port :%d"
+              % (args.gdb_port, port))
+    gdb_script = gdb_script_for_port(args.gdb_script, port, logdir, "shell")
+    qemu_cmd = qemu_cmd + gdb_stub_argv(port)
     gdb = find_gdb(args.arch)
     if gdb is None:
         return 2
-    print("  %-7s %s" % ("SHELL", "Starting debug session (%s)..."
-                          % args.cmds))
+    print("  %-7s %s" % ("SHELL", "Starting debug session (%s, GDB stub :%d)..."
+                          % (args.cmds, port)))
     script = (
         "fconfigure stdout -buffering none;\n"
         "set timeout 120;\n"
         "spawn {qemu};\n"
         "for {{set i 0}} {{$i < 8}} {{incr i}} {{\n"
-        "  if {{[catch {{exec nc -z localhost 1234}}] == 0}} {{break}};\n"
+        "  if {{[catch {{exec nc -z localhost {port}}}] == 0}} {{break}};\n"
         "  after 1000;\n"
         "}};\n"
         "exec {gdb} {elf} -batch -x {gdb_script} &;\n"
@@ -243,7 +313,7 @@ def cmd_debug_shell(args):
         "exit 0;\n"
     ).format(qemu=" ".join(qemu_cmd), gdb=gdb,
              elf=str(builddir / "src" / "kernel-debug.elf"),
-             gdb_script=args.gdb_script, cmds=args.cmds)
+             gdb_script=gdb_script, cmds=args.cmds, port=port)
     try:
         result = subprocess.run(["expect", "-c", script])
         return result.returncode
@@ -281,11 +351,11 @@ def cmd_rr(args, record):
         paths = dict(paths, iso=iso)
     qemu_cmd = harness.qemu_argv(args.arch, args.build, "none", paths, tag)
     mode = "record" if record else "replay"
-    print("  %-7s %s" % ("RR", "Deterministic %s..." % ("trace" if record else "replay with GDB stub on :1234...")))
+    print("  %-7s %s" % ("RR", "Deterministic %s..." % ("trace" if record else "replay with GDB stub on :%d..." % args.gdb_port)))
     if not record:
-        print("Connect GDB: gdb %s -ex 'target remote :1234'"
-              % (builddir / "src" / "kernel-debug.elf"))
-        qemu_cmd = qemu_cmd + ["-s", "-S"]
+        print("Connect GDB: gdb %s -ex 'target remote :%d'"
+              % (builddir / "src" / "kernel-debug.elf", args.gdb_port))
+        qemu_cmd = qemu_cmd + gdb_stub_argv(args.gdb_port)
     subprocess.run(qemu_cmd +
                    ["-icount", "shift=auto,rr=%s,rrfile=%s" % (mode, rr_log)])
     return 0
@@ -302,6 +372,9 @@ def main():
     parser.add_argument("--class", dest="cls", default="none")
     parser.add_argument("--gdb-script", default="")
     parser.add_argument("--cmds", default="")
+    parser.add_argument("--gdb-port", type=int, default=1234,
+                        help="GDB stub port (default 1234; free ephemeral "
+                             "port auto-picked when busy)")
     args = parser.parse_args()
     if args.mode == "debug-test":
         if not args.gdb_script:
