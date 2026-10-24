@@ -15,7 +15,6 @@
   <a href="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml"><img src="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml/badge.svg" alt="CI Build"/></a>
   <img src="https://img.shields.io/badge/tests-1862%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/C++20-freestanding-00599C?style=flat-square&logo=cplusplus" alt="C++20 Freestanding"/>
-  <img src="https://img.shields.io/badge/arch-x86__64%20%7C%20ARM64%2FRISCV%20?style=flat-square" alt="x86_64"/>
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
@@ -31,7 +30,7 @@ A freestanding C++20 multi-architecture real-time operating system with zero dyn
 
 Currently a hybrid kernel actively transitioning toward a capability-based microkernel.
 
-* **Target:** x86_64, ARM64 & RISC-V
+* **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
 * **Status:** v0.5.5 — Full Compatibility & Functional State for AARCH64 and RISCV64, FPU fork inheritance
 * **License:** GPLv3
