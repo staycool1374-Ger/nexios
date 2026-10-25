@@ -116,13 +116,21 @@ write_role_dev() {
     "external_directory": {
       "*": "deny",
       "/tmp/nexios-*": "allow",
+      "/private/tmp/nexios-*": "allow",
       "/tmp/nexios-*/**": "allow",
+      "/private/tmp/nexios-*/**": "allow",
       "/tmp/jarvis-*": "allow",
+      "/private/tmp/jarvis-*": "allow",
       "/tmp/jarvis-*/**": "allow",
+      "/private/tmp/jarvis-*/**": "allow",
       "/tmp/jarvis_*": "allow",
+      "/private/tmp/jarvis_*": "allow",
       "/tmp/matrix-*": "allow",
+      "/private/tmp/matrix-*": "allow",
       "/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow"
+      "/private/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow",
+      "/private/tmp/agentup-*": "allow"
     },
     "edit": {
       "*": "allow",
@@ -149,18 +157,28 @@ write_role_qe() {
     "external_directory": {
       "*": "deny",
       "/tmp/nexios-*": "allow",
+      "/private/tmp/nexios-*": "allow",
       "/tmp/nexios-*/**": "allow",
+      "/private/tmp/nexios-*/**": "allow",
       "/tmp/jarvis-*": "allow",
+      "/private/tmp/jarvis-*": "allow",
       "/tmp/jarvis-*/**": "allow",
+      "/private/tmp/jarvis-*/**": "allow",
       "/tmp/jarvis_*": "allow",
+      "/private/tmp/jarvis_*": "allow",
       "/tmp/matrix-*": "allow",
+      "/private/tmp/matrix-*": "allow",
       "/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow"
+      "/private/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow",
+      "/private/tmp/agentup-*": "allow"
     },
     "edit": {
       "*": "deny",
       "/tmp/nexios-*/*": "allow",
+      "/private/tmp/nexios-*/*": "allow",
       "/tmp/nexios-*/**/*": "allow",
+      "/private/tmp/nexios-*/**/*": "allow",
       "src/kernel/test/*": "allow",
       "src/kernel/test/**/*": "allow",
       "src/test/*": "allow",
@@ -182,18 +200,28 @@ write_role_auditor() {
     "external_directory": {
       "*": "deny",
       "/tmp/nexios-*": "allow",
+      "/private/tmp/nexios-*": "allow",
       "/tmp/nexios-*/**": "allow",
+      "/private/tmp/nexios-*/**": "allow",
       "/tmp/jarvis-*": "allow",
+      "/private/tmp/jarvis-*": "allow",
       "/tmp/jarvis-*/**": "allow",
+      "/private/tmp/jarvis-*/**": "allow",
       "/tmp/jarvis_*": "allow",
+      "/private/tmp/jarvis_*": "allow",
       "/tmp/matrix-*": "allow",
+      "/private/tmp/matrix-*": "allow",
       "/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow"
+      "/private/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow",
+      "/private/tmp/agentup-*": "allow"
     },
     "edit": {
       "*": "deny",
       "/tmp/nexios-*/*": "allow",
+      "/private/tmp/nexios-*/*": "allow",
       "/tmp/nexios-*/**/*": "allow",
+      "/private/tmp/nexios-*/**/*": "allow",
       "audits/rejected_patch.diff": "allow",
       "audits/report-*": "allow"
     }
@@ -213,18 +241,28 @@ write_role_coordinator() {
     "external_directory": {
       "*": "deny",
       "/tmp/nexios-*": "allow",
+      "/private/tmp/nexios-*": "allow",
       "/tmp/nexios-*/**": "allow",
+      "/private/tmp/nexios-*/**": "allow",
       "/tmp/jarvis-*": "allow",
+      "/private/tmp/jarvis-*": "allow",
       "/tmp/jarvis-*/**": "allow",
+      "/private/tmp/jarvis-*/**": "allow",
       "/tmp/jarvis_*": "allow",
+      "/private/tmp/jarvis_*": "allow",
       "/tmp/matrix-*": "allow",
+      "/private/tmp/matrix-*": "allow",
       "/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow"
+      "/private/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow",
+      "/private/tmp/agentup-*": "allow"
     },
     "edit": {
       "*": "deny",
       "/tmp/nexios-*/*": "allow",
+      "/private/tmp/nexios-*/*": "allow",
       "/tmp/nexios-*/**/*": "allow",
+      "/private/tmp/nexios-*/**/*": "allow",
       "prompts/LEARNINGS.md": "allow"
     }
   }
@@ -471,18 +509,31 @@ run_session() {
 }
 
 # $1 tmux-name, $2 expected PWD, $3 expected role config
+# Scoped to the tmux pane's own process tree: dev and auditor share PWD, so a
+# global PWD match can select the sibling's opencode (false UNFENCED + kill).
 check_fenced() {
-  local name="$1" want_pwd="$2" want_cfg="$3" pid="" p
-  for p in $(pgrep -f "opencode/bin/opencode$" 2>/dev/null); do
-    if ps eww -p "$p" 2>/dev/null | tr ' ' '\n' | grep -qx "PWD=$want_pwd"; then pid="$p"; break; fi
+  local name="$1" want_pwd="$2" want_cfg="$3"
+  local pane pid i found=0 seen=""
+  pane=$(tmux list-panes -t "$name" -F '#{pane_pid}' 2>/dev/null | head -1)
+  [ -n "$pane" ] || { echo "no tmux pane for '$name'" >&2; return 1; }
+  local pids=("$pane")
+  i=0
+  while [ "$i" -lt "${#pids[@]}" ]; do
+    for pid in $(pgrep -P "${pids[$i]}" 2>/dev/null); do pids[${#pids[@]}]="$pid"; done
+    i=$((i + 1))
   done
-  [ -n "$pid" ] || { echo "no opencode process with PWD=$want_pwd" >&2; return 1; }
-  local cfg
-  cfg=$(ps eww -p "$pid" 2>/dev/null | tr ' ' '\n' | grep "^OPENCODE_CONFIG=" | head -1 || true)
-  [ "$cfg" = "OPENCODE_CONFIG=$want_cfg" ] || {
-    echo "PWD ok but OPENCODE_CONFIG wrong: got '${cfg:-<unset>}', want '$want_cfg'" >&2; return 1
-  }
-  return 0
+  for pid in "${pids[@]}"; do
+    local env="" pwd_v cfg_v
+    env=$(ps eww -p "$pid" 2>/dev/null) || continue
+    case "$env" in *"$OPENCODE_BIN"*) ;; *) continue ;; esac
+    pwd_v=$(printf '%s\n' "$env" | tr ' ' '\n' | grep "^PWD=" | head -1 || true)
+    cfg_v=$(printf '%s\n' "$env" | tr ' ' '\n' | grep "^OPENCODE_CONFIG=" | head -1 || true)
+    seen="${seen}pid $pid pwd=${pwd_v:-?} cfg=${cfg_v:-<unset>}; "
+    [ "$pwd_v" = "PWD=$want_pwd" ] && [ "$cfg_v" = "OPENCODE_CONFIG=$want_cfg" ] && { found=1; break; }
+  done
+  [ "$found" = 1 ] && return 0
+  echo "pane tree of '$name' has no opencode with PWD=$want_pwd + OPENCODE_CONFIG=$want_cfg (saw: ${seen:-<none>})" >&2
+  return 1
 }
 
 # ---coordinator (addressable endpoint)-----------------------------------------

@@ -27,6 +27,15 @@ links and hard-fails if it finds a real file in their place.
   only for the role JSONs — those other edits are covered by audit + git review, not by
   the dev cage.
 
+**macOS path canonicalization (burn-in 2026-10-25):** `/tmp` is a symlink to
+`/private/tmp` and opencode canonicalizes a target before matching rules, so a
+`/tmp/nexios-*` allow never matched and every mailbox/state write silently fell
+back to `bash` (allowed, and path-gate-free). Every `/tmp/<ns>` rule is therefore
+duplicated as `/private/tmp/<ns>` in the role JSONs, the twins, `prompts/PROMPT-audit.md`
+and the four embedded fallbacks in `scripts/agent_up.sh` — keep the pairs in
+lockstep, and prove fence changes with a tool-only write probe, not by reading the
+map.
+
 ## Twins
 Each role has a twin agent definition, canonical in `tools/agents/twins/nexios-<role>.md` (subagent
 mode, same permission block) for in-session `@`-mention use (e.g. dev spawning `@nexios-audit`).

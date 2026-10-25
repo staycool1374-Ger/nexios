@@ -7,17 +7,27 @@ permission:
   external_directory:
     "*": deny
     "/tmp/nexios-*": allow
+    "/private/tmp/nexios-*": allow
     "/tmp/nexios-*/**": allow
+    "/private/tmp/nexios-*/**": allow
     "/tmp/jarvis-*": allow
+    "/private/tmp/jarvis-*": allow
     "/tmp/jarvis-*/**": allow
+    "/private/tmp/jarvis-*/**": allow
     "/tmp/jarvis_*": allow
+    "/private/tmp/jarvis_*": allow
     "/tmp/matrix-*": allow
+    "/private/tmp/matrix-*": allow
     "/tmp/qemu-serial.*": allow
+    "/private/tmp/qemu-serial.*": allow
     "/tmp/agentup-*": allow
+    "/private/tmp/agentup-*": allow
   edit:
     "*": deny
     "/tmp/nexios-*/*": allow
+    "/private/tmp/nexios-*/*": allow
     "/tmp/nexios-*/**/*": allow
+    "/private/tmp/nexios-*/**/*": allow
     "audits/rejected_patch.diff": allow
     "audits/report-*.md": allow
   bash:

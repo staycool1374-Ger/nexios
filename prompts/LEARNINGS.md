@@ -13,6 +13,7 @@
 - Release the primitive lock BEFORE reschedule; every BLOCKED leaves the ready queue (INV-2); waits are bounded or scheduler-mediated; test bridge sequences guard add_task too (§11, #208).
 - Test waits use need_resched + hlt (wait_for_termination_safe); BLOCKED + dequeue_ready; bare pause-spins starve ticks under TCG. Rendezvous tests must wake on message arrivals, never on third-party timing (tick-dependent peers/killers hang under load); cyclic-capable walks get trip-count fail-stops, inserts unlink-first.
 - Byte-identity via per-function objdump diff (totals mislead); always_inline hot helpers; #ifndef + value #error as a pair; GAS needs `msr daifset, #n` (#309b).
+- Fence allows are canonical-path matches: mirror every `/tmp` rule as `/private/tmp` (macOS `/tmp` symlink), and prove fences with a tool-only write probe naming tool-vs-bash, never a config dump (#410).
 - Post-edit grep every site after repeated-pattern edits (replaceAll missed the differently-indented handle_irq drain — auditor S2, #307).
 - x86 trap regs[17]=RIP [18]=CS [19]=RFLAGS [20]=RSP(user-only): CS-gate SP; new .cpp needs gen.mk regen; GAS: `msr daifset, #2`; test TUs compile in release so CONFIG_DEBUG seam users must be guarded (#308).
 - Single-asm stack-save for GPR dumps (multi-block mov corrupts); exc_table is x86-only; release 0/0 rows are link-boot, not coverage (#306).
@@ -83,6 +84,18 @@
 ```
 
 ## Entries
+
+### #410 — Phase 2 orchestration in-repo + workflow burn-in (audit iter-2 APPROVED, issue CLOSED)
+
+- **Learned:** (1) macOS `/tmp` is a symlink to `/private/tmp` and opencode canonicalizes a target BEFORE matching permission rules — so `/tmp/<ns>` allows never matched, every mailbox/state write silently fell back to `bash` (allowed and path-gate-free), and "the write tool goes through the fence" was false while every config dump looked right. Mirror every `/tmp` rule as `/private/tmp`, and prove fence changes with a tool-only write probe (state which path succeeded: tool vs bash), never by reading the map. (2) `check_fenced` must be scoped to the tmux pane's own process tree: PWD is not unique (dev and auditor both cwd=repo), so a global `pgrep`+PWD scan can select the sibling's opencode and kill a correctly-fenced session (observed: auditor config reported for a dev pane). (3) Burn-in before acceptance: both defects were invisible to config-level inspection and to the prior audits. (4) "No human relay" means no *human* relay — coordinator doorbells (`agent_up.sh msg`) are agent-to-agent and satisfy it.
+- **Adapted:** `/private/tmp` mirrors in the four role JSONs, three twins, `prompts/PROMPT-audit.md` and the four embedded fallbacks (`scripts/agent_up.sh`); pane-scoped `check_fenced`; the canonicalization rule documented in `tools/agents/roles/README.md`. Burn-in evidence on #410; `$TMPDIR` (`/var/folders/...`) coverage and the coordinator-side `check_fenced` assertion still open in #412.
+- **Style re-surface:** honest status lines name the mechanism ("write tool DENIED; bash fallback used"), not a verdict that hides which path ran — QE's precise report, not dev's "PASS", is what exposed the defect.
+
+### #410 — Phase 1 worktree-isolated multi-agent workflow (audit ACCEPT-APPROVED conditional, merged a2b8ea8bc, VERIFIED 157/157, issue OPEN for Phases 2–4)
+
+- **Learned:** (1) Audit orders must be referenceable from ONE place: a rerun whose order lives in another channel reads as self-commissioned even when ordered (the 07:44:55Z inbox NOTE existed; the "grandfathered" framing was still written and had to be withdrawn on the record — cite the order timestamp in the rerun request). (2) `harness new` drops the invoker env over daemon IPC (OPENCODE_CONFIG never arrives — proven twice by fail-open S1 stops), so role-fenced workers launch via tmux-direct with env, and harness-blind tmux sessions get read-only app-pane mirrors (`tmux attach -r`) for visibility; never start a second opencode in an app pane. (3) `audits/rejected_patch.diff` is pipeline scratch (tracked, routinely overwritten — HEAD still holds a stale 250-line #170-era blob); the immutable trail is the timestamped `report-*.md` files — back up scratch out-of-repo (`/tmp/nexios-<issue>/notes/` + sha256 manifest) before any destructive tree op, and never gate verification on scratch content. (4) Append-only evidence shared across branches needs `merge=union` or every catch-up merge conflicts (`test-history.txt`).
+- **Adapted:** C4 standing rule (re-audits coordinator-ordered, cited by timestamp) in #410 ruling + this entry; `scripts/agent_up.sh` (tmux-direct fenced launch, fence-verified-before-prompt, osascript read-only mirrors) rides `phase1/isolation`; S3 follow-ups tracked on #411 (nit folded into S3#3, single item). Gates: checker `--self-test` 13/13 both directions, selftest 157/157 both checkouts, role checks clean.
+- **Style re-surface:** check-7 N/A positions need the reason stated (zero applicable surface + named priors) plus the retrieval post with dispositions to close formally (#68, #324); exact-message `--no-ff` merges carry issue refs without closing keywords (`(#410, follow-ups #411)`, never `Fixes`).
 
 ### #385 — riscv64 exec_slots hang: unvalidated deferred-switch apply (audit APPROVED, committed, issue CLOSED pending QE + #387)
 
