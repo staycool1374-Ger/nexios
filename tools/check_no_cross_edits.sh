@@ -2,8 +2,8 @@
 # check_no_cross_edits.sh — isolation gate (Phase 1): no cross-role edits.
 #
 # Dev sessions may not touch the test trees; QE sessions may not touch
-# production sources. The live permission blocks (dev.json / qe.json) cover
-# the edit/write/patch tools only — bash heredocs, sed -i and python writes
+# production sources. The live permission blocks (rendered per role by
+# tools/agents/render_fence.py) cover the edit/write/patch tools only — bash heredocs, sed -i and python writes
 # bypass them by design. This script is the fail-closed backstop: it fails
 # the tree (and CI) when the current change set crosses the role fence.
 #
@@ -17,9 +17,15 @@
 # an explicit but empty/unresolvable base is a usage error (exit 2), never a
 # silent merge-base fallback (S4-7).
 #
-# Role resolution: --role dev|qe wins; otherwise $OPENCODE_CONFIG basename
-# (dev.json -> dev, qe.json -> qe). No detectable role is a fail-closed
-# usage error (exit 2), never a silent pass.
+# Role resolution, first match wins:
+#   --role dev|qe
+#   $NEXIOS_AGENT_ROLE=dev|qe                (set by the launcher for every role)
+#   $OPENCODE_CONFIG path shape              (legacy basename dev.json/qe.json, or
+#                                            .../rendered/<role>/opencode.resolved.json)
+# No detectable role is a fail-closed usage error (exit 2), never a silent pass.
+# Precedence before path shape is deliberate (#414): the launcher renders fences
+# per role, so a config path is evidence of the role, but the explicit env var is
+# the launcher's own statement and must not be overridden by a stale path.
 #
 # Fences:
 #   dev role: changes under src/kernel/test/** or src/test/** fail.
@@ -70,7 +76,7 @@ while [ $# -gt 0 ]; do
             [ -n "${2:-}" ] || { echo "usage: $0 --base <rev>" >&2; exit 2; }
             BASE_OVERRIDE="$2"; BASE_SET=1; shift ;;
         --self-test) SELFTEST=1 ;;
-        -h|--help) sed -n '1,45p' "$0"; exit 0 ;;
+        -h|--help) sed -n '1,/^set -u$/p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
     esac
     shift
@@ -181,6 +187,50 @@ CASES
         fail=1
     fi
 
+    # --- role detection (#414): env role wins, then the rendered config path ---
+    printf 'z\n' > "$scratch/src/kernel/sched/role_probe.cpp"
+    if env -u NEXIOS_AGENT_ROLE -u OPENCODE_CONFIG \
+        NEXIOS_AGENT_ROLE=qe bash "$scratch/tools/check_no_cross_edits.sh" \
+        --base=main >/dev/null 2>&1; then
+        echo "FAIL integration: NEXIOS_AGENT_ROLE=qe not honoured" >&2
+        fail=1
+    else
+        printf 'PASS integration: NEXIOS_AGENT_ROLE=qe catches a src write\n'
+    fi
+    if env -u NEXIOS_AGENT_ROLE -u OPENCODE_CONFIG \
+        OPENCODE_CONFIG=/tmp/x/rendered/qe/opencode.resolved.json \
+        bash "$scratch/tools/check_no_cross_edits.sh" --base=main >/dev/null 2>&1; then
+        echo "FAIL integration: rendered qe config path not detected" >&2
+        fail=1
+    else
+        printf 'PASS integration: rendered qe config path selects the qe role\n'
+    fi
+    if env -u NEXIOS_AGENT_ROLE -u OPENCODE_CONFIG \
+        OPENCODE_CONFIG=/tmp/x/rendered/dev/opencode.resolved.json \
+        bash "$scratch/tools/check_no_cross_edits.sh" --base=main >/dev/null 2>&1; then
+        printf 'PASS integration: rendered dev config path selects the dev role\n'
+    else
+        echo "FAIL integration: rendered dev config path rejected a dev write" >&2
+        fail=1
+    fi
+    if env -u OPENCODE_CONFIG NEXIOS_AGENT_ROLE=dev \
+        OPENCODE_CONFIG=/tmp/x/rendered/qe/opencode.resolved.json \
+        bash "$scratch/tools/check_no_cross_edits.sh" --base=main >/dev/null 2>&1; then
+        printf 'PASS integration: env role outranks the config path\n'
+    else
+        echo "FAIL integration: config path overrode NEXIOS_AGENT_ROLE" >&2
+        fail=1
+    fi
+    env -u OPENCODE_CONFIG NEXIOS_AGENT_ROLE=bogus \
+        bash "$scratch/tools/check_no_cross_edits.sh" --base=main >/dev/null 2>&1
+    if [ $? -eq 2 ]; then
+        printf 'PASS integration: invalid NEXIOS_AGENT_ROLE exits 2\n'
+    else
+        echo "FAIL integration: invalid NEXIOS_AGENT_ROLE did not exit 2" >&2
+        fail=1
+    fi
+    rm -f "$scratch/src/kernel/sched/role_probe.cpp"
+
     if [ "$fail" = "0" ]; then
         echo "check_no_cross_edits self-test: clean"
         exit 0
@@ -190,12 +240,19 @@ CASES
 fi
 
 if [ -z "$ROLE" ]; then
+    case "${NEXIOS_AGENT_ROLE:-}" in
+        dev|qe) ROLE="$NEXIOS_AGENT_ROLE" ;;
+        "") ;;
+        *) echo "check_no_cross_edits: NEXIOS_AGENT_ROLE=$NEXIOS_AGENT_ROLE is not dev|qe" >&2; exit 2 ;;
+    esac
+fi
+if [ -z "$ROLE" ]; then
     case "${OPENCODE_CONFIG:-}" in
-        *dev.json) ROLE="dev" ;;
-        *qe.json) ROLE="qe" ;;
+        */rendered/dev/opencode.resolved.json|*dev.json) ROLE="dev" ;;
+        */rendered/qe/opencode.resolved.json|*qe.json) ROLE="qe" ;;
         *)
             echo "check_no_cross_edits: role undetectable" >&2
-            echo "(set OPENCODE_CONFIG to dev.json/qe.json or pass --role dev|qe)" >&2
+            echo "(set NEXIOS_AGENT_ROLE=dev|qe, OPENCODE_CONFIG to a rendered role config, or pass --role)" >&2
             exit 2
             ;;
     esac

@@ -12,4 +12,6 @@ Role: own workflow transitions. You never write, build, or test kernel code — 
 - Role prompts live read-only in the repo: `{repo}/prompts/PROMPT-{dev,testdev,audit}.md` (the
   launched config resolves `{repo}` to the absolute repo root; the shipped files never carry a
   machine path). Reference, don't copy. LEARNINGS closeout writes `{repo}/prompts/LEARNINGS.md`.
-- Your own config is versioned in repo: `tools/agents/coordinator/{opencode.json,AGENTS.md}`. This directory's files are SYMLINKS to those — never write canonical content out of repo; link, don't copy.
+- Your own fence is versioned in repo: `tools/agents/fence/base.json` + `tools/agents/fence/roles/coordinator.json`
+  (this directory's `AGENTS.md` is a SYMLINK to `tools/agents/coordinator/AGENTS.md`; your config is rendered
+  to `~/.local/state/nexios/rendered/coordinator/opencode.resolved.json` at launch — never hand-edit a rendered file).

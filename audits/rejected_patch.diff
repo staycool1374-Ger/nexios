@@ -1,104 +1,42 @@
 diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
 --- a/scripts/agent_up.sh
 +++ b/scripts/agent_up.sh
-@@ -536,8 +536,9 @@ mode_state_set() {
-     state["updated"] = datetime.datetime.now(
-         datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-     directory = os.path.dirname(path)
--    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".state.")
-+    tmp = None
-     try:
-+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".state.")
-         with os.fdopen(fd, "w") as out:
-             json.dump(state, out, indent=2)
-             out.write("\n")
-@@ -706,6 +706,16 @@ ensure_coord_session() {
-   ensure_state_links
-   render_coord_config
-   need_file "$COORD_CONFIG_RESOLVED"
-+  if tmux has-session -t "$COORD_SESS" 2>/dev/null; then
-+    # Never trust a session this launch did not create: a pre-fence
-+    # coordinator (launched with no OPENCODE_CONFIG at all) or a moved repo
-+    # leaves a running session whose env is not the resolved config. Workers
-+    # refuse reuse outright; the coordinator kills the stale session so the
-+    # block below rebuilds it fenced (S4-9: reuse must assert too).
-+    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" 2>/dev/null || {
-+      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
-+    }
-+  fi
-   if ! tmux has-session -t "$COORD_SESS" 2>/dev/null; then
-     COORD_TMPDIR=$(ensure_session_tmpdir "$COORD_SESS")
-     tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
-@@ -1150,6 +1150,7 @@ mode_self_test() {
-   chk bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base main"
-   chk_neg bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base="
--  rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" \
--         "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991"
-+  rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
-+         "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
-+         "$REPO_ROOT/.nexios-runtime/9999"
-   echo "self-test: $pass/$t PASS"
-   [ "$pass" = "$t" ] || fail "self-test failures"
- }
-diff --git a/tools/agents/verify_fence.py b/tools/agents/verify_fence.py
---- a/tools/agents/verify_fence.py
-+++ b/tools/agents/verify_fence.py
-@@ -143,6 +143,13 @@ def main():
-     twins = {role: frontmatter(path) for role, path in TWIN.items()}
-     audit_prompt = frontmatter(AUDIT_PROMPT)
-     embedded = heredocs(AGENT_UP)
-+    for label, block in (("nexios-dev.md", twins["dev"]),
-+                         ("nexios-qe.md", twins["qe"]),
-+                         ("nexios-audit.md", twins["auditor"]),
-+                         ("PROMPT-audit.md", audit_prompt)):
-+        if block is not None and not block.get("permission"):
-+            fail("PARSE", "%s: empty permission block (skipped, not clean)"
-+                 % label)
-     if FAILS:
-         report()
-         return 2
-@@ -162,13 +162,13 @@ def main():
-     family = [("dev.json", worker),
-               ("qe.json", ext_map(configs["qe"])),
-               ("auditor.json", ext_map(configs["auditor"]))]
--    if twins["dev"]:
-+    if twins["dev"] is not None:
-         family.append(("nexios-dev.md", ext_map(twins["dev"])))
--    if twins["qe"]:
-+    if twins["qe"] is not None:
-         family.append(("nexios-qe.md", ext_map(twins["qe"])))
--    if twins["auditor"]:
-+    if twins["auditor"] is not None:
-         family.append(("nexios-audit.md", ext_map(twins["auditor"])))
--    if audit_prompt:
-+    if audit_prompt is not None:
-         family.append(("PROMPT-audit.md", ext_map(audit_prompt)))
-     for name, got in family:
-         if got != worker:
-@@ -192,12 +199,12 @@ def main():
-     # F4 - edit maps identical inside each family.
-     pairs = [("dev.json", edit_map(configs["dev"]), "nexios-dev.md",
--              edit_map(twins["dev"]) if twins["dev"] else None),
-+              edit_map(twins["dev"]) if twins["dev"] is not None else None),
-              ("qe.json", edit_map(configs["qe"]), "nexios-qe.md",
--              edit_map(twins["qe"]) if twins["qe"] else None),
-+              edit_map(twins["qe"]) if twins["qe"] is not None else None),
-              ("auditor.json", edit_map(configs["auditor"]), "nexios-audit.md",
--              edit_map(twins["auditor"]) if twins["auditor"] else None),
-+              edit_map(twins["auditor"]) if twins["auditor"] is not None else None),
-              ("auditor.json", edit_map(configs["auditor"]), "PROMPT-audit.md",
--              edit_map(audit_prompt) if audit_prompt else None)]
-+              edit_map(audit_prompt) if audit_prompt is not None else None)]
-     for left, left_map, right, right_map in pairs:
-         if right_map is not None and left_map != right_map:
-             fail("F4", "%s edit map differs from %s" % (left, right))
-diff --git a/tools/check_no_cross_edits.sh b/tools/check_no_cross_edits.sh
---- a/tools/check_no_cross_edits.sh
-+++ b/tools/check_no_cross_edits.sh
-@@ -72,3 +72,3 @@ while [ $# -gt 0; do
-         --self-test) SELFTEST=1 ;;
--        -h|--help) sed -n '1,32p' "$0"; exit 0 ;;
-+        -h|--help) sed -n '1,45p' "$0"; exit 0 ;;
-         *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
-     esac
-     shift
+@@ -500,7 +500,7 @@ mode_run() {
+   local prompt="$4"
+   local want_branch="${5:-}"
+   need_cmd tmux; need_cmd "$OPENCODE_BIN"
+-  case "$role" in */*|*.json) fail "run takes a role name (dev|qe|auditor|coordinator), not a config path: '$role'" ;; esac
++  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "run takes a role name (dev|qe|auditor|coordinator), not a config path: '$role'" ;; esac
+   need_file "$prompt"
+   [ -d "$dir" ] || fail "workdir missing: $dir"
+   check_branch "$dir" "$want_branch"
+@@ -529,14 +529,17 @@ run_session() {
+   local prompt="$4"
+   [ -d "$dir" ] || fail "workdir missing: $dir"
+   need_file "$prompt"
++  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "unknown role: '$role'" ;; esac
+   if tmux has-session -t "$name" 2>/dev/null; then
+     fail "tmux session '$name' already exists — refusing to clobber (close it first)"
+   fi
+-  # install_agents renders every role, including this one, and installs the
+-  # generated subagent definitions into the session's cwd.
++  # install_agents installs the generated subagent definitions into the
++  # session's cwd; render_role_config then re-renders THIS role fresh. Never
++  # trust the file on disk here: a pre-planted or stale config under
++  # $RENDERED_ROOT must never launch (the renderer validates the role and
++  # overwrites with a fresh compose, fail-closed on any error).
+   install_agents "$dir"
+-  local cfg; cfg=$(rendered_path "$role")
+-  [ -s "$cfg" ] || fail "rendered config missing after render: $cfg"
++  local cfg; cfg=$(render_role_config "$role")
+   tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
+   # Env hygiene: role config ONLY from OPENCODE_CONFIG; strip any leaky overrides.
+   # TMPDIR pinned inside the fenced namespace (host TMPDIR is per-boot: unfenceable).
+@@ -1118,6 +1121,7 @@ mode_fence_show() {
+ # $1 role — print the exact command run_session sends (self-test + inspection).
+ mode_launch_cmd() {
+   [ $# -eq 1 ] || fail "__run-cmd needs a role"
++  case "$1" in dev|qe|auditor|coordinator) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|coordinator), got '$1'" ;; esac
+   local cfg
+   cfg=$(render_role_config "$1")
+   printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=/tmp/agentup-tmp-agentup-probe OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s\n' \

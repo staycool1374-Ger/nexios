@@ -46,11 +46,11 @@ set -euo pipefail
 # LINKS ONLY — a real file out of repo is versioning drift and hard-fails here.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-ROLES_DIR="${ROLES_DIR:-$REPO_ROOT/tools/agents/roles}"
-COORD_CONFIG_DIR="$REPO_ROOT/tools/agents/coordinator"
+FENCE_DIR="${FENCE_DIR:-$REPO_ROOT/tools/agents/fence}"
+RENDERER="$REPO_ROOT/tools/agents/render_fence.py"
 NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
+RENDERED_ROOT="$NEXIOS_HOME/rendered"
 COORD_DIR="$NEXIOS_HOME/coordinator"
-COORD_CONFIG_RESOLVED="$COORD_DIR/opencode.resolved.json"
 COORD_TMPDIR=""
 OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
 TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
@@ -64,12 +64,20 @@ AUDIT_SESS="nexios-audit"
 fail() { echo "agent_up: ERROR: $*" >&2; exit 1; }
 info() { echo "agent_up: $*"; }
 
+# Rendered-fence layout. The path is produced in ONE place so a role can never
+# be written to another role's file by a copy-paste bug (self-test R6/L1).
+rendered_path() {
+  [ $# -eq 1 ] || fail "rendered_path needs a role"
+  printf '%s/%s/opencode.resolved.json\n' "$RENDERED_ROOT" "$1"
+}
+COORD_CONFIG_RESOLVED="$(rendered_path coordinator)"
+
 usage() {
   cat >&2 <<EOF
 usage: agent_up.sh <mode> [...]
   setup <issue>      create coord runtime (/tmp/nexios-<issue>/: inbox, state,
-                     prompts, notes, PROTOCOL) + bootstrap roles if missing.
-                     Idempotent: never overwrites existing state.json/inbox.
+                     prompts, notes, PROTOCOL) + render every role fence into
+                     $RENDERED_ROOT. Idempotent: never overwrites state/inbox.
   coord [taskfile]   ensure $COORD_SESS tmux session (cwd=coordinator home,
                      env scrubbed) running the coordinator TUI; attach to it.
                      Optional taskfile is pasted as the first message.
@@ -80,7 +88,9 @@ usage: agent_up.sh <mode> [...]
                      mirrors block ALL tmux input including doorbells) + coordinator
                      in tmux ($COORD_SESS) with the task pasted as its first
                      message. Pass a taskfile path or literal task text.
-  run ...            launch ONE session: run <name> <dir> <role.json> <prompt.txt> [branch]
+  run ...            launch ONE session: run <name> <dir> <role> <prompt.txt> [branch]
+                     <role> is dev|qe|auditor|coordinator — the fence for it is
+                     rendered from tools/agents/fence/ at launch (never a path).
   audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
   audit-diff [branch] [--base <rev>]
                      write the audit diff to audits/pending_patch.diff
@@ -97,6 +107,10 @@ usage: agent_up.sh <mode> [...]
   status --reconstruct <issue> --copy <dir>  rebuild state.json machine fields
                      from git branches + issue comments into a COPY (live
                      state.json is never touched; --copy is mandatory).
+  fence show <role>  print the composed permission map (no launch, no write).
+  fence install [dir]  regenerate every rendered config + the subagent files
+                     under <dir>/.opencode/agents (default: this checkout).
+  render-self-test   fence renderer/verifier matrix (no tmux, no opencode).
   self-test          guard + helper self-tests (scratch tmux names only; never
                      touches $DEV_SESS/$QE_SESS/$AUDIT_SESS/$COORD_SESS).
   approve <sess>     drive one Allow-always on the session's CURRENT permission
@@ -124,215 +138,106 @@ runtime_dir() {
 ensure_session_tmpdir() {
   local dir="/tmp/agentup-tmp-$1"
   mkdir -p -m 0700 "$dir" || fail "cannot create $dir"
+  chmod 700 "$dir" 2>/dev/null || fail "cannot restrict $dir to 0700"
   printf '%s\n' "$dir"
 }
 
-# ---embedded role defaults (bootstrap only; audited content)------------------
-# dev: edit-all EXCEPT test trees + own cage. Byte-identical to
-# tools/agents/roles/dev.json (canonical); this copy is the broken-checkout
-# fallback only. Last-match-wins; both star depths (docs don't pin * crossing /).
-write_role_dev() {
-  cat > "$1" <<'EOF'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "permission": {
-    "bash": "allow",
-    "external_directory": {
-      "*": "deny",
-      "/tmp/nexios-*": "allow",
-      "/private/tmp/nexios-*": "allow",
-      "/tmp/nexios-*/**": "allow",
-      "/private/tmp/nexios-*/**": "allow",
-      "/tmp/jarvis-*": "allow",
-      "/private/tmp/jarvis-*": "allow",
-      "/tmp/jarvis-*/**": "allow",
-      "/private/tmp/jarvis-*/**": "allow",
-      "/tmp/jarvis_*": "allow",
-      "/private/tmp/jarvis_*": "allow",
-      "/tmp/matrix-*": "allow",
-      "/private/tmp/matrix-*": "allow",
-      "/tmp/qemu-serial.*": "allow",
-      "/private/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow",
-      "/tmp/agentup-*/**": "allow",
-      "/private/tmp/agentup-*/**": "allow",
-      "/tmp/lldb-*": "allow",
-      "/private/tmp/lldb-*": "allow"
-    },
-    "edit": {
-      "*": "allow",
-      "tools/agents/roles/*": "deny",
-      "tools/agents/roles/**/*": "deny",
-      "src/kernel/test/*": "deny",
-      "src/kernel/test/**/*": "deny",
-      "src/test/*": "deny",
-      "src/test/**/*": "deny"
-    }
-  }
-}
+# Read state.json without ever leaking a traceback (#412 carried hardening).
+# $1 runtime dir, $2 comma-separated keys: one key prints the value, several
+# print a {key: value} projection (empty string for a missing file).
+read_state() {
+  local rt="$1" keys="$2"
+  [ -f "$rt/state.json" ] || { printf '\n'; return 1; }
+  python3 - "$rt/state.json" "$keys" <<'EOF'
+import json, sys
+path, keys = sys.argv[1], [k for k in sys.argv[2].split(",") if k]
+try:
+    with open(path) as handle:
+        state = json.load(handle)
+except (OSError, ValueError) as exc:
+    sys.stderr.write("state: cannot read %s: %s\n" % (path, exc))
+    raise SystemExit(1)
+if not isinstance(state, dict):
+    sys.stderr.write("state: %s is not a JSON object\n" % path)
+    raise SystemExit(1)
+if len(keys) == 1:
+    print(state.get(keys[0], ""))
+else:
+    print({k: state.get(k) for k in keys})
 EOF
 }
 
-# qe: edit ONLY test trees (+coord mailbox). Byte-identical to
-# tools/agents/roles/qe.json (canonical); fallback only.
-write_role_qe() {
-  cat > "$1" <<'EOF'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "permission": {
-    "bash": "allow",
-    "external_directory": {
-      "*": "deny",
-      "/tmp/nexios-*": "allow",
-      "/private/tmp/nexios-*": "allow",
-      "/tmp/nexios-*/**": "allow",
-      "/private/tmp/nexios-*/**": "allow",
-      "/tmp/jarvis-*": "allow",
-      "/private/tmp/jarvis-*": "allow",
-      "/tmp/jarvis-*/**": "allow",
-      "/private/tmp/jarvis-*/**": "allow",
-      "/tmp/jarvis_*": "allow",
-      "/private/tmp/jarvis_*": "allow",
-      "/tmp/matrix-*": "allow",
-      "/private/tmp/matrix-*": "allow",
-      "/tmp/qemu-serial.*": "allow",
-      "/private/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow",
-      "/tmp/agentup-*/**": "allow",
-      "/private/tmp/agentup-*/**": "allow",
-      "/tmp/lldb-*": "allow",
-      "/private/tmp/lldb-*": "allow"
-    },
-    "edit": {
-      "*": "deny",
-      "/tmp/nexios-*/*": "allow",
-      "/private/tmp/nexios-*/*": "allow",
-      "/tmp/nexios-*/**/*": "allow",
-      "/private/tmp/nexios-*/**/*": "allow",
-      "src/kernel/test/*": "allow",
-      "src/kernel/test/**/*": "allow",
-      "src/test/*": "allow",
-      "src/test/**/*": "allow"
-    }
-  }
-}
-EOF
+# ---fence rendering (single source)-------------------------------------------
+# The permission map lives ONLY in tools/agents/fence/{base.json,roles/*.json}.
+# opencode has no permission `include`, so a complete config is RENDERED per
+# launch into $NEXIOS_HOME/rendered/<role>/opencode.resolved.json. No file in
+# the repo is a finished map, and no file outside the repo is authoritative.
+# `render_fence.py` owns composition + validation; this wrapper only locates
+# files and fails closed.
+render_role_config() {
+  [ $# -eq 1 ] || fail "render_role_config needs a role"
+  need_cmd python3
+  need_file "$RENDERER"
+  need_file "$FENCE_DIR/base.json"
+  local role="$1"
+  local out
+  out=$(rendered_path "$role")
+  [ -f "$FENCE_DIR/roles/$role.json" ] || fail "missing fence delta for role '$role' in $FENCE_DIR/roles/"
+  mkdir -p "$(dirname "$out")"
+  if ! python3 "$RENDERER" --role "$role" --out "$out" --repo-root "$REPO_ROOT" \
+      --fence-root "$FENCE_DIR" --twins-out "$(dirname "$out")" >/dev/null; then
+    fail "cannot render fence for role '$role'"
+  fi
+  [ -s "$out" ] || fail "rendered config is empty: $out"
+  printf '%s\n' "$out"
 }
 
-# auditor: deny-all writes except mailbox + audit artifacts. Byte-identical to
-# tools/agents/roles/auditor.json (canonical); fallback only.
-write_role_auditor() {
-  cat > "$1" <<'EOF'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "permission": {
-    "bash": "allow",
-    "external_directory": {
-      "*": "deny",
-      "/tmp/nexios-*": "allow",
-      "/private/tmp/nexios-*": "allow",
-      "/tmp/nexios-*/**": "allow",
-      "/private/tmp/nexios-*/**": "allow",
-      "/tmp/jarvis-*": "allow",
-      "/private/tmp/jarvis-*": "allow",
-      "/tmp/jarvis-*/**": "allow",
-      "/private/tmp/jarvis-*/**": "allow",
-      "/tmp/jarvis_*": "allow",
-      "/private/tmp/jarvis_*": "allow",
-      "/tmp/matrix-*": "allow",
-      "/private/tmp/matrix-*": "allow",
-      "/tmp/qemu-serial.*": "allow",
-      "/private/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow",
-      "/tmp/agentup-*/**": "allow",
-      "/private/tmp/agentup-*/**": "allow",
-      "/tmp/lldb-*": "allow",
-      "/private/tmp/lldb-*": "allow"
-    },
-    "edit": {
-      "*": "deny",
-      "/tmp/nexios-*/*": "allow",
-      "/private/tmp/nexios-*/*": "allow",
-      "/tmp/nexios-*/**/*": "allow",
-      "/private/tmp/nexios-*/**/*": "allow",
-      "audits/rejected_patch.diff": "allow",
-      "audits/report-*.md": "allow"
-    }
-  }
-}
-EOF
+# $1 role, $2 field (cwd|prompt|name) — reads the role delta's metadata.
+role_field() {
+  [ $# -eq 2 ] || fail "role_field needs a role and a field"
+  need_cmd python3
+  need_file "$RENDERER"
+  python3 "$RENDERER" --meta --role "$1" --field "$2" --repo-root "$REPO_ROOT" \
+    --fence-root "$FENCE_DIR"
 }
 
-# coordinator: deny-all writes except mailbox + LEARNINGS closeout.
-# Byte-identical to tools/agents/roles/coordinator.json (canonical).
-write_role_coordinator() {
-  cat > "$1" <<'EOF'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "permission": {
-    "bash": "allow",
-    "external_directory": {
-      "*": "deny",
-      "{repo}/prompts/**": "allow",
-      "{repo}/audits/**": "allow",
-      "/tmp/nexios-*": "allow",
-      "/private/tmp/nexios-*": "allow",
-      "/tmp/nexios-*/**": "allow",
-      "/private/tmp/nexios-*/**": "allow",
-      "/tmp/jarvis-*": "allow",
-      "/private/tmp/jarvis-*": "allow",
-      "/tmp/jarvis-*/**": "allow",
-      "/private/tmp/jarvis-*/**": "allow",
-      "/tmp/jarvis_*": "allow",
-      "/private/tmp/jarvis_*": "allow",
-      "/tmp/matrix-*": "allow",
-      "/private/tmp/matrix-*": "allow",
-      "/tmp/qemu-serial.*": "allow",
-      "/private/tmp/qemu-serial.*": "allow",
-      "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow",
-      "/tmp/agentup-*/**": "allow",
-      "/private/tmp/agentup-*/**": "allow",
-      "/tmp/lldb-*": "allow",
-      "/private/tmp/lldb-*": "allow"
-    },
-    "edit": {
-      "*": "deny",
-      "/tmp/nexios-*/*": "allow",
-      "/private/tmp/nexios-*/*": "allow",
-      "/tmp/nexios-*/**/*": "allow",
-      "/private/tmp/nexios-*/**/*": "allow",
-      "{repo}/prompts/LEARNINGS.md": "allow"
-    }
-  }
-}
-EOF
-}
-write_roles_readme() {
-  cat > "$1" <<'EOF'
-# Role configs — canonical content lives in tools/agents/roles/ (repo).
-# This embedded copy is the broken-checkout fallback ONLY (used when the
-# repo files are absent); keep byte-identical with the repo files.
-# dev.json: edit-all EXCEPT test trees + own cage. qe.json: edit ONLY test
-# trees + coord mailbox. auditor.json: deny-all writes except mailbox + audit
-# artifacts. coordinator.json: deny-all except mailbox + LEARNINGS closeout.
-# edit covers edit/write/patch only, NOT bash heredocs/redirects — the repo
-# checker (tools/check_no_cross_edits.sh) is the fail-closed backstop.
-# Step zero of every session: `opencode debug config` shows these rules +
-# a blocked write fails at depth 1 AND nested + the allowed write succeeds.
-EOF
+render_all() {
+  local role
+  for role in dev qe auditor coordinator; do
+    render_role_config "$role" >/dev/null
+  done
+  info "fence rendered for dev, qe, auditor, coordinator under $RENDERED_ROOT"
 }
 
-ensure_roles() {
-  mkdir -p "$ROLES_DIR"
-  [ -f "$ROLES_DIR/dev.json" ] || { write_role_dev "$ROLES_DIR/dev.json"; info "bootstrapped roles/dev.json (fallback — repo copy canonical)"; }
-  [ -f "$ROLES_DIR/qe.json" ] || { write_role_qe "$ROLES_DIR/qe.json"; info "bootstrapped roles/qe.json (fallback — repo copy canonical)"; }
-  [ -f "$ROLES_DIR/auditor.json" ] || { write_role_auditor "$ROLES_DIR/auditor.json"; info "bootstrapped roles/auditor.json (fallback — repo copy canonical)"; }
-  [ -f "$ROLES_DIR/coordinator.json" ] || { write_role_coordinator "$ROLES_DIR/coordinator.json"; info "bootstrapped roles/coordinator.json (fallback — repo copy canonical)"; }
-  [ -f "$ROLES_DIR/README.md" ] || write_roles_readme "$ROLES_DIR/README.md"
+# Install the generated subagent definitions into a session's cwd. opencode
+# discovers agents in <cwd>/.opencode/agents/, so a subagent invoked FROM a
+# session gets its cage from the same delta that produced the session's own
+# config (a permission-less agent file would inherit the caller's map — for the
+# auditor invoked from a dev session that would be edit:allow). The directory is
+# gitignored and launcher-owned; tracked twins carry prose only.
+install_agents() {
+  local dir="$1"
+  [ -d "$dir" ] || fail "agent install target missing: $dir"
+  need_cmd python3
+  need_file "$RENDERER"
+  local role
+  for role in dev qe auditor; do
+    python3 "$RENDERER" --role "$role" --out "$(rendered_path "$role")" \
+      --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR" \
+      --twins-out "$dir/.opencode/agents" >/dev/null \
+      || fail "cannot install the generated $role agent into $dir"
+  done
+}
+
+# symbolic launch.cwd -> checkout. Session names stay fixed here: they are the
+# doorbell address, not fence data.
+role_dir() {
+  case "$1" in
+    dev|audit) printf '%s\n' "$DEV_DIR" ;;
+    qe) printf '%s\n' "$QE_DIR" ;;
+    coord) printf '%s\n' "$COORD_DIR" ;;
+    *) fail "unknown launch cwd: '$1'" ;;
+  esac
 }
 
 # Point an out-of-repo path at its versioned in-repo counterpart. Links are
@@ -351,15 +256,33 @@ ensure_link() {
   fi
 }
 
-# State dir + legacy role paths may contain LINKS ONLY (canonical: repo).
+# A legacy path may only be a LINK; a link is pruned (the artifact it pointed at
+# no longer exists), a REAL file hard-fails — never silently adopted.
+prune_link() {
+  local link="$1"
+  if [ -L "$link" ]; then
+    rm -f "$link"
+    info "pruned legacy link: $link"
+  elif [ -e "$link" ]; then
+    fail "$link holds a REAL file from the pre-#414 layout; the fence is now rendered from $FENCE_DIR. Move or delete it, then re-run."
+  fi
+}
+
+# State dir links: AGENTS.md (coordinator doctrine). Config files are RENDERED
+# into $RENDERED_ROOT and never linked; pre-#414 links/role copies are pruned.
 ensure_state_links() {
-  ensure_link "$COORD_DIR/opencode.json" "$COORD_CONFIG_DIR/opencode.json"
-  ensure_link "$COORD_DIR/AGENTS.md" "$COORD_CONFIG_DIR/AGENTS.md"
-  ensure_link "$NEXIOS_HOME/roles/dev.json" "$ROLES_DIR/dev.json"
-  ensure_link "$NEXIOS_HOME/roles/qe.json" "$ROLES_DIR/qe.json"
-  ensure_link "$NEXIOS_HOME/roles/auditor.json" "$ROLES_DIR/auditor.json"
-  ensure_link "$NEXIOS_HOME/roles/coordinator.json" "$ROLES_DIR/coordinator.json"
-  ensure_link "$NEXIOS_HOME/roles/README.md" "$ROLES_DIR/README.md"
+  mkdir -p "$NEXIOS_HOME"
+  ensure_link "$COORD_DIR/AGENTS.md" "$REPO_ROOT/tools/agents/coordinator/AGENTS.md"
+  prune_link "$COORD_DIR/opencode.json"
+  prune_link "$COORD_DIR/opencode.resolved.json"
+  prune_link "$NEXIOS_HOME/roles/dev.json"
+  prune_link "$NEXIOS_HOME/roles/qe.json"
+  prune_link "$NEXIOS_HOME/roles/auditor.json"
+  prune_link "$NEXIOS_HOME/roles/coordinator.json"
+  prune_link "$NEXIOS_HOME/roles/README.md"
+  if [ -d "$NEXIOS_HOME/roles" ] && [ -z "$(ls -A "$NEXIOS_HOME/roles" 2>/dev/null)" ]; then
+    rmdir "$NEXIOS_HOME/roles" 2>/dev/null || true
+  fi
 }
 
 # ---coord runtime (comms setup)------------------------------------------------
@@ -403,9 +326,8 @@ EOF
 mode_setup() {
   [ $# -eq 1 ] || fail "setup needs an issue number"
   local rt; rt=$(runtime_dir "$1")
-  ensure_roles
   ensure_state_links
-  render_coord_config
+  render_all
   mkdir -p -m 0700 "$rt/inbox" "$rt/notes" "$rt/prompts"
   for r in dev qe auditor coord; do
     [ -f "$rt/inbox/$r.md" ] || echo "# inbox/$r.md — append-only. Format: <ISO8601> FROM=<role> NEED|READY|NOTE :: <text>" > "$rt/inbox/$r.md"
@@ -567,16 +489,19 @@ print("state: ok (%d key(s) set)" % len(pairs))
 EOF
 }
 
-# $1 name, $2 dir, $3 role json, $4 prompt file, $5 expected branch (empty = skip)
+# $1 name, $2 dir, $3 role NAME, $4 prompt file, $5 expected branch (empty =
+# skip). A role name, never a config path: the fence is rendered from the repo
+# source here, so a caller cannot point a session at an arbitrary config.
 mode_run() {
-  [ $# -ge 4 ] || fail "run needs: <name> <dir> <role.json> <prompt.txt> [branch]"
+  [ $# -ge 4 ] || fail "run needs: <name> <dir> <role> <prompt.txt> [branch]"
   local name="$1"
   local dir="$2"
   local role="$3"
   local prompt="$4"
   local want_branch="${5:-}"
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
-  need_file "$role"; need_file "$prompt"
+  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "run takes a role name (dev|qe|auditor|coordinator), not a config path: '$role'" ;; esac
+  need_file "$prompt"
   [ -d "$dir" ] || fail "workdir missing: $dir"
   check_branch "$dir" "$want_branch"
   run_session "$name" "$dir" "$role" "$prompt"
@@ -585,17 +510,19 @@ mode_run() {
 mode_audit() {
   [ $# -eq 1 ] || fail "audit needs an issue number"
   local rt; rt=$(runtime_dir "$1")
-  need_file "$rt/prompts/auditor.txt"
-  need_file "$ROLES_DIR/auditor.json"
+  # Launch metadata (cwd + prompt file) comes from the role delta, not a
+  # hardcoded path: the auditor reads the dev checkout (diff + files) and never
+  # writes, and the delta is the single statement of that.
+  local dir prompt
+  dir=$(role_dir "$(role_field auditor cwd)")
+  prompt="$rt/prompts/$(role_field auditor prompt)"
+  need_file "$prompt"
   local branch=""
-  if [ -f "$rt/state.json" ]; then
-    branch=$(python3 -c "import json;print(json.load(open('$rt/state.json')).get('audit_branch',''))")
-  fi
-  # Auditor reads the dev checkout (diff + files), never writes: cwd=~/jarvis.
-  mode_run "$AUDIT_SESS" "$DEV_DIR" "$ROLES_DIR/auditor.json" "$rt/prompts/auditor.txt" "$branch"
+  branch=$(read_state "$rt" audit_branch 2>/dev/null || true)
+  mode_run "$AUDIT_SESS" "$dir" auditor "$prompt" "$branch"
 }
 
-# $1 tmux-name, $2 workdir, $3 role json, $4 prompt file
+# $1 tmux-name, $2 workdir, $3 role NAME, $4 prompt file
 # (split locals: bash 3.2 expands all RHS before assigning under set -u)
 run_session() {
   local name="$1"
@@ -603,19 +530,38 @@ run_session() {
   local role="$3"
   local prompt="$4"
   [ -d "$dir" ] || fail "workdir missing: $dir"
-  need_file "$role"; need_file "$prompt"
+  need_file "$prompt"
+  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "unknown role: '$role'" ;; esac
   if tmux has-session -t "$name" 2>/dev/null; then
     fail "tmux session '$name' already exists — refusing to clobber (close it first)"
   fi
+  # install_agents installs the generated subagent definitions into the
+  # session's cwd; render_role_config then re-renders THIS role fresh. Never
+  # trust the file on disk here: a pre-planted or stale config under
+  # $RENDERED_ROOT must never launch (the renderer validates the role and
+  # overwrites with a fresh compose, fail-closed on any error).
+  install_agents "$dir"
+  local cfg; cfg=$(render_role_config "$role")
   tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
   # Env hygiene: role config ONLY from OPENCODE_CONFIG; strip any leaky overrides.
   # TMPDIR pinned inside the fenced namespace (host TMPDIR is per-boot: unfenceable).
+  # NEXIOS_AGENT_ROLE is the launcher's own statement of the role, consumed by
+  # tools/check_no_cross_edits.sh (a config path alone is weaker evidence).
   local tdir; tdir=$(ensure_session_tmpdir "$name")
-  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$role $OPENCODE_BIN" Enter
+  # The launcher hands these to tmux as one space-separated command line and
+  # check_fenced reads them back from `ps eww`; a space inside a value would be
+  # misparsed. Refuse loudly instead of launching something ambiguous.
+  local v
+  for v in "$cfg" "$tdir" "$dir"; do
+    case "$v" in
+      *[[:space:]]*) fail "launch path contains whitespace, which the fenced env line cannot express: '$v'" ;;
+    esac
+  done
+  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$cfg NEXIOS_AGENT_ROLE=$role $OPENCODE_BIN" Enter
   sleep "$TUI_BOOT_WAIT"
-  check_fenced "$name" "$dir" "$role" || {
+  check_fenced "$name" "$dir" "$cfg" "$role" || {
     tmux kill-session -t "$name" 2>/dev/null || true
-    fail "session '$name' launched UNFENCED (config not in process env) — killed, fix before retry"
+    fail "session '$name' launched UNFENCED (config/role/tmpdir not in process env) — killed, fix before retry"
   }
   tmux load-buffer "$prompt"
   tmux paste-buffer -t "$name"
@@ -624,11 +570,14 @@ run_session() {
   info "launched '$name' (fenced, prompt delivered)"
 }
 
-# $1 tmux-name, $2 expected PWD, $3 expected role config
+# $1 tmux-name, $2 expected PWD, $3 expected rendered config, $4 expected role
 # Scoped to the tmux pane's own process tree: dev and auditor share PWD, so a
 # global PWD match can select the sibling's opencode (false UNFENCED + kill).
+# The match set is PWD + OPENCODE_CONFIG + NEXIOS_AGENT_ROLE + TMPDIR: a session
+# that loaded the right file but announced another role (or lost the pinned
+# TMPDIR) is not fenced in the way this launcher promises.
 check_fenced() {
-  local name="$1" want_pwd="$2" want_cfg="$3"
+  local name="$1" want_pwd="$2" want_cfg="$3" want_role="$4"
   local pane pid i found=0 seen=""
   pane=$(tmux list-panes -t "$name" -F '#{pane_pid}' 2>/dev/null | head -1)
   [ -n "$pane" ] || { echo "no tmux pane for '$name'" >&2; return 1; }
@@ -638,76 +587,49 @@ check_fenced() {
     for pid in $(pgrep -P "${pids[$i]}" 2>/dev/null); do pids[${#pids[@]}]="$pid"; done
     i=$((i + 1))
   done
+  local want_tmp="/tmp/agentup-tmp-$name"
   for pid in "${pids[@]}"; do
-    local env="" pwd_v cfg_v
+    local env="" pwd_v cfg_v role_v tmp_v hit=1
     env=$(ps eww -p "$pid" 2>/dev/null) || continue
     case "$env" in *"$OPENCODE_BIN"*) ;; *) continue ;; esac
+    # Decision by substring on the raw environment: exact-value tokens keep the
+    # assertion correct even if a value ever gains quoting/escapes. The
+    # tokenized view is for the diagnostic only.
+    case "$env" in *"PWD=$want_pwd"*) ;; *) hit=0 ;; esac
+    case "$env" in *"OPENCODE_CONFIG=$want_cfg"*) ;; *) hit=0 ;; esac
+    case "$env" in *"NEXIOS_AGENT_ROLE=$want_role"*) ;; *) hit=0 ;; esac
+    case "$env" in *"TMPDIR=$want_tmp"*) ;; *) hit=0 ;; esac
     pwd_v=$(printf '%s\n' "$env" | tr ' ' '\n' | grep "^PWD=" | head -1 || true)
     cfg_v=$(printf '%s\n' "$env" | tr ' ' '\n' | grep "^OPENCODE_CONFIG=" | head -1 || true)
-    seen="${seen}pid $pid pwd=${pwd_v:-?} cfg=${cfg_v:-<unset>}; "
-    [ "$pwd_v" = "PWD=$want_pwd" ] && [ "$cfg_v" = "OPENCODE_CONFIG=$want_cfg" ] && { found=1; break; }
+    role_v=$(printf '%s\n' "$env" | tr ' ' '\n' | grep "^NEXIOS_AGENT_ROLE=" | head -1 || true)
+    tmp_v=$(printf '%s\n' "$env" | tr ' ' '\n' | grep "^TMPDIR=" | head -1 || true)
+    seen="${seen}pid $pid pwd=${pwd_v:-?} cfg=${cfg_v:-<unset>} role=${role_v:-<unset>} tmp=${tmp_v:-<unset>}; "
+    [ "$hit" = 1 ] && { found=1; break; }
   done
   [ "$found" = 1 ] && return 0
-  echo "pane tree of '$name' has no opencode with PWD=$want_pwd + OPENCODE_CONFIG=$want_cfg (saw: ${seen:-<none>})" >&2
+  echo "pane tree of '$name' has no opencode with PWD=$want_pwd + OPENCODE_CONFIG=$want_cfg + NEXIOS_AGENT_ROLE=$want_role + TMPDIR=$want_tmp (saw: ${seen:-<none>})" >&2
   return 1
 }
 
 # ---coordinator (addressable endpoint)-----------------------------------------
-# The repo template carries a literal {repo} token instead of a machine path
-# (relative rules under the coordinator cwd resolve to a shadow file: S3-2R).
-# It is rendered into an out-of-repo resolved config at launch.
-render_coord_config() {
-  need_cmd python3
-  need_file "$COORD_CONFIG_DIR/opencode.json"
-  mkdir -p "$COORD_DIR"
-  local repo_real; repo_real=$(cd "$REPO_ROOT" && pwd -P)
-  python3 - "$COORD_CONFIG_DIR/opencode.json" "$COORD_CONFIG_RESOLVED" "$repo_real" <<'EOF'
-import json, os, sys
-
-
-def die(msg):
-    sys.stderr.write("agent_up: ERROR: %s\n" % msg)
-    sys.exit(1)
-
-
-src, dst, repo = sys.argv[1:4]
-if not os.path.isabs(repo):
-    die("repo root is not absolute: %r" % repo)
-if not os.path.isdir(os.path.join(repo, "prompts")):
-    die("no prompts/ under the repo root %s (wrong checkout?)" % repo)
-try:
-    with open(src) as handle:
-        raw = handle.read()
-except OSError as exc:
-    die("cannot read %s: %s" % (src, exc.strerror or exc))
-if "{repo}" not in raw:
-    die("template has no {repo} token: %s" % src)
-out = raw.replace("{repo}", repo)
-if "{repo}" in out:
-    die("unresolved {repo} token in the rendered config")
-try:
-    json.loads(out)
-except ValueError as exc:
-    die("rendered config is not valid JSON: %s" % exc)
-tmp = dst + ".tmp"
-with open(tmp, "w") as handle:
-    handle.write(out)
-    handle.flush()
-    os.fsync(handle.fileno())
-os.replace(tmp, dst)
-print("agent_up: coordinator config rendered: %s" % dst)
-EOF
-}
-
+# The coordinator fence is a role delta like every other one: `{repo}` tokens
+# are expanded to THIS checkout at render time, so a moved clone cannot leave a
+# stale machine path behind (S3-2R). Rendered path comes from rendered_path().
 coord_tui_cmd() {
-  echo "env -u OPENCODE_CONFIG_CONTENT TMPDIR=$COORD_TMPDIR OPENCODE_CONFIG=$COORD_CONFIG_RESOLVED $OPENCODE_BIN"
+  local v
+  for v in "$COORD_TMPDIR" "$COORD_CONFIG_RESOLVED"; do
+    case "$v" in
+      *[[:space:]]*) fail "coordinator launch path contains whitespace, which the fenced env line cannot express: '$v'" ;;
+    esac
+  done
+  echo "env -u OPENCODE_CONFIG_CONTENT TMPDIR=$COORD_TMPDIR OPENCODE_CONFIG=$COORD_CONFIG_RESOLVED NEXIOS_AGENT_ROLE=coordinator $OPENCODE_BIN"
 }
 
 # ensure nexios-coord tmux session exists running the coordinator TUI.
 ensure_coord_session() {
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
   ensure_state_links
-  render_coord_config
+  render_role_config coordinator >/dev/null
   need_file "$COORD_CONFIG_RESOLVED"
   if tmux has-session -t "$COORD_SESS" 2>/dev/null; then
     # Never trust a session this launch did not create: a pre-fence
@@ -715,7 +637,7 @@ ensure_coord_session() {
     # leaves a running session whose env is not the resolved config. Workers
     # refuse reuse outright; the coordinator kills the stale session so the
     # block below rebuilds it fenced (S4-9: reuse must assert too).
-    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" 2>/dev/null || {
+    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" coordinator 2>/dev/null || {
       tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
     }
   fi
@@ -724,7 +646,7 @@ ensure_coord_session() {
     tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
     tmux send-keys -t "$COORD_SESS" "$(coord_tui_cmd)" Enter
     sleep "$TUI_BOOT_WAIT"
-    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" || {
+    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" coordinator || {
       tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
       fail "coordinator launched UNFENCED (resolved config not in its env) — killed, fix before retry"
     }
@@ -759,12 +681,14 @@ mode_workers() {
   [ $# -eq 1 ] || fail "workers needs an issue number"
   local rt; rt=$(runtime_dir "$1")
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
-  need_file "$rt/prompts/dev.txt"; need_file "$rt/prompts/qe.txt"
-  need_file "$ROLES_DIR/dev.json"; need_file "$ROLES_DIR/qe.json"
+  local dp qp
+  dp="$rt/prompts/$(role_field dev prompt)"
+  qp="$rt/prompts/$(role_field qe prompt)"
+  need_file "$dp"; need_file "$qp"
   check_branch "$DEV_DIR" main
   check_branch "$QE_DIR" testbed
-  run_session "$DEV_SESS" "$DEV_DIR" "$ROLES_DIR/dev.json" "$rt/prompts/dev.txt"
-  run_session "$QE_SESS" "$QE_DIR" "$ROLES_DIR/qe.json" "$rt/prompts/qe.txt"
+  run_session "$DEV_SESS" "$DEV_DIR" dev "$dp"
+  run_session "$QE_SESS" "$QE_DIR" qe "$qp"
 }
 
 # $1 tmux session name — opens a new visible Terminal window attached READ-WRITE
@@ -943,7 +867,8 @@ mode_status() {
     done
     if [ -f "$rt/state.json" ]; then
       echo "--- state.json ---"
-      python3 -c "import json; s=json.load(open('$rt/state.json')); print({k: s.get(k) for k in ('phase','state','retries','retry_budget','halt','pending')})"
+      read_state "$rt" "phase,state,retries,retry_budget,halt,pending" \
+        || echo "(state.json unreadable)"
     fi
   fi
 }
@@ -1047,38 +972,62 @@ mode_self_test() {
   chk() { t=$((t+1)); if "$@" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS: $*"; else echo "FAIL: $*"; fi; }
   chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS (aborts): $*"; fi; }
   # guard aborts (scratch names only — never live sessions)
-  chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /nonexistent "$ROLES_DIR/dev.json" /dev/null || true
+  chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /nonexistent dev /dev/null || true
+  # a role is a NAME: a config path is refused before any render happens
+  chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /tmp dev/opencode.json /dev/null || true
   # msg discipline
   chk_neg "$SCRIPT_DIR/agent_up.sh" msg "agentup-nosuch-$$" "hi" || true
   printf 'two\nlines' > /tmp/agentup-ml-$$.txt || true
   # reconstruct refuses live dir ( Triple-check: uses --copy guard)
   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/nexios-410 || true
   rm -f /tmp/agentup-ml-$$.txt
-  # fence configuration: families byte-identical, mirrors complete, no drift
-  chk python3 "$REPO_ROOT/tools/agents/verify_fence.py"
+  # fence rendering: polarity, determinism, mirrors, {repo}, twins, fail-closed
+  chk "$SCRIPT_DIR/agent_up.sh" render-self-test
+  # ... and the verifier agrees with what the launcher renders (one source)
+  chk python3 "$REPO_ROOT/tools/agents/verify_fence.py" --self-test
   # the coordinator launch command carries the RESOLVED config + pinned TMPDIR
   # (S4-9: the fence assertion is only meaningful if the env is the fenced one)
   local cc; cc=$("$SCRIPT_DIR/agent_up.sh" __coord-cmd)
   chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*coordinator/opencode.resolved.json"' _ "$cc"
   chk bash -c 'printf "%s" "$1" | grep -q "TMPDIR=/tmp/agentup-tmp-"' _ "$cc"
   chk bash -c 'printf "%s" "$1" | grep -q -- "-u OPENCODE_CONFIG_CONTENT"' _ "$cc"
+  chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=coordinator"' _ "$cc"
+  # L1/L2 renderer path + role are derived per role, never hand-passed
+  local dc qc
+  dc=$("$SCRIPT_DIR/agent_up.sh" __run-cmd dev)
+  qc=$("$SCRIPT_DIR/agent_up.sh" __run-cmd qe)
+  chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*/rendered/dev/opencode.resolved.json"' _ "$dc"
+  chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*/rendered/qe/opencode.resolved.json"' _ "$qc"
+  chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=dev"' _ "$dc"
+  chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=qe"' _ "$qc"
+  # L3 traversal / unknown roles are refused before launching
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd ../../../tmp/evil
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd coordinator/../dev
+  # a slash-free but unknown role is refused too (allowlist, not a path heuristic)
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd evil
+  chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /tmp evil /dev/null
+  # ... and the refusal happens BEFORE any filesystem side effect
+  chk_neg test -e "/tmp/agentup-evil-$$"
+  # L4/L5 fence show reads the same source; unknown role aborts
+  chk bash -c "$SCRIPT_DIR/agent_up.sh fence show dev | grep -q '\"bash\": \"allow\"'"
+  chk_neg "$SCRIPT_DIR/agent_up.sh" fence show bogus
   # issue-number canonicality: 0, over-long and leading-zero aliases
   chk_neg "$SCRIPT_DIR/agent_up.sh" setup 0
   chk_neg "$SCRIPT_DIR/agent_up.sh" setup 12345678
-  # out-of-repo policy: a REAL file where a link belongs must hard-fail (drift),
-  # an absent path must be linked, a wrong link must be repointed.
-  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator"
+  # out-of-repo policy: a REAL file where a rendered config belongs hard-fails
+  # (silent adoption of pre-#414 state is forbidden), legacy LINKS are pruned,
+  # and the one surviving link (AGENTS.md) is versioned in-repo.
+  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator" "$st/home/roles"
   printf 'drift\n' > "$st/home/coordinator/opencode.json"
   chk_neg env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
   rm -f "$st/home/coordinator/opencode.json"
-  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
-  chk test -L "$st/home/coordinator/opencode.json"
-  chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
-  chk test -L "$st/home/roles/dev.json"
-  # a WRONG link is repointed, never adopted
+  ln -sfn "$REPO_ROOT/tools/agents/roles/dev.json" "$st/home/roles/dev.json"
   ln -sfn /nonexistent "$st/home/coordinator/opencode.json"
   chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
-  chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
+  chk test -L "$st/home/coordinator/AGENTS.md"
+  chk test "$(readlink "$st/home/coordinator/AGENTS.md")" = "$REPO_ROOT/tools/agents/coordinator/AGENTS.md"
+  chk_neg test -e "$st/home/coordinator/opencode.json"
+  chk_neg test -e "$st/home/roles/dev.json"
   # leading-zero issue numbers canonicalize onto ONE runtime (never alias 410)
   local zcan
   local zraw
@@ -1087,14 +1036,16 @@ mode_self_test() {
   chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup "$zraw"
   chk test -f "/tmp/nexios-$zcan/state.json"
   chk_neg test -e "/tmp/nexios-$zraw"
-  # coordinator config is rendered from the {repo} template, template untouched
-  chk test -f "$st/home/coordinator/opencode.resolved.json"
-  chk grep -q '{repo}' "$COORD_CONFIG_DIR/opencode.json"
-  chk_neg grep -q '{repo}' "$st/home/coordinator/opencode.resolved.json"
+  # every role is rendered by setup; coordinator {repo} keys are expanded
+  local rr
+  for rr in dev qe auditor coordinator; do
+    chk test -f "$st/home/rendered/$rr/opencode.resolved.json"
+  done
+  chk_neg grep -q '{repo}' "$st/home/rendered/coordinator/opencode.resolved.json"
   chk grep -q "$(cd "$REPO_ROOT" && pwd -P)/prompts/LEARNINGS.md" \
-      "$st/home/coordinator/opencode.resolved.json"
+      "$st/home/rendered/coordinator/opencode.resolved.json"
   chk python3 -c "import json,sys; json.load(open(sys.argv[1]))" \
-      "$st/home/coordinator/opencode.resolved.json"
+      "$st/home/rendered/coordinator/opencode.resolved.json"
   # state writer: validated keys/vocabulary, locked, atomic
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
@@ -1167,6 +1118,203 @@ mode_self_test() {
   [ "$pass" = "$t" ] || fail "self-test failures"
 }
 
+# $1 role — print the composed map. Reads the same source the launcher uses, so
+# "what will the agent get" is answerable without launching anything.
+mode_fence_show() {
+  case "${1:-}" in
+    show)
+      [ $# -eq 2 ] || fail "fence show needs a role (dev|qe|auditor|coordinator)"
+      need_cmd python3
+      need_file "$RENDERER"
+      python3 "$RENDERER" --role "$2" --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR"
+      ;;
+    install)
+      need_cmd python3
+      need_file "$RENDERER"
+      local dir="${2:-$REPO_ROOT}"
+      render_all >/dev/null
+      install_agents "$dir"
+      info "agents installed in $dir/.opencode/agents"
+      ;;
+    *) fail "usage: fence show <role> | fence install [dir]" ;;
+  esac
+}
+
+# $1 role — print the exact command run_session sends (self-test + inspection).
+mode_launch_cmd() {
+  [ $# -eq 1 ] || fail "__run-cmd needs a role"
+  case "$1" in dev|qe|auditor|coordinator) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|coordinator), got '$1'" ;; esac
+  local cfg
+  cfg=$(render_role_config "$1")
+  printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=/tmp/agentup-tmp-agentup-probe OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s\n' \
+    "$cfg" "$1" "$OPENCODE_BIN"
+}
+
+# Renderer/verifier matrix. No tmux, no opencode, no $NEXIOS_HOME: everything
+# lands in a scratch dir, so this is safe in CI and in a live session.
+mode_render_self_test() {
+  local t=0 pass=0
+  chk() { t=$((t+1)); if "$@" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS: $*"; else echo "FAIL: $*"; fi; }
+  chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS (aborts): $*"; fi; }
+  local st
+  st=$(mktemp -d /tmp/agentup-render-XXXXXX)
+  local out="$st/out" tw="$st/twins"
+  mkdir -p "$out" "$tw"
+
+  cfg_val() {  # $1 file, $2 section, $3 key
+    python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["permission"][sys.argv[2]].get(sys.argv[3],""))' "$@"
+  }
+  mirrors_ok() {
+    python3 - "$1" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1]))["permission"]
+for sect in ("external_directory", "edit"):
+    m = p[sect]
+    for k in list(m):
+        if k.startswith("/tmp/"):
+            assert m.get("/private" + k) == m[k], (sect, k)
+        elif k.startswith("/private/tmp/"):
+            assert m.get(k[len("/private"):]) == m[k], (sect, k)
+PY
+  }
+  no_host_tmp() { ! grep -q '/var/folders' "$1"; }
+  coord_ok() {
+    python3 - "$1" "$REPO_ROOT" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+repo = sys.argv[2]
+assert "mcp" in cfg and "github" in cfg["mcp"], "mcp lost"
+edit = cfg["permission"]["edit"]
+ext = cfg["permission"]["external_directory"]
+repos = {k: v for k, v in list(edit.items()) + list(ext.items()) if k.startswith(repo)}
+assert set(repos) == {repo + "/prompts/LEARNINGS.md", repo + "/prompts/**",
+                      repo + "/audits/**"}, repos
+assert all(v == "allow" for v in repos.values())
+PY
+  }
+  worker_ok() {  # $1 file, $2 repo
+    python3 - "$1" "$2" <<'PY'
+import json, sys
+text = open(sys.argv[1]).read()
+assert "{repo}" not in text, "template token leaked"
+assert sys.argv[2] + "/prompts" not in text, "worker carries a repo path"
+PY
+  }
+  twin_ok() {  # $1 twin file, $2 rendered config
+    python3 - "$1" "$2" <<'PY'
+import json, sys
+lines = open(sys.argv[1]).read().splitlines()
+cfg = json.load(open(sys.argv[2]))["permission"]
+assert lines[0] == "---" and "---" in lines[1:], "twin frontmatter missing"
+maps, sect = {"external_directory": {}, "edit": {}}, None
+for line in lines[1:]:
+    if line == "---":
+        break
+    if line == "  external_directory:":
+        sect = "external_directory"
+    elif line == "  edit:":
+        sect = "edit"
+    elif line.startswith("    ") and sect:
+        k, _, v = line.strip().partition(": ")
+        maps[sect][json.loads(k)] = v
+assert maps["external_directory"] == cfg["external_directory"], "external drift"
+assert maps["edit"] == cfg["edit"], "edit drift"
+PY
+  }
+  fixture() {  # $1 name -> fence dir with an independent copy of the sources
+    local d="$st/fx/$1"
+    mkdir -p "$d/roles"
+    cp "$FENCE_DIR/base.json" "$d/base.json"
+    cp "$FENCE_DIR"/roles/*.json "$d/roles/"
+    printf '%s\n' "$d"
+  }
+  mutate() {  # $1 json file, $2 python statements over `d`
+    python3 - "$1" "$2" <<'PY'
+import json, sys
+path, code = sys.argv[1], sys.argv[2]
+d = json.load(open(path))
+exec(code)
+with open(path, "w") as h:
+    json.dump(d, h, indent=2)
+PY
+  }
+  render() {
+    local role="$1" out="$2"; shift 2
+    python3 "$RENDERER" --role "$role" --out "$out" --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR" "$@"
+  }
+
+  # R1-R4 role polarity + validity
+  local r f
+  for r in dev qe auditor coordinator; do
+    f="$out/$r/opencode.resolved.json"
+    chk render "$r" "$f" --twins-out "$out/$r"
+    chk test -s "$f"
+    case "$r" in
+      dev) chk test "$(cfg_val "$f" edit '*')" = allow ;;
+      *)   chk test "$(cfg_val "$f" edit '*')" = deny ;;
+    esac
+  done
+  # R5 determinism, R6 role isolation
+  chk render dev "$st/again/opencode.resolved.json"
+  chk cmp -s "$out/dev/opencode.resolved.json" "$st/again/opencode.resolved.json"
+  local hashes
+  if command -v sha256sum >/dev/null 2>&1; then
+    hashes=$(sha256sum "$out"/*/opencode.resolved.json | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
+  else
+    hashes=$(shasum -a 256 "$out"/*/opencode.resolved.json | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
+  fi
+  chk test "$hashes" = 4
+  # R7 mirrors, R8 host TMPDIR, R9 coordinator keys, R10 worker purity
+  for r in dev qe auditor coordinator; do
+    chk mirrors_ok "$out/$r/opencode.resolved.json"
+    chk no_host_tmp "$out/$r/opencode.resolved.json"
+  done
+  chk coord_ok "$out/coordinator/opencode.resolved.json"
+  for r in dev qe auditor; do
+    chk worker_ok "$out/$r/opencode.resolved.json" "$REPO_ROOT"
+  done
+  # R11 generated twins match their rendered map
+  chk twin_ok "$out/dev/nexios-dev.md" "$out/dev/opencode.resolved.json"
+  chk twin_ok "$out/qe/nexios-qe.md" "$out/qe/opencode.resolved.json"
+  chk twin_ok "$out/auditor/nexios-audit.md" "$out/auditor/opencode.resolved.json"
+  chk_neg test -e "$out/coordinator/nexios-coordinator.md"
+
+  # N1-N13 fail-closed probes
+  chk_neg python3 "$RENDERER" --role bogus --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR"
+  local d
+  d=$(fixture n2); rm -f "$d/roles/qe.json"
+  chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n3); mutate "$d/roles/dev.json" 'd["edit_deny"].append("{repo}/src/x")'
+  chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n4); mutate "$d/roles/coordinator.json" 'd["edit_allow"].append("prompts/LEARNINGS.md")'
+  chk_neg python3 "$RENDERER" --role coordinator --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n5); mutate "$d/roles/dev.json" 'd["external_allow"].append("/tmp/nexios-*")'
+  chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n6); mutate "$d/roles/qe.json" 'd["edit_deny"].append("/tmp/jarvis-*")'
+  chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n7); mutate "$d/roles/qe.json" 'd["role"] = "dev"'
+  chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n8); mutate "$d/roles/dev.json" 'd["edit_deny_extra"] = []'
+  chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  chk_neg python3 "$RENDERER" --role dev --out "$REPO_ROOT/.render-probe.json" --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR"
+  printf 'x\n' > "$st/regular"
+  chk_neg python3 "$RENDERER" --role dev --out "$st/regular/x.json" --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR"
+  d=$(fixture n11); mutate "$d/base.json" 'd["namespaces"].append({"root": "/private/tmp/x", "decision": "allow"})'
+  chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n12); mutate "$d/roles/qe.json" 'd.pop("edit_default")'
+  chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n13); mutate "$d/roles/auditor.json" 'd["edit_allow"].append("*")'
+  chk_neg python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n14); mutate "$d/roles/dev.json" 'd["edit_allow"].append("/etc/cron.d/x")'
+  chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n15); mutate "$d/roles/qe.json" 'd["external_allow"].append("/private/tmp/agentup-*")'
+  chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
+
+  rm -rf "$st"
+  echo "render-self-test: $pass/$t PASS"
+  [ "$pass" = "$t" ] || fail "render-self-test failures"
+}
+
 mode_approve() {
   [ $# -eq 1 ] || fail "approve needs a tmux session name"
   tmux has-session -t "$1" 2>/dev/null || fail "no such tmux session: $1"
@@ -1212,7 +1360,10 @@ case "$mode" in
   comms-test) mode_comms_test "$@" ;;
   status) mode_status "$@" ;;
   self-test) mode_self_test "$@" ;;
+  render-self-test) mode_render_self_test "$@" ;;
+  fence) mode_fence_show "$@" ;;
   __check-clean-tree) mode_check_clean_tree "$@" ;;
+  __run-cmd) mode_launch_cmd "$@" ;;
   __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;

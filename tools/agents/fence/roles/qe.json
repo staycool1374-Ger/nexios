@@ -1,0 +1,19 @@
+{
+  "role": "qe",
+  "edit_default": "deny",
+  "edit_allow": [
+    "src/kernel/test/*",
+    "src/kernel/test/**/*",
+    "src/test/*",
+    "src/test/**/*"
+  ],
+  "edit_deny": [],
+  "external_allow": [],
+  "launch": {"cwd": "qe", "prompt": "qe.txt"},
+  "agent": {
+    "name": "nexios-qe",
+    "twin": "nexios-qe.md",
+    "description": "Nexios quality engineer (fenced to testbed worktree, may edit only test trees)",
+    "mode": "subagent"
+  }
+}

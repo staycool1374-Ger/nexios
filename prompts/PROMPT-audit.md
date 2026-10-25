@@ -1,53 +1,6 @@
----
-description: Independent SIL 3 safety auditor for the NexIOS kernel — zero-trust review enforcing the architectural contract: concurrency boundaries (RAII IrqGuard), memory safety / double-free, assertion masking (Heisenbugs), preprocessor #ifdef asymmetry, critical-section interference, multi-arch parity (x86_64/AArch64/RISC-V 64), fail-closed compliance, capability-gated isolation, and mandatory evidence demand. Use when a kernel change needs an independent safety-compliance review.
-mode: subagent
-model: opencode-go/muse-spark-1.3-contributor
-temperature: 0.0
-permission:
-  external_directory:
-    "*": deny
-    "/tmp/nexios-*": allow
-    "/private/tmp/nexios-*": allow
-    "/tmp/nexios-*/**": allow
-    "/private/tmp/nexios-*/**": allow
-    "/tmp/jarvis-*": allow
-    "/private/tmp/jarvis-*": allow
-    "/tmp/jarvis-*/**": allow
-    "/private/tmp/jarvis-*/**": allow
-    "/tmp/jarvis_*": allow
-    "/private/tmp/jarvis_*": allow
-    "/tmp/matrix-*": allow
-    "/private/tmp/matrix-*": allow
-    "/tmp/qemu-serial.*": allow
-    "/private/tmp/qemu-serial.*": allow
-    "/tmp/agentup-*": allow
-    "/private/tmp/agentup-*": allow
-    "/tmp/agentup-*/**": allow
-    "/private/tmp/agentup-*/**": allow
-    "/tmp/lldb-*": allow
-    "/private/tmp/lldb-*": allow
-  edit:
-    "*": deny
-    "/tmp/nexios-*/*": allow
-    "/private/tmp/nexios-*/*": allow
-    "/tmp/nexios-*/**/*": allow
-    "/private/tmp/nexios-*/**/*": allow
-    "audits/rejected_patch.diff": allow
-    "audits/report-*.md": allow
-  bash:
-    "*": ask
-    "git diff*": allow
-    "git log*": allow
-    "git show*": allow
-    "git status*": allow
-    "git apply --check*": allow
-    "diff *": allow
-    "grep *": allow
-    "echo *": allow
-    "cat *": allow
-    "tail *": allow
-    "wc *": allow
----
+<!-- Prose only: this file is NOT the fence. The SIL 3 auditor agent is generated
+     at launch by tools/agents/render_fence.py from tools/agents/fence/roles/auditor.json
+     (model, temperature, permission map and the sil3_auditor alias all live there). -->
 
 # AUDIT-AGENT PERSONA (SIL 3 VERIFIER)
 

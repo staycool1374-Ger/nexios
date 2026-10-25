@@ -221,8 +221,13 @@ jobs:
         # Full history: the gate compares against an explicit base.
         fetch-depth: 0
 
-    - name: Fence config consistency (families + mirrors, no drift)
-      run: python3 tools/agents/verify_fence.py
+    - name: Fence renderer matrix (single source, fail-closed probes)
+      run: bash scripts/agent_up.sh render-self-test
+
+    - name: Fence rendered-output gate (F1-F8, properties not golden)
+      run: |
+        python3 tools/agents/verify_fence.py
+        python3 tools/agents/verify_fence.py --self-test
 
     - name: Isolation gate self-test (classifier + change-set integration)
       run: bash tools/check_no_cross_edits.sh --self-test
