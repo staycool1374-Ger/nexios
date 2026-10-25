@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": "allow",
+    "external_directory": {
+      "*": "deny",
+      "/tmp/nexios-*": "allow",
+      "/tmp/nexios-*/**": "allow",
+      "/tmp/jarvis-*": "allow",
+      "/tmp/jarvis-*/**": "allow",
+      "/tmp/jarvis_*": "allow",
+      "/tmp/matrix-*": "allow",
+      "/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow"
+    },
+    "edit": {
+      "*": "allow",
+      "tools/agents/roles/*": "deny",
+      "tools/agents/roles/**/*": "deny",
+      "src/kernel/test/*": "deny",
+      "src/kernel/test/**/*": "deny",
+      "src/test/*": "deny",
+      "src/test/**/*": "deny"
+    }
+  }
+}

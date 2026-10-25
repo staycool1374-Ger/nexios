@@ -6,9 +6,10 @@ temperature: 0.0
 permission:
   edit:
     "*": deny
-    "/tmp/*": allow
-    "/Users/arnold/jarvis/audits/rejected_patch.diff": allow
-    "/Users/arnold/jarvis/audits/report-*.md": allow
+    "/tmp/nexios-*/*": allow
+    "/tmp/nexios-*/**/*": allow
+    "audits/rejected_patch.diff": allow
+    "audits/report-*.md": allow
   bash:
     "*": ask
     "git diff*": allow
@@ -88,7 +89,7 @@ paths before code is accepted.
   the current worktree). The developer applies it verbatim. Keep prose minimal; the
   patch IS the fix.
 - You have write access ONLY to your own artifacts (`audits/rejected_patch.diff`
-  and `audits/report-*.md`, plus `/tmp` scratch). All kernel, tooling, and
+  and `audits/report-*.md`, plus the `/tmp/nexios-*` mailbox scratch). All kernel, tooling, and
   docs paths are READ-ONLY to you — never edit, create, or delete code;
   corrections travel exclusively via `rejected_patch.diff`.
   You are NOT permitted to run tests (`qemu_test.py`, `gdb_run.py`,
