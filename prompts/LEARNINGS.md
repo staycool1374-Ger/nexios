@@ -15,7 +15,7 @@
 - Byte-identity via per-function objdump diff (totals mislead); always_inline hot helpers; #ifndef + value #error as a pair; GAS needs `msr daifset, #n` (#309b).
 - Fences are policy data with no permission `include`: ONE base + per-role delta rendered at launch, never copies (a verifier is only the second half — prove it green→red→green); a block-less agent file inherits the caller's map, so generated subagents carry their own cage; re-render and allowlist roles at launch (never trust on-disk config), confine delta paths to declared namespaces, assert the fence on REUSE too, and remember `edit` never covers shell redirection — the post-hoc diff gate is the remaining control (#410/#412/#414).
 - Fence allows are canonical-path matches: mirror every `/tmp` rule as `/private/tmp` (macOS `/tmp` symlink), and prove fences with a tool-only write probe naming tool-vs-bash, never a config dump (#410).
-- Post-edit grep every site after repeated-pattern edits (replaceAll missed the differently-indented handle_irq drain — auditor S2, #307).
+- Post-edit grep every site after repeated-pattern edits (replaceAll missed the differently-indented handle_irq drain — auditor S2, #307). Unquoted heredocs EXECUTE: a backtick in `usage()` ran `git diff`/`git add -N` on every help print — quote the heredoc or use plain quotes (#415).
 - x86 trap regs[17]=RIP [18]=CS [19]=RFLAGS [20]=RSP(user-only): CS-gate SP; new .cpp needs gen.mk regen; GAS: `msr daifset, #2`; test TUs compile in release so CONFIG_DEBUG seam users must be guarded (#308).
 - Single-asm stack-save for GPR dumps (multi-block mov corrupts); exc_table is x86-only; release 0/0 rows are link-boot, not coverage (#306).
 - Work-begun retrieval comment BEFORE implementing (iter-1 REJECT was procedural check-7 with zero code findings); `init` is not a class (`task_init` is) (#305).
@@ -85,6 +85,12 @@
 ```
 
 ## Entries
+
+### #415 — issue-optional launch: let the room open, then tell the coordinator (CLOSED 2026-10-25, SIL3 iter-2 APPROVED)
+
+- **Learned:** (1) Launcher ceremony decides whether a workflow gets used: requiring an issue number + two pre-written briefs before the first window appears inverts how work actually starts (an idea, or an issue found while reading). Make the entry point ceremony-free — bare `up` opens the fenced room and the *coordinator* materializes the runtime once the operator names an issue or an idea. (2) Optional inputs must not become optional gates: the no-issue path may skip the paste and the briefs, never the render or the `check_fenced` assertion; `runtime_dir` stays the single validator and every arity guard runs before `need_cmd`/render/tmux/`mkdir`. (3) Ambiguity is a defect: a non-numeric first argument is refused with a hint ("run bare `up` and type the idea"), never silently reinterpreted as an idea/task. (4) Docs that say "ONLY creator" must survive a grep: `comms-test` legitimately mkdirs its own scratch under the same prefix, so the claim was false and the auditor caught it — state the carve-out. (5) Plan discipline: the first plan solved a bigger problem than the ask (bootstrap text in the fence deltas, 18 tests); the owner's "it's just an invocation" was correct and the shipped change was ~100 net lines. Cut scope BEFORE implementing, not after.
+- **Adapted:** `scripts/agent_up.sh` (`run_session` brief optional; `mode_workers [issue]`; `mode_up [issue] ["task"]` with arity + `runtime_dir` validation; self-test-only `__room-plan` + 9 checks); `tools/agents/coordinator/AGENTS.md` "Cold start" section (setup → write briefs → ring → state, and never re-run `up`/`workers` for a live room); `usage()` heredoc backticks removed.
+- **Style re-surface:** fail closed before side effects with one actionable line; ambiguity gets an explicit error plus the correct command; every claim in doctrine must be grep-verifiable; document the deviation instead of silently dropping an acceptance criterion.
 
 ### #414 — single fence source, rendered at launch (CLOSED 2026-10-25, SIL3 iter-2 APPROVED)
 
