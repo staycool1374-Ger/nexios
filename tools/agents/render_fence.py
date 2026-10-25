@@ -26,7 +26,7 @@ from typing import Any, NoReturn
 
 ROLES = ("dev", "qe", "auditor", "coordinator")
 BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
-NS_KEYS = {"root", "decision", "external_variants", "edit_variants"}
+NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
 DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
               "external_allow", "launch", "agent", "config_extra"}
 LAUNCH_KEYS = {"cwd", "prompt"}
@@ -108,6 +108,13 @@ def validate_base(base):
         expect(not root.startswith("/private"), "namespace %r is already mirrored" % root)
         expect("**" not in root, "namespace root may not contain '**': %r" % root)
         expect(ns.get("decision") in POLARITY, "namespace %r decision invalid" % root)
+        roles = ns.get("roles")
+        if roles is not None:
+            expect(isinstance(roles, list) and roles,
+                   "namespace %r roles must be a non-empty list" % root)
+            for name in roles:
+                expect(name in ROLES,
+                       "namespace %r scopes unknown role %r" % (root, name))
         for field in ("external_variants", "edit_variants"):
             if field in ns:
                 variants = ns[field]
@@ -192,12 +199,20 @@ def validate_delta(delta, role):
         expect(isinstance(delta["config_extra"], dict), "config_extra must be an object")
 
 
+def ns_applies(ns, role):
+    """A namespace may be scoped to specific roles (default: every role)."""
+    roles = ns.get("roles")
+    return roles is None or role in roles
+
+
 def compose(base, delta, repo, role):
     out = {"$schema": base["$schema"]}
     permission = {"bash": base["bash"]}
 
     ext = {"*": base["external_default"]}
     for ns in base["namespaces"]:
+        if not ns_applies(ns, role):
+            continue
         for variant in ns.get("external_variants", [""]):
             pattern = ns["root"] + variant
             put(ext, pattern, ns["decision"], "base namespace")
@@ -208,6 +223,8 @@ def compose(base, delta, repo, role):
 
     edit = {"*": delta["edit_default"]}
     for ns in base["namespaces"]:
+        if not ns_applies(ns, role):
+            continue
         for variant in ns.get("edit_variants", []):
             pattern = ns["root"] + variant
             put(edit, pattern, ns["decision"], "base edit namespace")

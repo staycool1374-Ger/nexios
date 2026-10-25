@@ -75,11 +75,35 @@ cross-edit gate therefore does NOT forbid fence edits by a dev change set: the
 sanctioned way to change a fence is a deliberate, reviewable edit, and the gate
 would otherwise block the maintenance path the owner kept open.
 
+## Role-scoped namespaces
+
+A base namespace may carry `"roles": [...]`; it is then composed into those
+roles only (no `roles` key = every role). This is how the auditor's `/tmp/*`
+scratch exists without granting a blanket `/tmp` to the workers:
+`compose()` skips non-matching entries and `verify_fence` F5 applies the same
+filter, so a `/tmp/*` rule appearing in a worker's map is still a failure.
+
+## The auditor's shell is the boundary, not its edit map
+
+The auditor keeps `edit_default: deny` (it writes only `audits/rejected_patch.diff`
+and `audits/report-*.md`) and needs no MCP. Its bash map is intentionally broad —
+`bash *`, `python3 *`, `git apply *`, `sed *`, `cp *`, `mkdir *` — because
+reviewing a patch means reproducing builds, diffs and scratch harnesses. That
+means the `edit` map no longer bounds what the auditor can touch: the shell can
+reach the repo. The controls that remain are the ones that actually apply:
+
+- `audits/rejected_patch.diff` is the only sanctioned output; the developer
+  applies it, never the auditor (`PROMPT-audit.md`).
+- `tools/check_no_cross_edits.sh` reviews a change set, so an auditor that
+  modified a source file is visible in `git diff` and in the audit report the
+  developer reads before applying anything.
+- `tmux ls*` is allowed for room inspection; no session-attach rights.
+
 ## Verification
 
 ```
-scripts/agent_up.sh render-self-test    # 46 checks: polarity, mirrors, determinism,
-                                        # {repo}, twins, and 15 fail-closed probes
+scripts/agent_up.sh render-self-test    # 50 checks: polarity, mirrors, determinism,
+                                        # {repo}, twins, and 17 fail-closed probes
 scripts/agent_up.sh fence show <role>   # the composed map, without launching
 python3 tools/agents/verify_fence.py    # rendered-output properties (F1-F8)
 python3 tools/agents/verify_fence.py --self-test

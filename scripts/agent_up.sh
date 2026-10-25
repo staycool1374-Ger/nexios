@@ -1369,6 +1369,18 @@ PY
   chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
   d=$(fixture n15); mutate "$d/roles/qe.json" 'd["external_allow"].append("/private/tmp/agentup-*")'
   chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  # role-scoped namespaces: the auditor's /tmp scratch must not leak to workers
+  d=$(fixture n16); mutate "$d/base.json" 'd["namespaces"].append({"root": "/tmp/*", "decision": "allow", "roles": ["nobody"], "external_variants": [""]})'
+  chk_neg python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n17); mutate "$d/base.json" 'd["namespaces"].append({"root": "/tmp/*", "decision": "allow", "roles": []})'
+  chk_neg python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$d"
+
+  # auditor-only /tmp scratch: present for the auditor, absent for every worker
+  local au dv
+  au=$(python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR")
+  dv=$(python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR")
+  chk bash -c 'printf "%s" "$1" | grep -q "\"/tmp/\*\": \"allow\""' _ "$au"
+  chk_neg bash -c 'printf "%s" "$1" | grep -q "\"/tmp/\*\": \"allow\""' _ "$dv"
 
   rm -rf "$st"
   echo "render-self-test: $pass/$t PASS"

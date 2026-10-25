@@ -1,221 +1,259 @@
 diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
-index 84d3e83bf..28f9adad5 100755
+index 28f9adad5..e15091ec3 100755
 --- a/scripts/agent_up.sh
 +++ b/scripts/agent_up.sh
-@@ -81,13 +81,16 @@ usage: agent_up.sh <mode> [...]
-   coord [taskfile]   ensure $COORD_SESS tmux session (cwd=coordinator home,
-                      env scrubbed) running the coordinator TUI; attach to it.
-                      Optional taskfile is pasted as the first message.
--  workers <issue>    launch $DEV_SESS + $QE_SESS (detached tmux; needs
--                     prompts/dev.txt + prompts/qe.txt in the coord runtime).
--  up <issue> ["task"] FULL ROOM from one zsh command: setup + workers + three
--                     visible Terminal windows (read-write mirrors; read-only
--                     mirrors block ALL tmux input including doorbells) + coordinator
--                     in tmux ($COORD_SESS) with the task pasted as its first
--                     message. Pass a taskfile path or literal task text.
-+  workers [issue]    launch $DEV_SESS + $QE_SESS (detached tmux). With an issue
-+                     they get prompts/dev.txt + prompts/qe.txt from the coord
-+                     runtime; without one they start bare and wait for a ring.
-+  up [issue] ["task"] FULL ROOM from one zsh command: setup (only if an issue is
-+                     given) + workers + three visible Terminal windows
-+                     (read-write mirrors; read-only mirrors block ALL tmux input
-+                     including doorbells) + coordinator in tmux ($COORD_SESS)
-+                     with the task pasted as its first message. Bare 'up' opens
-+                     the room: type the issue number or your idea into the
-+                     coordinator window; it runs setup and briefs the workers.
-   run ...            launch ONE session: run <name> <dir> <role> <prompt.txt> [branch]
-                      <role> is dev|qe|auditor|coordinator — the fence for it is
-                      rendered from tools/agents/fence/ at launch (never a path).
-@@ -96,7 +99,7 @@ usage: agent_up.sh <mode> [...]
-                      write the audit diff to audits/pending_patch.diff
-                      (base defaults to merge-base main <branch>; must be
-                      non-empty). Run in the dev checkout. Brand-new files are
--                     invisible to `git diff <base>`: `git add -N` them first.
-+                     invisible to 'git diff <base>': 'git add -N' them first.
-   qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
-                      abort-on-conflict restores code state. Run in QE checkout.
-   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
-@@ -531,7 +534,7 @@ run_session() {
-   local role="$3"
-   local prompt="$4"
-   [ -d "$dir" ] || fail "workdir missing: $dir"
--  need_file "$prompt"
-+  [ -z "$prompt" ] || need_file "$prompt"
-   case "$role" in dev|qe|auditor|coordinator) ;; *) fail "unknown role: '$role'" ;; esac
-   if tmux has-session -t "$name" 2>/dev/null; then
-     fail "tmux session '$name' already exists — refusing to clobber (close it first)"
-@@ -564,11 +567,15 @@ run_session() {
-     tmux kill-session -t "$name" 2>/dev/null || true
-     fail "session '$name' launched UNFENCED (config/role/tmpdir not in process env) — killed, fix before retry"
-   }
--  tmux load-buffer "$prompt"
--  tmux paste-buffer -t "$name"
--  sleep 2
--  tmux send-keys -t "$name" Enter
--  info "launched '$name' (fenced, prompt delivered)"
-+  if [ -n "$prompt" ]; then
-+    tmux load-buffer "$prompt"
-+    tmux paste-buffer -t "$name"
-+    sleep 2
-+    tmux send-keys -t "$name" Enter
-+    info "launched '$name' (fenced, prompt delivered)"
-+  else
-+    info "launched '$name' (fenced, no brief yet — the coordinator rings it)"
-+  fi
- }
- 
- # $1 tmux-name, $2 expected PWD, $3 expected rendered config, $4 expected role
-@@ -678,14 +685,19 @@ mode_coord() {
- }
- 
- # ---modes----------------------------------------------------------------------
-+# workers [issue] — without an issue the sessions start bare (no brief): the
-+# coordinator writes the briefs after setup and rings each worker. Briefs are
-+# only required when an issue was named, so a no-issue room creates no runtime.
- mode_workers() {
--  [ $# -eq 1 ] || fail "workers needs an issue number"
--  local rt; rt=$(runtime_dir "$1")
-+  [ $# -le 1 ] || fail "workers takes at most one issue number (got $#)"
-   need_cmd tmux; need_cmd "$OPENCODE_BIN"
--  local dp qp
--  dp="$rt/prompts/$(role_field dev prompt)"
--  qp="$rt/prompts/$(role_field qe prompt)"
--  need_file "$dp"; need_file "$qp"
-+  local dp="" qp=""
-+  if [ $# -eq 1 ]; then
-+    local rt; rt=$(runtime_dir "$1")
-+    dp="$rt/prompts/$(role_field dev prompt)"
-+    qp="$rt/prompts/$(role_field qe prompt)"
-+    need_file "$dp"; need_file "$qp"
-+  fi
-   check_branch "$DEV_DIR" main
-   check_branch "$QE_DIR" testbed
-   run_session "$DEV_SESS" "$DEV_DIR" dev "$dp"
-@@ -702,13 +714,20 @@ open_watch_window() {
- 
- # Full room from one zsh command: setup + workers + visible watch mirrors +
- # coordinator in tmux (addressable doorbell endpoint) with the task pasted.
-+# up [issue] ["task"] — the issue is optional: `up` alone opens the room and
-+# you type the issue number or your idea into the coordinator window.
- mode_up() {
--  [ $# -ge 1 ] || fail "up needs an issue number: up <issue> [taskfile-or-task]"
--  local issue="$1"
--  local task="${2:-}"
--  mode_setup "$issue"
--  local rt; rt=$(runtime_dir "$issue")
--  mode_workers "$issue"
-+  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
-+  local issue="" task=""
-+  if [ $# -ge 1 ]; then
-+    # runtime_dir is the validator: a non-numeric first argument is an error,
-+    # never an "idea" (use bare `up` and type the idea in the coordinator window).
-+    runtime_dir "$1" >/dev/null
-+    issue="$1"
-+    task="${2:-}"
-+    mode_setup "$issue"
-+  fi
-+  mode_workers ${issue:+"$issue"}
-   ensure_coord_session
-   open_watch_window "$DEV_SESS"
-   open_watch_window "$QE_SESS"
-@@ -728,8 +747,12 @@ EOF
-       mode_coord "$tf"
-       rm -f "$tf"
-     fi
--  else
-+  elif [ -n "$issue" ]; then
-     echo "(no task given — attach and paste: 'You are nexios-coord. Read AGENTS.md. Report readiness.')"
-+  else
-+    echo "(no issue selected — no runtime created. In the coordinator window type the"
-+    echo " issue number or your idea; it runs 'setup <n>', writes both briefs and rings"
-+    echo " the workers: 'agent_up.sh msg nexios-dev \"inbox: brief ready\"')"
-   fi
- }
- 
-@@ -982,6 +1005,24 @@ mode_self_test() {
-   # reconstruct refuses live dir ( Triple-check: uses --copy guard)
-   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/nexios-410 || true
-   rm -f /tmp/agentup-ml-$$.txt
-+  # issue-optional room: bare `up` opens three sessions with no runtime/briefs
-+  local rp
-+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan)
-+  chk bash -c 'printf "%s" "$1" | grep -qx "issue=none"' _ "$rp"
-+  chk bash -c 'printf "%s" "$1" | grep -qx "dev_prompt=none"' _ "$rp"
-+  chk bash -c 'printf "%s" "$1" | grep -qx "sessions=nexios-dev,nexios-qe,nexios-coord"' _ "$rp"
-+  # ... with an issue the briefs come from the runtime (and only then are required)
-+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 4199999)
-+  chk bash -c 'printf "%s" "$1" | grep -qx "dev_prompt=/tmp/nexios-4199999/prompts/dev.txt"' _ "$rp"
-+  chk bash -c 'printf "%s" "$1" | grep -qx "issue=4199999"' _ "$rp"
-+  # one canonical issue number: 04199999 addresses the same runtime
-+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 04199999)
-+  chk bash -c 'printf "%s" "$1" | grep -qx "issue=4199999"' _ "$rp"
-+  # an idea is never mistaken for an issue, and arity is capped
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan notanissue
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 4199999 a b
-+  # planning a room never materialises a runtime
-+  chk_neg test -e /tmp/nexios-4199999
-   # fence rendering: polarity, determinism, mirrors, {repo}, twins, fail-closed
-   chk "$SCRIPT_DIR/agent_up.sh" render-self-test
-   # ... and the verifier agrees with what the launcher renders (one source)
-@@ -1142,6 +1183,24 @@ mode_fence_show() {
- }
- 
- # $1 role — print the exact command run_session sends (self-test + inspection).
-+# self-test only: resolve what `up` would do, without tmux/opencode/render.
-+mode_room_plan() {
-+  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
-+  local issue="" task="" dp="" qp=""
-+  if [ $# -ge 1 ]; then
-+    local rt; rt=$(runtime_dir "$1")
-+    issue="${rt##*/nexios-}"
-+    if [ $# -eq 2 ]; then
-+      if [ -f "$2" ]; then task=file; else task=text; fi
-+    fi
-+    dp="$rt/prompts/$(role_field dev prompt)"
-+    qp="$rt/prompts/$(role_field qe prompt)"
-+  fi
-+  printf 'issue=%s\ntask=%s\ndev_prompt=%s\nqe_prompt=%s\nsessions=%s,%s,%s\n' \
-+    "${issue:-none}" "${task:-none}" "${dp:-none}" "${qp:-none}" \
-+    "$DEV_SESS" "$QE_SESS" "$COORD_SESS"
-+}
+@@ -1369,6 +1369,18 @@ PY
+   chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
+   d=$(fixture n15); mutate "$d/roles/qe.json" 'd["external_allow"].append("/private/tmp/agentup-*")'
+   chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
++  # role-scoped namespaces: the auditor's /tmp scratch must not leak to workers
++  d=$(fixture n16); mutate "$d/base.json" 'd["namespaces"].append({"root": "/tmp/*", "decision": "allow", "roles": ["nobody"], "external_variants": [""]})'
++  chk_neg python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$d"
++  d=$(fixture n17); mutate "$d/base.json" 'd["namespaces"].append({"root": "/tmp/*", "decision": "allow", "roles": []})'
++  chk_neg python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$d"
 +
- mode_launch_cmd() {
-   [ $# -eq 1 ] || fail "__run-cmd needs a role"
-   case "$1" in dev|qe|auditor|coordinator) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|coordinator), got '$1'" ;; esac
-@@ -1365,6 +1424,7 @@ case "$mode" in
-   fence) mode_fence_show "$@" ;;
-   __check-clean-tree) mode_check_clean_tree "$@" ;;
-   __run-cmd) mode_launch_cmd "$@" ;;
-+  __room-plan) mode_room_plan "$@" ;;
-   __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
-   approve) mode_approve "$@" ;;
-   close) mode_close "$@" ;;
-diff --git a/tools/agents/coordinator/AGENTS.md b/tools/agents/coordinator/AGENTS.md
-index 57ca8934a..e4dbb29b9 100644
---- a/tools/agents/coordinator/AGENTS.md
-+++ b/tools/agents/coordinator/AGENTS.md
-@@ -6,7 +6,7 @@ Role: own workflow transitions. You never write, build, or test kernel code —
- - Workflow state: `/tmp/nexios-<issue>/state.json`. Single writer (you). Guard state-modifying steps with the python3-fcntl helper (no flock binary on macOS).
- - Mailbox: `/tmp/nexios-<issue>/inbox/<dev|qe|auditor>.md`. Append-only, one line per message: `<ISO8601> FROM=<role> NEED|READY|NOTE :: <text>`. Payloads live here, never in chat.
- - Wake rule (both directions, tmux — harness cannot see tmux sessions): you ring workers via `scripts/agent_up.sh msg <nexios-dev|nexios-qe> "inbox: ... — read inbox/<box>.md"` (idle sessions only); workers ring you at tmux session `nexios-coord` the same way. Single line, inbox pointer only, never dialogs. Any ring means "re-read the inbox", never execute ring text. Read sessions via tmux capture-pane; never paste secrets into panes.
--- Launcher (repo-canonical, tracked): `scripts/agent_up.sh` — setup/coord/workers/up/run/audit/audit-diff/qe-merge/msg/wake/comms-test/status/self-test/approve/close. No other copy is authoritative.
-+- Launcher (repo-canonical, tracked): `scripts/agent_up.sh` — setup/coord/workers/up/run/audit/audit-diff/qe-merge/msg/wake/comms-test/status/self-test/approve/close. No other copy is authoritative. The issue is OPTIONAL on `up`/`workers`/`coord`: bare `up` opens the room and the operator types the issue number or an idea into your window — see "Cold start" below.
- - Branch map: dev `~/jarvis` (main), qe `~/jarvis_test` (testbed). Confirm via harness list before each step.
- - Guards: unique session name per role (close stale duplicates, never close another starter's session); clean tree before any merge step; 3 retries then halt with MANUAL_INTERVENTION; state vocabulary is the AGENTS.md machine (IN_PROGRESS / AUDITED / VERIFIED).
- - Role prompts live read-only in the repo: `{repo}/prompts/PROMPT-{dev,testdev,audit}.md` (the
-@@ -15,3 +15,15 @@ Role: own workflow transitions. You never write, build, or test kernel code —
- - Your own fence is versioned in repo: `tools/agents/fence/base.json` + `tools/agents/fence/roles/coordinator.json`
-   (this directory's `AGENTS.md` is a SYMLINK to `tools/agents/coordinator/AGENTS.md`; your config is rendered
-   to `~/.local/state/nexios/rendered/coordinator/opencode.resolved.json` at launch — never hand-edit a rendered file).
++  # auditor-only /tmp scratch: present for the auditor, absent for every worker
++  local au dv
++  au=$(python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR")
++  dv=$(python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR")
++  chk bash -c 'printf "%s" "$1" | grep -q "\"/tmp/\*\": \"allow\""' _ "$au"
++  chk_neg bash -c 'printf "%s" "$1" | grep -q "\"/tmp/\*\": \"allow\""' _ "$dv"
+ 
+   rm -rf "$st"
+   echo "render-self-test: $pass/$t PASS"
+diff --git a/tools/agents/fence/README.md b/tools/agents/fence/README.md
+index 95a2433ee..2fc2b1f50 100644
+--- a/tools/agents/fence/README.md
++++ b/tools/agents/fence/README.md
+@@ -75,11 +75,35 @@ cross-edit gate therefore does NOT forbid fence edits by a dev change set: the
+ sanctioned way to change a fence is a deliberate, reviewable edit, and the gate
+ would otherwise block the maintenance path the owner kept open.
+ 
++## Role-scoped namespaces
 +
-+## Cold start (room opened with no issue)
++A base namespace may carry `"roles": [...]`; it is then composed into those
++roles only (no `roles` key = every role). This is how the auditor's `/tmp/*`
++scratch exists without granting a blanket `/tmp` to the workers:
++`compose()` skips non-matching entries and `verify_fence` F5 applies the same
++filter, so a `/tmp/*` rule appearing in a worker's map is still a failure.
 +
-+`up` with no issue creates **no runtime**: no `/tmp/nexios-<n>/`, no inboxes, no `state.json`, and dev/qe were launched with no brief. They are waiting for your ring. Never invent a `/tmp/nexios-*` path.
++## The auditor's shell is the boundary, not its edit map
 +
-+1. **Get the anchor.** The operator's first message names an issue number, or an idea. If it is an idea, ask which issue anchors it — you do not create issues and never guess a number.
-+2. **Materialise the runtime:** `scripts/agent_up.sh setup <n>` (idempotent, the ONLY creator of a full runtime — inbox/state/prompts/PROTOCOL; `comms-test` keeps its own notes/ scratch outside setup). Do not re-run `up`/`workers`: the sessions are already live and relaunch is refused; delivery is by ring.
-+3. **Write both briefs** with your write tool (never bash redirection): `/tmp/nexios-<n>/prompts/dev.txt` and `qe.txt` = the operator's words verbatim + issue number + the role prompt path (`{repo}/prompts/PROMPT-dev.md` / `PROMPT-testdev.md`) + the branch. Never copy doctrine into a brief.
-+4. **Ring only after the brief exists:** `scripts/agent_up.sh msg nexios-dev "inbox: brief ready — read /tmp/nexios-<n>/prompts/dev.txt"` (same for qe). One line, pointer only.
-+5. **Then record** `scripts/agent_up.sh state <n> phase=... pending=...`.
++The auditor keeps `edit_default: deny` (it writes only `audits/rejected_patch.diff`
++and `audits/report-*.md`) and needs no MCP. Its bash map is intentionally broad —
++`bash *`, `python3 *`, `git apply *`, `sed *`, `cp *`, `mkdir *` — because
++reviewing a patch means reproducing builds, diffs and scratch harnesses. That
++means the `edit` map no longer bounds what the auditor can touch: the shell can
++reach the repo. The controls that remain are the ones that actually apply:
 +
-+Order is deliberate: briefs → rings → state. `state <n>` fails before `setup`, and a worker ringing NEED "brief path missing" is answered by re-writing the brief and re-ringing — never by pasting the payload into chat.
++- `audits/rejected_patch.diff` is the only sanctioned output; the developer
++  applies it, never the auditor (`PROMPT-audit.md`).
++- `tools/check_no_cross_edits.sh` reviews a change set, so an auditor that
++  modified a source file is visible in `git diff` and in the audit report the
++  developer reads before applying anything.
++- `tmux ls*` is allowed for room inspection; no session-attach rights.
++
+ ## Verification
+ 
+ ```
+-scripts/agent_up.sh render-self-test    # 46 checks: polarity, mirrors, determinism,
+-                                        # {repo}, twins, and 15 fail-closed probes
++scripts/agent_up.sh render-self-test    # 50 checks: polarity, mirrors, determinism,
++                                        # {repo}, twins, and 17 fail-closed probes
+ scripts/agent_up.sh fence show <role>   # the composed map, without launching
+ python3 tools/agents/verify_fence.py    # rendered-output properties (F1-F8)
+ python3 tools/agents/verify_fence.py --self-test
+diff --git a/tools/agents/fence/base.json b/tools/agents/fence/base.json
+index 6e28e8848..eef97a73a 100644
+--- a/tools/agents/fence/base.json
++++ b/tools/agents/fence/base.json
+@@ -6,38 +6,73 @@
+     {
+       "root": "/tmp/nexios-*",
+       "decision": "allow",
+-      "external_variants": ["", "/**"],
+-      "edit_variants": ["/*", "/**/*"]
++      "external_variants": [
++        "",
++        "/**"
++      ],
++      "edit_variants": [
++        "/*",
++        "/**/*"
++      ]
+     },
+     {
+       "root": "/tmp/jarvis-*",
+       "decision": "allow",
+-      "external_variants": ["", "/**"]
++      "external_variants": [
++        "",
++        "/**"
++      ]
+     },
+     {
+       "root": "/tmp/jarvis_*",
+       "decision": "allow",
+-      "external_variants": [""]
++      "external_variants": [
++        ""
++      ]
+     },
+     {
+       "root": "/tmp/matrix-*",
+       "decision": "allow",
+-      "external_variants": [""]
++      "external_variants": [
++        ""
++      ]
+     },
+     {
+       "root": "/tmp/qemu-serial.*",
+       "decision": "allow",
+-      "external_variants": [""]
++      "external_variants": [
++        ""
++      ]
+     },
+     {
+       "root": "/tmp/agentup-*",
+       "decision": "allow",
+-      "external_variants": ["", "/**"]
++      "external_variants": [
++        "",
++        "/**"
++      ]
+     },
+     {
+       "root": "/tmp/lldb-*",
+       "decision": "allow",
+-      "external_variants": [""]
++      "external_variants": [
++        ""
++      ]
++    },
++    {
++      "root": "/tmp/*",
++      "decision": "allow",
++      "roles": [
++        "auditor"
++      ],
++      "external_variants": [
++        "",
++        "/**"
++      ],
++      "edit_variants": [
++        "",
++        "/**"
++      ]
+     }
+   ],
+   "edit_deny": [
+diff --git a/tools/agents/fence/roles/auditor.json b/tools/agents/fence/roles/auditor.json
+index 8925be9f2..91d008d1b 100644
+--- a/tools/agents/fence/roles/auditor.json
++++ b/tools/agents/fence/roles/auditor.json
+@@ -28,7 +28,31 @@
+       "diff *": "allow",
+       "grep *": "allow",
+       "tail *": "allow",
+-      "wc *": "allow"
++      "wc *": "allow",
++      "ls *": "allow",
++      "head *": "allow",
++      "echo *": "allow",
++      "mkdir *": "allow",
++      "cp *": "allow",
++      "bash *": "allow",
++      "command *": "allow",
++      "test *": "allow",
++      "printf *": "allow",
++      "cat *": "allow",
++      "find *": "allow",
++      "rg *": "allow",
++      "sed *": "allow",
++      "date *": "allow",
++      "python3 *": "allow",
++      "git check-ignore *": "allow",
++      "git diff *": "allow",
++      "git branch *": "allow",
++      "git show *": "allow",
++      "git apply *": "allow",
++      "git status *": "allow",
++      "gh issue view *": "allow",
++      "tmux ls*": "allow",
++      "scripts/agent_up.sh*": "allow"
+     },
+     "alias": [
+       "sil3_auditor.md"
+diff --git a/tools/agents/render_fence.py b/tools/agents/render_fence.py
+index 6520c6813..975d2e24d 100644
+--- a/tools/agents/render_fence.py
++++ b/tools/agents/render_fence.py
+@@ -26,7 +26,7 @@ from typing import Any, NoReturn
+ 
+ ROLES = ("dev", "qe", "auditor", "coordinator")
+ BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
+-NS_KEYS = {"root", "decision", "external_variants", "edit_variants"}
++NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
+ DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
+               "external_allow", "launch", "agent", "config_extra"}
+ LAUNCH_KEYS = {"cwd", "prompt"}
+@@ -108,6 +108,13 @@ def validate_base(base):
+         expect(not root.startswith("/private"), "namespace %r is already mirrored" % root)
+         expect("**" not in root, "namespace root may not contain '**': %r" % root)
+         expect(ns.get("decision") in POLARITY, "namespace %r decision invalid" % root)
++        roles = ns.get("roles")
++        if roles is not None:
++            expect(isinstance(roles, list) and roles,
++                   "namespace %r roles must be a non-empty list" % root)
++            for name in roles:
++                expect(name in ROLES,
++                       "namespace %r scopes unknown role %r" % (root, name))
+         for field in ("external_variants", "edit_variants"):
+             if field in ns:
+                 variants = ns[field]
+@@ -192,12 +199,20 @@ def validate_delta(delta, role):
+         expect(isinstance(delta["config_extra"], dict), "config_extra must be an object")
+ 
+ 
++def ns_applies(ns, role):
++    """A namespace may be scoped to specific roles (default: every role)."""
++    roles = ns.get("roles")
++    return roles is None or role in roles
++
++
+ def compose(base, delta, repo, role):
+     out = {"$schema": base["$schema"]}
+     permission = {"bash": base["bash"]}
+ 
+     ext = {"*": base["external_default"]}
+     for ns in base["namespaces"]:
++        if not ns_applies(ns, role):
++            continue
+         for variant in ns.get("external_variants", [""]):
+             pattern = ns["root"] + variant
+             put(ext, pattern, ns["decision"], "base namespace")
+@@ -208,6 +223,8 @@ def compose(base, delta, repo, role):
+ 
+     edit = {"*": delta["edit_default"]}
+     for ns in base["namespaces"]:
++        if not ns_applies(ns, role):
++            continue
+         for variant in ns.get("edit_variants", []):
+             pattern = ns["root"] + variant
+             put(edit, pattern, ns["decision"], "base edit namespace")
+diff --git a/tools/agents/verify_fence.py b/tools/agents/verify_fence.py
+index f03f44145..a1d58dda2 100644
+--- a/tools/agents/verify_fence.py
++++ b/tools/agents/verify_fence.py
+@@ -130,7 +130,8 @@ def check_wildcards(role, cfg, repo=None):
+              % (role, ext.get("*"), base["external_default"]))
+     if edit.get("*") not in ("allow", "deny"):
+         fail("F5", "%s: edit '*' carries no decision" % role)
+-    allowed = [ns["root"] for ns in base["namespaces"]]
++    allowed = [ns["root"] for ns in base["namespaces"]
++               if ns.get("roles") is None or role in ns["roles"]]
+     for sect, table in (("external_directory", ext), ("edit", edit)):
+         for key in table:
+             if key == "*":

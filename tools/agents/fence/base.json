@@ -6,38 +6,73 @@
     {
       "root": "/tmp/nexios-*",
       "decision": "allow",
-      "external_variants": ["", "/**"],
-      "edit_variants": ["/*", "/**/*"]
+      "external_variants": [
+        "",
+        "/**"
+      ],
+      "edit_variants": [
+        "/*",
+        "/**/*"
+      ]
     },
     {
       "root": "/tmp/jarvis-*",
       "decision": "allow",
-      "external_variants": ["", "/**"]
+      "external_variants": [
+        "",
+        "/**"
+      ]
     },
     {
       "root": "/tmp/jarvis_*",
       "decision": "allow",
-      "external_variants": [""]
+      "external_variants": [
+        ""
+      ]
     },
     {
       "root": "/tmp/matrix-*",
       "decision": "allow",
-      "external_variants": [""]
+      "external_variants": [
+        ""
+      ]
     },
     {
       "root": "/tmp/qemu-serial.*",
       "decision": "allow",
-      "external_variants": [""]
+      "external_variants": [
+        ""
+      ]
     },
     {
       "root": "/tmp/agentup-*",
       "decision": "allow",
-      "external_variants": ["", "/**"]
+      "external_variants": [
+        "",
+        "/**"
+      ]
     },
     {
       "root": "/tmp/lldb-*",
       "decision": "allow",
-      "external_variants": [""]
+      "external_variants": [
+        ""
+      ]
+    },
+    {
+      "root": "/tmp/*",
+      "decision": "allow",
+      "roles": [
+        "auditor"
+      ],
+      "external_variants": [
+        "",
+        "/**"
+      ],
+      "edit_variants": [
+        "",
+        "/**"
+      ]
     }
   ],
   "edit_deny": [

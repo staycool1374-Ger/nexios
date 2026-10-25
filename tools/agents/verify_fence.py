@@ -130,7 +130,8 @@ def check_wildcards(role, cfg, repo=None):
              % (role, ext.get("*"), base["external_default"]))
     if edit.get("*") not in ("allow", "deny"):
         fail("F5", "%s: edit '*' carries no decision" % role)
-    allowed = [ns["root"] for ns in base["namespaces"]]
+    allowed = [ns["root"] for ns in base["namespaces"]
+               if ns.get("roles") is None or role in ns["roles"]]
     for sect, table in (("external_directory", ext), ("edit", edit)):
         for key in table:
             if key == "*":
