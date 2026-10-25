@@ -268,7 +268,7 @@ prune_link() {
     rm -f "$link"
     info "pruned legacy link: $link"
   elif [ -e "$link" ]; then
-    fail "$link holds a REAL file from the pre-#414 layout; the fence is now rendered from $FENCE_DIR. Move or delete it, then re-run."
+    fail "$link holds a REAL file from the pre-#414 layout; the fence is now rendered from $FENCE_DIR. Archive it (e.g. mv \"$link\" \"$link.pre414\"), then re-run."
   fi
 }
 
@@ -536,9 +536,6 @@ run_session() {
   [ -d "$dir" ] || fail "workdir missing: $dir"
   [ -z "$prompt" ] || need_file "$prompt"
   case "$role" in dev|qe|auditor|coordinator) ;; *) fail "unknown role: '$role'" ;; esac
-  if tmux has-session -t "$name" 2>/dev/null; then
-    fail "tmux session '$name' already exists — refusing to clobber (close it first)"
-  fi
   # install_agents installs the generated subagent definitions into the
   # session's cwd; render_role_config then re-renders THIS role fresh. Never
   # trust the file on disk here: a pre-planted or stale config under
@@ -546,7 +543,16 @@ run_session() {
   # overwrites with a fresh compose, fail-closed on any error).
   install_agents "$dir"
   local cfg; cfg=$(render_role_config "$role")
-  tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
+  local reused=0
+  if tmux has-session -t "$name" 2>/dev/null; then
+    # A resumed launch is legal: `up` can fail after the workers are already
+    # running (a stale state file, a missing tool), and its message tells the
+    # operator to fix that and re-run — refusing reuse outright made that
+    # remedy impossible. Reuse only a session whose fence is provably the one
+    # this launch would build now; anything else is still never clobbered.
+    check_fenced "$name" "$dir" "$cfg" "$role" 2>/dev/null || fail "tmux session '$name' already exists with a different fence — close it first (never clobbered)"
+    reused=1
+  fi
   # Env hygiene: role config ONLY from OPENCODE_CONFIG; strip any leaky overrides.
   # TMPDIR pinned inside the fenced namespace (host TMPDIR is per-boot: unfenceable).
   # NEXIOS_AGENT_ROLE is the launcher's own statement of the role, consumed by
@@ -561,20 +567,25 @@ run_session() {
       *[[:space:]]*) fail "launch path contains whitespace, which the fenced env line cannot express: '$v'" ;;
     esac
   done
-  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$cfg NEXIOS_AGENT_ROLE=$role $OPENCODE_BIN" Enter
-  sleep "$TUI_BOOT_WAIT"
-  check_fenced "$name" "$dir" "$cfg" "$role" || {
-    tmux kill-session -t "$name" 2>/dev/null || true
-    fail "session '$name' launched UNFENCED (config/role/tmpdir not in process env) — killed, fix before retry"
-  }
+  if [ "$reused" = 0 ]; then
+    tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
+    tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$cfg NEXIOS_AGENT_ROLE=$role $OPENCODE_BIN" Enter
+    sleep "$TUI_BOOT_WAIT"
+    check_fenced "$name" "$dir" "$cfg" "$role" || {
+      tmux kill-session -t "$name" 2>/dev/null || true
+      fail "session '$name' launched UNFENCED (config/role/tmpdir not in process env) — killed, fix before retry"
+    }
+  fi
   if [ -n "$prompt" ]; then
     tmux load-buffer "$prompt"
     tmux paste-buffer -t "$name"
     sleep 2
     tmux send-keys -t "$name" Enter
-    info "launched '$name' (fenced, prompt delivered)"
+    if [ "$reused" = 1 ]; then info "reused '$name' (fenced, prompt delivered)"
+    else info "launched '$name' (fenced, prompt delivered)"; fi
   else
-    info "launched '$name' (fenced, no brief yet — the coordinator rings it)"
+    if [ "$reused" = 1 ]; then info "reused '$name' (fenced, no brief yet — the coordinator rings it)"
+    else info "launched '$name' (fenced, no brief yet — the coordinator rings it)"; fi
   fi
 }
 
