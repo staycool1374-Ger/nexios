@@ -101,6 +101,13 @@ function resolve(cls, a, k,   id, g) {
         id = 2 SUBSEP a SUBSEP k
         if ((id in seen)) bv = recval[id]
     }
+    # Class tier: an arch-qualified selector (`arch:class`, issue #170
+    # measured+30pct rule) beats the bare class selector, so per-arch
+    # baselines override the arch-blind value. Bare rows keep working.
+    if (a != "") {
+        id = 3 SUBSEP a ":" cls SUBSEP k
+        if ((id in seen)) bv = recval[id]
+    }
     id = 3 SUBSEP cls SUBSEP k
     if ((id in seen)) bv = recval[id]
     return bv
