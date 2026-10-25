@@ -1,0 +1,3 @@
+# Phase 1 isolation: test-history.txt is append-only from many parallel
+# sessions — union-merge keeps both sides' rows instead of conflicting.
+test-history.txt merge=union
