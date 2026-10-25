@@ -70,6 +70,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Sync docs (`README.md`, `prompts/ROADMAP.md`).
 - Mirror doc updates into Obsidian via MCP write tools (`mcp__obsidian__write_note`, preserving frontmatter/`[[wikilinks]]`/folder structure) and run `graphify update .` (CLI-only, no MCP equivalent) post-implementation.
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
+- When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 
 ### ResourceTracker (Strict Awareness)
 - See AGENTS.md ResourceTracker section for leak-detection rules.
