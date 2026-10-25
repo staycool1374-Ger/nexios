@@ -95,7 +95,8 @@ usage: agent_up.sh <mode> [...]
   audit-diff [branch] [--base <rev>]
                      write the audit diff to audits/pending_patch.diff
                      (base defaults to merge-base main <branch>; must be
-                     non-empty). Run in the dev checkout.
+                     non-empty). Run in the dev checkout. Brand-new files are
+                     invisible to `git diff <base>`: `git add -N` them first.
   qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
                      abort-on-conflict restores code state. Run in QE checkout.
   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
