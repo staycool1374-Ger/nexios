@@ -11,9 +11,9 @@ name: NexIOS Meson CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, testbed ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, testbed ]
 
 jobs:
   meson-x86_64:
@@ -185,6 +185,9 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        # Full history: the role gate compares against an explicit base.
+        fetch-depth: 0
 
     - name: Install Toolchain and Dependencies
       run: |
@@ -204,6 +207,58 @@ jobs:
         python3 tools/check-parity.py --report
         python3 tools/check_no_make_refs.sh
 
-    - name: Cross-edit isolation gate (self-test both directions)
+  cross-edit-isolation:
+    # Isolation gate as its own job (#412 S3-4R). The fence checks do not belong
+    # in the parity ledger: that job is advisory until the Make->Meson cutover,
+    # and the gate was therefore invisible as a merge blocker. Mark this job
+    # REQUIRED in branch protection to make the gate blocking (a repo setting,
+    # not YAML); until then it reports on every push/PR like the other jobs.
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        # Full history: the gate compares against an explicit base.
+        fetch-depth: 0
+
+    - name: Fence renderer matrix (single source, fail-closed probes)
+      run: bash scripts/agent_up.sh render-self-test
+
+    - name: Fence rendered-output gate (F1-F8, properties not golden)
       run: |
-        bash tools/check_no_cross_edits.sh --self-test
+        python3 tools/agents/verify_fence.py
+        python3 tools/agents/verify_fence.py --self-test
+
+    - name: Isolation gate self-test (classifier + change-set integration)
+      run: bash tools/check_no_cross_edits.sh --self-test
+
+    - name: Cross-edit isolation gate (role check on this change set)
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REF_NAME: ${{ github.ref_name }}
+        BASE_REF: ${{ github.base_ref }}
+        HEAD_REF: ${{ github.head_ref }}
+        BEFORE_SHA: ${{ github.event.before }}
+      run: |
+        if [ "$EVENT_NAME" = "pull_request" ]; then
+          # A PR checkout has no local `main`: an explicit base is required or
+          # the merge-base fallback classifies an empty set as clean.
+          base="origin/${BASE_REF}"
+          # The PRODUCER branch decides the role. On PRs REF_NAME is
+          # "<n>/merge", which used to classify every PR as dev (#412 S4-11).
+          role_ref="$HEAD_REF"
+        else
+          base="$BEFORE_SHA"
+          case "$base" in
+            ''|0000000000000000000000000000000000000000) base="origin/main" ;;
+          esac
+          role_ref="$REF_NAME"
+        fi
+        # Two-checkout model: testbed is the QE checkout, everything else is a
+        # developer branch.
+        case "$role_ref" in
+          testbed) role=qe ;;
+          *) role=dev ;;
+        esac
+        echo "cross-edit: role=$role (ref=${role_ref:-?}) base=$base event=$EVENT_NAME"
+        bash tools/check_no_cross_edits.sh --role="$role" --base="$base"

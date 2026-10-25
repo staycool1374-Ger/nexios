@@ -1,0 +1,19 @@
+{
+  "role": "dev",
+  "edit_default": "allow",
+  "edit_allow": [],
+  "edit_deny": [
+    "src/kernel/test/*",
+    "src/kernel/test/**/*",
+    "src/test/*",
+    "src/test/**/*"
+  ],
+  "external_allow": [],
+  "launch": {"cwd": "dev", "prompt": "dev.txt"},
+  "agent": {
+    "name": "nexios-dev",
+    "twin": "nexios-dev.md",
+    "description": "Nexios kernel developer (fenced to main worktree, test trees read-only)",
+    "mode": "subagent"
+  }
+}

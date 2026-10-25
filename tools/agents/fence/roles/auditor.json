@@ -1,0 +1,61 @@
+{
+  "role": "auditor",
+  "edit_default": "deny",
+  "edit_allow": [
+    "audits/rejected_patch.diff",
+    "audits/report-*.md"
+  ],
+  "edit_deny": [],
+  "external_allow": [],
+  "launch": {
+    "cwd": "audit",
+    "prompt": "auditor.txt"
+  },
+  "agent": {
+    "name": "nexios-audit",
+    "twin": "nexios-audit.md",
+    "description": "NexIOS SIL 3 safety auditor (read-only, never edits)",
+    "mode": "subagent",
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "temperature": 0.0,
+    "bash": {
+      "*": "ask",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git show*": "allow",
+      "git status*": "allow",
+      "git apply --check*": "allow",
+      "diff *": "allow",
+      "grep *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "ls *": "allow",
+      "head *": "allow",
+      "echo *": "allow",
+      "mkdir *": "allow",
+      "cp *": "allow",
+      "bash *": "allow",
+      "command *": "allow",
+      "test *": "allow",
+      "printf *": "allow",
+      "cat *": "allow",
+      "find *": "allow",
+      "rg *": "allow",
+      "sed *": "allow",
+      "date *": "allow",
+      "python3 *": "allow",
+      "git check-ignore *": "allow",
+      "git diff *": "allow",
+      "git branch *": "allow",
+      "git show *": "allow",
+      "git apply *": "allow",
+      "git status *": "allow",
+      "gh issue view *": "allow",
+      "tmux ls*": "allow",
+      "scripts/agent_up.sh*": "allow"
+    },
+    "alias": [
+      "sil3_auditor.md"
+    ]
+  }
+}
