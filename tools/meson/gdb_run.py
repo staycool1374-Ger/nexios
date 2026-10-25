@@ -83,6 +83,20 @@ def wait_for_stub(port, timeout_secs=8):
     return False
 
 
+def port_value(text):
+    """argparse type: integer in the valid TCP port range."""
+    import argparse
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("port must be an integer, got %r"
+                                         % text)
+    if not 1 <= value <= 65535:
+        raise argparse.ArgumentTypeError("port must be 1-65535, got %d"
+                                         % value)
+    return value
+
+
 def pick_gdb_port(requested):
     """Return (port, auto_picked): requested when free, else an ephemeral one.
 
@@ -129,9 +143,12 @@ def gdb_script_for_port(script_path, port, logdir, tag):
     patched, n = re.subn(r"(target\s+\S+\s+:?)1234\b", r"\g<1>%d" % port,
                          text)
     if n == 0:
-        print("NOTE: GDB script has no `target ... :1234` line; "
-              "connect manually with `target remote :%d`" % port)
-        return script_path
+        # Flailing closed on purpose: a script that cannot be pointed at the
+        # stub QEMU actually opened would silently target a foreign stub.
+        print("ERROR: GDB script %s has no `target ... :1234` line; refusing "
+              "to run against the auto-picked port :%d (fix the script or "
+              "pin --gdb-port 1234)" % (script_path, port))
+        raise SystemExit(2)
     out = Path(logdir) / ("gdb-script-%s-%d.gdb" % (tag, port))
     out.write_text(patched)
     print("NOTE: GDB script target port rewritten :1234 -> :%d (%s)"
@@ -372,7 +389,7 @@ def main():
     parser.add_argument("--class", dest="cls", default="none")
     parser.add_argument("--gdb-script", default="")
     parser.add_argument("--cmds", default="")
-    parser.add_argument("--gdb-port", type=int, default=1234,
+    parser.add_argument("--gdb-port", type=port_value, default=1234,
                         help="GDB stub port (default 1234; free ephemeral "
                              "port auto-picked when busy)")
     args = parser.parse_args()

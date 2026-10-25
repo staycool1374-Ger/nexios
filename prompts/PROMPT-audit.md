@@ -4,6 +4,16 @@ mode: subagent
 model: opencode-go/muse-spark-1.3-contributor
 temperature: 0.0
 permission:
+  external_directory:
+    "*": deny
+    "/tmp/nexios-*": allow
+    "/tmp/nexios-*/**": allow
+    "/tmp/jarvis-*": allow
+    "/tmp/jarvis-*/**": allow
+    "/tmp/jarvis_*": allow
+    "/tmp/matrix-*": allow
+    "/tmp/qemu-serial.*": allow
+    "/tmp/agentup-*": allow
   edit:
     "*": deny
     "/tmp/nexios-*/*": allow

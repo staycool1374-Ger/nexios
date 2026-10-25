@@ -11,9 +11,9 @@ name: NexIOS Meson CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, testbed ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, testbed ]
 
 jobs:
   meson-x86_64:
@@ -185,6 +185,9 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        # Full history: the role gate compares against an explicit base.
+        fetch-depth: 0
 
     - name: Install Toolchain and Dependencies
       run: |
@@ -207,3 +210,27 @@ jobs:
     - name: Cross-edit isolation gate (self-test both directions)
       run: |
         bash tools/check_no_cross_edits.sh --self-test
+
+    - name: Cross-edit isolation gate (role check on this change set)
+      run: |
+        # Role follows the branch under the two-checkout model: testbed is the
+        # QE checkout, everything else is a developer branch.
+        if [ "${GITHUB_REF_NAME}" = "testbed" ]; then
+          role=qe
+        else
+          role=dev
+        fi
+        echo "cross-edit role check: --role=$role (branch ${GITHUB_REF_NAME})"
+        # Explicit base: a PR / single-ref checkout has no local `main`, so the
+        # script's merge-base fallback degrades to HEAD and classifies an empty
+        # change set as clean.
+        if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+          base="origin/${GITHUB_BASE_REF}"
+        else
+          base="${{ github.event.before }}"
+          case "$base" in
+            ''|0000000000000000000000000000000000000000) base="origin/main" ;;
+          esac
+        fi
+        echo "cross-edit base: ${base}"
+        bash tools/check_no_cross_edits.sh --role="$role" --base="$base"

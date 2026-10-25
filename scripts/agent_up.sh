@@ -81,6 +81,7 @@ usage: agent_up.sh <mode> [...]
   wake <sess> <text> alias of msg (same guard + single-line rule).
   comms-test [issue] prove the doorbell end-to-end in BOTH directions using two
                      scratch echo sessions (no opencode, no tokens).
+  state <issue> key=value [...]  locked state.json write (validated keys/values).
   status [issue]     tmux + branches + inbox + state overview (read-only).
   status --reconstruct <issue> --copy <dir>  rebuild state.json machine fields
                      from git branches + issue comments into a COPY (live
@@ -96,7 +97,11 @@ EOF
 
 need_file() { [ -f "$1" ] || fail "missing: $1"; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "not on PATH: $1"; }
-runtime_dir() { [ $# -eq 1 ] || fail "need issue number"; echo "/tmp/nexios-$1"; }
+runtime_dir() {
+  [ $# -eq 1 ] || fail "need issue number"
+  case "$1" in ''|*[!0-9]*) fail "issue must be numeric: '$1'";; esac
+  echo "/tmp/nexios-$1"
+}
 
 # ---embedded role defaults (bootstrap only; audited content)------------------
 # dev: edit-all EXCEPT test trees + own cage. Byte-identical to
@@ -294,8 +299,9 @@ write_protocol() {
   Rules: single line, inbox POINTER only, idle sessions only, never dialogs.
   The coordinator treats any ring as "re-read the inbox", never executes it.
 - Coordinator address: tmux session `nexios-coord` (created by `coord`/`up`).
-- State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator.
-  Guard state-modifying steps with the fcntl lock helper (no flock on macOS).
+- State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator, and the
+  only sanctioned write path is `agent_up.sh state <issue> key=value` (flock on
+  `state.lock`, atomic replace, keys/vocabulary validated).
 EOF
 }
 
@@ -313,7 +319,6 @@ EOF
 # $1 issue. Idempotent: creates missing pieces, never overwrites state/inbox.
 mode_setup() {
   [ $# -eq 1 ] || fail "setup needs an issue number"
-  case "$1" in ''|*[!0-9]*) fail "issue must be numeric: '$1'";; esac
   local rt; rt=$(runtime_dir "$1")
   ensure_roles
   ensure_state_links
@@ -360,15 +365,54 @@ check_clean_tree() {
   done
 }
 
-# mutual exclusion for state-modifying steps (no flock binary on macOS).
-# usage: with_state_lock <state.json> <command...>
-with_state_lock() {
-  local st="$1"; shift
-  python3 -c "import fcntl,sys; fcntl.flock(open(sys.argv[1],'r+'),fcntl.LOCK_EX)" "$st"
-  "$@"
-  local rc=$?
-  python3 -c "import fcntl,sys; fcntl.flock(open(sys.argv[1],'r+'),fcntl.LOCK_UN)" "$st"
-  return $rc
+# Locked read-modify-write on state.json — the ONLY sanctioned state writer.
+# Lock lives on a stable sidecar (state.lock) so atomic replace cannot create a
+# stale-inode writer; no flock binary on macOS, fcntl only.
+# usage: state <issue> key=value [key=value...]
+mode_state_set() {
+  [ $# -ge 2 ] || fail "state needs: <issue> key=value [key=value...]"
+  local issue="$1"; shift
+  local rt; rt=$(runtime_dir "$issue")
+  need_file "$rt/state.json"
+  python3 - "$rt/state.json" "$@" <<'EOF'
+import datetime, fcntl, json, os, sys, tempfile
+
+path, pairs = sys.argv[1], sys.argv[2:]
+ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
+           "retry_budget", "state", "updated"}
+STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
+          "CLOSED", "FEEDBACK"}
+lock_path = os.path.join(os.path.dirname(path), "state.lock")
+with open(lock_path, "a+") as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    with open(path) as f:
+        state = json.load(f)
+    for pair in pairs:
+        if "=" not in pair:
+            sys.exit("state: expected key=value, got %r" % pair)
+        key, value = pair.split("=", 1)
+        if key not in ALLOWED:
+            sys.exit("state: unknown key %r (allowed: %s)"
+                     % (key, ", ".join(sorted(ALLOWED))))
+        if key in ("retries", "retry_budget"):
+            value = int(value)
+        elif key == "halt":
+            value = value.lower() in ("1", "true", "yes")
+        elif key == "state" and value not in STATES:
+            sys.exit("state: %r not in the AGENTS.md vocabulary" % value)
+        state[key] = value
+    state["updated"] = datetime.datetime.now(
+        datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+    with os.fdopen(fd, "w") as out:
+        json.dump(state, out, indent=2)
+        out.write("\n")
+        out.flush()
+        os.fsync(out.fileno())
+    os.replace(tmp, path)
+    fcntl.flock(lock, fcntl.LOCK_UN)
+print("state: ok (%d key(s) set)" % len(pairs))
+EOF
 }
 
 # $1 name, $2 dir, $3 role json, $4 prompt file, $5 expected branch (empty = skip)
@@ -510,6 +554,7 @@ mode_up() {
   mode_setup "$issue"
   local rt; rt=$(runtime_dir "$issue")
   mode_workers "$issue"
+  ensure_coord_session
   open_watch_window "$DEV_SESS"
   open_watch_window "$QE_SESS"
   open_watch_window "$COORD_SESS"
@@ -530,7 +575,6 @@ EOF
     fi
   else
     echo "(no task given — attach and paste: 'You are nexios-coord. Read AGENTS.md. Report readiness.')"
-    ensure_coord_session
   fi
 }
 
@@ -540,7 +584,13 @@ mode_audit_diff() {
   local br="${1:-$(git branch --show-current)}"
   local base; base=$(git merge-base main "$br")
   local out="audits/pending_patch.diff"
-  git diff "$base".."$br" -- . > "$out" || true
+  if [ "$br" = "$(git branch --show-current)" ]; then
+    # Same branch: diff the worktree too — uncommitted edits are part of the
+    # delta under audit (`base..br` would silently omit them).
+    git diff "$base" -- . > "$out" || true
+  else
+    git diff "$base".."$br" -- . > "$out" || true
+  fi
   [ -s "$out" ] || fail "audit diff empty for $br (nothing to audit)"
   info "audit diff: $out ($(wc -l < "$out") lines, merge-base $base)"
 }
@@ -549,13 +599,17 @@ mode_audit_diff() {
 # usage: qe-merge <issue>   (run in the QE checkout; aborts cleanly on conflict)
 mode_qe_merge() {
   [ $# -eq 1 ] || fail "qe-merge needs an issue number"
+  [ "$(git rev-parse --show-toplevel)" = "$(git -C "$QE_DIR" rev-parse --show-toplevel)" ] \
+    || fail "run qe-merge in the QE checkout ($QE_DIR), not $(pwd)"
+  check_branch "$QE_DIR" testbed
   check_clean_tree "$(pwd)" "test-history.txt" "graphify-out/"
-  git fetch origin main 2>/dev/null || true
+  git fetch origin main 2>/dev/null \
+    || fail "git fetch origin main failed — refusing to merge a possibly stale origin/main"
   if git merge --no-commit --no-ff origin/main; then
     info "merged origin/main --no-commit (inspect, test, then commit or abort)"
   else
     git merge --abort || true
-    fail "conflict — aborted, code state restored (resolve manually)"
+    fail "conflict — merge aborted; verify with git status (resolve manually)"
   fi
 }
 
@@ -575,7 +629,7 @@ mode_msg() {
 # tmux pane in both directions, using two scratch echo sessions (no opencode,
 # no tokens, no $DEV_SESS/$QE_SESS/$COORD_SESS touched).
 mode_comms_test() {
-  local issue="${1:-999-test}"
+  local issue="${1:-999999}"
   local rt; rt=$(runtime_dir "$issue")
   need_cmd tmux
   mkdir -p "$rt/notes"
@@ -635,15 +689,21 @@ mode_status_reconstruct() {
     esac
   done
   [ -n "$issue" ] && [ -n "$copy" ] || fail "need: status --reconstruct <issue> --copy <dir>"
-  case "$copy" in /tmp/*drill*|/tmp/*staging*|/tmp/*copy*) ;;
-    *) fail "refusing: --copy must point under /tmp with drill/staging/copy in the name";;
+  case "$copy" in /tmp/?*) ;; *) fail "refusing: --copy must be a direct /tmp/<name> path";; esac
+  case "${copy#/tmp/}" in */*) fail "refusing: --copy must be a direct /tmp/<name> path";; esac
+  case "$(basename "$copy")" in
+    *-drill|*-staging|*-copy) ;;
+    *) fail "refusing: --copy dir name must end in -drill, -staging or -copy (got $(basename "$copy"))";;
   esac
+  # `--copy` is checked as a string; a symlink named *-copy would write
+  # through to the live dir (or any target), defeating "live untouched".
+  [ -L "$copy" ] && fail "refusing: --copy must not be a symlink (got $(readlink "$copy"))"
   local rt; rt=$(runtime_dir "$issue")
   [ -f "$rt/state.json" ] || fail "no live state to compare against"
   case "$copy" in "$rt") fail "refusing to reconstruct the live dir (use a COPY)";; esac
   mkdir -p "$copy"
   python3 - "$rt" "$copy" "$DEV_DIR" "$QE_DIR" <<'EOF'
-import json, subprocess, sys
+import json, os, subprocess, sys
 rt, copy, devdir, qedir = sys.argv[1:5]
 live = json.load(open(rt + "/state.json"))
 dev_br = subprocess.run(["git","-C",devdir,"branch","--show-current"],
@@ -656,7 +716,10 @@ recon = {"halt": live.get("halt", False), "issue": live.get("issue"),
          "retry_budget": live.get("retry_budget", 3),
          "updated": live.get("updated", ""),
          "pending": live.get("pending", "")}
-open(copy + "/state.json", "w").write(json.dumps(recon, indent=2) + "\n")
+out_path = copy + "/state.json"
+if os.path.islink(out_path):
+    sys.exit("refusing: copy state.json is a symlink")
+open(out_path, "w").write(json.dumps(recon, indent=2) + "\n")
 print("reconstruct: dev=%s qe=%s" % (dev_br, qe_br))
 print("machine fields: " + ("MATCH" if all(
     recon[k] == live.get(k) for k in
@@ -686,6 +749,15 @@ mode_self_test() {
   chk test -L "$st/home/coordinator/opencode.json"
   chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
   chk test -L "$st/home/roles/dev.json"
+  # state writer: validated keys/vocabulary, locked, atomic
+  chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
+  chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
+  chk "$SCRIPT_DIR/agent_up.sh" state 9999 phase=AUDITED retries=1
+  chk grep -q '"phase": "AUDITED"' /tmp/nexios-9999/state.json
+  chk grep -q '"retries": 1' /tmp/nexios-9999/state.json
+  # --copy anchor: nested path and wrong suffix must be refused
+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/a/b-copy
+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/plain
   rm -rf "$st"
   echo "self-test: $pass/$t PASS"
   [ "$pass" = "$t" ] || fail "self-test failures"
@@ -732,6 +804,7 @@ case "$mode" in
   qe-merge) mode_qe_merge "$@" ;;
   msg) mode_msg "$@" ;;
   wake) mode_msg "$@" ;;
+  state) mode_state_set "$@" ;;
   comms-test) mode_comms_test "$@" ;;
   status) mode_status "$@" ;;
   self-test) mode_self_test "$@" ;;

@@ -34,24 +34,34 @@
 #
 # Self-test: --self-test runs the fence classifier over built-in cases in
 # both directions (green on clean sets, red on deliberate violations) and
-# exits 0/2. CI wires the self-test; humans run the role check pre-commit.
+# exits 0/2.
+# CI: the meson workflow runs `--self-test` (classifier sanity) and the ROLE
+# check itself, with the role derived from the branch (`testbed` -> qe, every
+# other branch -> dev) and an EXPLICIT --base (a PR checkout has no local
+# `main`, so the merge-base fallback would classify an empty set as clean).
+# Run it by hand with `--role=dev|qe` before pushing.
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 2
 
 ROLE=""
 SELFTEST=0
+BASE_OVERRIDE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --role=dev|--role=qe) ROLE="${1#--role=}" ;;
         --role)
             case "${2:-}" in
                 dev|qe) ROLE="$2"; shift ;;
-                *) echo "usage: $0 [--role dev|qe] [--self-test]" >&2; exit 2 ;;
+                *) echo "usage: $0 [--role dev|qe] [--base <rev>] [--self-test]" >&2; exit 2 ;;
             esac
             ;;
+        --base=*) BASE_OVERRIDE="${1#--base=}" ;;
+        --base)
+            [ -n "${2:-}" ] || { echo "usage: $0 --base <rev>" >&2; exit 2; }
+            BASE_OVERRIDE="$2"; shift ;;
         --self-test) SELFTEST=1 ;;
         -h|--help) sed -n '1,32p' "$0"; exit 0 ;;
-        *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--self-test])" >&2; exit 2 ;;
+        *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
     esac
     shift
 done
@@ -123,7 +133,16 @@ if [ -z "$ROLE" ]; then
     esac
 fi
 
-BASE=$(git merge-base main HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)
+if [ -n "$BASE_OVERRIDE" ]; then
+    # CI passes the true change-set base; an unresolvable base is a hard error
+    # so a single-ref checkout can never classify an empty set as clean.
+    BASE=$(git rev-parse --verify --quiet "$BASE_OVERRIDE^{commit}") || {
+        echo "check_no_cross_edits: base '$BASE_OVERRIDE' does not resolve" >&2
+        exit 2
+    }
+else
+    BASE=$(git merge-base main HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)
+fi
 if [ -z "$BASE" ]; then
     echo "check_no_cross_edits: not a git repo" >&2
     exit 2
@@ -134,7 +153,10 @@ TMP_TRACKED=$(mktemp)
 trap 'rm -f "$TMP_CHANGED" "$TMP_TRACKED"' EXIT
 
 # Tracked files changed vs BASE (committed-on-branch + staged + unstaged).
-git diff --name-only "$BASE" -- . > "$TMP_CHANGED"
+git diff --name-only "$BASE" -- . > "$TMP_CHANGED" || {
+    echo "check_no_cross_edits: git diff failed (cannot establish the change set)" >&2
+    exit 2
+}
 # Intersect with the tracked universe (drops untracked noise by contract).
 git ls-files > "$TMP_TRACKED"
 

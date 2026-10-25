@@ -22,7 +22,10 @@ links and hard-fails if it finds a real file in their place.
   would be a click-through farm). The fence was never the shell: cross-edit protection is the
   fail-closed `tools/check_no_cross_edits.sh` gate, not bash denial.
 - `edit` is where each role differs (see files). Every role denies editing its own cage
-  (`tools/agents/roles/**`) so a session cannot widen its own fence.
+  (`tools/agents/roles/**`). Dev still may edit the twin/coordinator definitions,
+  `prompts/PROMPT-*.md` and `scripts/agent_up.sh`, so "cannot widen its own fence" holds
+  only for the role JSONs — those other edits are covered by audit + git review, not by
+  the dev cage.
 
 ## Twins
 Each role has a twin agent definition, canonical in `tools/agents/twins/nexios-<role>.md` (subagent
