@@ -29,14 +29,20 @@
 # invoker's env (no --env flag), so harness-managed sessions launch UNFENCED
 # (proven: S1 step-zero fails there). Direct tmux launch inherits our env, so
 # fences hold (proven: S1 passes). Tradeoff: tmux sessions are invisible to
-# `harness ps` / the grid. Watch via `tmux attach -t <name> -r` (read-only).
+# `harness ps` / the grid. Watch via `tmux attach -t <name>` (read-write mirrors;
+# read-only (-r) mirrors block ALL tmux input including doorbells, so none here).
 # Proper fix belongs upstream: env passthrough on `harness new`.
 # Fencing itself is verified per-session BEFORE any prompt is delivered.
 set -euo pipefail
 
+# Canonical content lives IN the repo (versioned). The state dir below holds
+# LINKS ONLY — a real file out of repo is versioning drift and hard-fails here.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROLES_DIR="${ROLES_DIR:-$REPO_ROOT/tools/agents/roles}"
+COORD_CONFIG_DIR="$REPO_ROOT/tools/agents/coordinator"
 NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
 COORD_DIR="$NEXIOS_HOME/coordinator"
-ROLES_DIR="$NEXIOS_HOME/roles"
 OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
 TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
 DEV_DIR="$HOME/jarvis"
@@ -60,8 +66,9 @@ usage: agent_up.sh <mode> [...]
                      Optional taskfile is pasted as the first message.
   workers <issue>    launch $DEV_SESS + $QE_SESS (detached tmux; needs
                      prompts/dev.txt + prompts/qe.txt in the coord runtime).
-  up <issue> ["task"] FULL ROOM from one zsh command: setup + workers + two
-                     visible Terminal watch mirrors (read-only) + coordinator
+  up <issue> ["task"] FULL ROOM from one zsh command: setup + workers + three
+                     visible Terminal windows (read-write mirrors; read-only
+                     mirrors block ALL tmux input including doorbells) + coordinator
                      in tmux ($COORD_SESS) with the task pasted as its first
                      message. Pass a taskfile path or literal task text.
   run ...            launch ONE session: run <name> <dir> <role.json> <prompt.txt> [branch]
@@ -71,6 +78,9 @@ usage: agent_up.sh <mode> [...]
   qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
                      abort-on-conflict restores code state. Run in QE checkout.
   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
+  wake <sess> <text> alias of msg (same guard + single-line rule).
+  comms-test [issue] prove the doorbell end-to-end in BOTH directions using two
+                     scratch echo sessions (no opencode, no tokens).
   status [issue]     tmux + branches + inbox + state overview (read-only).
   status --reconstruct <issue> --copy <dir>  rebuild state.json machine fields
                      from git branches + issue comments into a COPY (live
@@ -89,15 +99,30 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "not on PATH: $1"; }
 runtime_dir() { [ $# -eq 1 ] || fail "need issue number"; echo "/tmp/nexios-$1"; }
 
 # ---embedded role defaults (bootstrap only; audited content)------------------
-# dev: edit-all EXCEPT test trees. Last-match-wins; both star depths listed
-# because the docs don't pin down whether * crosses /.
+# dev: edit-all EXCEPT test trees + own cage. Byte-identical to
+# tools/agents/roles/dev.json (canonical); this copy is the broken-checkout
+# fallback only. Last-match-wins; both star depths (docs don't pin * crossing /).
 write_role_dev() {
   cat > "$1" <<'EOF'
 {
   "$schema": "https://opencode.ai/config.json",
   "permission": {
+    "bash": "allow",
+    "external_directory": {
+      "*": "deny",
+      "/tmp/nexios-*": "allow",
+      "/tmp/nexios-*/**": "allow",
+      "/tmp/jarvis-*": "allow",
+      "/tmp/jarvis-*/**": "allow",
+      "/tmp/jarvis_*": "allow",
+      "/tmp/matrix-*": "allow",
+      "/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow"
+    },
     "edit": {
       "*": "allow",
+      "tools/agents/roles/*": "deny",
+      "tools/agents/roles/**/*": "deny",
       "src/kernel/test/*": "deny",
       "src/kernel/test/**/*": "deny",
       "src/test/*": "deny",
@@ -108,14 +133,29 @@ write_role_dev() {
 EOF
 }
 
-# qe: edit ONLY test trees.
+# qe: edit ONLY test trees (+coord mailbox). Byte-identical to
+# tools/agents/roles/qe.json (canonical); fallback only.
 write_role_qe() {
   cat > "$1" <<'EOF'
 {
   "$schema": "https://opencode.ai/config.json",
   "permission": {
+    "bash": "allow",
+    "external_directory": {
+      "*": "deny",
+      "/tmp/nexios-*": "allow",
+      "/tmp/nexios-*/**": "allow",
+      "/tmp/jarvis-*": "allow",
+      "/tmp/jarvis-*/**": "allow",
+      "/tmp/jarvis_*": "allow",
+      "/tmp/matrix-*": "allow",
+      "/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow"
+    },
     "edit": {
       "*": "deny",
+      "/tmp/nexios-*/*": "allow",
+      "/tmp/nexios-*/**/*": "allow",
       "src/kernel/test/*": "allow",
       "src/kernel/test/**/*": "allow",
       "src/test/*": "allow",
@@ -126,30 +166,74 @@ write_role_qe() {
 EOF
 }
 
-# auditor: deny-all writes; may read the stepper bin dir + coord runtime.
-# ASSUMPTION (flagged for audit review): exact allow paths for the cage.
+# auditor: deny-all writes except mailbox + audit artifacts. Byte-identical to
+# tools/agents/roles/auditor.json (canonical); fallback only.
 write_role_auditor() {
   cat > "$1" <<'EOF'
 {
   "$schema": "https://opencode.ai/config.json",
   "permission": {
+    "bash": "allow",
+    "external_directory": {
+      "*": "deny",
+      "/tmp/nexios-*": "allow",
+      "/tmp/nexios-*/**": "allow",
+      "/tmp/jarvis-*": "allow",
+      "/tmp/jarvis-*/**": "allow",
+      "/tmp/jarvis_*": "allow",
+      "/tmp/matrix-*": "allow",
+      "/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow"
+    },
     "edit": {
       "*": "deny",
-      "/tmp/*": "allow",
-      "/Users/arnold/.local/state/nexios/bin/**": "allow",
-      "/Users/arnold/jarvis/audits/rejected_patch.diff": "allow",
-      "/Users/arnold/jarvis/audits/report-*.md": "allow"
+      "/tmp/nexios-*/*": "allow",
+      "/tmp/nexios-*/**/*": "allow",
+      "audits/rejected_patch.diff": "allow",
+      "audits/report-*": "allow"
     }
   }
 }
 EOF
 }
 
+# coordinator: deny-all writes except mailbox + LEARNINGS closeout.
+# Byte-identical to tools/agents/roles/coordinator.json (canonical).
+write_role_coordinator() {
+  cat > "$1" <<'EOF'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": "allow",
+    "external_directory": {
+      "*": "deny",
+      "/tmp/nexios-*": "allow",
+      "/tmp/nexios-*/**": "allow",
+      "/tmp/jarvis-*": "allow",
+      "/tmp/jarvis-*/**": "allow",
+      "/tmp/jarvis_*": "allow",
+      "/tmp/matrix-*": "allow",
+      "/tmp/qemu-serial.*": "allow",
+      "/tmp/agentup-*": "allow"
+    },
+    "edit": {
+      "*": "deny",
+      "/tmp/nexios-*/*": "allow",
+      "/tmp/nexios-*/**/*": "allow",
+      "prompts/LEARNINGS.md": "allow"
+    }
+  }
+}
+EOF
+}
 write_roles_readme() {
   cat > "$1" <<'EOF'
-# Role configs — bootstrapped by scripts/agent_up.sh setup (embedded defaults).
-# dev.json: edit everything EXCEPT test trees. qe.json: edit ONLY test trees.
-# auditor.json: deny-all writes (cage: /tmp + audits artifacts + stepper bin).
+# Role configs — canonical content lives in tools/agents/roles/ (repo).
+# This embedded copy is the broken-checkout fallback ONLY (used when the
+# repo files are absent); keep byte-identical with the repo files.
+# dev.json: edit-all EXCEPT test trees + own cage. qe.json: edit ONLY test
+# trees + coord mailbox. auditor.json: deny-all writes except mailbox + audit
+# artifacts. coordinator.json: deny-all except mailbox + LEARNINGS closeout.
 # edit covers edit/write/patch only, NOT bash heredocs/redirects — the repo
 # checker (tools/check_no_cross_edits.sh) is the fail-closed backstop.
 # Step zero of every session: `opencode debug config` shows these rules +
@@ -159,10 +243,38 @@ EOF
 
 ensure_roles() {
   mkdir -p "$ROLES_DIR"
-  [ -f "$ROLES_DIR/dev.json" ] || { write_role_dev "$ROLES_DIR/dev.json"; info "bootstrapped roles/dev.json"; }
-  [ -f "$ROLES_DIR/qe.json" ] || { write_role_qe "$ROLES_DIR/qe.json"; info "bootstrapped roles/qe.json"; }
-  [ -f "$ROLES_DIR/auditor.json" ] || { write_role_auditor "$ROLES_DIR/auditor.json"; info "bootstrapped roles/auditor.json (ASSUMPTION: cage paths — flagged for audit review)"; }
+  [ -f "$ROLES_DIR/dev.json" ] || { write_role_dev "$ROLES_DIR/dev.json"; info "bootstrapped roles/dev.json (fallback — repo copy canonical)"; }
+  [ -f "$ROLES_DIR/qe.json" ] || { write_role_qe "$ROLES_DIR/qe.json"; info "bootstrapped roles/qe.json (fallback — repo copy canonical)"; }
+  [ -f "$ROLES_DIR/auditor.json" ] || { write_role_auditor "$ROLES_DIR/auditor.json"; info "bootstrapped roles/auditor.json (fallback — repo copy canonical)"; }
+  [ -f "$ROLES_DIR/coordinator.json" ] || { write_role_coordinator "$ROLES_DIR/coordinator.json"; info "bootstrapped roles/coordinator.json (fallback — repo copy canonical)"; }
   [ -f "$ROLES_DIR/README.md" ] || write_roles_readme "$ROLES_DIR/README.md"
+}
+
+# Point an out-of-repo path at its versioned in-repo counterpart. Links are
+# (re)created; a REAL file in its place is drift → hard fail, never silently
+# "adopted" (that is how out-of-repo copies appear).
+ensure_link() {
+  local link="$1" target="$2"
+  if [ -L "$link" ]; then
+    [ "$(readlink "$link")" = "$target" ] || ln -sfn "$target" "$link"
+  elif [ -e "$link" ]; then
+    fail "$link holds a REAL file; canonical content is $target. Move or delete it, then re-run (nothing is overwritten)."
+  else
+    mkdir -p "$(dirname "$link")"
+    ln -s "$target" "$link"
+    info "linked out-of-repo path: $link -> $target"
+  fi
+}
+
+# State dir + legacy role paths may contain LINKS ONLY (canonical: repo).
+ensure_state_links() {
+  ensure_link "$COORD_DIR/opencode.json" "$COORD_CONFIG_DIR/opencode.json"
+  ensure_link "$COORD_DIR/AGENTS.md" "$COORD_CONFIG_DIR/AGENTS.md"
+  ensure_link "$NEXIOS_HOME/roles/dev.json" "$ROLES_DIR/dev.json"
+  ensure_link "$NEXIOS_HOME/roles/qe.json" "$ROLES_DIR/qe.json"
+  ensure_link "$NEXIOS_HOME/roles/auditor.json" "$ROLES_DIR/auditor.json"
+  ensure_link "$NEXIOS_HOME/roles/coordinator.json" "$ROLES_DIR/coordinator.json"
+  ensure_link "$NEXIOS_HOME/roles/README.md" "$ROLES_DIR/README.md"
 }
 
 # ---coord runtime (comms setup)------------------------------------------------
@@ -201,15 +313,30 @@ EOF
 # $1 issue. Idempotent: creates missing pieces, never overwrites state/inbox.
 mode_setup() {
   [ $# -eq 1 ] || fail "setup needs an issue number"
+  case "$1" in ''|*[!0-9]*) fail "issue must be numeric: '$1'";; esac
   local rt; rt=$(runtime_dir "$1")
   ensure_roles
+  ensure_state_links
   mkdir -p -m 0700 "$rt/inbox" "$rt/notes" "$rt/prompts"
-  for r in dev qe auditor; do
+  for r in dev qe auditor coord; do
     [ -f "$rt/inbox/$r.md" ] || echo "# inbox/$r.md — append-only. Format: <ISO8601> FROM=<role> NEED|READY|NOTE :: <text>" > "$rt/inbox/$r.md"
   done
   [ -f "$rt/state.json" ] || { write_state_skeleton "$rt/state.json" "$1"; info "seeded state.json (IN_PROGRESS, retries 0/3)"; }
   write_protocol "$rt"
+  link_runtime "$1" "$rt"
   info "coord runtime ready: $rt"
+}
+
+# In-repo discovery pointer for the /tmp runtime. The payload (inbox, state,
+# prompts) stays in /tmp; the repo carries one gitignored symlink PER ISSUE so
+# every path an agent needs is reachable from the checkout and setting up a new
+# issue never hijacks the pointer of a live one.
+link_runtime() {
+  local issue="$1" rt="$2"
+  local dir="$REPO_ROOT/.nexios-runtime"
+  mkdir -p "$dir"
+  ln -sfn "$rt" "$dir/$issue"
+  info "runtime pointer: .nexios-runtime/$issue -> $rt"
 }
 
 # ---provisioning---------------------------------------------------------------
@@ -322,6 +449,7 @@ coord_tui_cmd() {
 # ensure nexios-coord tmux session exists running the coordinator TUI.
 ensure_coord_session() {
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
+  ensure_state_links
   need_file "$COORD_DIR/opencode.json"
   if ! tmux has-session -t "$COORD_SESS" 2>/dev/null; then
     tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
@@ -365,10 +493,12 @@ mode_workers() {
   run_session "$QE_SESS" "$QE_DIR" "$ROLES_DIR/qe.json" "$rt/prompts/qe.txt"
 }
 
-# $1 tmux session name — opens a new visible Terminal window attached read-only.
+# $1 tmux session name — opens a new visible Terminal window attached READ-WRITE
+# (owner call: watchers may type; the watch-XOR-drive rule is enforced socially —
+# read-only mirrors would block ALL tmux input including doorbells, so none here).
 open_watch_window() {
-  osascript -e "tell application \"Terminal\" to do script \"tmux attach -t $1 -r\"" >/dev/null
-  info "opened watch window for '$1' (read-only attach; detach with Ctrl-b d)"
+  osascript -e "tell application \"Terminal\" to do script \"tmux attach -t $1\"" >/dev/null
+  info "opened watch window for '$1' (read-write attach; type only deliberate input, never paste chat logs)"
 }
 
 # Full room from one zsh command: setup + workers + visible watch mirrors +
@@ -384,7 +514,7 @@ mode_up() {
   open_watch_window "$QE_SESS"
   open_watch_window "$COORD_SESS"
   cat <<EOF
-watch: three Terminal windows opened (read-only mirrors). Detach with Ctrl-b d.
+watch: three Terminal windows opened (read-write mirrors). Detach with Ctrl-b d.
 watch: Harness.app grid stays empty by design (tmux sessions are not discovered).
        Do NOT start opencode in app panes (that would duplicate live workers).
 next: the coordinator runs in tmux session '$COORD_SESS' (the doorbell address).
@@ -434,8 +564,45 @@ mode_msg() {
   [ $# -eq 2 ] || fail "msg needs: <tmux-session> <single-line-text>"
   case "$2" in *$'\n'*) fail "doorbell must be a single line (payloads live in inbox)";; esac
   tmux has-session -t "$1" 2>/dev/null || fail "no such tmux session: $1 (start it first)"
+  if tmux list-clients -t "$1" 2>/dev/null | grep -q "read-only"; then
+    fail "read-only watcher attached to '$1' — tmux blocks ALL input while one is present. Close the mirror window(s) (Ctrl-b d does not work in -r; close the window), then retry"
+  fi
   tmux send-keys -t "$1" "$2" Enter
   info "doorbell sent to '$1'"
+}
+
+# End-to-end transport self-test: proves msg delivers text+Enter INTO a live
+# tmux pane in both directions, using two scratch echo sessions (no opencode,
+# no tokens, no $DEV_SESS/$QE_SESS/$COORD_SESS touched).
+mode_comms_test() {
+  local issue="${1:-999-test}"
+  local rt; rt=$(runtime_dir "$issue")
+  need_cmd tmux
+  mkdir -p "$rt/notes"
+  local a="agentup-ct-a-$$" b="agentup-ct-b-$$"
+  cat > "$rt/notes/echo_agent.sh" <<'EOF'
+#!/bin/sh
+while IFS= read -r line; do printf 'GOT:%s\n' "$line"; done
+EOF
+  kill_sess() { tmux kill-session -t "$1" 2>/dev/null || true; }
+  trap "tmux kill-session -t '$a' 2>/dev/null || true; tmux kill-session -t '$b' 2>/dev/null || true" EXIT
+  tmux new-session -d -s "$a" "sh $rt/notes/echo_agent.sh"
+  tmux new-session -d -s "$b" "sh $rt/notes/echo_agent.sh"
+  sleep 1
+  local ok=1
+  # coord -> worker direction / worker -> coord direction (same mode_msg path)
+  mode_msg "$a" "PING-$$" >/dev/null || ok=0
+  mode_msg "$b" "PONG-$$" >/dev/null || ok=0
+  sleep 1
+  tmux capture-pane -p -t "$a" | grep -q "GOT:PING-$$" || { echo "FAIL: coord->worker not delivered"; ok=0; }
+  tmux capture-pane -p -t "$b" | grep -q "GOT:PONG-$$" || { echo "FAIL: worker->coord not delivered"; ok=0; }
+  # guard still fails loud on a missing session
+  if ( mode_msg "agentup-ct-missing-$$" "x" ) >/dev/null 2>&1; then
+    echo "FAIL: msg accepted a nonexistent session"; ok=0
+  fi
+  [ "$ok" = 1 ] || fail "comms-test FAILED"
+  kill_sess "$a"; kill_sess "$b"; trap - EXIT
+  info "comms-test PASSED: doorbell delivered in both directions (PING-$$/PONG-$$)"
 }
 
 mode_status() {
@@ -446,7 +613,7 @@ mode_status() {
   echo "qe:  $(git -C "$QE_DIR" branch --show-current 2>/dev/null || echo '?')"
   if [ $# -ge 1 ]; then
     local rt; rt=$(runtime_dir "$1")
-    for r in dev qe auditor; do
+    for r in dev qe auditor coord; do
       echo "--- inbox/$r.md (tail) ---"
       tail -2 "$rt/inbox/$r.md" 2>/dev/null || echo "(none)"
     done
@@ -502,13 +669,24 @@ mode_self_test() {
   chk() { t=$((t+1)); if "$@" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS: $*"; else echo "FAIL: $*"; fi; }
   chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS: $*"; fi; }
   # guard aborts (scratch names only — never live sessions)
-  chk_neg ./scripts/agent_up.sh run "agentup-st-$$" /nonexistent "$ROLES_DIR/dev.json" /dev/null || true
+  chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /nonexistent "$ROLES_DIR/dev.json" /dev/null || true
   # msg discipline
-  chk_neg ./scripts/agent_up.sh msg "agentup-nosuch-$$" "hi" || true
+  chk_neg "$SCRIPT_DIR/agent_up.sh" msg "agentup-nosuch-$$" "hi" || true
   printf 'two\nlines' > /tmp/agentup-ml-$$.txt || true
   # reconstruct refuses live dir ( Triple-check: uses --copy guard)
-  chk_neg ./scripts/agent_up.sh status --reconstruct 410 --copy /tmp/nexios-410 || true
+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/nexios-410 || true
   rm -f /tmp/agentup-ml-$$.txt
+  # out-of-repo policy: a REAL file where a link belongs must hard-fail (drift),
+  # an absent path must be linked, a wrong link must be repointed.
+  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator"
+  printf 'drift\n' > "$st/home/coordinator/opencode.json"
+  chk_neg env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
+  rm -f "$st/home/coordinator/opencode.json"
+  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
+  chk test -L "$st/home/coordinator/opencode.json"
+  chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
+  chk test -L "$st/home/roles/dev.json"
+  rm -rf "$st"
   echo "self-test: $pass/$t PASS"
   [ "$pass" = "$t" ] || fail "self-test failures"
 }
@@ -553,6 +731,8 @@ case "$mode" in
   audit-diff) mode_audit_diff "$@" ;;
   qe-merge) mode_qe_merge "$@" ;;
   msg) mode_msg "$@" ;;
+  wake) mode_msg "$@" ;;
+  comms-test) mode_comms_test "$@" ;;
   status) mode_status "$@" ;;
   self-test) mode_self_test "$@" ;;
   approve) mode_approve "$@" ;;
