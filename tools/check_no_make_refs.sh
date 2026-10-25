@@ -40,9 +40,8 @@ TARGETS='all|audit|build|check-[a-z-]+|clean|config-summary|coverage[a-z-]*|debu
 #   AGENTS.md at/after `## Active Summary`, all of prompts/STATE.md
 #                               rolling session logs (normative rules live
 #                               above the marker / in AGENTS.md proper)
-#   .github/workflows/ci.yml + docker-release.yml (dual-period CI; the
-#                               cutover flips/deletes them — until then the
-#                               Make legs are live, not stale)
+#   tools/check_makefile_freeze.sh (the freeze gate itself: guarding the
+#                               frozen paths requires naming them)
 #   `#<n> (<title with Makefile>)` issue-title references (history)
 #   this file itself (its header documents the patterns it hunts)
 #
@@ -70,8 +69,7 @@ grep -v -e '^Makefile$' -e '^mk/' -e '^tools/meson/' -e '^audits/' \
     -e '^prompts/LEARNINGS\.md$' -e '^prompts/LESSONS\.md$' \
     -e '^prompts/BUGS\.md$' -e '^testcases-v0\.4\.0\.md$' \
     -e '^prompts/STATE\.md$' -e '^tools/check_no_make_refs\.sh$' \
-    -e '^\.github/workflows/ci\.yml$' \
-    -e '^\.github/workflows/docker-release\.yml$' \
+    -e '^tools/check_makefile_freeze\.sh$' \
     "$TMP_ALLOW" > "$TMP_SCAN"
 
 fail=0

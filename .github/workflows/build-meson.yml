@@ -207,6 +207,26 @@ jobs:
         python3 tools/check-parity.py --report
         python3 tools/check_no_make_refs.sh
 
+  makefile-freeze:
+    # Frozen-build freeze (issue #170 A1/X1): any change set touching the
+    # frozen build without a Meson mirror or ledger update fails the gate.
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        # Full history: the gate compares against an explicit base.
+        fetch-depth: 0
+
+    - name: Enforce frozen-build freeze
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REF_NAME: ${{ github.ref_name }}
+        BASE_REF: ${{ github.base_ref }}
+        HEAD_REF: ${{ github.head_ref }}
+        BEFORE_SHA: ${{ github.event.before }}
+      run: bash tools/check_makefile_freeze.sh --event "$EVENT_NAME" --ref "$REF_NAME" --base-ref "$BASE_REF" --head-ref "$HEAD_REF" --before "$BEFORE_SHA"
+
   cross-edit-isolation:
     # Isolation gate as its own job (#412 S3-4R). The fence checks do not belong
     # in the parity ledger: that job is advisory until the Make->Meson cutover,

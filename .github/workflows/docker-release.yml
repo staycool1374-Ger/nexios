@@ -68,8 +68,8 @@ jobs:
 
   dogfood:
     # Validates the image contract: pull the pushed image (tags) or use
-    # the locally loaded one (dispatch), then build + run one quick
-    # class inside it. The image ref is :<ref-name> in both cases
+    # the locally loaded one (dispatch), then run the Meson build + one
+    # quick class inside it. The image ref is :<ref-name> in both cases
     # (:v0.5.1 on tags via type=ref,event=tag; :<branch> on dispatch
     # via type=ref,event=branch).
     needs: build-push
@@ -78,8 +78,11 @@ jobs:
       - name: Pull release image
         run: docker pull ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }}
 
-      - name: make build inside the image
-        run: docker run --rm ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }} make build
+      - name: Meson build inside the image
+        run: >
+          docker run --rm ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }}
+          bash -c "meson setup build/meson-x86_64 --cross-file cross/x86_64-elf.txt -Darch=x86_64 &&
+          tools/meson/build.sh build/meson-x86_64"
 
       - name: Quick test class inside the image
         # Retry-once: the QEMU harness has a known intermittent pre-test
@@ -89,7 +92,7 @@ jobs:
         # progress at any timeout.
         run: |
           for attempt in 1 2; do
-            if docker run --rm ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }} make execute-test x86_64 debug debug_syscall; then
+            if docker run --rm ghcr.io/staycool1374-ger/nexios-env:${{ github.ref_name }} python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall; then
               echo "dogfood green on attempt $attempt"
               exit 0
             fi
