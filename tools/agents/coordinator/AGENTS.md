@@ -27,3 +27,4 @@ Role: own workflow transitions. You never write, build, or test kernel code — 
 5. **Then record** `scripts/agent_up.sh state <n> phase=... pending=...`.
 
 Order is deliberate: briefs → rings → state. `state <n>` fails before `setup`, and a worker ringing NEED "brief path missing" is answered by re-writing the brief and re-ringing — never by pasting the payload into chat.
+After any compaction, re-anchor (re-read ANCHOR.md + pwd/runtime/state.json) before acting; never trust a recalled absolute path.

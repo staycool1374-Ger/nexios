@@ -326,6 +326,42 @@ open(path, "w").write(json.dumps(s, indent=2) + "\n")
 EOF
 }
 
+# ---compaction anchor--------------------------------------------------------
+# ANCHOR.md lives in the RUNTIME dir (not the repo, not the session cwd):
+# its paths are host-specific ($HOME, /tmp canonicalization, per-issue
+# runtime) and must never be committed or copied into doctrine (#414).
+# Rewritten by every `setup` (canonicalizes the live host); workers re-read
+# it after any compaction instead of trusting a recalled absolute path.
+write_anchor() {
+  local rt="$1"
+  python3 - "$rt" "$REPO_ROOT" "$QE_DIR" "$RENDERED_ROOT" <<'EOF'
+import os, socket, sys
+from datetime import datetime, timezone
+rt, repo, qe, rendered = sys.argv[1:5]
+def canon(p):
+    try:
+        return os.path.realpath(p)
+    except OSError:
+        return p + " (MISSING)"
+lines = [
+    "# ANCHOR — canonical absolute paths for this room",
+    "# Written by `setup`; host-specific, per-issue. Re-read after ANY",
+    "# compaction (with pwd + runtime/state.json) before acting; never",
+    "# trust a recalled absolute path, never copy these into doctrine.",
+    "- repo (dev checkout): %s" % canon(repo),
+    "- testbed checkout: %s" % canon(qe),
+    "- runtime dir: %s" % canon(rt),
+    "- inbox dir: %s" % canon(os.path.join(rt, "inbox")),
+    "- rendered fence dir: %s" % canon(rendered),
+    "- host: %s  utc: %s" % (socket.gethostname(),
+                             datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+    "",
+]
+with open(os.path.join(rt, "ANCHOR.md"), "w", encoding="utf-8") as handle:
+    handle.write("\n".join(lines))
+EOF
+}
+
 # $1 issue. Idempotent: creates missing pieces, never overwrites state/inbox.
 mode_setup() {
   [ $# -eq 1 ] || fail "setup needs an issue number"
@@ -338,6 +374,7 @@ mode_setup() {
   done
   [ -f "$rt/state.json" ] || { write_state_skeleton "$rt/state.json" "$1"; info "seeded state.json (IN_PROGRESS, retries 0/3)"; }
   write_protocol "$rt"
+  write_anchor "$rt"
   link_runtime "$1" "$rt"
   info "coord runtime ready: $rt"
 }
