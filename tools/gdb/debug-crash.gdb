@@ -1,6 +1,8 @@
 set pagination off
 set confirm off
-file build/kernel-debug.elf
+# ELF is passed on the gdb command line; only the stub port belongs here,
+# so gdb_run.py --gdb-port can rewrite it (busy :1234 auto-picks).
+target extended-remote :1234
 
 # Break at process_replenishments to catch the -1 this pointer
 b *SporadicServer::process_replenishments(unsigned long long)+0x1c
@@ -29,4 +31,4 @@ commands
   continue
 end
 
-run
+continue

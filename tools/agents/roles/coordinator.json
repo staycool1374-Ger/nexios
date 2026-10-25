@@ -4,6 +4,8 @@
     "bash": "allow",
     "external_directory": {
       "*": "deny",
+      "{repo}/prompts/**": "allow",
+      "{repo}/audits/**": "allow",
       "/tmp/nexios-*": "allow",
       "/private/tmp/nexios-*": "allow",
       "/tmp/nexios-*/**": "allow",
@@ -19,7 +21,11 @@
       "/tmp/qemu-serial.*": "allow",
       "/private/tmp/qemu-serial.*": "allow",
       "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow"
+      "/private/tmp/agentup-*": "allow",
+      "/tmp/agentup-*/**": "allow",
+      "/private/tmp/agentup-*/**": "allow",
+      "/tmp/lldb-*": "allow",
+      "/private/tmp/lldb-*": "allow"
     },
     "edit": {
       "*": "deny",
@@ -27,7 +33,7 @@
       "/private/tmp/nexios-*/*": "allow",
       "/tmp/nexios-*/**/*": "allow",
       "/private/tmp/nexios-*/**/*": "allow",
-      "prompts/LEARNINGS.md": "allow"
+      "{repo}/prompts/LEARNINGS.md": "allow"
     }
   }
 }

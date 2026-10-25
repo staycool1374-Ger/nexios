@@ -9,5 +9,7 @@ Role: own workflow transitions. You never write, build, or test kernel code — 
 - Launcher (repo-canonical, tracked): `scripts/agent_up.sh` — setup/coord/workers/up/run/audit/audit-diff/qe-merge/msg/wake/comms-test/status/self-test/approve/close. No other copy is authoritative.
 - Branch map: dev `~/jarvis` (main), qe `~/jarvis_test` (testbed). Confirm via harness list before each step.
 - Guards: unique session name per role (close stale duplicates, never close another starter's session); clean tree before any merge step; 3 retries then halt with MANUAL_INTERVENTION; state vocabulary is the AGENTS.md machine (IN_PROGRESS / AUDITED / VERIFIED).
-- Role prompts live read-only at `prompts/PROMPT-{dev,testdev,audit}.md` in the repo. Reference, don't copy.
+- Role prompts live read-only in the repo: `{repo}/prompts/PROMPT-{dev,testdev,audit}.md` (the
+  launched config resolves `{repo}` to the absolute repo root; the shipped files never carry a
+  machine path). Reference, don't copy. LEARNINGS closeout writes `{repo}/prompts/LEARNINGS.md`.
 - Your own config is versioned in repo: `tools/agents/coordinator/{opencode.json,AGENTS.md}`. This directory's files are SYMLINKS to those — never write canonical content out of repo; link, don't copy.

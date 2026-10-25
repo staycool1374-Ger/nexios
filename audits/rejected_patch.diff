@@ -1,242 +1,104 @@
-diff --git a/.github/workflows/build-meson.yml b/.github/workflows/build-meson.yml
-index e579d76..556bb8c 100644
---- a/.github/workflows/build-meson.yml
-+++ b/.github/workflows/build-meson.yml
-@@ -11,9 +11,9 @@ name: NexIOS Meson CI
- 
- on:
-   push:
--    branches: [ main ]
-+    branches: [ main, testbed ]
-   pull_request:
--    branches: [ main ]
-+    branches: [ main, testbed ]
- 
- jobs:
-   meson-x86_64:
-@@ -185,6 +185,9 @@ jobs:
-     steps:
-     - name: Checkout Code
-       uses: actions/checkout@v4
-+      with:
-+        # Full history: the role gate compares against an explicit base.
-+        fetch-depth: 0
- 
-     - name: Install Toolchain and Dependencies
-       run: |
-@@ -218,4 +221,16 @@ jobs:
-           role=dev
-         fi
-         echo "cross-edit role check: --role=$role (branch ${GITHUB_REF_NAME})"
--        bash tools/check_no_cross_edits.sh --role="$role"
-+        # Explicit base: a PR / single-ref checkout has no local `main`, so the
-+        # script's merge-base fallback degrades to HEAD and classifies an empty
-+        # change set as clean.
-+        if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-+          base="origin/${GITHUB_BASE_REF}"
-+        else
-+          base="${{ github.event.before }}"
-+          case "$base" in
-+            ''|0000000000000000000000000000000000000000) base="origin/main" ;;
-+          esac
-+        fi
-+        echo "cross-edit base: ${base}"
-+        bash tools/check_no_cross_edits.sh --role="$role" --base="$base"
-diff --git a/prompts/PROMPT-audit.md b/prompts/PROMPT-audit.md
-index 52f1d36..2aa3d7f 100644
---- a/prompts/PROMPT-audit.md
-+++ b/prompts/PROMPT-audit.md
-@@ -4,6 +4,16 @@ mode: subagent
- model: opencode-go/muse-spark-1.3-contributor
- temperature: 0.0
- permission:
-+  external_directory:
-+    "*": deny
-+    "/tmp/nexios-*": allow
-+    "/tmp/nexios-*/**": allow
-+    "/tmp/jarvis-*": allow
-+    "/tmp/jarvis-*/**": allow
-+    "/tmp/jarvis_*": allow
-+    "/tmp/matrix-*": allow
-+    "/tmp/qemu-serial.*": allow
-+    "/tmp/agentup-*": allow
-   edit:
-     "*": deny
-     "/tmp/nexios-*/*": allow
 diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
-index 2441bce..9b03f62 100755
 --- a/scripts/agent_up.sh
 +++ b/scripts/agent_up.sh
-@@ -378,7 +378,8 @@ mode_state_set() {
- import datetime, fcntl, json, os, sys, tempfile
- 
- path, pairs = sys.argv[1], sys.argv[2:]
--ALLOWED = {"halt", "pending", "phase", "retries", "retry_budget", "state", "updated"}
-+ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
-+           "retry_budget", "state", "updated"}
- STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
-           "CLOSED", "FEEDBACK"}
- lock_path = os.path.join(os.path.dirname(path), "state.lock")
-@@ -583,7 +584,13 @@ mode_audit_diff() {
-   local br="${1:-$(git branch --show-current)}"
-   local base; base=$(git merge-base main "$br")
-   local out="audits/pending_patch.diff"
--  git diff "$base".."$br" -- . > "$out" || true
-+  if [ "$br" = "$(git branch --show-current)" ]; then
-+    # Same branch: diff the worktree too — uncommitted edits are part of the
-+    # delta under audit (`base..br` would silently omit them).
-+    git diff "$base" -- . > "$out" || true
-+  else
-+    git diff "$base".."$br" -- . > "$out" || true
-+  fi
-   [ -s "$out" ] || fail "audit diff empty for $br (nothing to audit)"
-   info "audit diff: $out ($(wc -l < "$out") lines, merge-base $base)"
- }
-@@ -596,12 +603,13 @@ mode_qe_merge() {
-     || fail "run qe-merge in the QE checkout ($QE_DIR), not $(pwd)"
-   check_branch "$QE_DIR" testbed
-   check_clean_tree "$(pwd)" "test-history.txt" "graphify-out/"
--  git fetch origin main 2>/dev/null || true
-+  git fetch origin main 2>/dev/null \
-+    || fail "git fetch origin main failed — refusing to merge a possibly stale origin/main"
-   if git merge --no-commit --no-ff origin/main; then
-     info "merged origin/main --no-commit (inspect, test, then commit or abort)"
-   else
-     git merge --abort || true
--    fail "conflict — aborted, code state restored (resolve manually)"
-+    fail "conflict — merge aborted; verify with git status (resolve manually)"
-   fi
- }
- 
-@@ -687,12 +695,15 @@ mode_status_reconstruct() {
-     *-drill|*-staging|*-copy) ;;
-     *) fail "refusing: --copy dir name must end in -drill, -staging or -copy (got $(basename "$copy"))";;
-   esac
-+  # `--copy` is checked as a string; a symlink named *-copy would write
-+  # through to the live dir (or any target), defeating "live untouched".
-+  [ -L "$copy" ] && fail "refusing: --copy must not be a symlink (got $(readlink "$copy"))"
-   local rt; rt=$(runtime_dir "$issue")
-   [ -f "$rt/state.json" ] || fail "no live state to compare against"
-   case "$copy" in "$rt") fail "refusing to reconstruct the live dir (use a COPY)";; esac
-   mkdir -p "$copy"
-   python3 - "$rt" "$copy" "$DEV_DIR" "$QE_DIR" <<'EOF'
--import json, subprocess, sys
-+import json, os, subprocess, sys
- rt, copy, devdir, qedir = sys.argv[1:5]
- live = json.load(open(rt + "/state.json"))
- dev_br = subprocess.run(["git","-C",devdir,"branch","--show-current"],
-@@ -705,7 +716,10 @@ recon = {"halt": live.get("halt", False), "issue": live.get("issue"),
-          "retry_budget": live.get("retry_budget", 3),
-          "updated": live.get("updated", ""),
-          "pending": live.get("pending", "")}
--open(copy + "/state.json", "w").write(json.dumps(recon, indent=2) + "\n")
-+out_path = copy + "/state.json"
-+if os.path.islink(out_path):
-+    sys.exit("refusing: copy state.json is a symlink")
-+open(out_path, "w").write(json.dumps(recon, indent=2) + "\n")
- print("reconstruct: dev=%s qe=%s" % (dev_br, qe_br))
- print("machine fields: " + ("MATCH" if all(
-     recon[k] == live.get(k) for k in
-diff --git a/tools/agents/coordinator/opencode.json b/tools/agents/coordinator/opencode.json
-index 0a10eaf..ded0fe3 100644
---- a/tools/agents/coordinator/opencode.json
-+++ b/tools/agents/coordinator/opencode.json
-@@ -1,5 +1,25 @@
- {
-   "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "prompts/LEARNINGS.md": "allow"
+@@ -536,8 +536,9 @@ mode_state_set() {
+     state["updated"] = datetime.datetime.now(
+         datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+     directory = os.path.dirname(path)
+-    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".state.")
++    tmp = None
+     try:
++        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".state.")
+         with os.fdopen(fd, "w") as out:
+             json.dump(state, out, indent=2)
+             out.write("\n")
+@@ -706,6 +706,16 @@ ensure_coord_session() {
+   ensure_state_links
+   render_coord_config
+   need_file "$COORD_CONFIG_RESOLVED"
++  if tmux has-session -t "$COORD_SESS" 2>/dev/null; then
++    # Never trust a session this launch did not create: a pre-fence
++    # coordinator (launched with no OPENCODE_CONFIG at all) or a moved repo
++    # leaves a running session whose env is not the resolved config. Workers
++    # refuse reuse outright; the coordinator kills the stale session so the
++    # block below rebuilds it fenced (S4-9: reuse must assert too).
++    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" 2>/dev/null || {
++      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
 +    }
-+  },
-   "mcp": {
-     "harness": {
-       "type": "local",
-diff --git a/tools/agents/roles/README.md b/tools/agents/roles/README.md
-index b9b7aed..fd8586f 100644
---- a/tools/agents/roles/README.md
-+++ b/tools/agents/roles/README.md
-@@ -22,7 +22,10 @@ links and hard-fails if it finds a real file in their place.
-   would be a click-through farm). The fence was never the shell: cross-edit protection is the
-   fail-closed `tools/check_no_cross_edits.sh` gate, not bash denial.
- - `edit` is where each role differs (see files). Every role denies editing its own cage
--  (`tools/agents/roles/**`) so a session cannot widen its own fence.
-+  (`tools/agents/roles/**`). Dev still may edit the twin/coordinator definitions,
-+  `prompts/PROMPT-*.md` and `scripts/agent_up.sh`, so "cannot widen its own fence" holds
-+  only for the role JSONs — those other edits are covered by audit + git review, not by
-+  the dev cage.
- 
- ## Twins
- Each role has a twin agent definition, canonical in `tools/agents/twins/nexios-<role>.md` (subagent
++  fi
+   if ! tmux has-session -t "$COORD_SESS" 2>/dev/null; then
+     COORD_TMPDIR=$(ensure_session_tmpdir "$COORD_SESS")
+     tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
+@@ -1150,6 +1150,7 @@ mode_self_test() {
+   chk bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base main"
+   chk_neg bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base="
+-  rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" \
+-         "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991"
++  rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
++         "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
++         "$REPO_ROOT/.nexios-runtime/9999"
+   echo "self-test: $pass/$t PASS"
+   [ "$pass" = "$t" ] || fail "self-test failures"
+ }
+diff --git a/tools/agents/verify_fence.py b/tools/agents/verify_fence.py
+--- a/tools/agents/verify_fence.py
++++ b/tools/agents/verify_fence.py
+@@ -143,6 +143,13 @@ def main():
+     twins = {role: frontmatter(path) for role, path in TWIN.items()}
+     audit_prompt = frontmatter(AUDIT_PROMPT)
+     embedded = heredocs(AGENT_UP)
++    for label, block in (("nexios-dev.md", twins["dev"]),
++                         ("nexios-qe.md", twins["qe"]),
++                         ("nexios-audit.md", twins["auditor"]),
++                         ("PROMPT-audit.md", audit_prompt)):
++        if block is not None and not block.get("permission"):
++            fail("PARSE", "%s: empty permission block (skipped, not clean)"
++                 % label)
+     if FAILS:
+         report()
+         return 2
+@@ -162,13 +162,13 @@ def main():
+     family = [("dev.json", worker),
+               ("qe.json", ext_map(configs["qe"])),
+               ("auditor.json", ext_map(configs["auditor"]))]
+-    if twins["dev"]:
++    if twins["dev"] is not None:
+         family.append(("nexios-dev.md", ext_map(twins["dev"])))
+-    if twins["qe"]:
++    if twins["qe"] is not None:
+         family.append(("nexios-qe.md", ext_map(twins["qe"])))
+-    if twins["auditor"]:
++    if twins["auditor"] is not None:
+         family.append(("nexios-audit.md", ext_map(twins["auditor"])))
+-    if audit_prompt:
++    if audit_prompt is not None:
+         family.append(("PROMPT-audit.md", ext_map(audit_prompt)))
+     for name, got in family:
+         if got != worker:
+@@ -192,12 +199,12 @@ def main():
+     # F4 - edit maps identical inside each family.
+     pairs = [("dev.json", edit_map(configs["dev"]), "nexios-dev.md",
+-              edit_map(twins["dev"]) if twins["dev"] else None),
++              edit_map(twins["dev"]) if twins["dev"] is not None else None),
+              ("qe.json", edit_map(configs["qe"]), "nexios-qe.md",
+-              edit_map(twins["qe"]) if twins["qe"] else None),
++              edit_map(twins["qe"]) if twins["qe"] is not None else None),
+              ("auditor.json", edit_map(configs["auditor"]), "nexios-audit.md",
+-              edit_map(twins["auditor"]) if twins["auditor"] else None),
++              edit_map(twins["auditor"]) if twins["auditor"] is not None else None),
+              ("auditor.json", edit_map(configs["auditor"]), "PROMPT-audit.md",
+-              edit_map(audit_prompt) if audit_prompt else None)]
++              edit_map(audit_prompt) if audit_prompt is not None else None)]
+     for left, left_map, right, right_map in pairs:
+         if right_map is not None and left_map != right_map:
+             fail("F4", "%s edit map differs from %s" % (left, right))
 diff --git a/tools/check_no_cross_edits.sh b/tools/check_no_cross_edits.sh
-index e3f534c..67be303 100755
 --- a/tools/check_no_cross_edits.sh
 +++ b/tools/check_no_cross_edits.sh
-@@ -37,24 +37,31 @@
- # exits 0/2.
- # CI: the meson workflow runs `--self-test` (classifier sanity) and the ROLE
- # check itself, with the role derived from the branch (`testbed` -> qe, every
--# other branch -> dev). Run it by hand with `--role=dev|qe` before pushing.
-+# other branch -> dev) and an EXPLICIT --base (a PR checkout has no local
-+# `main`, so the merge-base fallback would classify an empty set as clean).
-+# Run it by hand with `--role=dev|qe` before pushing.
- set -u
- cd "$(dirname "$0")/.." || exit 2
- 
- ROLE=""
- SELFTEST=0
-+BASE_OVERRIDE=""
- while [ $# -gt 0 ]; do
-     case "$1" in
-         --role=dev|--role=qe) ROLE="${1#--role=}" ;;
-         --role)
-             case "${2:-}" in
-                 dev|qe) ROLE="$2"; shift ;;
--                *) echo "usage: $0 [--role dev|qe] [--self-test]" >&2; exit 2 ;;
-+                *) echo "usage: $0 [--role dev|qe] [--base <rev>] [--self-test]" >&2; exit 2 ;;
-             esac
-             ;;
-+        --base=*) BASE_OVERRIDE="${1#--base=}" ;;
-+        --base)
-+            [ -n "${2:-}" ] || { echo "usage: $0 --base <rev>" >&2; exit 2; }
-+            BASE_OVERRIDE="$2"; shift ;;
+@@ -72,3 +72,3 @@ while [ $# -gt 0; do
          --self-test) SELFTEST=1 ;;
-         -h|--help) sed -n '1,32p' "$0"; exit 0 ;;
--        *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--self-test])" >&2; exit 2 ;;
-+        *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
+-        -h|--help) sed -n '1,32p' "$0"; exit 0 ;;
++        -h|--help) sed -n '1,45p' "$0"; exit 0 ;;
+         *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
      esac
      shift
- done
-@@ -126,7 +133,16 @@ if [ -z "$ROLE" ]; then
-     esac
- fi
- 
--BASE=$(git merge-base main HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)
-+if [ -n "$BASE_OVERRIDE" ]; then
-+    # CI passes the true change-set base; an unresolvable base is a hard error
-+    # so a single-ref checkout can never classify an empty set as clean.
-+    BASE=$(git rev-parse --verify --quiet "$BASE_OVERRIDE^{commit}") || {
-+        echo "check_no_cross_edits: base '$BASE_OVERRIDE' does not resolve" >&2
-+        exit 2
-+    }
-+else
-+    BASE=$(git merge-base main HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)
-+fi
- if [ -z "$BASE" ]; then
-     echo "check_no_cross_edits: not a git repo" >&2
-     exit 2

@@ -7,14 +7,15 @@
 # bypass them by design. This script is the fail-closed backstop: it fails
 # the tree (and CI) when the current change set crosses the role fence.
 #
-# Scans TRACKED files only (git ls-files: build output, vendored deps and
-# IDE state are untracked and out of scope by construction — same contract
-# as tools/check_no_make_refs.sh).
-#
-# Change set: tracked files differing from BASE, where BASE is
-# `git merge-base main HEAD` (branch work, committed or not) falling back
-# to HEAD (dirty tree directly on main). Untracked-but-unadded files are
-# invisible until `git add` tracks them; the gate turns red at commit time.
+# Change set: tracked files differing from BASE PLUS every untracked,
+# non-ignored file (`git ls-files --others --exclude-standard`). Untracked
+# files were silently invisible before #412 S4-8: a brand-new
+# `src/kernel/test/*.cpp` could be written by a dev session and never seen by
+# the gate until `git add`, which is exactly the window the fence exists for.
+# BASE is `git merge-base main HEAD` (branch work, committed or not) falling
+# back to HEAD (dirty tree directly on main), or an explicit `--base <rev>`;
+# an explicit but empty/unresolvable base is a usage error (exit 2), never a
+# silent merge-base fallback (S4-7).
 #
 # Role resolution: --role dev|qe wins; otherwise $OPENCODE_CONFIG basename
 # (dev.json -> dev, qe.json -> qe). No detectable role is a fail-closed
@@ -30,7 +31,9 @@
 #   1  violation — prints `CROSS-ROLE EDITS:` plus offending paths
 #   2  usage/environment error (unknown role, not a git repo, self-test fail)
 #
-# Exempt: this file itself (its header documents the patterns it hunts).
+# This file is NOT exempt: an edit to the gate is classified like any other
+# path (it is neither a test tree nor a `src/` source, so it passes for both
+# roles) — the old blanket self-exemption hid gate edits from the gate.
 #
 # Self-test: --self-test runs the fence classifier over built-in cases in
 # both directions (green on clean sets, red on deliberate violations) and
@@ -46,6 +49,7 @@ cd "$(dirname "$0")/.." || exit 2
 ROLE=""
 SELFTEST=0
 BASE_OVERRIDE=""
+BASE_SET=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --role=dev|--role=qe) ROLE="${1#--role=}" ;;
@@ -55,12 +59,18 @@ while [ $# -gt 0 ]; do
                 *) echo "usage: $0 [--role dev|qe] [--base <rev>] [--self-test]" >&2; exit 2 ;;
             esac
             ;;
-        --base=*) BASE_OVERRIDE="${1#--base=}" ;;
+        --base=*)
+            BASE_OVERRIDE="${1#--base=}"
+            [ -n "$BASE_OVERRIDE" ] || {
+                echo "check_no_cross_edits: --base needs a revision (got an empty value)" >&2
+                exit 2
+            }
+            BASE_SET=1 ;;
         --base)
             [ -n "${2:-}" ] || { echo "usage: $0 --base <rev>" >&2; exit 2; }
-            BASE_OVERRIDE="$2"; shift ;;
+            BASE_OVERRIDE="$2"; BASE_SET=1; shift ;;
         --self-test) SELFTEST=1 ;;
-        -h|--help) sed -n '1,32p' "$0"; exit 0 ;;
+        -h|--help) sed -n '1,45p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
     esac
     shift
@@ -113,6 +123,64 @@ qe|src/test/foo.cpp|OK
 qe|tools/check_no_cross_edits.sh|OK
 qe|test-history.txt|OK
 CASES
+    # --- integration: the change-set builder, in a hermetic scratch repo -----
+    # Proves the parts the classifier cases cannot: untracked files are in scope
+    # (S4-8), renames classify on the NEW path, and an explicit empty base is a
+    # usage error rather than a merge-base fallback (S4-7).
+    scratch=$(mktemp -d)
+    trap 'rm -rf "$scratch"' EXIT
+    mkdir -p "$scratch/tools" "$scratch/src/kernel/sched"
+    cp "$0" "$scratch/tools/check_no_cross_edits.sh"
+    git -C "$scratch" init -q -b main
+    printf 'base\n' > "$scratch/src/kernel/sched/a.cpp"
+    git -C "$scratch" add -A
+    git -C "$scratch" -c user.email=t@t -c user.name=t commit -qm base
+    mkdir -p "$scratch/src/kernel/test"
+    printf 'x\n' > "$scratch/src/kernel/test/untracked.cpp"
+    if bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base=main \
+        >/dev/null 2>&1; then
+        echo "FAIL integration: untracked dev test file not classified" >&2
+        fail=1
+    else
+        printf 'PASS integration: untracked dev test file caught\n'
+    fi
+    rm -f "$scratch/src/kernel/test/untracked.cpp"
+    printf 'y\n' > "$scratch/src/kernel/sched/untracked.cpp"
+    if bash "$scratch/tools/check_no_cross_edits.sh" --role=qe --base=main \
+        >/dev/null 2>&1; then
+        echo "FAIL integration: untracked qe source file not classified" >&2
+        fail=1
+    else
+        printf 'PASS integration: untracked qe source file caught\n'
+    fi
+    rm -f "$scratch/src/kernel/sched/untracked.cpp"
+    git -C "$scratch" mv src/kernel/sched/a.cpp \
+        "src/kernel/test/renamed with space.cpp"
+    if bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base=main \
+        >/dev/null 2>&1; then
+        echo "FAIL integration: rename into the test tree not classified" >&2
+        fail=1
+    else
+        printf 'PASS integration: rename into the test tree caught\n'
+    fi
+    git -C "$scratch" mv "src/kernel/test/renamed with space.cpp" \
+        src/kernel/sched/a.cpp
+    bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base= \
+        >/dev/null 2>&1
+    if [ $? -eq 2 ]; then
+        printf 'PASS integration: empty --base is a usage error\n'
+    else
+        echo "FAIL integration: empty --base did not exit 2" >&2
+        fail=1
+    fi
+    if bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base=main \
+        >/dev/null 2>&1; then
+        printf 'PASS integration: clean tree passes\n'
+    else
+        echo "FAIL integration: clean tree reported a violation" >&2
+        fail=1
+    fi
+
     if [ "$fail" = "0" ]; then
         echo "check_no_cross_edits self-test: clean"
         exit 0
@@ -133,7 +201,7 @@ if [ -z "$ROLE" ]; then
     esac
 fi
 
-if [ -n "$BASE_OVERRIDE" ]; then
+if [ "$BASE_SET" = 1 ]; then
     # CI passes the true change-set base; an unresolvable base is a hard error
     # so a single-ref checkout can never classify an empty set as clean.
     BASE=$(git rev-parse --verify --quiet "$BASE_OVERRIDE^{commit}") || {
@@ -149,26 +217,23 @@ if [ -z "$BASE" ]; then
 fi
 
 TMP_CHANGED=$(mktemp)
-TMP_TRACKED=$(mktemp)
-trap 'rm -f "$TMP_CHANGED" "$TMP_TRACKED"' EXIT
+trap 'rm -f "$TMP_CHANGED"' EXIT
 
-# Tracked files changed vs BASE (committed-on-branch + staged + unstaged).
+# Tracked files changed vs BASE (committed-on-branch + staged + unstaged) plus
+# untracked non-ignored files (build output stays out via --exclude-standard).
 git diff --name-only "$BASE" -- . > "$TMP_CHANGED" || {
     echo "check_no_cross_edits: git diff failed (cannot establish the change set)" >&2
     exit 2
 }
-# Intersect with the tracked universe (drops untracked noise by contract).
-git ls-files > "$TMP_TRACKED"
+git ls-files --others --exclude-standard >> "$TMP_CHANGED" || {
+    echo "check_no_cross_edits: git ls-files failed (cannot establish the change set)" >&2
+    exit 2
+}
+sort -u -o "$TMP_CHANGED" "$TMP_CHANGED"
 
 OUT=""
 while IFS= read -r file; do
     [ -z "$file" ] && continue
-    case "$file" in
-        tools/check_no_cross_edits.sh) continue ;;  # exempt: this gate itself
-    esac
-    if ! grep -qxF "$file" "$TMP_TRACKED"; then
-        continue
-    fi
     if [ "$(classify "$ROLE" "$file")" = "VIOLATION" ]; then
         OUT="${OUT}${ROLE}: ${file}
 "

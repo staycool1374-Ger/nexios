@@ -13,6 +13,7 @@
 - Release the primitive lock BEFORE reschedule; every BLOCKED leaves the ready queue (INV-2); waits are bounded or scheduler-mediated; test bridge sequences guard add_task too (§11, #208).
 - Test waits use need_resched + hlt (wait_for_termination_safe); BLOCKED + dequeue_ready; bare pause-spins starve ticks under TCG. Rendezvous tests must wake on message arrivals, never on third-party timing (tick-dependent peers/killers hang under load); cyclic-capable walks get trip-count fail-stops, inserts unlink-first.
 - Byte-identity via per-function objdump diff (totals mislead); always_inline hot helpers; #ifndef + value #error as a pair; GAS needs `msr daifset, #n` (#309b).
+- Fences are duplicated data with no permission `include`: prove the family mechanically (verifier green→red→green before the edit), assert the fence on session REUSE too (never trust a session you did not create), and remember `edit` rules do not cover shell redirection — the post-hoc diff gate is the second half (#412).
 - Fence allows are canonical-path matches: mirror every `/tmp` rule as `/private/tmp` (macOS `/tmp` symlink), and prove fences with a tool-only write probe naming tool-vs-bash, never a config dump (#410).
 - Post-edit grep every site after repeated-pattern edits (replaceAll missed the differently-indented handle_irq drain — auditor S2, #307).
 - x86 trap regs[17]=RIP [18]=CS [19]=RFLAGS [20]=RSP(user-only): CS-gate SP; new .cpp needs gen.mk regen; GAS: `msr daifset, #2`; test TUs compile in release so CONFIG_DEBUG seam users must be guarded (#308).
@@ -84,6 +85,12 @@
 ```
 
 ## Entries
+
+### #412 — Fences are data: copies drift, and only enforcement counts
+
+- **Learned:** (1) Prompts are advisory; a permission block only binds the tool that reads it, and `edit` rules do NOT cover shell redirection — role isolation needs a post-hoc diff gate *in addition to* the fence, and "the agent was told to stay inside" is not a control. (2) The same map exists in 13 hand-maintained copies (role JSONs, launcher heredocs, twins, `PROMPT-audit.md`, coordinator template) because opencode has no permission `include`; drift is invisible to every reader, so only a mechanical family verifier catches it — run it BEFORE the edit as a positive control (it was green→red→green; a verifier first written after the edit proves nothing). (3) Two files that "must stay in sync" is itself the defect: the durable fix is one base fence rendered per role at launch. (4) A fence assertion must run on the REUSE path, not just creation — a session this launch did not create may carry no config at all (pre-fence coordinator or moved repo). (5) Never parse `git status` text (renames, spaces) — `--porcelain -z`; and an empty/absent base revision is a usage error, never a `merge-base` fallback that classifies an empty change set as "clean". (6) A scratch dir the self-test creates must be removed by the same test, and numeric keys must be canonicalized before they touch a path (`000410` ≠ `410`).
+- **Adapted:** `tools/agents/verify_fence.py` (F1–F7: heredoc/twin/prompt families, `{repo}` template shape, `/tmp`↔`/private/tmp` mirrors, required namespaces, narrowed auditor glob) wired into `self-test` and the `cross-edit-isolation` CI job; `agent_up.sh` canonical `runtime_dir`, `TMPDIR` pin, dev/ino `--copy` guard, `audit-diff --base` via temp file, hardened state writer, coordinator `check_fenced` on create+reuse; `check_no_cross_edits.sh` untracked-in-scope + no self-exemption + integration self-test; `{repo}`-templated coordinator config rendered to `opencode.resolved.json`. Duplication removal is tracked as a follow-up (single base fence → generated per-role configs), which deletes the verifier too.
+- **Style re-surface:** host tooling fails closed with a single `agent_up: ERROR:` line and no raw traceback; every value that becomes a path or a git revision is validated before use; portability (bash 3.2, macOS canonicalization, `fcntl`) is part of correctness.
 
 ### #410 — Phase 2 orchestration in-repo + workflow burn-in (audit iter-2 APPROVED, issue CLOSED)
 

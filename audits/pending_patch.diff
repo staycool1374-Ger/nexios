@@ -1,1375 +1,1534 @@
 diff --git a/.github/workflows/build-meson.yml b/.github/workflows/build-meson.yml
-index 1c01e5a9d..556bb8cfe 100644
+index 556bb8cfe..05c51e5e5 100644
 --- a/.github/workflows/build-meson.yml
 +++ b/.github/workflows/build-meson.yml
-@@ -11,9 +11,9 @@ name: NexIOS Meson CI
+@@ -207,30 +207,53 @@ jobs:
+         python3 tools/check-parity.py --report
+         python3 tools/check_no_make_refs.sh
  
- on:
-   push:
--    branches: [ main ]
-+    branches: [ main, testbed ]
-   pull_request:
--    branches: [ main ]
-+    branches: [ main, testbed ]
- 
- jobs:
-   meson-x86_64:
-@@ -185,6 +185,9 @@ jobs:
-     steps:
-     - name: Checkout Code
-       uses: actions/checkout@v4
+-    - name: Cross-edit isolation gate (self-test both directions)
+-      run: |
+-        bash tools/check_no_cross_edits.sh --self-test
++  cross-edit-isolation:
++    # Isolation gate as its own job (#412 S3-4R). The fence checks do not belong
++    # in the parity ledger: that job is advisory until the Make->Meson cutover,
++    # and the gate was therefore invisible as a merge blocker. Mark this job
++    # REQUIRED in branch protection to make the gate blocking (a repo setting,
++    # not YAML); until then it reports on every push/PR like the other jobs.
++    runs-on: ubuntu-24.04
++    steps:
++    - name: Checkout Code
++      uses: actions/checkout@v4
 +      with:
-+        # Full history: the role gate compares against an explicit base.
++        # Full history: the gate compares against an explicit base.
 +        fetch-depth: 0
- 
-     - name: Install Toolchain and Dependencies
-       run: |
-@@ -207,3 +210,27 @@ jobs:
-     - name: Cross-edit isolation gate (self-test both directions)
-       run: |
-         bash tools/check_no_cross_edits.sh --self-test
 +
-+    - name: Cross-edit isolation gate (role check on this change set)
-+      run: |
-+        # Role follows the branch under the two-checkout model: testbed is the
-+        # QE checkout, everything else is a developer branch.
-+        if [ "${GITHUB_REF_NAME}" = "testbed" ]; then
-+          role=qe
-+        else
-+          role=dev
-+        fi
-+        echo "cross-edit role check: --role=$role (branch ${GITHUB_REF_NAME})"
-+        # Explicit base: a PR / single-ref checkout has no local `main`, so the
-+        # script's merge-base fallback degrades to HEAD and classifies an empty
-+        # change set as clean.
-+        if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-+          base="origin/${GITHUB_BASE_REF}"
-+        else
-+          base="${{ github.event.before }}"
-+          case "$base" in
-+            ''|0000000000000000000000000000000000000000) base="origin/main" ;;
-+          esac
-+        fi
-+        echo "cross-edit base: ${base}"
-+        bash tools/check_no_cross_edits.sh --role="$role" --base="$base"
-diff --git a/.gitignore b/.gitignore
-index 2cb223545..efde249a5 100644
---- a/.gitignore
-+++ b/.gitignore
-@@ -30,3 +30,4 @@ bench_mandelbrot.cpp
- tools/gdb/*.gdb
- .opencode/
- .obsidian/
-+.nexios-runtime/
++    - name: Fence config consistency (families + mirrors, no drift)
++      run: python3 tools/agents/verify_fence.py
++
++    - name: Isolation gate self-test (classifier + change-set integration)
++      run: bash tools/check_no_cross_edits.sh --self-test
+ 
+     - name: Cross-edit isolation gate (role check on this change set)
++      env:
++        EVENT_NAME: ${{ github.event_name }}
++        REF_NAME: ${{ github.ref_name }}
++        BASE_REF: ${{ github.base_ref }}
++        HEAD_REF: ${{ github.head_ref }}
++        BEFORE_SHA: ${{ github.event.before }}
+       run: |
+-        # Role follows the branch under the two-checkout model: testbed is the
+-        # QE checkout, everything else is a developer branch.
+-        if [ "${GITHUB_REF_NAME}" = "testbed" ]; then
+-          role=qe
+-        else
+-          role=dev
+-        fi
+-        echo "cross-edit role check: --role=$role (branch ${GITHUB_REF_NAME})"
+-        # Explicit base: a PR / single-ref checkout has no local `main`, so the
+-        # script's merge-base fallback degrades to HEAD and classifies an empty
+-        # change set as clean.
+-        if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+-          base="origin/${GITHUB_BASE_REF}"
++        if [ "$EVENT_NAME" = "pull_request" ]; then
++          # A PR checkout has no local `main`: an explicit base is required or
++          # the merge-base fallback classifies an empty set as clean.
++          base="origin/${BASE_REF}"
++          # The PRODUCER branch decides the role. On PRs REF_NAME is
++          # "<n>/merge", which used to classify every PR as dev (#412 S4-11).
++          role_ref="$HEAD_REF"
+         else
+-          base="${{ github.event.before }}"
++          base="$BEFORE_SHA"
+           case "$base" in
+             ''|0000000000000000000000000000000000000000) base="origin/main" ;;
+           esac
++          role_ref="$REF_NAME"
+         fi
+-        echo "cross-edit base: ${base}"
++        # Two-checkout model: testbed is the QE checkout, everything else is a
++        # developer branch.
++        case "$role_ref" in
++          testbed) role=qe ;;
++          *) role=dev ;;
++        esac
++        echo "cross-edit: role=$role (ref=${role_ref:-?}) base=$base event=$EVENT_NAME"
+         bash tools/check_no_cross_edits.sh --role="$role" --base="$base"
 diff --git a/prompts/PROMPT-audit.md b/prompts/PROMPT-audit.md
-index eea12f40e..2aa3d7fcf 100644
+index 7383d8ee7..1225e7395 100644
 --- a/prompts/PROMPT-audit.md
 +++ b/prompts/PROMPT-audit.md
-@@ -4,11 +4,22 @@ mode: subagent
- model: opencode-go/muse-spark-1.3-contributor
- temperature: 0.0
- permission:
-+  external_directory:
-+    "*": deny
-+    "/tmp/nexios-*": allow
-+    "/tmp/nexios-*/**": allow
-+    "/tmp/jarvis-*": allow
-+    "/tmp/jarvis-*/**": allow
-+    "/tmp/jarvis_*": allow
-+    "/tmp/matrix-*": allow
-+    "/tmp/qemu-serial.*": allow
-+    "/tmp/agentup-*": allow
+@@ -22,6 +22,10 @@ permission:
+     "/private/tmp/qemu-serial.*": allow
+     "/tmp/agentup-*": allow
+     "/private/tmp/agentup-*": allow
++    "/tmp/agentup-*/**": allow
++    "/private/tmp/agentup-*/**": allow
++    "/tmp/lldb-*": allow
++    "/private/tmp/lldb-*": allow
    edit:
      "*": deny
--    "/tmp/*": allow
--    "/Users/arnold/jarvis/audits/rejected_patch.diff": allow
--    "/Users/arnold/jarvis/audits/report-*.md": allow
-+    "/tmp/nexios-*/*": allow
-+    "/tmp/nexios-*/**/*": allow
-+    "audits/rejected_patch.diff": allow
-+    "audits/report-*.md": allow
-   bash:
-     "*": ask
-     "git diff*": allow
-@@ -88,7 +99,7 @@ paths before code is accepted.
-   the current worktree). The developer applies it verbatim. Keep prose minimal; the
-   patch IS the fix.
- - You have write access ONLY to your own artifacts (`audits/rejected_patch.diff`
--  and `audits/report-*.md`, plus `/tmp` scratch). All kernel, tooling, and
-+  and `audits/report-*.md`, plus the `/tmp/nexios-*` mailbox scratch). All kernel, tooling, and
-   docs paths are READ-ONLY to you — never edit, create, or delete code;
-   corrections travel exclusively via `rejected_patch.diff`.
-   You are NOT permitted to run tests (`qemu_test.py`, `gdb_run.py`,
+     "/tmp/nexios-*/*": allow
 diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
-new file mode 100755
-index 000000000..9b03f62d9
---- /dev/null
+index 4d71a5e54..ca412e59d 100755
+--- a/scripts/agent_up.sh
 +++ b/scripts/agent_up.sh
-@@ -0,0 +1,814 @@
-+#!/usr/bin/env bash
-+# agent_up.sh — provision nexios agent sessions + full environment setup.
-+# CANONICAL LOCATION: this file (repo checkout, scripts/). No other copy is
-+# authoritative — a stale copy under ~/.local/state/nexios/bin/ is superseded
-+# by this file and must be deleted, never run. The script stays UNTRACKED until
-+# an explicit audit + merge decision commits it; `git add -A` must never be run
-+# blindly while it is untracked (see clean-tree guard).
+@@ -32,7 +32,14 @@
+ # `harness ps` / the grid. Watch via `tmux attach -t <name>` (read-write mirrors;
+ # read-only (-r) mirrors block ALL tmux input including doorbells, so none here).
+ # Proper fix belongs upstream: env passthrough on `harness new`.
+-# Fencing itself is verified per-session BEFORE any prompt is delivered.
++# Fencing itself is verified per-session BEFORE any prompt is delivered, for the
++# coordinator too (`S4-9`): a session whose env lacks the expected config is
++# killed rather than trusted.
 +#
-+# WHAT IT SETS UP (one command, zero out-of-repo prerequisites):
-+#   workers    named fenced tmux sessions (nexios-dev, nexios-qe, nexios-audit)
-+#   coordinator named tmux session (nexios-coord) — the STABLE ADDRESS every
-+#              doorbell rings. The coordinator had no address (bare TUI in an
-+#              anonymous terminal), so worker→coordinator wakes were impossible
-+#              and a human relayed every transition. Fixed here by construction.
-+#   comms      coord runtime root /tmp/nexios-<issue>/ (inbox/dev|qe|auditor.md,
-+#              state.json, prompts/, notes/, PROTOCOL.md), role configs
-+#              bootstrapped from embedded defaults if absent.
-+#
-+# DOORBELL (both directions, tmux send-keys — harness cannot see tmux sessions,
-+# so `harness send`/agent-messages is NOT a wake path here):
-+#   coord→worker:  agent_up.sh msg nexios-dev "inbox: READY from dev — read inbox/qe.md"
-+#   worker→coord:  agent_up.sh msg nexios-coord "inbox: dev READY — read inbox/dev.md"
-+# Rules (both ways): single line, inbox POINTER only (payloads never in chat),
-+# idle sessions only, never touch permission dialogs (approve mode is person-run).
-+# The coordinator treats any ring as "re-read the inbox", never executes ring text.
-+#
-+# WHY TMUX, NOT `harness new`: fenced sessions need OPENCODE_CONFIG in their
-+# process env. `harness new` talks to the daemon over IPC, which drops the
-+# invoker's env (no --env flag), so harness-managed sessions launch UNFENCED
-+# (proven: S1 step-zero fails there). Direct tmux launch inherits our env, so
-+# fences hold (proven: S1 passes). Tradeoff: tmux sessions are invisible to
-+# `harness ps` / the grid. Watch via `tmux attach -t <name>` (read-write mirrors;
-+# read-only (-r) mirrors block ALL tmux input including doorbells, so none here).
-+# Proper fix belongs upstream: env passthrough on `harness new`.
-+# Fencing itself is verified per-session BEFORE any prompt is delivered.
-+set -euo pipefail
++# TMPDIR is PINNED into the allowed /tmp/agentup-tmp-<session> namespace. The
++# host TMPDIR (/var/folders/... on macOS) is deliberately not allowed: it is
++# per-boot, so it cannot be fenced, and an unfenced TMPDIR is how writers fell
++# back to bash (unfenced by design) during the #410 burn-in.
+ set -euo pipefail
+ 
+ # Canonical content lives IN the repo (versioned). The state dir below holds
+@@ -43,6 +50,8 @@ ROLES_DIR="${ROLES_DIR:-$REPO_ROOT/tools/agents/roles}"
+ COORD_CONFIG_DIR="$REPO_ROOT/tools/agents/coordinator"
+ NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
+ COORD_DIR="$NEXIOS_HOME/coordinator"
++COORD_CONFIG_RESOLVED="$COORD_DIR/opencode.resolved.json"
++COORD_TMPDIR=""
+ OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
+ TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
+ DEV_DIR="$HOME/jarvis"
+@@ -73,8 +82,10 @@ usage: agent_up.sh <mode> [...]
+                      message. Pass a taskfile path or literal task text.
+   run ...            launch ONE session: run <name> <dir> <role.json> <prompt.txt> [branch]
+   audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
+-  audit-diff [branch] print merge-base audit diff to audits/pending_patch.diff
+-                     (non-empty assertion). Run in the dev checkout.
++  audit-diff [branch] [--base <rev>]
++                     write the audit diff to audits/pending_patch.diff
++                     (base defaults to merge-base main <branch>; must be
++                     non-empty). Run in the dev checkout.
+   qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
+                      abort-on-conflict restores code state. Run in QE checkout.
+   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
+@@ -100,7 +111,20 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "not on PATH: $1"; }
+ runtime_dir() {
+   [ $# -eq 1 ] || fail "need issue number"
+   case "$1" in ''|*[!0-9]*) fail "issue must be numeric: '$1'";; esac
+-  echo "/tmp/nexios-$1"
++  # Canonical form only: `setup 0410` must never alias onto /tmp/nexios-410.
++  local n="$1"
++  while [ "${n#0}" != "$n" ]; do n="${n#0}"; done
++  [ -n "$n" ] || fail "issue must be non-zero: '$1'"
++  [ ${#n} -le 7 ] || fail "issue number too long (max 7 digits): '$1'"
++  printf '/tmp/nexios-%s\n' "$n"
++}
 +
-+# Canonical content lives IN the repo (versioned). The state dir below holds
-+# LINKS ONLY — a real file out of repo is versioning drift and hard-fails here.
-+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-+ROLES_DIR="${ROLES_DIR:-$REPO_ROOT/tools/agents/roles}"
-+COORD_CONFIG_DIR="$REPO_ROOT/tools/agents/coordinator"
-+NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
-+COORD_DIR="$NEXIOS_HOME/coordinator"
-+OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
-+TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
-+DEV_DIR="$HOME/jarvis"
-+QE_DIR="$HOME/jarvis_test"
-+COORD_SESS="nexios-coord"
-+DEV_SESS="nexios-dev"
-+QE_SESS="nexios-qe"
-+AUDIT_SESS="nexios-audit"
-+
-+fail() { echo "agent_up: ERROR: $*" >&2; exit 1; }
-+info() { echo "agent_up: $*"; }
-+
-+usage() {
-+  cat >&2 <<EOF
-+usage: agent_up.sh <mode> [...]
-+  setup <issue>      create coord runtime (/tmp/nexios-<issue>/: inbox, state,
-+                     prompts, notes, PROTOCOL) + bootstrap roles if missing.
-+                     Idempotent: never overwrites existing state.json/inbox.
-+  coord [taskfile]   ensure $COORD_SESS tmux session (cwd=coordinator home,
-+                     env scrubbed) running the coordinator TUI; attach to it.
-+                     Optional taskfile is pasted as the first message.
-+  workers <issue>    launch $DEV_SESS + $QE_SESS (detached tmux; needs
-+                     prompts/dev.txt + prompts/qe.txt in the coord runtime).
-+  up <issue> ["task"] FULL ROOM from one zsh command: setup + workers + three
-+                     visible Terminal windows (read-write mirrors; read-only
-+                     mirrors block ALL tmux input including doorbells) + coordinator
-+                     in tmux ($COORD_SESS) with the task pasted as its first
-+                     message. Pass a taskfile path or literal task text.
-+  run ...            launch ONE session: run <name> <dir> <role.json> <prompt.txt> [branch]
-+  audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
-+  audit-diff [branch] print merge-base audit diff to audits/pending_patch.diff
-+                     (non-empty assertion). Run in the dev checkout.
-+  qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
-+                     abort-on-conflict restores code state. Run in QE checkout.
-+  msg <sess> <text>  single-line doorbell to a tmux session (both directions).
-+  wake <sess> <text> alias of msg (same guard + single-line rule).
-+  comms-test [issue] prove the doorbell end-to-end in BOTH directions using two
-+                     scratch echo sessions (no opencode, no tokens).
-+  state <issue> key=value [...]  locked state.json write (validated keys/values).
-+  status [issue]     tmux + branches + inbox + state overview (read-only).
-+  status --reconstruct <issue> --copy <dir>  rebuild state.json machine fields
-+                     from git branches + issue comments into a COPY (live
-+                     state.json is never touched; --copy is mandatory).
-+  self-test          guard + helper self-tests (scratch tmux names only; never
-+                     touches $DEV_SESS/$QE_SESS/$AUDIT_SESS/$COORD_SESS).
-+  approve <sess>     drive one Allow-always on the session's CURRENT permission
-+                     dialog (checks first; person-run only).
-+  close [--all]      kill worker tmux sessions; --all also kills $COORD_SESS.
++# Per-session TMPDIR, inside the allowed /tmp/agentup-* namespace (both the flat
++# rule and the /** rule exist, so files created inside are fenced too).
++ensure_session_tmpdir() {
++  local dir="/tmp/agentup-tmp-$1"
++  mkdir -p -m 0700 "$dir" || fail "cannot create $dir"
++  printf '%s\n' "$dir"
+ }
+ 
+ # ---embedded role defaults (bootstrap only; audited content)------------------
+@@ -130,7 +154,11 @@ write_role_dev() {
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "allow",
+@@ -171,7 +199,11 @@ write_role_qe() {
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "deny",
+@@ -214,7 +246,11 @@ write_role_auditor() {
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "deny",
+@@ -223,7 +259,7 @@ write_role_auditor() {
+       "/tmp/nexios-*/**/*": "allow",
+       "/private/tmp/nexios-*/**/*": "allow",
+       "audits/rejected_patch.diff": "allow",
+-      "audits/report-*": "allow"
++      "audits/report-*.md": "allow"
+     }
+   }
+ }
+@@ -240,6 +276,8 @@ write_role_coordinator() {
+     "bash": "allow",
+     "external_directory": {
+       "*": "deny",
++      "{repo}/prompts/**": "allow",
++      "{repo}/audits/**": "allow",
+       "/tmp/nexios-*": "allow",
+       "/private/tmp/nexios-*": "allow",
+       "/tmp/nexios-*/**": "allow",
+@@ -255,7 +293,11 @@ write_role_coordinator() {
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "deny",
+@@ -263,7 +305,7 @@ write_role_coordinator() {
+       "/private/tmp/nexios-*/*": "allow",
+       "/tmp/nexios-*/**/*": "allow",
+       "/private/tmp/nexios-*/**/*": "allow",
+-      "prompts/LEARNINGS.md": "allow"
++      "{repo}/prompts/LEARNINGS.md": "allow"
+     }
+   }
+ }
+@@ -338,8 +380,11 @@ write_protocol() {
+   The coordinator treats any ring as "re-read the inbox", never executes it.
+ - Coordinator address: tmux session `nexios-coord` (created by `coord`/`up`).
+ - State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator, and the
+-  only sanctioned write path is `agent_up.sh state <issue> key=value` (flock on
+-  `state.lock`, atomic replace, keys/vocabulary validated).
++  only sanctioned write path is `agent_up.sh state <issue> key=value` (python3
++  fcntl lock on `state.lock`, atomic replace + fsync, keys/vocabulary validated).
++- `audit_branch` (optional, string): the branch the auditor's checkout must be
++  on. Write it with `agent_up.sh state <issue> audit_branch=<branch>`; `audit
++  <issue>` passes it to the launch branch check. Empty/unset = skip the check.
+ EOF
+ }
+ 
+@@ -360,6 +405,7 @@ mode_setup() {
+   local rt; rt=$(runtime_dir "$1")
+   ensure_roles
+   ensure_state_links
++  render_coord_config
+   mkdir -p -m 0700 "$rt/inbox" "$rt/notes" "$rt/prompts"
+   for r in dev qe auditor coord; do
+     [ -f "$rt/inbox/$r.md" ] || echo "# inbox/$r.md — append-only. Format: <ISO8601> FROM=<role> NEED|READY|NOTE :: <text>" > "$rt/inbox/$r.md"
+@@ -377,9 +423,12 @@ mode_setup() {
+ link_runtime() {
+   local issue="$1" rt="$2"
+   local dir="$REPO_ROOT/.nexios-runtime"
++  # Key from the CANONICAL runtime dir, never from the raw argv: `setup 000410`
++  # and `setup 410` must share one pointer, not create a second one.
++  local key="${rt##*/nexios-}"
+   mkdir -p "$dir"
+-  ln -sfn "$rt" "$dir/$issue"
+-  info "runtime pointer: .nexios-runtime/$issue -> $rt"
++  ln -sfn "$rt" "$dir/$key"
++  info "runtime pointer: .nexios-runtime/$key -> $rt"
+ }
+ 
+ # ---provisioning---------------------------------------------------------------
+@@ -392,15 +441,42 @@ check_branch() {
+ 
+ # clean-tree guard: refuse when tracked files (minus listed prefixes) are dirty.
+ # $1 workdir, $2... exempt path prefixes (e.g. graphify-out/ test-history.txt)
++# Porcelain -z parsing: plain `git status --porcelain | awk '{print $2}'` loses
++# rename origins (reports the OLD path) and truncates paths with spaces.
+ check_clean_tree() {
+   local dir="$1"; shift
+-  local dirty ex ok=0
+-  dirty=$(git -C "$dir" status --porcelain | awk '{print $2}')
+-  for f in $dirty; do
+-    ok=1
+-    for ex in "$@"; do case "$f" in "$ex"*) ok=0;; esac; done
+-    [ "$ok" = 0 ] || fail "dirty tree: $f (commit/stash first; exempt: $*)"
+-  done
++  local out rc=0
++  out=$(python3 - "$dir" "$@" <<'EOF'
++import os, subprocess, sys
++d, exempt = sys.argv[1], tuple(sys.argv[2:])
++raw = subprocess.run(["git", "-C", d, "status", "--porcelain=v1", "-z"],
++                     capture_output=True)
++if raw.returncode != 0:
++    sys.exit(2)  # unreadable tree is an error, never "clean"
++recs = raw.stdout.split(b"\0")
++i = 0
++paths = []
++while i < len(recs):
++    rec = recs[i]
++    if not rec:
++        i += 1
++        continue
++    xy, path = rec[:2], rec[3:]
++    paths.append(os.fsdecode(path))
++    if xy[:1] in (b"R", b"C"):
++        i += 1  # the next record is the rename/copy ORIGIN
++    i += 1
++bad = [p for p in paths if not (exempt and p.startswith(exempt))]
++for p in bad:
++    print(p)
++sys.exit(1 if bad else 0)
 +EOF
-+  exit 2
++) || rc=$?
++  [ "$rc" = 0 ] && return 0
++  if [ "$rc" = 1 ]; then
++    fail "dirty tree: $(printf '%s' "$out" | tr '\n' ' ')(commit/stash first; exempt: $*)"
++  fi
++  fail "cannot read git status for $dir"
+ }
+ 
+ # Locked read-modify-write on state.json — the ONLY sanctioned state writer.
+@@ -415,6 +491,12 @@ mode_state_set() {
+   python3 - "$rt/state.json" "$@" <<'EOF'
+ import datetime, fcntl, json, os, sys, tempfile
+ 
++
++def die(msg):
++    sys.stderr.write("state: %s\n" % msg)
++    sys.exit(1)
++
++
+ path, pairs = sys.argv[1], sys.argv[2:]
+ ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
+            "retry_budget", "state", "updated"}
+@@ -423,31 +505,63 @@ STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
+ lock_path = os.path.join(os.path.dirname(path), "state.lock")
+ with open(lock_path, "a+") as lock:
+     fcntl.flock(lock, fcntl.LOCK_EX)
+-    with open(path) as f:
+-        state = json.load(f)
++    try:
++        with open(path) as f:
++            state = json.load(f)
++    except OSError as exc:
++        die("cannot read %s: %s" % (path, exc.strerror or exc))
++    except ValueError as exc:
++        die("existing state.json is not valid JSON: %s" % exc)
++    if not isinstance(state, dict):
++        die("existing state.json is not a JSON object")
+     for pair in pairs:
+         if "=" not in pair:
+-            sys.exit("state: expected key=value, got %r" % pair)
++            die("expected key=value, got %r" % pair)
+         key, value = pair.split("=", 1)
+         if key not in ALLOWED:
+-            sys.exit("state: unknown key %r (allowed: %s)"
+-                     % (key, ", ".join(sorted(ALLOWED))))
++            die("unknown key %r (allowed: %s)"
++                % (key, ", ".join(sorted(ALLOWED))))
+         if key in ("retries", "retry_budget"):
+-            value = int(value)
++            try:
++                value = int(value)
++            except ValueError:
++                die("%s needs an integer, got %r" % (key, value))
++            if value < 0:
++                die("%s must be >= 0" % key)
+         elif key == "halt":
+             value = value.lower() in ("1", "true", "yes")
+         elif key == "state" and value not in STATES:
+-            sys.exit("state: %r not in the AGENTS.md vocabulary" % value)
++            die("%r not in the AGENTS.md vocabulary" % value)
+         state[key] = value
+     state["updated"] = datetime.datetime.now(
+         datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+-    with os.fdopen(fd, "w") as out:
+-        json.dump(state, out, indent=2)
+-        out.write("\n")
+-        out.flush()
+-        os.fsync(out.fileno())
+-    os.replace(tmp, path)
++    directory = os.path.dirname(path)
++    tmp = None
++    try:
++        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".state.")
++        with os.fdopen(fd, "w") as out:
++            json.dump(state, out, indent=2)
++            out.write("\n")
++            out.flush()
++            os.fsync(out.fileno())
++        os.replace(tmp, path)
++        tmp = None
++    except OSError as exc:
++        die("cannot write %s: %s" % (path, exc.strerror or exc))
++    finally:
++        if tmp is not None:
++            try:
++                os.unlink(tmp)
++            except OSError:
++                pass
++    try:
++        dfd = os.open(directory, os.O_RDONLY)
++        try:
++            os.fsync(dfd)
++        finally:
++            os.close(dfd)
++    except OSError as exc:
++        die("cannot fsync %s: %s" % (directory, exc.strerror or exc))
+     fcntl.flock(lock, fcntl.LOCK_UN)
+ print("state: ok (%d key(s) set)" % len(pairs))
+ EOF
+@@ -495,7 +609,9 @@ run_session() {
+   fi
+   tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
+   # Env hygiene: role config ONLY from OPENCODE_CONFIG; strip any leaky overrides.
+-  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT OPENCODE_CONFIG=$role $OPENCODE_BIN" Enter
++  # TMPDIR pinned inside the fenced namespace (host TMPDIR is per-boot: unfenceable).
++  local tdir; tdir=$(ensure_session_tmpdir "$name")
++  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$role $OPENCODE_BIN" Enter
+   sleep "$TUI_BOOT_WAIT"
+   check_fenced "$name" "$dir" "$role" || {
+     tmux kill-session -t "$name" 2>/dev/null || true
+@@ -537,19 +653,82 @@ check_fenced() {
+ }
+ 
+ # ---coordinator (addressable endpoint)-----------------------------------------
++# The repo template carries a literal {repo} token instead of a machine path
++# (relative rules under the coordinator cwd resolve to a shadow file: S3-2R).
++# It is rendered into an out-of-repo resolved config at launch.
++render_coord_config() {
++  need_cmd python3
++  need_file "$COORD_CONFIG_DIR/opencode.json"
++  mkdir -p "$COORD_DIR"
++  local repo_real; repo_real=$(cd "$REPO_ROOT" && pwd -P)
++  python3 - "$COORD_CONFIG_DIR/opencode.json" "$COORD_CONFIG_RESOLVED" "$repo_real" <<'EOF'
++import json, os, sys
++
++
++def die(msg):
++    sys.stderr.write("agent_up: ERROR: %s\n" % msg)
++    sys.exit(1)
++
++
++src, dst, repo = sys.argv[1:4]
++if not os.path.isabs(repo):
++    die("repo root is not absolute: %r" % repo)
++if not os.path.isdir(os.path.join(repo, "prompts")):
++    die("no prompts/ under the repo root %s (wrong checkout?)" % repo)
++try:
++    with open(src) as handle:
++        raw = handle.read()
++except OSError as exc:
++    die("cannot read %s: %s" % (src, exc.strerror or exc))
++if "{repo}" not in raw:
++    die("template has no {repo} token: %s" % src)
++out = raw.replace("{repo}", repo)
++if "{repo}" in out:
++    die("unresolved {repo} token in the rendered config")
++try:
++    json.loads(out)
++except ValueError as exc:
++    die("rendered config is not valid JSON: %s" % exc)
++tmp = dst + ".tmp"
++with open(tmp, "w") as handle:
++    handle.write(out)
++    handle.flush()
++    os.fsync(handle.fileno())
++os.replace(tmp, dst)
++print("agent_up: coordinator config rendered: %s" % dst)
++EOF
 +}
 +
-+need_file() { [ -f "$1" ] || fail "missing: $1"; }
-+need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "not on PATH: $1"; }
-+runtime_dir() {
-+  [ $# -eq 1 ] || fail "need issue number"
-+  case "$1" in ''|*[!0-9]*) fail "issue must be numeric: '$1'";; esac
-+  echo "/tmp/nexios-$1"
-+}
-+
-+# ---embedded role defaults (bootstrap only; audited content)------------------
-+# dev: edit-all EXCEPT test trees + own cage. Byte-identical to
-+# tools/agents/roles/dev.json (canonical); this copy is the broken-checkout
-+# fallback only. Last-match-wins; both star depths (docs don't pin * crossing /).
-+write_role_dev() {
-+  cat > "$1" <<'EOF'
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "allow",
-+      "tools/agents/roles/*": "deny",
-+      "tools/agents/roles/**/*": "deny",
-+      "src/kernel/test/*": "deny",
-+      "src/kernel/test/**/*": "deny",
-+      "src/test/*": "deny",
-+      "src/test/**/*": "deny"
+ coord_tui_cmd() {
+-  echo "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT $OPENCODE_BIN"
++  echo "env -u OPENCODE_CONFIG_CONTENT TMPDIR=$COORD_TMPDIR OPENCODE_CONFIG=$COORD_CONFIG_RESOLVED $OPENCODE_BIN"
+ }
+ 
+ # ensure nexios-coord tmux session exists running the coordinator TUI.
+ ensure_coord_session() {
+   need_cmd tmux; need_cmd "$OPENCODE_BIN"
+   ensure_state_links
+-  need_file "$COORD_DIR/opencode.json"
++  render_coord_config
++  need_file "$COORD_CONFIG_RESOLVED"
++  if tmux has-session -t "$COORD_SESS" 2>/dev/null; then
++    # Never trust a session this launch did not create: a pre-fence
++    # coordinator (launched with no OPENCODE_CONFIG at all) or a moved repo
++    # leaves a running session whose env is not the resolved config. Workers
++    # refuse reuse outright; the coordinator kills the stale session so the
++    # block below rebuilds it fenced (S4-9: reuse must assert too).
++    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" 2>/dev/null || {
++      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
 +    }
-+  }
-+}
-+EOF
-+}
-+
-+# qe: edit ONLY test trees (+coord mailbox). Byte-identical to
-+# tools/agents/roles/qe.json (canonical); fallback only.
-+write_role_qe() {
-+  cat > "$1" <<'EOF'
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "src/kernel/test/*": "allow",
-+      "src/kernel/test/**/*": "allow",
-+      "src/test/*": "allow",
-+      "src/test/**/*": "allow"
++  fi
+   if ! tmux has-session -t "$COORD_SESS" 2>/dev/null; then
++    COORD_TMPDIR=$(ensure_session_tmpdir "$COORD_SESS")
+     tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
+     tmux send-keys -t "$COORD_SESS" "$(coord_tui_cmd)" Enter
+-    info "started $COORD_SESS (coordinator TUI; attach: tmux attach -t $COORD_SESS)"
++    sleep "$TUI_BOOT_WAIT"
++    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" || {
++      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
++      fail "coordinator launched UNFENCED (resolved config not in its env) — killed, fix before retry"
 +    }
-+  }
-+}
-+EOF
-+}
-+
-+# auditor: deny-all writes except mailbox + audit artifacts. Byte-identical to
-+# tools/agents/roles/auditor.json (canonical); fallback only.
-+write_role_auditor() {
-+  cat > "$1" <<'EOF'
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "audits/rejected_patch.diff": "allow",
-+      "audits/report-*": "allow"
-+    }
-+  }
-+}
-+EOF
-+}
-+
-+# coordinator: deny-all writes except mailbox + LEARNINGS closeout.
-+# Byte-identical to tools/agents/roles/coordinator.json (canonical).
-+write_role_coordinator() {
-+  cat > "$1" <<'EOF'
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "prompts/LEARNINGS.md": "allow"
-+    }
-+  }
-+}
-+EOF
-+}
-+write_roles_readme() {
-+  cat > "$1" <<'EOF'
-+# Role configs — canonical content lives in tools/agents/roles/ (repo).
-+# This embedded copy is the broken-checkout fallback ONLY (used when the
-+# repo files are absent); keep byte-identical with the repo files.
-+# dev.json: edit-all EXCEPT test trees + own cage. qe.json: edit ONLY test
-+# trees + coord mailbox. auditor.json: deny-all writes except mailbox + audit
-+# artifacts. coordinator.json: deny-all except mailbox + LEARNINGS closeout.
-+# edit covers edit/write/patch only, NOT bash heredocs/redirects — the repo
-+# checker (tools/check_no_cross_edits.sh) is the fail-closed backstop.
-+# Step zero of every session: `opencode debug config` shows these rules +
-+# a blocked write fails at depth 1 AND nested + the allowed write succeeds.
-+EOF
-+}
-+
-+ensure_roles() {
-+  mkdir -p "$ROLES_DIR"
-+  [ -f "$ROLES_DIR/dev.json" ] || { write_role_dev "$ROLES_DIR/dev.json"; info "bootstrapped roles/dev.json (fallback — repo copy canonical)"; }
-+  [ -f "$ROLES_DIR/qe.json" ] || { write_role_qe "$ROLES_DIR/qe.json"; info "bootstrapped roles/qe.json (fallback — repo copy canonical)"; }
-+  [ -f "$ROLES_DIR/auditor.json" ] || { write_role_auditor "$ROLES_DIR/auditor.json"; info "bootstrapped roles/auditor.json (fallback — repo copy canonical)"; }
-+  [ -f "$ROLES_DIR/coordinator.json" ] || { write_role_coordinator "$ROLES_DIR/coordinator.json"; info "bootstrapped roles/coordinator.json (fallback — repo copy canonical)"; }
-+  [ -f "$ROLES_DIR/README.md" ] || write_roles_readme "$ROLES_DIR/README.md"
-+}
-+
-+# Point an out-of-repo path at its versioned in-repo counterpart. Links are
-+# (re)created; a REAL file in its place is drift → hard fail, never silently
-+# "adopted" (that is how out-of-repo copies appear).
-+ensure_link() {
-+  local link="$1" target="$2"
-+  if [ -L "$link" ]; then
-+    [ "$(readlink "$link")" = "$target" ] || ln -sfn "$target" "$link"
-+  elif [ -e "$link" ]; then
-+    fail "$link holds a REAL file; canonical content is $target. Move or delete it, then re-run (nothing is overwritten)."
-+  else
-+    mkdir -p "$(dirname "$link")"
-+    ln -s "$target" "$link"
-+    info "linked out-of-repo path: $link -> $target"
-+  fi
-+}
-+
-+# State dir + legacy role paths may contain LINKS ONLY (canonical: repo).
-+ensure_state_links() {
-+  ensure_link "$COORD_DIR/opencode.json" "$COORD_CONFIG_DIR/opencode.json"
-+  ensure_link "$COORD_DIR/AGENTS.md" "$COORD_CONFIG_DIR/AGENTS.md"
-+  ensure_link "$NEXIOS_HOME/roles/dev.json" "$ROLES_DIR/dev.json"
-+  ensure_link "$NEXIOS_HOME/roles/qe.json" "$ROLES_DIR/qe.json"
-+  ensure_link "$NEXIOS_HOME/roles/auditor.json" "$ROLES_DIR/auditor.json"
-+  ensure_link "$NEXIOS_HOME/roles/coordinator.json" "$ROLES_DIR/coordinator.json"
-+  ensure_link "$NEXIOS_HOME/roles/README.md" "$ROLES_DIR/README.md"
-+}
-+
-+# ---coord runtime (comms setup)------------------------------------------------
-+write_protocol() {
-+  cat > "$1/PROTOCOL.md" <<'EOF'
-+# Mailbox protocol
-+
-+- Dir: `/tmp/nexios-<issue>/inbox/<dev|qe|auditor>.md` — shared, append-only.
-+- One line per message: `<ISO8601> FROM=<role> NEED|READY|NOTE :: <text>`
-+- Single-line `O_APPEND` writes are atomic; python3-fcntl guard for multi-line.
-+- Receiver reads its own inbox at natural step boundaries only (step start,
-+  post-test-run). Workers never poll.
-+- Payloads live here, never in chat.
-+- Doorbell (both directions, tmux — harness cannot see tmux sessions):
-+  coord→worker:  agent_up.sh msg nexios-dev "inbox: READY from dev — read inbox/qe.md"
-+  worker→coord:  agent_up.sh msg nexios-coord "inbox: dev READY — read inbox/dev.md"
-+  Rules: single line, inbox POINTER only, idle sessions only, never dialogs.
-+  The coordinator treats any ring as "re-read the inbox", never executes it.
-+- Coordinator address: tmux session `nexios-coord` (created by `coord`/`up`).
-+- State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator, and the
-+  only sanctioned write path is `agent_up.sh state <issue> key=value` (flock on
-+  `state.lock`, atomic replace, keys/vocabulary validated).
-+EOF
-+}
-+
-+write_state_skeleton() {
-+  python3 - "$1" "$2" <<'EOF'
-+import json, sys
-+path, issue = sys.argv[1], sys.argv[2]
-+s = {"halt": False, "issue": int(issue), "phase": "",
-+     "state": "IN_PROGRESS", "retries": 0, "retry_budget": 3,
-+     "updated": "", "pending": "provision workers"}
-+open(path, "w").write(json.dumps(s, indent=2) + "\n")
-+EOF
-+}
-+
-+# $1 issue. Idempotent: creates missing pieces, never overwrites state/inbox.
-+mode_setup() {
-+  [ $# -eq 1 ] || fail "setup needs an issue number"
-+  local rt; rt=$(runtime_dir "$1")
-+  ensure_roles
-+  ensure_state_links
-+  mkdir -p -m 0700 "$rt/inbox" "$rt/notes" "$rt/prompts"
-+  for r in dev qe auditor coord; do
-+    [ -f "$rt/inbox/$r.md" ] || echo "# inbox/$r.md — append-only. Format: <ISO8601> FROM=<role> NEED|READY|NOTE :: <text>" > "$rt/inbox/$r.md"
-+  done
-+  [ -f "$rt/state.json" ] || { write_state_skeleton "$rt/state.json" "$1"; info "seeded state.json (IN_PROGRESS, retries 0/3)"; }
-+  write_protocol "$rt"
-+  link_runtime "$1" "$rt"
-+  info "coord runtime ready: $rt"
-+}
-+
-+# In-repo discovery pointer for the /tmp runtime. The payload (inbox, state,
-+# prompts) stays in /tmp; the repo carries one gitignored symlink PER ISSUE so
-+# every path an agent needs is reachable from the checkout and setting up a new
-+# issue never hijacks the pointer of a live one.
-+link_runtime() {
-+  local issue="$1" rt="$2"
-+  local dir="$REPO_ROOT/.nexios-runtime"
-+  mkdir -p "$dir"
-+  ln -sfn "$rt" "$dir/$issue"
-+  info "runtime pointer: .nexios-runtime/$issue -> $rt"
-+}
-+
-+# ---provisioning---------------------------------------------------------------
-+# $1 dir, $2 expected branch (empty = skip check)
-+check_branch() {
-+  local cur
-+  cur=$(git -C "$1" branch --show-current)
-+  [ -z "$2" ] || [ "$cur" = "$2" ] || fail "$1 on '$cur', want '$2'"
-+}
-+
-+# clean-tree guard: refuse when tracked files (minus listed prefixes) are dirty.
-+# $1 workdir, $2... exempt path prefixes (e.g. graphify-out/ test-history.txt)
-+check_clean_tree() {
-+  local dir="$1"; shift
-+  local dirty ex ok=0
-+  dirty=$(git -C "$dir" status --porcelain | awk '{print $2}')
-+  for f in $dirty; do
-+    ok=1
-+    for ex in "$@"; do case "$f" in "$ex"*) ok=0;; esac; done
-+    [ "$ok" = 0 ] || fail "dirty tree: $f (commit/stash first; exempt: $*)"
-+  done
-+}
-+
-+# Locked read-modify-write on state.json — the ONLY sanctioned state writer.
-+# Lock lives on a stable sidecar (state.lock) so atomic replace cannot create a
-+# stale-inode writer; no flock binary on macOS, fcntl only.
-+# usage: state <issue> key=value [key=value...]
-+mode_state_set() {
-+  [ $# -ge 2 ] || fail "state needs: <issue> key=value [key=value...]"
-+  local issue="$1"; shift
-+  local rt; rt=$(runtime_dir "$issue")
-+  need_file "$rt/state.json"
-+  python3 - "$rt/state.json" "$@" <<'EOF'
-+import datetime, fcntl, json, os, sys, tempfile
-+
-+path, pairs = sys.argv[1], sys.argv[2:]
-+ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
-+           "retry_budget", "state", "updated"}
-+STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
-+          "CLOSED", "FEEDBACK"}
-+lock_path = os.path.join(os.path.dirname(path), "state.lock")
-+with open(lock_path, "a+") as lock:
-+    fcntl.flock(lock, fcntl.LOCK_EX)
-+    with open(path) as f:
-+        state = json.load(f)
-+    for pair in pairs:
-+        if "=" not in pair:
-+            sys.exit("state: expected key=value, got %r" % pair)
-+        key, value = pair.split("=", 1)
-+        if key not in ALLOWED:
-+            sys.exit("state: unknown key %r (allowed: %s)"
-+                     % (key, ", ".join(sorted(ALLOWED))))
-+        if key in ("retries", "retry_budget"):
-+            value = int(value)
-+        elif key == "halt":
-+            value = value.lower() in ("1", "true", "yes")
-+        elif key == "state" and value not in STATES:
-+            sys.exit("state: %r not in the AGENTS.md vocabulary" % value)
-+        state[key] = value
-+    state["updated"] = datetime.datetime.now(
-+        datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
-+    with os.fdopen(fd, "w") as out:
-+        json.dump(state, out, indent=2)
-+        out.write("\n")
-+        out.flush()
-+        os.fsync(out.fileno())
-+    os.replace(tmp, path)
-+    fcntl.flock(lock, fcntl.LOCK_UN)
-+print("state: ok (%d key(s) set)" % len(pairs))
-+EOF
-+}
-+
-+# $1 name, $2 dir, $3 role json, $4 prompt file, $5 expected branch (empty = skip)
-+mode_run() {
-+  [ $# -ge 4 ] || fail "run needs: <name> <dir> <role.json> <prompt.txt> [branch]"
-+  local name="$1"
-+  local dir="$2"
-+  local role="$3"
-+  local prompt="$4"
-+  local want_branch="${5:-}"
-+  need_cmd tmux; need_cmd "$OPENCODE_BIN"
-+  need_file "$role"; need_file "$prompt"
-+  [ -d "$dir" ] || fail "workdir missing: $dir"
-+  check_branch "$dir" "$want_branch"
-+  run_session "$name" "$dir" "$role" "$prompt"
-+}
-+
-+mode_audit() {
-+  [ $# -eq 1 ] || fail "audit needs an issue number"
-+  local rt; rt=$(runtime_dir "$1")
-+  need_file "$rt/prompts/auditor.txt"
-+  need_file "$ROLES_DIR/auditor.json"
-+  local branch=""
-+  if [ -f "$rt/state.json" ]; then
-+    branch=$(python3 -c "import json;print(json.load(open('$rt/state.json')).get('audit_branch',''))")
-+  fi
-+  # Auditor reads the dev checkout (diff + files), never writes: cwd=~/jarvis.
-+  mode_run "$AUDIT_SESS" "$DEV_DIR" "$ROLES_DIR/auditor.json" "$rt/prompts/auditor.txt" "$branch"
-+}
-+
-+# $1 tmux-name, $2 workdir, $3 role json, $4 prompt file
-+# (split locals: bash 3.2 expands all RHS before assigning under set -u)
-+run_session() {
-+  local name="$1"
-+  local dir="$2"
-+  local role="$3"
-+  local prompt="$4"
-+  [ -d "$dir" ] || fail "workdir missing: $dir"
-+  need_file "$role"; need_file "$prompt"
-+  if tmux has-session -t "$name" 2>/dev/null; then
-+    fail "tmux session '$name' already exists — refusing to clobber (close it first)"
-+  fi
-+  tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
-+  # Env hygiene: role config ONLY from OPENCODE_CONFIG; strip any leaky overrides.
-+  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT OPENCODE_CONFIG=$role $OPENCODE_BIN" Enter
-+  sleep "$TUI_BOOT_WAIT"
-+  check_fenced "$name" "$dir" "$role" || {
-+    tmux kill-session -t "$name" 2>/dev/null || true
-+    fail "session '$name' launched UNFENCED (config not in process env) — killed, fix before retry"
-+  }
-+  tmux load-buffer "$prompt"
-+  tmux paste-buffer -t "$name"
-+  sleep 2
-+  tmux send-keys -t "$name" Enter
-+  info "launched '$name' (fenced, prompt delivered)"
-+}
-+
-+# $1 tmux-name, $2 expected PWD, $3 expected role config
-+check_fenced() {
-+  local name="$1" want_pwd="$2" want_cfg="$3" pid="" p
-+  for p in $(pgrep -f "opencode/bin/opencode$" 2>/dev/null); do
-+    if ps eww -p "$p" 2>/dev/null | tr ' ' '\n' | grep -qx "PWD=$want_pwd"; then pid="$p"; break; fi
-+  done
-+  [ -n "$pid" ] || { echo "no opencode process with PWD=$want_pwd" >&2; return 1; }
-+  local cfg
-+  cfg=$(ps eww -p "$pid" 2>/dev/null | tr ' ' '\n' | grep "^OPENCODE_CONFIG=" | head -1 || true)
-+  [ "$cfg" = "OPENCODE_CONFIG=$want_cfg" ] || {
-+    echo "PWD ok but OPENCODE_CONFIG wrong: got '${cfg:-<unset>}', want '$want_cfg'" >&2; return 1
-+  }
-+  return 0
-+}
-+
-+# ---coordinator (addressable endpoint)-----------------------------------------
-+coord_tui_cmd() {
-+  echo "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT $OPENCODE_BIN"
-+}
-+
-+# ensure nexios-coord tmux session exists running the coordinator TUI.
-+ensure_coord_session() {
-+  need_cmd tmux; need_cmd "$OPENCODE_BIN"
-+  ensure_state_links
-+  need_file "$COORD_DIR/opencode.json"
-+  if ! tmux has-session -t "$COORD_SESS" 2>/dev/null; then
-+    tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
-+    tmux send-keys -t "$COORD_SESS" "$(coord_tui_cmd)" Enter
-+    info "started $COORD_SESS (coordinator TUI; attach: tmux attach -t $COORD_SESS)"
-+  fi
-+}
-+
-+# $1 optional taskfile to paste as the coordinator's first message
-+mode_coord() {
-+  [ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" ] || fail "GITHUB_PERSONAL_ACCESS_TOKEN unset (github MCP needs it)"
-+  if [ -n "${OPENCODE_CONFIG:-}${OPENCODE_CONFIG_CONTENT:-}" ]; then
-+    info "scrubbing leaky OPENCODE_CONFIG* from coordinator env"
-+  fi
-+  ensure_coord_session
-+  if [ $# -ge 1 ]; then
-+    need_file "$1"
-+    tmux load-buffer "$1"
-+    tmux paste-buffer -t "$COORD_SESS"
-+    sleep 2
-+    tmux send-keys -t "$COORD_SESS" Enter
-+    info "delivered first message to $COORD_SESS"
-+  fi
-+  if [ -n "${TMUX:-}" ]; then
-+    tmux switch-client -t "$COORD_SESS"
-+  else
-+    tmux attach -t "$COORD_SESS"
-+  fi
-+}
-+
-+# ---modes----------------------------------------------------------------------
-+mode_workers() {
-+  [ $# -eq 1 ] || fail "workers needs an issue number"
-+  local rt; rt=$(runtime_dir "$1")
-+  need_cmd tmux; need_cmd "$OPENCODE_BIN"
-+  need_file "$rt/prompts/dev.txt"; need_file "$rt/prompts/qe.txt"
-+  need_file "$ROLES_DIR/dev.json"; need_file "$ROLES_DIR/qe.json"
-+  check_branch "$DEV_DIR" main
-+  check_branch "$QE_DIR" testbed
-+  run_session "$DEV_SESS" "$DEV_DIR" "$ROLES_DIR/dev.json" "$rt/prompts/dev.txt"
-+  run_session "$QE_SESS" "$QE_DIR" "$ROLES_DIR/qe.json" "$rt/prompts/qe.txt"
-+}
-+
-+# $1 tmux session name — opens a new visible Terminal window attached READ-WRITE
-+# (owner call: watchers may type; the watch-XOR-drive rule is enforced socially —
-+# read-only mirrors would block ALL tmux input including doorbells, so none here).
-+open_watch_window() {
-+  osascript -e "tell application \"Terminal\" to do script \"tmux attach -t $1\"" >/dev/null
-+  info "opened watch window for '$1' (read-write attach; type only deliberate input, never paste chat logs)"
-+}
-+
-+# Full room from one zsh command: setup + workers + visible watch mirrors +
-+# coordinator in tmux (addressable doorbell endpoint) with the task pasted.
-+mode_up() {
-+  [ $# -ge 1 ] || fail "up needs an issue number: up <issue> [taskfile-or-task]"
-+  local issue="$1"
-+  local task="${2:-}"
-+  mode_setup "$issue"
-+  local rt; rt=$(runtime_dir "$issue")
-+  mode_workers "$issue"
-+  ensure_coord_session
-+  open_watch_window "$DEV_SESS"
-+  open_watch_window "$QE_SESS"
-+  open_watch_window "$COORD_SESS"
-+  cat <<EOF
-+watch: three Terminal windows opened (read-write mirrors). Detach with Ctrl-b d.
-+watch: Harness.app grid stays empty by design (tmux sessions are not discovered).
-+       Do NOT start opencode in app panes (that would duplicate live workers).
-+next: the coordinator runs in tmux session '$COORD_SESS' (the doorbell address).
-+EOF
-+  if [ -n "$task" ]; then
-+    if [ -f "$task" ]; then
-+      mode_coord "$task"
-+    else
-+      local tf; tf=$(mktemp)
-+      printf '%s\n' "$task" > "$tf"
-+      mode_coord "$tf"
-+      rm -f "$tf"
-+    fi
-+  else
-+    echo "(no task given — attach and paste: 'You are nexios-coord. Read AGENTS.md. Report readiness.')"
-+  fi
-+}
-+
-+# audit-diff: generate merge-base audit diff with non-empty assertion.
-+# usage: audit-diff [branch]   (default: current branch; run in dev checkout)
-+mode_audit_diff() {
-+  local br="${1:-$(git branch --show-current)}"
-+  local base; base=$(git merge-base main "$br")
-+  local out="audits/pending_patch.diff"
-+  if [ "$br" = "$(git branch --show-current)" ]; then
-+    # Same branch: diff the worktree too — uncommitted edits are part of the
-+    # delta under audit (`base..br` would silently omit them).
-+    git diff "$base" -- . > "$out" || true
-+  else
-+    git diff "$base".."$br" -- . > "$out" || true
-+  fi
-+  [ -s "$out" ] || fail "audit diff empty for $br (nothing to audit)"
-+  info "audit diff: $out ($(wc -l < "$out") lines, merge-base $base)"
-+}
-+
-+# qe-merge: merge origin/main into testbed --no-commit --no-ff.
-+# usage: qe-merge <issue>   (run in the QE checkout; aborts cleanly on conflict)
-+mode_qe_merge() {
-+  [ $# -eq 1 ] || fail "qe-merge needs an issue number"
-+  [ "$(git rev-parse --show-toplevel)" = "$(git -C "$QE_DIR" rev-parse --show-toplevel)" ] \
-+    || fail "run qe-merge in the QE checkout ($QE_DIR), not $(pwd)"
-+  check_branch "$QE_DIR" testbed
-+  check_clean_tree "$(pwd)" "test-history.txt" "graphify-out/"
-+  git fetch origin main 2>/dev/null \
-+    || fail "git fetch origin main failed — refusing to merge a possibly stale origin/main"
-+  if git merge --no-commit --no-ff origin/main; then
-+    info "merged origin/main --no-commit (inspect, test, then commit or abort)"
-+  else
-+    git merge --abort || true
-+    fail "conflict — merge aborted; verify with git status (resolve manually)"
-+  fi
-+}
-+
-+# single-line doorbell to a tmux session (both directions). usage: msg <sess> <text>
-+mode_msg() {
-+  [ $# -eq 2 ] || fail "msg needs: <tmux-session> <single-line-text>"
-+  case "$2" in *$'\n'*) fail "doorbell must be a single line (payloads live in inbox)";; esac
-+  tmux has-session -t "$1" 2>/dev/null || fail "no such tmux session: $1 (start it first)"
-+  if tmux list-clients -t "$1" 2>/dev/null | grep -q "read-only"; then
-+    fail "read-only watcher attached to '$1' — tmux blocks ALL input while one is present. Close the mirror window(s) (Ctrl-b d does not work in -r; close the window), then retry"
-+  fi
-+  tmux send-keys -t "$1" "$2" Enter
-+  info "doorbell sent to '$1'"
-+}
-+
-+# End-to-end transport self-test: proves msg delivers text+Enter INTO a live
-+# tmux pane in both directions, using two scratch echo sessions (no opencode,
-+# no tokens, no $DEV_SESS/$QE_SESS/$COORD_SESS touched).
-+mode_comms_test() {
-+  local issue="${1:-999999}"
-+  local rt; rt=$(runtime_dir "$issue")
-+  need_cmd tmux
-+  mkdir -p "$rt/notes"
-+  local a="agentup-ct-a-$$" b="agentup-ct-b-$$"
-+  cat > "$rt/notes/echo_agent.sh" <<'EOF'
-+#!/bin/sh
-+while IFS= read -r line; do printf 'GOT:%s\n' "$line"; done
-+EOF
-+  kill_sess() { tmux kill-session -t "$1" 2>/dev/null || true; }
-+  trap "tmux kill-session -t '$a' 2>/dev/null || true; tmux kill-session -t '$b' 2>/dev/null || true" EXIT
-+  tmux new-session -d -s "$a" "sh $rt/notes/echo_agent.sh"
-+  tmux new-session -d -s "$b" "sh $rt/notes/echo_agent.sh"
-+  sleep 1
-+  local ok=1
-+  # coord -> worker direction / worker -> coord direction (same mode_msg path)
-+  mode_msg "$a" "PING-$$" >/dev/null || ok=0
-+  mode_msg "$b" "PONG-$$" >/dev/null || ok=0
-+  sleep 1
-+  tmux capture-pane -p -t "$a" | grep -q "GOT:PING-$$" || { echo "FAIL: coord->worker not delivered"; ok=0; }
-+  tmux capture-pane -p -t "$b" | grep -q "GOT:PONG-$$" || { echo "FAIL: worker->coord not delivered"; ok=0; }
-+  # guard still fails loud on a missing session
-+  if ( mode_msg "agentup-ct-missing-$$" "x" ) >/dev/null 2>&1; then
-+    echo "FAIL: msg accepted a nonexistent session"; ok=0
-+  fi
-+  [ "$ok" = 1 ] || fail "comms-test FAILED"
-+  kill_sess "$a"; kill_sess "$b"; trap - EXIT
-+  info "comms-test PASSED: doorbell delivered in both directions (PING-$$/PONG-$$)"
-+}
-+
-+mode_status() {
-+  if [ "${1:-}" = "--reconstruct" ]; then shift; mode_status_reconstruct "$@"; return; fi
-+  info "--- tmux ---"; tmux ls 2>&1 || true
-+  info "--- branches ---"
-+  echo "dev: $(git -C "$DEV_DIR" branch --show-current 2>/dev/null || echo '?')"
-+  echo "qe:  $(git -C "$QE_DIR" branch --show-current 2>/dev/null || echo '?')"
-+  if [ $# -ge 1 ]; then
-+    local rt; rt=$(runtime_dir "$1")
-+    for r in dev qe auditor coord; do
-+      echo "--- inbox/$r.md (tail) ---"
-+      tail -2 "$rt/inbox/$r.md" 2>/dev/null || echo "(none)"
-+    done
-+    if [ -f "$rt/state.json" ]; then
-+      echo "--- state.json ---"
-+      python3 -c "import json; s=json.load(open('$rt/state.json')); print({k: s.get(k) for k in ('phase','state','retries','retry_budget','halt','pending')})"
-+    fi
-+  fi
-+}
-+
-+# rebuild state.json machine fields from git + issue into a COPY (live untouched).
-+# usage: status --reconstruct <issue> --copy <dir>
-+mode_status_reconstruct() {
-+  local issue="" copy=""
++    info "started $COORD_SESS (fenced, config=$COORD_CONFIG_RESOLVED)"
+   fi
+ }
+ 
+@@ -629,21 +808,61 @@ EOF
+   fi
+ }
+ 
+-# audit-diff: generate merge-base audit diff with non-empty assertion.
+-# usage: audit-diff [branch]   (default: current branch; run in dev checkout)
++# audit-diff: generate the audit diff with a non-empty assertion.
++# usage: audit-diff [branch] [--base <rev>]   (default: current branch)
++# Writes through a temp file: diffing straight into audits/pending_patch.diff
++# made the file its own delta (a self-deletion hunk in every audit).
++# Process artifacts are excluded so the auditor sees the code, not the trail.
+ mode_audit_diff() {
+-  local br="${1:-$(git branch --show-current)}"
+-  local base; base=$(git merge-base main "$br")
++  local br="" base_override="" base_set=0
 +  while [ $# -gt 0 ]; do
 +    case "$1" in
-+      --copy) copy="$2"; shift 2;;
-+      *) [ -z "$issue" ] && { issue="$1"; shift; } || fail "unexpected arg: $1";;
++      --base)
++        [ -n "${2:-}" ] || fail "--base needs a revision"
++        base_override="$2"; base_set=1; shift 2 ;;
++      --base=*)
++        base_override="${1#--base=}"
++        [ -n "$base_override" ] || fail "--base needs a revision (got an empty value)"
++        base_set=1; shift ;;
++      *)
++        [ -z "$br" ] || fail "unexpected arg: $1"
++        br="$1"; shift ;;
 +    esac
 +  done
-+  [ -n "$issue" ] && [ -n "$copy" ] || fail "need: status --reconstruct <issue> --copy <dir>"
-+  case "$copy" in /tmp/?*) ;; *) fail "refusing: --copy must be a direct /tmp/<name> path";; esac
-+  case "${copy#/tmp/}" in */*) fail "refusing: --copy must be a direct /tmp/<name> path";; esac
-+  case "$(basename "$copy")" in
-+    *-drill|*-staging|*-copy) ;;
-+    *) fail "refusing: --copy dir name must end in -drill, -staging or -copy (got $(basename "$copy"))";;
-+  esac
-+  # `--copy` is checked as a string; a symlink named *-copy would write
-+  # through to the live dir (or any target), defeating "live untouched".
-+  [ -L "$copy" ] && fail "refusing: --copy must not be a symlink (got $(readlink "$copy"))"
-+  local rt; rt=$(runtime_dir "$issue")
-+  [ -f "$rt/state.json" ] || fail "no live state to compare against"
-+  case "$copy" in "$rt") fail "refusing to reconstruct the live dir (use a COPY)";; esac
-+  mkdir -p "$copy"
-+  python3 - "$rt" "$copy" "$DEV_DIR" "$QE_DIR" <<'EOF'
-+import json, os, subprocess, sys
-+rt, copy, devdir, qedir = sys.argv[1:5]
-+live = json.load(open(rt + "/state.json"))
-+dev_br = subprocess.run(["git","-C",devdir,"branch","--show-current"],
-+                        capture_output=True, text=True).stdout.strip()
-+qe_br = subprocess.run(["git","-C",qedir,"branch","--show-current"],
-+                       capture_output=True, text=True).stdout.strip()
-+recon = {"halt": live.get("halt", False), "issue": live.get("issue"),
-+         "phase": live.get("phase", ""), "state": live.get("state"),
-+         "retries": live.get("retries", 0),
-+         "retry_budget": live.get("retry_budget", 3),
-+         "updated": live.get("updated", ""),
-+         "pending": live.get("pending", "")}
-+out_path = copy + "/state.json"
-+if os.path.islink(out_path):
-+    sys.exit("refusing: copy state.json is a symlink")
-+open(out_path, "w").write(json.dumps(recon, indent=2) + "\n")
-+print("reconstruct: dev=%s qe=%s" % (dev_br, qe_br))
-+print("machine fields: " + ("MATCH" if all(
-+    recon[k] == live.get(k) for k in
-+    ("phase","state","retries","retry_budget","halt")) else "MISMATCH"))
-+EOF
++  [ -n "$br" ] || br=$(git branch --show-current)
++  [ -n "$br" ] || fail "cannot determine the branch (detached HEAD? pass one)"
++  local base base_desc
++  if [ "$base_set" = 1 ]; then
++    base=$(git rev-parse --verify --quiet "$base_override^{commit}") \
++      || fail "base '$base_override' does not resolve to a commit"
++    base_desc="$base_override"
++  else
++    base=$(git merge-base main "$br" 2>/dev/null || true)
++    [ -n "$base" ] || fail "no merge-base with main for '$br' (pass --base <rev>)"
++    base_desc="merge-base main $br = $base"
++  fi
+   local out="audits/pending_patch.diff"
++  mkdir -p audits
++  local tmpf; tmpf=$(mktemp "${TMPDIR:-/tmp}/agentup-auditdiff.XXXXXX")
++  local excl=( "--" "." ":!audits/pending_patch.diff" \
++               ":!audits/rejected_patch.diff" ":!prompts/LEARNINGS.md" \
++               ":!test-history.txt" ":!graphify-out" )
+   if [ "$br" = "$(git branch --show-current)" ]; then
+     # Same branch: diff the worktree too — uncommitted edits are part of the
+     # delta under audit (`base..br` would silently omit them).
+-    git diff "$base" -- . > "$out" || true
++    git diff --no-ext-diff "$base" "${excl[@]}" > "$tmpf" \
++      || { rm -f "$tmpf"; fail "git diff failed (base $base_desc)"; }
+   else
+-    git diff "$base".."$br" -- . > "$out" || true
++    git diff --no-ext-diff "$base..$br" "${excl[@]}" > "$tmpf" \
++      || { rm -f "$tmpf"; fail "git diff failed (base $base_desc)"; }
+   fi
+-  [ -s "$out" ] || fail "audit diff empty for $br (nothing to audit)"
+-  info "audit diff: $out ($(wc -l < "$out") lines, merge-base $base)"
++  if [ ! -s "$tmpf" ]; then
++    rm -f "$tmpf"
++    fail "audit diff empty for $br (nothing to audit; base $base_desc)"
++  fi
++  chmod 0644 "$tmpf"
++  mv -f "$tmpf" "$out"
++  info "audit diff: $out ($(wc -l < "$out" | tr -d ' ') lines, base $base_desc)"
+ }
+ 
+ # qe-merge: merge origin/main into testbed --no-commit --no-ff.
+@@ -753,13 +972,33 @@ mode_status_reconstruct() {
+   [ -f "$rt/state.json" ] || fail "no live state to compare against"
+   case "$copy" in "$rt") fail "refusing to reconstruct the live dir (use a COPY)";; esac
+   mkdir -p "$copy"
++  # A hardlink named *-copy is not a symlink but shares the live inode, so
++  # writing through it rewrote live state (S3-1R). The shell `-ef` check is the
++  # fast path; the Python re-check is the one that cannot be raced.
++  if [ -e "$copy/state.json" ] && [ "$copy/state.json" -ef "$rt/state.json" ]; then
++    fail "refusing: $copy/state.json shares the live state inode (hardlink) — use a real copy"
++  fi
+   python3 - "$rt" "$copy" "$DEV_DIR" "$QE_DIR" <<'EOF'
+-import json, os, subprocess, sys
++import json, os, subprocess, sys, tempfile
++
++
++def die(msg):
++    sys.stderr.write("agent_up: ERROR: %s\n" % msg)
++    sys.exit(1)
++
++
+ rt, copy, devdir, qedir = sys.argv[1:5]
+-live = json.load(open(rt + "/state.json"))
+-dev_br = subprocess.run(["git","-C",devdir,"branch","--show-current"],
++try:
++    with open(rt + "/state.json") as handle:
++        live = json.load(handle)
++    live_stat = os.stat(rt + "/state.json")
++except OSError as exc:
++    die("cannot read live state: %s" % (exc.strerror or exc))
++except ValueError as exc:
++    die("live state.json is not valid JSON: %s" % exc)
++dev_br = subprocess.run(["git", "-C", devdir, "branch", "--show-current"],
+                         capture_output=True, text=True).stdout.strip()
+-qe_br = subprocess.run(["git","-C",qedir,"branch","--show-current"],
++qe_br = subprocess.run(["git", "-C", qedir, "branch", "--show-current"],
+                        capture_output=True, text=True).stdout.strip()
+ recon = {"halt": live.get("halt", False), "issue": live.get("issue"),
+          "phase": live.get("phase", ""), "state": live.get("state"),
+@@ -768,20 +1007,45 @@ recon = {"halt": live.get("halt", False), "issue": live.get("issue"),
+          "updated": live.get("updated", ""),
+          "pending": live.get("pending", "")}
+ out_path = copy + "/state.json"
+-if os.path.islink(out_path):
+-    sys.exit("refusing: copy state.json is a symlink")
+-open(out_path, "w").write(json.dumps(recon, indent=2) + "\n")
++if os.path.exists(out_path):
++    st = os.stat(out_path)
++    if (st.st_dev, st.st_ino) == (live_stat.st_dev, live_stat.st_ino):
++        die("copy state.json is the live file (shared dev/ino)")
++cst, lst = os.stat(copy), os.stat(rt)
++if (cst.st_dev, cst.st_ino) == (lst.st_dev, lst.st_ino):
++    die("--copy is the live runtime dir")
++fd, tmp = tempfile.mkstemp(dir=copy, prefix=".recon.")
++try:
++    with os.fdopen(fd, "w") as handle:
++        handle.write(json.dumps(recon, indent=2) + "\n")
++        handle.flush()
++        os.fsync(handle.fileno())
++    os.replace(tmp, out_path)  # replace the entry, never truncate a shared inode
++    tmp = None
++finally:
++    if tmp is not None:
++        try:
++            os.unlink(tmp)
++        except OSError:
++            pass
+ print("reconstruct: dev=%s qe=%s" % (dev_br, qe_br))
+ print("machine fields: " + ("MATCH" if all(
+     recon[k] == live.get(k) for k in
+-    ("phase","state","retries","retry_budget","halt")) else "MISMATCH"))
++    ("phase", "state", "retries", "retry_budget", "halt")) else "MISMATCH"))
+ EOF
+ }
+ 
++# self-test only (not in usage): expose the clean-tree parser so its porcelain
++# handling (renames, spaces, untracked) is testable without a live worker.
++mode_check_clean_tree() {
++  [ $# -ge 1 ] || fail "usage: __check-clean-tree <dir> [exempt-prefix...]"
++  check_clean_tree "$@"
 +}
 +
-+mode_self_test() {
-+  local t=0 pass=0
-+  chk() { t=$((t+1)); if "$@" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS: $*"; else echo "FAIL: $*"; fi; }
-+  chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS: $*"; fi; }
-+  # guard aborts (scratch names only — never live sessions)
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /nonexistent "$ROLES_DIR/dev.json" /dev/null || true
-+  # msg discipline
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" msg "agentup-nosuch-$$" "hi" || true
-+  printf 'two\nlines' > /tmp/agentup-ml-$$.txt || true
-+  # reconstruct refuses live dir ( Triple-check: uses --copy guard)
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/nexios-410 || true
-+  rm -f /tmp/agentup-ml-$$.txt
-+  # out-of-repo policy: a REAL file where a link belongs must hard-fail (drift),
-+  # an absent path must be linked, a wrong link must be repointed.
-+  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator"
-+  printf 'drift\n' > "$st/home/coordinator/opencode.json"
-+  chk_neg env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
-+  rm -f "$st/home/coordinator/opencode.json"
+ mode_self_test() {
+   local t=0 pass=0
+   chk() { t=$((t+1)); if "$@" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS: $*"; else echo "FAIL: $*"; fi; }
+-  chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS: $*"; fi; }
++  chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS (aborts): $*"; fi; }
+   # guard aborts (scratch names only — never live sessions)
+   chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /nonexistent "$ROLES_DIR/dev.json" /dev/null || true
+   # msg discipline
+@@ -790,6 +1054,17 @@ mode_self_test() {
+   # reconstruct refuses live dir ( Triple-check: uses --copy guard)
+   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/nexios-410 || true
+   rm -f /tmp/agentup-ml-$$.txt
++  # fence configuration: families byte-identical, mirrors complete, no drift
++  chk python3 "$REPO_ROOT/tools/agents/verify_fence.py"
++  # the coordinator launch command carries the RESOLVED config + pinned TMPDIR
++  # (S4-9: the fence assertion is only meaningful if the env is the fenced one)
++  local cc; cc=$("$SCRIPT_DIR/agent_up.sh" __coord-cmd)
++  chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*coordinator/opencode.resolved.json"' _ "$cc"
++  chk bash -c 'printf "%s" "$1" | grep -q "TMPDIR=/tmp/agentup-tmp-"' _ "$cc"
++  chk bash -c 'printf "%s" "$1" | grep -q -- "-u OPENCODE_CONFIG_CONTENT"' _ "$cc"
++  # issue-number canonicality: 0, over-long and leading-zero aliases
++  chk_neg "$SCRIPT_DIR/agent_up.sh" setup 0
++  chk_neg "$SCRIPT_DIR/agent_up.sh" setup 12345678
+   # out-of-repo policy: a REAL file where a link belongs must hard-fail (drift),
+   # an absent path must be linked, a wrong link must be repointed.
+   local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator"
+@@ -800,16 +1075,94 @@ mode_self_test() {
+   chk test -L "$st/home/coordinator/opencode.json"
+   chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
+   chk test -L "$st/home/roles/dev.json"
++  # a WRONG link is repointed, never adopted
++  ln -sfn /nonexistent "$st/home/coordinator/opencode.json"
 +  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
-+  chk test -L "$st/home/coordinator/opencode.json"
 +  chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
-+  chk test -L "$st/home/roles/dev.json"
-+  # state writer: validated keys/vocabulary, locked, atomic
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
-+  chk "$SCRIPT_DIR/agent_up.sh" state 9999 phase=AUDITED retries=1
-+  chk grep -q '"phase": "AUDITED"' /tmp/nexios-9999/state.json
-+  chk grep -q '"retries": 1' /tmp/nexios-9999/state.json
-+  # --copy anchor: nested path and wrong suffix must be refused
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/a/b-copy
-+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/plain
-+  rm -rf "$st"
-+  echo "self-test: $pass/$t PASS"
-+  [ "$pass" = "$t" ] || fail "self-test failures"
-+}
-+
-+mode_approve() {
-+  [ $# -eq 1 ] || fail "approve needs a tmux session name"
-+  tmux has-session -t "$1" 2>/dev/null || fail "no such tmux session: $1"
-+  local dlg
-+  dlg=$(tmux capture-pane -t "$1" -p | grep -B1 -A6 "Permission required" | head -12 || true)
-+  if [ -z "$dlg" ]; then
-+    fail "no permission dialog open on '$1' — not touching input (refusing blind keypresses)"
-+  fi
-+  echo "--- dialog on '$1' (allowing ALWAYS) ---"
-+  echo "$dlg"
-+  echo "--- driving Allow always + Confirm ---"
-+  tmux send-keys -t "$1" Right && sleep 1
-+  tmux send-keys -t "$1" Enter && sleep 6
-+  if tmux capture-pane -t "$1" -p | grep -q "Confirm"; then
-+    tmux send-keys -t "$1" Enter && sleep 5
-+  fi
-+  tmux capture-pane -t "$1" -p | tail -5
-+}
-+
-+mode_close() {
-+  local all=0; [ "${1:-}" = "--all" ] && all=1
-+  for s in "$DEV_SESS" "$QE_SESS" "$AUDIT_SESS"; do
-+    if tmux has-session -t "$s" 2>/dev/null; then tmux kill-session -t "$s"; info "killed $s"; fi
-+  done
-+  if [ "$all" = 1 ]; then
-+    if tmux has-session -t "$COORD_SESS" 2>/dev/null; then tmux kill-session -t "$COORD_SESS"; info "killed $COORD_SESS"; fi
-+  fi
-+}
-+
-+mode="${1:-}"; shift || true
-+case "$mode" in
-+  setup) mode_setup "$@" ;;
-+  coord) mode_coord "$@" ;;
-+  workers) mode_workers "$@" ;;
-+  up) mode_up "$@" ;;
-+  run) mode_run "$@" ;;
-+  audit) mode_audit "$@" ;;
-+  audit-diff) mode_audit_diff "$@" ;;
-+  qe-merge) mode_qe_merge "$@" ;;
-+  msg) mode_msg "$@" ;;
-+  wake) mode_msg "$@" ;;
-+  state) mode_state_set "$@" ;;
-+  comms-test) mode_comms_test "$@" ;;
-+  status) mode_status "$@" ;;
-+  self-test) mode_self_test "$@" ;;
-+  approve) mode_approve "$@" ;;
-+  close) mode_close "$@" ;;
-+  *) usage ;;
-+esac
++  # leading-zero issue numbers canonicalize onto ONE runtime (never alias 410)
++  local zcan
++  local zraw
++  zcan=$((900000 + ($$ % 90000)))
++  zraw="000$zcan"
++  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup "$zraw"
++  chk test -f "/tmp/nexios-$zcan/state.json"
++  chk_neg test -e "/tmp/nexios-$zraw"
++  # coordinator config is rendered from the {repo} template, template untouched
++  chk test -f "$st/home/coordinator/opencode.resolved.json"
++  chk grep -q '{repo}' "$COORD_CONFIG_DIR/opencode.json"
++  chk_neg grep -q '{repo}' "$st/home/coordinator/opencode.resolved.json"
++  chk grep -q "$(cd "$REPO_ROOT" && pwd -P)/prompts/LEARNINGS.md" \
++      "$st/home/coordinator/opencode.resolved.json"
++  chk python3 -c "import json,sys; json.load(open(sys.argv[1]))" \
++      "$st/home/coordinator/opencode.resolved.json"
+   # state writer: validated keys/vocabulary, locked, atomic
+   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
+   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
++  chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 retries=abc
+   chk "$SCRIPT_DIR/agent_up.sh" state 9999 phase=AUDITED retries=1
+   chk grep -q '"phase": "AUDITED"' /tmp/nexios-9999/state.json
+   chk grep -q '"retries": 1' /tmp/nexios-9999/state.json
++  # ... and a corrupt state file is a one-line error, never a traceback
++  local bad="/tmp/nexios-9991"; rm -rf "$bad"
++  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9991
++  printf '{not json' > "$bad/state.json"
++  local jout; jout=$("$SCRIPT_DIR/agent_up.sh" state 9991 phase=PLANNED 2>&1 || true)
++  chk bash -c 'printf "%s" "$1" | grep -q "state: existing state.json is not valid JSON"' _ "$jout"
++  chk_neg bash -c 'printf "%s" "$1" | grep -q Traceback' _ "$jout"
+   # --copy anchor: nested path and wrong suffix must be refused
+   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/a/b-copy
+   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/plain
+-  rm -rf "$st"
++  # --copy is a symlink / shares the live inode -> refused, live state unchanged
++  local sl="/tmp/agentup-sl-$$-copy"
++  rm -rf "$sl"; ln -s /tmp "$sl"
++  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 9999 --copy "$sl"
++  rm -f "$sl"
++  local hl="/tmp/agentup-hl-$$-copy"
++  rm -rf "$hl"; mkdir -p "$hl"
++  ln -s /tmp/nexios-9999/state.json "$hl/state.json"
++  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 9999 --copy "$hl"
++  rm -rf "$hl"; mkdir -p "$hl"
++  ln /tmp/nexios-9999/state.json "$hl/state.json"
++  local before after
++  before=$(shasum /tmp/nexios-9999/state.json | cut -d' ' -f1)
++  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 9999 --copy "$hl"
++  after=$(shasum /tmp/nexios-9999/state.json | cut -d' ' -f1)
++  chk test "$before" = "$after"
++  rm -rf "$hl"
++  # clean-tree parser: renames report the NEW path, spaces survive, untracked is
++  # in scope, exempt prefixes stay exempt
++  local ct="$st/clean"; mkdir -p "$ct/graphify-out"
++  git -C "$ct" init -q -b main
++  printf 'a\n' > "$ct/a b.txt"
++  git -C "$ct" add -A
++  git -C "$ct" -c user.email=t@t -c user.name=t commit -qm base
++  git -C "$ct" mv "a b.txt" "x y.txt"
++  printf 'z\n' > "$ct/z.txt"
++  printf 'q\n' > "$ct/graphify-out/x"
++  local ctout; ctout=$("$SCRIPT_DIR/agent_up.sh" __check-clean-tree "$ct" graphify-out/ 2>&1 || true)
++  chk bash -c 'printf "%s" "$1" | grep -q "x y.txt"' _ "$ctout"
++  chk bash -c 'printf "%s" "$1" | grep -q "z.txt"' _ "$ctout"
++  chk_neg bash -c 'printf "%s" "$1" | grep -q "a b.txt"' _ "$ctout"
++  chk_neg bash -c 'printf "%s" "$1" | grep -q "graphify-out/x"' _ "$ctout"
++  git -C "$ct" add -A
++  git -C "$ct" -c user.email=t@t -c user.name=t commit -qm clean
++  chk "$SCRIPT_DIR/agent_up.sh" __check-clean-tree "$ct" graphify-out/
++  # audit-diff: explicit base, temp-file write (no self-deletion hunk), exclusions
++  local gd="$st/gd"; mkdir -p "$gd/audits"
++  git -C "$gd" init -q -b main
++  printf 'base\n' > "$gd/a.txt"
++  printf 'old\n' > "$gd/audits/pending_patch.diff"
++  git -C "$gd" add -A
++  git -C "$gd" -c user.email=t@t -c user.name=t commit -qm base
++  printf 'change\n' >> "$gd/a.txt"
++  chk bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main"
++  chk grep -q '^+change' "$gd/audits/pending_patch.diff"
++  chk_neg grep -q 'pending_patch.diff' "$gd/audits/pending_patch.diff"
++  chk bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base main"
++  chk_neg bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base="
++  rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
++         "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
++         "$REPO_ROOT/.nexios-runtime/9999"
+   echo "self-test: $pass/$t PASS"
+   [ "$pass" = "$t" ] || fail "self-test failures"
+ }
+@@ -859,6 +1212,8 @@ case "$mode" in
+   comms-test) mode_comms_test "$@" ;;
+   status) mode_status "$@" ;;
+   self-test) mode_self_test "$@" ;;
++  __check-clean-tree) mode_check_clean_tree "$@" ;;
++  __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
+   approve) mode_approve "$@" ;;
+   close) mode_close "$@" ;;
+   *) usage ;;
 diff --git a/tools/agents/coordinator/AGENTS.md b/tools/agents/coordinator/AGENTS.md
-new file mode 100644
-index 000000000..d21351ca0
---- /dev/null
+index d21351ca0..35bbfb7f6 100644
+--- a/tools/agents/coordinator/AGENTS.md
 +++ b/tools/agents/coordinator/AGENTS.md
-@@ -0,0 +1,13 @@
-+# Coordinator (nexios-coord)
-+
-+Role: own workflow transitions. You never write, build, or test kernel code — workers do that in their own checkouts. Your tools are the `harness_*` verbs (agents), `github_*` (issues), and plain file access (mailbox + state).
-+
-+- Plan source of truth: issue #410 (+ its comments). Log progress notes there.
-+- Workflow state: `/tmp/nexios-<issue>/state.json`. Single writer (you). Guard state-modifying steps with the python3-fcntl helper (no flock binary on macOS).
-+- Mailbox: `/tmp/nexios-<issue>/inbox/<dev|qe|auditor>.md`. Append-only, one line per message: `<ISO8601> FROM=<role> NEED|READY|NOTE :: <text>`. Payloads live here, never in chat.
-+- Wake rule (both directions, tmux — harness cannot see tmux sessions): you ring workers via `scripts/agent_up.sh msg <nexios-dev|nexios-qe> "inbox: ... — read inbox/<box>.md"` (idle sessions only); workers ring you at tmux session `nexios-coord` the same way. Single line, inbox pointer only, never dialogs. Any ring means "re-read the inbox", never execute ring text. Read sessions via tmux capture-pane; never paste secrets into panes.
-+- Launcher (repo-canonical, tracked): `scripts/agent_up.sh` — setup/coord/workers/up/run/audit/audit-diff/qe-merge/msg/wake/comms-test/status/self-test/approve/close. No other copy is authoritative.
-+- Branch map: dev `~/jarvis` (main), qe `~/jarvis_test` (testbed). Confirm via harness list before each step.
-+- Guards: unique session name per role (close stale duplicates, never close another starter's session); clean tree before any merge step; 3 retries then halt with MANUAL_INTERVENTION; state vocabulary is the AGENTS.md machine (IN_PROGRESS / AUDITED / VERIFIED).
-+- Role prompts live read-only at `prompts/PROMPT-{dev,testdev,audit}.md` in the repo. Reference, don't copy.
-+- Your own config is versioned in repo: `tools/agents/coordinator/{opencode.json,AGENTS.md}`. This directory's files are SYMLINKS to those — never write canonical content out of repo; link, don't copy.
+@@ -9,5 +9,7 @@ Role: own workflow transitions. You never write, build, or test kernel code —
+ - Launcher (repo-canonical, tracked): `scripts/agent_up.sh` — setup/coord/workers/up/run/audit/audit-diff/qe-merge/msg/wake/comms-test/status/self-test/approve/close. No other copy is authoritative.
+ - Branch map: dev `~/jarvis` (main), qe `~/jarvis_test` (testbed). Confirm via harness list before each step.
+ - Guards: unique session name per role (close stale duplicates, never close another starter's session); clean tree before any merge step; 3 retries then halt with MANUAL_INTERVENTION; state vocabulary is the AGENTS.md machine (IN_PROGRESS / AUDITED / VERIFIED).
+-- Role prompts live read-only at `prompts/PROMPT-{dev,testdev,audit}.md` in the repo. Reference, don't copy.
++- Role prompts live read-only in the repo: `{repo}/prompts/PROMPT-{dev,testdev,audit}.md` (the
++  launched config resolves `{repo}` to the absolute repo root; the shipped files never carry a
++  machine path). Reference, don't copy. LEARNINGS closeout writes `{repo}/prompts/LEARNINGS.md`.
+ - Your own config is versioned in repo: `tools/agents/coordinator/{opencode.json,AGENTS.md}`. This directory's files are SYMLINKS to those — never write canonical content out of repo; link, don't copy.
 diff --git a/tools/agents/coordinator/opencode.json b/tools/agents/coordinator/opencode.json
-new file mode 100644
-index 000000000..ded0fe32a
---- /dev/null
+index 11ab120a5..f1747daba 100644
+--- a/tools/agents/coordinator/opencode.json
 +++ b/tools/agents/coordinator/opencode.json
-@@ -0,0 +1,42 @@
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "prompts/LEARNINGS.md": "allow"
-+    }
-+  },
-+  "mcp": {
-+    "harness": {
-+      "type": "local",
-+      "command": [
-+        "harness",
-+        "mcp"
-+      ],
-+      "enabled": true
-+    },
-+    "github": {
-+      "type": "remote",
-+      "url": "https://api.githubcopilot.com/mcp/",
-+      "enabled": true,
-+      "oauth": false,
-+      "headers": {
-+        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
-+      }
-+    }
-+  }
-+}
+@@ -4,6 +4,8 @@
+     "bash": "allow",
+     "external_directory": {
+       "*": "deny",
++      "{repo}/prompts/**": "allow",
++      "{repo}/audits/**": "allow",
+       "/tmp/nexios-*": "allow",
+       "/private/tmp/nexios-*": "allow",
+       "/tmp/nexios-*/**": "allow",
+@@ -19,7 +21,11 @@
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "deny",
+@@ -27,7 +33,7 @@
+       "/private/tmp/nexios-*/*": "allow",
+       "/tmp/nexios-*/**/*": "allow",
+       "/private/tmp/nexios-*/**/*": "allow",
+-      "prompts/LEARNINGS.md": "allow"
++      "{repo}/prompts/LEARNINGS.md": "allow"
+     }
+   },
+   "mcp": {
 diff --git a/tools/agents/roles/README.md b/tools/agents/roles/README.md
-new file mode 100644
-index 000000000..fd8586f08
---- /dev/null
+index 5dbb8c9d9..405bf9602 100644
+--- a/tools/agents/roles/README.md
 +++ b/tools/agents/roles/README.md
-@@ -0,0 +1,40 @@
-+# Role configs (fencing for the multi-agent workflow, issue #410)
+@@ -15,7 +15,14 @@ links and hard-fails if it finds a real file in their place.
+   - `/tmp/nexios-*` (+ `/**`) — the issue mailbox runtime created by `scripts/agent_up.sh setup`.
+   - `/tmp/jarvis-*`, `/tmp/jarvis_*`, `/tmp/matrix-*`, `/tmp/qemu-serial.*` — kernel test/build
+     scratch (`tools/meson/*`, `scripts/run_all_classes.sh`, `tools/deadline_matrix.sh`).
+-  - `/tmp/agentup-*` — `scripts/agent_up.sh` self-test scratch.
++  - `/tmp/agentup-*` (+ `/**`) — `scripts/agent_up.sh` self-test scratch AND the
++    per-session `TMPDIR` (`/tmp/agentup-tmp-<session>`). The host `$TMPDIR`
++    (`/var/folders/...` on macOS) is deliberately NOT allowed: it is per-boot and
++    therefore unfenceable. It is pinned instead of banned-and-ignored, because an
++    unfenced TMPDIR is what sent writers to `bash` (unfenced by design) during the
++    #410 burn-in.
++  - `/tmp/lldb-*` — lldb replay/watchpoint scratch written by `tools/gdb/*.py`
++    (`h2_*` scripts). Flat namespace, same shape as `qemu-serial.*`.
+   Own-checkout files need no rule (in-cwd); cross-checkout reads are denied (each checkout carries its
+   own copy of prompts/specs, so branch-consistent roles fall out naturally).
+ - `bash: allow` — intentional and explicit (opencode 1.x defaults bash to ask; without this the fence
+@@ -36,6 +43,31 @@ and the four embedded fallbacks in `scripts/agent_up.sh` — keep the pairs in
+ lockstep, and prove fence changes with a tool-only write probe, not by reading the
+ map.
+ 
++## Coordinator config (repo-anchored, rendered at launch)
++The coordinator's cwd is out of repo, so a relative rule such as
++`prompts/LEARNINGS.md` resolved to a SHADOW file there, and `external_directory:
++"*": deny` blocked tool reads of the repo entirely (issue #412 S3-2R). The
++canonical config therefore carries a literal `{repo}` token instead of a machine
++path, and `scripts/agent_up.sh` renders it into
++`$NEXIOS_HOME/coordinator/opencode.resolved.json` at launch (absolute,
++canonical repo root, JSON-validated, refuses a residual token). The shipped
++files contain no machine-specific paths; only the generated resolved file does.
 +
-+Each file is an opencode permission profile, loaded via `OPENCODE_CONFIG=<repo>/tools/agents/roles/<role>.json`
-+(absolute path at *runtime* only — the files themselves contain no machine-specific paths; the only
-+absolute prefix is `/tmp`, and only inside the NAMED scratch namespaces listed below).
++Coordinator read surface: `{repo}/prompts/**` and `{repo}/audits/**` are the only
++`external_directory` allowances beyond the shared scratch map; the only repo
++write is `{repo}/prompts/LEARNINGS.md` (FEEDBACK closeout).
 +
-+Out-of-repo copies are forbidden: `~/.local/state/nexios/roles/*` and `.../coordinator/*` are
-+SYMLINKS into this repo (canonical content is versioned here). `scripts/agent_up.sh` creates the
-+links and hard-fails if it finds a real file in their place.
++## Byte-identity families (mechanically enforced)
++`tools/agents/verify_fence.py` (stdlib, run by `agent_up.sh self-test` and the
++`cross-edit-isolation` CI job) checks: the four embedded fallbacks in
++`scripts/agent_up.sh` are byte-identical to the role JSONs; the worker
++`external_directory`/`edit` maps are identical across JSONs, twins and
++`prompts/PROMPT-audit.md`; the coordinator map is exactly the worker map plus the
++two `{repo}` read keys; every `/tmp` rule has its `/private/tmp` mirror with the
++same decision; the `audits/report-*.md` glob stays narrowed; the required
++`/tmp` namespaces are still present. A fence change that breaks a family fails
++the suite — do not "keep them in sync" by eye.
 +
-+## The fence (same shape for all roles)
-+- `external_directory: deny` except the NAMED scratch namespaces below — a session touches only its
-+  own checkout plus its own scratch, never the rest of `/tmp` (no other user's temp files, no
-+  unrelated sockets/tokens):
-+  - `/tmp/nexios-*` (+ `/**`) — the issue mailbox runtime created by `scripts/agent_up.sh setup`.
-+  - `/tmp/jarvis-*`, `/tmp/jarvis_*`, `/tmp/matrix-*`, `/tmp/qemu-serial.*` — kernel test/build
-+    scratch (`tools/meson/*`, `scripts/run_all_classes.sh`, `tools/deadline_matrix.sh`).
-+  - `/tmp/agentup-*` — `scripts/agent_up.sh` self-test scratch.
-+  Own-checkout files need no rule (in-cwd); cross-checkout reads are denied (each checkout carries its
-+  own copy of prompts/specs, so branch-consistent roles fall out naturally).
-+- `bash: allow` — intentional and explicit (opencode 1.x defaults bash to ask; without this the fence
-+  would be a click-through farm). The fence was never the shell: cross-edit protection is the
-+  fail-closed `tools/check_no_cross_edits.sh` gate, not bash denial.
-+- `edit` is where each role differs (see files). Every role denies editing its own cage
-+  (`tools/agents/roles/**`). Dev still may edit the twin/coordinator definitions,
-+  `prompts/PROMPT-*.md` and `scripts/agent_up.sh`, so "cannot widen its own fence" holds
-+  only for the role JSONs — those other edits are covered by audit + git review, not by
-+  the dev cage.
-+
-+## Twins
-+Each role has a twin agent definition, canonical in `tools/agents/twins/nexios-<role>.md` (subagent
-+mode, same permission block) for in-session `@`-mention use (e.g. dev spawning `@nexios-audit`).
-+`.opencode/agents/nexios-<role>.md` is a RELATIVE SYMLINK into that directory (`.opencode/` is
-+gitignored, so the versioned copy lives under `tools/agents/`). Keep the pair in sync when changing
-+either; the JSON is the tmux-launch twin, the markdown the subagent twin.
-+
-+## Verification (S1, mandatory per fresh session before any task work)
-+1. `opencode debug config` must show the role's permission block.
-+2. Attempt a blocked edit (must DENY) at depth 1 AND nested; attempt the allowed counterpart (must succeed, then clean up).
-+3. Stop on any failure. A fence that can't prove itself is not a fence.
+ ## Twins
+ Each role has a twin agent definition, canonical in `tools/agents/twins/nexios-<role>.md` (subagent
+ mode, same permission block) for in-session `@`-mention use (e.g. dev spawning `@nexios-audit`).
+@@ -44,6 +76,8 @@ gitignored, so the versioned copy lives under `tools/agents/`). Keep the pair in
+ either; the JSON is the tmux-launch twin, the markdown the subagent twin.
+ 
+ ## Verification (S1, mandatory per fresh session before any task work)
+-1. `opencode debug config` must show the role's permission block.
++1. `opencode debug config` must show the role's permission block (coordinator:
++   `OPENCODE_CONFIG=$NEXIOS_HOME/coordinator/opencode.resolved.json` — the
++   template is not what launches).
+ 2. Attempt a blocked edit (must DENY) at depth 1 AND nested; attempt the allowed counterpart (must succeed, then clean up).
+ 3. Stop on any failure. A fence that can't prove itself is not a fence.
 diff --git a/tools/agents/roles/auditor.json b/tools/agents/roles/auditor.json
-new file mode 100644
-index 000000000..27846f182
---- /dev/null
+index 6b726efa9..bde558fe8 100644
+--- a/tools/agents/roles/auditor.json
 +++ b/tools/agents/roles/auditor.json
-@@ -0,0 +1,24 @@
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "audits/rejected_patch.diff": "allow",
-+      "audits/report-*": "allow"
-+    }
-+  }
-+}
+@@ -19,7 +19,11 @@
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "deny",
+@@ -28,7 +32,7 @@
+       "/tmp/nexios-*/**/*": "allow",
+       "/private/tmp/nexios-*/**/*": "allow",
+       "audits/rejected_patch.diff": "allow",
+-      "audits/report-*": "allow"
++      "audits/report-*.md": "allow"
+     }
+   }
+ }
 diff --git a/tools/agents/roles/coordinator.json b/tools/agents/roles/coordinator.json
-new file mode 100644
-index 000000000..fcc6a48ca
---- /dev/null
+index b9b3972c9..f766c54a6 100644
+--- a/tools/agents/roles/coordinator.json
 +++ b/tools/agents/roles/coordinator.json
-@@ -0,0 +1,23 @@
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "prompts/LEARNINGS.md": "allow"
-+    }
-+  }
-+}
+@@ -4,6 +4,8 @@
+     "bash": "allow",
+     "external_directory": {
+       "*": "deny",
++      "{repo}/prompts/**": "allow",
++      "{repo}/audits/**": "allow",
+       "/tmp/nexios-*": "allow",
+       "/private/tmp/nexios-*": "allow",
+       "/tmp/nexios-*/**": "allow",
+@@ -19,7 +21,11 @@
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "deny",
+@@ -27,7 +33,7 @@
+       "/private/tmp/nexios-*/*": "allow",
+       "/tmp/nexios-*/**/*": "allow",
+       "/private/tmp/nexios-*/**/*": "allow",
+-      "prompts/LEARNINGS.md": "allow"
++      "{repo}/prompts/LEARNINGS.md": "allow"
+     }
+   }
+ }
 diff --git a/tools/agents/roles/dev.json b/tools/agents/roles/dev.json
-new file mode 100644
-index 000000000..4e198db5a
---- /dev/null
+index fa099b708..0b55836c6 100644
+--- a/tools/agents/roles/dev.json
 +++ b/tools/agents/roles/dev.json
-@@ -0,0 +1,26 @@
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "allow",
-+      "tools/agents/roles/*": "deny",
-+      "tools/agents/roles/**/*": "deny",
-+      "src/kernel/test/*": "deny",
-+      "src/kernel/test/**/*": "deny",
-+      "src/test/*": "deny",
-+      "src/test/**/*": "deny"
-+    }
-+  }
-+}
+@@ -19,7 +19,11 @@
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "allow",
 diff --git a/tools/agents/roles/qe.json b/tools/agents/roles/qe.json
-new file mode 100644
-index 000000000..7a7bc8e23
---- /dev/null
+index 16e24d4b7..fc37d1fa1 100644
+--- a/tools/agents/roles/qe.json
 +++ b/tools/agents/roles/qe.json
-@@ -0,0 +1,26 @@
-+{
-+  "$schema": "https://opencode.ai/config.json",
-+  "permission": {
-+    "bash": "allow",
-+    "external_directory": {
-+      "*": "deny",
-+      "/tmp/nexios-*": "allow",
-+      "/tmp/nexios-*/**": "allow",
-+      "/tmp/jarvis-*": "allow",
-+      "/tmp/jarvis-*/**": "allow",
-+      "/tmp/jarvis_*": "allow",
-+      "/tmp/matrix-*": "allow",
-+      "/tmp/qemu-serial.*": "allow",
-+      "/tmp/agentup-*": "allow"
-+    },
-+    "edit": {
-+      "*": "deny",
-+      "/tmp/nexios-*/*": "allow",
-+      "/tmp/nexios-*/**/*": "allow",
-+      "src/kernel/test/*": "allow",
-+      "src/kernel/test/**/*": "allow",
-+      "src/test/*": "allow",
-+      "src/test/**/*": "allow"
-+    }
-+  }
-+}
+@@ -19,7 +19,11 @@
+       "/tmp/qemu-serial.*": "allow",
+       "/private/tmp/qemu-serial.*": "allow",
+       "/tmp/agentup-*": "allow",
+-      "/private/tmp/agentup-*": "allow"
++      "/private/tmp/agentup-*": "allow",
++      "/tmp/agentup-*/**": "allow",
++      "/private/tmp/agentup-*/**": "allow",
++      "/tmp/lldb-*": "allow",
++      "/private/tmp/lldb-*": "allow"
+     },
+     "edit": {
+       "*": "deny",
 diff --git a/tools/agents/twins/nexios-audit.md b/tools/agents/twins/nexios-audit.md
-new file mode 100644
-index 000000000..a25026f3a
---- /dev/null
+index 269b7687a..6daa6c1c9 100644
+--- a/tools/agents/twins/nexios-audit.md
 +++ b/tools/agents/twins/nexios-audit.md
-@@ -0,0 +1,24 @@
-+---
-+description: NexIOS SIL 3 safety auditor (read-only, never edits)
-+mode: subagent
-+permission:
-+  bash: allow
-+  external_directory:
-+    "*": deny
-+    "/tmp/nexios-*": allow
-+    "/tmp/nexios-*/**": allow
-+    "/tmp/jarvis-*": allow
-+    "/tmp/jarvis-*/**": allow
-+    "/tmp/jarvis_*": allow
-+    "/tmp/matrix-*": allow
-+    "/tmp/qemu-serial.*": allow
-+    "/tmp/agentup-*": allow
-+  edit:
-+    "*": deny
-+    "/tmp/nexios-*/*": allow
-+    "/tmp/nexios-*/**/*": allow
-+    "audits/rejected_patch.diff": allow
-+    "audits/report-*": allow
-+---
-+
-+You are nexios-audit. You review diffs statically and post verdicts (APPROVED/REJECTED + report file). You never commit, merge, or push anything. Read-only means read-only. Your cage is identical to tools/agents/roles/auditor.json — keep them in sync.
+@@ -21,6 +21,10 @@ permission:
+     "/private/tmp/qemu-serial.*": allow
+     "/tmp/agentup-*": allow
+     "/private/tmp/agentup-*": allow
++    "/tmp/agentup-*/**": allow
++    "/private/tmp/agentup-*/**": allow
++    "/tmp/lldb-*": allow
++    "/private/tmp/lldb-*": allow
+   edit:
+     "*": deny
+     "/tmp/nexios-*/*": allow
+@@ -28,7 +32,7 @@ permission:
+     "/tmp/nexios-*/**/*": allow
+     "/private/tmp/nexios-*/**/*": allow
+     "audits/rejected_patch.diff": allow
+-    "audits/report-*": allow
++    "audits/report-*.md": allow
+ ---
+ 
+ You are nexios-audit. You review diffs statically and post verdicts (APPROVED/REJECTED + report file). You never commit, merge, or push anything. Read-only means read-only. Your cage is identical to tools/agents/roles/auditor.json — keep them in sync.
 diff --git a/tools/agents/twins/nexios-dev.md b/tools/agents/twins/nexios-dev.md
-new file mode 100644
-index 000000000..0dc6dadaa
---- /dev/null
+index 541fa3ada..b9d19062b 100644
+--- a/tools/agents/twins/nexios-dev.md
 +++ b/tools/agents/twins/nexios-dev.md
-@@ -0,0 +1,26 @@
-+---
-+description: Nexios kernel developer (fenced to main worktree, test trees read-only)
-+mode: subagent
-+permission:
-+  bash: allow
-+  external_directory:
-+    "*": deny
-+    "/tmp/nexios-*": allow
-+    "/tmp/nexios-*/**": allow
-+    "/tmp/jarvis-*": allow
-+    "/tmp/jarvis-*/**": allow
-+    "/tmp/jarvis_*": allow
-+    "/tmp/matrix-*": allow
-+    "/tmp/qemu-serial.*": allow
-+    "/tmp/agentup-*": allow
-+  edit:
-+    "*": allow
-+    "tools/agents/roles/*": deny
-+    "tools/agents/roles/**/*": deny
-+    "src/kernel/test/*": deny
-+    "src/kernel/test/**/*": deny
-+    "src/test/*": deny
-+    "src/test/**/*": deny
-+---
-+
-+You are nexios-dev. Worktree ~/jarvis, branch main (feature branches only, main stays pristine). You may read everything but edit nothing under src/kernel/test/ or src/test/, and never touch files outside the worktree except the named /tmp scratch namespaces (/tmp/nexios-*, /tmp/jarvis-*, /tmp/agentup-*). Your cage is identical to tools/agents/roles/dev.json — keep them in sync; the JSON is the tmux-launch twin of this agent.
+@@ -21,6 +21,10 @@ permission:
+     "/private/tmp/qemu-serial.*": allow
+     "/tmp/agentup-*": allow
+     "/private/tmp/agentup-*": allow
++    "/tmp/agentup-*/**": allow
++    "/private/tmp/agentup-*/**": allow
++    "/tmp/lldb-*": allow
++    "/private/tmp/lldb-*": allow
+   edit:
+     "*": allow
+     "tools/agents/roles/*": deny
 diff --git a/tools/agents/twins/nexios-qe.md b/tools/agents/twins/nexios-qe.md
-new file mode 100644
-index 000000000..4e3b4f39e
---- /dev/null
+index 169527cb3..372c2996f 100644
+--- a/tools/agents/twins/nexios-qe.md
 +++ b/tools/agents/twins/nexios-qe.md
-@@ -0,0 +1,26 @@
-+---
-+description: Nexios quality engineer (fenced to testbed worktree, may edit only test trees)
-+mode: subagent
-+permission:
-+  bash: allow
-+  external_directory:
-+    "*": deny
-+    "/tmp/nexios-*": allow
-+    "/tmp/nexios-*/**": allow
-+    "/tmp/jarvis-*": allow
-+    "/tmp/jarvis-*/**": allow
-+    "/tmp/jarvis_*": allow
-+    "/tmp/matrix-*": allow
-+    "/tmp/qemu-serial.*": allow
-+    "/tmp/agentup-*": allow
-+  edit:
-+    "*": deny
-+    "/tmp/nexios-*/*": allow
-+    "/tmp/nexios-*/**/*": allow
-+    "src/kernel/test/*": allow
-+    "src/kernel/test/**/*": allow
-+    "src/test/*": allow
-+    "src/test/**/*": allow
-+---
+@@ -21,6 +21,10 @@ permission:
+     "/private/tmp/qemu-serial.*": allow
+     "/tmp/agentup-*": allow
+     "/private/tmp/agentup-*": allow
++    "/tmp/agentup-*/**": allow
++    "/private/tmp/agentup-*/**": allow
++    "/tmp/lldb-*": allow
++    "/private/tmp/lldb-*": allow
+   edit:
+     "*": deny
+     "/tmp/nexios-*/*": allow
+diff --git a/tools/agents/verify_fence.py b/tools/agents/verify_fence.py
+new file mode 100644
+index 000000000..734b170ba
+--- /dev/null
++++ b/tools/agents/verify_fence.py
+@@ -0,0 +1,280 @@
++#!/usr/bin/env python3
++"""verify_fence.py - mechanical consistency gate for the agent fences (#412).
 +
-+You are nexios-qe. Worktree ~/jarvis_test, branch testbed. You may edit ONLY files under src/kernel/test/ or src/test/ (plus mailbox notes under /tmp/nexios-*); everything else is read-only, and outside the worktree only the named /tmp scratch namespaces (/tmp/nexios-*, /tmp/jarvis-*) are reachable (your own checkout's prompts/ and specs need no rule). Your cage is identical to tools/agents/roles/qe.json — keep them in sync; the JSON is the tmux-launch twin of this agent.
++The role fences are duplicated across five kinds of file: the role JSONs, the
++coordinator config, the subagent twins, the audit prompt and the embedded
++fallbacks inside scripts/agent_up.sh. Drift between copies silently defuses a
++fence, and a visual diff cannot prove identity. This checks the families the
++#410 burn-in and the #412 audit made load-bearing:
++
++  F1  heredoc fallbacks byte-identical to the repo role JSONs
++  F2  worker external_directory map identical across JSONs, twins, audit prompt
++  F3  coordinator family identical, and exactly workers + the {repo} read keys
++  F4  edit maps identical inside their family
++  F5  every /tmp rule mirrored as /private/tmp (and vice versa), same decision
++  F6  no un-narrowed audits/report-*; {repo} only under prompts/ or audits/
++  F7  the /tmp namespaces the tooling writes to are still allowed (+ mirrors)
++
++Exit 0 clean, 2 on any drift (never 1: drift is a configuration error).
++Stdlib only.
++"""
++
++import json
++import os
++import re
++import sys
++
++ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++ROLES = os.path.join(ROOT, "tools", "agents", "roles")
++COORD = os.path.join(ROOT, "tools", "agents", "coordinator", "opencode.json")
++TWINS = os.path.join(ROOT, "tools", "agents", "twins")
++AUDIT_PROMPT = os.path.join(ROOT, "prompts", "PROMPT-audit.md")
++AGENT_UP = os.path.join(ROOT, "scripts", "agent_up.sh")
++
++ROLE_JSON = {r: os.path.join(ROLES, r + ".json")
++             for r in ("dev", "qe", "auditor", "coordinator")}
++TWIN = {r: os.path.join(TWINS, "nexios-%s.md" % ("audit" if r == "auditor" else r))
++        for r in ("dev", "qe", "auditor")}
++REPO_READ_KEYS = [("{repo}/prompts/**", "allow"),
++                  ("{repo}/audits/**", "allow")]
++
++FAILS = []
++
++
++def fail(check, detail):
++    FAILS.append((check, detail))
++
++
++def read(path):
++    with open(path, encoding="utf-8") as handle:
++        return handle.read()
++
++
++def load_json(path):
++    try:
++        return json.loads(read(path))
++    except ValueError as exc:
++        fail("PARSE", "%s: %s" % (path, exc))
++        return None
++
++
++def frontmatter(path):
++    """Return the mapping block of a markdown agent file's YAML frontmatter.
++
++    Deliberately strict: only `key: value` / `key:` lines at even indentation
++    with a bare or double-quoted key. Anything else is a parse error, not a
++    silently skipped line (a fence must never be skipped by a formatter).
++    """
++    text = read(path)
++    if not text.startswith("---\n"):
++        fail("PARSE", "%s: no YAML frontmatter" % path)
++        return None
++    body = text.split("\n---\n", 1)[0][4:]
++    out = {}
++    stack = [(-1, out)]
++    for lineno, line in enumerate(body.split("\n"), start=2):
++        if not line.strip() or line.lstrip().startswith("#"):
++            continue
++        indent = len(line) - len(line.lstrip(" "))
++        if indent % 2:
++            fail("PARSE", "%s:%d: odd indentation" % (path, lineno))
++            return None
++        stripped = line.strip()
++        if stripped.startswith('"'):
++            match = re.match(r'^("(?:[^"\\]|\\.)*")\s*:\s*(.*)$', stripped)
++            if not match:
++                fail("PARSE", "%s:%d: bad quoted key" % (path, lineno))
++                return None
++            key = json.loads(match.group(1))
++            value = match.group(2)
++        else:
++            match = re.match(r"^([A-Za-z0-9_*./-]+)\s*:\s*(.*)$", stripped)
++            if not match:
++                fail("PARSE", "%s:%d: not `key: value`" % (path, lineno))
++                return None
++            key = match.group(1)
++            value = match.group(2)
++        while stack and indent <= stack[-1][0]:
++            stack.pop()
++        if not stack:
++            fail("PARSE", "%s:%d: dedent past root" % (path, lineno))
++            return None
++        parent = stack[-1][1]
++        if value == "":
++            node = {}
++            parent[key] = node
++            stack.append((indent, node))
++        else:
++            if value in ("allow", "deny", "ask", "true", "false"):
++                parsed = value if value in ("allow", "deny", "ask") else (value == "true")
++            else:
++                match = re.match(r'^"((?:[^"\\]|\\.)*)"$', value)
++                if match:
++                    parsed = json.loads('"%s"' % match.group(1))
++                else:
++                    parsed = value
++            parent[key] = parsed
++    return out
++
++
++def heredocs(path):
++    """Exact bytes of each write_role_*() fallback body."""
++    text = read(path)
++    found = {}
++    for role in ("dev", "qe", "auditor", "coordinator"):
++        pattern = (r"write_role_%s\(\) \{\n  cat > \"\$1\" <<'EOF'\n"
++                   r"(.*?)\nEOF\n\}" % role)
++        match = re.search(pattern, text, re.S)
++        if not match:
++            fail("PARSE", "%s: no write_role_%s heredoc" % (path, role))
++        else:
++            found[role] = match.group(1) + "\n"
++    return found
++
++
++def ext_map(config):
++    return list(config["permission"]["external_directory"].items())
++
++
++def edit_map(config):
++    return list(config["permission"]["edit"].items())
++
++
++def main():
++    configs = {role: load_json(path) for role, path in ROLE_JSON.items()}
++    coord_config = load_json(COORD)
++    twins = {role: frontmatter(path) for role, path in TWIN.items()}
++    audit_prompt = frontmatter(AUDIT_PROMPT)
++    embedded = heredocs(AGENT_UP)
++    for label, block in (("nexios-dev.md", twins["dev"]),
++                         ("nexios-qe.md", twins["qe"]),
++                         ("nexios-audit.md", twins["auditor"]),
++                         ("PROMPT-audit.md", audit_prompt)):
++        if block is not None and not block.get("permission"):
++            fail("PARSE", "%s: empty permission block (skipped, not clean)"
++                 % label)
++    if FAILS:
++        report()
++        return 2
++
++    # F1 - embedded fallbacks are the repo files, byte for byte.
++    for role in ("dev", "qe", "auditor", "coordinator"):
++        want = read(ROLE_JSON[role])
++        got = embedded.get(role, "")
++        if got != want:
++            fail("F1", "%s heredoc differs from %s" % (role, ROLE_JSON[role]))
++
++    # F2 - one worker external_directory map across seven files.
++    worker = ext_map(configs["dev"])
++    family = [("dev.json", worker),
++              ("qe.json", ext_map(configs["qe"])),
++              ("auditor.json", ext_map(configs["auditor"]))]
++    if twins["dev"] is not None:
++        family.append(("nexios-dev.md", ext_map(twins["dev"])))
++    if twins["qe"] is not None:
++        family.append(("nexios-qe.md", ext_map(twins["qe"])))
++    if twins["auditor"] is not None:
++        family.append(("nexios-audit.md", ext_map(twins["auditor"])))
++    if audit_prompt is not None:
++        family.append(("PROMPT-audit.md", ext_map(audit_prompt)))
++    for name, got in family:
++        if got != worker:
++            fail("F2", "%s external_directory differs from dev.json" % name)
++
++    # F3 - coordinator family is identical, and exactly workers + {repo} keys.
++    coord_roles = ext_map(configs["coordinator"])
++    coord_cfg = ext_map(coord_config) if coord_config else None
++    if coord_cfg != coord_roles:
++        fail("F3", "coordinator/opencode.json external_directory differs from "
++                   "roles/coordinator.json")
++    want_coord = [worker[0]] + REPO_READ_KEYS + worker[1:]
++    if coord_roles != want_coord:
++        fail("F3", "coordinator external_directory is not workers + %s"
++                   % ([k for k, _ in REPO_READ_KEYS],))
++    for role, block in (("dev", twins["dev"]), ("qe", twins["qe"]),
++                        ("auditor", twins["auditor"])):
++        if block and set(ext_map(block)) & set(REPO_READ_KEYS):
++            fail("F3", "%s twin carries a coordinator-only {repo} rule" % role)
++
++    # F4 - edit maps identical inside each family.
++    pairs = [("dev.json", edit_map(configs["dev"]), "nexios-dev.md",
++              edit_map(twins["dev"]) if twins["dev"] is not None else None),
++             ("qe.json", edit_map(configs["qe"]), "nexios-qe.md",
++              edit_map(twins["qe"]) if twins["qe"] is not None else None),
++             ("auditor.json", edit_map(configs["auditor"]), "nexios-audit.md",
++              edit_map(twins["auditor"]) if twins["auditor"] is not None else None),
++             ("auditor.json", edit_map(configs["auditor"]), "PROMPT-audit.md",
++              edit_map(audit_prompt) if audit_prompt is not None else None)]
++    for left, left_map, right, right_map in pairs:
++        if right_map is not None and left_map != right_map:
++            fail("F4", "%s edit map differs from %s" % (left, right))
++    coord_edit = edit_map(configs["coordinator"])
++    if coord_config and edit_map(coord_config) != coord_edit:
++        fail("F4", "coordinator/opencode.json edit map differs from "
++                   "roles/coordinator.json")
++    if not any(k.startswith("{repo}/") for k, _ in coord_edit):
++        fail("F4", "coordinator edit map has no repo-anchored LEARNINGS rule "
++                   "(relative patterns resolve to a shadow under the coord cwd)")
++
++    # F5 - /tmp and /private/tmp mirrors carry the same decision, both ways.
++    for name, mapping in family + [("coordinator.json", coord_roles)]:
++        decisions = dict(mapping)
++        for key, value in mapping:
++            if key.startswith("/private/tmp/"):
++                continue
++            if not key.startswith("/tmp/"):
++                continue
++            mirror = "/private" + key
++            if mirror not in decisions:
++                fail("F5", "%s: %s has no %s mirror" % (name, key, mirror))
++            elif decisions[mirror] != value:
++                fail("F5", "%s: %s and %s disagree" % (name, key, mirror))
++        for key in decisions:
++            if key.startswith("/private/tmp/"):
++                plain = key[len("/private"):]
++                if plain not in decisions:
++                    fail("F5", "%s: %s has no %s mirror" % (name, key, plain))
++
++    # F6 - narrowed report glob, and {repo} never escapes the repo subtrees.
++    texts = [(os.path.relpath(path, ROOT), read(path)) for path in
++             list(ROLE_JSON.values()) + [COORD, AUDIT_PROMPT] +
++             list(TWIN.values()) + [AGENT_UP]]
++    for name, text in texts:
++        for match in re.finditer(r"audits/report-\*(?!\.md)", text):
++            fail("F6", "%s: un-narrowed audits/report-* glob" % name)
++            break
++        # The launcher legitimately manipulates the token itself; only the
++        # permission files must keep every {repo} inside a repo subtree.
++        if name == os.path.relpath(AGENT_UP, ROOT):
++            continue
++        for match in re.finditer(r"\{repo\}(?!/prompts/|/audits/)", text):
++            fail("F6", "%s: {repo} outside prompts//audits/: %r"
++                       % (name, text[match.start():match.start() + 40]))
++            break
++
++    # F7 - the namespaces scripts and tooling actually write to are present.
++    required = ["/tmp/nexios-*", "/tmp/nexios-*/**", "/tmp/jarvis-*",
++                "/tmp/jarvis_*", "/tmp/matrix-*", "/tmp/qemu-serial.*",
++                "/tmp/agentup-*", "/tmp/agentup-*/**", "/tmp/lldb-*"]
++    have = dict(worker)
++    for key in required:
++        if key not in have:
++            fail("F7", "worker map lost required namespace %s" % key)
++        if have.get("/private" + key) is None:
++            fail("F7", "worker map lost the %s mirror" % ("/private" + key))
++
++    report()
++    return 2 if FAILS else 0
++
++
++def report():
++    if not FAILS:
++        print("verify_fence: F1-F7 clean (7 checks, 13 files)")
++        return
++    for check, detail in FAILS:
++        print("FAIL %s: %s" % (check, detail))
++    print("verify_fence: %d drift(s)" % len(FAILS))
++
++
++if __name__ == "__main__":
++    sys.exit(main())
 diff --git a/tools/check_no_cross_edits.sh b/tools/check_no_cross_edits.sh
-index 16b28b902..67be303e8 100755
+index 67be303e8..f3cce17b7 100755
 --- a/tools/check_no_cross_edits.sh
 +++ b/tools/check_no_cross_edits.sh
-@@ -34,24 +34,34 @@
+@@ -7,14 +7,15 @@
+ # bypass them by design. This script is the fail-closed backstop: it fails
+ # the tree (and CI) when the current change set crosses the role fence.
+ #
+-# Scans TRACKED files only (git ls-files: build output, vendored deps and
+-# IDE state are untracked and out of scope by construction — same contract
+-# as tools/check_no_make_refs.sh).
+-#
+-# Change set: tracked files differing from BASE, where BASE is
+-# `git merge-base main HEAD` (branch work, committed or not) falling back
+-# to HEAD (dirty tree directly on main). Untracked-but-unadded files are
+-# invisible until `git add` tracks them; the gate turns red at commit time.
++# Change set: tracked files differing from BASE PLUS every untracked,
++# non-ignored file (`git ls-files --others --exclude-standard`). Untracked
++# files were silently invisible before #412 S4-8: a brand-new
++# `src/kernel/test/*.cpp` could be written by a dev session and never seen by
++# the gate until `git add`, which is exactly the window the fence exists for.
++# BASE is `git merge-base main HEAD` (branch work, committed or not) falling
++# back to HEAD (dirty tree directly on main), or an explicit `--base <rev>`;
++# an explicit but empty/unresolvable base is a usage error (exit 2), never a
++# silent merge-base fallback (S4-7).
+ #
+ # Role resolution: --role dev|qe wins; otherwise $OPENCODE_CONFIG basename
+ # (dev.json -> dev, qe.json -> qe). No detectable role is a fail-closed
+@@ -30,7 +31,9 @@
+ #   1  violation — prints `CROSS-ROLE EDITS:` plus offending paths
+ #   2  usage/environment error (unknown role, not a git repo, self-test fail)
+ #
+-# Exempt: this file itself (its header documents the patterns it hunts).
++# This file is NOT exempt: an edit to the gate is classified like any other
++# path (it is neither a test tree nor a `src/` source, so it passes for both
++# roles) — the old blanket self-exemption hid gate edits from the gate.
  #
  # Self-test: --self-test runs the fence classifier over built-in cases in
  # both directions (green on clean sets, red on deliberate violations) and
--# exits 0/2. CI wires the self-test; humans run the role check pre-commit.
-+# exits 0/2.
-+# CI: the meson workflow runs `--self-test` (classifier sanity) and the ROLE
-+# check itself, with the role derived from the branch (`testbed` -> qe, every
-+# other branch -> dev) and an EXPLICIT --base (a PR checkout has no local
-+# `main`, so the merge-base fallback would classify an empty set as clean).
-+# Run it by hand with `--role=dev|qe` before pushing.
- set -u
--cd "$(dirname "$0")/.."
-+cd "$(dirname "$0")/.." || exit 2
- 
+@@ -46,6 +49,7 @@ cd "$(dirname "$0")/.." || exit 2
  ROLE=""
  SELFTEST=0
-+BASE_OVERRIDE=""
+ BASE_OVERRIDE=""
++BASE_SET=0
  while [ $# -gt 0 ]; do
      case "$1" in
          --role=dev|--role=qe) ROLE="${1#--role=}" ;;
-         --role)
-             case "${2:-}" in
-                 dev|qe) ROLE="$2"; shift ;;
--                *) echo "usage: $0 [--role dev|qe] [--self-test]" >&2; exit 2 ;;
-+                *) echo "usage: $0 [--role dev|qe] [--base <rev>] [--self-test]" >&2; exit 2 ;;
+@@ -55,12 +59,18 @@ while [ $# -gt 0 ]; do
+                 *) echo "usage: $0 [--role dev|qe] [--base <rev>] [--self-test]" >&2; exit 2 ;;
              esac
              ;;
-+        --base=*) BASE_OVERRIDE="${1#--base=}" ;;
-+        --base)
-+            [ -n "${2:-}" ] || { echo "usage: $0 --base <rev>" >&2; exit 2; }
-+            BASE_OVERRIDE="$2"; shift ;;
+-        --base=*) BASE_OVERRIDE="${1#--base=}" ;;
++        --base=*)
++            BASE_OVERRIDE="${1#--base=}"
++            [ -n "$BASE_OVERRIDE" ] || {
++                echo "check_no_cross_edits: --base needs a revision (got an empty value)" >&2
++                exit 2
++            }
++            BASE_SET=1 ;;
+         --base)
+             [ -n "${2:-}" ] || { echo "usage: $0 --base <rev>" >&2; exit 2; }
+-            BASE_OVERRIDE="$2"; shift ;;
++            BASE_OVERRIDE="$2"; BASE_SET=1; shift ;;
          --self-test) SELFTEST=1 ;;
-         -h|--help) sed -n '1,32p' "$0"; exit 0 ;;
--        *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--self-test])" >&2; exit 2 ;;
-+        *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
+-        -h|--help) sed -n '1,32p' "$0"; exit 0 ;;
++        -h|--help) sed -n '1,45p' "$0"; exit 0 ;;
+         *) echo "unknown arg: $1 (usage: $0 [--role dev|qe] [--base <rev>] [--self-test])" >&2; exit 2 ;;
      esac
      shift
- done
-@@ -123,7 +133,16 @@ if [ -z "$ROLE" ]; then
+@@ -113,6 +123,64 @@ qe|src/test/foo.cpp|OK
+ qe|tools/check_no_cross_edits.sh|OK
+ qe|test-history.txt|OK
+ CASES
++    # --- integration: the change-set builder, in a hermetic scratch repo -----
++    # Proves the parts the classifier cases cannot: untracked files are in scope
++    # (S4-8), renames classify on the NEW path, and an explicit empty base is a
++    # usage error rather than a merge-base fallback (S4-7).
++    scratch=$(mktemp -d)
++    trap 'rm -rf "$scratch"' EXIT
++    mkdir -p "$scratch/tools" "$scratch/src/kernel/sched"
++    cp "$0" "$scratch/tools/check_no_cross_edits.sh"
++    git -C "$scratch" init -q -b main
++    printf 'base\n' > "$scratch/src/kernel/sched/a.cpp"
++    git -C "$scratch" add -A
++    git -C "$scratch" -c user.email=t@t -c user.name=t commit -qm base
++    mkdir -p "$scratch/src/kernel/test"
++    printf 'x\n' > "$scratch/src/kernel/test/untracked.cpp"
++    if bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base=main \
++        >/dev/null 2>&1; then
++        echo "FAIL integration: untracked dev test file not classified" >&2
++        fail=1
++    else
++        printf 'PASS integration: untracked dev test file caught\n'
++    fi
++    rm -f "$scratch/src/kernel/test/untracked.cpp"
++    printf 'y\n' > "$scratch/src/kernel/sched/untracked.cpp"
++    if bash "$scratch/tools/check_no_cross_edits.sh" --role=qe --base=main \
++        >/dev/null 2>&1; then
++        echo "FAIL integration: untracked qe source file not classified" >&2
++        fail=1
++    else
++        printf 'PASS integration: untracked qe source file caught\n'
++    fi
++    rm -f "$scratch/src/kernel/sched/untracked.cpp"
++    git -C "$scratch" mv src/kernel/sched/a.cpp \
++        "src/kernel/test/renamed with space.cpp"
++    if bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base=main \
++        >/dev/null 2>&1; then
++        echo "FAIL integration: rename into the test tree not classified" >&2
++        fail=1
++    else
++        printf 'PASS integration: rename into the test tree caught\n'
++    fi
++    git -C "$scratch" mv "src/kernel/test/renamed with space.cpp" \
++        src/kernel/sched/a.cpp
++    bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base= \
++        >/dev/null 2>&1
++    if [ $? -eq 2 ]; then
++        printf 'PASS integration: empty --base is a usage error\n'
++    else
++        echo "FAIL integration: empty --base did not exit 2" >&2
++        fail=1
++    fi
++    if bash "$scratch/tools/check_no_cross_edits.sh" --role=dev --base=main \
++        >/dev/null 2>&1; then
++        printf 'PASS integration: clean tree passes\n'
++    else
++        echo "FAIL integration: clean tree reported a violation" >&2
++        fail=1
++    fi
++
+     if [ "$fail" = "0" ]; then
+         echo "check_no_cross_edits self-test: clean"
+         exit 0
+@@ -133,7 +201,7 @@ if [ -z "$ROLE" ]; then
      esac
  fi
  
--BASE=$(git merge-base main HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)
-+if [ -n "$BASE_OVERRIDE" ]; then
-+    # CI passes the true change-set base; an unresolvable base is a hard error
-+    # so a single-ref checkout can never classify an empty set as clean.
-+    BASE=$(git rev-parse --verify --quiet "$BASE_OVERRIDE^{commit}") || {
-+        echo "check_no_cross_edits: base '$BASE_OVERRIDE' does not resolve" >&2
-+        exit 2
-+    }
-+else
-+    BASE=$(git merge-base main HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || true)
-+fi
- if [ -z "$BASE" ]; then
-     echo "check_no_cross_edits: not a git repo" >&2
-     exit 2
-@@ -134,7 +153,10 @@ TMP_TRACKED=$(mktemp)
- trap 'rm -f "$TMP_CHANGED" "$TMP_TRACKED"' EXIT
+-if [ -n "$BASE_OVERRIDE" ]; then
++if [ "$BASE_SET" = 1 ]; then
+     # CI passes the true change-set base; an unresolvable base is a hard error
+     # so a single-ref checkout can never classify an empty set as clean.
+     BASE=$(git rev-parse --verify --quiet "$BASE_OVERRIDE^{commit}") || {
+@@ -149,26 +217,23 @@ if [ -z "$BASE" ]; then
+ fi
  
- # Tracked files changed vs BASE (committed-on-branch + staged + unstaged).
--git diff --name-only "$BASE" -- . > "$TMP_CHANGED"
-+git diff --name-only "$BASE" -- . > "$TMP_CHANGED" || {
-+    echo "check_no_cross_edits: git diff failed (cannot establish the change set)" >&2
+ TMP_CHANGED=$(mktemp)
+-TMP_TRACKED=$(mktemp)
+-trap 'rm -f "$TMP_CHANGED" "$TMP_TRACKED"' EXIT
++trap 'rm -f "$TMP_CHANGED"' EXIT
+ 
+-# Tracked files changed vs BASE (committed-on-branch + staged + unstaged).
++# Tracked files changed vs BASE (committed-on-branch + staged + unstaged) plus
++# untracked non-ignored files (build output stays out via --exclude-standard).
+ git diff --name-only "$BASE" -- . > "$TMP_CHANGED" || {
+     echo "check_no_cross_edits: git diff failed (cannot establish the change set)" >&2
+     exit 2
+ }
+-# Intersect with the tracked universe (drops untracked noise by contract).
+-git ls-files > "$TMP_TRACKED"
++git ls-files --others --exclude-standard >> "$TMP_CHANGED" || {
++    echo "check_no_cross_edits: git ls-files failed (cannot establish the change set)" >&2
 +    exit 2
 +}
- # Intersect with the tracked universe (drops untracked noise by contract).
- git ls-files > "$TMP_TRACKED"
++sort -u -o "$TMP_CHANGED" "$TMP_CHANGED"
  
-diff --git a/tools/meson/gdb_run.py b/tools/meson/gdb_run.py
-index 8d157f195..f425e2fa2 100644
---- a/tools/meson/gdb_run.py
-+++ b/tools/meson/gdb_run.py
-@@ -83,6 +83,20 @@ def wait_for_stub(port, timeout_secs=8):
-     return False
+ OUT=""
+ while IFS= read -r file; do
+     [ -z "$file" ] && continue
+-    case "$file" in
+-        tools/check_no_cross_edits.sh) continue ;;  # exempt: this gate itself
+-    esac
+-    if ! grep -qxF "$file" "$TMP_TRACKED"; then
+-        continue
+-    fi
+     if [ "$(classify "$ROLE" "$file")" = "VIOLATION" ]; then
+         OUT="${OUT}${ROLE}: ${file}
+ "
+diff --git a/tools/gdb/debug-crash.gdb b/tools/gdb/debug-crash.gdb
+index 749066c8a..049565109 100644
+--- a/tools/gdb/debug-crash.gdb
++++ b/tools/gdb/debug-crash.gdb
+@@ -1,6 +1,8 @@
+ set pagination off
+ set confirm off
+-file build/kernel-debug.elf
++# ELF is passed on the gdb command line; only the stub port belongs here,
++# so gdb_run.py --gdb-port can rewrite it (busy :1234 auto-picks).
++target extended-remote :1234
  
+ # Break at process_replenishments to catch the -1 this pointer
+ b *SporadicServer::process_replenishments(unsigned long long)+0x1c
+@@ -29,4 +31,4 @@ commands
+   continue
+ end
  
-+def port_value(text):
-+    """argparse type: integer in the valid TCP port range."""
-+    import argparse
-+    try:
-+        value = int(text)
-+    except ValueError:
-+        raise argparse.ArgumentTypeError("port must be an integer, got %r"
-+                                         % text)
-+    if not 1 <= value <= 65535:
-+        raise argparse.ArgumentTypeError("port must be 1-65535, got %d"
-+                                         % value)
-+    return value
-+
-+
- def pick_gdb_port(requested):
-     """Return (port, auto_picked): requested when free, else an ephemeral one.
- 
-@@ -129,9 +143,12 @@ def gdb_script_for_port(script_path, port, logdir, tag):
-     patched, n = re.subn(r"(target\s+\S+\s+:?)1234\b", r"\g<1>%d" % port,
-                          text)
-     if n == 0:
--        print("NOTE: GDB script has no `target ... :1234` line; "
--              "connect manually with `target remote :%d`" % port)
--        return script_path
-+        # Flailing closed on purpose: a script that cannot be pointed at the
-+        # stub QEMU actually opened would silently target a foreign stub.
-+        print("ERROR: GDB script %s has no `target ... :1234` line; refusing "
-+              "to run against the auto-picked port :%d (fix the script or "
-+              "pin --gdb-port 1234)" % (script_path, port))
-+        raise SystemExit(2)
-     out = Path(logdir) / ("gdb-script-%s-%d.gdb" % (tag, port))
-     out.write_text(patched)
-     print("NOTE: GDB script target port rewritten :1234 -> :%d (%s)"
-@@ -372,7 +389,7 @@ def main():
-     parser.add_argument("--class", dest="cls", default="none")
-     parser.add_argument("--gdb-script", default="")
-     parser.add_argument("--cmds", default="")
--    parser.add_argument("--gdb-port", type=int, default=1234,
-+    parser.add_argument("--gdb-port", type=port_value, default=1234,
-                         help="GDB stub port (default 1234; free ephemeral "
-                              "port auto-picked when busy)")
-     args = parser.parse_args()
+-run
++continue

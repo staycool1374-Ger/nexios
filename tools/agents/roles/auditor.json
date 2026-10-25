@@ -19,7 +19,11 @@
       "/tmp/qemu-serial.*": "allow",
       "/private/tmp/qemu-serial.*": "allow",
       "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow"
+      "/private/tmp/agentup-*": "allow",
+      "/tmp/agentup-*/**": "allow",
+      "/private/tmp/agentup-*/**": "allow",
+      "/tmp/lldb-*": "allow",
+      "/private/tmp/lldb-*": "allow"
     },
     "edit": {
       "*": "deny",
@@ -28,7 +32,7 @@
       "/tmp/nexios-*/**/*": "allow",
       "/private/tmp/nexios-*/**/*": "allow",
       "audits/rejected_patch.diff": "allow",
-      "audits/report-*": "allow"
+      "audits/report-*.md": "allow"
     }
   }
 }

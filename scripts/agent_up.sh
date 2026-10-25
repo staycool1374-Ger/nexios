@@ -32,7 +32,14 @@
 # `harness ps` / the grid. Watch via `tmux attach -t <name>` (read-write mirrors;
 # read-only (-r) mirrors block ALL tmux input including doorbells, so none here).
 # Proper fix belongs upstream: env passthrough on `harness new`.
-# Fencing itself is verified per-session BEFORE any prompt is delivered.
+# Fencing itself is verified per-session BEFORE any prompt is delivered, for the
+# coordinator too (`S4-9`): a session whose env lacks the expected config is
+# killed rather than trusted.
+#
+# TMPDIR is PINNED into the allowed /tmp/agentup-tmp-<session> namespace. The
+# host TMPDIR (/var/folders/... on macOS) is deliberately not allowed: it is
+# per-boot, so it cannot be fenced, and an unfenced TMPDIR is how writers fell
+# back to bash (unfenced by design) during the #410 burn-in.
 set -euo pipefail
 
 # Canonical content lives IN the repo (versioned). The state dir below holds
@@ -43,6 +50,8 @@ ROLES_DIR="${ROLES_DIR:-$REPO_ROOT/tools/agents/roles}"
 COORD_CONFIG_DIR="$REPO_ROOT/tools/agents/coordinator"
 NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
 COORD_DIR="$NEXIOS_HOME/coordinator"
+COORD_CONFIG_RESOLVED="$COORD_DIR/opencode.resolved.json"
+COORD_TMPDIR=""
 OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
 TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
 DEV_DIR="$HOME/jarvis"
@@ -73,8 +82,10 @@ usage: agent_up.sh <mode> [...]
                      message. Pass a taskfile path or literal task text.
   run ...            launch ONE session: run <name> <dir> <role.json> <prompt.txt> [branch]
   audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
-  audit-diff [branch] print merge-base audit diff to audits/pending_patch.diff
-                     (non-empty assertion). Run in the dev checkout.
+  audit-diff [branch] [--base <rev>]
+                     write the audit diff to audits/pending_patch.diff
+                     (base defaults to merge-base main <branch>; must be
+                     non-empty). Run in the dev checkout.
   qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
                      abort-on-conflict restores code state. Run in QE checkout.
   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
@@ -100,7 +111,20 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "not on PATH: $1"; }
 runtime_dir() {
   [ $# -eq 1 ] || fail "need issue number"
   case "$1" in ''|*[!0-9]*) fail "issue must be numeric: '$1'";; esac
-  echo "/tmp/nexios-$1"
+  # Canonical form only: `setup 0410` must never alias onto /tmp/nexios-410.
+  local n="$1"
+  while [ "${n#0}" != "$n" ]; do n="${n#0}"; done
+  [ -n "$n" ] || fail "issue must be non-zero: '$1'"
+  [ ${#n} -le 7 ] || fail "issue number too long (max 7 digits): '$1'"
+  printf '/tmp/nexios-%s\n' "$n"
+}
+
+# Per-session TMPDIR, inside the allowed /tmp/agentup-* namespace (both the flat
+# rule and the /** rule exist, so files created inside are fenced too).
+ensure_session_tmpdir() {
+  local dir="/tmp/agentup-tmp-$1"
+  mkdir -p -m 0700 "$dir" || fail "cannot create $dir"
+  printf '%s\n' "$dir"
 }
 
 # ---embedded role defaults (bootstrap only; audited content)------------------
@@ -130,7 +154,11 @@ write_role_dev() {
       "/tmp/qemu-serial.*": "allow",
       "/private/tmp/qemu-serial.*": "allow",
       "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow"
+      "/private/tmp/agentup-*": "allow",
+      "/tmp/agentup-*/**": "allow",
+      "/private/tmp/agentup-*/**": "allow",
+      "/tmp/lldb-*": "allow",
+      "/private/tmp/lldb-*": "allow"
     },
     "edit": {
       "*": "allow",
@@ -171,7 +199,11 @@ write_role_qe() {
       "/tmp/qemu-serial.*": "allow",
       "/private/tmp/qemu-serial.*": "allow",
       "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow"
+      "/private/tmp/agentup-*": "allow",
+      "/tmp/agentup-*/**": "allow",
+      "/private/tmp/agentup-*/**": "allow",
+      "/tmp/lldb-*": "allow",
+      "/private/tmp/lldb-*": "allow"
     },
     "edit": {
       "*": "deny",
@@ -214,7 +246,11 @@ write_role_auditor() {
       "/tmp/qemu-serial.*": "allow",
       "/private/tmp/qemu-serial.*": "allow",
       "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow"
+      "/private/tmp/agentup-*": "allow",
+      "/tmp/agentup-*/**": "allow",
+      "/private/tmp/agentup-*/**": "allow",
+      "/tmp/lldb-*": "allow",
+      "/private/tmp/lldb-*": "allow"
     },
     "edit": {
       "*": "deny",
@@ -223,7 +259,7 @@ write_role_auditor() {
       "/tmp/nexios-*/**/*": "allow",
       "/private/tmp/nexios-*/**/*": "allow",
       "audits/rejected_patch.diff": "allow",
-      "audits/report-*": "allow"
+      "audits/report-*.md": "allow"
     }
   }
 }
@@ -240,6 +276,8 @@ write_role_coordinator() {
     "bash": "allow",
     "external_directory": {
       "*": "deny",
+      "{repo}/prompts/**": "allow",
+      "{repo}/audits/**": "allow",
       "/tmp/nexios-*": "allow",
       "/private/tmp/nexios-*": "allow",
       "/tmp/nexios-*/**": "allow",
@@ -255,7 +293,11 @@ write_role_coordinator() {
       "/tmp/qemu-serial.*": "allow",
       "/private/tmp/qemu-serial.*": "allow",
       "/tmp/agentup-*": "allow",
-      "/private/tmp/agentup-*": "allow"
+      "/private/tmp/agentup-*": "allow",
+      "/tmp/agentup-*/**": "allow",
+      "/private/tmp/agentup-*/**": "allow",
+      "/tmp/lldb-*": "allow",
+      "/private/tmp/lldb-*": "allow"
     },
     "edit": {
       "*": "deny",
@@ -263,7 +305,7 @@ write_role_coordinator() {
       "/private/tmp/nexios-*/*": "allow",
       "/tmp/nexios-*/**/*": "allow",
       "/private/tmp/nexios-*/**/*": "allow",
-      "prompts/LEARNINGS.md": "allow"
+      "{repo}/prompts/LEARNINGS.md": "allow"
     }
   }
 }
@@ -338,8 +380,11 @@ write_protocol() {
   The coordinator treats any ring as "re-read the inbox", never executes it.
 - Coordinator address: tmux session `nexios-coord` (created by `coord`/`up`).
 - State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator, and the
-  only sanctioned write path is `agent_up.sh state <issue> key=value` (flock on
-  `state.lock`, atomic replace, keys/vocabulary validated).
+  only sanctioned write path is `agent_up.sh state <issue> key=value` (python3
+  fcntl lock on `state.lock`, atomic replace + fsync, keys/vocabulary validated).
+- `audit_branch` (optional, string): the branch the auditor's checkout must be
+  on. Write it with `agent_up.sh state <issue> audit_branch=<branch>`; `audit
+  <issue>` passes it to the launch branch check. Empty/unset = skip the check.
 EOF
 }
 
@@ -360,6 +405,7 @@ mode_setup() {
   local rt; rt=$(runtime_dir "$1")
   ensure_roles
   ensure_state_links
+  render_coord_config
   mkdir -p -m 0700 "$rt/inbox" "$rt/notes" "$rt/prompts"
   for r in dev qe auditor coord; do
     [ -f "$rt/inbox/$r.md" ] || echo "# inbox/$r.md — append-only. Format: <ISO8601> FROM=<role> NEED|READY|NOTE :: <text>" > "$rt/inbox/$r.md"
@@ -377,9 +423,12 @@ mode_setup() {
 link_runtime() {
   local issue="$1" rt="$2"
   local dir="$REPO_ROOT/.nexios-runtime"
+  # Key from the CANONICAL runtime dir, never from the raw argv: `setup 000410`
+  # and `setup 410` must share one pointer, not create a second one.
+  local key="${rt##*/nexios-}"
   mkdir -p "$dir"
-  ln -sfn "$rt" "$dir/$issue"
-  info "runtime pointer: .nexios-runtime/$issue -> $rt"
+  ln -sfn "$rt" "$dir/$key"
+  info "runtime pointer: .nexios-runtime/$key -> $rt"
 }
 
 # ---provisioning---------------------------------------------------------------
@@ -392,15 +441,42 @@ check_branch() {
 
 # clean-tree guard: refuse when tracked files (minus listed prefixes) are dirty.
 # $1 workdir, $2... exempt path prefixes (e.g. graphify-out/ test-history.txt)
+# Porcelain -z parsing: plain `git status --porcelain | awk '{print $2}'` loses
+# rename origins (reports the OLD path) and truncates paths with spaces.
 check_clean_tree() {
   local dir="$1"; shift
-  local dirty ex ok=0
-  dirty=$(git -C "$dir" status --porcelain | awk '{print $2}')
-  for f in $dirty; do
-    ok=1
-    for ex in "$@"; do case "$f" in "$ex"*) ok=0;; esac; done
-    [ "$ok" = 0 ] || fail "dirty tree: $f (commit/stash first; exempt: $*)"
-  done
+  local out rc=0
+  out=$(python3 - "$dir" "$@" <<'EOF'
+import os, subprocess, sys
+d, exempt = sys.argv[1], tuple(sys.argv[2:])
+raw = subprocess.run(["git", "-C", d, "status", "--porcelain=v1", "-z"],
+                     capture_output=True)
+if raw.returncode != 0:
+    sys.exit(2)  # unreadable tree is an error, never "clean"
+recs = raw.stdout.split(b"\0")
+i = 0
+paths = []
+while i < len(recs):
+    rec = recs[i]
+    if not rec:
+        i += 1
+        continue
+    xy, path = rec[:2], rec[3:]
+    paths.append(os.fsdecode(path))
+    if xy[:1] in (b"R", b"C"):
+        i += 1  # the next record is the rename/copy ORIGIN
+    i += 1
+bad = [p for p in paths if not (exempt and p.startswith(exempt))]
+for p in bad:
+    print(p)
+sys.exit(1 if bad else 0)
+EOF
+) || rc=$?
+  [ "$rc" = 0 ] && return 0
+  if [ "$rc" = 1 ]; then
+    fail "dirty tree: $(printf '%s' "$out" | tr '\n' ' ')(commit/stash first; exempt: $*)"
+  fi
+  fail "cannot read git status for $dir"
 }
 
 # Locked read-modify-write on state.json — the ONLY sanctioned state writer.
@@ -415,6 +491,12 @@ mode_state_set() {
   python3 - "$rt/state.json" "$@" <<'EOF'
 import datetime, fcntl, json, os, sys, tempfile
 
+
+def die(msg):
+    sys.stderr.write("state: %s\n" % msg)
+    sys.exit(1)
+
+
 path, pairs = sys.argv[1], sys.argv[2:]
 ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
            "retry_budget", "state", "updated"}
@@ -423,31 +505,63 @@ STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
 lock_path = os.path.join(os.path.dirname(path), "state.lock")
 with open(lock_path, "a+") as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
-    with open(path) as f:
-        state = json.load(f)
+    try:
+        with open(path) as f:
+            state = json.load(f)
+    except OSError as exc:
+        die("cannot read %s: %s" % (path, exc.strerror or exc))
+    except ValueError as exc:
+        die("existing state.json is not valid JSON: %s" % exc)
+    if not isinstance(state, dict):
+        die("existing state.json is not a JSON object")
     for pair in pairs:
         if "=" not in pair:
-            sys.exit("state: expected key=value, got %r" % pair)
+            die("expected key=value, got %r" % pair)
         key, value = pair.split("=", 1)
         if key not in ALLOWED:
-            sys.exit("state: unknown key %r (allowed: %s)"
-                     % (key, ", ".join(sorted(ALLOWED))))
+            die("unknown key %r (allowed: %s)"
+                % (key, ", ".join(sorted(ALLOWED))))
         if key in ("retries", "retry_budget"):
-            value = int(value)
+            try:
+                value = int(value)
+            except ValueError:
+                die("%s needs an integer, got %r" % (key, value))
+            if value < 0:
+                die("%s must be >= 0" % key)
         elif key == "halt":
             value = value.lower() in ("1", "true", "yes")
         elif key == "state" and value not in STATES:
-            sys.exit("state: %r not in the AGENTS.md vocabulary" % value)
+            die("%r not in the AGENTS.md vocabulary" % value)
         state[key] = value
     state["updated"] = datetime.datetime.now(
         datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
-    with os.fdopen(fd, "w") as out:
-        json.dump(state, out, indent=2)
-        out.write("\n")
-        out.flush()
-        os.fsync(out.fileno())
-    os.replace(tmp, path)
+    directory = os.path.dirname(path)
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".state.")
+        with os.fdopen(fd, "w") as out:
+            json.dump(state, out, indent=2)
+            out.write("\n")
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(tmp, path)
+        tmp = None
+    except OSError as exc:
+        die("cannot write %s: %s" % (path, exc.strerror or exc))
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    try:
+        dfd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError as exc:
+        die("cannot fsync %s: %s" % (directory, exc.strerror or exc))
     fcntl.flock(lock, fcntl.LOCK_UN)
 print("state: ok (%d key(s) set)" % len(pairs))
 EOF
@@ -495,7 +609,9 @@ run_session() {
   fi
   tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
   # Env hygiene: role config ONLY from OPENCODE_CONFIG; strip any leaky overrides.
-  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT OPENCODE_CONFIG=$role $OPENCODE_BIN" Enter
+  # TMPDIR pinned inside the fenced namespace (host TMPDIR is per-boot: unfenceable).
+  local tdir; tdir=$(ensure_session_tmpdir "$name")
+  tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$role $OPENCODE_BIN" Enter
   sleep "$TUI_BOOT_WAIT"
   check_fenced "$name" "$dir" "$role" || {
     tmux kill-session -t "$name" 2>/dev/null || true
@@ -537,19 +653,82 @@ check_fenced() {
 }
 
 # ---coordinator (addressable endpoint)-----------------------------------------
+# The repo template carries a literal {repo} token instead of a machine path
+# (relative rules under the coordinator cwd resolve to a shadow file: S3-2R).
+# It is rendered into an out-of-repo resolved config at launch.
+render_coord_config() {
+  need_cmd python3
+  need_file "$COORD_CONFIG_DIR/opencode.json"
+  mkdir -p "$COORD_DIR"
+  local repo_real; repo_real=$(cd "$REPO_ROOT" && pwd -P)
+  python3 - "$COORD_CONFIG_DIR/opencode.json" "$COORD_CONFIG_RESOLVED" "$repo_real" <<'EOF'
+import json, os, sys
+
+
+def die(msg):
+    sys.stderr.write("agent_up: ERROR: %s\n" % msg)
+    sys.exit(1)
+
+
+src, dst, repo = sys.argv[1:4]
+if not os.path.isabs(repo):
+    die("repo root is not absolute: %r" % repo)
+if not os.path.isdir(os.path.join(repo, "prompts")):
+    die("no prompts/ under the repo root %s (wrong checkout?)" % repo)
+try:
+    with open(src) as handle:
+        raw = handle.read()
+except OSError as exc:
+    die("cannot read %s: %s" % (src, exc.strerror or exc))
+if "{repo}" not in raw:
+    die("template has no {repo} token: %s" % src)
+out = raw.replace("{repo}", repo)
+if "{repo}" in out:
+    die("unresolved {repo} token in the rendered config")
+try:
+    json.loads(out)
+except ValueError as exc:
+    die("rendered config is not valid JSON: %s" % exc)
+tmp = dst + ".tmp"
+with open(tmp, "w") as handle:
+    handle.write(out)
+    handle.flush()
+    os.fsync(handle.fileno())
+os.replace(tmp, dst)
+print("agent_up: coordinator config rendered: %s" % dst)
+EOF
+}
+
 coord_tui_cmd() {
-  echo "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT $OPENCODE_BIN"
+  echo "env -u OPENCODE_CONFIG_CONTENT TMPDIR=$COORD_TMPDIR OPENCODE_CONFIG=$COORD_CONFIG_RESOLVED $OPENCODE_BIN"
 }
 
 # ensure nexios-coord tmux session exists running the coordinator TUI.
 ensure_coord_session() {
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
   ensure_state_links
-  need_file "$COORD_DIR/opencode.json"
+  render_coord_config
+  need_file "$COORD_CONFIG_RESOLVED"
+  if tmux has-session -t "$COORD_SESS" 2>/dev/null; then
+    # Never trust a session this launch did not create: a pre-fence
+    # coordinator (launched with no OPENCODE_CONFIG at all) or a moved repo
+    # leaves a running session whose env is not the resolved config. Workers
+    # refuse reuse outright; the coordinator kills the stale session so the
+    # block below rebuilds it fenced (S4-9: reuse must assert too).
+    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" 2>/dev/null || {
+      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
+    }
+  fi
   if ! tmux has-session -t "$COORD_SESS" 2>/dev/null; then
+    COORD_TMPDIR=$(ensure_session_tmpdir "$COORD_SESS")
     tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
     tmux send-keys -t "$COORD_SESS" "$(coord_tui_cmd)" Enter
-    info "started $COORD_SESS (coordinator TUI; attach: tmux attach -t $COORD_SESS)"
+    sleep "$TUI_BOOT_WAIT"
+    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" || {
+      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
+      fail "coordinator launched UNFENCED (resolved config not in its env) — killed, fix before retry"
+    }
+    info "started $COORD_SESS (fenced, config=$COORD_CONFIG_RESOLVED)"
   fi
 }
 
@@ -629,21 +808,61 @@ EOF
   fi
 }
 
-# audit-diff: generate merge-base audit diff with non-empty assertion.
-# usage: audit-diff [branch]   (default: current branch; run in dev checkout)
+# audit-diff: generate the audit diff with a non-empty assertion.
+# usage: audit-diff [branch] [--base <rev>]   (default: current branch)
+# Writes through a temp file: diffing straight into audits/pending_patch.diff
+# made the file its own delta (a self-deletion hunk in every audit).
+# Process artifacts are excluded so the auditor sees the code, not the trail.
 mode_audit_diff() {
-  local br="${1:-$(git branch --show-current)}"
-  local base; base=$(git merge-base main "$br")
+  local br="" base_override="" base_set=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --base)
+        [ -n "${2:-}" ] || fail "--base needs a revision"
+        base_override="$2"; base_set=1; shift 2 ;;
+      --base=*)
+        base_override="${1#--base=}"
+        [ -n "$base_override" ] || fail "--base needs a revision (got an empty value)"
+        base_set=1; shift ;;
+      *)
+        [ -z "$br" ] || fail "unexpected arg: $1"
+        br="$1"; shift ;;
+    esac
+  done
+  [ -n "$br" ] || br=$(git branch --show-current)
+  [ -n "$br" ] || fail "cannot determine the branch (detached HEAD? pass one)"
+  local base base_desc
+  if [ "$base_set" = 1 ]; then
+    base=$(git rev-parse --verify --quiet "$base_override^{commit}") \
+      || fail "base '$base_override' does not resolve to a commit"
+    base_desc="$base_override"
+  else
+    base=$(git merge-base main "$br" 2>/dev/null || true)
+    [ -n "$base" ] || fail "no merge-base with main for '$br' (pass --base <rev>)"
+    base_desc="merge-base main $br = $base"
+  fi
   local out="audits/pending_patch.diff"
+  mkdir -p audits
+  local tmpf; tmpf=$(mktemp "${TMPDIR:-/tmp}/agentup-auditdiff.XXXXXX")
+  local excl=( "--" "." ":!audits/pending_patch.diff" \
+               ":!audits/rejected_patch.diff" ":!prompts/LEARNINGS.md" \
+               ":!test-history.txt" ":!graphify-out" )
   if [ "$br" = "$(git branch --show-current)" ]; then
     # Same branch: diff the worktree too — uncommitted edits are part of the
     # delta under audit (`base..br` would silently omit them).
-    git diff "$base" -- . > "$out" || true
+    git diff --no-ext-diff "$base" "${excl[@]}" > "$tmpf" \
+      || { rm -f "$tmpf"; fail "git diff failed (base $base_desc)"; }
   else
-    git diff "$base".."$br" -- . > "$out" || true
+    git diff --no-ext-diff "$base..$br" "${excl[@]}" > "$tmpf" \
+      || { rm -f "$tmpf"; fail "git diff failed (base $base_desc)"; }
   fi
-  [ -s "$out" ] || fail "audit diff empty for $br (nothing to audit)"
-  info "audit diff: $out ($(wc -l < "$out") lines, merge-base $base)"
+  if [ ! -s "$tmpf" ]; then
+    rm -f "$tmpf"
+    fail "audit diff empty for $br (nothing to audit; base $base_desc)"
+  fi
+  chmod 0644 "$tmpf"
+  mv -f "$tmpf" "$out"
+  info "audit diff: $out ($(wc -l < "$out" | tr -d ' ') lines, base $base_desc)"
 }
 
 # qe-merge: merge origin/main into testbed --no-commit --no-ff.
@@ -753,13 +972,33 @@ mode_status_reconstruct() {
   [ -f "$rt/state.json" ] || fail "no live state to compare against"
   case "$copy" in "$rt") fail "refusing to reconstruct the live dir (use a COPY)";; esac
   mkdir -p "$copy"
+  # A hardlink named *-copy is not a symlink but shares the live inode, so
+  # writing through it rewrote live state (S3-1R). The shell `-ef` check is the
+  # fast path; the Python re-check is the one that cannot be raced.
+  if [ -e "$copy/state.json" ] && [ "$copy/state.json" -ef "$rt/state.json" ]; then
+    fail "refusing: $copy/state.json shares the live state inode (hardlink) — use a real copy"
+  fi
   python3 - "$rt" "$copy" "$DEV_DIR" "$QE_DIR" <<'EOF'
-import json, os, subprocess, sys
+import json, os, subprocess, sys, tempfile
+
+
+def die(msg):
+    sys.stderr.write("agent_up: ERROR: %s\n" % msg)
+    sys.exit(1)
+
+
 rt, copy, devdir, qedir = sys.argv[1:5]
-live = json.load(open(rt + "/state.json"))
-dev_br = subprocess.run(["git","-C",devdir,"branch","--show-current"],
+try:
+    with open(rt + "/state.json") as handle:
+        live = json.load(handle)
+    live_stat = os.stat(rt + "/state.json")
+except OSError as exc:
+    die("cannot read live state: %s" % (exc.strerror or exc))
+except ValueError as exc:
+    die("live state.json is not valid JSON: %s" % exc)
+dev_br = subprocess.run(["git", "-C", devdir, "branch", "--show-current"],
                         capture_output=True, text=True).stdout.strip()
-qe_br = subprocess.run(["git","-C",qedir,"branch","--show-current"],
+qe_br = subprocess.run(["git", "-C", qedir, "branch", "--show-current"],
                        capture_output=True, text=True).stdout.strip()
 recon = {"halt": live.get("halt", False), "issue": live.get("issue"),
          "phase": live.get("phase", ""), "state": live.get("state"),
@@ -768,20 +1007,45 @@ recon = {"halt": live.get("halt", False), "issue": live.get("issue"),
          "updated": live.get("updated", ""),
          "pending": live.get("pending", "")}
 out_path = copy + "/state.json"
-if os.path.islink(out_path):
-    sys.exit("refusing: copy state.json is a symlink")
-open(out_path, "w").write(json.dumps(recon, indent=2) + "\n")
+if os.path.exists(out_path):
+    st = os.stat(out_path)
+    if (st.st_dev, st.st_ino) == (live_stat.st_dev, live_stat.st_ino):
+        die("copy state.json is the live file (shared dev/ino)")
+cst, lst = os.stat(copy), os.stat(rt)
+if (cst.st_dev, cst.st_ino) == (lst.st_dev, lst.st_ino):
+    die("--copy is the live runtime dir")
+fd, tmp = tempfile.mkstemp(dir=copy, prefix=".recon.")
+try:
+    with os.fdopen(fd, "w") as handle:
+        handle.write(json.dumps(recon, indent=2) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, out_path)  # replace the entry, never truncate a shared inode
+    tmp = None
+finally:
+    if tmp is not None:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 print("reconstruct: dev=%s qe=%s" % (dev_br, qe_br))
 print("machine fields: " + ("MATCH" if all(
     recon[k] == live.get(k) for k in
-    ("phase","state","retries","retry_budget","halt")) else "MISMATCH"))
+    ("phase", "state", "retries", "retry_budget", "halt")) else "MISMATCH"))
 EOF
+}
+
+# self-test only (not in usage): expose the clean-tree parser so its porcelain
+# handling (renames, spaces, untracked) is testable without a live worker.
+mode_check_clean_tree() {
+  [ $# -ge 1 ] || fail "usage: __check-clean-tree <dir> [exempt-prefix...]"
+  check_clean_tree "$@"
 }
 
 mode_self_test() {
   local t=0 pass=0
   chk() { t=$((t+1)); if "$@" >/dev/null 2>&1; then pass=$((pass+1)); echo "PASS: $*"; else echo "FAIL: $*"; fi; }
-  chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS: $*"; fi; }
+  chk_neg() { t=$((t+1)); if "$@" >/dev/null 2>&1; then echo "FAIL (should abort): $*"; else pass=$((pass+1)); echo "PASS (aborts): $*"; fi; }
   # guard aborts (scratch names only — never live sessions)
   chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /nonexistent "$ROLES_DIR/dev.json" /dev/null || true
   # msg discipline
@@ -790,6 +1054,17 @@ mode_self_test() {
   # reconstruct refuses live dir ( Triple-check: uses --copy guard)
   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/nexios-410 || true
   rm -f /tmp/agentup-ml-$$.txt
+  # fence configuration: families byte-identical, mirrors complete, no drift
+  chk python3 "$REPO_ROOT/tools/agents/verify_fence.py"
+  # the coordinator launch command carries the RESOLVED config + pinned TMPDIR
+  # (S4-9: the fence assertion is only meaningful if the env is the fenced one)
+  local cc; cc=$("$SCRIPT_DIR/agent_up.sh" __coord-cmd)
+  chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*coordinator/opencode.resolved.json"' _ "$cc"
+  chk bash -c 'printf "%s" "$1" | grep -q "TMPDIR=/tmp/agentup-tmp-"' _ "$cc"
+  chk bash -c 'printf "%s" "$1" | grep -q -- "-u OPENCODE_CONFIG_CONTENT"' _ "$cc"
+  # issue-number canonicality: 0, over-long and leading-zero aliases
+  chk_neg "$SCRIPT_DIR/agent_up.sh" setup 0
+  chk_neg "$SCRIPT_DIR/agent_up.sh" setup 12345678
   # out-of-repo policy: a REAL file where a link belongs must hard-fail (drift),
   # an absent path must be linked, a wrong link must be repointed.
   local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator"
@@ -800,16 +1075,94 @@ mode_self_test() {
   chk test -L "$st/home/coordinator/opencode.json"
   chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
   chk test -L "$st/home/roles/dev.json"
+  # a WRONG link is repointed, never adopted
+  ln -sfn /nonexistent "$st/home/coordinator/opencode.json"
+  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
+  chk test "$(readlink "$st/home/coordinator/opencode.json")" = "$COORD_CONFIG_DIR/opencode.json"
+  # leading-zero issue numbers canonicalize onto ONE runtime (never alias 410)
+  local zcan
+  local zraw
+  zcan=$((900000 + ($$ % 90000)))
+  zraw="000$zcan"
+  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup "$zraw"
+  chk test -f "/tmp/nexios-$zcan/state.json"
+  chk_neg test -e "/tmp/nexios-$zraw"
+  # coordinator config is rendered from the {repo} template, template untouched
+  chk test -f "$st/home/coordinator/opencode.resolved.json"
+  chk grep -q '{repo}' "$COORD_CONFIG_DIR/opencode.json"
+  chk_neg grep -q '{repo}' "$st/home/coordinator/opencode.resolved.json"
+  chk grep -q "$(cd "$REPO_ROOT" && pwd -P)/prompts/LEARNINGS.md" \
+      "$st/home/coordinator/opencode.resolved.json"
+  chk python3 -c "import json,sys; json.load(open(sys.argv[1]))" \
+      "$st/home/coordinator/opencode.resolved.json"
   # state writer: validated keys/vocabulary, locked, atomic
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
+  chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 retries=abc
   chk "$SCRIPT_DIR/agent_up.sh" state 9999 phase=AUDITED retries=1
   chk grep -q '"phase": "AUDITED"' /tmp/nexios-9999/state.json
   chk grep -q '"retries": 1' /tmp/nexios-9999/state.json
+  # ... and a corrupt state file is a one-line error, never a traceback
+  local bad="/tmp/nexios-9991"; rm -rf "$bad"
+  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9991
+  printf '{not json' > "$bad/state.json"
+  local jout; jout=$("$SCRIPT_DIR/agent_up.sh" state 9991 phase=PLANNED 2>&1 || true)
+  chk bash -c 'printf "%s" "$1" | grep -q "state: existing state.json is not valid JSON"' _ "$jout"
+  chk_neg bash -c 'printf "%s" "$1" | grep -q Traceback' _ "$jout"
   # --copy anchor: nested path and wrong suffix must be refused
   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/a/b-copy
   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/plain
-  rm -rf "$st"
+  # --copy is a symlink / shares the live inode -> refused, live state unchanged
+  local sl="/tmp/agentup-sl-$$-copy"
+  rm -rf "$sl"; ln -s /tmp "$sl"
+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 9999 --copy "$sl"
+  rm -f "$sl"
+  local hl="/tmp/agentup-hl-$$-copy"
+  rm -rf "$hl"; mkdir -p "$hl"
+  ln -s /tmp/nexios-9999/state.json "$hl/state.json"
+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 9999 --copy "$hl"
+  rm -rf "$hl"; mkdir -p "$hl"
+  ln /tmp/nexios-9999/state.json "$hl/state.json"
+  local before after
+  before=$(shasum /tmp/nexios-9999/state.json | cut -d' ' -f1)
+  chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 9999 --copy "$hl"
+  after=$(shasum /tmp/nexios-9999/state.json | cut -d' ' -f1)
+  chk test "$before" = "$after"
+  rm -rf "$hl"
+  # clean-tree parser: renames report the NEW path, spaces survive, untracked is
+  # in scope, exempt prefixes stay exempt
+  local ct="$st/clean"; mkdir -p "$ct/graphify-out"
+  git -C "$ct" init -q -b main
+  printf 'a\n' > "$ct/a b.txt"
+  git -C "$ct" add -A
+  git -C "$ct" -c user.email=t@t -c user.name=t commit -qm base
+  git -C "$ct" mv "a b.txt" "x y.txt"
+  printf 'z\n' > "$ct/z.txt"
+  printf 'q\n' > "$ct/graphify-out/x"
+  local ctout; ctout=$("$SCRIPT_DIR/agent_up.sh" __check-clean-tree "$ct" graphify-out/ 2>&1 || true)
+  chk bash -c 'printf "%s" "$1" | grep -q "x y.txt"' _ "$ctout"
+  chk bash -c 'printf "%s" "$1" | grep -q "z.txt"' _ "$ctout"
+  chk_neg bash -c 'printf "%s" "$1" | grep -q "a b.txt"' _ "$ctout"
+  chk_neg bash -c 'printf "%s" "$1" | grep -q "graphify-out/x"' _ "$ctout"
+  git -C "$ct" add -A
+  git -C "$ct" -c user.email=t@t -c user.name=t commit -qm clean
+  chk "$SCRIPT_DIR/agent_up.sh" __check-clean-tree "$ct" graphify-out/
+  # audit-diff: explicit base, temp-file write (no self-deletion hunk), exclusions
+  local gd="$st/gd"; mkdir -p "$gd/audits"
+  git -C "$gd" init -q -b main
+  printf 'base\n' > "$gd/a.txt"
+  printf 'old\n' > "$gd/audits/pending_patch.diff"
+  git -C "$gd" add -A
+  git -C "$gd" -c user.email=t@t -c user.name=t commit -qm base
+  printf 'change\n' >> "$gd/a.txt"
+  chk bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main"
+  chk grep -q '^+change' "$gd/audits/pending_patch.diff"
+  chk_neg grep -q 'pending_patch.diff' "$gd/audits/pending_patch.diff"
+  chk bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base main"
+  chk_neg bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base="
+  rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
+         "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
+         "$REPO_ROOT/.nexios-runtime/9999"
   echo "self-test: $pass/$t PASS"
   [ "$pass" = "$t" ] || fail "self-test failures"
 }
@@ -859,6 +1212,8 @@ case "$mode" in
   comms-test) mode_comms_test "$@" ;;
   status) mode_status "$@" ;;
   self-test) mode_self_test "$@" ;;
+  __check-clean-tree) mode_check_clean_tree "$@" ;;
+  __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
   *) usage ;;

@@ -21,6 +21,10 @@ permission:
     "/private/tmp/qemu-serial.*": allow
     "/tmp/agentup-*": allow
     "/private/tmp/agentup-*": allow
+    "/tmp/agentup-*/**": allow
+    "/private/tmp/agentup-*/**": allow
+    "/tmp/lldb-*": allow
+    "/private/tmp/lldb-*": allow
   edit:
     "*": allow
     "tools/agents/roles/*": deny

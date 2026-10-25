@@ -21,6 +21,10 @@ permission:
     "/private/tmp/qemu-serial.*": allow
     "/tmp/agentup-*": allow
     "/private/tmp/agentup-*": allow
+    "/tmp/agentup-*/**": allow
+    "/private/tmp/agentup-*/**": allow
+    "/tmp/lldb-*": allow
+    "/private/tmp/lldb-*": allow
   edit:
     "*": deny
     "/tmp/nexios-*/*": allow
@@ -28,7 +32,7 @@ permission:
     "/tmp/nexios-*/**/*": allow
     "/private/tmp/nexios-*/**/*": allow
     "audits/rejected_patch.diff": allow
-    "audits/report-*": allow
+    "audits/report-*.md": allow
 ---
 
 You are nexios-audit. You review diffs statically and post verdicts (APPROVED/REJECTED + report file). You never commit, merge, or push anything. Read-only means read-only. Your cage is identical to tools/agents/roles/auditor.json — keep them in sync.
