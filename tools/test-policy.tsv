@@ -33,3 +33,61 @@ class|ahci_live|arch_scope|x86_64
 class|iommu_live|arch_scope|x86_64
 class|ahci_live|build_scope|debug
 class|iommu_live|build_scope|debug
+
+# Measured+30pct class timeouts (issue #170, operator-ordered 2026-10-25).
+# Rule: expect_timeout = ceil(measured normal-pass wall x 1.3), per arch,
+# via arch-qualified class selectors (arch:class beats bare class).
+# Baselines below measured 2026-10-25 on a LOADED host (load 5-12 x86_64,
+# 3-6 aarch64) — upper bounds, strictly tighter than the 120/250 defaults
+# they replace. Refresh from unloaded/CI runs when available; a TCG trip
+# of a 30pct margin is a flake (root-cause/file), never a silent inflate.
+# Classes with NO passing baseline keep the tier defaults (no row):
+# aarch64 core_sched/core_memory/capability/deadline/bench (known-reds,
+# list_tests.py AARCH64_CLASSES comment; issues #417/#418 where kernel-side).
+# Outer wrapper untouched (600/1200 backstop, covers 2 attempts + compile).
+# x86_64 baselines: debug gate 2026-10-25 17:40 (smp_multicpu 18/18 rerun
+# 1204ms; hal/bench/ahci times include one stall-retry cycle, conservative).
+class|x86_64:core_basic|expect_timeout|8263
+class|x86_64:core_sync|expect_timeout|8439
+class|x86_64:core_sched|expect_timeout|15022
+class|x86_64:core_task|expect_timeout|4476
+class|x86_64:core_memory|expect_timeout|16442
+class|x86_64:core_syscall|expect_timeout|5267
+class|x86_64:core_tracing|expect_timeout|2093
+class|x86_64:ipc|expect_timeout|8526
+class|x86_64:capability|expect_timeout|13504
+class|x86_64:proc_elf|expect_timeout|62415
+class|x86_64:storage|expect_timeout|47666
+class|x86_64:servers|expect_timeout|5823
+class|x86_64:drivers|expect_timeout|9431
+class|x86_64:hal|expect_timeout|14849
+class|x86_64:smp|expect_timeout|8120
+class|x86_64:smp_multicpu|expect_timeout|1566
+class|x86_64:deadline|expect_timeout|45543
+class|x86_64:ui|expect_timeout|5453
+class|x86_64:logging_debug|expect_timeout|2940
+class|x86_64:random|expect_timeout|1436
+class|x86_64:bench|expect_timeout|3425
+class|x86_64:task_tcb_log|expect_timeout|107
+class|x86_64:task_fpu|expect_timeout|19482
+class|x86_64:ahci_live|expect_timeout|8033
+class|x86_64:iommu_live|expect_timeout|526
+class|x86_64:testrunner|expect_timeout|168587
+# aarch64 baselines: debug gate 2026-10-25 18:34 (testrunner EXPECTED_PANIC).
+class|aarch64:core_basic|expect_timeout|3765
+class|aarch64:core_sync|expect_timeout|3919
+class|aarch64:core_task|expect_timeout|1798
+class|aarch64:core_syscall|expect_timeout|3786
+class|aarch64:core_tracing|expect_timeout|788
+class|aarch64:ipc|expect_timeout|4112
+class|aarch64:proc_elf|expect_timeout|4176
+class|aarch64:storage|expect_timeout|28279
+class|aarch64:servers|expect_timeout|2535
+class|aarch64:drivers|expect_timeout|2574
+class|aarch64:hal|expect_timeout|3026
+class|aarch64:ui|expect_timeout|3900
+class|aarch64:logging_debug|expect_timeout|1326
+class|aarch64:random|expect_timeout|637
+class|aarch64:task_tcb_log|expect_timeout|47
+class|aarch64:task_fpu|expect_timeout|320
+class|aarch64:testrunner|expect_timeout|160002

@@ -7,7 +7,9 @@ Usage:
 Mirrors the run_all_classes.sh selection: the x86_64 debug list, the
 riscv64 reduced list, NEXIOS_TEST_CLASSES override, arch/build scoping
 via tools/test-policy.awk. Prints one `class|timeout` line per class
-(timeout = 2x the policy outer_timeout, A1: never the 30 s default).
+(timeout = the policy outer_timeout backstop, never the 30 s default;
+per-attempt budgets are the measured+30pct expect_timeout rows, same
+table — the outer only bounds whole-test wall including rebuild+retries).
 """
 
 import os
@@ -90,7 +92,7 @@ def main():
         if not scoped_in(arch, build, cls, "build_scope"):
             continue
         try:
-            timeout = int(policy(arch, cls, "outer_timeout")) * 2
+            timeout = int(policy(arch, cls, "outer_timeout"))
         except ValueError:
             print("ERROR: non-numeric outer_timeout for %s" % cls)
             return 2

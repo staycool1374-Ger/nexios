@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""QEMU test() timeout parity (issue #170, A1).
+"""QEMU test() timeout parity (issue #170, A1; measured+30pct rule).
 
 Usage:
     python3 tools/meson/tests/test_policy_timeouts.py <builddir> <arch>
 
-Asserts every QEMU test() timeout equals 2x the policy outer_timeout
-(never the Meson 30 s default) by re-resolving the policy the same way
-list_tests.py does and comparing against `meson introspect --tests`.
+Asserts every QEMU test() timeout equals the policy outer_timeout
+backstop (never the Meson 30 s default) by re-resolving the policy the
+same way list_tests.py does and comparing against
+`meson introspect --tests`. Per-attempt budgets (measured+30pct
+expect_timeout) are enforced inside the runner, not here.
 """
 
 import json
@@ -50,14 +52,14 @@ def main():
             continue
         cls = name.split("/")[-1]
         try:
-            expected = int(policy(arch, cls, "outer_timeout")) * 2
+            expected = int(policy(arch, cls, "outer_timeout"))
         except ValueError:
             failures.append("%s: non-numeric outer_timeout" % cls)
             continue
         actual = test.get("timeout", 30)
         checked += 1
         if actual != expected:
-            failures.append("%s: timeout=%s, want 2x policy=%s"
+            failures.append("%s: timeout=%s, want policy outer=%s"
                             % (name, actual, expected))
         if actual <= 30:
             failures.append("%s: timeout=%s looks like the Meson default"

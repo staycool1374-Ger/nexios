@@ -3,7 +3,8 @@
 # QEMU suites: one test() per class from the policy table, generated at
 # configure time by tools/meson/list_tests.py (mirrors the
 # run_all_classes.sh selection incl. NEXIOS_TEST_CLASSES override).
-# timeout = 2x the policy outer_timeout (A1: never the 30 s default);
+# timeout = the policy outer_timeout backstop (never the 30 s default);
+# per-attempt budgets are the measured+30pct expect_timeout rows.
 # is_parallel: false (QEMU mutual exclusion + single serial log set).
 # The runner reconfigures/rebuilds per test (idempotent), so plain
 # `meson test` works with no extra flags.
