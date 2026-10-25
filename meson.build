@@ -45,6 +45,10 @@ arch_readelf = find_program(triplet + 'readelf', required : true)
 arch_strip = find_program(triplet + 'strip', required : true)
 arch_objdump = find_program(triplet + 'objdump', required : false)
 nasm_prog = find_program('nasm', required : arch == 'x86_64')
+# C/C++ compiler objects for feature probes (has_argument). The release
+# analyzer-suppress loop below needs the C compiler; debug never touches
+# it, so the missing definition only ever broke release setup (#170 A6).
+cc = meson.get_compiler('c')
 
 # --- Common flags: byte-mirror of Makefile CXXFLAGS_COMMON (sans -pipe -MMD -MP;
 # ninja emits its own depfiles). CONFIG_DEFS map 1:1 to config_defs.
