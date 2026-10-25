@@ -203,3 +203,7 @@ jobs:
       run: |
         python3 tools/check-parity.py --report
         python3 tools/check_no_make_refs.sh
+
+    - name: Cross-edit isolation gate (self-test both directions)
+      run: |
+        bash tools/check_no_cross_edits.sh --self-test
