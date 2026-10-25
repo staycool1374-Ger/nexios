@@ -81,13 +81,16 @@ usage: agent_up.sh <mode> [...]
   coord [taskfile]   ensure $COORD_SESS tmux session (cwd=coordinator home,
                      env scrubbed) running the coordinator TUI; attach to it.
                      Optional taskfile is pasted as the first message.
-  workers <issue>    launch $DEV_SESS + $QE_SESS (detached tmux; needs
-                     prompts/dev.txt + prompts/qe.txt in the coord runtime).
-  up <issue> ["task"] FULL ROOM from one zsh command: setup + workers + three
-                     visible Terminal windows (read-write mirrors; read-only
-                     mirrors block ALL tmux input including doorbells) + coordinator
-                     in tmux ($COORD_SESS) with the task pasted as its first
-                     message. Pass a taskfile path or literal task text.
+  workers [issue]    launch $DEV_SESS + $QE_SESS (detached tmux). With an issue
+                     they get prompts/dev.txt + prompts/qe.txt from the coord
+                     runtime; without one they start bare and wait for a ring.
+  up [issue] ["task"] FULL ROOM from one zsh command: setup (only if an issue is
+                     given) + workers + three visible Terminal windows
+                     (read-write mirrors; read-only mirrors block ALL tmux input
+                     including doorbells) + coordinator in tmux ($COORD_SESS)
+                     with the task pasted as its first message. Bare 'up' opens
+                     the room: type the issue number or your idea into the
+                     coordinator window; it runs setup and briefs the workers.
   run ...            launch ONE session: run <name> <dir> <role> <prompt.txt> [branch]
                      <role> is dev|qe|auditor|coordinator — the fence for it is
                      rendered from tools/agents/fence/ at launch (never a path).
@@ -96,7 +99,7 @@ usage: agent_up.sh <mode> [...]
                      write the audit diff to audits/pending_patch.diff
                      (base defaults to merge-base main <branch>; must be
                      non-empty). Run in the dev checkout. Brand-new files are
-                     invisible to `git diff <base>`: `git add -N` them first.
+                     invisible to 'git diff <base>': 'git add -N' them first.
   qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
                      abort-on-conflict restores code state. Run in QE checkout.
   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
@@ -531,7 +534,7 @@ run_session() {
   local role="$3"
   local prompt="$4"
   [ -d "$dir" ] || fail "workdir missing: $dir"
-  need_file "$prompt"
+  [ -z "$prompt" ] || need_file "$prompt"
   case "$role" in dev|qe|auditor|coordinator) ;; *) fail "unknown role: '$role'" ;; esac
   if tmux has-session -t "$name" 2>/dev/null; then
     fail "tmux session '$name' already exists — refusing to clobber (close it first)"
@@ -564,11 +567,15 @@ run_session() {
     tmux kill-session -t "$name" 2>/dev/null || true
     fail "session '$name' launched UNFENCED (config/role/tmpdir not in process env) — killed, fix before retry"
   }
-  tmux load-buffer "$prompt"
-  tmux paste-buffer -t "$name"
-  sleep 2
-  tmux send-keys -t "$name" Enter
-  info "launched '$name' (fenced, prompt delivered)"
+  if [ -n "$prompt" ]; then
+    tmux load-buffer "$prompt"
+    tmux paste-buffer -t "$name"
+    sleep 2
+    tmux send-keys -t "$name" Enter
+    info "launched '$name' (fenced, prompt delivered)"
+  else
+    info "launched '$name' (fenced, no brief yet — the coordinator rings it)"
+  fi
 }
 
 # $1 tmux-name, $2 expected PWD, $3 expected rendered config, $4 expected role
@@ -678,14 +685,19 @@ mode_coord() {
 }
 
 # ---modes----------------------------------------------------------------------
+# workers [issue] — without an issue the sessions start bare (no brief): the
+# coordinator writes the briefs after setup and rings each worker. Briefs are
+# only required when an issue was named, so a no-issue room creates no runtime.
 mode_workers() {
-  [ $# -eq 1 ] || fail "workers needs an issue number"
-  local rt; rt=$(runtime_dir "$1")
+  [ $# -le 1 ] || fail "workers takes at most one issue number (got $#)"
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
-  local dp qp
-  dp="$rt/prompts/$(role_field dev prompt)"
-  qp="$rt/prompts/$(role_field qe prompt)"
-  need_file "$dp"; need_file "$qp"
+  local dp="" qp=""
+  if [ $# -eq 1 ]; then
+    local rt; rt=$(runtime_dir "$1")
+    dp="$rt/prompts/$(role_field dev prompt)"
+    qp="$rt/prompts/$(role_field qe prompt)"
+    need_file "$dp"; need_file "$qp"
+  fi
   check_branch "$DEV_DIR" main
   check_branch "$QE_DIR" testbed
   run_session "$DEV_SESS" "$DEV_DIR" dev "$dp"
@@ -702,13 +714,20 @@ open_watch_window() {
 
 # Full room from one zsh command: setup + workers + visible watch mirrors +
 # coordinator in tmux (addressable doorbell endpoint) with the task pasted.
+# up [issue] ["task"] — the issue is optional: `up` alone opens the room and
+# you type the issue number or your idea into the coordinator window.
 mode_up() {
-  [ $# -ge 1 ] || fail "up needs an issue number: up <issue> [taskfile-or-task]"
-  local issue="$1"
-  local task="${2:-}"
-  mode_setup "$issue"
-  local rt; rt=$(runtime_dir "$issue")
-  mode_workers "$issue"
+  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
+  local issue="" task=""
+  if [ $# -ge 1 ]; then
+    # runtime_dir is the validator: a non-numeric first argument is an error,
+    # never an "idea" (use bare `up` and type the idea in the coordinator window).
+    runtime_dir "$1" >/dev/null
+    issue="$1"
+    task="${2:-}"
+    mode_setup "$issue"
+  fi
+  mode_workers ${issue:+"$issue"}
   ensure_coord_session
   open_watch_window "$DEV_SESS"
   open_watch_window "$QE_SESS"
@@ -728,8 +747,12 @@ EOF
       mode_coord "$tf"
       rm -f "$tf"
     fi
-  else
+  elif [ -n "$issue" ]; then
     echo "(no task given — attach and paste: 'You are nexios-coord. Read AGENTS.md. Report readiness.')"
+  else
+    echo "(no issue selected — no runtime created. In the coordinator window type the"
+    echo " issue number or your idea; it runs 'setup <n>', writes both briefs and rings"
+    echo " the workers: 'agent_up.sh msg nexios-dev \"inbox: brief ready\"')"
   fi
 }
 
@@ -982,6 +1005,24 @@ mode_self_test() {
   # reconstruct refuses live dir ( Triple-check: uses --copy guard)
   chk_neg "$SCRIPT_DIR/agent_up.sh" status --reconstruct 410 --copy /tmp/nexios-410 || true
   rm -f /tmp/agentup-ml-$$.txt
+  # issue-optional room: bare `up` opens three sessions with no runtime/briefs
+  local rp
+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan)
+  chk bash -c 'printf "%s" "$1" | grep -qx "issue=none"' _ "$rp"
+  chk bash -c 'printf "%s" "$1" | grep -qx "dev_prompt=none"' _ "$rp"
+  chk bash -c 'printf "%s" "$1" | grep -qx "sessions=nexios-dev,nexios-qe,nexios-coord"' _ "$rp"
+  # ... with an issue the briefs come from the runtime (and only then are required)
+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 4199999)
+  chk bash -c 'printf "%s" "$1" | grep -qx "dev_prompt=/tmp/nexios-4199999/prompts/dev.txt"' _ "$rp"
+  chk bash -c 'printf "%s" "$1" | grep -qx "issue=4199999"' _ "$rp"
+  # one canonical issue number: 04199999 addresses the same runtime
+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 04199999)
+  chk bash -c 'printf "%s" "$1" | grep -qx "issue=4199999"' _ "$rp"
+  # an idea is never mistaken for an issue, and arity is capped
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan notanissue
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 4199999 a b
+  # planning a room never materialises a runtime
+  chk_neg test -e /tmp/nexios-4199999
   # fence rendering: polarity, determinism, mirrors, {repo}, twins, fail-closed
   chk "$SCRIPT_DIR/agent_up.sh" render-self-test
   # ... and the verifier agrees with what the launcher renders (one source)
@@ -1142,6 +1183,24 @@ mode_fence_show() {
 }
 
 # $1 role — print the exact command run_session sends (self-test + inspection).
+# self-test only: resolve what `up` would do, without tmux/opencode/render.
+mode_room_plan() {
+  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
+  local issue="" task="" dp="" qp=""
+  if [ $# -ge 1 ]; then
+    local rt; rt=$(runtime_dir "$1")
+    issue="${rt##*/nexios-}"
+    if [ $# -eq 2 ]; then
+      if [ -f "$2" ]; then task=file; else task=text; fi
+    fi
+    dp="$rt/prompts/$(role_field dev prompt)"
+    qp="$rt/prompts/$(role_field qe prompt)"
+  fi
+  printf 'issue=%s\ntask=%s\ndev_prompt=%s\nqe_prompt=%s\nsessions=%s,%s,%s\n' \
+    "${issue:-none}" "${task:-none}" "${dp:-none}" "${qp:-none}" \
+    "$DEV_SESS" "$QE_SESS" "$COORD_SESS"
+}
+
 mode_launch_cmd() {
   [ $# -eq 1 ] || fail "__run-cmd needs a role"
   case "$1" in dev|qe|auditor|coordinator) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|coordinator), got '$1'" ;; esac
@@ -1365,6 +1424,7 @@ case "$mode" in
   fence) mode_fence_show "$@" ;;
   __check-clean-tree) mode_check_clean_tree "$@" ;;
   __run-cmd) mode_launch_cmd "$@" ;;
+  __room-plan) mode_room_plan "$@" ;;
   __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;

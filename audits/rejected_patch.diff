@@ -1,42 +1,12 @@
-diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
---- a/scripts/agent_up.sh
-+++ b/scripts/agent_up.sh
-@@ -500,7 +500,7 @@ mode_run() {
-   local prompt="$4"
-   local want_branch="${5:-}"
-   need_cmd tmux; need_cmd "$OPENCODE_BIN"
--  case "$role" in */*|*.json) fail "run takes a role name (dev|qe|auditor|coordinator), not a config path: '$role'" ;; esac
-+  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "run takes a role name (dev|qe|auditor|coordinator), not a config path: '$role'" ;; esac
-   need_file "$prompt"
-   [ -d "$dir" ] || fail "workdir missing: $dir"
-   check_branch "$dir" "$want_branch"
-@@ -529,14 +529,17 @@ run_session() {
-   local prompt="$4"
-   [ -d "$dir" ] || fail "workdir missing: $dir"
-   need_file "$prompt"
-+  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "unknown role: '$role'" ;; esac
-   if tmux has-session -t "$name" 2>/dev/null; then
-     fail "tmux session '$name' already exists — refusing to clobber (close it first)"
-   fi
--  # install_agents renders every role, including this one, and installs the
--  # generated subagent definitions into the session's cwd.
-+  # install_agents installs the generated subagent definitions into the
-+  # session's cwd; render_role_config then re-renders THIS role fresh. Never
-+  # trust the file on disk here: a pre-planted or stale config under
-+  # $RENDERED_ROOT must never launch (the renderer validates the role and
-+  # overwrites with a fresh compose, fail-closed on any error).
-   install_agents "$dir"
--  local cfg; cfg=$(rendered_path "$role")
--  [ -s "$cfg" ] || fail "rendered config missing after render: $cfg"
-+  local cfg; cfg=$(render_role_config "$role")
-   tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
-   # Env hygiene: role config ONLY from OPENCODE_CONFIG; strip any leaky overrides.
-   # TMPDIR pinned inside the fenced namespace (host TMPDIR is per-boot: unfenceable).
-@@ -1118,6 +1121,7 @@ mode_fence_show() {
- # $1 role — print the exact command run_session sends (self-test + inspection).
- mode_launch_cmd() {
-   [ $# -eq 1 ] || fail "__run-cmd needs a role"
-+  case "$1" in dev|qe|auditor|coordinator) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|coordinator), got '$1'" ;; esac
-   local cfg
-   cfg=$(render_role_config "$1")
-   printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=/tmp/agentup-tmp-agentup-probe OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s\n' \
+diff --git a/tools/agents/coordinator/AGENTS.md b/tools/agents/coordinator/AGENTS.md
+--- a/tools/agents/coordinator/AGENTS.md
++++ b/tools/agents/coordinator/AGENTS.md
+@@ -21,7 +21,7 @@ Role: own workflow transitions. You never write, build, or test kernel code —
+ `up` with no issue creates **no runtime**: no `/tmp/nexios-<n>/`, no inboxes, no `state.json`, and dev/qe were launched with no brief. They are waiting for your ring. Never invent a `/tmp/nexios-*` path.
+
+ 1. **Get the anchor.** The operator's first message names an issue number, or an idea. If it is an idea, ask which issue anchors it — you do not create issues and never guess a number.
+-2. **Materialise the runtime:** `scripts/agent_up.sh setup <n>` (idempotent, the ONLY creator). Do not re-run `up`/`workers`: the sessions are already live and relaunch is refused; delivery is by ring.
++2. **Materialise the runtime:** `scripts/agent_up.sh setup <n>` (idempotent, the ONLY creator of a full runtime — inbox/state/prompts/PROTOCOL; `comms-test` keeps its own notes/ scratch outside setup). Do not re-run `up`/`workers`: the sessions are already live and relaunch is refused; delivery is by ring.
+ 3. **Write both briefs** with your write tool (never bash redirection): `/tmp/nexios-<n>/prompts/dev.txt` and `qe.txt` = the operator's words verbatim + issue number + the role prompt path (`{repo}/prompts/PROMPT-dev.md` / `PROMPT-testdev.md`) + the branch. Never copy doctrine into a brief.
+ 4. **Ring only after the brief exists:** `scripts/agent_up.sh msg nexios-dev "inbox: brief ready — read /tmp/nexios-<n>/prompts/dev.txt"` (same for qe). One line, pointer only.
+ 5. **Then record** `scripts/agent_up.sh state <n> phase=... pending=...`.
