@@ -7,15 +7,16 @@
 # block, writes a machine-readable verdict to <verdict_log>, and exits 0 on
 # PASS / 1 on FAIL|TIMEOUT|QEMU_EXIT.
 #
-# Expected-panic handling (issue #181):
-#   The TEST SUMMARY block is authoritative — it decides the verdict whenever
-#   present, even if a KERNEL PANIC: line appeared earlier in the same run
-#   (passing tests may log benign FATAL lines). Panic text is therefore only
-#   RECORDED, never terminal: a flag is set and matching continues. Only when
-#   the run ends (eof) or the deadline passes (timeout) with NO summary does
-#   the recorded flag decide: the exact `exhausted PCP retry budget`
-#   signature (ASIL-D safety panic, kernel halts, no summary follows) yields
-#   PASS, any other recorded panic yields FAIL.
+# Expected-panic handling (issue #181; prompt conversion per #170 F2):
+#   The TEST SUMMARY block is authoritative whenever present, even if a
+#   KERNEL PANIC: line appeared earlier in the same run (passing tests may
+#   log benign FATAL lines). Ordinary panic text is therefore only
+#   RECORDED, never terminal. The one exception is the exact
+#   `exhausted PCP retry budget` signature (ASIL-D safety panic: the
+#   kernel halts, no summary can follow) — on sighting it the verdict is
+#   PASS immediately (no waiting for eof/timeout, which previously burned
+#   the 220 s watchdog + full outer timeout for a decided verdict).
+#   Recorded flags still decide at eof/timeout when no summary arrived.
 #
 # Robust by design:
 #   - The verdict is written to a dedicated file (never lost to pipe buffering).
@@ -57,21 +58,18 @@ expect {
         set fh [open $verdict_log w]; puts $fh $verdict; close $fh
         exit $rc
     }
-    # ── Expected panic signature seen — record, keep waiting for summary.
-    #    Bare substring (not same-chunk anchored): robust to split writes.
-    #    Decides nothing by itself; only the eof/timeout arms below read it.
+    # ── Expected panic signature seen — PASS promptly, do not wait.
+    #    The `exhausted PCP retry budget` signature is terminal by design
+    #    (ASIL-D safety panic: kernel halts, NO summary ever follows — see
+    #    header). Waiting for summary/eof/timeout after it only burns the
+    #    220 s watchdog + the full outer timeout (observed: 234 s x86_64,
+    #    600 s aarch64) for a verdict that is already decided. The summary
+    #    arm above stays authoritative whenever a summary IS present.
     -re {exhausted PCP retry budget} {
-        set expected_panic_seen 1
-        set panic_seen 1
-        set remaining [expr {$deadline - [clock seconds]}]
-        if {$remaining <= 0} {
-            set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
-            puts $verdict; flush stdout
-            set fh [open $verdict_log w]; puts $fh $verdict; close $fh
-            exit 0
-        }
-        set timeout $remaining
-        exp_continue
+        set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
+        puts $verdict; flush stdout
+        set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+        exit 0
     }
     # ── Any other KERNEL PANIC: line — record, keep waiting for summary ─
     -re {KERNEL PANIC:} {
