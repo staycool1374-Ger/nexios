@@ -2076,30 +2076,45 @@ void TaskControlBlock::complete_teardown() noexcept {
     // transiently hold the lock and cause a skip.
     {
         arch::IrqGuard irq_guard{};
-        // Issue #409 W1: double-destroy race guard — a tick-ISR destroy may
-        // have freed this block after the entry checks (magic alone is not
-        // identity: the pool can recycle the block and magic would pass
-        // again, so unregistering it would evict someone else's live
-        // task). Re-prove the SAME occupancy instead: the id-table slot
-        // for this id must still point at THIS object. alloc_id is
-        // monotonic with no reuse within a boot (scheduler_id_table.cpp),
-        // so a recycled block always carries a different id and can never
-        // match this slot; magic is only a secondary witness below.
-        // Single CPU + IRQs off here, so no new teardown can interleave
-        // between this check and the unregister below. A mismatch means a
-        // concurrent teardown already ran the removal+free path, so
-        // skipping unregister is table-clean — an ENSURE here would panic
-        // on a won race. Genuine corruption (registered but poisoned)
-        // still trips unregister_task's own ENSURE below.
-        auto *registered = Scheduler::find_task(id);
-        if (registered != this) {
-            Logger::warn("[SCHED] unregister skipped: id-table slot "
-                         "mismatch for id=%lu (magic=0x%lx) — concurrent "
-                         "teardown already removed this task",
-                         id, (uint64_t)magic);
+        // Issue #409 W1 (iter-1 audit hardening): validity-gated skip.
+        // The id-table check below only gates the UNREGISTER, never the
+        // teardown: table removal legitimately precedes teardown on the
+        // reaper, zombie-drain/flush, #373 second-destroy and reboot paths
+        // (release_zombie / reap_orphans remove first; cleanup runs later).
+        // Snapshot the recycle-sensitive generation at entry: only a freed
+        // (poisoned) or recycled block skips everything.
+        const uint32_t teardown_gen_at_entry = generation;
+        // (snapshot, check and unregister all run under the same IrqGuard,
+        // u32 load included, so no new teardown can interleave between them.)
+        if (!TaskControlBlock::is_valid(this)) {
+            Logger::warn("[SCHED] teardown skipped: TCB no longer valid "
+                         "(magic=0x%lx) - concurrent teardown already "
+                         "removed and freed this task",
+                         (uint64_t)magic);
             return;
         }
-        Scheduler::unregister_task(*this);
+        if (generation != teardown_gen_at_entry) {
+            Logger::warn("[SCHED] teardown skipped: TCB recycled under us "
+                         "(id=%lu) - concurrent teardown freed this block "
+                         "and it was reallocated",
+                         id);
+            return;
+        }
+        // Valid, same-occupancy block: run the teardown. Removal may
+        // already have happened (pre-remove paths); the idempotent
+        // unregister below is then a proven no-op. Skipping it is
+        // table-clean; an ENSURE here would panic on a won race.
+        // Genuine corruption (registered but poisoned) still trips
+        // unregister_task own ENSURE below.
+        auto *registered = Scheduler::find_task(id);
+        if (registered == this) {
+            Scheduler::unregister_task(*this);
+        } else {
+            Logger::warn("[SCHED] unregister skipped: id-table slot "
+                         "mismatch for id=%lu - already removed, teardown "
+                         "continues",
+                         id);
+        }
     }
     kernel::task_step(kernel::TaskCleanupSteps::Unregister); // issue #347 Slice C
 
