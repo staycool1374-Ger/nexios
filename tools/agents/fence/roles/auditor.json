@@ -59,7 +59,9 @@
       "sha256sum *": "allow",
       "cut *": "allow",
       "od *": "allow",
-      "git merge-tree *": "allow"
+      "git merge-tree *": "allow",
+      "git cat-file *": "allow",
+      "true*": "allow"
     },
     "alias": [
       "sil3_auditor.md"
