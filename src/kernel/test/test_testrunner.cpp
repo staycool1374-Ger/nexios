@@ -331,6 +331,11 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
             "PRE: none | POST: none") {
     static constexpr uint64_t HHDM_LIMIT = 128ULL * 1024 * 1024;
     static constexpr uint64_t CYCLES = 20;
+    // Ownership (issue #421): the buffer is freed AS ITS OWNER (the worker)
+    // BEFORE terminate_and_drain — free() enforces the H-2 owner
+    // contract (non-owner free fails closed) and teardown's
+    // unmap_all consumes the entry, so freeing as another task or
+    // after drain can never succeed.
 
     for (uint64_t cycle = 0; cycle < CYCLES; ++cycle) {
         // Simulate the pattern of a typical test: create user tasks.
@@ -366,12 +371,16 @@ JARVIS_TEST(harness_hhdm_user_page_bounds,
         Scheduler::add_task(*worker);
         Scheduler::reschedule();
         kernel::test::wait_for_termination_safe(worker);
-        kernel::test::terminate_and_drain(*worker);
 
-        // Free the buffer back to the pool (kernel worker's buffer).
+        // Free AS THE OWNER before teardown consumes the entry (H-2 owner
+        // contract: non-owner free fails closed; unmap_all on teardown
+        // frees it anyway, so freeing as another task or after drain
+        // can never succeed).
         if (g_handle != 0) {
-            JARVIS_ASSERT(BufferPool::free(*sender, g_handle));
+            JARVIS_ASSERT(BufferPool::free(*worker, g_handle));
+            g_handle = 0;
         }
+        kernel::test::terminate_and_drain(*worker);
 
         // Clean up tasks (this frees page-table pages back to PMM free list)
         kernel::test::terminate_and_drain2(sender, receiver);
