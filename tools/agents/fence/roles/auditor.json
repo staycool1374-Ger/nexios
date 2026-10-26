@@ -53,7 +53,8 @@
       "gh issue view *": "allow",
       "tmux ls*": "allow",
       "scripts/agent_up.sh*": "allow",
-      "git ls-files *": "allow"
+      "git ls-files *": "allow",
+      "git rev-parse *": "allow"
     },
     "alias": [
       "sil3_auditor.md"
