@@ -53,7 +53,6 @@ def main_learnings_text(root: Path) -> str:
     if result.returncode != 0:
         return ""
     return result.stdout
-LEARNINGS = ROOT / "prompts" / "LEARNINGS.md"
 
 # Commit types that never need an issue reference.
 ISSUE_FREE_TYPES = {"docs", "chore", "style"}
@@ -117,6 +116,7 @@ def cmd_check_commit(msgfile: str) -> int:
         if issue.get("state") == "closed":
             print(f"warning: referenced issue #{ref} is already closed")
     return ok(f"commit references issue(s) {', '.join('#'+r for r in sorted(refs))}")
+
 
 def cmd_check_feedback(issue: int) -> int:
     result = subprocess.run(
@@ -210,9 +210,22 @@ def _self_test() -> int:
         # 1. worktree-only entry passes (pre-push flow preserved).
         r = gate("check-feedback", "9000")
         check("worktree-only entry passes", r.returncode == 0)
-        # 2. entry only on main passes from a feature checkout (the #425 fix).
+        # 2. entry only on main passes from a feature checkout (the #425
+        # fix). The entry is committed on main AFTER branching, so the
+        # feature worktree genuinely lacks it: the worktree leg misses and
+        # only the refs/heads/main leg can pass. (Branching at the base
+        # commit would leave the entry in the worktree file and pass even
+        # without the fix — a vacuous regression test.)
         run("git", "checkout", "-qb", "fix/st-feature", check=True)
-        r = gate("check-feedback", "9000")
+        run("git", "checkout", "-q", "main", check=True)
+        (repo / "prompts" / "LEARNINGS.md").write_text(
+            "# L\n\n### #9000 — baseline\n\n### #9002 — main-only\n",
+            encoding="utf-8",
+        )
+        run("git", "add", "-A", check=True)
+        run("git", "commit", "-qm", "main-only entry", check=True)
+        run("git", "checkout", "-q", "fix/st-feature", check=True)
+        r = gate("check-feedback", "9002")
         check("main-only entry passes from feature checkout", r.returncode == 0)
         # 3. entry nowhere fails.
         r = gate("check-feedback", "9001")

@@ -1728,8 +1728,14 @@ clean_delete_branch() { # $1 repo $2 branch — gated explicit delete, no -d/-D
       | grep -qxF "branch refs/heads/$2"; then
     fail "clean: refusing to delete $2 (checked out in another worktree)"
   fi
-  git -C "$1" update-ref -d "refs/heads/$2" \
-    || fail "clean: failed to delete merged branch $2"
+  # Compare-and-swap on the resolved tip: if the ref moved after the
+  # merged-ness gate above (new commits, concurrent cleaner), the delete
+  # fails loud instead of removing a tip nobody checked (#425 hardening).
+  local old_tip
+  old_tip=$(git -C "$1" rev-parse --verify "refs/heads/$2" 2>/dev/null) \
+    || fail "clean: refusing to delete $2 (ref vanished during delete)"
+  git -C "$1" update-ref -d "refs/heads/$2" "$old_tip" \
+    || fail "clean: refusing to delete $2 (ref moved during delete)"
 }
 __clean_pred() { # $1 branch -> owned|protected|foreign (introspection hook)
   if is_protected_branch "$1"; then echo protected; return; fi
