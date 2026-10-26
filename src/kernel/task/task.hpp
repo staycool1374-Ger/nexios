@@ -694,6 +694,15 @@ struct TaskControlBlock {
     ///        debug/release parity: plain bool, never CONFIG_DEBUG-gated.
     bool teardown_completed_ = false;
 
+    /// @brief Teardown ownership claim (issue #409). Set once, under
+    ///        interrupts-off, by the single party that will run this
+    ///        occupancy's teardown to completion; every other party that
+    ///        reaches a freeing path must skip the ENTIRE teardown
+    ///        including the free. The winner is obliged to complete the
+    ///        full tail (never abandoned, never doubled). False after
+    ///        every memset site / init_task_common (per-occupancy state).
+    bool teardown_claimed_ = false;
+
     /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
     uint64_t wdog_period_ticks = 0;
 
@@ -996,7 +1005,25 @@ struct TaskControlBlock {
     ///        deferred teardown without re-running table removal; a
     ///        REAPED-after-full-teardown TCB is only freed (safe no-op).
     ///        No-op on nullptr. Mirrors operator delete() semantics exactly.
+    ///        Issue #409: claims teardown ownership at entry
+    ///        (try_claim_teardown); a rival-owned or already-torn-down TCB
+    ///        is a no-op — the owner completes the full tail exactly once.
     static void destroy(TaskControlBlock *tcb) noexcept;
+
+    /// @brief Tries to claim this occupancy's teardown (issue #409).
+    ///        One atomic check-and-set under interrupts-off: succeeds once
+    ///        per occupancy. False on nullptr, poisoned/freed blocks, and
+    ///        when another party already claimed the teardown. A completed-
+    ///        but-unclaimed tail still claims successfully (the claim gates
+    ///        the free, not the tail); completed_/REAPED/unregistered decline
+    ///        a NEW teardown only via the ISR-side predicate.
+    static bool try_claim_teardown(TaskControlBlock *tcb) noexcept;
+
+    /// @brief Releases a claim taken without completing the tail (issue
+    ///        #409): used only by destroy()'s pinned early-return (pinned
+    ///        blocks are never freed, so no race exists while pinned; the
+    ///        #373 second destroy re-claims fresh once unpinned).
+    static void release_teardown_claim(TaskControlBlock *tcb) noexcept;
 
     /// @brief Save the current register context into this TCB.
     /// @param rsp Reference to current stack pointer (updated on save).

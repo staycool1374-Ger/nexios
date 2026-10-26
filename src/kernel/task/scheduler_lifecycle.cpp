@@ -268,7 +268,12 @@ void Scheduler::drain_zombie_list() noexcept {
             // Issue #324 Tick 13: drain-pop commit — free follows.
             teardown_step(SchedTeardownSteps::DrainPop);
         }
-        // IRQs on — cleanup and free without holding any lock.
+        // IRQs on — cleanup and free without holding any lock. Issue #409:
+        // claim ownership first; a rival-owned block is already unlisted by
+        // this pop, so dropping the local pointer is leak-free — the owner
+        // completes the tail and frees it.
+        if (!TaskControlBlock::try_claim_teardown(task))
+            continue;
         task->cleanup();
         MemPool::free(task);
     }
@@ -313,10 +318,14 @@ void Scheduler::cleanup_step() noexcept {
         if (task->in_edf_queue_)
             edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
-        // Issue #324 Tick 13: drain-pop commit — free follows.
-        teardown_step(SchedTeardownSteps::DrainPop);
-    }
-    // IRQs on — cleanup and free without holding any lock.
+            // Issue #324 Tick 13: drain-pop commit — free follows.
+            teardown_step(SchedTeardownSteps::DrainPop);
+        }
+    // IRQs on — cleanup and free without holding any lock. Issue #409:
+    // claim ownership first; a rival-owned block is already unlisted by
+    // this pop, so returning early is leak-free — the owner frees it.
+    if (!TaskControlBlock::try_claim_teardown(task))
+        return;
     task->cleanup();
     MemPool::free(task);
 }
@@ -361,9 +370,13 @@ void Scheduler::cleanup_step_try() noexcept {
         if (task->in_edf_queue_)
             edf_remove(*task, queue_target(*task));
         __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
-        // Issue #324 Tick 13: drain-pop commit — free follows.
-        teardown_step(SchedTeardownSteps::DrainPop);
-    }
+            // Issue #324 Tick 13: drain-pop commit — free follows.
+            teardown_step(SchedTeardownSteps::DrainPop);
+        }
+    // Issue #409: claim ownership first; a rival-owned block is already
+    // unlisted by this pop, so returning early is leak-free.
+    if (!TaskControlBlock::try_claim_teardown(task))
+        return;
     task->cleanup();
     MemPool::free(task);
 }
@@ -498,6 +511,11 @@ void Scheduler::fb_terminated_line(const char *name, uint64_t id) noexcept {
 
 void Scheduler::note_termination_and_free(TaskControlBlock *t) noexcept {
     ENSURE(validate_task_ptr(t, "note_termination_and_free"));
+    // Issue #409: claim ownership first; on decline the reaper already
+    // removed the tables above, and the owner completes the tail and
+    // frees — returning early is table-clean and leak-free.
+    if (!TaskControlBlock::try_claim_teardown(t))
+        return;
     if (!suppress_terminated_log_) {
         // Issue #407 item 2: the console line is a deferred URC, drained
         // at the next prompt redraw.  The dmesg record (TASK+17) preserves
@@ -736,8 +754,26 @@ void Scheduler::cleanup_test_tasks() noexcept {
 // P5a: Deferred-kill helpers
 // ---------------------------------------------------------------------------
 
+// Issue #409: killability predicate — true when this task's teardown is
+// already owned elsewhere (claimed by a rival, completed, REAPED by an
+// owner running cleanup, or already removed from the registry), so a
+// deferred kill must be declined, never destroyed. Shared by the arm
+// (defer_kill: queue hygiene) and the process instant
+// (process_deferred_kills: the necessary check — arm-time cannot see a
+// teardown that starts after the arm). Same-tick scan arms never hit
+// this: the owner cannot interleave inside the ISR.
+static bool kill_declined(TaskControlBlock *task) noexcept {
+    return task->teardown_claimed_ || task->teardown_completed_ ||
+           task->state == TaskState::REAPED ||
+           Scheduler::find_task(task->id) != task;
+}
+
 void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
     ENSURE(validate_task_ptr(task, "defer_kill"));
+    // Issue #409 (b): do not queue a kill for a task whose teardown is
+    // already owned — the owner completes it.
+    if (kill_declined(task))
+        return;
     // Callers: watchdog/deadline KILL arms (scan or idle-seam fire paths),
     // which may run without the global lock — append-only, lock-free;
     // global→leaf order is unaffected (no lock taken here).
@@ -776,6 +812,19 @@ void Scheduler::process_deferred_kills() noexcept {
         if (!task || task->magic != TaskControlBlock::TCB_MAGIC ||
             task->generation != gen) [[unlikely]]
             continue;
+        // Issue #409 (a): decline kills for tasks whose teardown is owned
+        // elsewhere (seam-armed entry overtaken by owner teardown — the
+        // scan path cannot hit this: the owner cannot interleave inside
+        // the ISR). Dropped, not retained: the owner completes the tail.
+        if (kill_declined(task)) {
+            Logger::warn("[SCHED] deferred kill declined for id=%lu "
+                         "(claimed=%u done=%u reaped=%u reg=%u)",
+                         task->id, task->teardown_claimed_ ? 1u : 0u,
+                         task->teardown_completed_ ? 1u : 0u,
+                         task->state == TaskState::REAPED ? 1u : 0u,
+                         Scheduler::find_task(task->id) == task ? 1u : 0u);
+            continue;
+        }
         // Issue #197: spare AP-live tasks (never free a live stack) —
         // retain the entry (compacted); the kill completes once the task
         // deschedules.
