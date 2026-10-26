@@ -125,6 +125,8 @@ usage: agent_up.sh <mode> [...]
   close [--all]      kill worker tmux sessions; --all also kills $COORD_SESS.
   clean <issue> [--dry-run]  remove a CLOSED lane's merged branches + room;
                      refuses on open issue, unpushed main, live room.
+  watch <issue> [arm|disarm|tick|status]  dev/qe activity watchdog
+                     (bare verb = status); arm takes interval_s (default 180).
 EOF
   exit 2
 }
@@ -1301,6 +1303,38 @@ mode_self_test() {
       "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9997 >/dev/null
   chk_neg test -e "$r97"
   chk_neg test -e /tmp/nexios-9997-backupX
+  # watchdog: verbs refuse bad input; tick on missing room fails loud
+  chk_neg "$SCRIPT_DIR/agent_up.sh" watch
+  chk_neg "$SCRIPT_DIR/agent_up.sh" watch notanissue
+  chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9999 bogus
+  chk_neg "$SCRIPT_DIR/agent_up.sh" watch 0 tick
+  rm -rf /tmp/nexios-9990
+  chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9990 tick
+  # watchdog: tick state machine is fixture-driven (live workers make real
+  # fingerprints nondeterministic); plus one live smoke test proving the
+  # real probes run end-to-end.
+  local r93="/tmp/nexios-9993"; rm -rf "$r93"
+  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9993
+  chk bash -c '"$0" watch 9993 tick | grep -qE "^(BASELINE|UNCHANGED|CHANGED) 9993"' "$SCRIPT_DIR/agent_up.sh"
+  rm -f "$r93"/watch.fingerprint "$r93"/watch.now "$r93"/watch.unchanged
+  local fpf="$st/fp"; printf 'v1\n' > "$fpf"
+  chk bash -c 'NEXIOS_WATCHDOG_FAKE_FP="$1" "$0" watch 9993 tick | grep -q "^BASELINE 9993$"' "$SCRIPT_DIR/agent_up.sh" "$fpf"
+  chk bash -c 'NEXIOS_WATCHDOG_FAKE_FP="$1" "$0" watch 9993 tick | grep -q "^UNCHANGED 9993 x1$"' "$SCRIPT_DIR/agent_up.sh" "$fpf"
+  chk bash -c 'NEXIOS_WATCHDOG_FAKE_FP="$1" "$0" watch 9993 tick | grep -q "^UNCHANGED 9993 x2$"' "$SCRIPT_DIR/agent_up.sh" "$fpf"
+  chk bash -c 'NEXIOS_WATCHDOG_FAKE_FP="$1" "$0" watch 9993 tick | grep -q "^UNCHANGED 9993 x3 ESCALATE$"' "$SCRIPT_DIR/agent_up.sh" "$fpf"
+  printf 'v2\n' > "$fpf"
+  chk bash -c 'NEXIOS_WATCHDOG_FAKE_FP="$1" "$0" watch 9993 tick | grep -q "^CHANGED 9993 "' "$SCRIPT_DIR/agent_up.sh" "$fpf"
+  chk bash -c 'NEXIOS_WATCHDOG_FAKE_FP="$1" "$0" watch 9993 tick | grep -q "^UNCHANGED 9993 x1$"' "$SCRIPT_DIR/agent_up.sh" "$fpf"
+  # watchdog: arm/disarm pid lifecycle, double-arm refusal, status
+  "$SCRIPT_DIR/agent_up.sh" watch 9993 arm 3600 >/dev/null
+  chk test -f "$r93/watch.pid"
+  chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 arm 3600
+  chk bash -c '"$0" watch 9993 status | grep -q "^armed pid=[0-9]* streak=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
+  "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm >/dev/null
+  chk_neg test -e "$r93/watch.pid"
+  chk bash -c '"$0" watch 9993 status | grep -q "^disarmed streak=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
+  chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm
+  rm -rf "$r93"
   rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
          "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
          "$REPO_ROOT/.nexios-runtime/9999"
@@ -1661,6 +1695,28 @@ mode_clean() {
   __clean_repo "$REPO_ROOT" "$issue" "$dry"
 }
 
+mode_watch() {
+  [ $# -ge 1 ] || fail "usage: watch <issue> [arm|disarm|tick|status] [interval_s]"
+  local issue act
+  issue=$(clean_issue_num "$1"); shift
+  act="status"
+  if [ $# -ge 1 ]; then
+    case "$1" in
+      arm|disarm|tick|status) act="$1"; shift;;
+      *) fail "usage: watch <issue> [arm|disarm|tick|status] [interval_s]";;
+    esac
+  fi
+  if [ "$act" = "arm" ]; then
+    [ $# -le 1 ] || fail "usage: watch <issue> arm [interval_s]"
+  else
+    [ $# -eq 0 ] || fail "usage: watch <issue> [arm|disarm|tick|status] [interval_s]"
+  fi
+  export NEXIOS_AGENT_UP="$SCRIPT_DIR/agent_up.sh"
+  export NEXIOS_DEV_SESS="$DEV_SESS" NEXIOS_QE_SESS="$QE_SESS"
+  export NEXIOS_COORD_SESS="$COORD_SESS"
+  exec "$SCRIPT_DIR/watchdog.sh" "$act" "$issue" "$@"
+}
+
 mode_close() {
   local all=0; [ "${1:-}" = "--all" ] && all=1
   for s in "$DEV_SESS" "$QE_SESS" "$AUDIT_SESS"; do
@@ -1695,6 +1751,7 @@ case "$mode" in
   __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
+  watch) mode_watch "$@" ;;
   clean) mode_clean "$@" ;;
   __clean-repo) __clean_repo "$@" ;;
   __clean-pred) __clean_pred "$@" ;;
