@@ -23,6 +23,7 @@
       "rg *": "allow",
       "echo *": "allow",
       "head *": "allow",
+    "git ls-files *": "allow",
       "git -C */jarvis *": "allow",
       "git -C */jarvis_test *": "allow",
       "git diff*": "allow",
