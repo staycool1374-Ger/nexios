@@ -41,7 +41,37 @@ static_assert(CONFIG_WATCHDOG_ACTION <= 4,
 
 namespace {
 
-// Synthetic probe candidate: stack-constructed, never added to any table
+// #422: the boot stack is 16 KiB and sizeof(TaskControlBlock) is ~16 KiB
+// — stack-resident probes overflowed it under nolto (the Logger leaf chain
+// spilled ~56 B past the base and tripped _m_stack_before). Probes live in
+// .bss aligned storage instead (shell.cpp Notify-nap precedent: block-scope
+// statics need __cxa_atexit, absent freestanding; placement-new registers
+// nothing). Boot-only, single BSP, IRQs off, built once per boot;
+// make_probe_candidate memsets before use as before.
+alignas(TaskControlBlock)
+uint8_t g_probe_cand_buf[sizeof(TaskControlBlock)] = {};
+alignas(TaskControlBlock)
+uint8_t g_probe_bad_buf[sizeof(TaskControlBlock)] = {};
+alignas(TaskControlBlock)
+uint8_t g_probe_stale_buf[sizeof(TaskControlBlock)] = {};
+
+// Aligned-punning accessors (shell.cpp precedent): the buffers above are
+// alignas-sized for exactly TaskControlBlock; no other object ever aliases
+// them, and the kernel never destroys them (boot-lifetime probes).
+TaskControlBlock &probe_cand() {
+    new (g_probe_cand_buf) TaskControlBlock;
+    return *reinterpret_cast<TaskControlBlock *>(g_probe_cand_buf);
+}
+TaskControlBlock &probe_bad() {
+    new (g_probe_bad_buf) TaskControlBlock;
+    return *reinterpret_cast<TaskControlBlock *>(g_probe_bad_buf);
+}
+TaskControlBlock &probe_stale() {
+    new (g_probe_stale_buf) TaskControlBlock;
+    return *reinterpret_cast<TaskControlBlock *>(g_probe_stale_buf);
+}
+
+// Synthetic probe candidate: never added to any table
 // (all helpers used here only READ it; the id can never collide with a
 // live task).  No vtable use (no virtual calls on this path), no ctor.
 void make_probe_candidate(TaskControlBlock &cand, uint64_t wcet,
@@ -81,7 +111,7 @@ bool admission_boot_selftest() noexcept {
     // allocation-free/read-only (the timer ISR takes the lock by
     // try_lock and skips on contention, so it can never block on us).
     {
-        TaskControlBlock cand{};
+        TaskControlBlock &cand = probe_cand();
         make_probe_candidate(cand, 60, 100, 1000, false, 1);
         uint64_t util = 0;
         uint32_t bound = 0;
@@ -100,7 +130,7 @@ bool admission_boot_selftest() noexcept {
     // is rejected; an exempt task with a stale WCET is admitted (never
     // gate exempt tasks — denying boot daemons would wedge the boot).
     {
-        TaskControlBlock bad{};
+        TaskControlBlock &bad = probe_bad();
         make_probe_candidate(bad, 200, 100, 1000, false, 1);
         if (Scheduler::admission_check_cpu_locked(bad, 0, nullptr,
                                                   nullptr) !=
@@ -109,7 +139,7 @@ bool admission_boot_selftest() noexcept {
                 "admission self-test: wcet>period not rejected");
             ok = false;
         }
-        TaskControlBlock stale{};
+        TaskControlBlock &stale = probe_stale();
         make_probe_candidate(stale, 50, 0, 0, true, 1);
         if (Scheduler::admission_check_cpu_locked(stale, 0, nullptr,
                                                   nullptr) !=
