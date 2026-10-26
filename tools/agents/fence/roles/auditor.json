@@ -55,7 +55,8 @@
       "scripts/agent_up.sh*": "allow",
       "git ls-files *": "allow",
       "git rev-parse *": "allow",
-      "git merge-base *": "allow"
+      "git merge-base *": "allow",
+      "sha256sum *": "allow"
     },
     "alias": [
       "sil3_auditor.md"
