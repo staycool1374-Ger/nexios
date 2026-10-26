@@ -1291,6 +1291,31 @@ mode_self_test() {
       "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 >/dev/null
   chk_neg git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-merged
   chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-open
+  # clean from a feature-branch checkout: HEAD-coupling must not block
+  # deletion of main-merged lanes (#425). Same repo, new lane merged
+  # into main while parked on an unrelated feature branch.
+  git -C "$cr/repo" checkout -q -b fix/st-feature
+  git -C "$cr/repo" checkout -q -b fix/st-alien main
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m lane2
+  git -C "$cr/repo" checkout -q main
+  git -C "$cr/repo" merge -q --ff-only fix/st-alien
+  git -C "$cr/repo" push -q origin main
+  git -C "$cr/repo" checkout -q fix/st-feature
+  local drylist livelist
+  drylist=$(env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run)
+  chk bash -c 'printf "%s" "$1" | grep -q "WOULD REMOVE branch: fix/st-alien"' _ "$drylist"
+  chk bash -c 'printf "%s" "$1" | grep -q "KEPT (checked out): fix/st-feature"' _ "$drylist"
+  livelist=$(env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996)
+  chk bash -c 'printf "%s" "$1" | grep -q "REMOVED branch: fix/st-alien"' _ "$livelist"
+  chk_neg git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-alien
+  chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-open
+  chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-feature
+  # dry-run listing matches the real run branch-for-branch (#425 parity)
+  chk bash -c 'test "$(printf "%s" "$1" | grep -o "WOULD REMOVE branch: .*" | awk "{print \$NF}" | sort)" = "$(printf "%s" "$2" | grep -o "REMOVED branch: .*" | awk "{print \$NF}" | sort)"' _ "$drylist" "$livelist"
+  # gate.py self-test covers the check-feedback main-vs-worktree fix
+  chk python3 "$REPO_ROOT/scripts/gate.py" self-test
   # live room removal requires closed-state: PLANNED room refuses first
   local r97="/tmp/nexios-9997"; rm -rf "$r97"
   chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9997
@@ -1649,20 +1674,24 @@ __clean_repo() {
   fi
   # 4. branches: protected first (disjoint from owned by construction, but
   # the check order makes that a verified property, not an assumption).
+  # Merged-ness is tested against refs/heads/main explicitly — never the
+  # ambient HEAD — so cleanup works from any checkout (#425). Deletion is
+  # a gated `update-ref -d` (never -d/-D): `git branch -d` re-tests
+  # ancestry against HEAD and would refuse a main-merged lane on a feature
+  # checkout, while -D skips the check entirely. The gate below IS the
+  # check; dry-run and live share this exact path so they cannot disagree.
   local cur b
   cur=$(git -C "$repo" branch --show-current)
   for b in $(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads/); do
     if is_protected_branch "$b"; then info "KEPT (protected): $b"; continue; fi
     if ! is_owned_branch "$b"; then info "KEPT (foreign): $b"; continue; fi
     if [ "$b" = "$cur" ]; then info "KEPT (checked out): $b"; continue; fi
-    if git -C "$repo" merge-base --is-ancestor "$b" main 2>/dev/null; then
-      if [ "$dry" = 1 ]; then info "WOULD REMOVE branch: $b"; continue; fi
-      git -C "$repo" branch -d "$b" >/dev/null \
-        || fail "clean: failed to delete merged branch $b"
-      info "REMOVED branch: $b"
-    else
-      info "KEPT (not merged): $b"
+    if ! is_merged_into_main "$repo" "$b"; then
+      info "KEPT (not merged): $b"; continue
     fi
+    if [ "$dry" = 1 ]; then info "WOULD REMOVE branch: $b"; continue; fi
+    clean_delete_branch "$repo" "$b"
+    info "REMOVED branch: $b"
   done
   # 5. room + backups (live mode only).
   if [ -d "$room" ]; then
@@ -1679,6 +1708,34 @@ __clean_repo() {
   else
     info "KEPT (room already absent): $room"
   fi
+}
+is_merged_into_main() { # $1 repo $2 branch — explicit main ref, never HEAD
+  git -C "$1" merge-base --is-ancestor "$2" refs/heads/main 2>/dev/null
+}
+clean_delete_branch() { # $1 repo $2 branch — gated explicit delete, no -d/-D
+  # Gate (the check `-d` used to smuggle in): fully merged into
+  # refs/heads/main. Re-verified immediately before the write so the check
+  # and the delete cannot drift apart (a concurrent merge only ever ADDS
+  # eligibility; history rewrites are out of scope for a local cleanup).
+  git -C "$1" merge-base --is-ancestor "$2" refs/heads/main 2>/dev/null \
+    || fail "clean: refusing to delete $2 (not merged into main)"
+  # Checked-out guard (here and in every worktree): update-ref on a live
+  # checkout would strand HEAD. `git branch -d` refused these too.
+  if [ "$2" = "$(git -C "$1" branch --show-current)" ]; then
+    fail "clean: refusing to delete checked-out branch $2"
+  fi
+  if git -C "$1" worktree list --porcelain 2>/dev/null \
+      | grep -qxF "branch refs/heads/$2"; then
+    fail "clean: refusing to delete $2 (checked out in another worktree)"
+  fi
+  # Compare-and-swap on the resolved tip: if the ref moved after the
+  # merged-ness gate above (new commits, concurrent cleaner), the delete
+  # fails loud instead of removing a tip nobody checked (#425 hardening).
+  local old_tip
+  old_tip=$(git -C "$1" rev-parse --verify "refs/heads/$2" 2>/dev/null) \
+    || fail "clean: refusing to delete $2 (ref vanished during delete)"
+  git -C "$1" update-ref -d "refs/heads/$2" "$old_tip" \
+    || fail "clean: refusing to delete $2 (ref moved during delete)"
 }
 __clean_pred() { # $1 branch -> owned|protected|foreign (introspection hook)
   if is_protected_branch "$1"; then echo protected; return; fi
