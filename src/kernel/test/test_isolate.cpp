@@ -63,7 +63,7 @@
 #include <kernel/cap/wdog.hpp>
 #include <kernel/watchdog/watchdogd.hpp>
 #include <logger.hpp>
-#include "test_registry.gen.hpp"
+#include <test_registry.gen.hpp>
 
 extern "C" void debug_write(const char *s);
 extern "C" void debug_write_hex(uint64_t value);

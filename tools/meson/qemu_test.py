@@ -647,10 +647,15 @@ def main():
         print("ERROR: release builds only supported on x86_64")
         return 2
     builddir = Path(args.builddir or
-                    ("build/meson-%s" % args.arch)).resolve()
+                    ("build/meson-%s-release" % args.arch
+                     if args.build == "release"
+                     else "build/meson-%s" % args.arch)).resolve()
     if not (builddir / "build.ninja").exists():
         print("ERROR: builddir %s not configured "
-              "(meson setup --cross-file ...)" % builddir)
+              "(meson setup --cross-file cross/%s-elf.txt -Darch=%s%s)"
+              % (builddir, args.arch, args.arch,
+                 " -Dbuildtype=release -Db_lto=false"
+                 if args.build == "release" else ""))
         return 2
     tag = checkout_tag()
     logdir = Path("/tmp/jarvis-meson-%s" % tag)

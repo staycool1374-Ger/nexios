@@ -26,15 +26,31 @@ GEN = REPO / "tools" / "gen_test_registry.py"
 TEST_SRC_DIR = REPO / "src" / "kernel" / "test"
 
 
+FPU_EXCLUDED = {
+    "test_fpu.cpp",
+    "test_fpu_clone.cpp",
+    "test_fpu_multi.cpp",
+    "test_fpu_sse.cpp",
+    "test_fpu_xmm_all.cpp",
+}
+
+
 def make_order_list():
-    """Replicate the Makefile enumeration for this subtree."""
+    """Replicate the Makefile enumeration for this subtree.
+
+    TEST_SRC_FILES filters SRC_CXX (which already excludes the 5 FPU/SSE
+    TUs per mk/rules.mk:26-29 — they fail to compile with GCC 16), so the
+    enumeration drops them too. Scanning them would register tests with
+    no definitions (non-LTO link failure).
+    """
     out = subprocess.run(
         ["find", str(TEST_SRC_DIR), "-maxdepth", "1", "-name", "*.cpp"],
         capture_output=True,
         text=True,
         check=True,
     )
-    return [line for line in out.stdout.splitlines() if line]
+    return [line for line in out.stdout.splitlines()
+            if line and Path(line).name not in FPU_EXCLUDED]
 
 
 def main():
