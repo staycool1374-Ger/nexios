@@ -356,6 +356,14 @@ void init_task_common(TaskControlBlock &tcb) {
     // Buffer pool list starts empty
     tcb.buf_list_head = -1;
 
+    // Issue #409: teardown ownership is per-occupancy state. The deferred-
+    // kill generation snapshot rejects recycled occupants before the claim
+    // is ever consulted, and the memset sites zero the block — these
+    // explicit resets document that a recycled block never inherits a
+    // stale claim or completion from its previous occupant.
+    tcb.teardown_claimed_ = false;
+    tcb.teardown_completed_ = false;
+
     // Signal handlers all default to nullptr (SIG_DFL)
     for (size_t i = 0; i < MAX_SIGNAL_HANDLERS; ++i) {
         tcb.signal_handlers[i] = nullptr;
@@ -2374,11 +2382,54 @@ TaskError TaskControlBlock::clone_err(uint64_t *regs,
     return out_tcb ? TASK_ERR_OK : TASK_ERR_OOM;
 }
 
+// Issue #409: exactly-once teardown ownership. The tick-ISR deferred kill
+// and task-context teardown (test end, reaper, drain, waitpid) can both
+// reach the same TCB: the loser must skip the ENTIRE teardown including
+// the free, and the winner is obliged to complete the full tail (this is
+// what refutes the S1 leak objection — the tail is never abandoned, only
+// never doubled). The single common exclusion window is interrupts-off:
+// the claim is one atomic check-and-set under IrqGuard, consulted by
+// every path that frees. The deferred-kill generation snapshot answers
+// "same task?" (recycled occupants are rejected before the claim is
+// consulted); the claim answers "teardown still unowned?".
+bool TaskControlBlock::try_claim_teardown(TaskControlBlock *tcb) noexcept {
+    if (!tcb || tcb->magic != TCB_MAGIC)
+        return false;
+    arch::IrqGuard irq_guard{};
+    // Issue #409: reject ONLY a rival in-flight claim. A completed-but-
+    // unclaimed tail (waitpid/test cleanup(); delete; flows complete the
+    // tail without claiming — the claim is taken at destroy entry) must
+    // still proceed to the free; the ISR-side predicate (kill_declined)
+    // is where completed_/REAPED/unregistered decline a NEW teardown.
+    if (tcb->teardown_claimed_)
+        return false;
+    tcb->teardown_claimed_ = true;
+    return true;
+}
+
+void TaskControlBlock::release_teardown_claim(TaskControlBlock *tcb) noexcept {
+    if (!tcb || tcb->magic != TCB_MAGIC)
+        return;
+    arch::IrqGuard irq_guard{};
+    tcb->teardown_claimed_ = false;
+}
+
 void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
     // Issue #324 Tick 1: tri-state magic contract — TCB_MAGIC (normal),
     // 0 (OOM-path partial TCB, free directly), 0xDD (already freed, skip).
     // No validate_task_ptr ENSURE: states 0/0xDD are legitimate entries.
     if (!tcb)
+        return;
+    if (tcb->magic == 0) {
+        // OOM-path partial TCB: never initialized, never published, so no
+        // teardown to own — free directly (unchanged pre-#409 path).
+        MemPool::free(tcb);
+        return;
+    }
+    // Issue #409: claim teardown ownership before touching anything. A
+    // rival-owned (claimed), completed, or already-freed (0xDD) block is a
+    // no-op — the owner completes the full tail exactly once.
+    if (!TaskControlBlock::try_claim_teardown(tcb))
         return;
     if (tcb->magic == TCB_MAGIC) {
         // If the caller already called cleanup() before destroy, state
@@ -2400,9 +2451,13 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
         // Baseline-owned (pinned) blocks are never freed: the snapshot
         // owns the block and restore rewinds it (cleanup() already skips
         // teardown for pinned for the same reason). In production nothing
-        // is pinned, so this changes nothing outside tests.
-        if (kernel::MemPool::is_block_pinned(tcb))
+        // is pinned, so this changes nothing outside tests. Issue
+        // #409/#373: a pinned teardown takes nothing — release the claim
+        // so the second destroy (unpinned since) re-claims fresh.
+        if (kernel::MemPool::is_block_pinned(tcb)) {
+            TaskControlBlock::release_teardown_claim(tcb);
             return;
+        }
         tcb->magic =
             0; // Prevent double-free if caller re-enters the destroy path
         MemPool::free(tcb);
