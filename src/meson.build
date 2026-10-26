@@ -21,9 +21,19 @@ test_find = run_command('find', test_src_dir, '-name', '*.cpp',
   check : true)
 test_src_list = []
 foreach f : test_find.stdout().strip().split('\n')
-  # The registry scans every test TU (FPU included — exclusion is a
-  # compile-time concern only, mirroring Make TEST_SRC_FILES which
-  # filters only on src/kernel/test/%.cpp membership).
+  # The registry scans the COMPILED source set: the 5 FPU/SSE TUs are
+  # excluded here exactly as in generic_srcs below (mk/rules.mk:26-29 —
+  # they fail to compile with GCC 16 on all arches) and in
+  # test_source_set.py FPU_EXCLUDED. Scanning them registers tests with
+  # no definitions: the non-LTO link retains .lrodata.generated_tests
+  # unconditionally and fails (debug only links via LTO slimming).
+  if f == '' or f.endswith('test_fpu.cpp') \
+      or f.endswith('test_fpu_clone.cpp') \
+      or f.endswith('test_fpu_multi.cpp') \
+      or f.endswith('test_fpu_sse.cpp') \
+      or f.endswith('test_fpu_xmm_all.cpp')
+    continue
+  endif
   if f != ''
     test_src_list += [f]
   endif
