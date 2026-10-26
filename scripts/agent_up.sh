@@ -103,7 +103,10 @@ usage: agent_up.sh <mode> [...]
   qe-merge <issue>   merge origin/main into testbed --no-commit --no-ff;
                      abort-on-conflict restores code state. Run in QE checkout.
   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
-  wake <sess> <text> alias of msg (same guard + single-line rule).
+  wake <issue> <from> <sess> <text>
+                     durable wake to the coordinator: msg doorbell PLUS an
+                     ordered WAKE line in /tmp/nexios-<issue>/inbox/coord.md
+                     (fails loud when the runtime/inbox is absent).
   comms-test [issue] prove the doorbell end-to-end in BOTH directions using two
                      scratch echo sessions (no opencode, no tokens).
   state <issue> key=value [...]  locked state.json write (validated keys/values).
@@ -305,6 +308,15 @@ write_protocol() {
   worker→coord:  agent_up.sh msg nexios-coord "inbox: dev READY — read inbox/dev.md"
   Rules: single line, inbox POINTER only, idle sessions only, never dialogs.
   The coordinator treats any ring as "re-read the inbox", never executes it.
+- Durable wake (worker→coord only): `agent_up.sh wake <issue> <from> <sess>
+  <text>` sends the doorbell AND appends `<ISO8601> FROM=<from> WAKE ::
+  <text>` to `/tmp/nexios-<issue>/inbox/coord.md` (ordered, survives closed
+  terminals; keystroke stays the live doorbell, the wake line is the durable
+  record). Fails loud when the runtime/inbox is absent — never silent.
+  Every worker brief ends with the ring template as its last line (verbatim
+  when done): `agent_up.sh wake <n> <role> nexios-coord "inbox: <role>
+  <READY|NEED> — read inbox/<role>.md"` (coordinator fills in <n>; <role>
+  is dev|qe|auditor).
 - Coordinator address: tmux session `nexios-coord` (created by `coord`/`up`).
 - State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator, and the
   only sanctioned write path is `agent_up.sh state <issue> key=value` (python3
@@ -326,6 +338,42 @@ open(path, "w").write(json.dumps(s, indent=2) + "\n")
 EOF
 }
 
+# ---compaction anchor--------------------------------------------------------
+# ANCHOR.md lives in the RUNTIME dir (not the repo, not the session cwd):
+# its paths are host-specific ($HOME, /tmp canonicalization, per-issue
+# runtime) and must never be committed or copied into doctrine (#414).
+# Rewritten by every `setup` (canonicalizes the live host); workers re-read
+# it after any compaction instead of trusting a recalled absolute path.
+write_anchor() {
+  local rt="$1"
+  python3 - "$rt" "$REPO_ROOT" "$QE_DIR" "$RENDERED_ROOT" <<'EOF'
+import os, socket, sys
+from datetime import datetime, timezone
+rt, repo, qe, rendered = sys.argv[1:5]
+def canon(p):
+    try:
+        return os.path.realpath(p)
+    except OSError:
+        return p + " (MISSING)"
+lines = [
+    "# ANCHOR — canonical absolute paths for this room",
+    "# Written by `setup`; host-specific, per-issue. Re-read after ANY",
+    "# compaction (with pwd + runtime/state.json) before acting; never",
+    "# trust a recalled absolute path, never copy these into doctrine.",
+    "- repo (dev checkout): %s" % canon(repo),
+    "- testbed checkout: %s" % canon(qe),
+    "- runtime dir: %s" % canon(rt),
+    "- inbox dir: %s" % canon(os.path.join(rt, "inbox")),
+    "- rendered fence dir: %s" % canon(rendered),
+    "- host: %s  utc: %s" % (socket.gethostname(),
+                             datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+    "",
+]
+with open(os.path.join(rt, "ANCHOR.md"), "w", encoding="utf-8") as handle:
+    handle.write("\n".join(lines))
+EOF
+}
+
 # $1 issue. Idempotent: creates missing pieces, never overwrites state/inbox.
 mode_setup() {
   [ $# -eq 1 ] || fail "setup needs an issue number"
@@ -338,6 +386,7 @@ mode_setup() {
   done
   [ -f "$rt/state.json" ] || { write_state_skeleton "$rt/state.json" "$1"; info "seeded state.json (IN_PROGRESS, retries 0/3)"; }
   write_protocol "$rt"
+  write_anchor "$rt"
   link_runtime "$1" "$rt"
   info "coord runtime ready: $rt"
 }
@@ -852,6 +901,25 @@ mode_msg() {
   fi
   tmux send-keys -t "$1" "$2" Enter
   info "doorbell sent to '$1'"
+}
+
+# Durable wake to the coordinator (worker -> coord): the live keystroke
+# doorbell PLUS an ordered wake line in the issue inbox, so the wake
+# survives closed terminals and is re-readable at step boundaries.
+# usage: wake <issue> <from-role> <sess> <text>
+# Fails loud (never silent) when the runtime or inbox is absent: no
+# keystroke is sent and nothing is appended in that case.
+mode_wake() {
+  [ $# -eq 4 ] || fail "wake needs: <issue> <from-role> <tmux-session> <single-line-text>"
+  local rt; rt=$(runtime_dir "$1")
+  case "$2" in dev|qe|auditor|coord) ;; *) fail "wake from-role must be dev|qe|auditor|coord (got '$2')";; esac
+  case "$4" in *$'\n'*) fail "wake text must be a single line (payloads live in inbox)";; esac
+  [ -d "$rt/inbox" ] || fail "no runtime inbox for issue $1 (run setup $1 first)"
+  [ -f "$rt/inbox/coord.md" ] || fail "no inbox/coord.md for issue $1 (run setup $1 first)"
+  mode_msg "$3" "$4"
+  printf '%s FROM=%s WAKE :: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$4" >> "$rt/inbox/coord.md" \
+    || fail "wake delivered to '$3' but the inbox append failed (not durable)"
+  info "wake recorded in '$rt/inbox/coord.md'"
 }
 
 # End-to-end transport self-test: proves msg delivers text+Enter INTO a live
@@ -1438,7 +1506,7 @@ case "$mode" in
   audit-diff) mode_audit_diff "$@" ;;
   qe-merge) mode_qe_merge "$@" ;;
   msg) mode_msg "$@" ;;
-  wake) mode_msg "$@" ;;
+  wake) mode_wake "$@" ;;
   state) mode_state_set "$@" ;;
   comms-test) mode_comms_test "$@" ;;
   status) mode_status "$@" ;;
