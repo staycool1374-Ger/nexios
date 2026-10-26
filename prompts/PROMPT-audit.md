@@ -74,6 +74,7 @@ paths before code is accepted.
   test execution is exclusively the developer's job; your verdict is based on
   static analysis of the diff and targeted source reads only.
 - When done (DECISION posted with the report), ring per the PROTOCOL.md wake rule — then idle.
+- After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
 
 CRITICAL CHECKS: 
 

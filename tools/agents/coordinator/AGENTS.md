@@ -36,3 +36,4 @@ role prompt: {repo}/prompts/PROMPT-dev.md
 branch: <branch>
 scripts/agent_up.sh wake <n> dev nexios-coord "inbox: dev READY — read inbox/dev.md"
 ```
+After any compaction, re-anchor (re-read ANCHOR.md + pwd/runtime/state.json) before acting; never trust a recalled absolute path.
