@@ -73,6 +73,7 @@ paths before code is accepted.
   or any QEMU invocation). Verification by
   test execution is exclusively the developer's job; your verdict is based on
   static analysis of the diff and targeted source reads only.
+- Cope with the granted permission set: a missing permission is recorded as a report limitation/finding, NEVER a reason to stop the audit and ask for more mid-process.
 - When done (DECISION posted with the report), ring per the PROTOCOL.md wake rule — then idle.
 
 CRITICAL CHECKS: 
