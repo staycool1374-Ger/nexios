@@ -57,6 +57,26 @@ real artifacts. `debug-test`/`debug-shell` use a separate
 
 `tools/meson/build.sh` is the build entry point (style gate, then compile).
 
+## Interactive boot
+
+```sh
+meson compile -C build/meson-x86_64 boot-debug       # debug ISO, 1 CPU
+meson compile -C build/meson-x86_64-release boot-release  # release ISO, 2 CPUs
+```
+
+Each builddir offers its own boot target (the other name fails loud there).
+QEMU opens a framebuffer window and the serial console is the invoking
+terminal (`mon:stdio`); there is no GDB stub and no watchdog verdict — the
+guest runs until the window is closed (or `Ctrl-A X` in the terminal).
+The target boots only a `test_class=none` tree: a builddir with a class
+baked in fails with an explicit error instead of booting into a suite
+(reconfigure `-Dtest_class=none` + rebuild for interactive use).
+Debug boots single-CPU; release boots `-smp 2` with the no-LTO release
+link (release with LTO is unsupported: an inline-only `memset` has no
+out-of-line definition, so LTO static-init fails to link; parity with the
+no-LTO release link, and the target refuses a `-Db_lto=true` release
+builddir instead of silently booting a mixed tree).
+
 ## Verify flags
 
 ```sh

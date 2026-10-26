@@ -74,6 +74,23 @@ foreach t : [['test_debugd', 'test_main.cpp', []],
   test('host/debugd/' + t[0], debugd_exe, suite : 'host')
 endforeach
 
+# Interactive boot (issue #170 follow-up): one target per build kind, each
+# refusing the wrong builddir and any baked test class at run time.
+# Framebuffer window (default display), serial on mon:stdio, no GDB stub,
+# no watchdog verdict — the guest runs until the user quits QEMU.
+boot_target = files('../tools/meson/boot_target.py')
+if build_kind == 'release'
+  run_target('boot-release',
+    command : [py3, boot_target,
+      '--mode', 'release', '--arch', arch,
+      '--builddir', meson.project_build_root()])
+else
+  run_target('boot-debug',
+    command : [py3, boot_target,
+      '--mode', 'debug', '--arch', arch,
+      '--builddir', meson.project_build_root()])
+endif
+
 # Interactive / record flows (no `meson test` entry — they need a
 # terminal or human-driven GDB). Class/script/cmds via environment
 # (defaults mirror the most common Make invocations).
