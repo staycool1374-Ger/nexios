@@ -1253,6 +1253,9 @@ mode_self_test() {
   local ghf="$st/gh"; mkdir -p "$ghf"
   printf '#!/bin/sh\nprintf "OPEN\\n"\n' > "$ghf/gh-open"; chmod +x "$ghf/gh-open"
   printf '#!/bin/sh\nprintf "CLOSED\\n"\n' > "$ghf/gh-closed"; chmod +x "$ghf/gh-closed"
+  # argv recorder: proves clean resolves --repo explicitly (item 2, #427).
+  # Records gh's argv to $GH_ARGV_FILE, then answers CLOSED like gh-closed.
+  printf '#!/bin/sh\necho "$@" > "$GH_ARGV_FILE"\nprintf "CLOSED\\n"\n' > "$ghf/gh-record"; chmod +x "$ghf/gh-record"
   local cr="$st/clean"; mkdir -p "$cr"
   git init -q --bare -b main "$cr/origin.git"
   git init -q -b main "$cr/repo"
@@ -1274,7 +1277,7 @@ mode_self_test() {
   git -C "$cr/repo" checkout -q -b fix/st-merged
   git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m lane
   git -C "$cr/repo" checkout -q main
-  git -C "$cr/repo" merge -q --ff-only fix/st-merged
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t merge -q --no-ff -m merge-st-merged fix/st-merged
   git -C "$cr/repo" push -q origin main
   git -C "$cr/repo" checkout -q -b fix/st-open
   git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m wip
@@ -1298,7 +1301,7 @@ mode_self_test() {
   git -C "$cr/repo" checkout -q -b fix/st-alien main
   git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m lane2
   git -C "$cr/repo" checkout -q main
-  git -C "$cr/repo" merge -q --ff-only fix/st-alien
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t merge -q --no-ff -m merge-st-alien fix/st-alien
   git -C "$cr/repo" push -q origin main
   git -C "$cr/repo" checkout -q fix/st-feature
   local drylist livelist
@@ -1314,6 +1317,52 @@ mode_self_test() {
   chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-feature
   # dry-run listing matches the real run branch-for-branch (#425 parity)
   chk bash -c 'test "$(printf "%s" "$1" | grep -o "WOULD REMOVE branch: .*" | awk "{print \$NF}" | sort)" = "$(printf "%s" "$2" | grep -o "REMOVED branch: .*" | awk "{print \$NF}" | sort)"' _ "$drylist" "$livelist"
+  # dry-run mirrors the live worktree guard (QE addendum: WOULD REMOVE here
+  # must never become a live refusal). Merged owned branch checked out in
+  # a second worktree: dry-run KEPT, live refuses, nothing moves.
+  git -C "$cr/repo" checkout -q -b fix/st-linked main
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m lane3
+  git -C "$cr/repo" checkout -q main
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t merge -q --no-ff -m merge-st-linked fix/st-linked
+  git -C "$cr/repo" push -q origin main
+  git -C "$cr/repo" checkout -q fix/st-feature
+  git -C "$cr/repo" worktree add "$st/wt2" fix/st-linked >/dev/null
+  local drywt
+  drywt=$(env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run)
+  chk bash -c 'printf "%s" "$1" | grep -q "KEPT (checked out in another worktree): fix/st-linked"' _ "$drywt"
+  # dry==real on a worktree-linked branch: the live run succeeds without
+  # touching it (both paths share the guard, so live can neither delete
+  # nor refuse where dry listed KEPT).
+  chk env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996
+  chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-linked
+  chk test -d "$st/wt2"
+  git -C "$cr/repo" worktree remove --force "$st/wt2"
+  git -C "$cr/repo" worktree prune
+  # item 2 (#427): gh gets an explicit --repo derived from origin, even
+  # with a cwd outside any repo. github-style origin first.
+  git -C "$cr/repo" remote set-url origin "git@github.com:acme/widget.git"
+  (cd / && env NEXIOS_GH_BIN="$ghf/gh-record" GH_ARGV_FILE="$st/gh-argv" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run >/dev/null)
+  chk grep -q -- "--repo acme/widget" "$st/gh-argv"
+  # unparseable (local-path) origin degrades to ambient gh resolution.
+  git -C "$cr/repo" remote set-url origin "$cr/origin.git"
+  (cd / && env NEXIOS_GH_BIN="$ghf/gh-record" GH_ARGV_FILE="$st/gh-argv" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run >/dev/null)
+  chk_neg grep -q -- "--repo" "$st/gh-argv"
+  # item 3 (#427): owned+merged branch sitting exactly at the main tip
+  # (empty lane, nothing committed) is KEPT with an explicit reason, in
+  # dry-run and live alike. Parked on an unrelated branch.
+  git -C "$cr/repo" checkout -q -b fix/st-empty main
+  git -C "$cr/repo" checkout -q fix/st-feature
+  local dryempty
+  dryempty=$(env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run)
+  chk bash -c 'printf "%s" "$1" | grep -q "KEPT (at main tip.*): fix/st-empty"' _ "$dryempty"
+  chk env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996
+  chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-empty
   # gate.py self-test covers the check-feedback main-vs-worktree fix
   chk python3 "$REPO_ROOT/scripts/gate.py" self-test
   # live room removal requires closed-state: PLANNED room refuses first
@@ -1625,11 +1674,38 @@ clean_issue_num() { # $1 raw -> canonical decimal, fail-loud
   [ "$n" != "0" ] || fail "clean: issue must be numeric: '$1'"
   printf '%s' "$n"
 }
-clean_gh_state() { # $1 canonical issue -> state word, fail-loud
-  local st
-  st=$("${NEXIOS_GH_BIN:-gh}" issue view "$1" --json state --jq .state 2>/dev/null) \
-    || fail "clean: cannot read issue state (gh failed for #$1)"
-  [ -n "$st" ] || fail "clean: empty issue state for #$1"
+clean_gh_repo() { # $1 repo dir -> owner/repo or "" (read-only, never fails)
+  # Item 2 (#427): resolve the GitHub repo explicitly from the resolved
+  # repo root's origin, so `clean` works from any cwd with no GH_REPO
+  # requirement. Unparseable origins (local-path fixtures) yield "" and
+  # the caller falls back to ambient gh resolution.
+  local url rest owner name
+  url=$(git -C "$1" remote get-url origin 2>/dev/null) || return 0
+  case "$url" in
+    git@github.com:*) rest=${url#git@github.com:} ;;
+    ssh://git@github.com/*) rest=${url#ssh://git@github.com/} ;;
+    https://github.com/*) rest=${url#https://github.com/} ;;
+    http://github.com/*) rest=${url#http://github.com/} ;;
+    *) return 0 ;;
+  esac
+  rest=${rest%.git}
+  case "$rest" in */*) ;; *) return 0 ;; esac
+  owner=${rest%%/*}; name=${rest#*/}
+  case "$owner" in ""|*/*) return 0 ;; esac
+  case "$name" in ""|*/*) return 0 ;; esac
+  printf '%s/%s' "$owner" "$name"
+}
+clean_gh_state() { # $1 repo dir, $2 canonical issue -> state word, fail-loud
+  local st rr
+  rr=$(clean_gh_repo "$1")
+  if [ -n "$rr" ]; then
+    st=$("${NEXIOS_GH_BIN:-gh}" issue view "$2" --repo "$rr" --json state --jq .state 2>/dev/null) \
+      || fail "clean: cannot read issue state (gh failed for #$2)"
+  else
+    st=$("${NEXIOS_GH_BIN:-gh}" issue view "$2" --json state --jq .state 2>/dev/null) \
+      || fail "clean: cannot read issue state (gh failed for #$2)"
+  fi
+  [ -n "$st" ] || fail "clean: empty issue state for #$2"
   printf '%s' "$st"
 }
 is_owned_branch() { # $1 short branch name (lane patterns only)
@@ -1653,7 +1729,7 @@ __clean_repo() {
   [ "${3:-}" = "--dry-run" ] && dry=1
   [ -d "$repo/.git" ] || fail "clean: not a git repo: $repo"
   # 1. issue CLOSED on GitHub (verify only).
-  local st; st=$(clean_gh_state "$issue")
+  local st; st=$(clean_gh_state "$repo" "$issue")
   [ "$st" = "CLOSED" ] || fail "clean: issue #$issue is $st (must be CLOSED)"
   # 2. main == origin/main (verify only — never push, never fetch).
   local mt ot
@@ -1680,14 +1756,29 @@ __clean_repo() {
   # ancestry against HEAD and would refuse a main-merged lane on a feature
   # checkout, while -D skips the check entirely. The gate below IS the
   # check; dry-run and live share this exact path so they cannot disagree.
-  local cur b
-  cur=$(git -C "$repo" branch --show-current)
+  local b block_reason
   for b in $(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads/); do
     if is_protected_branch "$b"; then info "KEPT (protected): $b"; continue; fi
     if ! is_owned_branch "$b"; then info "KEPT (foreign): $b"; continue; fi
-    if [ "$b" = "$cur" ]; then info "KEPT (checked out): $b"; continue; fi
     if ! is_merged_into_main "$repo" "$b"; then
       info "KEPT (not merged): $b"; continue
+    fi
+    # Live-tree guards run on the listing path too, through the same
+    # predicate the live delete uses — dry-run and real runs cannot
+    # disagree on checked-out branches (#425 addendum).
+    block_reason=$(clean_delete_guard "$repo" "$b")
+    if [ -n "$block_reason" ]; then
+      info "KEPT ($block_reason): $b"; continue
+    fi
+    # Item 3 (#427): an owned+merged branch sitting exactly at the main
+    # tip is an empty lane — nothing committed — whose commit may be in
+    # preparation. Keep with an explicit reason, never list for removal.
+    # (Lane closes land as merge commits, so a tip-equal branch contributed
+    # nothing; a hand-ff'd lane also lands here — kept, fail-safe toward
+    # keeping. Checked-out/worktree branches returned above with the more
+    # actionable reason.)
+    if [ "$(git -C "$repo" rev-parse --verify "$b" 2>/dev/null)" = "$mt" ]; then
+      info "KEPT (at main tip - empty lane, may be in preparation): $b"; continue
     fi
     if [ "$dry" = 1 ]; then info "WOULD REMOVE branch: $b"; continue; fi
     clean_delete_branch "$repo" "$b"
@@ -1712,6 +1803,20 @@ __clean_repo() {
 is_merged_into_main() { # $1 repo $2 branch — explicit main ref, never HEAD
   git -C "$1" merge-base --is-ancestor "$2" refs/heads/main 2>/dev/null
 }
+clean_delete_guard() { # $1 repo $2 branch — "" if deletable, else KEPT reason
+  # Single source of truth for BOTH the dry-run listing and the live
+  # delete: a guard that lives in only one path lets dry-run and reality
+  # disagree (the #425 addendum class of bug — WOULD REMOVE here, refuse
+  # there). Read-only: safe to call on either path.
+  if [ "$2" = "$(git -C "$1" branch --show-current)" ]; then
+    echo "checked out"; return 0
+  fi
+  if git -C "$1" worktree list --porcelain 2>/dev/null \
+      | grep -qxF "branch refs/heads/$2"; then
+    echo "checked out in another worktree"; return 0
+  fi
+  echo ""
+}
 clean_delete_branch() { # $1 repo $2 branch — gated explicit delete, no -d/-D
   # Gate (the check `-d` used to smuggle in): fully merged into
   # refs/heads/main. Re-verified immediately before the write so the check
@@ -1719,15 +1824,12 @@ clean_delete_branch() { # $1 repo $2 branch — gated explicit delete, no -d/-D
   # eligibility; history rewrites are out of scope for a local cleanup).
   git -C "$1" merge-base --is-ancestor "$2" refs/heads/main 2>/dev/null \
     || fail "clean: refusing to delete $2 (not merged into main)"
-  # Checked-out guard (here and in every worktree): update-ref on a live
-  # checkout would strand HEAD. `git branch -d` refused these too.
-  if [ "$2" = "$(git -C "$1" branch --show-current)" ]; then
-    fail "clean: refusing to delete checked-out branch $2"
-  fi
-  if git -C "$1" worktree list --porcelain 2>/dev/null \
-      | grep -qxF "branch refs/heads/$2"; then
-    fail "clean: refusing to delete $2 (checked out in another worktree)"
-  fi
+  # Live-tree guards: same predicate the dry-run listing uses, so the two
+  # paths cannot disagree. update-ref on a live checkout would strand HEAD
+  # (`git branch -d` refused these too).
+  local block_reason; block_reason=$(clean_delete_guard "$1" "$2")
+  [ -z "$block_reason" ] \
+    || fail "clean: refusing to delete $2 ($block_reason)"
   # Compare-and-swap on the resolved tip: if the ref moved after the
   # merged-ness gate above (new commits, concurrent cleaner), the delete
   # fails loud instead of removing a tip nobody checked (#425 hardening).
