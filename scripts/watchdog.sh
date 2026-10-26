@@ -129,12 +129,14 @@ mode_arm() { # $1 issue [$2 interval_s]
 }
 
 mode_disarm() { # $1 issue
-  local room pidf pid
+  local room pidf pid ticker
   room=$(room_for "$1")
   pidf="$room/watch.pid"
   [ -f "$pidf" ] || fail "not armed: no $pidf"
   pid=$(cat "$pidf" 2>/dev/null || true)
-  if [ -z "${pid:-}" ] || ! kill -0 "$pid" 2>/dev/null; then
+  ticker=$(ps -o args= -p "${pid:-0}" 2>/dev/null || true)
+  case "$ticker" in *__ticker*) ;; *) ticker="";; esac
+  if [ -z "${pid:-}" ] || ! kill -0 "$pid" 2>/dev/null || [ -z "$ticker" ]; then
     rm -f "$pidf"
     info "stale pid file removed (ticker already dead)"
     return 0
@@ -176,6 +178,7 @@ __tick_alarm() { # $1 issue (internal: one tick + exactly one doorbell attempt)
 }
 
 __ticker() { # $1 issue $2 interval (internal: detached loop)
+  trap 'exit 0' TERM INT
   while true; do
     sleep "$2"
     __tick_alarm "$1" || true
