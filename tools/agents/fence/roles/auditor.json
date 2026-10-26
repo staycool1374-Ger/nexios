@@ -56,7 +56,8 @@
       "git ls-files *": "allow",
       "git rev-parse *": "allow",
       "git merge-base *": "allow",
-      "sha256sum *": "allow"
+      "sha256sum *": "allow",
+      "cut *": "allow"
     },
     "alias": [
       "sil3_auditor.md"
