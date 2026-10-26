@@ -30,6 +30,7 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 * **Target:** All work occurs in `src/kernel/test/` on the `testbed` branch. No production code.
 * **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` (safe class, fast) or `bash scripts/run_all_classes.sh x86_64 debug` (full suite).
  * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
+* When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 
 ### Pseudocode in Stub Tests
 * Some stub tests contain `/* Pseudocode: ... */` comments describing intended behavior — use these for insight when implementing.
