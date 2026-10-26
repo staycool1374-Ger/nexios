@@ -123,6 +123,8 @@ usage: agent_up.sh <mode> [...]
   approve <sess>     drive one Allow-always on the session's CURRENT permission
                      dialog (checks first; person-run only).
   close [--all]      kill worker tmux sessions; --all also kills $COORD_SESS.
+  clean <issue> [--dry-run]  remove a CLOSED lane's merged branches + room;
+                     refuses on open issue, unpushed main, live room.
 EOF
   exit 2
 }
@@ -1232,6 +1234,69 @@ mode_self_test() {
   chk_neg grep -q 'pending_patch.diff' "$gd/audits/pending_patch.diff"
   chk bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base main"
   chk_neg bash -c "cd '$gd' && '$SCRIPT_DIR/agent_up.sh' audit-diff main --base="
+  # clean: arity + numeric issues (no repo contact on these paths)
+  chk_neg "$SCRIPT_DIR/agent_up.sh" clean
+  chk_neg "$SCRIPT_DIR/agent_up.sh" clean notanissue
+  chk_neg "$SCRIPT_DIR/agent_up.sh" clean 0
+  chk_neg "$SCRIPT_DIR/agent_up.sh" clean 1 2 3
+  chk_neg "$SCRIPT_DIR/agent_up.sh" clean 9999 --bogus
+  # clean predicate guard rails (protected wins by check order)
+  chk bash -c 'test "$("$0" __clean-pred fix/422-x)" = owned' "$SCRIPT_DIR/agent_up.sh"
+  chk bash -c 'test "$("$0" __clean-pred fence/gap9)" = owned' "$SCRIPT_DIR/agent_up.sh"
+  chk bash -c 'test "$("$0" __clean-pred main)" = protected' "$SCRIPT_DIR/agent_up.sh"
+  chk bash -c 'test "$("$0" __clean-pred testbed)" = protected' "$SCRIPT_DIR/agent_up.sh"
+  chk bash -c 'test "$("$0" __clean-pred feature/x)" = foreign' "$SCRIPT_DIR/agent_up.sh"
+  # clean fixtures: gh seam (OPEN vs CLOSED) + scratch repo with fake origin
+  local ghf="$st/gh"; mkdir -p "$ghf"
+  printf '#!/bin/sh\nprintf "OPEN\\n"\n' > "$ghf/gh-open"; chmod +x "$ghf/gh-open"
+  printf '#!/bin/sh\nprintf "CLOSED\\n"\n' > "$ghf/gh-closed"; chmod +x "$ghf/gh-closed"
+  local cr="$st/clean"; mkdir -p "$cr"
+  git init -q --bare -b main "$cr/origin.git"
+  git init -q -b main "$cr/repo"
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+  git -C "$cr/repo" remote add origin "$cr/origin.git"
+  git -C "$cr/repo" push -q origin main
+  # refusal: open issue aborts before any repo contact
+  chk_neg env NEXIOS_GH_BIN="$ghf/gh-open" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run
+  # refusal: unpushed main aborts (gh passes, push check fails)
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m ahead
+  chk_neg env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run
+  git -C "$cr/repo" push -q origin main
+  # dry-run listing: merged owned WOULD REMOVE, unmerged KEPT, nothing moves
+  git -C "$cr/repo" checkout -q -b fix/st-merged
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m lane
+  git -C "$cr/repo" checkout -q main
+  git -C "$cr/repo" merge -q --ff-only fix/st-merged
+  git -C "$cr/repo" push -q origin main
+  git -C "$cr/repo" checkout -q -b fix/st-open
+  git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m wip
+  git -C "$cr/repo" checkout -q main
+  local clout
+  clout=$(env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run || true)
+  chk bash -c 'printf "%s" "$1" | grep -q "WOULD REMOVE branch: fix/st-merged"' _ "$clout"
+  chk bash -c 'printf "%s" "$1" | grep -q "KEPT (not merged): fix/st-open"' _ "$clout"
+  chk bash -c 'printf "%s" "$1" | grep -q "KEPT (protected): main"' _ "$clout"
+  chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-merged
+  # live run deletes only the merged owned branch (room absent path)
+  env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 >/dev/null
+  chk_neg git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-merged
+  chk git -C "$cr/repo" show-ref --verify -q refs/heads/fix/st-open
+  # live room removal requires closed-state: PLANNED room refuses first
+  local r97="/tmp/nexios-9997"; rm -rf "$r97"
+  chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9997
+  chk_neg env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9997
+  chk test -d "$r97"
+  "$SCRIPT_DIR/agent_up.sh" state 9997 phase=CLOSED >/dev/null
+  mkdir -p /tmp/nexios-9997-backupX
+  env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9997 >/dev/null
+  chk_neg test -e "$r97"
+  chk_neg test -e /tmp/nexios-9997-backupX
   rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
          "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
          "$REPO_ROOT/.nexios-runtime/9999"
@@ -1485,6 +1550,109 @@ mode_approve() {
   tmux capture-pane -t "$1" -p | tail -5
 }
 
+# Lane cleanup (operator-ordered automation): remove a CLOSED lane's merged
+# branches + runtime room, guarded. Order is fail-safe: every refusal fires
+# BEFORE any deletion. NEVER pushes, NEVER fetches, NEVER force-deletes.
+# gh binary is overridable for self-test fixtures (NEXIOS_GH_BIN, default
+# gh) — same seam pattern as TEST_TIMEOUT_OVERRIDE.
+clean_issue_num() { # $1 raw -> canonical decimal, fail-loud
+  case "$1" in ''|*[!0-9]*) fail "clean: issue must be numeric: '$1'";; esac
+  [ "$1" != "0" ] || fail "clean: issue must be numeric: '$1'"
+  printf '%s' "$((10#$1))"
+}
+clean_gh_state() { # $1 canonical issue -> state word, fail-loud
+  local st
+  st=$("${NEXIOS_GH_BIN:-gh}" issue view "$1" --json state --jq .state 2>/dev/null) \
+    || fail "clean: cannot read issue state (gh failed for #$1)"
+  [ -n "$st" ] || fail "clean: empty issue state for #$1"
+  printf '%s' "$st"
+}
+is_owned_branch() { # $1 short branch name (lane patterns only)
+  case "$1" in
+    fix/*|fence/*|comms/*|build/*|cutover/*|doctrine/*) return 0;;
+    *) return 1;;
+  esac
+}
+is_protected_branch() { # $1 short branch name (never touched, even if merged)
+  case "$1" in
+    main|testbed|arm-dev|risc-dev) return 0;;
+    *) return 1;;
+  esac
+}
+# $1 repo dir, $2 canonical issue, $3 [--dry-run]. Reports REMOVED:/KEPT:/
+# WOULD REMOVE: lines; exit nonzero only on refusal.
+__clean_repo() {
+  local repo="$1" issue="$2" dry=0
+  [ "${3:-}" = "--dry-run" ] && dry=1
+  [ -d "$repo/.git" ] || fail "clean: not a git repo: $repo"
+  # 1. issue CLOSED on GitHub (verify only).
+  local st; st=$(clean_gh_state "$issue")
+  [ "$st" = "CLOSED" ] || fail "clean: issue #$issue is $st (must be CLOSED)"
+  # 2. main == origin/main (verify only — never push, never fetch).
+  local mt ot
+  mt=$(git -C "$repo" rev-parse main 2>/dev/null) \
+    || fail "clean: no local main in $repo"
+  ot=$(git -C "$repo" rev-parse origin/main 2>/dev/null) \
+    || fail "clean: no origin/main in $repo"
+  [ "$mt" = "$ot" ] \
+    || fail "clean: main ($mt) != origin/main ($ot) — push first (never auto-pushed)"
+  # 3. room closed-state (when present; absent room is nothing to do).
+  local room="/tmp/nexios-$issue" rstate=""
+  if [ -d "$room" ]; then
+    rstate=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('phase',''))" \
+      "$room/state.json" 2>/dev/null) \
+      || fail "clean: room $room state unreadable (must be closed-state)"
+    [ "$rstate" = "CLOSED" ] \
+      || fail "clean: room $room phase is $rstate (must be CLOSED)"
+  fi
+  # 4. branches: protected first (disjoint from owned by construction, but
+  # the check order makes that a verified property, not an assumption).
+  local cur b
+  cur=$(git -C "$repo" branch --show-current)
+  for b in $(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads/); do
+    if is_protected_branch "$b"; then info "KEPT (protected): $b"; continue; fi
+    if ! is_owned_branch "$b"; then info "KEPT (foreign): $b"; continue; fi
+    if [ "$b" = "$cur" ]; then info "KEPT (checked out): $b"; continue; fi
+    if git -C "$repo" merge-base --is-ancestor "$b" main 2>/dev/null; then
+      if [ "$dry" = 1 ]; then info "WOULD REMOVE branch: $b"; continue; fi
+      git -C "$repo" branch -d "$b" >/dev/null \
+        || fail "clean: failed to delete merged branch $b"
+      info "REMOVED branch: $b"
+    else
+      info "KEPT (not merged): $b"
+    fi
+  done
+  # 5. room + backups (live mode only).
+  if [ -d "$room" ]; then
+    if [ "$dry" = 1 ]; then
+      info "WOULD REMOVE room: $room"
+    else
+      rm -rf "$room"
+      local p; for p in /tmp/nexios-"$issue"-backup*; do
+        [ -e "$p" ] || continue
+        rm -rf "$p"; info "REMOVED backup: $p"
+      done
+      info "REMOVED room: $room"
+    fi
+  else
+    info "KEPT (room already absent): $room"
+  fi
+}
+__clean_pred() { # $1 branch -> owned|protected|foreign (introspection hook)
+  if is_protected_branch "$1"; then echo protected; return; fi
+  if is_owned_branch "$1"; then echo owned; return; fi
+  echo foreign
+}
+mode_clean() {
+  [ $# -ge 1 ] && [ $# -le 2 ] || fail "usage: clean <issue> [--dry-run]"
+  local issue dry=""; issue=$(clean_issue_num "$1")
+  if [ $# -eq 2 ]; then
+    [ "$2" = "--dry-run" ] || fail "usage: clean <issue> [--dry-run]"
+    dry="--dry-run"
+  fi
+  __clean_repo "$REPO_ROOT" "$issue" "$dry"
+}
+
 mode_close() {
   local all=0; [ "${1:-}" = "--all" ] && all=1
   for s in "$DEV_SESS" "$QE_SESS" "$AUDIT_SESS"; do
@@ -1519,5 +1687,8 @@ case "$mode" in
   __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
+  clean) mode_clean "$@" ;;
+  __clean-repo) __clean_repo "$@" ;;
+  __clean-pred) __clean_pred "$@" ;;
   *) usage ;;
 esac
