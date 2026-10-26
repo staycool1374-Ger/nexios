@@ -1240,6 +1240,7 @@ mode_self_test() {
   chk_neg "$SCRIPT_DIR/agent_up.sh" clean 0
   chk_neg "$SCRIPT_DIR/agent_up.sh" clean 1 2 3
   chk_neg "$SCRIPT_DIR/agent_up.sh" clean 9999 --bogus
+  chk_neg "$SCRIPT_DIR/agent_up.sh" clean 00
   # clean predicate guard rails (protected wins by check order)
   chk bash -c 'test "$("$0" __clean-pred fix/422-x)" = owned' "$SCRIPT_DIR/agent_up.sh"
   chk bash -c 'test "$("$0" __clean-pred fence/gap9)" = owned' "$SCRIPT_DIR/agent_up.sh"
@@ -1264,6 +1265,9 @@ mode_self_test() {
   chk_neg env NEXIOS_GH_BIN="$ghf/gh-closed" \
       "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --dry-run
   git -C "$cr/repo" push -q origin main
+  # refusal: unknown __clean-repo flag is fail-closed, never silently live
+  chk_neg env NEXIOS_GH_BIN="$ghf/gh-closed" \
+      "$SCRIPT_DIR/agent_up.sh" __clean-repo "$cr/repo" 9996 --bogus
   # dry-run listing: merged owned WOULD REMOVE, unmerged KEPT, nothing moves
   git -C "$cr/repo" checkout -q -b fix/st-merged
   git -C "$cr/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m lane
@@ -1558,7 +1562,9 @@ mode_approve() {
 clean_issue_num() { # $1 raw -> canonical decimal, fail-loud
   case "$1" in ''|*[!0-9]*) fail "clean: issue must be numeric: '$1'";; esac
   [ "$1" != "0" ] || fail "clean: issue must be numeric: '$1'"
-  printf '%s' "$((10#$1))"
+  local n; n=$((10#$1))
+  [ "$n" != "0" ] || fail "clean: issue must be numeric: '$1'"
+  printf '%s' "$n"
 }
 clean_gh_state() { # $1 canonical issue -> state word, fail-loud
   local st
@@ -1583,6 +1589,8 @@ is_protected_branch() { # $1 short branch name (never touched, even if merged)
 # WOULD REMOVE: lines; exit nonzero only on refusal.
 __clean_repo() {
   local repo="$1" issue="$2" dry=0
+  [ $# -le 3 ] || fail "clean: too many arguments"
+  case "${3:-}" in ''|--dry-run) ;; *) fail "clean: unknown flag: '${3:-}'";; esac
   [ "${3:-}" = "--dry-run" ] && dry=1
   [ -d "$repo/.git" ] || fail "clean: not a git repo: $repo"
   # 1. issue CLOSED on GitHub (verify only).
