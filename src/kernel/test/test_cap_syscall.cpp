@@ -508,6 +508,183 @@ JARVIS_TEST(sys_cap_revoke_cleanup_zero_delta, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: #171 P3 grant/copy/revoke lifecycle through the syscall
+//        boundary. A granted handle copies; the revoked handle fails
+//        closed on use; a second revoke fails closed (idempotent
+//        revoke reports false, never ENSUREs). Caller-root scope (no
+//        cross-space revoke without cascade machinery, which the plan
+//        excludes): revoke() names a slot in the caller's own CSpace,
+//        so the revoke target is the SOURCE slot, not the granted copy.
+//        The granted copy stays valid (no cascade for non-CNode targets).
+// Input: task installs a Task cap + dest CNode; dispatches GRANT, COPY,
+//        REVOKE of the source slot, COPY-after-revoke, REVOKE-again via
+//        Syscall::handle.
+// Expect: grant/copy return opaque handles (!= -1); revoke returns 0;
+//        post-revoke copy and second revoke return -1.
+// Depends: kernel::Syscall, kernel::cap
+JARVIS_TEST(sys_cap_grant_copy_revoke_lifecycle, "PRE: none | POST: none") {
+    static uint64_t g_grant = 0;
+    static uint64_t g_copy = 0;
+    static uint64_t g_revoke = 0;
+    static uint64_t g_copy_dead = 0;
+    static uint64_t g_revoke_again = 0;
+
+    g_grant = g_copy = g_revoke = 0;
+    g_copy_dead = g_revoke_again = 0;
+
+    auto *t = run_cap_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cspace = cur->get_cspace();
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
+        if (!tgt)
+            return;
+        new (tgt) TestTarget;
+        tgt->mark_pool_backed();
+        kernel::test::ResourceTracker::instance().track_cap_object_add();
+
+        int ss = cspace->install(tgt, cap::CapType::Task,
+                                 cap::CapRights::READ | cap::CapRights::GRANT |
+                                     cap::CapRights::COPY);
+        cap::CNode *dst = nullptr;
+        int ds = -1;
+        install_dest_cspace(cur, &dst, &ds);
+        if (ss < 0 || ds < 0) {
+            tgt->release();
+            return;
+        }
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t dh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ds),
+                               cspace->slot_gen(static_cast<uint32_t>(ds)));
+        g_grant = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_GRANT), sh, dh, 0, 0,
+            nullptr);
+        g_copy = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_COPY), sh, dh, 0, 0,
+            nullptr);
+        // Revoke the SOURCE slot (caller-root scope: revoke() only names
+        // slots in the caller's own CSpace; the granted copy in the dest
+        // CNode stays valid — no cascade for non-CNode targets).
+        g_revoke = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_REVOKE), sh, 0, 0, 0,
+            nullptr);
+        // Copy-after-revoke from the revoked source slot fails closed.
+        g_copy_dead = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_COPY), sh, dh, 0, 0,
+            nullptr);
+        // Second revoke of the same slot fails closed (idempotent).
+        g_revoke_again = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_REVOKE), sh, 0, 0, 0,
+            nullptr);
+        teardown_dest_cspace(cur, dst, ds);
+        cspace->remove(static_cast<uint32_t>(ss));
+        tgt->release();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(g_grant != static_cast<uint64_t>(-1));
+    JARVIS_ASSERT(g_copy != static_cast<uint64_t>(-1));
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(0), g_revoke);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_copy_dead);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_revoke_again);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #171 P3 table-full fails closed with a code, never hangs or
+//        ENSUREs. Filling the destination CNode makes the next grant
+//        return -1; freeing one slot recovers a valid handle.
+// Input: task installs a Task cap + dest CNode; fills all 64 dest
+//        slots; dispatches GRANT (expect -1), removes one slot,
+//        dispatches GRANT again (expect a handle).
+// Expect: -1 while full; opaque handle after one free slot; no residue
+//        (every fill target released, dest CNode torn down).
+// Depends: kernel::Syscall, kernel::cap
+JARVIS_TEST(sys_cap_grant_dst_full_returns_minus1, "PRE: none | POST: none") {
+    static uint64_t g_full = 0;
+    static uint64_t g_recovered = 0;
+
+    g_full = 0;
+    g_recovered = 0;
+
+    auto *t = run_cap_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cspace = cur->get_cspace();
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
+        if (!tgt)
+            return;
+        new (tgt) TestTarget;
+        tgt->mark_pool_backed();
+        kernel::test::ResourceTracker::instance().track_cap_object_add();
+
+        int ss = cspace->install(tgt, cap::CapType::Task,
+                                 cap::CapRights::READ |
+                                     cap::CapRights::GRANT);
+        cap::CNode *dst = nullptr;
+        int ds = -1;
+        install_dest_cspace(cur, &dst, &ds);
+        if (ss < 0 || ds < 0) {
+            tgt->release();
+            return;
+        }
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t dh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ds),
+                               cspace->slot_gen(static_cast<uint32_t>(ds)));
+        TestTarget *fills[64] = {};
+        uint32_t filled = 0;
+        for (uint32_t i = 0;
+             i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++i) {
+            auto *fill =
+                static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
+            if (!fill)
+                break;
+            new (fill) TestTarget;
+            fill->mark_pool_backed();
+            kernel::test::ResourceTracker::instance().track_cap_object_add();
+            int fs = dst->install(fill, cap::CapType::Task,
+                                  cap::CapRights::READ);
+            if (fs < 0) {
+                fill->release();
+                kernel::test::ResourceTracker::instance()
+                    .track_cap_object_remove();
+                break;
+            }
+            fills[filled++] = fill;
+        }
+        g_full = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_GRANT), sh, dh, 0, 0,
+            nullptr);
+        if (filled > 0) {
+            dst->remove(0);
+            fills[0]->release();
+            fills[0] = nullptr;
+            g_recovered = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::CAP_GRANT), sh, dh, 0,
+                0, nullptr);
+        }
+        for (uint32_t i = 1; i < filled; ++i) {
+            dst->remove(i);
+            fills[i]->release();
+        }
+        teardown_dest_cspace(cur, dst, ds);
+        cspace->remove(static_cast<uint32_t>(ss));
+        tgt->release();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_full);
+    JARVIS_ASSERT(g_recovered != static_cast<uint64_t>(-1));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all SYS_CAP_* syscall dispatch tests.
 // Input: None
 // Expect: All tests registered
@@ -523,4 +700,6 @@ void register_cap_syscall_tests() {
     JARVIS_REGISTER_TEST(sys_cap_rights_denied_returns_minus1);
     JARVIS_REGISTER_TEST(sys_cap_revoke_cleanup_zero_delta);
     JARVIS_REGISTER_TEST(sys_cap_returned_handle_roundtrip); // issue #266
+    JARVIS_REGISTER_TEST(sys_cap_grant_copy_revoke_lifecycle); // #171 P3
+    JARVIS_REGISTER_TEST(sys_cap_grant_dst_full_returns_minus1); // #171 P3
 }
