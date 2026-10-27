@@ -207,6 +207,10 @@ class Syscall {
         SyscallNumber::PAUSE,
         SyscallNumber::REBOOT,
         SyscallNumber::HALT,
+        SyscallNumber::ABI_VERSION, // #171 P1: pointer-free constant return;
+        // zero protection value in canary verification (nothing to protect:
+        // no user-memory dereference); the scheduler sample remains the
+        // tamper tripwire. TLS_SET stays FULL (explicit P1 scope decision).
         SyscallNumber::SEND_FAST,
         SyscallNumber::RECV_FAST,
         SyscallNumber::SEND_SYNC_FAST,
