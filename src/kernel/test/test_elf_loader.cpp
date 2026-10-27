@@ -291,6 +291,164 @@ JARVIS_TEST(loader_cap_smoke_fail_closed,
                       (unsigned long)code);
     JARVIS_TEST_PASS();
 }
+// Runmode: kernel
+// Testidea: #431 forged-mismatch fail-closed standing gate. Forge the
+// entry ABI check (expect-major 1 -> 2) in a copy of the initrd hey
+// image, dispatch it, and prove the fail-closed contract end to end:
+// the task terminates (no hang/crash), exit code is 0xC0DE, the .Lfail
+// diagnostic lands on the task's stderr, and teardown reaps everything
+// (zero ResourceTracker delta — exercises the #431 always-reap path).
+// The forge target is located by byte signature, never by hardcoded
+// file offset: absent/duplicated signature fails the test instead of
+// testing the wrong bytes. Per-arch step-2 compare shapes (verified by
+// objdump on tip-built hey.c.elf): x86_64 shr+cmp imm8, aarch64 lsr+cmp
+// imm, riscv64 srli+li (patched li immediate).
+// Input: read /hey.c.elf via vfs, patch the compare, write
+// /tmp/hey-mismatch.elf, request_load, take, repoint fd 2 at a tmpfs
+// capture file, dispatch at prio 11, join via wait_for_termination_safe.
+// Expect: TERMINATED, exit_code == 0xC0DE, capture contains the
+// "crt0: ABI contract mismatch" diagnostic; zero resource delta.
+// Depends: ElfLoader initrd-path load, P1 crt0 contract, fd plumbing.
+JARVIS_TEST(loader_stub_mismatch_fail_closed, "PRE: vfsd, iocd | POST: none") {
+    // 1. Read pristine image bytes from initrd (bounded: reject > 128 KiB).
+    static uint8_t s_mm_img[128 * 1024];
+    vfs::Vnode *src = vfs::resolve("/hey.c.elf");
+    JARVIS_ASSERT_FMT(src != nullptr && src->ops != nullptr &&
+                          src->ops->read != nullptr,
+                      "mismatch: cannot resolve /hey.c.elf");
+    uint64_t img_sz = 0;
+    while (img_sz < sizeof(s_mm_img)) {
+        uint64_t chunk = sizeof(s_mm_img) - img_sz;
+        if (chunk > 4096)
+            chunk = 4096;
+        int64_t rd = src->ops->read(*src, s_mm_img + img_sz, chunk, img_sz);
+        if (rd <= 0)
+            break;
+        img_sz += static_cast<uint64_t>(rd);
+    }
+    JARVIS_ASSERT_FMT(img_sz > 64 && img_sz < sizeof(s_mm_img),
+                      "mismatch: bad image size %lu",
+                      (unsigned long)img_sz);
+    // 2. Locate the step-2 compare by byte signature (exactly one hit).
+    static const uint8_t kSigX86[] = {0x48, 0xc1, 0xe8, 0x10,
+                                      0x48, 0x83, 0xf8, 0x01};
+    static const uint8_t kSigAA64[] = {0x00, 0xfc, 0x50, 0xd3,
+                                       0x1f, 0x04, 0x00, 0xf1};
+    static const uint8_t kSigRV64[] = {0x41, 0x81, 0x85, 0x42};
+    const uint8_t *sig = nullptr;
+    uint64_t sig_len = 0, patch_off = 0;
+    uint8_t patch_to = 0;
+#if defined(CONFIG_ARCH_X86_64)
+    sig = kSigX86;
+    sig_len = sizeof(kSigX86);
+    patch_off = 7;
+    patch_to = 0x02;
+#elif defined(CONFIG_ARCH_AARCH64)
+    sig = kSigAA64;
+    sig_len = sizeof(kSigAA64);
+    patch_off = 5;
+    patch_to = 0x08;
+#elif defined(CONFIG_ARCH_RISCV64)
+    sig = kSigRV64;
+    sig_len = sizeof(kSigRV64);
+    patch_off = 2;
+    patch_to = 0x89;
+#else
+    JARVIS_ASSERT_FMT(false, "mismatch: no forge signature for this arch");
+#endif
+    (void)sizeof(kSigX86);
+    (void)sizeof(kSigAA64);
+    (void)sizeof(kSigRV64);
+    uint64_t hits = 0, hit_at = 0;
+    for (uint64_t i = 0; i + sig_len <= img_sz; ++i) {
+        uint64_t j = 0;
+        while (j < sig_len && s_mm_img[i + j] == sig[j])
+            ++j;
+        if (j == sig_len) {
+            ++hits;
+            hit_at = i;
+        }
+    }
+    JARVIS_ASSERT_FMT(hits == 1,
+                      "mismatch: signature hits=%lu, want exactly 1",
+                      (unsigned long)hits);
+    s_mm_img[hit_at + patch_off] = patch_to;
+    // 3. Stage the doctored image and load it.
+    constexpr const char *kMmPath = "/tmp/hey-mismatch.elf";
+    JARVIS_ASSERT(write_file(kMmPath, s_mm_img, img_sz) == img_sz);
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(elf::ElfLoader::request_load(kMmPath) ==
+                          elf::LoadResult::OK,
+                      "mismatch request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 &&
+                          t->is_user_,
+                      "mismatch take_completed failed");
+    // 4. Repoint fd 2 (stderr, unwired in harness) at a tmpfs capture
+    // file so the .Lfail diagnostic is observable in-guest (fd-1
+    // pattern from the libc_verify harness; same no-dec discipline:
+    // FdTable::free would dec a vnode ref never inc'd).
+    constexpr const char *kCapPath = "/tmp/mismatch-stderr.txt";
+    JARVIS_ASSERT(t->fd_table.fds[2].used);
+    kernel::test::mark_vfs_touched();
+    JARVIS_ASSERT(vfs::create(kCapPath, 0) == 0);
+    vfs::Vnode *capvn = vfs::resolve(kCapPath);
+    JARVIS_ASSERT(capvn != nullptr);
+    t->fd_table.fds[2].vnode = capvn;
+    t->fd_table.fds[2].offset = 0;
+    t->fd_table.fds[2].flags = 0;
+    // 5. Dispatch and join (prio 11: the harness idles below it).
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    bool exited = (t->state == TaskState::TERMINATED);
+    uint64_t code = t->exit_code;
+    // 6. Teardown first (mirrors the #431 always-reap harness path so a
+    // nonzero exit still reaps), then assert on the saved values.
+    if (TaskControlBlock::is_valid(t))
+        Scheduler::terminate(*t, code);
+    Scheduler::drain_zombie_list();
+    char diag[96]{};
+    uint64_t dpos = 0;
+    vfs::Vnode *cap = vfs::resolve(kCapPath);
+    if (cap != nullptr && cap->ops != nullptr && cap->ops->read != nullptr) {
+        while (dpos < sizeof(diag) - 1) {
+            int64_t rd = cap->ops->read(*cap,
+                                        reinterpret_cast<uint8_t *>(diag) +
+                                            dpos,
+                                        1, dpos);
+            if (rd <= 0)
+                break;
+            dpos += static_cast<uint64_t>(rd);
+        }
+    }
+    diag[dpos] = '\0';
+    cleanup_file(kMmPath);
+    kernel::test::mark_vfs_touched();
+    vfs::unlink(kCapPath);
+    JARVIS_ASSERT_FMT(exited, "mismatch task did not terminate");
+    JARVIS_ASSERT_FMT(code == 0xC0DE, "mismatch exit code 0x%lx, want 0xC0DE",
+                      (unsigned long)code);
+    const char *want = "crt0: ABI contract mismatch";
+    bool found = false;
+    for (uint64_t i = 0; dpos >= 28 && i + 28 <= dpos; ++i) {
+        uint64_t j = 0;
+        while (want[j] != '\0' && diag[i + j] == want[j])
+            ++j;
+        if (want[j] == '\0') {
+            found = true;
+            break;
+        }
+    }
+    JARVIS_ASSERT_FMT(found, "mismatch diagnostic absent from stderr");
+    JARVIS_TEST_PASS();
+}
 
 // Runmode: kernel
 // Testidea: cancel reclaims all partial state (zero delta) and the loader
@@ -1445,4 +1603,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_bss_only_data_canary); // #271 live-E2E BSS-only
     JARVIS_REGISTER_TEST(loader_stub_roundtrip_generated_stubs); // #171 P2
     JARVIS_REGISTER_TEST(loader_cap_smoke_fail_closed); // #171 P3
+    JARVIS_REGISTER_TEST(loader_stub_mismatch_fail_closed); // #431 forged-mismatch fail-closed
 }
