@@ -60,6 +60,11 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Run automated test suites via `bash scripts/run_all_classes.sh <arch> <build>` (or per-class `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>`, `selftest` for CI gate).
 - See AGENTS.md for Circuit Breaker limits.
 
+### Tool & Session Discipline (standing order — violations stall the lane and get the session recreated)
+- ONE tool call per message, all parameters complete. NEVER batch calls; on SchemaError/missing-key, re-issue singly — never loop retries.
+- Read tool for reads, Grep tool for searches, Glob for file lists. NEVER use bash for file reads (`cat/sed/grep/rg/awk/head/tail` via shell); bash is for builds, QEMU runs, and git only, one simple command at a time, no pipes or `;` chains.
+- Permission modals mean NO: treat every approval dialog as denied. Route around with the tools above, record anything uncheckable as an explicit gap, and NEVER halt or ask for more permissions.
+
 ### 5. Bug Tracking & Documentation Updates
 - **Bugs are tracked as GitHub Issues**, not in prompts/BUGS.md (see AGENTS.md "GitHub Issue Tracking"):
   - New failure found during development: file an issue

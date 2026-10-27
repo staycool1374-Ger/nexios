@@ -7,6 +7,7 @@ set -euo pipefail
 
 DEV_SESS="${NEXIOS_DEV_SESS:-nexios-dev}"
 QE_SESS="${NEXIOS_QE_SESS:-nexios-qe}"
+AUDIT_SESS="${NEXIOS_AUDIT_SESS:-nexios-audit}"
 COORD_SESS="${NEXIOS_COORD_SESS:-nexios-coord}"
 AGENT_UP="${NEXIOS_AGENT_UP:-$(cd "$(dirname "$0")" && pwd)/agent_up.sh}"
 
@@ -55,6 +56,15 @@ qemu_count() {
   echo "${q:-0}"
 }
 
+latest_report() { # $1 room -> newest audit report for this issue, or none
+  # The auditor has no working doorbell; verdicts land as files.
+  # The coordinator polls this (doctrine) instead of waiting for a ring.
+  local issue rep
+  issue=$(basename "$1"); issue=${issue#nexios-}
+  rep=$(ls -t /Users/arnold/jarvis/audits/report-*-"${issue}".md /Users/arnold/jarvis/audits/report-*-"${issue}"-*.md 2>/dev/null | head -n 1 || true)
+  echo "${rep:-none}"
+}
+
 fingerprint() { # $1 room -> full multi-line fingerprint on stdout
   # Self-test fixture seam (same pattern as NEXIOS_GH_BIN): when set, the
   # fingerprint is read from this file instead of live probes, so the
@@ -64,12 +74,21 @@ fingerprint() { # $1 room -> full multi-line fingerprint on stdout
     cat "$NEXIOS_WATCHDOG_FAKE_FP"
     return 0
   fi
-  local inbox="$1/inbox/dev.md" n last
-  [ -f "$inbox" ] || fail "no inbox at $inbox"
-  n=$(wc -l < "$inbox" | tr -d ' ')
-  last=$(grep 'FROM=' "$inbox" | tail -n 1 || true)
-  echo "inbox_lines=$n"
-  echo "inbox_last=${last:-none}"
+  local box bf n last
+  # Worker-authored lines ONLY: the coordinator's own FROM=coord orders
+  # live in these same boxes and must never tick the room (a tick means
+  # a worker posted, never that the coordinator wrote).
+  for box in dev qe auditor; do
+    bf="$1/inbox/$box.md"
+    if [ -f "$bf" ]; then
+      n=$(grep -cE 'FROM=(dev|qe|audit) ' "$bf" 2>/dev/null || true)
+      last=$(grep -E 'FROM=(dev|qe|audit) ' "$bf" 2>/dev/null | tail -n 1 || true)
+    else
+      n="no-inbox"; last="none"
+    fi
+    echo "inbox_${box}_lines=${n:-0}"
+    echo "inbox_${box}_last=${last:-none}"
+  done
   echo "[dev]"
   echo "sess=$(sess_state "$DEV_SESS")"
   echo "repo=$(repo_state "$HOME/jarvis")"
@@ -79,6 +98,9 @@ fingerprint() { # $1 room -> full multi-line fingerprint on stdout
   echo "repo=$(repo_state "$HOME/jarvis_test")"
   echo "hist=$(hist_last "$HOME/jarvis_test")"
   echo "qemu=$(qemu_count)"
+  echo "[auditor]"
+  echo "sess=$(sess_state "$AUDIT_SESS")"
+  echo "audit=$(latest_report "$1")"
 }
 
 mode_tick() { # $1 canonical issue -> verdict line (+delta), updates state
