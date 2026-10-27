@@ -14,6 +14,18 @@
  * (audit gate — only its own .rodata is read). The fail-closed exit code
  * is 0xC0DE (CRT0 contract mismatch).
  *
+ * ABI query path: the step-1 query is a FAST syscall (SYSCALL_FAST_MASK),
+ * deliberately NOT gated on the canary check — it is pointer-free with
+ * a constant return, so there is no user-memory interaction for the
+ * canary to protect (the scheduler sample remains the tamper tripwire).
+ * Without this, any task with a tripped canary could never pass the
+ * entry contract (fail-closed on untrusted state, not on ABI mismatch).
+ *
+ * Post-sys_exit tripwires (ud2/udf/unimp): sys_exit does not return — if
+ * execution ever reaches one, the deferred switch failed to deschedule
+ * this terminated task. Fault LOUDLY (do not run on as a zombie, do not
+ * park silently); the exit code is already recorded.
+ *
  * Mismatch design: v0.1 compares the kernel ABI major from the step-1
  * query against NEXIOS_ABI_MAJOR (syscall.h) — any differ (newer or older
  * kernel) fails closed. SDK-major/contract equality is structural in v0.1
@@ -36,9 +48,8 @@
 #if defined(__x86_64__)
 _start:
     /* Step 1: raw ABI_VERSION query (84, syscall.h). No TLS needed.
-       Unused arg regs are zeroed, never left as garbage: §2 passes args
-       by register, and a garbage 5th-arg register faulted the aarch64
-       exit trap (issue #171) — the same luck must not be relied on here. */
+       Unused arg regs are zeroed (deterministic per §2 ABI: no reliance
+       on entry garbage). */
     mov $84, %rax
     xor %ebx, %ebx
     xor %ecx, %ecx
@@ -77,7 +88,12 @@ _start:
     xor %esi, %esi
     xor %edi, %edi
     int $0x80
-    hlt
+    /* Tripwire, not a park: sys_exit does not return — if the deferred
+       switch fails to deschedule this terminated task and execution falls
+       through, fault LOUDLY (ud2) instead of running on as a zombie or
+       parking silently. The exit code is already recorded; a fault here
+       names a scheduler-switch gap (out of scope: #409-adjacent). */
+    ud2
 .Lfail:
     /* Best-effort diagnostic + fail-closed exit. See header comment. */
     mov $13, %rax             /* SYS_WRITE (syscall.h) */
@@ -87,6 +103,7 @@ _start:
     xor %esi, %esi
     xor %edi, %edi
     int $0x80
+    /* SYS_EXIT (6) with the contract-mismatch exit code. */
     mov $6, %rax              /* SYS_EXIT */
     mov $0xC0DE, %rbx         /* CRT0 contract-mismatch exit code */
     xor %ecx, %ecx
@@ -94,13 +111,14 @@ _start:
     xor %esi, %esi
     xor %edi, %edi
     int $0x80
-    hlt
+    /* Tripwire (see above): sys_exit does not return; fault loudly on
+       fall-through rather than running on as a zombie. */
+    ud2
 #elif defined(__aarch64__)
 _start:
     /* Step 1: raw ABI_VERSION query (84). No TLS needed. Unused arg
-       regs are zeroed, never left as garbage: §2 passes args by
-       register (x8=num, x0-x3=args, x4 5th), and a garbage 5th-arg
-       register faulted this file's exit trap (issue #171). */
+       regs are zeroed (deterministic per §2 ABI: no reliance on entry
+       garbage). */
     mov x8, #84
     mov x0, #0
     mov x1, #0
@@ -138,8 +156,11 @@ _start:
     mov x3, #0
     mov x4, #0
     svc #0
-1:  wfe
-    b 1b
+    /* Tripwire, not a park: sys_exit does not return — if the deferred
+       switch fails to deschedule this terminated task and execution falls
+       through, fault LOUDLY (udf) instead of running on as a zombie or
+       parking silently. The exit code is already recorded. */
+    udf #0
 .Lfail:
     mov x8, #13               /* SYS_WRITE */
     mov x0, #2                /* stderr */
@@ -150,15 +171,17 @@ _start:
     mov x3, #0
     mov x4, #0
     svc #0
-    mov x8, #6                /* SYS_EXIT */
+    /* SYS_EXIT (6) with the contract-mismatch exit code. */
+    mov x8, #6
     mov x0, #0xC0DE           /* CRT0 contract-mismatch exit code */
     mov x1, #0
     mov x2, #0
     mov x3, #0
     mov x4, #0
     svc #0
-2:  wfe
-    b 2b
+    /* Tripwire (see above): sys_exit does not return; fault loudly on
+       fall-through rather than running on as a zombie. */
+    udf #0
 #elif defined(__riscv)
 _start:
     .option push
@@ -166,9 +189,8 @@ _start:
     la gp, __global_pointer$
     .option pop
     /* Step 1: raw ABI_VERSION query (84). No TLS needed. Unused arg
-       regs are zeroed, never left as garbage: §2 passes args by
-       register (a7=num, a0-a3=args, a4 5th); garbage arg regs faulted
-       the aarch64 exit trap (issue #171). */
+       regs are zeroed (deterministic per §2 ABI: no reliance on
+       entry garbage). */
     li a7, 84
     li a0, 0
     li a1, 0
@@ -205,8 +227,11 @@ _start:
     li a3, 0
     li a4, 0
     ecall
-1:  wfi
-    j 1b
+    /* Tripwire, not a park: sys_exit does not return — if the deferred
+       switch fails to deschedule this terminated task and execution falls
+       through, fault LOUDLY (unimp) instead of running on as a zombie or
+       parking silently. The exit code is already recorded. */
+    unimp
 .Lfail:
     li a7, 13                /* SYS_WRITE */
     li a0, 2                 /* stderr */
@@ -216,15 +241,17 @@ _start:
     li a3, 0
     li a4, 0
     ecall
-    li a7, 6                 /* SYS_EXIT */
+    /* SYS_EXIT (6) with the contract-mismatch exit code. */
+    li a7, 6
     li a0, 0xC0DE            /* CRT0 contract-mismatch exit code */
     li a1, 0
     li a2, 0
     li a3, 0
     li a4, 0
     ecall
-2:  wfi
-    j 2b
+    /* Tripwire (see above): sys_exit does not return; fault loudly on
+       fall-through rather than running on as a zombie. */
+    unimp
 #endif
 
     /* Shared fail-closed diagnostic (user-half .rodata, always mapped). */
