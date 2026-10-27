@@ -166,7 +166,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          build-essential git make python3 python3-pip ninja-build \
+          build-essential git make python3 python3-pip nasm ninja-build \
           gcc-x86-64-linux-gnu g++-x86-64-linux-gnu
         sudo pip3 install --break-system-packages 'meson==1.12.0'
         for tool in gcc g++ as ld ar objcopy objdump strip readelf gdb; do
@@ -205,7 +205,7 @@ jobs:
     - name: Parity ledger report
       run: |
         python3 tools/check-parity.py --report
-        python3 tools/check_no_make_refs.sh
+        bash tools/check_no_make_refs.sh
 
   makefile-freeze:
     # Frozen-build freeze (issue #170 A1/X1): any change set touching the

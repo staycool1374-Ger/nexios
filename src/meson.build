@@ -58,8 +58,7 @@ test_registry_gen = custom_target('test_registry_gen',
 test_config = custom_target('test_config',
   output : 'test-config.txt',
   command : [py3, files('../tools/meson/gen_test_config.py'),
-    get_option('test_class'), '@OUTPUT@',
-    meson.project_source_root() / 'initrd' / 'tests' / 'test-config.txt'],
+    get_option('test_class'), '@OUTPUT@'],
   build_by_default : true)
 
 # --- Kernel TU discovery (mirrors mk/rules.mk SRC_CXX_*) ---
