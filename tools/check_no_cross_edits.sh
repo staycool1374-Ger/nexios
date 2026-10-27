@@ -409,7 +409,43 @@ CASES
     if gate2 off "$s2base"; then
         echo "FAIL integration: #429 replay passed unattributed" >&2; fail=1
     else
-        printf 'PASS integration: #429 replay fails unattributed (FAIL->PASS)\n'
+        printf 'PASS integration: #429 merge replay fails unattributed (FAIL->PASS)\n'
+    fi
+    # C1-1 (issue #433 conditions): a deletion-only test change fails —
+    # no added lines exist to attribute, so there is nothing to exempt.
+    git -C "$s2" checkout -q "$s2base"
+    printf 'l1\nl2\nl3\n' > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" commit -qam 'C1 three-line base'
+    : > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" commit -qam 'C1 delete everything'
+    if gate2 on "$s2base"; then
+        echo "FAIL integration: deletion-only test hunk passed" >&2; fail=1
+    else
+        printf 'PASS integration: deletion-only test hunk fails\n'
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: deletion-only hunk passed unattributed" >&2
+        fail=1
+    else
+        printf 'PASS integration: deletion-only hunk fails unattributed too\n'
+    fi
+    # C1-2: a test file mixing QE-authored and dev-authored hunks fails —
+    # exemption requires EVERY added line to blame to the QE author.
+    git -C "$s2" checkout -q "$s2base"
+    qe_commit src/kernel/test/t.cpp 't0-qe-mix' 'qe part of mixed file'
+    printf 't0-qe-mix\ndev-part\n' > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" add -A
+    git -C "$s2" -c user.name=t -c user.email=t@t \
+        commit -qm 'dev part of mixed file' -- src/kernel/test/t.cpp
+    if gate2 on "$s2base"; then
+        echo "FAIL integration: mixed QE+dev test file passed" >&2; fail=1
+    else
+        printf 'PASS integration: mixed QE+dev test file fails\n'
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: mixed file passed unattributed" >&2; fail=1
+    else
+        printf 'PASS integration: mixed file fails unattributed too\n'
     fi
 
     if [ "$fail" = "0" ]; then
