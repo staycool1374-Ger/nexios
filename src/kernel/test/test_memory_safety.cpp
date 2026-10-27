@@ -189,9 +189,10 @@ JARVIS_TEST(user_red_zone_heap_overflow_pf, "PRE: none | POST: none") {
 // Expect: virt_to_phys_in_pml4(slot_va, kernel PML4) == 0; the stack above
 // it is mapped.
 // Depends: VMM page-table walk, kslot window wiring
-//           Off x86_64 there is no kslot window (alloc_kslot stub returns 0
-//           by design; HHDM fallback): the pinned contract is slot == 0
-//           with the HHDM stack still mapped.
+//           rv64 has no kslot window (backend stub returns false by design;
+//           HHDM fallback): the pinned contract there is slot == 0 with the
+//           HHDM stack still mapped. x86_64 + aarch64 share the live window
+//           (#434 P2 unified — the old off-x86 pin is now rv64-only).
 JARVIS_TEST(kernel_red_zone_between_stack_data, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
@@ -199,9 +200,10 @@ JARVIS_TEST(kernel_red_zone_between_stack_data, "PRE: none | POST: none") {
         t->cleanup();
         delete t;
     });
-#if !defined(CONFIG_ARCH_X86_64)
-    // No kslot window off x86_64: the HHDM fallback carries no slot.
-    // Pin the documented fallback instead of the x86-only window.
+#if defined(CONFIG_ARCH_RISCV64)
+    // No kslot window on rv64 by design (exhaustion-0 backend stub): the
+    // HHDM fallback carries no slot. Pin the documented fallback; the
+    // live-window asserts below run on x86_64 + aarch64.
     JARVIS_ASSERT(t->kstack_slot_va_ == 0);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
                       reinterpret_cast<uint64_t>(t->kernel_stack),
@@ -221,6 +223,232 @@ JARVIS_TEST(kernel_red_zone_between_stack_data, "PRE: none | POST: none") {
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
                       reinterpret_cast<uint64_t>(t->kernel_stack),
                       VMM::get_kernel_pml4()) != 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #434 P2 kslot alloc — N live slots via the public task API:
+// each carries a distinct slot VA with guard-unmapped + stack-mapped walks.
+// Input: 8x create_user(32 KiB); walk each slot VA + stack VA.
+// Expect: slot!=0, all distinct; guard walk==0, stack walk!=0 (x86_64+aa64);
+// rv64 designed-false: slot==0 + HHDM stack mapped on every birth.
+// Depends: alloc_kslot via create_user, VMM walk, kslot window wiring
+JARVIS_TEST(kslot_alloc_many_walks, "PRE: none | POST: none") {
+    static constexpr size_t kN = 8;
+    TaskControlBlock *ts[kN] = {};
+    uint64_t vas[kN] = {};
+    for (size_t i = 0; i < kN; ++i) {
+        ts[i] = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+        JARVIS_ASSERT_FMT(ts[i] != nullptr, "create_user %zu failed", i);
+        vas[i] = ts[i]->kstack_slot_va_;
+    }
+#if defined(CONFIG_ARCH_RISCV64)
+    // Designed-false: no window on rv64 — every birth takes exhaustion-0.
+    for (size_t i = 0; i < kN; ++i) {
+        JARVIS_ASSERT_FMT(vas[i] == 0, "rv64 slot %zu live", i);
+        JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
+                          reinterpret_cast<uint64_t>(ts[i]->kernel_stack),
+                          VMM::get_kernel_pml4()) != 0);
+    }
+#else
+    for (size_t i = 0; i < kN; ++i) {
+        JARVIS_ASSERT_FMT(vas[i] != 0, "slot %zu missing", i);
+        for (size_t j = 0; j < i; ++j)
+            JARVIS_ASSERT_FMT(vas[i] != vas[j], "slots %zu/%zu collide", i,
+                              j);
+        JARVIS_ASSERT_FMT(VMM::virt_to_phys_in_pml4(vas[i],
+                                                    VMM::get_kernel_pml4()) ==
+                              0,
+                          "guard 0x%lx mapped", vas[i]);
+        JARVIS_ASSERT_FMT(
+            VMM::virt_to_phys_in_pml4(vas[i] + 4096,
+                                      VMM::get_kernel_pml4()) != 0,
+            "stack 0x%lx unmapped", vas[i] + 4096);
+    }
+#endif
+    for (size_t i = 0; i < kN; ++i) {
+        ts[i]->cleanup();
+        delete ts[i];
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #434 P2 kslot churn-steady — repeated alloc/free cycles hold
+// steady with no growth, no leak, no panic (pool dynamics are baseline
+// state, so exact-VA LIFO is asserted by code-read of the head-take path,
+// not by VA equality here: every cycle must hand back a live slot).
+// Input: 70x create_user(32 KiB) -> destroy, asserting slot!=0 each time.
+// Expect: all 70 slots nonzero + distinctness not required across cycles
+// (reuse is opportunistic); zero ResourceTracker delta at class end.
+// Depends: alloc_kslot, free_kslot, teardown
+JARVIS_TEST(kslot_churn_steady, "PRE: none | POST: none") {
+    static constexpr size_t kCycles = 70;
+    for (size_t i = 0; i < kCycles; ++i) {
+        auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+        JARVIS_ASSERT_FMT(t != nullptr, "churn create %zu failed", i);
+#if defined(CONFIG_ARCH_RISCV64)
+        JARVIS_ASSERT(t->kstack_slot_va_ == 0);
+#else
+        JARVIS_ASSERT_FMT(t->kstack_slot_va_ != 0, "churn slot %zu missing",
+                          i);
+#endif
+        t->cleanup();
+        delete t;
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #434 P2 kslot serves every task the system can host — fill
+// live tasks until creation stops: the stop must be the task-cap nullptr,
+// with every created task slotted (kslot is never the binding constraint:
+// 64 tasks x 36 KiB = 2.3 MiB << 16 MiB window). The true window-full
+// slot==0 path is defensive (unreachable while task-cap binds first) and
+// stays code-read-verified (P1 return-0 + C1 loud-once warn + HHDM
+// fallback); if it ever fires here, its fallback is asserted mapped.
+// Input: create_user(32 KiB) loop, cap 600; walk the stopped task.
+// Expect: stopped early (< cap); all created slots nonzero+distinct, or a
+// slot==0 with HHDM stack mapped; all torn down, zero delta.
+// Depends: alloc_kslot bump bound, task create cap, HHDM fallback, teardown
+JARVIS_TEST(kslot_exhaustion_task_cap, "PRE: none | POST: none") {
+    static constexpr size_t kCap = 600;
+    static TaskControlBlock *ts[kCap];
+    size_t filled = 0;
+    size_t fail_at = kCap;
+    bool null_cap = false;
+    for (; filled < kCap; ++filled) {
+        ts[filled] = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+        if (ts[filled] == nullptr) {
+            null_cap = true;
+            fail_at = filled;
+            break;
+        }
+        if (ts[filled]->kstack_slot_va_ == 0) {
+            fail_at = filled;
+            break;
+        }
+    }
+    JARVIS_ASSERT_FMT(fail_at < kCap, "no bound hit in %zu creates", kCap);
+    for (size_t i = 0; i < fail_at; ++i) {
+        JARVIS_ASSERT_FMT(ts[i]->kstack_slot_va_ != 0, "slot %zu missing", i);
+        for (size_t j = 0; j < i; ++j)
+            JARVIS_ASSERT_FMT(ts[i]->kstack_slot_va_ != ts[j]->kstack_slot_va_,
+                              "slots %zu/%zu collide", i, j);
+    }
+    if (null_cap) {
+        // Task-cap bound: kslot served every hosted task (window-math holds:
+        // fail_at x 36 KiB fits the 16 MiB window with room to spare).
+        JARVIS_ASSERT_FMT(fail_at * 36864ULL < 16ULL * 1024 * 1024,
+                          "kslot bound first at %zu", fail_at);
+    } else {
+        // Defensive window-full: HHDM fallback stack is mapped and usable.
+        JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
+                          reinterpret_cast<uint64_t>(ts[fail_at]->kernel_stack),
+                          VMM::get_kernel_pml4()) != 0);
+    }
+    for (size_t i = 0; i < fail_at; ++i) {
+        ts[i]->cleanup();
+        delete ts[i];
+    }
+    if (!null_cap) {
+        ts[fail_at]->cleanup();
+        delete ts[fail_at];
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #434 P2 kslot teardown — destroying tasks unmaps their window
+// leaves and zeroes the slot fields (no stale PTEs, no dangling handles).
+// Walks happen BEFORE the test ends (isolate rewind would mask a leak).
+// Input: 3x create_user(32 KiB); per task: pre-walks, cleanup, post-walks.
+// Expect: pre: guard==0 + stack!=0; post: guard==0 + stack==0 (unmapped) +
+// slot fields zeroed. rv64: HHDM path needs no unmap (fields already 0).
+// Depends: teardown order (unmap -> free_slot -> free phys -> zero fields)
+JARVIS_TEST(kslot_teardown_unmaps, "PRE: none | POST: none") {
+    static constexpr size_t kN = 3;
+    TaskControlBlock *ts[kN] = {};
+    uint64_t vas[kN] = {};
+    for (size_t i = 0; i < kN; ++i) {
+        ts[i] = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+        JARVIS_ASSERT_FMT(ts[i] != nullptr, "create_user %zu failed", i);
+        vas[i] = ts[i]->kstack_slot_va_;
+    }
+#if defined(CONFIG_ARCH_RISCV64)
+    for (size_t i = 0; i < kN; ++i) {
+        JARVIS_ASSERT(vas[i] == 0);
+        ts[i]->cleanup();
+        delete ts[i];
+    }
+    JARVIS_TEST_PASS();
+    return;
+#else
+    for (size_t i = 0; i < kN; ++i)
+        JARVIS_ASSERT_FMT(vas[i] != 0, "slot %zu missing", i);
+    for (size_t i = 0; i < kN; ++i) {
+        // Pre-destroy: guard unmapped, stack mapped (live slot).
+        JARVIS_ASSERT_FMT(VMM::virt_to_phys_in_pml4(vas[i],
+                                                    VMM::get_kernel_pml4()) ==
+                              0,
+                          "pre guard 0x%lx mapped", vas[i]);
+        JARVIS_ASSERT_FMT(
+            VMM::virt_to_phys_in_pml4(vas[i] + 4096,
+                                      VMM::get_kernel_pml4()) != 0,
+            "pre stack 0x%lx unmapped", vas[i] + 4096);
+        ts[i]->cleanup();
+        JARVIS_ASSERT_FMT(ts[i]->kstack_slot_va_ == 0, "slot %zu not zeroed",
+                          i);
+        JARVIS_ASSERT_FMT(ts[i]->kstack_slot_size_ == 0, "size %zu not zeroed",
+                          i);
+        // Post-destroy: the window leaves are gone (no stale PTEs).
+        JARVIS_ASSERT_FMT(VMM::virt_to_phys_in_pml4(vas[i],
+                                                    VMM::get_kernel_pml4()) ==
+                              0,
+                          "post guard 0x%lx mapped", vas[i]);
+        JARVIS_ASSERT_FMT(
+            VMM::virt_to_phys_in_pml4(vas[i] + 4096,
+                                      VMM::get_kernel_pml4()) == 0,
+            "post stack 0x%lx still mapped", vas[i] + 4096);
+        delete ts[i];
+    }
+    JARVIS_TEST_PASS();
+#endif
+}
+
+// Runmode: kernel
+// Testidea: #434 P2 ELF-born slot+walk — an ElfLoader-born user task routes
+// through the same allocator (provision_kstack funnel): it carries a live
+// slot with guard-unmapped + stack-mapped walks, runs, and tears down.
+// Input: load_probe stack-probe (runs + TERMINATES via its guard fault);
+// inspect slot + walks pre-dispatch; dispatch; join; drain.
+// Expect: slot!=0 (x86_64+aa64; ==0 rv64 designed-false) + walks as above;
+// task TERMINATED; zero delta.
+// Depends: provision_kstack ELF funnel, ElfLoader, scheduler dispatch
+JARVIS_TEST(kslot_elf_born_slot_walk, "PRE: none | POST: none") {
+    auto *t = load_probe("bin/stack-probe.c.elf");
+    if (!t) {
+        JARVIS_TEST_PASS(); // probe ELF not built — skip (file convention)
+        return;
+    }
+#if defined(CONFIG_ARCH_RISCV64)
+    JARVIS_ASSERT(t->kstack_slot_va_ == 0);
+#else
+    JARVIS_ASSERT_FMT(t->kstack_slot_va_ != 0, "ELF-born slot missing");
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(t->kstack_slot_va_,
+                                  VMM::get_kernel_pml4()) == 0,
+        "ELF-born guard 0x%lx mapped", t->kstack_slot_va_);
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(t->kstack_slot_va_ + 4096,
+                                  VMM::get_kernel_pml4()) != 0,
+        "ELF-born stack 0x%lx unmapped", t->kstack_slot_va_ + 4096);
+#endif
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT(t->state == TaskState::TERMINATED);
+    kernel::test::terminate_and_drain(*t);
     JARVIS_TEST_PASS();
 }
 
@@ -363,6 +591,11 @@ void register_memory_safety_tests() {
     JARVIS_REGISTER_TEST(user_red_zone_stack_overflow_pf);
     JARVIS_REGISTER_TEST(user_red_zone_heap_overflow_pf);
     JARVIS_REGISTER_TEST(kernel_red_zone_between_stack_data);
+    JARVIS_REGISTER_TEST(kslot_alloc_many_walks); // #434 P2 alloc+walks
+    JARVIS_REGISTER_TEST(kslot_churn_steady); // #434 P2 churn-steady
+    JARVIS_REGISTER_TEST(kslot_exhaustion_task_cap); // #434 P2 task-cap bound
+    JARVIS_REGISTER_TEST(kslot_teardown_unmaps); // #434 P2 teardown
+    JARVIS_REGISTER_TEST(kslot_elf_born_slot_walk); // #434 P2 ELF funnel
     JARVIS_REGISTER_TEST(canary_installed_at_segment_boundaries);
     JARVIS_REGISTER_TEST(canary_tamper_detected_on_syscall);
     JARVIS_REGISTER_TEST(canary_intact_after_normal_dispatch);
