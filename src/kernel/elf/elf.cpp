@@ -754,11 +754,23 @@ static void install_segment_canaries(TaskControlBlock *tcb,
     }
 
     if (text_base) {
-        tcb->canary_before[text] = text_base;
-        canary_write_at(text_base,
-                        TaskControlBlock::CANARY_MAGIC ^ (text + 1),
-                        tcb->get_page_table());
-        tcb->canary_installed |= (1u << text);
+        // Issue #429: never clobber the entry bytes. The canary slot is
+        // the first 8 bytes of the first X segment; when the ELF entry
+        // point lives there (the normal case: _start at the segment base),
+        // writing the canary destroys the entry and the task faults on
+        // dispatch (observed: UDF at entry, no sys_exit, unreaped leak).
+        // Skip the install in that case: the verify loop skips zero
+        // addresses, so an uninstalled canary is fail-closed (none
+        // claimed, none checked). canary_before[text] stays 0.
+        if (hdr->entry >= text_base && hdr->entry < text_base + 8) {
+            tcb->canary_before[text] = 0;
+        } else {
+            tcb->canary_before[text] = text_base;
+            canary_write_at(text_base,
+                            TaskControlBlock::CANARY_MAGIC ^ (text + 1),
+                            tcb->get_page_table());
+            tcb->canary_installed |= (1u << text);
+        }
     }
     if (text_after) {
         tcb->canary_after[text] = text_after;
