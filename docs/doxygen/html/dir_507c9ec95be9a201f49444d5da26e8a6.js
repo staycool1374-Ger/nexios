@@ -12,6 +12,7 @@ var dir_507c9ec95be9a201f49444d5da26e8a6 =
     [ "exit_record.hpp", "exit__record_8hpp.html", "exit__record_8hpp" ],
     [ "idle_monitor.cpp", "idle__monitor_8cpp.html", "idle__monitor_8cpp" ],
     [ "idle_monitor.hpp", "idle__monitor_8hpp.html", "idle__monitor_8hpp" ],
+    [ "kslot_backend.hpp", "kslot__backend_8hpp.html", "kslot__backend_8hpp" ],
     [ "priority_map.hpp", "priority__map_8hpp.html", "priority__map_8hpp" ],
     [ "ready_queue_manager.cpp", "ready__queue__manager_8cpp.html", "ready__queue__manager_8cpp" ],
     [ "ready_queue_manager.hpp", "ready__queue__manager_8hpp.html", "ready__queue__manager_8hpp" ],

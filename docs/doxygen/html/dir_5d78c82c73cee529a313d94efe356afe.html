@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -136,6 +136,8 @@ Files</h2></td></tr>
 <tr class="memitem:idt_2Ecpp" id="r_idt_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2idt_8cpp.html">idt.cpp</a></td></tr>
 <tr class="memdesc:riscv64_2idt_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 interrupt dispatch table (stvec-based) — registers per-vector ISR handlers and dispatches via trap_vector. <br /></td></tr>
 <tr class="memitem:interrupt_5Fcontroller_2Ecpp" id="r_interrupt_5Fcontroller_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2interrupt__controller_8cpp.html">interrupt_controller.cpp</a></td></tr>
+<tr class="memitem:kslot_5Fbackend_2Ecpp" id="r_kslot_5Fbackend_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2kslot__backend_8cpp.html">kslot_backend.cpp</a></td></tr>
+<tr class="memdesc:riscv64_2kslot__backend_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">#434 P1: rv64 kslot window backend — STUB (non-goal this issue). wire_window_tables() returns false so alloc_kslot() takes the documented exhaustion-0 path (general mechanism, no arch guard in callers). The interface admits a future rv64 instantiation without caller changes. Build-selected via arch/&lt;arch&gt;/ discovery; no CONFIG_ARCH guard here. <br /></td></tr>
 <tr class="memitem:rtc_2Ecpp" id="r_rtc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2rtc_8cpp.html">rtc.cpp</a></td></tr>
 <tr class="memdesc:riscv64_2rtc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">RISC-V64 RTC driver — Goldfish wall clock when the DTB provides it (<span class="tt">google,goldfish-rtc</span>), mtime uptime fallback otherwise (issue #355; supersedes the uptime-only driver for the DTB-present case). <br /></td></tr>
 <tr class="memitem:serial_2Ecpp" id="r_serial_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="riscv64_2serial_8cpp.html">serial.cpp</a></td></tr>

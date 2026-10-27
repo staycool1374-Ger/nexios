@@ -25,7 +25,7 @@
 
 /// @brief Kernel version — single source of truth.
 /// Format: "vmajor.minor.patch-stage"
-#define KERNEL_VERSION_STRING "v0.5.6-dev"
+#define KERNEL_VERSION_STRING "v0.5.6"
 
 /// @brief Picolibc version backing the user-space runtime (issue #244).
 /// Injected by the Makefile from PICOLIBC_VERSION as a pp-number

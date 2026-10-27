@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -147,6 +147,8 @@ Files</h2></td></tr>
 <tr class="memdesc:idle__monitor_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-task safety monitors, foundation slice (issues #43/#282). M1-M6 contract (docs/specs/idle_monitor.md §1): BSP-idle only, chunk-budgeted, noexcept, no allocation, no new locks, skip invalid, test seams, never kills. <br /></td></tr>
 <tr class="memitem:idle_5Fmonitor_2Ehpp" id="r_idle_5Fmonitor_2Ehpp"><td class="memItemLeft"><a href="idle__monitor_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="idle__monitor_8hpp.html">idle_monitor.hpp</a></td></tr>
 <tr class="memdesc:idle__monitor_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Idle-task safety monitors, foundation slice (issues #43/#282). Normative contract: docs/specs/idle_monitor.md §1 (M1-M6). The monitor READS task state and SETS flags; it never kills, reaps, reprioritizes, or rebudgets (M6 — violation is an S1 audit finding). Escalation flows only through existing handler paths (spec §3 E1-E3). <br /></td></tr>
+<tr class="memitem:kslot_5Fbackend_2Ehpp" id="r_kslot_5Fbackend_2Ehpp"><td class="memItemLeft"><a href="kslot__backend_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="kslot__backend_8hpp.html">kslot_backend.hpp</a></td></tr>
+<tr class="memdesc:kslot__backend_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">#434 P1: arch-neutral kslot window backend interface (SPEC §3.1). <br /></td></tr>
 <tr class="memitem:priority_5Fmap_2Ehpp" id="r_priority_5Fmap_2Ehpp"><td class="memItemLeft"><a href="priority__map_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="priority__map_8hpp.html">priority_map.hpp</a></td></tr>
 <tr class="memdesc:priority__map_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Two-level bitmap for O(1) highest-priority lookup. <br /></td></tr>
 <tr class="memitem:ready_5Fqueue_5Fmanager_2Ecpp" id="r_ready_5Fqueue_5Fmanager_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="ready__queue__manager_8cpp.html">ready_queue_manager.cpp</a></td></tr>

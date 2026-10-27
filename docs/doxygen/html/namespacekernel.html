@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -726,6 +726,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:afa5566867274b1950bc3ed7acc375508"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the kstack-window PT contents and slot bookkeeping into <code class="param">dst</code> (must hold &gt;= <a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895" title="Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot boo...">kslot_snapshot_bytes()</a> bytes).  <br /></td></tr>
 <tr class="memitem:a74d19182fedd131cc4450ebe5242359e" id="r_a74d19182fedd131cc4450ebe5242359e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a74d19182fedd131cc4450ebe5242359e">kslot_snapshot_restore</a> (const uint8_t *src)</td></tr>
 <tr class="memdesc:a74d19182fedd131cc4450ebe5242359e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore the kstack-window PT contents and slot bookkeeping from <code class="param">src</code>, and flush the TLB for every window VA.  <br /></td></tr>
+<tr class="memitem:a0755c0274728a5f8e10b6a5b4bd0c9fc" id="r_a0755c0274728a5f8e10b6a5b4bd0c9fc"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a0755c0274728a5f8e10b6a5b4bd0c9fc">is_stack_guard_fault</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t, uint64_t fault_va) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a0755c0274728a5f8e10b6a5b4bd0c9fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Guard-fault predicate shared by all arch fault entries (#434 P3): true iff <code class="param">t</code> owns a kslot window (slot VA != 0, i.e. non-HHDM) and <code class="param">fault_va</code> lies in the unmapped guard page [kstack_slot_va_, kstack_slot_va_ + PAGE_SIZE). Arch-neutral (no CONFIG_ARCH/ifdefs at call sites): the x86 #PF block calls this behavior-identically, the aa64 EL1 fault entry uses it to arm the guard-abort path.  <br /></td></tr>
 <tr class="memitem:a1d1f72f7161fa8a1f32d2692b7c90d8c" id="r_a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1d1f72f7161fa8a1f32d2692b7c90d8c">canary_write_at</a> (uint64_t va, uint64_t value, uint64_t pml4)</td></tr>
 <tr class="memdesc:a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code> (resolving the frame via HHDM). No-op when the page is not present.  <br /></td></tr>
 <tr class="memitem:a772626334577fb34746dd85c3e6e3b9c" id="r_a772626334577fb34746dd85c3e6e3b9c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a772626334577fb34746dd85c3e6e3b9c">canary_install_user_segments</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
@@ -4740,6 +4742,37 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a0755c0274728a5f8e10b6a5b4bd0c9fc" name="a0755c0274728a5f8e10b6a5b4bd0c9fc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0755c0274728a5f8e10b6a5b4bd0c9fc">&#9670;&#160;</a></span>is_stack_guard_fault()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::is_stack_guard_fault </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>t</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>fault_va</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Guard-fault predicate shared by all arch fault entries (#434 P3): true iff <code class="param">t</code> owns a kslot window (slot VA != 0, i.e. non-HHDM) and <code class="param">fault_va</code> lies in the unmapped guard page [kstack_slot_va_, kstack_slot_va_ + PAGE_SIZE). Arch-neutral (no CONFIG_ARCH/ifdefs at call sites): the x86 #PF block calls this behavior-identically, the aa64 EL1 fault entry uses it to arm the guard-abort path. </p>
+
+</div>
+</div>
 <a id="a39fa71941abf971947793936af03c774" name="a39fa71941abf971947793936af03c774"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a39fa71941abf971947793936af03c774">&#9670;&#160;</a></span>is_timerfd_vnode()</h2>
 
@@ -4804,6 +4837,12 @@ Here is the call graph for this function:</div>
 
 <p>Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping. </p>
 <dl class="section return"><dt>Returns</dt><dd>Byte count consumed by kslot_snapshot_capture/restore. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a25626431fd5ef9ee4a6698a65b1f0895_cgraph.png" border="0" usemap="#anamespacekernel_a25626431fd5ef9ee4a6698a65b1f0895_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 23 -->
+</div>
 
 </div>
 </div>
@@ -4823,6 +4862,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Capture the kstack-window PT contents and slot bookkeeping into <code class="param">dst</code> (must hold &gt;= <a class="el" href="#a25626431fd5ef9ee4a6698a65b1f0895" title="Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot boo...">kslot_snapshot_bytes()</a> bytes). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_afa5566867274b1950bc3ed7acc375508_cgraph.png" border="0" usemap="#anamespacekernel_afa5566867274b1950bc3ed7acc375508_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 24 -->
+</div>
 
 </div>
 </div>
@@ -4842,6 +4887,12 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Restore the kstack-window PT contents and slot bookkeeping from <code class="param">src</code>, and flush the TLB for every window VA. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a74d19182fedd131cc4450ebe5242359e_cgraph.png" border="0" usemap="#anamespacekernel_a74d19182fedd131cc4450ebe5242359e_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 25 -->
+</div>
 
 </div>
 </div>
@@ -4923,7 +4974,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_affaa475d1e0ac61cef604410e598aef5_cgraph.png" border="0" usemap="#anamespacekernel_affaa475d1e0ac61cef604410e598aef5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -4960,7 +5011,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a482dceb71eed911e238f19118e3b99db_cgraph.png" border="0" usemap="#anamespacekernel_a482dceb71eed911e238f19118e3b99db_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -4997,7 +5048,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa495f96fbf4a3d25bb1afcace8d3d05c_cgraph.png" border="0" usemap="#anamespacekernel_aa495f96fbf4a3d25bb1afcace8d3d05c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -5030,7 +5081,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a8f2fb39a6f3047468e5d7e0d47a055df_cgraph.png" border="0" usemap="#anamespacekernel_a8f2fb39a6f3047468e5d7e0d47a055df_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -5063,7 +5114,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a22a7b2029d884e2644e18996f6d32a7a_cgraph.png" border="0" usemap="#anamespacekernel_a22a7b2029d884e2644e18996f6d32a7a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -5098,7 +5149,7 @@ template&lt;typename... E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ac0dfc57c0ca659f41aec20aa95a6ee87_cgraph.png" border="0" usemap="#anamespacekernel_ac0dfc57c0ca659f41aec20aa95a6ee87_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 31 -->
 </div>
 
 </div>
@@ -5162,7 +5213,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a6a834ef9a5be3f74d413f335a5e8dcb5_cgraph.png" border="0" usemap="#anamespacekernel_a6a834ef9a5be3f74d413f335a5e8dcb5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 32 -->
 </div>
 
 </div>
@@ -5195,7 +5246,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a94e0b0f3cccf9c2ac2a901f8f57de7a5_cgraph.png" border="0" usemap="#anamespacekernel_a94e0b0f3cccf9c2ac2a901f8f57de7a5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 30 -->
+<!-- MAP 33 -->
 </div>
 
 </div>
@@ -5230,7 +5281,7 @@ template&lt;Enum E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a60ced87cba5aa87864a6cbc268bc66d6_cgraph.png" border="0" usemap="#anamespacekernel_a60ced87cba5aa87864a6cbc268bc66d6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 31 -->
+<!-- MAP 34 -->
 </div>
 
 </div>
@@ -5263,7 +5314,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a86a023bc72a32ad58b7d72e845565c03_cgraph.png" border="0" usemap="#anamespacekernel_a86a023bc72a32ad58b7d72e845565c03_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 32 -->
+<!-- MAP 35 -->
 </div>
 
 </div>
@@ -5296,7 +5347,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ac1a6a8f9c61fb801dd07e17dc160aad0_cgraph.png" border="0" usemap="#anamespacekernel_ac1a6a8f9c61fb801dd07e17dc160aad0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 33 -->
+<!-- MAP 36 -->
 </div>
 
 </div>
@@ -5350,7 +5401,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.png" border="0" usemap="#anamespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 34 -->
+<!-- MAP 37 -->
 </div>
 
 </div>
@@ -5451,7 +5502,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afd055fda8598441f99e25ff68ddfd338_cgraph.png" border="0" usemap="#anamespacekernel_afd055fda8598441f99e25ff68ddfd338_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 35 -->
+<!-- MAP 38 -->
 </div>
 
 </div>
@@ -5567,7 +5618,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ad809cb492189b631f97f59e576ca4566_cgraph.png" border="0" usemap="#anamespacekernel_ad809cb492189b631f97f59e576ca4566_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 36 -->
+<!-- MAP 39 -->
 </div>
 
 </div>
@@ -5633,7 +5684,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph.png" border="0" usemap="#anamespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 37 -->
+<!-- MAP 40 -->
 </div>
 
 </div>
@@ -5665,7 +5716,7 @@ The fd index, or VFS_INVALID on failure. </dd></dl>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.png" border="0" usemap="#anamespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 38 -->
+<!-- MAP 41 -->
 </div>
 
 </div>
@@ -5691,7 +5742,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph.png" border="0" usemap="#anamespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 39 -->
+<!-- MAP 42 -->
 </div>
 
 </div>
@@ -5723,7 +5774,7 @@ The fd index, or VFS_INVALID on failure. </dd></dl>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 40 -->
+<!-- MAP 43 -->
 </div>
 
 </div>
@@ -5866,7 +5917,7 @@ template&lt;typename E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aede26da92b8e8907e42f8360f5f5d4d6_cgraph.png" border="0" usemap="#anamespacekernel_aede26da92b8e8907e42f8360f5f5d4d6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 41 -->
+<!-- MAP 44 -->
 </div>
 
 </div>
@@ -5899,7 +5950,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a4c23531a101e27c4223754109ba5b89c_cgraph.png" border="0" usemap="#anamespacekernel_a4c23531a101e27c4223754109ba5b89c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 42 -->
+<!-- MAP 45 -->
 </div>
 
 </div>
@@ -5932,7 +5983,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_affb587aabb41091e32d5cf0f3c232149_cgraph.png" border="0" usemap="#anamespacekernel_affb587aabb41091e32d5cf0f3c232149_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 43 -->
+<!-- MAP 46 -->
 </div>
 
 </div>
@@ -5965,7 +6016,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a579cd1e79fb3b12f9a592183c66b3f7f_cgraph.png" border="0" usemap="#anamespacekernel_a579cd1e79fb3b12f9a592183c66b3f7f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 44 -->
+<!-- MAP 47 -->
 </div>
 
 </div>
@@ -6012,7 +6063,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph.png" border="0" usemap="#anamespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 45 -->
+<!-- MAP 48 -->
 </div>
 
 </div>
@@ -6481,7 +6532,7 @@ template&lt;Enum E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a56febead1e6ad1b0808a6b0807c5aebf_cgraph.png" border="0" usemap="#anamespacekernel_a56febead1e6ad1b0808a6b0807c5aebf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 46 -->
+<!-- MAP 49 -->
 </div>
 
 </div>
@@ -6514,7 +6565,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a86b16fba95948e6798ebd256bf7cb80b_cgraph.png" border="0" usemap="#anamespacekernel_a86b16fba95948e6798ebd256bf7cb80b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 47 -->
+<!-- MAP 50 -->
 </div>
 
 </div>
@@ -6553,7 +6604,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a6b5ee8c17a9a6bdac4152aff1443b58b_cgraph.png" border="0" usemap="#anamespacekernel_a6b5ee8c17a9a6bdac4152aff1443b58b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 48 -->
+<!-- MAP 51 -->
 </div>
 
 </div>
@@ -6595,7 +6646,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a58d591caf1b230899994e1ab11a29415_cgraph.png" border="0" usemap="#anamespacekernel_a58d591caf1b230899994e1ab11a29415_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 49 -->
+<!-- MAP 52 -->
 </div>
 
 </div>

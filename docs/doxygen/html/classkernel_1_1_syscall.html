@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -368,6 +368,10 @@ Here is the call graph for this function:</div>
 <div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a291554596c183e837f0a6bec3767c891">SyscallNumber::PAUSE</a>,</div>
 <div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a65abf85acd7ea0c82f179038bdc375f5">SyscallNumber::REBOOT</a>,</div>
 <div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abf2d798abfe8267da4f101692b6cfecd">SyscallNumber::HALT</a>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abc29579fba5bfdf69102c3d9e1295082">SyscallNumber::ABI_VERSION</a>, </div>
+<div class="line">    </div>
+<div class="line">    </div>
+<div class="line">    </div>
 <div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a1c2e112ea60c1b1a83a5410d7dfa4fcd">SyscallNumber::SEND_FAST</a>,</div>
 <div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a5d465054367acd24c976f3ada51e493a">SyscallNumber::RECV_FAST</a>,</div>
 <div class="line">    <a class="code hl_enumvalue" href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a92b091b1c0aac5962a42c441bd5380f1">SyscallNumber::SEND_SYNC_FAST</a>,</div>
@@ -381,6 +385,7 @@ Here is the call graph for this function:</div>
 <div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a65abf85acd7ea0c82f179038bdc375f5"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a65abf85acd7ea0c82f179038bdc375f5">kernel::SyscallNumber::REBOOT</a></div><div class="ttdeci">@ REBOOT</div><div class="ttdef"><b>Definition</b> syscall.hpp:79</div></div>
 <div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a83e990574e4601b663d42b05121bf312"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a83e990574e4601b663d42b05121bf312">kernel::SyscallNumber::GET_TICKS</a></div><div class="ttdeci">@ GET_TICKS</div><div class="ttdef"><b>Definition</b> syscall.hpp:35</div></div>
 <div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270a92b091b1c0aac5962a42c441bd5380f1"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a92b091b1c0aac5962a42c441bd5380f1">kernel::SyscallNumber::SEND_SYNC_FAST</a></div><div class="ttdeci">@ SEND_SYNC_FAST</div><div class="ttdoc">register-passing SEND_SYNC (issue #11)</div><div class="ttdef"><b>Definition</b> syscall.hpp:106</div></div>
+<div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270abc29579fba5bfdf69102c3d9e1295082"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abc29579fba5bfdf69102c3d9e1295082">kernel::SyscallNumber::ABI_VERSION</a></div><div class="ttdeci">@ ABI_VERSION</div><div class="ttdoc">query NEXIOS_ABI_MAJOR&lt;&lt;16|MINOR (issue #70)</div><div class="ttdef"><b>Definition</b> syscall.hpp:114</div></div>
 <div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270abf2d798abfe8267da4f101692b6cfecd"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270abf2d798abfe8267da4f101692b6cfecd">kernel::SyscallNumber::HALT</a></div><div class="ttdeci">@ HALT</div><div class="ttdef"><b>Definition</b> syscall.hpp:80</div></div>
 <div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270ac0e9b39754d7e9a33ea37fc69fb104e2"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270ac0e9b39754d7e9a33ea37fc69fb104e2">kernel::SyscallNumber::DESTROY_MAILBOX</a></div><div class="ttdeci">@ DESTROY_MAILBOX</div><div class="ttdef"><b>Definition</b> syscall.hpp:38</div></div>
 <div class="ttc" id="anamespacekernel_html_a210a0a299a55c9ad49ab6b2b4542d270af96eee4e48ee90430f17fb3a8388507b"><div class="ttname"><a href="namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af96eee4e48ee90430f17fb3a8388507b">kernel::SyscallNumber::PRINT</a></div><div class="ttdeci">@ PRINT</div><div class="ttdef"><b>Definition</b> syscall.hpp:34</div></div>

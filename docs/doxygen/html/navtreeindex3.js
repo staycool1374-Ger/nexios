@@ -1,5 +1,6 @@
 var NAVTREEINDEX3 =
 {
+"classkernel_1_1_ready_queue_manager.html#a5bbe9153737ac77841bcbbb4ac644b42":[2,0,3,54,14],
 "classkernel_1_1_ready_queue_manager.html#a6b670132dd09b3a80e51653b3ad92172":[0,0,5,75,8],
 "classkernel_1_1_ready_queue_manager.html#a6b670132dd09b3a80e51653b3ad92172":[2,0,3,54,8],
 "classkernel_1_1_ready_queue_manager.html#a7cd0fb1e8df2a42e98dc99dc0957a5e3":[0,0,5,75,10],
@@ -248,6 +249,5 @@ var NAVTREEINDEX3 =
 "classkernel_1_1block_1_1_virtio_blk_driver.html#ad66294e9d38284fb4b12230461514788":[2,0,3,2,6,3],
 "classkernel_1_1block_1_1_virtio_blk_driver.html#afee1d23f846e35528bd2827fa1462ea5":[0,0,5,2,6,14],
 "classkernel_1_1block_1_1_virtio_blk_driver.html#afee1d23f846e35528bd2827fa1462ea5":[2,0,3,2,6,14],
-"classkernel_1_1cap_1_1_c_node.html":[0,0,5,6,0],
-"classkernel_1_1cap_1_1_c_node.html":[2,0,3,3,0]
+"classkernel_1_1cap_1_1_c_node.html":[0,0,5,6,0]
 };
