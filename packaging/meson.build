@@ -33,8 +33,42 @@ libc_a = static_library('c', libc_sources,
   # No LTO on libc objects: Make CCFLAGS never carry -flto
   # (LTO lives in debug CXXFLAGS/LDFLAGS only).
   override_options : ['b_lto=false'],
-  install : false,
+  install : true,
+  install_dir : '/opt/nexios-sdk/lib',
 )
+
+# --- SDK staging (issue #171 P5): install the Ring-3 surface under
+# /opt/nexios-sdk (absolute install_dir, destdir-safe for staged CI
+# verification: two `meson install --destdir` runs must diff clean).
+# Contents: public libc headers, lds/user_task.ld, crt0.o (installed
+# from src/meson.build), libc.a (above). The P2 generated stubs
+# (gen/nexios_syscalls.h) and P3 cap API (cap/nexios_cap.h) join this
+# manifest when P2/P3 merge (their lanes own the headers; libc.a
+# already picks up their objects via the find-based libc_sources
+# above — no rule change needed for that).
+install_data(files(
+    '../src/libc/syscall.h',
+    '../src/libc/sdk_version.h',
+    '../src/libc/errno.h',
+    '../src/libc/ipc.h',
+    '../src/libc/unistd.h',
+    '../src/libc/stdio.h',
+    '../src/libc/stdlib.h',
+    '../src/libc/string.h',
+    '../src/libc/time.h',
+    '../src/libc/signal.h',
+    '../src/libc/ctype.h',
+    '../src/libc/stdarg.h',
+  ),
+  install_dir : '/opt/nexios-sdk/include')
+install_data(files(
+    '../src/libc/sys/types.h',
+    '../src/libc/sys/stat.h',
+    '../src/libc/sys/utsname.h',
+  ),
+  install_dir : '/opt/nexios-sdk/include/sys')
+install_data(files('../lds/user_task.ld'),
+  install_dir : '/opt/nexios-sdk/lds')
 
 # --- Userspace discovery (mirrors USERSPACE_SRC; picolibc separate) ---
 _user_find = run_command('find', meson.project_source_root() / 'userspace',
