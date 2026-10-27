@@ -530,6 +530,19 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
 ///        program-header table (for canary installation).
 /// @param file_size Total file size in bytes.
 /// @return New TaskControlBlock, or nullptr on failure (partial state freed).
+///
+/// @brief Binding bootstrapping rule (issue #171 P4): no loader magic.
+///        A freshly finalized task owns NO capabilities: cspace_ stays
+///        null (lazy ensure_cspace on the first cap syscall) and the
+///        loader passes only argc/argv/envp on the user stack plus the
+///        entry point in the trap frame — no versioned launch struct
+///        (reserved-absent), no pre-seeded handles. Whatever a driver
+///        needs, its creator must grant/copy/mint into its CSpace before
+///        first dispatch (caller-relative handles). Exec preserves the
+///        rule by inheritance: exec_into_current keeps cspace_ untouched
+///        (mappings/FDs/TLS reset, caps kept). Any behavior change here
+///        requires a plan amendment and re-audit first (P4 scope: comment
+///        + seeding test only).
 TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
                                        uint64_t ustack_phys,
                                        const uint8_t *phdr_image,
