@@ -1082,6 +1082,9 @@ JARVIS_TEST(rerun_auth_decay_refused, "PRE: none | POST: none") {
 // stack and heap slots hold live derived magic after a rerun build,
 // TEXT-before is untouched since load (shared phys), and golden PTEs
 // are RW-clear with NX following PF_X.
+// Issue #429: the build_rw_elf fixture entry (0x400000) sits inside the
+// TEXT canary slot, so the installer skips it (never clobbers entry
+// bytes); TEXT-before assertions below verify the skip + intact entry.
 JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     elf::ElfLoader::reset();
     uint8_t img[8192];
@@ -1094,8 +1097,6 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     auto *t1 = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(t1 != nullptr);
     uint64_t id1 = t1->id;
-    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->get_page_table());
-    JARVIS_ASSERT(g0 != 0);
     elf::ElfLoader::note_launched(id1);
     elf::ElfLoader::note_task_end(id1, true, 0);
     t1->cleanup();
@@ -1116,15 +1117,20 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     const uint64_t text = TaskControlBlock::SEG_TEXT;
     const uint64_t heap = TaskControlBlock::SEG_HEAP;
     const uint64_t stk = TaskControlBlock::SEG_STACK;
-    JARVIS_ASSERT(t2->canary_installed & (1u << text));
+    JARVIS_ASSERT(!(t2->canary_installed & (1u << text)));
+    JARVIS_ASSERT(t2->canary_before[text] == 0);
     JARVIS_ASSERT(t2->canary_installed & (1u << heap));
     JARVIS_ASSERT(t2->canary_installed & (1u << stk));
-    // TEXT-before: shared phys since load (selective skip), live magic.
-    uint64_t tb = 0;
-    JARVIS_ASSERT(read8(t2->canary_before[text], t2->get_page_table(), tb));
-    JARVIS_ASSERT(tb == (TaskControlBlock::CANARY_MAGIC ^ (text + 1)));
-    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(t2->canary_before[text],
-                                            t2->get_page_table()) == g0);
+    // Issue #429: TEXT-before skipped — the fixture entry (0x400000) is
+    // inside the canary slot, so the installer leaves it alone: no
+    // installed bit, canary_before[text] stays 0.
+    // Entry bytes intact: the first 8 bytes are the original NOP fill
+    // (build_rw_elf), not canary magic — the loader never clobbers
+    // the entry point.
+    uint64_t entry0 = 0;
+    JARVIS_ASSERT(read8(0x400000, t2->get_page_table(), entry0));
+    JARVIS_ASSERT_FMT(entry0 == 0x9090909090909090ULL,
+                      "entry clobbered: 0x%lx", entry0);
     // HEAP + STACK slots: fresh pages, live derived magic both ends.
     uint64_t live = 0;
     JARVIS_ASSERT(read8(t2->canary_before[heap], t2->get_page_table(), live));
@@ -1204,6 +1210,8 @@ JARVIS_TEST(rerun_bss_only_data_canary, "PRE: none | POST: none") {
 // run must NOT free golden phys (live mapper owns them through its own
 // teardown); the live task stays byte-correct; everything reclaims
 // after death + drop.
+// Issue #429: TEXT canary slot asserts entry-bytes-intact (NOP fill),
+// not magic — the installer skips entry-overlapping slots.
 JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
     elf::ElfLoader::reset();
     uint8_t imgA[8192];
@@ -1230,9 +1238,10 @@ JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
     auto *tB = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(tB != nullptr);
     JARVIS_ASSERT(elf::ElfLoader::has_retained());
-    // Live task still byte-correct: TEXT canary slot holds derived
-    // magic (written at load into the shared golden page), the rest
-    // of the prefix is NOP fill.
+    // Live task still byte-correct: TEXT canary slot holds the original
+    // NOP fill (issue #429: installer skips the slot when the fixture
+    // entry 0x400000 sits inside it — entry bytes are never clobbered),
+    // the rest of the prefix is NOP fill.
     {
         uint64_t phys =
             VMM::virt_to_phys_in_pml4(0x400000, tA->get_page_table());
@@ -1242,8 +1251,8 @@ JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
                                     arch::HHDM_OFFSET + phys),
                          8);
         JARVIS_ASSERT_FMT(
-            slot == (TaskControlBlock::CANARY_MAGIC ^ (0 + 1)),
-            "live canary slot 0x%lx != derived", slot);
+            slot == 0x9090909090909090ULL,
+            "live entry bytes clobbered: 0x%lx", slot);
     }
     for (size_t i = 8; i < 24; ++i) {
         uint64_t phys =
