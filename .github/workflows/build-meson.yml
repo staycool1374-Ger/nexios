@@ -176,6 +176,9 @@ jobs:
     - name: Meson setup
       run: meson setup build/meson-x86_64 --cross-file cross/x86_64-elf.txt -Darch=x86_64
 
+    - name: Style gate + build
+      run: tools/meson/build.sh build/meson-x86_64
+
     - name: Host suites
       run: meson test -C build/meson-x86_64 --suite host --print-errorlogs
 
