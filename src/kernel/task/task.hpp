@@ -1151,6 +1151,16 @@ static_assert(sizeof(((TaskControlBlock *)nullptr)->fpu_state) ==
 // Note: 64-byte alignment of fpu_state is enforced by its alignas(64)
 // member specifier (offsetof is unavailable: TCB is non-standard-layout).
 
+/// @brief Guard-fault predicate shared by all arch fault entries (#434 P3):
+///        true iff @p t owns a kslot window (slot VA != 0, i.e. non-HHDM)
+///        and @p fault_va lies in the unmapped guard page
+///        [kstack_slot_va_, kstack_slot_va_ + PAGE_SIZE).
+///        Arch-neutral (no CONFIG_ARCH/ifdefs at call sites): the x86 #PF
+///        block calls this behavior-identically, the aa64 EL1 fault entry
+///        uses it to arm the guard-abort path.
+bool is_stack_guard_fault(const TaskControlBlock &t,
+                          uint64_t fault_va) noexcept;
+
 /// @brief Total snapshot bytes for the kernel-stack window state
 ///        (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping.
 /// @return Byte count consumed by kslot_snapshot_capture/restore.
