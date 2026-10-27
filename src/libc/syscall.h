@@ -305,17 +305,9 @@ static inline long sys_watchdog_kick(void) {
 #define NEXIOS_ABI_MINOR 0
 #define SYS_MAX          86
 
-// SDK internal versioning from 0.1 (spec §14, issue #171 P0): SDK layout,
-// Capability-API, and crt0 entry contract version independently. SDK 0.x =
-// unstable: layout/contract may break on minor, API calls append-only.
-// CRT0_CONTRACT starts at 1 (0 is reserved = unset, same doctrine as
-// tls_base_ == 0); enforced by the crt0 self-check matrix (§14), the
-// loader stays dumb.
-#define NEXIOS_SDK_MAJOR     0
-#define NEXIOS_SDK_MINOR     1
-#define NEXIOS_CAP_API_MAJOR 0
-#define NEXIOS_CAP_API_MINOR 1
-#define NEXIOS_CRT0_CONTRACT 1
+// SDK internal versioning macros live in sdk_version.h (spec §14,
+// issue #171) so kernel test TUs can consume them without libc types.
+#include "sdk_version.h"
 
 static inline long sys_tls_set(unsigned long base) {
     return __syscall5(SYS_TLS_SET, (long)base, 0, 0, 0);
