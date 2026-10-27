@@ -39,6 +39,9 @@ namespace kslot_backend {
 // Wire the window tables into the boot kernel PML4/TTBR1 (lazy, once).
 // Returns true when the window is usable; false means unusable on this
 // arch/build (caller takes the exhaustion-0 path — no arch guard outside).
+// P1-C1: all-or-nothing re-entry — partial wiring completes on retry,
+// usable is reported only when fully wired; failure is loud-once
+// (one-time serial/boot diagnostic), never silent.
 // Must be idempotent: a second call with tables present re-adopts them.
 bool wire_window_tables();
 

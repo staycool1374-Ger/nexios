@@ -27,13 +27,27 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/nexios_config.h>
 #include <constants.hpp>
+#include <logger.hpp>
 
 namespace kslot_backend {
 
 static uint64_t s_kstack_pt_pages[8] = {};
+// #434 P1-C1: all-or-nothing re-entry. Partial wiring (OOM mid-loop) leaves
+// adopted entries in place; a retry completes the missing tables. The window
+// is reported usable only when fully wired.
+static bool s_wired_complete = false;
+static bool s_wired_warned = false;
+
+static void warn_wire_failed_once() {
+    if (!s_wired_warned) {
+        s_wired_warned = true;
+        kernel::Logger::warn("kslot: window wiring FAILED — callers take "
+                             "the exhaustion-0 fallback, no guard page");
+    }
+}
 
 bool wire_window_tables() {
-    if (s_kstack_pt_pages[0])
+    if (s_wired_complete)
         return true;
     const uint64_t addr_mask = 0x0000FFFFFFFFFFFFULL;
     uint64_t base_48 = CONFIG_KSTACK_WINDOW_BASE & addr_mask;
@@ -49,8 +63,10 @@ bool wire_window_tables() {
     uint64_t pdpt_phys = 0;
     if (!(pml4[pml4_idx] & P)) {
         pdpt_phys = kernel::PMM::alloc_page_table();
-        if (!pdpt_phys)
+        if (!pdpt_phys) {
+            warn_wire_failed_once();
             return false;
+        }
         auto *pdpt =
             reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
         __builtin_memset(pdpt, 0, 4096);
@@ -63,8 +79,10 @@ bool wire_window_tables() {
     uint64_t pd_phys = 0;
     if (!(pdpt[pdpt_idx] & P)) {
         pd_phys = kernel::PMM::alloc_page_table();
-        if (!pd_phys)
+        if (!pd_phys) {
+            warn_wire_failed_once();
             return false;
+        }
         auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
         __builtin_memset(pd, 0, 4096);
         pdpt[pdpt_idx] = pd_phys | P | W;
@@ -76,8 +94,10 @@ bool wire_window_tables() {
     for (unsigned i = 0; i < 8; ++i) {
         if (!(pd[pd_idx + i] & P)) {
             s_kstack_pt_pages[i] = kernel::PMM::alloc_page_table();
-            if (!s_kstack_pt_pages[i])
+            if (!s_kstack_pt_pages[i]) {
+                warn_wire_failed_once();
                 return false;
+            }
             auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                                     s_kstack_pt_pages[i]);
             __builtin_memset(pt, 0, 4096);
@@ -90,6 +110,7 @@ bool wire_window_tables() {
     uint64_t cr3 = 0;
     asm volatile("mov %%cr3, %0" : "=r"(cr3) : : "memory");
     asm volatile("mov %0, %%cr3" : : "r"(cr3) : "memory");
+    s_wired_complete = true;
     return true;
 }
 

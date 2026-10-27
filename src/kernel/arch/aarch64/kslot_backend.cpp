@@ -30,12 +30,25 @@
 #include <kernel/nexios_config.h>
 #include <constants.hpp>
 #include <string.hpp>
+#include <logger.hpp>
 
 namespace kslot_backend {
 
 // Layout: s_tables[0]=L1 (for L0[288]), s_tables[1]=L2 (for L1[0]),
 // s_tables[2..9]=L3 (for L2[0..7]). Total 10 pages, mirrors x86 1+1+8.
 static uint64_t s_tables[10] = {};
+// #434 P1-C1: all-or-nothing re-entry (mirrors x86 backend). Partial wiring
+// completes on retry; usable only when fully wired. Failure is loud-once.
+static bool s_wired_complete = false;
+static bool s_wired_warned = false;
+
+static void warn_wire_failed_once() {
+    if (!s_wired_warned) {
+        s_wired_warned = true;
+        kernel::Logger::warn("kslot: window wiring FAILED — callers take "
+                             "the exhaustion-0 fallback, no guard page");
+    }
+}
 
 static constexpr uint64_t DESC_VALID = 1ULL << 0;
 static constexpr uint64_t DESC_TABLE = 1ULL << 1;
@@ -51,7 +64,7 @@ static constexpr uint64_t PHYS_MASK = ((1ULL << 48) - 1) & ~0xFFFULL;
 static constexpr uint64_t VA48_MASK = 0x0000FFFFFFFFFFFFULL;
 
 bool wire_window_tables() {
-    if (s_tables[0] && s_tables[1] && s_tables[2])
+    if (s_wired_complete)
         return true;
     const uint64_t base_48 = CONFIG_KSTACK_WINDOW_BASE & VA48_MASK;
     const size_t l0_idx = (base_48 >> 39) & 0x1FF;
@@ -69,8 +82,10 @@ bool wire_window_tables() {
     uint64_t l1_phys = 0;
     if (!(l0[l0_idx] & DESC_VALID)) {
         l1_phys = kernel::PMM::alloc_page_table();
-        if (!l1_phys)
+        if (!l1_phys) {
+            warn_wire_failed_once();
             return false;
+        }
         __builtin_memset(
             reinterpret_cast<void *>(arch::HHDM_OFFSET + l1_phys), 0, 4096);
         l0[l0_idx] = l1_phys | DESC_VALID | DESC_TABLE;
@@ -85,8 +100,10 @@ bool wire_window_tables() {
     uint64_t l2_phys = 0;
     if (!(l1[win_l1] & DESC_VALID)) {
         l2_phys = kernel::PMM::alloc_page_table();
-        if (!l2_phys)
+        if (!l2_phys) {
+            warn_wire_failed_once();
             return false;
+        }
         __builtin_memset(
             reinterpret_cast<void *>(arch::HHDM_OFFSET + l2_phys), 0, 4096);
         l1[win_l1] = l2_phys | DESC_VALID | DESC_TABLE;
@@ -100,8 +117,10 @@ bool wire_window_tables() {
     for (size_t i = 0; i < 8; ++i) {
         if (!(l2[win_l2 + i] & DESC_VALID)) {
             uint64_t l3_phys = kernel::PMM::alloc_page_table();
-            if (!l3_phys)
+            if (!l3_phys) {
+                warn_wire_failed_once();
                 return false;
+            }
             __builtin_memset(
                 reinterpret_cast<void *>(arch::HHDM_OFFSET + l3_phys), 0,
                 4096);
@@ -113,6 +132,7 @@ bool wire_window_tables() {
     }
 
     arch::ArchPageTable::tlb_flush_all();
+    s_wired_complete = true;
     return true;
 }
 
