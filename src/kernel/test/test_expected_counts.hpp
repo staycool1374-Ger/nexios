@@ -79,7 +79,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // process
     {"process_lifecycle",    16,   16,      16     },  // process lifecycle, child table, clone with real user parents
     {"process_elf",           9,    0,       0      },  // ELF validation, segments
-    {"elf_loader",            25,   25,      25     },  // chunked background loader: success/errors/cancel/authenticity/decay/fork
+    {"elf_loader",            28,   28,      28     },  // chunked background loader: success/errors/cancel/authenticity/decay/fork + P2 roundtrip + P3 smoke + #431 mismatch
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit, brk
@@ -297,7 +297,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_sched",          112,  0,       0      },  // scheduler_*
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         124,  0,       0      },  // memory_* incl. NX/W^X pins
-    {"core_syscall",        85,   0,       0      },  // syscall_*, debug_syscall, tls
+    {"core_syscall",          88,    0,       0      },  // syscall_*, debug_syscall, tls
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
     {"capability",          149,  0,       0      },  // cap_* excl. iommu_live
