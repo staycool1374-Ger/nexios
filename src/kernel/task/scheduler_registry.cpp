@@ -261,6 +261,20 @@ Scheduler::set_tls_base_err(TaskControlBlock &task, uint64_t base) noexcept {
         arch::write_tpidr_el0(base);
 #elif defined(CONFIG_ARCH_RISCV64)
         arch::write_tp(base);
+        // P2 rv64: the trap epilogue restores TP from the per-trap OFF_TP
+        // save area (syscall_entry.S exit-consume), clobbering the live
+        // write above before userspace resumes — the first errno touch
+        // then faults at VA 0. Publish through the deferred slot as well
+        // so this trap's exit-consume applies the base to the save area.
+        // Trap-context only (nesting depth > 0): direct Syscall::handle
+        // calls from kernel/test context have no trap exit to consume
+        // the slot, and a stale slot would leak into the next trap's
+        // epilogue on this hart (single-hart, SIE-clear: no other
+        // publisher can interleave a genuine trap's arm).
+        if (isr_nesting_own() != 0) {
+            __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), base,
+                             __ATOMIC_RELEASE);
+        }
 #endif
     }
     return errors::SCHED_ERR_OK;
