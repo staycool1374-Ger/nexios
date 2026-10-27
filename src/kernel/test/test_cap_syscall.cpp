@@ -358,6 +358,93 @@ JARVIS_TEST(sys_cap_mint_dispatch, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: #171 P4 creator-seeding: a fresh task owns no caps; everything
+//        in a seeded CSpace arrives through an explicit grant the creator
+//        performs itself (mirroring what a creator does before first
+//        dispatch — the loader grants nothing, exec inherits, see the
+//        finalize_loaded_task / exec_into_current rule comments).
+// Input: fresh create_user task asserts null CSpace; creator installs a
+//        dest CNode + grants a Task cap via SYS_CAP_GRANT; sibling fresh
+//        task asserts null CSpace (no cross-task leakage).
+// Expect: newborn cspace null; grant returns a usable opaque handle;
+//        dest holds exactly the granted cap (occupied_count == 1,
+//        lookup resolves the granted target); sibling still null.
+// Depends: finalize_loaded_task (no seeding), ensure_cspace (lazy),
+//          SYS_CAP_GRANT dispatch, cap::lookup.
+JARVIS_TEST(sys_cap_creator_seeding_exact, "PRE: none | POST: none") {
+    static uint64_t g_grant = 0;
+    static uint64_t g_occ = 0;
+    static bool g_resolved = false;
+    static bool g_sibling_null = false;
+
+    g_grant = 0;
+    g_occ = 0;
+    g_resolved = false;
+    g_sibling_null = false;
+
+    auto *t = run_cap_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Birth state (P4 binding rule): the loader seeds nothing, the
+        // CSpace is null until first use.
+        if (cur->get_cspace() != nullptr)
+            return;
+        cur->ensure_cspace();
+        cap::CNode *cspace = cur->get_cspace();
+        auto *tgt =
+            static_cast<TestTarget *>(MemPool::alloc(sizeof(TestTarget)));
+        if (!tgt)
+            return;
+        new (tgt) TestTarget;
+        tgt->mark_pool_backed();
+        kernel::test::ResourceTracker::instance().track_cap_object_add();
+
+        int ss = cspace->install(tgt, cap::CapType::Task,
+                                 cap::CapRights::READ | cap::CapRights::GRANT);
+        cap::CNode *dst = nullptr;
+        int ds = -1;
+        install_dest_cspace(cur, &dst, &ds);
+        if (ss < 0 || ds < 0) {
+            tgt->release();
+            return;
+        }
+        uint64_t sh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ss),
+                               cspace->slot_gen(static_cast<uint32_t>(ss)));
+        uint64_t dh =
+            cap::encode_handle(cspace->cspace_id, static_cast<uint32_t>(ds),
+                               cspace->slot_gen(static_cast<uint32_t>(ds)));
+        // The creator's explicit grant is the only way the dest CSpace
+        // gains a cap (loader magic: none).
+        g_grant = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::CAP_GRANT), sh, dh, 0, 0,
+            nullptr);
+        g_occ = cap::occupied_count(dst);
+        KernelObject *pinned = cap::lookup(
+            dst, g_grant, cap::CapType::Task, cap::CapRights::READ);
+        g_resolved = (pinned == static_cast<KernelObject *>(tgt));
+        if (pinned)
+            pinned->release();
+        teardown_dest_cspace(cur, dst, ds);
+        cspace->remove(static_cast<uint32_t>(ss));
+        tgt->release();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(g_grant != static_cast<uint64_t>(-1));
+    JARVIS_ASSERT_EQ(1ULL, g_occ);
+    JARVIS_ASSERT(g_resolved);
+
+    // A sibling newborn owns nothing: no cross-task leakage.
+    auto *t2 = run_cap_task([]() {
+        auto *cur = Scheduler::current_task();
+        g_sibling_null = (cur->get_cspace() == nullptr);
+    });
+    JARVIS_ASSERT(t2 != nullptr);
+    JARVIS_ASSERT(g_sibling_null);
+    JARVIS_TEST_PASS();
+}
+
+
+// Runmode: kernel
 // Testidea: A bad (out-of-range / stale) handle makes the syscall return -1.
 // Input: task dispatches SYS_CAP_REVOKE with slot == CONFIG_CSLOT_COUNT
 // Expect: -1, no crash, CSpace unchanged
@@ -702,4 +789,5 @@ void register_cap_syscall_tests() {
     JARVIS_REGISTER_TEST(sys_cap_returned_handle_roundtrip); // issue #266
     JARVIS_REGISTER_TEST(sys_cap_grant_copy_revoke_lifecycle); // #171 P3
     JARVIS_REGISTER_TEST(sys_cap_grant_dst_full_returns_minus1); // #171 P3
+    JARVIS_REGISTER_TEST(sys_cap_creator_seeding_exact); // #171 P4
 }
