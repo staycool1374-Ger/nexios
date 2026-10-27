@@ -37,3 +37,12 @@ branch: <branch>
 scripts/agent_up.sh wake <n> dev nexios-coord "inbox: dev READY — read inbox/dev.md"
 ```
 After any compaction, re-anchor (re-read ANCHOR.md + pwd/runtime/state.json) before acting; never trust a recalled absolute path.
+
+## Parallelism (operator-confirmed)
+
+No worker idles at a handoff — briefing the NEXT task is part of finishing the current one:
+- Pipeline lanes: while a fix sits in audit/QE gates, dev starts the next lane's plan/read-only phase (no branch, no code). A parked worker is a coordinator failure, not patience.
+- Brief NEXT before the current task completes: QE's verification approach for feature N is briefed while it verifies fix N-1; the auditor takes the plan audit the moment the plan lands.
+- Pair plans: for features, dev drafts the implementation plan and QE drafts the verification approach in parallel, so the plan audit cross-checks build-vs-verify coverage before any code.
+- Merge prep never jumps gates: worktree creation, LEARNINGS, close, push happen only after audit APPROVED + QE READY are both on file.
+- Queued tasks are not rung: a QUEUED brief waits for its trigger (e.g. QE starts #171 work the moment it posts #406 READY, with or without a fresh ring).
