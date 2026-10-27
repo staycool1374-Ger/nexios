@@ -115,11 +115,12 @@ JARVIS_TEST(stack_alloc_multiple_tasks_distinct_stacks,
 // can never be swallowed.  New bool contract (issue #308).
 static uint64_t g_hook_task_id = 0;
 static uint64_t g_hook_rip = 0;
+static uint64_t g_hook_fault_va = 0;
 
 bool stack_overflow_hook(kernel::TaskControlBlock &task,
                          const kernel::debug::FirstChanceFrame &frame) {
-    (void)frame;
     g_hook_task_id = task.id;
+    g_hook_fault_va = frame.addr;
     g_hook_rip = 0xDEAD0000BEEFULL;
     if (kernel::Scheduler::is_test_active()) {
         // Synthetic-drive recovery: nothing to recover (we are not inside the
@@ -127,6 +128,16 @@ bool stack_overflow_hook(kernel::TaskControlBlock &task,
         return true;
     }
     return false;
+}
+
+// #434 P3: cross-TU latch readers for the aa64 guard-abort probe
+// (test_aarch64.cpp).  Additive only — x86 assertions unchanged.
+uint64_t stack_overflow_hook_latched_task() { return g_hook_task_id; }
+uint64_t stack_overflow_hook_latched_va() { return g_hook_fault_va; }
+void stack_overflow_hook_reset_latch() {
+    g_hook_task_id = 0;
+    g_hook_fault_va = 0;
+    g_hook_rip = 0;
 }
 
 JARVIS_TEST(stack_alloc_overflow_hook_weak_symbol,
@@ -155,8 +166,9 @@ JARVIS_TEST(stack_alloc_overflow_hook_weak_symbol,
 // Expect: virt_to_phys_in_pml4(slot_va, kernel PML4) == 0;
 // virt_to_phys_in_pml4(kernel_stack, kernel PML4) != 0.
 // Depends: VMM page-table walk, kslot window wiring
-// (Off x86_64 there is no kslot window; the pinned contract is the
-// HHDM fallback: slot == 0 with the stack mapped.)
+// (rv64 has no kslot window — backend stub returns 0 by design; HHDM
+// fallback: slot == 0 with the stack mapped. x86_64 + aarch64 share the
+// live window, #434 P2 unified — the old off-x86 pin is now rv64-only.)
 JARVIS_TEST(kstack_guard_base_unmapped, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
@@ -164,9 +176,10 @@ JARVIS_TEST(kstack_guard_base_unmapped, "PRE: none | POST: none") {
         t->cleanup();
         delete t;
     });
-#if !defined(CONFIG_ARCH_X86_64)
-    // No kslot window off x86_64: the HHDM fallback carries no slot.
-    // Pin the documented fallback instead of the x86-only window.
+#if defined(CONFIG_ARCH_RISCV64)
+    // No kslot window on rv64 by design (exhaustion-0 backend stub): the
+    // HHDM fallback carries no slot. Pin the documented fallback instead
+    // of the live window.
     JARVIS_ASSERT(t->kstack_slot_va_ == 0);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
                       reinterpret_cast<uint64_t>(t->kernel_stack),
@@ -242,13 +255,21 @@ JARVIS_TEST(kstack_overflow_invokes_hook, "PRE: none | POST: none") {
 // Depends: kslot snapshot helpers (task.cpp MP-6.3)
 JARVIS_TEST(kstack_slot_snapshot_restore_safe, "PRE: none | POST: none") {
     uint64_t free_before = PMM::free_pages_ref();
-    // 8 window PT pages (8*4096) + generous bookkeeping headroom.
-    static constexpr size_t KSLOT_SNAP_SIZE = 8 * arch::PAGE_SIZE + 4096;
+    // 8 window PT pages on x86 (8*4096) / 10 tables on aa64 + generous
+    // bookkeeping headroom (per-arch: rv64 stub needs 0 + bookkeeping,
+    // covered with room). Matches backend snapshot_bytes() on every arch.
+#if defined(CONFIG_ARCH_AARCH64)
+    static constexpr size_t KSLOT_SNAP_PAGES = 10;
+#else
+    static constexpr size_t KSLOT_SNAP_PAGES = 8;
+#endif
+    static constexpr size_t KSLOT_SNAP_SIZE =
+        KSLOT_SNAP_PAGES * arch::PAGE_SIZE + 4096;
     static uint8_t s_kslot_buf[KSLOT_SNAP_SIZE];
     JARVIS_ASSERT(kernel::kslot_snapshot_bytes() <= KSLOT_SNAP_SIZE);
 
-#if !defined(CONFIG_ARCH_X86_64)
-    // No kslot window off x86_64 (alloc_kslot stub returns 0 by design):
+#if defined(CONFIG_ARCH_RISCV64)
+    // No kslot window on rv64 by design (exhaustion-0 backend stub):
     // a fresh user task carries no slot. Window snapshot/restore is
     // covered arch-neutrally by kstack_snapshot_null_page_slot_roundtrip.
     auto *t0 = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
@@ -333,7 +354,13 @@ JARVIS_TEST(kstack_slot_snapshot_restore_safe, "PRE: none | POST: none") {
 JARVIS_TEST(kstack_snapshot_null_page_slot_roundtrip,
             "PRE: none | POST: none") {
     uint64_t free_before = PMM::free_pages_ref();
-    static constexpr size_t KSLOT_SNAP_SIZE = 8 * arch::PAGE_SIZE + 4096;
+#if defined(CONFIG_ARCH_AARCH64)
+    static constexpr size_t KSLOT_SNAP_PAGES = 10; // aa64 backend: 10 tables
+#else
+    static constexpr size_t KSLOT_SNAP_PAGES = 8; // x86: 8 PT pages; rv64 stub: 0 + bookkeeping, covered with room
+#endif
+    static constexpr size_t KSLOT_SNAP_SIZE =
+        KSLOT_SNAP_PAGES * arch::PAGE_SIZE + 4096;
     static uint8_t s_live_buf[KSLOT_SNAP_SIZE];
     static uint8_t s_craft_buf[KSLOT_SNAP_SIZE];
     static uint8_t s_out_buf[KSLOT_SNAP_SIZE];

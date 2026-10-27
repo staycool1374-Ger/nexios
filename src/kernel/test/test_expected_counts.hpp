@@ -166,7 +166,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_pmm",            9,    0,       0      },  // PMM alloc/free, window geometry, err wrappers
     {"memory_mempool",        5,    0,       0      },  // MemPool allocator + helpers
     {"memory_slab",           5,    0,       0      },  // slab reclaim
-    {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants, red zones, canaries
+    {"memory_safety",        16,    16,      16     },  // MemPool/PMM invariants, red zones, canaries + kslot unit (P2 unified, all arches)
     {"stack_cookie",          4,    0,       0      },  // stack protector contract pins
     {"pointer_isolation",     5,    0,       0      },  // kernel-leak rejection, count edges, factory
     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion, no-dynamic-alloc cycles
@@ -261,7 +261,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   35,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
+    {"arch_aarch64",          0,   38,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,      31      },  // S-mode traps, loader probes, UART, RTC (M-mode CSRs deferred)

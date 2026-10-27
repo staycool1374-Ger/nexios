@@ -41,6 +41,7 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/debug/debug_regs.hpp>
 #include <kernel/debug/crash_dump.hpp>
+#include <scope_guard.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/elf/elf_loader.hpp>
@@ -1368,6 +1369,196 @@ JARVIS_TEST(aarch64_el1_failstop_raw_frame) {
 }
 #endif // CONFIG_DEBUG (first-chance seam test)
 
+// Runmode: kernel
+// Testidea: #434 P3 — aa64 guard-abort arm: an EL1 data abort (EC 0x25)
+// whose FAR lands in the faulting task's kslot guard page routes to the
+// stack_overflow_hook-else-halt path with STACK_OVERFLOW cause (x86 #PF
+// parity).  The C handler is driven directly with the runner task's own
+// guard VA — same entry-level technique as aarch64_el1_failstop_raw_frame
+// (a live faulting store cannot terminate: hook-true erets to the faulting
+// store and re-faults, hook-false parks in the asm wfi loop).
+// Input: current_task() (slot != 0 — boot-time kslot, see below); recover
+//   disarmed; call aarch64_el1_unexpected_fault(EC-0x25 ESR, slot_va, elr,
+//   sp) + predicate unit-checks on a created task.
+// Expect (test-active): hook returns true -> ret 0 (resume contract);
+//   latched task id + fault VA match the runner task + its guard base.
+// Depends: is_stack_guard_fault, test strong hook override (+VA latch).
+// Latch readers live in test_stack_alloc.cpp (memory_stack_alloc class
+// scope); declared here as extern, defined there — single definition.
+// NOTE: the runner (harness init_task, PID 1) is boot-created while the
+// harness is inactive, so it owns a boot-time kslot exactly like a
+// production kernel task.  create()-born tasks from inside the harness
+// take the HHDM fallback (documented dual-path, task.cpp) and would show
+// slot == 0 here — the assert below fails loud if that ever changes.
+#if CONFIG_STACK_OVERFLOW_HOOK
+JARVIS_TEST(aarch64_kslot_guard_abort_hook) {
+    extern uint64_t stack_overflow_hook_latched_task();
+    extern uint64_t stack_overflow_hook_latched_va();
+    extern void stack_overflow_hook_reset_latch();
+    JARVIS_ASSERT(kernel::Scheduler::is_test_active());
+    auto *self = kernel::Scheduler::current_task();
+    JARVIS_ASSERT(self != nullptr);
+    JARVIS_ASSERT_FMT(self->kstack_slot_va_ != 0,
+                      "runner task has no kslot (HHDM) — probe needs a "
+                      "slotted test context");
+    // Predicate unit-checks on a live slotted task (arch-neutral contract).
+    auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+    JARVIS_ASSERT(t != nullptr);
+    auto cleanup = ScopeGuard([&]() {
+        t->cleanup();
+        delete t;
+    });
+    JARVIS_ASSERT(t->kstack_slot_va_ != 0);
+    JARVIS_ASSERT(
+        kernel::is_stack_guard_fault(*t, t->kstack_slot_va_));
+    JARVIS_ASSERT(
+        kernel::is_stack_guard_fault(*t, t->kstack_slot_va_ + 4095));
+    JARVIS_ASSERT(
+        !kernel::is_stack_guard_fault(*t, t->kstack_slot_va_ + 4096));
+    JARVIS_ASSERT(!kernel::is_stack_guard_fault(
+        *t, reinterpret_cast<uint64_t>(t->kernel_stack)));
+    JARVIS_ASSERT(!kernel::is_stack_guard_fault(*t, 0x40008000ULL));
+    // Handler-level: FAR in the RUNNER's own guard (owner by construction).
+    kernel::gs::user_access_recover_ip() = 0;
+    stack_overflow_hook_reset_latch();
+    const uint64_t ret = aarch64_el1_unexpected_fault(
+        0x96000010ULL, self->kstack_slot_va_, 0xFFFF000040001000ULL,
+        0xFFFF000041000000ULL);
+    JARVIS_ASSERT_FMT(ret == 0, "guard hook-true returned %lx, want 0", ret);
+    JARVIS_ASSERT(stack_overflow_hook_latched_task() == self->id);
+    JARVIS_ASSERT_FMT(stack_overflow_hook_latched_va() ==
+                          self->kstack_slot_va_,
+                      "latched VA 0x%lx, want guard 0x%lx",
+                      stack_overflow_hook_latched_va(),
+                      self->kstack_slot_va_);
+    JARVIS_TEST_PASS();
+}
+#endif
+
+// Runmode: kernel
+// Testidea: #434 P3 — non-guard EL1 data aborts fall through to the
+// existing first-chance halt path (no guard-arm misfire): a live slotted
+// runner task faults on an unmapped non-guard VA -> ret 1 under the
+// CONFIG_DEBUG seam with CPU_EXCEPTION cause (not STACK_OVERFLOW) and the
+// FAR echoed verbatim.
+// Input: recover disarmed + armed seam; handler direct call with EC-0x25
+//   ESR, FAR 0x40008000 (unmapped, not any guard page).
+// Expect: ret 1; halt count 1; last frame cause CPU_EXCEPTION,
+//   addr == FAR.
+// Depends: aarch64_el1_unexpected_fault, crash-halt seam (issue #308).
+// CONFIG_DEBUG-only: arms the debug halt seam.
+#if CONFIG_DEBUG
+JARVIS_TEST(aarch64_kslot_guard_non_guard_fallthrough) {
+    JARVIS_ASSERT(kernel::Scheduler::is_test_active());
+    auto *self = kernel::Scheduler::current_task();
+    JARVIS_ASSERT(self != nullptr);
+    JARVIS_ASSERT(self->kstack_slot_va_ != 0);
+    kernel::gs::user_access_recover_ip() = 0;
+    kernel::debug::test_reset_crash_halt();
+    kernel::debug::test_arm_crash_halt();
+    const uint64_t ret = aarch64_el1_unexpected_fault(
+        0x96000010ULL, 0x40008000ULL, 0xFFFF000040000000ULL,
+        0xFFFF000041000000ULL);
+    JARVIS_ASSERT_FMT(ret == 1, "non-guard path returned %lx, want 1", ret);
+    JARVIS_ASSERT_FMT(kernel::debug::test_crash_halt_count() == 1,
+                      "halt count %lx, want 1",
+                      kernel::debug::test_crash_halt_count());
+    kernel::debug::FirstChanceFrame f = kernel::debug::test_last_frame();
+    JARVIS_ASSERT_FMT(
+        f.cause == kernel::debug::FirstChanceCause::CPU_EXCEPTION &&
+            f.addr == 0x40008000ULL,
+        "fall-through frame mismatch: cause %u addr 0x%lx",
+        static_cast<unsigned>(f.cause), f.addr);
+    kernel::debug::test_reset_crash_halt();
+    JARVIS_TEST_PASS();
+}
+#endif
+
+// Runmode: kernel
+// Testidea: #434 P3.3 — the kslot pool + window PT state is snapshot-safe
+// on aa64 (10-table backend): capture, corrupt the slot's stack PTE live,
+// restore -> the original PTE comes back; a fresh allocation after restore
+// reuses a live slot with unmapped guard + mapped stack; full-buffer
+// capture/mutate/restore round-trip is byte-identical; zero PMM delta.
+// Input: create_user() (slot != 0 on aa64); kslot_snapshot_capture;
+//   evil-map the stack PTE via map_page_in_pml4; kslot_snapshot_restore;
+//   create_user() again; buffer round-trip like kstack_snapshot_null_.
+// Expect: original stack phys back after restore; t2 guard 0 + stack
+//   mapped; round-trip byte-compare PASS over kslot_snapshot_bytes();
+//   PMM free count returns to baseline.
+// Depends: kslot snapshot helpers (task.cpp P3.3, zero product change).
+JARVIS_TEST(aarch64_kslot_snapshot_restore_safe) {
+    uint64_t free_before = PMM::free_pages_ref();
+    static constexpr size_t KSLOT_SNAP_CAP = 10 * arch::PAGE_SIZE + 4096;
+    static uint8_t s_snap_buf[KSLOT_SNAP_CAP];
+    static uint8_t s_craft_buf[KSLOT_SNAP_CAP];
+    static uint8_t s_out_buf[KSLOT_SNAP_CAP];
+    const size_t snap_bytes = kernel::kslot_snapshot_bytes();
+    JARVIS_ASSERT(snap_bytes <= KSLOT_SNAP_CAP);
+    JARVIS_ASSERT(snap_bytes >= 10 * arch::PAGE_SIZE);
+
+    auto *t1 = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+    JARVIS_ASSERT(t1 != nullptr);
+    uint64_t slot1 = t1->kstack_slot_va_;
+    JARVIS_ASSERT(slot1 != 0);
+    uint64_t stack_va = slot1 + arch::PAGE_SIZE;
+    uint64_t stack_phys1 =
+        VMM::virt_to_phys_in_pml4(stack_va, VMM::get_kernel_pml4());
+    JARVIS_ASSERT(stack_phys1 != 0);
+
+    kernel::kslot_snapshot_capture(s_snap_buf);
+    uint64_t evil_phys = PMM::alloc_page();
+    JARVIS_ASSERT(evil_phys != 0);
+    VMM::map_page_in_pml4(stack_va, evil_phys, false, false,
+                           VMM::get_kernel_pml4());
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(stack_va,
+                                            VMM::get_kernel_pml4()) ==
+                  evil_phys);
+    kernel::kslot_snapshot_restore(s_snap_buf);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(stack_va,
+                                            VMM::get_kernel_pml4()) ==
+                  stack_phys1);
+    PMM::free_page(evil_phys);
+    t1->cleanup();
+    delete t1;
+
+    auto *t2 = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+    JARVIS_ASSERT(t2 != nullptr);
+    JARVIS_ASSERT(t2->kstack_slot_va_ != 0);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(t2->kstack_slot_va_,
+                                            VMM::get_kernel_pml4()) == 0);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
+                      reinterpret_cast<uint64_t>(t2->kernel_stack),
+                      VMM::get_kernel_pml4()) != 0);
+    t2->cleanup();
+    delete t2;
+
+    // Full-buffer round-trip: crafted (mutated) state restores exactly,
+    // then the live state is reinstalled.
+    kernel::kslot_snapshot_capture(s_snap_buf);
+    for (size_t idx = 0; idx < snap_bytes; ++idx) {
+        s_craft_buf[idx] = s_snap_buf[idx];
+    }
+    for (size_t idx = 0; idx < arch::PAGE_SIZE; ++idx) {
+        s_craft_buf[idx] = 0;
+    }
+    for (size_t idx = 10 * arch::PAGE_SIZE; idx < snap_bytes; ++idx) {
+        s_craft_buf[idx] = 0xA5;
+    }
+    kernel::kslot_snapshot_restore(s_craft_buf);
+    kernel::kslot_snapshot_capture(s_out_buf);
+    for (size_t idx = 0; idx < snap_bytes; ++idx) {
+        JARVIS_ASSERT_FMT(s_out_buf[idx] == s_craft_buf[idx],
+                          "kslot round-trip mismatch at byte %lx",
+                          static_cast<uint64_t>(idx));
+    }
+    kernel::kslot_snapshot_restore(s_snap_buf);
+    JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
+                      "PMM delta %ld pages after aa64 kslot cycle",
+                      (long)(PMM::free_pages_ref() - free_before));
+    JARVIS_TEST_PASS();
+}
+
 void register_aarch64_tests() {
     Logger::info("Registering aarch64 architecture tests");
 
@@ -1408,6 +1599,13 @@ void register_aarch64_tests() {
 #if CONFIG_DEBUG
     JARVIS_REGISTER_TEST(aarch64_el1_failstop_raw_frame);  // issue #308
 #endif
+#if CONFIG_STACK_OVERFLOW_HOOK
+    JARVIS_REGISTER_TEST(aarch64_kslot_guard_abort_hook);  // #434 P3
+#endif
+#if CONFIG_DEBUG
+    JARVIS_REGISTER_TEST(aarch64_kslot_guard_non_guard_fallthrough);  // #434 P3
+#endif
+    JARVIS_REGISTER_TEST(aarch64_kslot_snapshot_restore_safe);  // #434 P3
 }
 
 #endif
