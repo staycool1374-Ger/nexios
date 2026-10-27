@@ -195,11 +195,46 @@ class HeadersChecker(Checker):
 
     _include = re.compile(r'#include\s+[<"]([^>"]+)[>"]')
 
+    @staticmethod
+    def _first_significant_line(text: str) -> tuple[str, int]:
+        """First non-blank, non-comment line + its 1-based number (#405).
+
+        Skips blank lines, `//` line comments, and `/* ... */` blocks
+        (multi-line aware; content trailing a same-line close counts).
+        Returns ("", 1) when no significant line exists."""
+        in_block = False
+        for idx, line in enumerate(text.splitlines(), start=1):
+            stripped = line.strip()
+            if in_block:
+                close = stripped.find("*/")
+                if close == -1:
+                    continue
+                stripped = stripped[close + 2:].strip()
+                in_block = False
+                if not stripped:
+                    continue
+            if not stripped:
+                continue
+            if stripped.startswith("//"):
+                continue
+            if stripped.startswith("/*"):
+                close = stripped.find("*/", 2)
+                if close == -1:
+                    in_block = True
+                    continue
+                rest = stripped[close + 2:].strip()
+                if not rest:
+                    continue
+                stripped = rest
+            return stripped, idx
+        return "", 1
+
     def check_file(self, rel_path: str, text: str) -> None:
         if not rel_path.endswith(".hpp") and not rel_path.endswith(".h"):
             return
-        if not text.startswith("#pragma once") and "//" not in text[:20]:
-            self.add(rel_path, 1, "Missing '#pragma once'")
+        first_text, first_line = self._first_significant_line(text)
+        if not first_text.startswith("#pragma once"):
+            self.add(rel_path, first_line, "Missing '#pragma once'")
 
         last_includes: list[str] = []
         for m in self._include.finditer(text):
