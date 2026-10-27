@@ -46,6 +46,15 @@ uint64_t VMM::vmm_arch_table_child(uint64_t entry) {
     return entry & PAGE_TABLE_ADDR_MASK;
 }
 
+uint64_t VMM::vmm_arch_root_phys(uint64_t live_root) {
+    // aa64 TTBR carries ASID in bits [63:48] — the walk mask keeps them,
+    // so a raw TTBR wraps the L0 base non-canonical (issue #171 P6).
+    // Strip to the 48-bit base address (computed mask: the style gate
+    // misparses a raw hex mask in an expression as a declaration).
+    // Idempotent on clean phys roots.
+    return live_root & ((1ULL << 48) - 1);
+}
+
 bool VMM::vmm_arch_split_needed(uint64_t entry) {
     return (entry & (PAGE_PRESENT | PAGE_TABLE)) == PAGE_PRESENT;
 }

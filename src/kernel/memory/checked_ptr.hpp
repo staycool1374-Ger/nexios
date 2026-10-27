@@ -235,12 +235,16 @@ static inline bool is_user_string(const void *user_ptr,
         return false;
     // Check if the page is actually mapped before dereferencing.
     // After snapshot_restore clears kernel PML4 user entries, unmapped
-    // user addresses would cause a Page Fault here.  Probe the CURRENTLY
+    // user addresses would cause a Page Fault here. Probe the CURRENTLY
     // ACTIVE page table (the current task's private PML4 under MP-1 — the
     // boot kernel_pml4_ has its user entries zeroed, so VMM::virt_to_phys
-    // would wrongly report every user string unmapped).  virt_to_phys_in_pml4
+    // would wrongly report every user string unmapped). virt_to_phys_in_pml4
     // returns 0 for unmapped pages without faulting.
-    uint64_t probe_cr3 = arch::read_cr3();
+    // Issue #171 P6: read_cr3() is a LIVE root — aa64 TTBR0 carries the
+    // ASID in bits [63:48] and the walk mask keeps it, wrapping the L0
+    // base non-canonical (EL1 abort). Untag to a table phys first
+    // (x86/riscv pass through unchanged).
+    uint64_t probe_cr3 = VMM::vmm_arch_root_phys(arch::read_cr3());
     if (VMM::virt_to_phys_in_pml4(addr, probe_cr3) == 0)
         return false;
     // Hoisted above the keep-alive edge: the goto below must not cross a
