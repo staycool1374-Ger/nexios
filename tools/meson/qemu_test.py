@@ -144,6 +144,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                      "-serial", "file:%s" % paths["com1"],
                      "-device", "isa-debugcon,chardev=dbg",
                      "-monitor", "none",
+                     "-display", "none",
                      "-machine", "q35", "-cpu", "max",
                      "-drive", "if=pflash,format=raw,readonly=on,file=%s" % ovmf,
                      "-device", "intel-iommu,intremap=off,dma-translation=on"]
@@ -159,6 +160,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                     "-serial", "file:%s" % paths["com1"],
                     "-device", "isa-debugcon,chardev=dbg",
                     "-monitor", "none",
+                    "-display", "none",
                     "-machine", "q35,sata=off", "-cpu", "max",
                      "-drive", "if=pflash,format=raw,readonly=on,file=%s" % ovmf,
                      "-device", "ich9-ahci,id=ahci0",
@@ -176,6 +178,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                      "-serial", "file:%s" % paths["com1"],
                      "-device", "isa-debugcon,chardev=dbg",
                      "-monitor", "none",
+                     "-display", "none",
                      "-netdev", "user,id=net0",
                      "-device", "virtio-net-pci,netdev=net0,disable-legacy=on",
                      "-boot", "order=d",
