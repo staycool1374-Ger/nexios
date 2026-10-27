@@ -334,9 +334,18 @@ VerifyOutcome run_verify_impl(bool admitted) {
         }
         out.capture[pos] = '\0';
     }
-    if (TaskControlBlock::is_valid(t) &&
-        (t->state != TaskState::TERMINATED || t->exit_code == 0))
-        Scheduler::terminate(*t, 0);
+    // Issue #431: reap every completed task, not just clean exits. A
+    // naturally-terminated task never joins the zombie list on its own
+    // (sys_exit skips terminate() deliberately — ISR-context safety), so
+    // the old exit_code == 0 exemption leaked the TCB, address space,
+    // fds and IPC state on nonzero exits (PMM +54 / Tasks +1 pattern).
+    // Passing the task's own code preserves the verdict (already saved
+    // in `code` above) while routing through the same release_zombie +
+    // drain path the exit-0 case already exercises — no new kernel
+    // exposure. A never-exited task carries exit_code == 0
+    // (TCB ctor + task.cpp reset), so the hung-task path is unchanged.
+    if (TaskControlBlock::is_valid(t))
+        Scheduler::terminate(*t, t->exit_code);
     Scheduler::drain_zombie_list();
     cleanup_image_file();
     cleanup_stdin_file();
