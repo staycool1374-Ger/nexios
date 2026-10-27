@@ -199,6 +199,54 @@ JARVIS_TEST(loader_initrd_request_no_vnode_leak, "PRE: vfsd, iocd | POST: none")
 }
 
 // Runmode: kernel
+// Testidea: #171 P2 generated-stub round trip. The stub-roundtrip probe
+//        (userspace/stub-roundtrip.c) calls generated nexios_sys_* stubs
+//        end to end and exits 0 only if every check passes: ABI_VERSION
+//        exact value, TIMER_CREATE fail-closed NULL out-pointer (EFAULT
+//        through the generated stub), CREATE + GETTIME + DELETE with a
+//        live timer id (all four argument positions observed), invalid-op
+//        EINVAL with four distinct nonzero args (number + op routing
+//        proof), GETPID determinism. Nonzero exit names the failing
+//        check (see the probe source).
+// Input: request_load("/bin/stub-roundtrip.c.elf"), dispatch at prio 11,
+//        join to TERMINATED via wait_for_termination_safe.
+// Expect: TERMINATED with exit_code 0.
+// Depends: ElfLoader initrd-path load, P1 crt0 contract, timer_create.
+JARVIS_TEST(loader_stub_roundtrip_generated_stubs,
+            "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load("/bin/stub-roundtrip.c.elf") ==
+            elf::LoadResult::OK,
+        "stub-roundtrip request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 &&
+                          t->is_user_,
+                      "stub-roundtrip take_completed failed");
+    // Prio 11: the harness idles; lower-priority waitees starve
+    // (every driven test uses >= 11). Set before add_task.
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    bool exited = (t->state == TaskState::TERMINATED);
+    uint64_t code = t->exit_code;
+    if (TaskControlBlock::is_valid(t) &&
+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
+        Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(exited, "stub-roundtrip task did not terminate");
+    JARVIS_ASSERT_FMT(code == 0, "stub-roundtrip probe failed check %lu",
+                      (unsigned long)code);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: cancel reclaims all partial state (zero delta) and the loader
 // returns to IDLE with no retained image.  The cancel is issued
 // pre-first-dispatch with the timer tick masked (issue #267): reschedule()
@@ -1349,4 +1397,5 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_supersede_while_live); // #271 P3 supersede
     JARVIS_REGISTER_TEST(rerun_fork_child_private_copy); // #271 P3 fork (C8)
     JARVIS_REGISTER_TEST(rerun_bss_only_data_canary); // #271 live-E2E BSS-only
+    JARVIS_REGISTER_TEST(loader_stub_roundtrip_generated_stubs); // #171 P2
 }
