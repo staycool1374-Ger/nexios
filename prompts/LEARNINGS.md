@@ -1578,3 +1578,8 @@
 - Tools must name their ref and repo — no ambient HEAD/cwd (refs/heads/main, gated update-ref -d with CAS, explicit gh --repo).
 - A listing that predicts a destructive action IS the action's spec — dry-run and live share one predicate, fail-safe toward keeping.
 - Races are fixed at ownership via a single choke point (claim gates who, never whether), never by checks after the last preemption point.
+
+### #405 — HeadersChecker cried wolf 53 times (CLOSED 2026-10-27, SIL3 APPROVED, VERIFIED)
+- **Learned:** the pragma-once heuristic only accepted the pragma at byte 0 or behind a `//` comment, so every header starting with the `/*` GPL block false-fired — 53 of 2255 warnings (~2%) were pure checker noise hiding real violations. The fix belonged in the checker, not in 52 complying headers.
+- **Adapted:** skip leading `/* */` blocks (multi-line aware), `//` lines and blanks via `_first_significant_line`, then require the pragma; the diagnostic points at the significant line. Adversarial prefixes (unclosed comment, pragma-in-comment, pragma-after-code) still flag.
+- **Style re-face:** when a gate accuses compliant code, fix the gate's eyesight, not the code's compliance. Baseline discipline held: the issue text said 52, the lane measured 53 on current main and explained the delta instead of assuming it. The legacy `make build` compile failure (missing generated registry header) was proven identical with and without the patch by stash pair — stated out-of-scope with evidence, not waived.
