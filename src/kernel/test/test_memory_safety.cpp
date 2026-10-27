@@ -189,6 +189,9 @@ JARVIS_TEST(user_red_zone_heap_overflow_pf, "PRE: none | POST: none") {
 // Expect: virt_to_phys_in_pml4(slot_va, kernel PML4) == 0; the stack above
 // it is mapped.
 // Depends: VMM page-table walk, kslot window wiring
+//           Off x86_64 there is no kslot window (alloc_kslot stub returns 0
+//           by design; HHDM fallback): the pinned contract is slot == 0
+//           with the HHDM stack still mapped.
 JARVIS_TEST(kernel_red_zone_between_stack_data, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
@@ -196,6 +199,16 @@ JARVIS_TEST(kernel_red_zone_between_stack_data, "PRE: none | POST: none") {
         t->cleanup();
         delete t;
     });
+#if !defined(CONFIG_ARCH_X86_64)
+    // No kslot window off x86_64: the HHDM fallback carries no slot.
+    // Pin the documented fallback instead of the x86-only window.
+    JARVIS_ASSERT(t->kstack_slot_va_ == 0);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
+                      reinterpret_cast<uint64_t>(t->kernel_stack),
+                      VMM::get_kernel_pml4()) != 0);
+    JARVIS_TEST_PASS();
+    return;
+#endif
     JARVIS_ASSERT(t->kstack_slot_va_ != 0);
 
     uint64_t guard_phys =
@@ -235,7 +248,15 @@ JARVIS_TEST(canary_installed_at_segment_boundaries,
     const uint64_t text = TaskControlBlock::SEG_TEXT;
     const uint64_t heap = TaskControlBlock::SEG_HEAP;
     const uint64_t stk = TaskControlBlock::SEG_STACK;
-    JARVIS_ASSERT(t->canary_installed & (1u << text));
+    // Issue #429: an entry-overlapping TEXT segment skips the install
+    // (never clobber the entry bytes). The skip is layout-dependent
+    // (aa64 user-app entry sits at the TEXT base; x86_64 does not), so
+    // accept it iff the skip marker holds: nothing claimed (bit clear)
+    // with canary_before[text] == 0 (fail-closed, verify loop skips
+    // zero addresses). A clear bit with a nonzero marker is a defect.
+    if (!(t->canary_installed & (1u << text))) {
+        JARVIS_ASSERT(t->canary_before[text] == 0);
+    }
     JARVIS_ASSERT(t->canary_installed & (1u << heap));
     JARVIS_ASSERT(t->canary_installed & (1u << stk));
 

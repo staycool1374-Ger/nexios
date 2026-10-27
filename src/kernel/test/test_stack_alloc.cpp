@@ -155,6 +155,8 @@ JARVIS_TEST(stack_alloc_overflow_hook_weak_symbol,
 // Expect: virt_to_phys_in_pml4(slot_va, kernel PML4) == 0;
 // virt_to_phys_in_pml4(kernel_stack, kernel PML4) != 0.
 // Depends: VMM page-table walk, kslot window wiring
+// (Off x86_64 there is no kslot window; the pinned contract is the
+// HHDM fallback: slot == 0 with the stack mapped.)
 JARVIS_TEST(kstack_guard_base_unmapped, "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t != nullptr);
@@ -162,6 +164,16 @@ JARVIS_TEST(kstack_guard_base_unmapped, "PRE: none | POST: none") {
         t->cleanup();
         delete t;
     });
+#if !defined(CONFIG_ARCH_X86_64)
+    // No kslot window off x86_64: the HHDM fallback carries no slot.
+    // Pin the documented fallback instead of the x86-only window.
+    JARVIS_ASSERT(t->kstack_slot_va_ == 0);
+    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(
+                      reinterpret_cast<uint64_t>(t->kernel_stack),
+                      VMM::get_kernel_pml4()) != 0);
+    JARVIS_TEST_PASS();
+    return;
+#endif
     JARVIS_ASSERT(t->kstack_slot_va_ != 0);
 
     uint64_t kernel_pml4 = VMM::get_kernel_pml4();
@@ -234,6 +246,19 @@ JARVIS_TEST(kstack_slot_snapshot_restore_safe, "PRE: none | POST: none") {
     static constexpr size_t KSLOT_SNAP_SIZE = 8 * arch::PAGE_SIZE + 4096;
     static uint8_t s_kslot_buf[KSLOT_SNAP_SIZE];
     JARVIS_ASSERT(kernel::kslot_snapshot_bytes() <= KSLOT_SNAP_SIZE);
+
+#if !defined(CONFIG_ARCH_X86_64)
+    // No kslot window off x86_64 (alloc_kslot stub returns 0 by design):
+    // a fresh user task carries no slot. Window snapshot/restore is
+    // covered arch-neutrally by kstack_snapshot_null_page_slot_roundtrip.
+    auto *t0 = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
+    JARVIS_ASSERT(t0 != nullptr);
+    JARVIS_ASSERT(t0->kstack_slot_va_ == 0);
+    t0->cleanup();
+    delete t0;
+    JARVIS_TEST_PASS();
+    return;
+#endif
 
     auto *t1 = TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB);
     JARVIS_ASSERT(t1 != nullptr);
