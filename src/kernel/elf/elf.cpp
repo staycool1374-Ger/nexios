@@ -609,10 +609,10 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
         return nullptr;
     }
     tcb->stack_phys_ = kstack_phys;
-    uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
-    tcb->kernel_stack_top = kstack_virt + TaskControlBlock::STACK_SIZE;
+    // #434 P2: route through the kslot window (guard page below the
+    // stack) via the shared funnel — HHDM fallback only on exhaustion.
+    TaskControlBlock::provision_kstack(tcb, kstack_phys,
+                                       TaskControlBlock::STACK_SIZE);
 
     tcb->install_page_table(pml4);
     tcb->is_user_ = true;

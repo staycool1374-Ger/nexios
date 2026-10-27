@@ -849,6 +849,36 @@ void TaskControlBlock::clear_page_table() noexcept {
     page_table_ = 0;
 }
 
+void TaskControlBlock::provision_kstack(TaskControlBlock *tcb,
+                                        uint64_t kstack_phys,
+                                        size_t stack_size) noexcept {
+    // #434 P2: single funnel for ELF birth sites (mirrors create_user —
+    // same slot formula, same backend map, same HHDM fallback).
+    // Arch-neutral: all table mechanics live in the backend (C3).
+    // Restricted to ELF use; task.cpp birth sites keep their form.
+    size_t stack_pages = (stack_size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+    uint64_t slot_va = alloc_kslot(stack_size);
+    if (slot_va) {
+        tcb->kstack_slot_va_ = slot_va;
+        tcb->kstack_slot_size_ = ((stack_size + 4095) / 4096) * 4096 + 4096;
+        uint64_t kstack_va = slot_va + 4096;
+        for (size_t i = 0; i < stack_pages; ++i)
+            kslot_backend::map_window_page(
+                kstack_va + i * arch::PAGE_SIZE,
+                kstack_phys + i * arch::PAGE_SIZE);
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
+        tcb->kernel_stack_top = kstack_va + stack_size;
+        return;
+    }
+    tcb->kstack_slot_va_ = 0;
+    tcb->kstack_slot_size_ = 0;
+    uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
+    tcb->kernel_stack_top = kstack_virt + stack_size;
+}
+
 TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
                                            uint64_t period_ticks)
 // NOLINTEND(bugprone-easily-swappable-parameters)

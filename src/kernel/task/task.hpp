@@ -994,7 +994,21 @@ struct TaskControlBlock {
     /// @param[out] out_tcb Pointer to the created TCB on success.
     /// @return TaskError code.
     static errors::TaskError clone_err(uint64_t *regs,
-                                       TaskControlBlock *&out_tcb);
+                                        TaskControlBlock *&out_tcb);
+
+    /// @brief Provision a TCB's kernel stack through the kslot window
+    ///        (#434 P2): slot attempt via the shared pool, backend map
+    ///        per page, slot fields/stack VAs set; on exhaustion-0 the
+    ///        HHDM fallback with zeroed slot fields (same funnel as
+    ///        create_user — ELF birth sites use this, no arch ifdefs).
+    ///        Restricted to ELF birth use (C3); the task.cpp birth
+    ///        sites keep their open-coded form. Not a test seam.
+    /// @param tcb Target TCB (stack_phys_ already allocated by caller).
+    /// @param kstack_phys Contiguous physical pages for the stack.
+    /// @param stack_size Kernel stack size in bytes (STACK_SIZE).
+    static void provision_kstack(TaskControlBlock *tcb,
+                                 uint64_t kstack_phys,
+                                 size_t stack_size) noexcept;
 
     /// @brief Destroys a TCB and returns its MemPool block (H-5: single
     ///        pool-aware teardown path replacing raw `delete` on RT error
