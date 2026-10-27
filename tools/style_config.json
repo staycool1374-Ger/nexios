@@ -58,7 +58,7 @@
     "min_length": 3,
     "blocklist": ["tmp", "temp", "ptr", "p", "t", "v", "val"],
     "allow_loop_indices": ["i", "j", "k", "idx"],
-    "allow_common_abbrevs": ["id", "fd", "va", "cs", "tv", "vn", "st", "en", "it", "ok", "to", "q", "n", "m", "y", "c", "s", "r", "fd", "ID", "e", "lo", "hi", "tm", "OK", "h", "L", "T", "O", "C", "_i"],
+    "allow_common_abbrevs": ["id", "fd", "va", "cs", "tv", "vn", "st", "en", "it", "ok", "to", "q", "n", "m", "y", "c", "s", "r", "fd", "ID", "e", "lo", "hi", "tm", "OK", "h", "L", "T", "O", "C", "_i", "PA", "pa", "VA", "SP", "sp", "IP", "ip", "IF", "Hz", "ns"],
     "max_loop_body_lines": 5
   },
   "sentinel_enums": {
