@@ -33,6 +33,11 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 * When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 * After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
 
+### Tool & Session Discipline (standing order — violations stall the lane and get the session recreated)
+- ONE tool call per message, all parameters complete. NEVER batch calls; on SchemaError/missing-key, re-issue singly — never loop retries.
+- Read tool for reads, Grep tool for searches, Glob for file lists. NEVER use bash for file reads; bash is for builds, QEMU runs, and git only, one simple command at a time, no pipes or `;` chains.
+- Permission modals mean NO: treat every approval dialog as denied. Route around, record uncheckable items as explicit gaps, never halt, never ask for more permissions.
+
 ### Pseudocode in Stub Tests
 * Some stub tests contain `/* Pseudocode: ... */` comments describing intended behavior — use these for insight when implementing.
 * When writing new stub tests, a pseudocode block is required inside the test function to document the intended test flow.
