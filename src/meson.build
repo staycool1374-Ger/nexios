@@ -181,10 +181,13 @@ kernel_cpp = files(generic_srcs + arch_srcs)
 kernel_asm_s = files(generic_s + arch_s)
 
 # --- crt0 (in-tree userspace entry; userspace links consume it) ---
+# Installed to the SDK staging tree (issue #171 P5) alongside libc.a.
 crt0_o = custom_target('crt0',
   input : files('../src/libc/crt0.S'),
   output : 'crt0.o',
   command : [cc_prog] + cc_base_flags + cc_arch_flags + cc_includes + cc_build_flags + ['-c', '@INPUT@', '-o', '@OUTPUT@'],
+  install : true,
+  install_dir : '/opt/nexios-sdk/lib',
 )
 
 # --- objcopy flavor per arch (mirrors OBJCOPY_FMT/OBJCOPY_ARCH) ---
