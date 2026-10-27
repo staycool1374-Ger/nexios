@@ -7,6 +7,7 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/idle_monitor.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/crash_dump.hpp>
 #include <signal.hpp>
@@ -364,9 +365,12 @@ extern "C" uint64_t aarch64_last_el0_esr() { return g_last_el0_esr; }
 ///        applied (asm stub restores + erets).  Any other EL1 sync fault
 ///        is a kernel bug — issue #308: raw first-chance frame over the
 ///        lock-free UART path, then halt in ALL builds (the old release
-///        ELR+=4 skip silently continued after kernel faults).  Runs with
-///        interrupts masked (vector entry); must not re-enable IRQs or
-///        touch the scheduler.
+///        ELR+=4 skip silently continued after kernel faults).  #434 P3: a
+///        same/lower-EL data abort (EC 0x25/0x24) whose FAR falls in the
+///        current task's kslot guard page routes to the
+///        stack_overflow_hook-else-halt path first (x86 #PF parity).
+///        Runs with interrupts masked (vector entry); must not re-enable
+///        IRQs or touch the scheduler.
 extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
                                                 uint64_t elr, uint64_t sp) {
     uint64_t recover = kernel::g_user_access_recover_ip;
@@ -374,6 +378,35 @@ extern "C" uint64_t aarch64_el1_unexpected_fault(uint64_t esr, uint64_t far,
         kernel::g_user_access_recover_ip = 0;
         asm volatile("msr elr_el1, %0" ::"r"(recover));
         return 0;
+    }
+    // #434 P3: kernel-stack guard abort (aa64 half, x86 #PF parity).  A
+    // data abort from the current EL (EC 0x25) or a lower EL (EC 0x24)
+    // whose FAR lands in the faulting task's guard page routes to the
+    // existing stack_overflow_hook-else-halt path with STACK_OVERFLOW
+    // cause — same contract as the x86 guard block in kernel.cpp.  Runs
+    // AFTER the recover check (guarded copies must still recover even if
+    // FAR lands in a guard range) and stays lock-free: owner is
+    // current_task() by construction, no RSP-owner scan.
+    {
+        uint64_t ec = (esr >> 26) & 0x3FULL;
+        kernel::TaskControlBlock *owner = kernel::Scheduler::current_task();
+        if ((ec == 0x24 || ec == 0x25) && owner != nullptr &&
+            kernel::is_stack_guard_fault(*owner, far)) {
+            auto guard_frame = kernel::debug::make_aarch64_frame(
+                esr, far, elr, sp, arch::read_ttbr0_el1(),
+                arch::read_ttbr1_el1());
+            guard_frame.cause =
+                kernel::debug::FirstChanceCause::STACK_OVERFLOW;
+#if CONFIG_STACK_OVERFLOW_HOOK
+            if (stack_overflow_hook(*owner, guard_frame)) {
+                return 0;
+            }
+            kernel::debug::first_chance_halt(guard_frame);
+            return 1;
+#else
+            panic("kernel stack overflow");
+#endif
+        }
     }
     auto frame = kernel::debug::make_aarch64_frame(
         esr, far, elr, sp, arch::read_ttbr0_el1(), arch::read_ttbr1_el1());

@@ -696,6 +696,18 @@ void kslot_snapshot_restore(const uint8_t *src) {
                      KSLOT_POOL_SIZE * sizeof(KSlotEntry));
 }
 
+// #434 P3: shared guard-fault predicate (arch-neutral, TCB-near).  The x86
+// #PF block and the aa64 EL1 fault entry both funnel through this — the
+// predicate IS the contract, never a per-arch copy.
+bool is_stack_guard_fault(const TaskControlBlock &t,
+                          uint64_t fault_va) noexcept {
+    if (t.kstack_slot_va_ == 0) {
+        return false;
+    }
+    return fault_va >= t.kstack_slot_va_ &&
+           fault_va < t.kstack_slot_va_ + arch::PAGE_SIZE;
+}
+
 // ---------------------------------------------------------------------------
 // Software sentinel canaries (v0.4.0 MP-3)
 // ---------------------------------------------------------------------------

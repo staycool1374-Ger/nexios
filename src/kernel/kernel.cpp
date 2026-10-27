@@ -2492,10 +2492,11 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         }
 
         // ---- Guard-page check (kernel stack overflow) ----
+        // #434 P3: range comparison factored into is_stack_guard_fault
+        // (behavior-identical — the predicate IS the x86 contract).
         if (vector == 14 && t && t->kstack_slot_va_) {
             uint64_t cr2 = read_cr2();
-            if (cr2 >= t->kstack_slot_va_ &&
-                cr2 < t->kstack_slot_va_ + arch::PAGE_SIZE) {
+            if (kernel::is_stack_guard_fault(*t, cr2)) {
 #if CONFIG_STACK_OVERFLOW_HOOK
                 // Issue #308: hook first — a recovering override returns
                 // true (test-only, gated inside the override); otherwise
