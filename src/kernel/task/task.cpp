@@ -58,6 +58,7 @@
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
 #include <kernel/cap/frame_map.hpp>
+#include <kernel/task/kslot_backend.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <assert.hpp>
 
@@ -580,27 +581,13 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
     return true;
 }
 
-/// @brief Physical addresses of the 8 pre-allocated PT pages for the window.
-static uint64_t s_kstack_pt_pages[8] = {};
-
-#if defined(CONFIG_ARCH_X86_64)
-static void init_kstack_window();
-static void map_kstack_page(uint64_t virt, uint64_t phys);
-static void unmap_kstack_page(uint64_t virt);
-#endif
-
 static uint64_t alloc_kslot(uint64_t stack_size) {
-#if !defined(CONFIG_ARCH_X86_64)
-    // The kstack VA window (and its CR3/invlpg page-table wiring) is
-    // x86_64-only; other arches use the HHDM direct-map fallback.
-    (void)stack_size;
-    return 0;
-#else
-    // Lazy init: pre-allocate page table pages on first call.
-    // Must be called after PMM and VMM init (first create() is in
-    // Scheduler::init(), well after both).
-    if (!s_kstack_pt_pages[0])
-        init_kstack_window();
+    // #434 P1: arch-neutral. Window tables are wired by the build-selected
+    // backend (x86_64/aa64); rv64 stub returns false -> exhaustion-0 path
+    // (general mechanism, no arch guard in callers). Lazy init: must run
+    // after PMM and VMM init (first create() is in Scheduler::init()).
+    if (!kslot_backend::wire_window_tables())
+        return 0;
 
     uint64_t slot_size = ((stack_size + 4095) / 4096) * 4096 + 4096;
 
@@ -634,7 +621,6 @@ static uint64_t alloc_kslot(uint64_t stack_size) {
         s_kslot_bump = va + slot_size;
         return va;
     }
-#endif // CONFIG_ARCH_X86_64
 }
 
 static void free_kslot(uint64_t va, uint64_t size) {
@@ -650,107 +636,12 @@ static void free_kslot(uint64_t va, uint64_t size) {
 }
 
 // ---------------------------------------------------------------------------
-// Kernel-stack window page table pool
+// Kernel-stack window backend (build-selected TU, SPEC §3.1)
 // ---------------------------------------------------------------------------
-
-#if defined(CONFIG_ARCH_X86_64)
-/// @brief Pre-allocate all page table pages for the kernel-stack window and
-///        wire them into the kernel PML4.  Called once at boot, before any
-///        snapshot is taken.
-void init_kstack_window() {
-    const uint64_t addr_mask = 0x0000FFFFFFFFFFFFULL;
-    uint64_t base_48 = CONFIG_KSTACK_WINDOW_BASE & addr_mask;
-    unsigned pml4_idx = (base_48 >> 39) & 0x1FF;
-    unsigned pdpt_idx = (base_48 >> 30) & 0x1FF;
-    unsigned pd_idx = (base_48 >> 21) & 0x1FF;
-
-    auto *pml4 = reinterpret_cast<uint64_t *>(
-        arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
-    constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
-    constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
-
-    uint64_t pdpt_phys = 0;
-    if (!(pml4[pml4_idx] & P)) {
-        pdpt_phys = PMM::alloc_page_table();
-        if (!pdpt_phys)
-            panic("init_kstack_window: pdpt_phys OOM");
-        auto *pdpt =
-            reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
-        __builtin_memset(pdpt, 0, 4096);
-        pml4[pml4_idx] = pdpt_phys | P | W;
-    } else {
-        pdpt_phys = pml4[pml4_idx] & ~0xFFFULL;
-    }
-
-    auto *pdpt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pdpt_phys);
-    uint64_t pd_phys = 0;
-    if (!(pdpt[pdpt_idx] & P)) {
-        pd_phys = PMM::alloc_page_table();
-        if (!pd_phys)
-            panic("init_kstack_window: pd_phys OOM");
-        auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
-        __builtin_memset(pd, 0, 4096);
-        pdpt[pdpt_idx] = pd_phys | P | W;
-    } else {
-        pd_phys = pdpt[pdpt_idx] & ~0xFFFULL;
-    }
-
-    auto *pd = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + pd_phys);
-    for (unsigned i = 0; i < 8; ++i) {
-        if (!(pd[pd_idx + i] & P)) {
-            s_kstack_pt_pages[i] = PMM::alloc_page_table();
-            if (!s_kstack_pt_pages[i])
-                panic("init_kstack_window: pt page OOM");
-            auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                                    s_kstack_pt_pages[i]);
-            __builtin_memset(pt, 0, 4096);
-            pd[pd_idx + i] = s_kstack_pt_pages[i] | P | W;
-        } else {
-            s_kstack_pt_pages[i] = pd[pd_idx + i] & ~0xFFFULL;
-        }
-    }
-
-    uint64_t cr3 = 0;
-    asm volatile("mov %%cr3, %0" : "=r"(cr3) : : "memory");
-    asm volatile("mov %0, %%cr3" : : "r"(cr3) : "memory");
-}
-
-/// @brief Map one 4 KiB kernel-stack page via pre-allocated PT.
-static void map_kstack_page(uint64_t virt, uint64_t phys) {
-    uint64_t offset = virt - CONFIG_KSTACK_WINDOW_BASE;
-    unsigned pt_idx = offset / (512 * 4096);
-    unsigned entry = (offset / 4096) & 0x1FF;
-    if (pt_idx >= 8)
-        return;
-    constexpr uint64_t P = 1ULL << 0; // PAGE_PRESENT
-    constexpr uint64_t W = 1ULL << 1; // PAGE_WRITE
-#if defined(CONFIG_ARCH_X86_64)
-    // Issue #376 (boot-text W^X): kernel stacks are data — RW+NX.
-    // x86-only window (other arches use the HHDM fallback, out of scope).
-    constexpr uint64_t NX = 1ULL << 63;
-    const uint64_t leaf_flags = P | W | NX;
-#else
-    const uint64_t leaf_flags = P | W;
-#endif
-    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            s_kstack_pt_pages[pt_idx]);
-    pt[entry] = phys | leaf_flags;
-    asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
-}
-
-/// @brief Unmap one 4 KiB kernel-stack page.
-static void unmap_kstack_page(uint64_t virt) {
-    uint64_t offset = virt - CONFIG_KSTACK_WINDOW_BASE;
-    unsigned pt_idx = offset / (512 * 4096);
-    unsigned entry = (offset / 4096) & 0x1FF;
-    if (pt_idx >= 8)
-        return;
-    auto *pt = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            s_kstack_pt_pages[pt_idx]);
-    pt[entry] = 0;
-    asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
-}
-#endif // CONFIG_ARCH_X86_64
+// Table wiring, map/unmap, and TLB maintenance live in
+// kslot_backend::{wire_window_tables,map_window_page,unmap_window_page,
+// flush_window_va}. task.cpp keeps only the shared policy (pool/bump,
+// guard+stack layout, teardown order). No CONFIG_ARCH here (C3).
 
 } // anonymous namespace
 
@@ -765,23 +656,16 @@ static void unmap_kstack_page(uint64_t virt) {
 // this state at every test boundary.
 
 size_t kslot_snapshot_bytes() {
-    return 8 * arch::PAGE_SIZE + sizeof(uint64_t) + 2 * sizeof(int32_t) +
-           KSLOT_POOL_SIZE * sizeof(KSlotEntry);
+    return kslot_backend::snapshot_bytes() + sizeof(uint64_t) +
+           2 * sizeof(int32_t) + KSLOT_POOL_SIZE * sizeof(KSlotEntry);
 }
 
 void kslot_snapshot_capture(uint8_t *dst) {
     size_t off = 0;
-    for (unsigned i = 0; i < 8; ++i) {
-        if (s_kstack_pt_pages[i]) {
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            __builtin_memcpy(dst + off,
-                             reinterpret_cast<const void *>(
-                                 arch::HHDM_OFFSET + s_kstack_pt_pages[i]),
-                             arch::PAGE_SIZE);
-        } else {
-            __builtin_memset(dst + off, 0, arch::PAGE_SIZE);
-        }
-        off += arch::PAGE_SIZE;
+    size_t back = kslot_backend::snapshot_bytes();
+    if (back) {
+        kslot_backend::snapshot_capture(dst);
+        off += back;
     }
     __builtin_memcpy(dst + off, &s_kslot_bump, sizeof(s_kslot_bump));
     off += sizeof(s_kslot_bump);
@@ -795,31 +679,12 @@ void kslot_snapshot_capture(uint8_t *dst) {
 
 void kslot_snapshot_restore(const uint8_t *src) {
     size_t off = 0;
-    for (unsigned i = 0; i < 8; ++i) {
-        if (s_kstack_pt_pages[i]) {
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            __builtin_memcpy(
-                reinterpret_cast<void *>(arch::HHDM_OFFSET +
-                                         s_kstack_pt_pages[i]),
-                src + off, arch::PAGE_SIZE);
-#if defined(CONFIG_ARCH_X86_64)
-            // Flush the TLB for every window VA backed by this PT page.
-            // invlpg on an unmapped VA is a documented no-op (no exception).
-            uint64_t base_va = CONFIG_KSTACK_WINDOW_BASE +
-                               static_cast<uint64_t>(i) * 512 *
-                                   arch::PAGE_SIZE;
-            for (unsigned e = 0; e < 512; ++e)
-                asm volatile("invlpg (%0)"
-                             :
-                             : "r"(base_va + e * arch::PAGE_SIZE)
-                             : "memory");
-#endif // CONFIG_ARCH_X86_64
-        }
-        // Issue #263: advance unconditionally, mirroring capture (which
-        // writes zeros for null slots but still advances). Skipping the
-        // advance on null slots shifts every later page read plus the
-        // trailing bump/list/pool reads — silent wrong-state restore.
-        off += arch::PAGE_SIZE;
+    size_t back = kslot_backend::snapshot_bytes();
+    if (back) {
+        // Issue #263: backend framing is fixed-size; restore consumes it
+        // unconditionally, mirroring capture.
+        kslot_backend::snapshot_restore(src);
+        off += back;
     }
     __builtin_memcpy(&s_kslot_bump, src + off, sizeof(s_kslot_bump));
     off += sizeof(s_kslot_bump);
@@ -1138,11 +1003,9 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     // This dual-path design is certified-safe because the test environment
     // provides equivalent fault containment (complete memory rewind),
     // while production builds never take the HHDM fallback.
-    // The kslot VA window (and its CR3/invlpg wiring) is x86_64-only; on
-    // other arches alloc_kslot() returns 0 and the HHDM fallback below is
-    // always taken.
+    // #434 P1: arch-neutral — backend wire failure (e.g. rv64 stub) takes
+    // the documented exhaustion-0 path; no arch guard in callers (C3).
     // ------------------------------------------------------------------
-#if defined(CONFIG_ARCH_X86_64)
     if (!Scheduler::in_test_harness()) {
         uint64_t slot_va = alloc_kslot(stack_size);
         if (slot_va) {
@@ -1150,8 +1013,9 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
             tcb->kstack_slot_size_ = ((stack_size + 4095) / 4096) * 4096 + 4096;
             uint64_t kstack_va = slot_va + 4096;
             for (size_t i = 0; i < stack_pages; ++i)
-                map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
-                                stack_phys + i * arch::PAGE_SIZE);
+                kslot_backend::map_window_page(
+                    kstack_va + i * arch::PAGE_SIZE,
+                    stack_phys + i * arch::PAGE_SIZE);
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             TCB_WRITE(tcb, kernel_stack,
                       reinterpret_cast<uint8_t *>(kstack_va));
@@ -1159,7 +1023,6 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
             goto done_stack;
         }
     }
-#endif // CONFIG_ARCH_X86_64
     tcb->kstack_slot_va_ = 0;
     tcb->kstack_slot_size_ = 0;
     {
@@ -1168,9 +1031,7 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
         TCB_WRITE(tcb, kernel_stack, reinterpret_cast<uint8_t *>(stack_virt));
         tcb->kernel_stack_top = stack_virt + stack_size;
     }
-#if defined(CONFIG_ARCH_X86_64)
 done_stack:
-#endif
 
     // v0.4.0 MP-1.2: every kernel task gets a private kernel-half PML4.
     // clone_kernel_pml4() zeroes the user entries (0..255) and copies the
@@ -1346,16 +1207,16 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->stack_phys_ = kstack_phys;
 
     // Route through kslot for guard page below kernel stack.
+    // #434 P1: unconditional backend map (C3); backend no-ops only on
+    // exhaustion, never on arch.
     uint64_t slot_va = alloc_kslot(STACK_SIZE);
     if (slot_va) {
         tcb->kstack_slot_va_ = slot_va;
         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
         uint64_t kstack_va = slot_va + 4096;
-#if defined(CONFIG_ARCH_X86_64)
         for (size_t i = 0; i < kernel_stack_pages; ++i)
-            map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
-                            kstack_phys + i * arch::PAGE_SIZE);
-#endif
+            kslot_backend::map_window_page(kstack_va + i * arch::PAGE_SIZE,
+                                           kstack_phys + i * arch::PAGE_SIZE);
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
@@ -1739,11 +1600,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
         tcb->kstack_slot_va_ = slot_va;
         tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
         uint64_t kstack_va = slot_va + 4096;
-#if defined(CONFIG_ARCH_X86_64)
         for (size_t i = 0; i < stack_pages; ++i)
-            map_kstack_page(kstack_va + i * arch::PAGE_SIZE,
-                            kstack_phys + i * arch::PAGE_SIZE);
-#endif
+            kslot_backend::map_window_page(kstack_va + i * arch::PAGE_SIZE,
+                                           kstack_phys + i * arch::PAGE_SIZE);
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
         tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
         tcb->kernel_stack_top = kstack_va + STACK_SIZE;
@@ -1757,23 +1616,14 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
             tcb->kernel_stack_top = kstack_virt + STACK_SIZE;
         } else {
             // Issue #209: a raw physical address is NOT a valid VA on
-            // non-x86 (no identity map — EL1 faults translate to a silent
-            // skip in default_exception, so the 36-push frame build becomes
-            // 36 no-ops and readback observes stale registers).  Route
-            // kernel-task stacks through HHDM like create() does
-            // (task.cpp:1047-1052); x86 keeps its raw-phys convention.
-#if defined(CONFIG_ARCH_X86_64)
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            TCB_WRITE(tcb, kernel_stack,
-                      reinterpret_cast<uint8_t *>(kstack_phys));
-            tcb->kernel_stack_top = kstack_phys + STACK_SIZE;
-#else
+            // non-x86 (no identity map). Route kernel-task stacks through
+            // HHDM on all archs (x86 HHDM alias is equally valid; the old
+            // raw-phys convention is retired — #434 P1, C3, no arch guard).
             uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             TCB_WRITE(tcb, kernel_stack,
                       reinterpret_cast<uint8_t *>(kstack_virt));
             tcb->kernel_stack_top = kstack_virt + STACK_SIZE;
-#endif
         }
     }
 
@@ -2239,11 +2089,10 @@ void TaskControlBlock::complete_teardown() noexcept {
                            : ((STACK_SIZE + 4095) / arch::PAGE_SIZE);
         if (kstack_slot_va_) {
             uint64_t slot_va = kstack_slot_va_;
-#if defined(CONFIG_ARCH_X86_64)
             uint64_t stack_va = slot_va + 4096;
             for (size_t i = 0; i < pages; ++i)
-                unmap_kstack_page(stack_va + i * arch::PAGE_SIZE);
-#endif
+                kslot_backend::unmap_window_page(stack_va +
+                                                 i * arch::PAGE_SIZE);
             free_kslot(slot_va, kstack_slot_size_);
         }
         // Free physical pages (no poison — see NOTE).
