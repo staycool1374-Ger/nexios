@@ -4,12 +4,15 @@
  * 6-step entry: SDK-version pin (compile-time), VFS (open/read/close
  * on the initrd image itself with an ELF-magic assert), and IPC
  * fail-closed behavior (async send to a nonexistent PID must return
- * negative, never block) plus a self-notify post (no peer required).
+ * negative via the lookup-miss early return, never block) plus a self-notify post (no peer required).
  *
  * Exit 0 = every check green; 1..5 name the failing check (probe
  * convention: the exit code IS the assertion channel, serial text is
- * diagnostic-only). No check blocks: the bogus-destination send uses
- * IPC_NONBLOCK and notify is post-only, so the worst case is a
+ * diagnostic-only). No check blocks: the bogus-destination send misses
+ * in `Scheduler::find_task` and returns false before any queue-full
+ * blocking (the `IPC_NONBLOCK` flag is passed for forward-compatibility
+ * only — currently dropped at the syscall boundary), and notify is
+ * post-only, so the worst case is a
  * nonzero exit, never a hang under `runelf`.
  *
  * Post-merge E2E (P2+P3 headers land): the stub round-trip
@@ -41,8 +44,13 @@ _Static_assert(NEXIOS_CRT0_CONTRACT == 1, "ref-driver pins CRT0 contract 1");
 #define CHECK_IPC_NOTIFY_SELF 5
 
 /* A PID that can never exist: PIDs are small dense task indices, so
- * 9999 is out of range on every boot. The kernel must fail the send
- * closed (negative return) without touching the caller. */
+ * 9999 is out of range on every boot and always misses in
+ * Scheduler::find_task (null/TERMINATED -> false before any queue
+ * blocking). The kernel must fail the send
+ * closed (negative return) without touching the caller. The
+ * IPC_NONBLOCK flag is passed for forward-compatibility; it is
+ * currently dropped at the syscall boundary and is not the
+ * no-block mechanism. */
 #define BOGUS_PID 9999u
 #define PROBE_TYPE 0x55u
 

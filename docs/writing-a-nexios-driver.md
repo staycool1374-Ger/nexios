@@ -54,17 +54,24 @@ reply_buf)` is the workhorse — contract (issue #317 option b): the
 reply **payload** lands in `reply_buf` (a real destination, at least
 `size` bytes; `NULL` for no payload), and the return value is the
 reply message **type** (negative on failure), not a result code. Async
-`ipc_send(..., flags)` with `IPC_NONBLOCK` never waits; `ipc_notify /
+`ipc_send(..., flags)` takes an `IPC_NONBLOCK` bit, but the flag is
+currently dropped at the syscall boundary (`Syscall::sys_send` forces
+`flags = 0`; #348-D1 notes only the NONBLOCK bit is read downstream
+with legacy ignore-semantics) — so NONBLOCK has no effect through the
+syscall today and is NOT the no-wait mechanism. `ipc_notify /
 ipc_notify_wait` and `ipc_event_set / ipc_event_wait` cover
 fire-and-forget wakeups.
 
 Patterns, in increasing order of coupling:
 
-1. **Fail-closed probe (no peer).** Send `IPC_NONBLOCK` to a PID that
-   cannot exist and assert a negative return. This exercises the
-   boundary validation with zero hang risk. `ref-driver.c` does this
-   against PID 9999 (PIDs are small dense indices; 9999 is out of
-   range on every boot).
+1. **Fail-closed probe (no peer).** Send to a PID that
+   cannot exist and assert a negative return. The zero-hang guarantee
+   comes from the lookup-miss early return (`IPC::send` returns false
+   before any queue-full blocking when `Scheduler::find_task` misses
+   or the target is `TERMINATED`), not from the `IPC_NONBLOCK` flag
+   (dropped at the boundary — passed for forward-compatibility only).
+   `ref-driver.c` does this against PID 9999 (PIDs are small dense
+   indices; 9999 is out of range on every boot, so it always misses).
 2. **Self-notify post (no peer).** `ipc_notify(getpid(), value)`
    queues into your own queue; assert non-negative. No wait is done
    here on purpose — see §4 on why waits need a responder.
@@ -76,8 +83,11 @@ Patterns, in increasing order of coupling:
    first, or keep _sync calls out of the standalone path.
 4. **Post-merge cap-API (P3 headers).** `grant / copy / revoke /
    mint-with-badge`, `MMIO_MAP`, `IRQ_REGISTER/WAIT`,
-   `IOMMU_MAP/UNMAP`, endpoint send/recv, `FRAME_*` — allow-list only
-   (`src/libc/cap/` on the P3 lane). `dst` binds to your own or an
+   `IOMMU_MAP/UNMAP`, `FRAME_*` — allow-list only
+   (`src/libc/cap/` on the P3 lane). Endpoint send/recv is NOT a new
+   cap-header API: it stays in the existing `src/libc/ipc.h`
+   (`SYS_SEND`/`RECEIVE` on task ids, not cap handles — no new decls).
+   `dst` binds to your own or an
    endpoint-delegated CSpace only; every op fails closed with a code,
    never `ENSURE`s. Raw constructors (`create(phys/vector)`,
    `CNode::install/remove`, revoke cascades, `IOPORT_GRANT`) are
