@@ -187,6 +187,11 @@ void TaskControlBlock::init_sporadic_server(
 ///        load-bearing: storing the full id while the wire format stays
 ///        8-bit would self-reject every task with id > 255.  A future global
 ///        cspace registry must widen CAP_HANDLE_IDBITS first.
+///        Bootstrapping side (issue #171 P4): null-until-first-use IS the
+///        creator-seeding invariant — nothing installs caps at task birth,
+///        so a driver that never makes a cap syscall keeps a null CSpace
+///        and can hold nothing.  Idempotent: safe to call on every cap
+///        path (syscalls, daemon startup, tests).
 void TaskControlBlock::ensure_cspace() noexcept {
     if (cspace_)
         return;
