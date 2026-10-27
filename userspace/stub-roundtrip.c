@@ -6,7 +6,7 @@
 // EINVAL with four distinct nonzero args (number + op routing proof),
 // and GETPID determinism. Exit 0 = all pass; otherwise the failing
 // check number. Creates no residue: every created timer is deleted
-// before return (best-effort on failure paths too).
+// before return (best-effort DELETE, retried once, on failure paths).
 
 #include "gen/nexios_syscalls.h"
 
@@ -37,10 +37,16 @@ int main(void) {
     if (created != 0 || timer_id == PROBE_SENTINEL) {
         return 3;
     }
-    unsigned long scratch = 0;
+    // GETTIME writes a 32-byte AbiItimerspec: the out-buffer must
+    // match, an 8-byte slot would overflow the stack by 24 bytes.
+    long scratch[4];
     long gettime_ok = nexios_sys_timer_create(
-        2, (long)timer_id, (long)&scratch, 0);
+        2, (long)timer_id, (long)scratch, 0);
     long deleted = nexios_sys_timer_create(3, (long)timer_id, 0, 0);
+    if (deleted != 0) {
+        // Best-effort re-issue: a failed DELETE leaves the timer alive.
+        deleted = nexios_sys_timer_create(3, (long)timer_id, 0, 0);
+    }
     if (gettime_ok != 0) {
         return 4;
     }

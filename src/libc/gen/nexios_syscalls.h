@@ -18,7 +18,7 @@
  */
 
 /// @file gen/nexios_syscalls.h
-/// @brief Generated uniform Ring-3 syscall stubs (issue #171 P2).
+/// @brief Generated uniform Ring-3 stubs (#171 P2).
 /// @details GENERATED FILE — do not edit. Regenerate with
 /// `tools/gen_syscall_stubs.py`; see that script for the
 /// exclusion list and determinism contract.
@@ -27,7 +27,7 @@
 
 /// @brief Section 2 error predicate shared by every stub.
 /// @param ret raw syscall return value.
-/// @return -1 with errno set for -4095..-1, else ret verbatim.
+/// @return -1 with errno set for -4095..-1, else ret.
 long nexios_stub_map_err(long ret);
 
 /// @brief Generated stub for SYS_YIELD (0).
@@ -60,6 +60,7 @@ long nexios_sys_receive(
 /// @param arg2 third syscall argument.
 /// @param arg3 fourth syscall argument.
 /// @return raw success value, or -1 with errno set.
+/// @warning reply_buf is always 0 (no-reply requests only).
 long nexios_sys_send_sync(
     long arg0, long arg1, long arg2, long arg3);
 /// @brief Generated stub for SYS_PRINT (4).

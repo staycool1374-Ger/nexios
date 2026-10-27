@@ -50,6 +50,11 @@ EXCLUDED_NAMES = {
     "SYS_MAX": "table count, not a syscall number",
 }
 
+EXTRA_DOC = {
+    "SYS_SEND_SYNC":
+        "/// @warning reply_buf is always 0 (no-reply requests only).",
+}
+
 GPL_HEADER = """/*
  * NexIOS RTOS — Generated syscall stubs (issue #171 P2).
  *
@@ -142,7 +147,7 @@ def render_header(kept, header_rel):
     lines.append(GPL_HEADER.rstrip("\n"))
     lines.append("")
     lines.append("/// @file gen/nexios_syscalls.h")
-    lines.append("/// @brief Generated uniform Ring-3 syscall stubs (issue #171 P2).")
+    lines.append("/// @brief Generated uniform Ring-3 stubs (#171 P2).")
     lines.append("/// @details GENERATED FILE — do not edit. Regenerate with")
     lines.append("/// `tools/gen_syscall_stubs.py`; see that script for the")
     lines.append("/// exclusion list and determinism contract.")
@@ -151,7 +156,7 @@ def render_header(kept, header_rel):
     lines.append("")
     lines.append("/// @brief Section 2 error predicate shared by every stub.")
     lines.append("/// @param ret raw syscall return value.")
-    lines.append("/// @return -1 with errno set for -4095..-1, else ret verbatim.")
+    lines.append("/// @return -1 with errno set for -4095..-1, else ret.")
     lines.append("long nexios_stub_map_err(long ret);")
     lines.append("")
     for number, name in kept:
@@ -162,6 +167,8 @@ def render_header(kept, header_rel):
         lines.append("/// @param arg2 third syscall argument.")
         lines.append("/// @param arg3 fourth syscall argument.")
         lines.append("/// @return raw success value, or -1 with errno set.")
+        if name in EXTRA_DOC:
+            lines.append(EXTRA_DOC[name])
         lines.append(f"long nexios_sys_{lower}(")
         lines.append("    long arg0, long arg1, long arg2, long arg3);")
     lines.append("")
@@ -175,14 +182,14 @@ def render_source(kept):
     lines.append(GPL_HEADER.rstrip("\n"))
     lines.append("")
     lines.append("/// @file gen/nexios_syscalls.c")
-    lines.append("/// @brief Generated uniform Ring-3 syscall stubs (issue #171 P2).")
+    lines.append("/// @brief Generated uniform Ring-3 stubs (#171 P2).")
     lines.append("/// @details GENERATED FILE — do not edit. Regenerate with")
     lines.append("/// `tools/gen_syscall_stubs.py`. Every stub routes")
     lines.append("/// (arg0..arg3) through `__syscall5r` with an explicit zero")
-    lines.append("/// fifth register: deterministic trap state on all arches, and")
-    lines.append("/// the kernel documents reply_buf == 0 as no-reply for the one")
-    lines.append("/// reader (SEND_SYNC). Failures map through the section 2")
-    lines.append("/// predicate; -4095 maps to errno, -4097 stays a success value.")
+    lines.append("/// fifth register (deterministic trap state on all arches);")
+    lines.append("/// the kernel documents reply_buf == 0 as no-reply for its")
+    lines.append("/// only reader (SEND_SYNC). Failures map through section 2")
+    lines.append("/// predicate: -4095 maps to errno, -4097 stays success.")
     lines.append("")
     lines.append('#include "nexios_syscalls.h"')
     lines.append("#include <errno.h>")

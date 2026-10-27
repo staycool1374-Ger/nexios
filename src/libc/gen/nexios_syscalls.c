@@ -18,14 +18,14 @@
  */
 
 /// @file gen/nexios_syscalls.c
-/// @brief Generated uniform Ring-3 syscall stubs (issue #171 P2).
+/// @brief Generated uniform Ring-3 stubs (#171 P2).
 /// @details GENERATED FILE — do not edit. Regenerate with
 /// `tools/gen_syscall_stubs.py`. Every stub routes
 /// (arg0..arg3) through `__syscall5r` with an explicit zero
-/// fifth register: deterministic trap state on all arches, and
-/// the kernel documents reply_buf == 0 as no-reply for the one
-/// reader (SEND_SYNC). Failures map through the section 2
-/// predicate; -4095 maps to errno, -4097 stays a success value.
+/// fifth register (deterministic trap state on all arches);
+/// the kernel documents reply_buf == 0 as no-reply for its
+/// only reader (SEND_SYNC). Failures map through section 2
+/// predicate: -4095 maps to errno, -4097 stays success.
 
 #include "nexios_syscalls.h"
 #include <errno.h>
