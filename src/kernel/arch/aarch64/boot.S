@@ -3,6 +3,45 @@
 .type _start, @function
 
 _start:
+    // #351 slice-0: unexpected-topology fail-closed halt.  Only the
+    // boot CPU (MPIDR_EL1 Aff0 == 0) proceeds; any secondary prints
+    // a diagnostic and halts here instead of running the BSP boot
+    // path (shared boot stack + MMU setup would corrupt — no
+    // secondary path exists until slice-2 brings PSCI/spin-table
+    // bring-up; the halt stays for anything unexpected, and the
+    // cpu_index()==0 stub is replaced only together with that
+    // bring-up, never before).  Uses x9 (x0 carries the DTB pointer
+    // for the BSP path below); MPIDR_EL1 is readable at any EL >= 1.
+    mrs     x9, mpidr_el1
+    and     x9, x9, #0xFF
+    cbz     x9, 8f
+    // Secondary: polled PL011 diagnostic ("SMP!") + halt.  Raw UART
+    // access only (QEMU virt PL011 accepts DR writes pre-init).
+    ldr     x1, =0x9000000
+5:  ldr     w2, [x1, #0x18]
+    tst     w2, #(1 << 5)
+    b.ne    5b
+    mov     w2, #0x53
+    str     w2, [x1]
+4:  ldr     w2, [x1, #0x18]
+    tst     w2, #(1 << 5)
+    b.ne    4b
+    mov     w2, #0x4D
+    str     w2, [x1]
+3:  ldr     w2, [x1, #0x18]
+    tst     w2, #(1 << 5)
+    b.ne    3b
+    mov     w2, #0x50
+    str     w2, [x1]
+7:  ldr     w2, [x1, #0x18]
+    tst     w2, #(1 << 5)
+    b.ne    7b
+    mov     w2, #0x21
+    str     w2, [x1]
+6:
+    wfi
+    b       6b
+8:
     // Save DTB address (x0 from bootloader) in x20
     mov     x20, x0
     // Issue #354 (Q3): QEMU -kernel is a generic ELF, so no DTB arrives in
