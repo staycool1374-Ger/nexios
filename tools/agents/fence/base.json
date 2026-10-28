@@ -63,7 +63,8 @@
       "root": "/tmp/*",
       "decision": "allow",
       "roles": [
-        "auditor"
+        "auditor",
+        "coordinator"
       ],
       "external_variants": [
         "",

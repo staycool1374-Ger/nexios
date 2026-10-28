@@ -762,8 +762,10 @@ mode_workers() {
     qp="$rt/prompts/$(role_field qe prompt)"
     need_file "$dp"; need_file "$qp"
   fi
-  check_branch "$DEV_DIR" main
-  check_branch "$QE_DIR" testbed
+  # Any-branch launch: coord/workers start from any checkout branch.
+  # Branch discipline lives at merge time (qe-merge enforces testbed).
+  info "dev checkout branch: $(git -C "$DEV_DIR" branch --show-current 2>/dev/null || echo '?') (any branch allowed)"
+  info "qe checkout branch: $(git -C "$QE_DIR" branch --show-current 2>/dev/null || echo '?') (any branch allowed)"
   run_session "$DEV_SESS" "$DEV_DIR" dev "$dp"
   run_session "$QE_SESS" "$QE_DIR" qe "$qp"
 }
