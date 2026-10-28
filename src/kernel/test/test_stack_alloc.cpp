@@ -118,11 +118,22 @@ static uint64_t g_hook_task_id = 0;
 static uint64_t g_hook_rip = 0;
 static uint64_t g_hook_fault_va = 0;
 
+// #435 E2E variant A: test-side hook arm/disarm. The hook-false halt
+// expectation needs the override to return false while test-active;
+// default false preserves all existing behavior (P3 + x86 unchanged).
+static bool g_hook_force_false = false;
+void stack_overflow_hook_set_force_false(bool v) { g_hook_force_false = v; }
+
 bool stack_overflow_hook(kernel::TaskControlBlock &task,
                          const kernel::debug::FirstChanceFrame &frame) {
     g_hook_task_id = task.id;
     g_hook_fault_va = frame.addr;
     g_hook_rip = 0xDEAD0000BEEFULL;
+    if (g_hook_force_false) {
+        // Latch recorded above; report unrecovered so the handler takes
+        // the first-chance halt path (variant A re-fault loop).
+        return false;
+    }
     if (kernel::Scheduler::is_test_active()) {
         // Synthetic-drive recovery: nothing to recover (we are not inside the
         // #PF handler) — just latch and report recovered.

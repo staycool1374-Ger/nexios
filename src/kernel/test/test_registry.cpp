@@ -273,6 +273,7 @@ void register_vfs_errors_tests();
 void register_pipe_blocking_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
+void register_elf_guard_e2e_tests();
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
 void register_riscv64_tests();
@@ -1001,7 +1002,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"arch_cross", []() { run_arch_cross_group(); }},
 
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64", []() { register_aarch64_tests(); }},
+    {"arch_aarch64", []() { register_aarch64_tests(); register_elf_guard_e2e_tests(); }},
 #endif
 
 #if defined(CONFIG_ARCH_RISCV64)
