@@ -91,7 +91,12 @@ usage: agent_up.sh <mode> [...]
                      with the task pasted as its first message. Bare 'up' opens
                      the room: type the issue number or your idea into the
                      coordinator window; it runs setup and briefs the workers.
-  run ...            launch ONE session: run <name> <dir> <role> <prompt.txt> [branch]
+   resume             continue the LAST session with no arguments: the newest
+                      /tmp/nexios-*/ room is refreshed, workers relaunch from
+                      its briefs (bare when the room has none), coordinator
+                      ensured, watch mirrors opened, operator attached to
+                      $COORD_SESS.
+   run ...            launch ONE session: run <name> <dir> <role> <prompt.txt> [branch]
                      <role> is dev|qe|auditor|coordinator — the fence for it is
                      rendered from tools/agents/fence/ at launch (never a path).
   audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
@@ -822,6 +827,50 @@ EOF
   fi
 }
 
+# newest room by state.json mtime (the last session). $1 optional scan dir
+# (self-test seam; default /tmp). Prints the canonical issue number.
+last_issue() {
+  local scan="${1:-/tmp}"
+  python3 - "$scan" <<'EOF'
+import glob, os, sys
+scan = sys.argv[1]
+cands = glob.glob(os.path.join(scan, "nexios-*", "state.json"))
+if not cands:
+    sys.stderr.write("agent_up: ERROR: no previous session (no nexios-*/state.json under %s)\n" % scan)
+    sys.exit(1)
+newest = max(cands, key=lambda p: os.path.getmtime(p))
+sys.stdout.write(os.path.basename(os.path.dirname(newest)).split("nexios-", 1)[1])
+EOF
+}
+
+# resume — continue the last session with NO arguments: newest /tmp/nexios-*/
+# room is refreshed (setup is idempotent), workers relaunch from its briefs
+# (bare when the room has none), coordinator ensured, watch mirrors opened,
+# and the operator lands attached to the coordinator.
+mode_resume() {
+  [ $# -eq 0 ] || fail "resume takes no arguments (it continues the last session)"
+  local issue; issue=$(last_issue)
+  runtime_dir "$issue" >/dev/null
+  local rt; rt=$(runtime_dir "$issue")
+  info "resuming last session: issue $issue ($rt)"
+  mode_setup "$issue"
+  if [ -f "$rt/prompts/dev.txt" ] && [ -f "$rt/prompts/qe.txt" ]; then
+    mode_workers "$issue"
+  else
+    info "room $issue has no briefs — workers start bare, the coordinator re-briefs them"
+    mode_workers
+  fi
+  ensure_coord_session
+  open_watch_window "$DEV_SESS"
+  open_watch_window "$QE_SESS"
+  open_watch_window "$COORD_SESS"
+  if [ -n "${TMUX:-}" ]; then
+    tmux switch-client -t "$COORD_SESS"
+  else
+    tmux attach -t "$COORD_SESS"
+  fi
+}
+
 # audit-diff: generate the audit diff with a non-empty assertion.
 # usage: audit-diff [branch] [--base <rev>]   (default: current branch)
 # Writes through a temp file: diffing straight into audits/pending_patch.diff
@@ -1108,6 +1157,15 @@ mode_self_test() {
   chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 4199999 a b
   # planning a room never materialises a runtime
   chk_neg test -e /tmp/nexios-4199999
+  # resume: takes no arguments; last-room discovery is fixture-driven
+  chk_neg "$SCRIPT_DIR/agent_up.sh" resume extra-arg
+  local rs="/tmp/agentup-resume-$$"; mkdir -p "$rs/nexios-4242" "$rs/nexios-999"
+  printf '{}' > "$rs/nexios-4242/state.json"
+  printf '{}' > "$rs/nexios-999/state.json"
+  touch -t 202001010000 "$rs/nexios-999/state.json"
+  chk bash -c 'test "$("$0" __last-issue "$1")" = 4242' "$SCRIPT_DIR/agent_up.sh" "$rs"
+  rm -rf "$rs"
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __last-issue "/nonexistent-dir-$$"
   # fence rendering: polarity, determinism, mirrors, {repo}, twins, fail-closed
   chk "$SCRIPT_DIR/agent_up.sh" render-self-test
   # ... and the verifier agrees with what the launcher renders (one source)
@@ -1894,6 +1952,7 @@ case "$mode" in
   coord) mode_coord "$@" ;;
   workers) mode_workers "$@" ;;
   up) mode_up "$@" ;;
+  resume) mode_resume "$@" ;;
   run) mode_run "$@" ;;
   audit) mode_audit "$@" ;;
   audit-diff) mode_audit_diff "$@" ;;
@@ -1909,6 +1968,7 @@ case "$mode" in
   __check-clean-tree) mode_check_clean_tree "$@" ;;
   __run-cmd) mode_launch_cmd "$@" ;;
   __room-plan) mode_room_plan "$@" ;;
+  __last-issue) last_issue "$@" ;;
   __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
