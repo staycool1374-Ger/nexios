@@ -45,7 +45,152 @@ bool dtb_span_inside(uint64_t ptr, uint64_t span, uint64_t base,
     return ptr - base <= size - span;
 }
 
+// Step cap for the /cpus child walk (flat sibling list; 256 nodes is
+// orders of magnitude above any real topology, still fully bounded).
+constexpr int kMaxCpuWalkSteps = 256;
+
+// PSCI compatible strings, newest first. Probe order is a contract:
+// slices 2/3 boot the first match exclusively, never merge across nodes.
+constexpr const char *kPsciCompatV1 = "arm,psci-1.0";
+constexpr const char *kPsciCompatV02 = "arm,psci-0.2";
+constexpr const char *kPsciCompatBase = "arm,psci";
+
+// Bounded exact string compare inside a property payload (the property
+// may lack a NUL within bounds; plain strcmp could over-read).
+bool prop_is_str(const char *prop, int prop_len, const char *want) {
+    if (prop == nullptr || want == nullptr || prop_len <= 0) return false;
+    int idx = 0;
+    while (want[idx] != '\0') {
+        if (idx >= prop_len || prop[idx] != want[idx]) return false;
+        ++idx;
+    }
+    return idx < prop_len && prop[idx] == '\0';
+}
+
 } // namespace
+
+int dtb_walk_cpus(const void *fdt, DtbCpuEntry *out_entries, int max_entries) {
+    if (fdt == nullptr || out_entries == nullptr || max_entries <= 0) {
+        return 0;
+    }
+    if (fdt_check_layout(fdt) != 0 || fdt_check_structure(fdt) != 0) {
+        return 0;
+    }
+    // /cpus lookup by name (the vendored libfdt has no path helper;
+    // name length 4 covers "cpus" without the NUL by namelen contract).
+    int cpus_node = fdt_subnode_offset_namelen(fdt, 0, "cpus", 4);
+    if (cpus_node < 0) return 0;
+    // #address-cells on /cpus is probed, never assumed: absent or
+    // non-{1,2} means the topology is untrusted (skew -> halt upstream).
+    int cells_len = 0;
+    const void *cells_prop =
+        fdt_getprop_namelen(fdt, cpus_node, "#address-cells", &cells_len);
+    if (cells_prop == nullptr || cells_len != 4) return 0;
+    uint32_t addr_cells = 0;
+    __builtin_memcpy(&addr_cells, cells_prop, sizeof(addr_cells));
+    addr_cells = __builtin_bswap32(addr_cells);
+    if (addr_cells < 1 || addr_cells > 2) return 0;
+    int found = 0;
+    int steps = 0;
+    int node = fdt_first_child(fdt, cpus_node);
+    while (node >= 0) {
+        if (steps >= kMaxCpuWalkSteps) return 0;
+        ++steps;
+        int next_node = fdt_next_sibling(fdt, node);
+        int type_len = 0;
+        const char *type_prop = static_cast<const char *>(
+            fdt_getprop_namelen(fdt, node, "device_type", &type_len));
+        if (type_prop == nullptr || !prop_is_str(type_prop, type_len, "cpu")) {
+            node = next_node;
+            continue; // Probe: only cpu children count, never names.
+        }
+        if (found >= max_entries) return 0; // Unrepresentable: halt.
+        int reg_len = 0;
+        const void *reg_prop =
+            fdt_getprop_namelen(fdt, node, "reg", &reg_len);
+        if (reg_prop == nullptr ||
+            reg_len != static_cast<int>(addr_cells * 4)) {
+            return 0; // Malformed cpu node: whole walk untrusted.
+        }
+        uint64_t cpu_id = 0;
+        const uint8_t *reg_bytes = static_cast<const uint8_t *>(reg_prop);
+        for (uint32_t cell_idx = 0; cell_idx < addr_cells; ++cell_idx) {
+            uint32_t cell_val = 0;
+            __builtin_memcpy(&cell_val, reg_bytes + cell_idx * 4,
+                             sizeof(cell_val));
+            cpu_id = (cpu_id << 32) | __builtin_bswap32(cell_val);
+        }
+        CpuEnableMethod method = CpuEnableMethod::UNKNOWN;
+        int method_len = 0;
+        const char *method_prop = static_cast<const char *>(
+            fdt_getprop_namelen(fdt, node, "enable-method", &method_len));
+        if (method_prop != nullptr) {
+            if (prop_is_str(method_prop, method_len, "psci")) {
+                method = CpuEnableMethod::PSCI;
+            } else if (prop_is_str(method_prop, method_len, "spin-table")) {
+                method = CpuEnableMethod::SPIN_TABLE;
+            } else {
+                return 0; // Unsupported method cannot be booted.
+            }
+        }
+        uint64_t release_addr = 0;
+        if (method == CpuEnableMethod::SPIN_TABLE) {
+            int rel_len = 0;
+            const void *rel_prop = fdt_getprop_namelen(fdt, node,
+                                                       "cpu-release-addr",
+                                                       &rel_len);
+            if (rel_prop == nullptr || rel_len != 8) return 0;
+            uint32_t rel_hi = 0;
+            uint32_t rel_lo = 0;
+            __builtin_memcpy(&rel_hi, rel_prop, sizeof(rel_hi));
+            const uint8_t *rel_bytes = static_cast<const uint8_t *>(rel_prop);
+            __builtin_memcpy(&rel_lo, rel_bytes + 4, sizeof(rel_lo));
+            release_addr = (static_cast<uint64_t>(__builtin_bswap32(rel_hi))
+                            << 32) |
+                           __builtin_bswap32(rel_lo);
+        }
+        out_entries[found].id = cpu_id;
+        out_entries[found].method = method;
+        out_entries[found].release_addr = release_addr;
+        ++found;
+        node = next_node;
+    }
+    return found;
+}
+
+bool dtb_psci_method(const void *fdt, char *out_method, int max_len) {
+    if (fdt == nullptr || out_method == nullptr || max_len <= 0) {
+        return false;
+    }
+    if (fdt_check_layout(fdt) != 0 || fdt_check_structure(fdt) != 0) {
+        return false;
+    }
+    const char *compat_list[] = {kPsciCompatV1, kPsciCompatV02,
+                                 kPsciCompatBase};
+    int psci_node = -1;
+    for (const char *compat : compat_list) {
+        int match = -1;
+        int hits = dtb_find_compatible_nodes(fdt, compat, &match, 1);
+        if (hits > 0) {
+            psci_node = match;
+            break;
+        }
+    }
+    if (psci_node < 0) return false;
+    int prop_len = 0;
+    const char *prop = static_cast<const char *>(
+        fdt_getprop_namelen(fdt, psci_node, "method", &prop_len));
+    if (prop == nullptr || prop_len <= 1) return false;
+    int copy_len = 0;
+    while (copy_len < prop_len && copy_len < max_len - 1 &&
+           prop[copy_len] != '\0') {
+        out_method[copy_len] = prop[copy_len];
+        ++copy_len;
+    }
+    if (copy_len >= prop_len || prop[copy_len] != '\0') return false;
+    out_method[copy_len] = '\0';
+    return true;
+}
 
 const void *dtb_from_boot_info() {
     const BootInfo &info = kernel::gs::boot_info();
