@@ -62,11 +62,13 @@ void Timer::init(uint32_t frequency_hz) {
 
 /// @brief Arm the SBI timer for an absolute mtime deadline (EID 0).
 /// @param absolute_deadline mtime value to fire at (MTIMECMP_DISARMED parks).
+/// a1 is clobbered: OpenSBI normalizes every SBI return to sbiret (error
+/// in a0, value in a1), so it must not hold a live value across ecall.
 static void sbi_set_timer(uint64_t absolute_deadline) {
     asm volatile("mv a0, %0; mv a7, %1; ecall"
                  :
                  : "r"(absolute_deadline), "r"(SBI_LEGACY_SET_TIMER)
-                 : "a0", "a7", "memory");
+                 : "a0", "a1", "a7", "memory");
 }
 
 void Timer::set_frequency(uint32_t frequency_hz) {

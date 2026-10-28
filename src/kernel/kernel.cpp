@@ -88,6 +88,8 @@
 #elif defined(CONFIG_ARCH_RISCV64)
 #include <kernel/arch/riscv64/hal/asid.hpp>
 #include <kernel/arch/riscv64/hal/fpu.hpp>
+#include <kernel/arch/riscv64/hal/percpu.hpp>
+#include <kernel/arch/riscv64/hal/smp.hpp>
 #endif
 #include <initrd/initrd.hpp>
 #include <services/terminal/framebuffer.hpp>
@@ -1028,6 +1030,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // boot.S); the slots are valid immediately (zeroed).
     arch::percpu_init_bsp(arch::read_mpidr_el1());
 #endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-3: point tp at per_cpu[0] before any trap can run.
+    // Harts >0 are firmware-held until HSM bring-up (S2's aa64 slice-0
+    // equivalent is the boot.S hart!=0 halt); the slots are valid
+    // immediately (zeroed).  The boot hart id comes from OpenSBI in a0.
+    arch::percpu_init_bsp(
+        static_cast<uint64_t>(kernel::gs::boot_info().hart_id));
+#endif
 #if defined(CONFIG_ARCH_X86_64)
     // Issue #251: same hidden-visibility binding as the RSP switch above —
     // RSP and TSS.RSP0 must resolve to the identical descriptor value.
@@ -1611,6 +1621,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #if defined(CONFIG_ARCH_AARCH64)
     // Issue #351 slice-2: DTB-driven PSCI/spin-table bring-up (same
     // park-or-panic contract; single-CPU DTB is a silent no-op).
+    kernel::smp::bring_up();
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-3: DTB-driven SBI HSM bring-up (same park-or-panic
+    // contract; single-hart DTB is a silent no-op; no HSM = no APs).
     kernel::smp::bring_up();
 #endif
 

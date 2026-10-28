@@ -3,6 +3,7 @@
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/riscv64/hal/plic.hpp>
+#include <kernel/arch/riscv64/hal/smp.hpp>
 #include <kernel/arch/hal/irq_storm.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/log/dmesg.hpp>
@@ -118,7 +119,14 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
     (void)regs;
     if (scause & (1ULL << 63)) {
         uint64_t code = scause & ~(1ULL << 63);
-        if (code == 5) {
+        if (code == 1) {
+            // S-mode software interrupt (issue #351 slice-3): the IPI
+            // channel.  Clear SSIP FIRST (level-like until cleared — an
+            // early return would refire immediately), then fan out via
+            // the per-hart mailbox (reschedule / shootdown / loopback).
+            asm volatile("csrc sip, %0" : : "r"(1ULL << 1U) : "memory");
+            kernel::smp::handle_sswi_ipi();
+        } else if (code == 5) {
             IDT::handle_interrupt(
                 static_cast<uint64_t>(InterruptVector::TIMER), 0, sepc);
         } else if (code == 9) {
