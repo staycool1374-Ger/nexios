@@ -25,7 +25,7 @@
 
 /// @brief Kernel version — single source of truth.
 /// Format: "vmajor.minor.patch-stage"
-#define KERNEL_VERSION_STRING "v0.5.6"
+#define KERNEL_VERSION_STRING "v0.5.7-dev"
 
 /// @brief Picolibc version backing the user-space runtime (issue #244).
 /// Injected by the Makefile from PICOLIBC_VERSION as a pp-number
@@ -41,7 +41,7 @@ namespace kernel {
 struct Version {
     static constexpr unsigned major = 0;
     static constexpr unsigned minor = 5;
-    static constexpr unsigned patch = 6;
+    static constexpr unsigned patch = 7;
     static constexpr const char* stage = "dev";
 
     static const char* string();
