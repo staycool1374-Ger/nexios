@@ -214,6 +214,19 @@ bool send_resched_ipi(uint64_t logical) {
     return sbi_send_ipi_mask(1ULL << hart);
 }
 
+bool send_shootdown_ipi(uint64_t logical) {
+    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+        return false;
+    }
+    const uint64_t hart = s_ap_hart[logical];
+    if (hart >= 64U) {
+        return false; // Legacy hart-mask is XLEN bits; no silent narrow.
+    }
+    __atomic_fetch_or(&ipi_mailbox_[logical], SMP_IPI_SHOOTDOWN,
+                      __ATOMIC_RELEASE);
+    return sbi_send_ipi_mask(1ULL << hart);
+}
+
 bool queue_shootdown(uint64_t logical, uint64_t addr) {
     if (logical == 0 || logical >= CONFIG_MAX_CPUS || addr == 0U) {
         return false;
