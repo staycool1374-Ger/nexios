@@ -181,7 +181,11 @@ else ifeq ($(ARCH),aarch64)
     AR          := $(AARCH64_TRIPLET)ar
     OBJCOPY     := $(AARCH64_TRIPLET)objcopy
 
-    CXXFLAGS    := $(CXXFLAGS_COMMON) -march=armv8-a
+    # Issue #437: -mno-outline-atomics forces inline LDXR/STXR loops.
+    # Default outline-atomics pulls libgcc lse-init.o (__getauxval + orphan
+    # .plt/.rela.dyn vs linker_aarch64.ld AT() layout). Cortex-a72 is ARMv8.0
+    # (no LSE), so inline atomics are correct and freestanding-clean.
+    CXXFLAGS    := $(CXXFLAGS_COMMON) -march=armv8-a -mno-outline-atomics
     CCFLAGS     := -static -nostdlib -ffreestanding -O2 -pipe -MMD -MP \
                    -ffunction-sections -fdata-sections \
                    -I src -I src/lib
