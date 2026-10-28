@@ -32,7 +32,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.6 — Meson build system cutover, userspace SDK with reference driver, kernel-stack window parity + guard-page abort (1873 debug / 89 release tests; smp_multicpu red under fix-first #417, fix verified post-freeze)
+* **Status:** v0.5.6 — Meson build system cutover, userspace SDK with reference driver, kernel-stack window parity + guard-page abort
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -93,7 +93,7 @@ Done roadmap archived in `prompts/README_done.md`.
 * **Meson Build System (#170):** full Meson cutover for build, test registry, and QEMU harness flows (build.sh, qemu_test.py, gen_test_registry).
 * **Userspace SDK (#171):** Ring-3 driver surface with reference driver (userspace/ref-driver.c), driver guide (docs/writing-a-nexios-driver.md), and staged SDK install under /opt/nexios-sdk.
 * **v0.5.6 Bug Run:** checked_ptr untag fault-repro fix with E2E vehicle, QEMU headless-display parity (F2).
-* **kstack Parity + Guard Page (#434):** aa64 kslot window wiring (P1), ELF birth-stack routing (P2), shared guard-fault predicate + aa64 EL1 abort arm + snapshot round-trip (P3), task integration + regression (P4).
+* **kstack Parity + Guard Page:** aa64 kslot window wiring (P1), ELF birth-stack routing (P2), shared guard-fault predicate + aa64 EL1 abort arm + snapshot round-trip (P3), task integration + regression.
 * **QEMU/Tooling (F2):** headless parity for x86_64 QEMU runs (-display none), tooling hardening.
 
 ### v0.5.5: Architecture Parity & Hardening
@@ -102,10 +102,6 @@ Done roadmap archived in `prompts/README_done.md`.
 * **Security & Isolation:** Fail-closed contracts for DMA, hardware discovery, and synthetic parent-clone restrictions.
 * **Console Infrastructure:** Bounded URC (Unsolicited Result Code) console discipline and zero-copy shell slices.
 * **Harness & Docs:** shell-smoke E2E chain on release, dump-counts reconciliation.
-
-### **v0.5.4 — Stabilization & Bugfixing**
-* **Scheduler Decomposition & Lifecycle:**  task creation/lifecycle/cleanup audit with deferred-kill handshake, scheduler post-split hardening.
-* **Tracing & Modernization:** XOR→order-sensitive path-tracer fold, C++20 nodiscard/span/concepts sweep.
 
 ---
 
