@@ -83,6 +83,11 @@ No worker idles at a handoff — briefing the NEXT task is part of finishing the
   idleness is a blocking concurrent task (input-wait per BLOCKED-ON-QE, or a gate
   the lane is properly stacked/queued behind). Everything else is reassigned,
   briefed, or laddered the same turn it is noticed — never relayed as a resting state.
+- POST-YIELD IDLE IS NORMAL (operator order, mandatory): turn-based workers yield
+  after posting — a bare prompt right after a post is correct idle, not stuck.
+  Starvation is ONLY: assigned pending NEXT: working + no post + no pane activity
+  across a full tick cycle. Never ladder a fresh post.
+- VERIFY BEFORE CLAIM (operator order, mandatory): no status claim about a worker without same-turn evidence (worker-state run and/or fresh inbox read). Retained impression is not evidence.
 - PERMISSION MODALS (operator order, mandatory): the coordinator dismisses unanswered
   permission modals itself via tmux, every turn they appear — never waits for a tick.
   Deny, never grant (Esc, guidance, Enter); blanket shell allows (`rm *`, `touch *`,
