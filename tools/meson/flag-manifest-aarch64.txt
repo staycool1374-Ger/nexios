@@ -19,6 +19,7 @@
 -DPICOLIBC_VERSION_NUM=1.8.12
 -march=armv8-a
 -mno-outline-atomics
+-fno-pie
 -g
 -Og
 -DCONFIG_DEBUG
