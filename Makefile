@@ -185,7 +185,10 @@ else ifeq ($(ARCH),aarch64)
     # Default outline-atomics pulls libgcc lse-init.o (__getauxval + orphan
     # .plt/.rela.dyn vs linker_aarch64.ld AT() layout). Cortex-a72 is ARMv8.0
     # (no LSE), so inline atomics are correct and freestanding-clean.
-    CXXFLAGS    := $(CXXFLAGS_COMMON) -march=armv8-a -mno-outline-atomics
+    # Issue #439: -fno-pie — Debian/Ubuntu linux-gnu drivers default to PIE
+    # (same precedent as x86_64 CXXFLAGS, riscv64 below); without it the CI
+    # aarch64-linux-gnu link emits orphan .rela.dyn vs linker_aarch64.ld.
+    CXXFLAGS    := $(CXXFLAGS_COMMON) -march=armv8-a -mno-outline-atomics -fno-pie
     CCFLAGS     := -static -nostdlib -ffreestanding -O2 -pipe -MMD -MP \
                    -ffunction-sections -fdata-sections \
                    -I src -I src/lib
@@ -197,7 +200,8 @@ else ifeq ($(ARCH),aarch64)
     OBJCOPY_ARCH := aarch64
     LIBGCC       := $(shell $(CC) --print-libgcc-file-name)
     LD_LIBS      := $(LIBGCC)
-    LDFLAGS      := -nostdlib -T linker/linker_$(ARCH).ld -Map=build/kernel.map
+    # Issue #439: -no-pie (mirror x86_64 LDFLAGS; raw-ld accepts it there).
+    LDFLAGS      := -nostdlib -no-pie -T linker/linker_$(ARCH).ld -Map=build/kernel.map
 
     QEMU_SYSTEM     := qemu-system-aarch64
     QEMU_ARCH_FLAGS := -machine virt -cpu cortex-a72 -kernel $(KERNEL_DEBUG)

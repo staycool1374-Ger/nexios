@@ -79,7 +79,10 @@ elif arch == 'aarch64'
   # linux-gnu toolchains needs __getauxval + orphan .plt/.rela.dyn that
   # collide under linker_aarch64.ld AT() layout. Cortex-a72 is ARMv8.0
   # (no LSE), so inline atomics are correct and freestanding-clean.
-  arch_flags = ['-march=armv8-a', '-mno-outline-atomics']
+  # Issue #439: -fno-pie — Debian/Ubuntu linux-gnu drivers default to PIE
+  # (same precedent as x86_64 above, riscv64 below); without it the CI
+  # aarch64-linux-gnu link emits orphan .rela.dyn that collides with .data.
+  arch_flags = ['-march=armv8-a', '-mno-outline-atomics', '-fno-pie']
 elif arch == 'riscv64'
   arch_flags = ['-march=rv64imafdc', '-mabi=lp64d', '-mcmodel=medany', '-fno-pie']
 endif
@@ -137,7 +140,8 @@ cc_base_flags = ['-static', '-nostdlib', '-ffreestanding', '-O2',
 if arch == 'x86_64'
   cc_arch_flags = ['-m64']
 elif arch == 'aarch64'
-  cc_arch_flags = []
+  # Issue #439: -fno-pie (C-side mirror of the arch_flags fix above).
+  cc_arch_flags = ['-fno-pie']
 else
   cc_arch_flags = ['-DCONFIG_ARCH_RISCV64', '-mcmodel=medany', '-fno-pie']
 endif

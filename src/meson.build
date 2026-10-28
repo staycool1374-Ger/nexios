@@ -335,7 +335,10 @@ if arch == 'x86_64'
     '-Wl,-z,max-page-size=0x1000',
     '-Wl,-Map=' + kernel_map]
 elif arch == 'aarch64'
-  link_args = ['-nostdlib',
+  # Issue #439: -no-pie (mirror x86_64 above) — the CI aarch64-linux-gnu
+  # driver defaults to PIE and without it emits orphan .rela.dyn that
+  # collides with .data under linker_aarch64.ld (no orphan placement).
+  link_args = ['-nostdlib', '-no-pie',
     '-Wl,-T,' + meson.project_source_root() / 'linker' / 'linker_aarch64.ld',
     '-Wl,-Map=' + kernel_map,
     '-lgcc']
