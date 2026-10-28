@@ -602,6 +602,7 @@ var namespacekernel =
     [ "is_boot_stack_rsp", "namespacekernel.html#a72d7be181f62634469d9791222867623", null ],
     [ "is_poisoned_block", "namespacekernel.html#af9e4d2f44f2d54a3a4c1144c7bf2202f", null ],
     [ "is_poisoned_block", "namespacekernel.html#af9e4d2f44f2d54a3a4c1144c7bf2202f", null ],
+    [ "is_stack_guard_fault", "namespacekernel.html#a0755c0274728a5f8e10b6a5b4bd0c9fc", null ],
     [ "is_timerfd_vnode", "namespacekernel.html#a39fa71941abf971947793936af03c774", null ],
     [ "isr_nesting_own", "namespacekernel.html#a0571e17de31b74de7a47a25459361c20", null ],
     [ "kslot_snapshot_bytes", "namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895", null ],

@@ -1,5 +1,6 @@
 var NAVTREEINDEX5 =
 {
+"classkernel_1_1fat32_1_1_fat32_partition.html#a42c3db79121fafbcc79728f377a7efb2":[2,0,3,9,2,8],
 "classkernel_1_1fat32_1_1_fat32_partition.html#a57051bdf82c3d3baccb4a865cba17bc6":[0,0,5,14,2,0],
 "classkernel_1_1fat32_1_1_fat32_partition.html#a57051bdf82c3d3baccb4a865cba17bc6":[2,0,3,9,2,0],
 "classkernel_1_1fat32_1_1_fat32_partition.html#a6085c63efe916f94c99efc9510380f3c":[0,0,5,14,2,11],
@@ -248,6 +249,5 @@ var NAVTREEINDEX5 =
 "classkernel_1_1sync_1_1_queue.html#a760d09f44d6d84ec48e3633b49896226":[2,0,3,21,4,2],
 "classkernel_1_1sync_1_1_queue.html#a7dda801315d3bd250b0014a9f6c7130f":[0,0,5,41,4,12],
 "classkernel_1_1sync_1_1_queue.html#a7dda801315d3bd250b0014a9f6c7130f":[2,0,3,21,4,12],
-"classkernel_1_1sync_1_1_queue.html#a8a679de7b0f3ddd7a2d5ccdd79044979":[0,0,5,41,4,4],
-"classkernel_1_1sync_1_1_queue.html#a8a679de7b0f3ddd7a2d5ccdd79044979":[2,0,3,21,4,4]
+"classkernel_1_1sync_1_1_queue.html#a8a679de7b0f3ddd7a2d5ccdd79044979":[0,0,5,41,4,4]
 };

@@ -13,12 +13,12 @@
 
 <p align="center">
   <a href="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml"><img src="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml/badge.svg" alt="CI Build"/></a>
-  <img src="https://img.shields.io/badge/tests-1862%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
+  <img src="https://img.shields.io/badge/tests-1873%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/C++20-freestanding-00599C?style=flat-square&logo=cplusplus" alt="C++20 Freestanding"/>
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.5.5-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.5.6-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -32,7 +32,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.5 — Full Compatibility & Functional State for AARCH64 and RISCV64, FPU fork inheritance
+* **Status:** v0.5.6 — Meson build system cutover, userspace SDK with reference driver, kernel-stack window parity + guard-page abort (1873 debug / 89 release tests; smp_multicpu red under fix-first #417, fix verified post-freeze)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -88,6 +88,13 @@ Done roadmap archived in `prompts/README_done.md`.
 ---
 
 ## Recent Release Highlights
+
+### v0.5.6: Meson Cutover, Userspace SDK & kstack Guard Parity
+* **Meson Build System (#170):** full Meson cutover for build, test registry, and QEMU harness flows (build.sh, qemu_test.py, gen_test_registry).
+* **Userspace SDK (#171):** Ring-3 driver surface with reference driver (userspace/ref-driver.c), driver guide (docs/writing-a-nexios-driver.md), and staged SDK install under /opt/nexios-sdk.
+* **v0.5.6 Bug Run:** checked_ptr untag fault-repro fix with E2E vehicle, QEMU headless-display parity (F2).
+* **kstack Parity + Guard Page (#434):** aa64 kslot window wiring (P1), ELF birth-stack routing (P2), shared guard-fault predicate + aa64 EL1 abort arm + snapshot round-trip (P3), task integration + regression (P4).
+* **QEMU/Tooling (F2):** headless parity for x86_64 QEMU runs (-display none), tooling hardening.
 
 ### v0.5.5: Architecture Parity & Hardening
 * **Interrupt & Timer Subsystems:** Full parity across platforms, including GICv2 initialization (ARM) and PLIC S-context handling (RISC-V).

@@ -13,5 +13,8 @@ var test__stack__alloc_8cpp =
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#ac37b7a387bcde57916fc552db0e69b84", null ],
     [ "JARVIS_TEST", "test__stack__alloc_8cpp.html#ae67f8eb9aed06e2d81ec60c1f4c65d22", null ],
     [ "register_stack_alloc_tests", "test__stack__alloc_8cpp.html#a465d0a1793fbe7178f27f6bf4c16445c", null ],
-    [ "stack_overflow_hook", "test__stack__alloc_8cpp.html#a31ca687659b8dd5a38b9f8bf3c3bfc05", null ]
+    [ "stack_overflow_hook", "test__stack__alloc_8cpp.html#a31ca687659b8dd5a38b9f8bf3c3bfc05", null ],
+    [ "stack_overflow_hook_latched_task", "test__stack__alloc_8cpp.html#a2dbd9f2b7a220bee9c01f7d7f9e2b140", null ],
+    [ "stack_overflow_hook_latched_va", "test__stack__alloc_8cpp.html#a9263e1defb6cd43be0cebbfca2c8501e", null ],
+    [ "stack_overflow_hook_reset_latch", "test__stack__alloc_8cpp.html#a7773539a843d59e25ca99cb8e35bddd7", null ]
 ];

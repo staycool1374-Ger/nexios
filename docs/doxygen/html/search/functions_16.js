@@ -29,9 +29,10 @@ var searchData=
   ['virtio_5fsetup_5fqueue_26',['virtio_setup_queue',['../namespacearch.html#a9feefbea1a3cdebff8c58cb8dec3d426',1,'arch']]],
   ['virtioblkdriver_27',['VirtioBlkDriver',['../classkernel_1_1block_1_1_virtio_blk_driver.html#a4e858e184872512bac2aa96edb83c975',1,'kernel::block::VirtioBlkDriver']]],
   ['virtualaddress_28',['VirtualAddress',['../classarch_1_1kernel_1_1_virtual_address.html#aca8e04fb25341928bf3cb3602a60913a',1,'arch::kernel::VirtualAddress::VirtualAddress() noexcept'],['../classarch_1_1kernel_1_1_virtual_address.html#a27fb283d895c0805350c9e55c79b4399',1,'arch::kernel::VirtualAddress::VirtualAddress(uint64_t addr) noexcept'],['../classkernel_1_1_virtual_address.html#aca6aa068f02bb85761ecc0b4c20d30b9',1,'kernel::VirtualAddress::VirtualAddress() noexcept'],['../classkernel_1_1_virtual_address.html#a80dce632a813aa23eccd8590cfe0742d',1,'kernel::VirtualAddress::VirtualAddress(uint64_t addr) noexcept']]],
-  ['vmm_5fstep_29',['vmm_step',['../namespacekernel.html#a56febead1e6ad1b0808a6b0807c5aebf',1,'kernel::vmm_step(uint64_t step_bit) noexcept'],['../namespacekernel.html#a86b16fba95948e6798ebd256bf7cb80b',1,'kernel::vmm_step(VmmMapSteps step_value) noexcept']]],
-  ['vnode_5fidentity_5fmatch_30',['vnode_identity_match',['../namespacekernel_1_1vfs.html#ab8b8c200cb8667206c6cddd15c42a35e',1,'kernel::vfs']]],
-  ['vprint_31',['vprint',['../classkernel_1_1_logger.html#a12794441edd7245c8a81bfe5b9a6dd14',1,'kernel::Logger']]],
-  ['vprint_5fraw_32',['vprint_raw',['../classkernel_1_1_logger.html#a2784a0d5d84c070025fefd8e78692322',1,'kernel::Logger']]],
-  ['vsnprintf_33',['vsnprintf',['../stdio_8c.html#af67cd10179bf7388f6190ad133aa3258',1,'vsnprintf(char *buf, size_t n, const char *fmt, va_list ap):&#160;stdio.c'],['../stdio_8h.html#af67cd10179bf7388f6190ad133aa3258',1,'vsnprintf(char *buf, size_t n, const char *fmt, va_list ap):&#160;stdio.c']]]
+  ['vmm_5farch_5froot_5fphys_29',['vmm_arch_root_phys',['../classkernel_1_1_v_m_m.html#a0a3f668059e335d3aa824dea139a43cf',1,'kernel::VMM']]],
+  ['vmm_5fstep_30',['vmm_step',['../namespacekernel.html#a56febead1e6ad1b0808a6b0807c5aebf',1,'kernel::vmm_step(uint64_t step_bit) noexcept'],['../namespacekernel.html#a86b16fba95948e6798ebd256bf7cb80b',1,'kernel::vmm_step(VmmMapSteps step_value) noexcept']]],
+  ['vnode_5fidentity_5fmatch_31',['vnode_identity_match',['../namespacekernel_1_1vfs.html#ab8b8c200cb8667206c6cddd15c42a35e',1,'kernel::vfs']]],
+  ['vprint_32',['vprint',['../classkernel_1_1_logger.html#a12794441edd7245c8a81bfe5b9a6dd14',1,'kernel::Logger']]],
+  ['vprint_5fraw_33',['vprint_raw',['../classkernel_1_1_logger.html#a2784a0d5d84c070025fefd8e78692322',1,'kernel::Logger']]],
+  ['vsnprintf_34',['vsnprintf',['../stdio_8c.html#af67cd10179bf7388f6190ad133aa3258',1,'vsnprintf(char *buf, size_t n, const char *fmt, va_list ap):&#160;stdio.c'],['../stdio_8h.html#af67cd10179bf7388f6190ad133aa3258',1,'vsnprintf(char *buf, size_t n, const char *fmt, va_list ap):&#160;stdio.c']]]
 ];

@@ -56,5 +56,6 @@ var searchData=
   ['kernel_3a_3atime_53',['time',['../namespacekernel_1_1time.html',1,'kernel']]],
   ['kernel_3a_3avfs_54',['vfs',['../namespacekernel_1_1vfs.html',1,'kernel']]],
   ['kernel_3a_3avfsd_55',['vfsd',['../namespacekernel_1_1vfsd.html',1,'kernel']]],
-  ['kernel_3a_3awatchdogd_56',['watchdogd',['../namespacekernel_1_1watchdogd.html',1,'kernel']]]
+  ['kernel_3a_3awatchdogd_56',['watchdogd',['../namespacekernel_1_1watchdogd.html',1,'kernel']]],
+  ['kslot_5fbackend_57',['kslot_backend',['../namespacekslot__backend.html',1,'']]]
 ];

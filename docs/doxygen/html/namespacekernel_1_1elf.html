@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -1099,6 +1099,20 @@ Here is the call graph for this function:</div>
 
 <p>Finish a partially-built load: allocate the TCB, kernel stack, adopt <code class="param">pml4</code> as page_table_, wire std fds, setup the user stack frame and install segment canaries. Extracted from <a class="el" href="#ada05ba431e1699232e0cb0ca87af0a2b" title="Load an ELF binary into a new task.">elf::load</a> for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a> (chunked loader). </p>
 <p>Finish a partially-built load: allocate the TCB, kernel stack, adopt <code class="param">pml4</code> as page_table_, wire std fds, setup the user stack frame and install segment canaries. Extracted from <a class="el" href="#ada05ba431e1699232e0cb0ca87af0a2b" title="Load an ELF binary into a new task.">elf::load</a> for reuse by the background <a class="el" href="classkernel_1_1elf_1_1_elf_loader.html" title="Background ELF loader singleton.">ElfLoader</a>.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">hdr</td><td>Validated ELF header. </td></tr>
+    <tr><td class="paramname">pml4</td><td>The built PML4 (user pages already mapped). </td></tr>
+    <tr><td class="paramname">ustack_phys</td><td>Physical base of the user stack. </td></tr>
+    <tr><td class="paramname">phdr_image</td><td>Buffer holding the ELF header followed by the full program-header table (for canary installation). </td></tr>
+    <tr><td class="paramname">file_size</td><td>Total file size in bytes. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>New <a class="el" href="structkernel_1_1_task_control_block.html" title="Task control block — represents a single thread of execution.">TaskControlBlock</a>, or nullptr on failure (partial state freed).</dd></dl>
+<p>Binding bootstrapping rule (issue #171 P4): no loader magic. A freshly finalized task owns NO capabilities: cspace_ stays null (lazy ensure_cspace on the first cap syscall) and the loader passes only argc/argv/envp on the user stack plus the entry point in the trap frame — no versioned launch struct (reserved-absent), no pre-seeded handles. Whatever a driver needs, its creator must grant/copy/mint into its CSpace before first dispatch (caller-relative handles). Exec preserves the rule by inheritance: exec_into_current keeps cspace_ untouched (mappings/FDs/TLS reset, caps kept). Any behavior change here requires a plan amendment and re-audit first (P4 scope: comment</p><ul>
+<li>seeding test only).</li>
+</ul>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">hdr</td><td>Validated ELF header. </td></tr>

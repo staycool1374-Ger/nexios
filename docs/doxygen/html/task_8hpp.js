@@ -25,6 +25,7 @@ var task_8hpp =
     [ "kernel::canary_write_at", "namespacekernel.html#a1d1f72f7161fa8a1f32d2692b7c90d8c", null ],
     [ "kernel::task::dmesg_task_main", "namespacekernel_1_1task.html#ae7fc9a59f78d98d18c2d3c5a25ec2193", null ],
     [ "kernel::init_task_common", "namespacekernel.html#abb9b26c8d76b814b9ed2a3c78bad290e", null ],
+    [ "kernel::is_stack_guard_fault", "namespacekernel.html#a0755c0274728a5f8e10b6a5b4bd0c9fc", null ],
     [ "kernel::kslot_snapshot_bytes", "namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895", null ],
     [ "kernel::kslot_snapshot_capture", "namespacekernel.html#afa5566867274b1950bc3ed7acc375508", null ],
     [ "kernel::kslot_snapshot_restore", "namespacekernel.html#a74d19182fedd131cc4450ebe5242359e", null ],

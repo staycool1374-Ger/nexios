@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -159,6 +159,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('task_8cpp.html
 <code>#include &lt;<a class="el" href="iopb_8hpp_source.html">kernel/arch/hal/iopb.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="mmio_8hpp_source.html">kernel/cap/mmio.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="frame__map_8hpp_source.html">kernel/cap/frame_map.hpp</a>&gt;</code><br />
+<code>#include &lt;<a class="el" href="kslot__backend_8hpp_source.html">kernel/task/kslot_backend.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="irq__delivery_8hpp_source.html">kernel/irq_delivery.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="assert_8hpp_source.html">assert.hpp</a>&gt;</code><br />
 <code>#include &lt;<a class="el" href="task__errors_8hpp_source.html">kernel/task/task_errors.hpp</a>&gt;</code><br />
@@ -192,6 +193,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:afa5566867274b1950bc3ed7acc375508"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture the kstack-window PT contents and slot bookkeeping into <code class="param">dst</code> (must hold &gt;= <a class="el" href="namespacekernel.html#a25626431fd5ef9ee4a6698a65b1f0895" title="Total snapshot bytes for the kernel-stack window state (v0.4.0 MP-6.3): 8 PT page contents + slot boo...">kslot_snapshot_bytes()</a> bytes).  <br /></td></tr>
 <tr class="memitem:a74d19182fedd131cc4450ebe5242359e" id="r_a74d19182fedd131cc4450ebe5242359e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a74d19182fedd131cc4450ebe5242359e">kernel::kslot_snapshot_restore</a> (const uint8_t *src)</td></tr>
 <tr class="memdesc:a74d19182fedd131cc4450ebe5242359e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore the kstack-window PT contents and slot bookkeeping from <code class="param">src</code>, and flush the TLB for every window VA.  <br /></td></tr>
+<tr class="memitem:a0755c0274728a5f8e10b6a5b4bd0c9fc" id="r_a0755c0274728a5f8e10b6a5b4bd0c9fc"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a0755c0274728a5f8e10b6a5b4bd0c9fc">kernel::is_stack_guard_fault</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t, uint64_t fault_va) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a0755c0274728a5f8e10b6a5b4bd0c9fc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Guard-fault predicate shared by all arch fault entries (#434 P3): true iff <code class="param">t</code> owns a kslot window (slot VA != 0, i.e. non-HHDM) and <code class="param">fault_va</code> lies in the unmapped guard page [kstack_slot_va_, kstack_slot_va_ + PAGE_SIZE). Arch-neutral (no CONFIG_ARCH/ifdefs at call sites): the x86 #PF block calls this behavior-identically, the aa64 EL1 fault entry uses it to arm the guard-abort path.  <br /></td></tr>
 <tr class="memitem:a1d1f72f7161fa8a1f32d2692b7c90d8c" id="r_a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a1d1f72f7161fa8a1f32d2692b7c90d8c">kernel::canary_write_at</a> (uint64_t va, uint64_t value, uint64_t pml4)</td></tr>
 <tr class="memdesc:a1d1f72f7161fa8a1f32d2692b7c90d8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write an 8-byte canary value at <code class="param">va</code> through <code class="param">pml4</code> (resolving the frame via HHDM). No-op when the page is not present.  <br /></td></tr>
 <tr class="memitem:a772626334577fb34746dd85c3e6e3b9c" id="r_a772626334577fb34746dd85c3e6e3b9c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a772626334577fb34746dd85c3e6e3b9c">kernel::canary_install_user_segments</a> (<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *t)</td></tr>
