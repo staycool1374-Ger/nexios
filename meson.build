@@ -74,7 +74,12 @@ arch_flags = []
 if arch == 'x86_64'
   arch_flags = ['-fno-pie', '-m64', '-mno-red-zone', '-mgeneral-regs-only', '-mcmodel=large']
 elif arch == 'aarch64'
-  arch_flags = ['-march=armv8-a']
+  # Issue #437: -mno-outline-atomics forces inline LDXR/STXR loops.
+  # Default outline-atomics emits libgcc calls pulling lse-init.o, which on
+  # linux-gnu toolchains needs __getauxval + orphan .plt/.rela.dyn that
+  # collide under linker_aarch64.ld AT() layout. Cortex-a72 is ARMv8.0
+  # (no LSE), so inline atomics are correct and freestanding-clean.
+  arch_flags = ['-march=armv8-a', '-mno-outline-atomics']
 elif arch == 'riscv64'
   arch_flags = ['-march=rv64imafdc', '-mabi=lp64d', '-mcmodel=medany', '-fno-pie']
 endif
