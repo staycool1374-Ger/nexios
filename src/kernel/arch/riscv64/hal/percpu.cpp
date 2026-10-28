@@ -26,6 +26,15 @@ namespace arch {
 // Per-hart array (CONFIG_MAX_CPUS pages, 4 KiB each).
 PerCpu per_cpu[CONFIG_MAX_CPUS];
 
+/// @brief Linkage anchor for the trap entry (issue #351 S3 fix-2).
+/// Holds &per_cpu[0] as a C-linkage constant so assembly can derive the
+/// current hart's slot index as (tp - base) >> 12 without a PC-relative
+/// reference to the C++-mangled array (out of range is impossible here:
+/// same linkage unit, absolute address materialized by the linker).
+/// Marked used: no C++ TU references it, only syscall_entry.S.
+extern "C" PerCpu *const arch_per_cpu_base __attribute__((used)) =
+    per_cpu;
+
 void percpu_init_bsp(uint64_t bsp_hart) {
     // Initialize BSP (hart 0) per-hart state.
     PerCpu &bsp_block = per_cpu[0];

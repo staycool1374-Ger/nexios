@@ -351,14 +351,31 @@ abort_switch:
     j 7f
 
 7:  # Issue #74: consume the TLS slot into the trap-frame TP save area.
-    # Both SATP paths converge here, so the slot is consumed
-    # unconditionally. A direct tp write would die at the OFF_TP restore
-    # below, and no sfence is needed for tp.
-    la t0, scheduler_load_tls_from
-    ld t1, 0(t0)
-    sd zero, 0(t0)
+    # Both SATP paths converge here. The slots are per-hart
+    # ([CONFIG_MAX_CPUS], indexed by this_cpu() in C++): index by the
+    # CURRENT hart here — a hardcoded slot 0 lets an AP timer tick steal
+    # the BSP's pending TLS update AND clobber the AP's own tp with a
+    # user VA (after which cpu_index() misderives to 0 and the AP
+    # impersonates the BSP; issue #351 S3 triage). Derive the index from
+    # tp itself (the per_hart base): idx = (tp - base) >> 12. Out of
+    # range (foreign tp, e.g. pre-percpu-init zero) skips the consume;
+    # the rightful owner's own trap will consume its slot. A direct tp
+    # write would die at the OFF_TP restore below, and no sfence is
+    # needed for tp.
+    mv   t0, tp                       # current per-hart base (pre-consume)
+    la   t1, arch_per_cpu_base
+    ld   t1, 0(t1)                    # &per_cpu[0] (C-linkage anchor)
+    sub  t0, t0, t1                   # byte offset into per_cpu[]
+    srli t0, t0, 12                   # logical index (4 KiB pages)
+    li   t1, 8                        # CONFIG_MAX_CPUS (range guard)
+    bgeu t0, t1, 8f                   # foreign tp: skip, leave all alone
+    slli t0, t0, 3                    # slot byte offset
+    la   t1, scheduler_load_tls_from
+    add  t0, t0, t1                   # &slots[current hart]
+    ld   t1, 0(t0)
+    sd   zero, 0(t0)
     beqz t1, 8f
-    sd t1, OFF_TP(sp)
+    sd   t1, OFF_TP(sp)
 8:  # Decrement nesting depth
     la t0, isr_nesting_depth
     ld t1, 0(t0)

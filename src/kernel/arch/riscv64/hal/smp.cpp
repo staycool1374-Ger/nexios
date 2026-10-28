@@ -468,10 +468,12 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_hart) {
     // Interrupts stay disabled until the idle phase below.
     arch::percpu_init_ap(logical_id, ap_hart);
     arch::plic_threshold_s_for_hart(ap_hart, 0);
-    // Arm this hart's own timer (SBI set_timer; the ISR re-arms).
-    // Delivery is still masked, so arming here is side-effect-free.
-    const uint32_t timer_hz = kernel::BootParams::instance().timer_hz;
-    arch::Timer::set_frequency(timer_hz);
+    // S3 scope: the AP stays timer-quiet. Arming the AP timer would let
+    // ap_tick run scheduling decisions on hart1, but cross-CPU dispatch
+    // gating lands in slice-4; until then AP ticks only race the BSP
+    // scheduler (loaded -smp2 post-suite corruption). The AP still idles
+    // in wfi and services S-soft IPIs via the trap path (no timer needed).
+    // (Deliberately no Timer::set_frequency here.)
     ap_ready[logical_id] = 1;
 
     // Start-gate: spin parked until the BSP publishes scheduler_ready
@@ -489,17 +491,24 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_hart) {
     // stvec is per-hart: point this AP at the shared vector table
     // (IDT::init only programs the calling hart; IDT::load is a no-op).
     arch::IDT::init();
-    // Unmask S-mode IRQs (timer + external) and the S-soft IPI line.
-    arch::sti();
-    uint64_t sie_bits = 0;
-    asm volatile("csrr %0, sie" : "=r"(sie_bits));
-    sie_bits |= (1ULL << 1); // SSIE: S-mode software interrupts (IPIs)
-    asm volatile("csrw sie, %0" : : "r"(sie_bits) : "memory");
-    for (;;) {
-        // Timer IRQs drive on_tick() on this hart (ticks attributed via
-        // the now-live tp identity); wfi parks between ticks.
-        arch::hlt();
+    // Enable the S-soft IPI line (still masked globally, so no trap yet).
+    {
+        uint64_t sie_bits = 0;
+        asm volatile("csrr %0, sie" : "=r"(sie_bits));
+        sie_bits |= (1ULL << 1); // SSIE: S-mode software interrupts (IPIs)
+        asm volatile("csrw sie, %0" : : "r"(sie_bits) : "memory");
     }
+    // Drop onto the idle task's own kernel stack with interrupts on, then
+    // halt (mirrors x86 enter_idle_context + the BSP reboot path: SP =
+    // idle top, SIE set, wfi loop).  The SP switch and the unmask must be
+    // one atomic step: idling on the PMM bring-up stack leaves a TCB-
+    // foreign SP that corrupts owner-resolution on the first AP-side
+    // deferred switch (issue #351 S3 triage: H2W orphan-displaced ->
+    // validate_switch fail -> ENSURE).  Never returns.
+    asm volatile("mv sp, %0; csrs sstatus, 2; 1: wfi; j 1b" ::"r"(
+                     idle->kernel_stack_top)
+                 : "memory");
+    __builtin_unreachable();
 }
 
 } // namespace kernel::smp
