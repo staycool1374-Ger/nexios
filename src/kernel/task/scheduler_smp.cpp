@@ -118,7 +118,7 @@ void Scheduler::mailbox_drain() noexcept {
     // IF=0-excluded while we run).
     if (!scheduler_lock_.try_lock())
         return;
-    SpinLockGuard<sync::SpinLock> outer(scheduler_lock_, adopt_lock);
+    SchedulerLockGuard outer(scheduler_lock_, adopt_lock);
     ENSURE(scheduler_lock_.holder() != nullptr); // issue #369 T2a: adopted global held before the leaf take below
     SpinLockGuard<sync::SpinLock> guard(wake_mailbox_lock_[cpu]);
     for (;;) {
