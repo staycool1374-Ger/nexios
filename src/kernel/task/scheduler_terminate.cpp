@@ -59,8 +59,8 @@ Scheduler::terminate_err(TaskControlBlock &task,
                             task.name, task.id);
         return errors::SCHED_ERR_REMOTE_CURRENT;
     }
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
+    SchedulerLockGuard guard(scheduler_lock_);
     charge_exec(task); // issue #21: bill the final partial quantum (no loss)
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     if (task.id == 6) {
