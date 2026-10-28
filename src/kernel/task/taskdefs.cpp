@@ -37,6 +37,9 @@
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/smp.hpp>
 #endif
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/smp.hpp>
+#endif
 #include <kernel/nexios_config.h>
 #include <logger.hpp>
 
@@ -471,6 +474,11 @@ void reboot_from_table() {
     // parked until this lands; post-gate they create their idles and tick.
     kernel::smp::publish_scheduler_ready();
 #endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: same start-gate contract for aa64 APs (parked in
+    // ap_main until this lands; post-gate they adopt idle tasks and tick).
+    kernel::smp::publish_scheduler_ready();
+#endif
 
     // 5. Switch to idle-task stack and enter the idle loop
     if (idle) {
@@ -520,6 +528,17 @@ void reboot_from_table() {
             }
         }
     }
+#endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: one-shot cross-CPU SGI verification, last
+    // reboot step before unmasking IRQs. Placement is deliberate: the
+    // BSP needs no IRQs of its own (it sends via MMIO and polls the
+    // APs' shared-memory acks), while the APs are already IRQ-live in
+    // their idle loops (start-gate published above). Running it here —
+    // instead of after sti — keeps it deterministic: the first timer
+    // tick would otherwise preempt the idle entry and strand this
+    // one-shot behind the scheduler. Panic on failure (fail-closed).
+    kernel::smp::verify_booted_aps();
 #endif
     arch::sti();
     for (;;) {

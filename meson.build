@@ -178,8 +178,14 @@ if arch == 'aarch64'
   qemu_aarch64 = find_program('qemu-system-aarch64', required : true)
   virt_dtb_raw = custom_target('virt-dtb-dump',
     output : 'virt.dtb',
+    # Issue #351 slice-2: dump with -smp 8 (CONFIG_MAX_CPUS max topology).
+    # QEMU -kernel boots generic ELFs with x0 == 0 (Linux-header images
+    # only get the live DTB), so the kernel always falls back to this
+    # embedded blob.  Max-topology is the honest template: bring_up()
+    # PSCI-probes each DTB cpu and skips refusals (absent CPUs) silently,
+    # parks 0 APs on skew, panics only on start/SGI timeout.
     command : [qemu_aarch64, '-machine', 'virt,dumpdtb=@OUTPUT@',
-      '-cpu', 'cortex-a72', '-m', '256M'],
+      '-cpu', 'cortex-a72', '-m', '256M', '-smp', '8'],
   )
   virt_dtb_trimmed = custom_target('virt-dtb-trim',
     input : virt_dtb_raw,
