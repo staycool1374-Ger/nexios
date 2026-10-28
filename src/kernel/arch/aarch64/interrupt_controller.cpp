@@ -286,23 +286,41 @@ namespace {
 volatile uint64_t g_last_el0_esr = 0;
 volatile uint64_t g_last_el0_far = 0;
 volatile uint64_t g_last_el0_elr = 0;
+// save_all (vectors.S) slot index of the trapped ELR: [sp,#256]/8 == 32.
+// The recover path patches this in-frame slot, never the live ELR_EL1:
+// the asm restore_all reloads ELR from the frame on resume and would
+// clobber a live-CSR redirect (x86 regs[17] / riscv64 OFF_SEPC parity).
+constexpr uint64_t EL0_FRAME_ELR_SLOT = 256 / 8;
 } // namespace
 
 /// @brief EL0 synchronous-fault handler called from vectors.S (issues
-///        #184/#28).  Non-SVC faults from EL0 land here.  Latch ESR/FAR/ELR
-///        for post-mortem GDB, mark the faulting task TERMINATED
-///        (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit
-///        self-termination path.  Runs with interrupts masked (vector
-///        entry); must not re-enable IRQs, and must NOT call
-///        Scheduler::terminate (ISR-unsafe: switch_to_task resolves the
-///        live exception RSP as the save owner — see
-///        syscall_handlers_misc.cpp).  The asm caller applies the pending
-///        switch via irq_context_switch_common; if no task is current (no
-///        user context to kill) park as a last resort.
-///        A parent BLOCKED in waitpid IS woken (issue #217:
-///        wake_waiting_parent delivers status + PID before the switch);
-///        polled waiters (wait_for_termination_safe) observe TERMINATED.
-extern "C" void aarch64_el0_fault_handler() {
+///        #184/#28, #435 seam).  Non-SVC faults from EL0 land here.
+///        Latch ESR/FAR/ELR for post-mortem GDB, then: recover-first via
+///        g_user_access_recover_ip (frame ELR slot patched, resume), else
+///        debugger stop routing for attached targets, else the guard arm
+///        (#434 P3, mirrors the EL1 arm per its §369 comment: same/lower-EL
+///        data abort whose FAR falls in the faulting task's kslot guard
+///        page routes to the stack_overflow_hook-else-halt path with
+///        STACK_OVERFLOW cause — x86 #PF parity), else mark the faulting
+///        task TERMINATED (exit_code = -SIGSEGV) and switch off it,
+///        mirroring the sys_exit self-termination path.  Runs with
+///        interrupts masked (vector entry); must not re-enable IRQs, and
+///        must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task
+///        resolves the live exception RSP as the save owner — see
+///        syscall_handlers_misc.cpp).  The asm caller restores + erets on
+///        a 0 return, else applies the pending switch via
+///        irq_context_switch_common; if no switch is armed (no user
+///        context to kill, or a debugger park which arms none) the asm
+///        parks as a last resort (the fault frame stays on the stack for
+///        the debugger).  A parent BLOCKED in waitpid IS woken (issue
+///        #217: wake_waiting_parent delivers status + PID before the
+///        switch); polled waiters (wait_for_termination_safe) observe
+///        TERMINATED.
+/// @param frame save_all trap frame base ([sp,#248]=SP_EL0,
+///        [sp,#256]=ELR_EL1, [sp,#264]=SPSR_EL1); the recover path patches
+///        the ELR slot in-frame.
+/// @return 0 resume (asm restore_all + eret), nonzero switch-or-park.
+extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
     uint64_t esr = 0;
     uint64_t far = 0;
     uint64_t elr = 0;
@@ -312,13 +330,24 @@ extern "C" void aarch64_el0_fault_handler() {
     g_last_el0_esr = esr;
     g_last_el0_far = far;
     g_last_el0_elr = elr;
+    // Recover-first (mirrors the EL1 arm and riscv64_exception_dispatch):
+    // while a guarded copy runs, ANY fault redirects the resume ELR
+    // in-frame so the copy returns false instead of faulting. Checked
+    // before the guard arm (a guarded copy must still recover even if
+    // FAR lands in a guard range).
+    uint64_t recover = kernel::g_user_access_recover_ip;
+    if (recover != 0) {
+        kernel::g_user_access_recover_ip = 0;
+        frame[EL0_FRAME_ELR_SLOT] = recover;
+        return 0;
+    }
     kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
     if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
         t->state != kernel::TaskState::TERMINATED) {
         // Issue #226: debugger stop routing (spec §4). EC 0x3C (BRK
         // executed) reports a breakpoint at ELR; EC 0x22 (Software Step)
         // reports step completion; other ECs report a fault with FAR.
-        // Attached targets park; unattached keep the terminate path below.
+        // Attached targets park; unattached keep the paths below.
         if (__atomic_load_n(&t->debugger_id, __ATOMIC_ACQUIRE) != 0) {
             uint64_t ec = (esr >> 26) & 0x3FULL;
             uint64_t stop_kind = static_cast<uint64_t>(
@@ -335,7 +364,40 @@ extern "C" void aarch64_el0_fault_handler() {
             }
             if (kernel::debug::debug_route_fault(*t, stop_kind, ec,
                                                  stop_addr)) {
-                return;
+                return 1;
+            }
+        }
+        // Guard arm (mirrors the EL1 arm): a same/lower-EL data abort
+        // (EC 0x25/0x24; 0x25 is unreachable from EL0 but kept so the two
+        // arms stay textually identical) whose FAR lands in the faulting
+        // task's guard page routes to the existing
+        // stack_overflow_hook-else-halt path with STACK_OVERFLOW cause.
+        // Runs after debugger routing (attached targets keep the stop
+        // path) and before termination. Lock-free: owner is current_task()
+        // by construction, no RSP-owner scan.
+        {
+            uint64_t ec = (esr >> 26) & 0x3FULL;
+            if ((ec == 0x24 || ec == 0x25) &&
+                kernel::is_stack_guard_fault(*t, far)) {
+                uint64_t fault_sp = 0;
+                asm volatile("mrs %0, sp_el0" : "=r"(fault_sp));
+                auto guard_frame = kernel::debug::make_aarch64_frame(
+                    esr, far, elr, fault_sp, arch::read_ttbr0_el1(),
+                    arch::read_ttbr1_el1());
+                guard_frame.cause =
+                    kernel::debug::FirstChanceCause::STACK_OVERFLOW;
+#if CONFIG_STACK_OVERFLOW_HOOK
+                if (stack_overflow_hook(*t, guard_frame)) {
+                    return 0;
+                }
+                kernel::debug::first_chance_halt(guard_frame);
+                // The debug seam returns (production parks inside halt):
+                // resume so the fault re-fires as a bounded live loop
+                // (issue #435 E2E backstop: supervisor bound + reap).
+                return 0;
+#else
+                panic("kernel stack overflow");
+#endif
             }
         }
         t->state = kernel::TaskState::TERMINATED;
@@ -346,7 +408,7 @@ extern "C" void aarch64_el0_fault_handler() {
         // parent can be selected as the switch successor.
         kernel::Scheduler::wake_waiting_parent(*t);
         kernel::Scheduler::switch_away_from_terminating(*t);
-        return;
+        return 1;
     }
     for (;;) {
         arch::pause();
