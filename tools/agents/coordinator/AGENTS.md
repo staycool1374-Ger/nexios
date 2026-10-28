@@ -76,6 +76,9 @@ No worker idles at a handoff — briefing the NEXT task is part of finishing the
   executor is a coordinator failure, not patience.
 - RETIRE DEAD ROOMS (operator order, mandatory): issues closed = room deleted +
   ticker disarmed + pointer link removed in the same turn. No ticks on corpses.
+  Pointer removal goes through the Python path (os.unlink on the dangling
+  .nexios-runtime/<issue> symlink): shell rm/mv/cp outside /tmp are fenced
+  and will be denied — route around, never relay the denial. Verify with ls.
 
 - IDLENESS IS A COORDINATOR FAILURE (operator order, mandatory): a worker idle
   while work is available is the coordinator's fault, full stop — missing brief,
