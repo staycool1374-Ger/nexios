@@ -26,8 +26,6 @@
 ///        so cross-arch readers (test isolation, debuggers) see one shape.
 ///        CONFIG_MAX_CPUS pages; the BSP owns index 0, APs own 1...n.
 
-#pragma once
-
 #include <types.hpp>
 #include <constants.hpp>
 

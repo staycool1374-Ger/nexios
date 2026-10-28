@@ -53,7 +53,7 @@ uint64_t s_ap_mpidr[CONFIG_MAX_CPUS] = {};
 uint64_t s_ap_count = 0;
 /// @brief Shared boot cells: [kernel TTBR phys, MAIR, TCR, HHDM, per_cpu].
 uint64_t s_ap_boot[5] = {};
-/// @brief Per-logical stack-top PA (ABI-biased by 8, like x86 ap_stacks).
+/// @brief Per-logical stack-top PA (16-byte aligned; AAPCS64 has no bias).
 uint64_t s_ap_stack[CONFIG_MAX_CPUS] = {};
 }
 
@@ -172,6 +172,16 @@ uint8_t ap_count() {
     return g_aps_up;
 }
 
+uint64_t ap_aff0(uint8_t logical) {
+    // GIC targets are Aff0 (v2 interface / v3 TargetList bit), not the
+    // compressed logical index: refusal skips make them differ on gapped
+    // topologies (same mapping the ap_entry stub resolves via MPIDR).
+    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+        return 0xFFU; // unmapped: caller treats as un-targetable (fail-closed)
+    }
+    return s_ap_mpidr[logical] & 0xFFU;
+}
+
 void publish_scheduler_ready() {
     __atomic_store_n(&scheduler_ready_, true, __ATOMIC_RELEASE);
 }
@@ -265,9 +275,11 @@ void bring_up() {
         if (cpu_aff == bsp_aff0) {
             continue; // never wake the BSP
         }
+        // AAPCS64: SP must stay 16-byte aligned — no x86 retaddr bias.
+        // (x86 subtracts 8 so a jmp-entered ap_main observes RSP%16==8;
+        // AArch64 faults on any misaligned SP with SA enabled.)
         const uint64_t stack_top =
-            reinterpret_cast<uint64_t>(&ap_stacks[logical - 1][0]) + 4096U -
-            8U;
+            reinterpret_cast<uint64_t>(&ap_stacks[logical - 1][0]) + 4096U;
         s_ap_mpidr[logical] = cpu_aff;
         s_ap_count = logical + 1U;
         s_ap_stack[logical] = stack_top - arch::HHDM_OFFSET;
@@ -375,8 +387,11 @@ void verify_booted_aps() {
     for (uint8_t logical = 1; logical <= g_aps_up; ++logical) {
         __atomic_store_n(&s_sgi_ack[logical], 0, __ATOMIC_RELEASE);
         bool sgi_ok = false;
+        // GIC targets are Aff0, not the compressed logical index.
+        const uint32_t sgi_target =
+            static_cast<uint32_t>(ap_aff0(logical) & 0xFFU);
         for (uint32_t attempt = 0; attempt < 3U && !sgi_ok; ++attempt) {
-            if (!arch::gic_send_sgi(logical, arch::SMP_LOOPBACK_SGI)) {
+            if (!arch::gic_send_sgi(sgi_target, arch::SMP_LOOPBACK_SGI)) {
                 break;
             }
             uint64_t probe_start = 0;

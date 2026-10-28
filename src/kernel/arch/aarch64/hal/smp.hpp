@@ -27,8 +27,6 @@
 ///        (Phase C scheduling lands in slice-4/5).  Single-CPU runs are a
 ///        silent no-op.  AArch64-only.
 
-#pragma once
-
 #include <types.hpp>
 #include <kernel/arch/aarch64/hal/gic.hpp>
 
@@ -46,6 +44,11 @@ inline constexpr uint64_t PSCI_RET_SUCCESS = 0U;
 
 /// @brief Number of APs woken AND parked (0 on single-CPU runs).
 uint8_t ap_count();
+
+/// @brief DTB reg (MPIDR Aff0) for a parked AP (issue #351 slice-2).
+/// Maps the compressed logical index to the GIC target (Aff0); identity
+/// only for contiguous topologies. 0xFF when unmapped (fail-closed).
+uint64_t ap_aff0(uint8_t logical);
 
 /// @brief Bring up application processors (called once at boot, after
 ///        Timer::init, under interrupt guard).  Fail-closed: any malformed

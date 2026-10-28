@@ -220,11 +220,17 @@ inline constexpr uint32_t gicd_bank(uint32_t intid) { return intid / 32; }
 /// with Aff1 = 0, TargetList = (1 << cpu) (single-cluster QEMU virt:
 /// Aff3 == Aff2 == 0, Aff0 selects the list bit).  Fail-closed false on
 /// out-of-range cpu/intid; never programs reserved INTIDs.
-/// @param target_cpu Logical CPU index (0..CONFIG_MAX_CPUS-1).
-/// @param intid SGI INTID (0..15; use SMP_SCHED_SGI / SMP_SHOOTDOWN_SGI).
+/// @param target_cpu GIC target (Aff0 / CPU interface, 0..CONFIG_MAX_CPUS-1).
+/// @param intid SGI INTID (kernel set: SMP_LOOPBACK/SCHED/SHOOTDOWN_SGI).
 /// @return true when the SGI was issued, false when rejected.
 inline bool gic_send_sgi(uint32_t target_cpu, uint32_t intid) {
     if (target_cpu >= CONFIG_MAX_CPUS || intid > 15U) {
+        return false;
+    }
+    // Only the kernel SGI set may be programmed (INTIDs 8/9/10 land on
+    // free IDT vectors; 0/1/2 would alias TIMER/KEYBOARD/SYSCALL).
+    if (intid != SMP_LOOPBACK_SGI && intid != SMP_SCHED_SGI &&
+        intid != SMP_SHOOTDOWN_SGI) {
         return false;
     }
     if (gic_version() >= 3U) {
