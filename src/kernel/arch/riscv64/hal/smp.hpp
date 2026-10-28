@@ -98,6 +98,14 @@ void verify_booted_aps();
 /// @return true when the SBI call was accepted, false otherwise.
 bool send_resched_ipi(uint64_t logical_id);
 
+/// @brief Send a TLB-shootdown IPI to a parked AP (issue #351, slice-4).
+/// Sets the AP's mailbox SHOOTDOWN bit, then the legacy SBI hart-mask
+/// ecall (same C2 contract as the resched leg). Batch framing stays with
+/// the caller; this only delivers the notification.
+/// @param logical_id Target AP index (1..CONFIG_MAX_CPUS-1).
+/// @return true when the SBI call was accepted, false otherwise.
+bool send_shootdown_ipi(uint64_t logical_id);
+
 /// @brief Queue one TLB-shootdown entry for an AP (BSP-side, no IPI yet).
 /// @param logical_id Target AP index (1..CONFIG_MAX_CPUS-1).
 /// @param addr Virtual address to fence (per-batch-entry SFENCE.VMA).

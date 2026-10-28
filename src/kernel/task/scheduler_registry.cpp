@@ -31,7 +31,7 @@
 #include <kernel/log/dmesg.hpp>                         // issue #323 dmesg ring
 #include <kernel/memory/integrity.hpp>                  // issue #323 integrity checks
 #include <kernel/test/resource_tracker.hpp>             // issue #323 track_task_add
-#include <kernel/arch/apic.hpp>                         // issue #323 arch::APIC (SCHED-IPI path)
+#include <kernel/arch/hal/ipi.hpp>                      // issue #351 arch::send_resched_ipi
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/msr.hpp>
@@ -426,19 +426,18 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
         target = 0; // shared-TSS backstop (see enqueue_ready)
     uint64_t here = sched_cpu();
     if (target != here) {
-#if defined(CONFIG_ARCH_X86_64)
         uint64_t up = sched_up_cpus();
         if (target < up && up > 1) {
-            // Remote up CPU: mailbox + SCHED IPI (never direct remote
-            // enqueue). Target drains in its IPI handler and dispatches
-            // on its next tick (≤1 tick latency).
+            // Remote up CPU: mailbox + SCHED IPI via the arch interface
+            // (issue #351, slice-4: x86 LAPIC, aa64 SGI, rv64 SBI).
+            // Target drains in its IPI handler and dispatches on its next
+            // tick (≤1 tick latency). The send result stays unchecked (as
+            // before): a refused send leaves the mailbox queued for the
+            // next IPI/tick.
             mailbox_publish(target, task);
-            uint32_t lapic = arch::per_cpu[target].lapic_id;
-            arch::APIC::send_ipi(lapic, arch::APIC::SCHED_VECTOR,
-                                 arch::APIC::IpiMode::FIXED);
+            (void)arch::send_resched_ipi(target);
             return;
         }
-#endif
         // Target not up (or single-core build): direct-enqueue under the
         // global lock; the task waits like single-core parked work.
         // Issue #250: same wake-while-current deferral as enqueue_ready
