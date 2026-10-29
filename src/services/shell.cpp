@@ -64,6 +64,8 @@
 #include <kernel/arch/hal/cpuid.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/time/timer_wheel.hpp>
+#include <kernel/time/timer_srv.hpp>
+#include <kernel/daemon/daemon_mgr.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #endif
@@ -349,6 +351,9 @@ void Shell::init() {
     register_command("cat",     "Print file contents to terminal",   cmd_cat);
     register_command("touch",   "Create an empty file",              cmd_touch);
     register_command("dmesg",   "Print kernel log buffer",           cmd_dmesg);
+#if CONFIG_TIMER_SRV_FAULT_INJECT
+    register_command("timerfault", "Terminate timer-srv PD (fault drill)", cmd_timerfault);
+#endif
     register_command("lspci",   "List PCI devices",                  cmd_lspci);
 
     work_dir_[0] = '/';
@@ -2520,6 +2525,22 @@ void Shell::cmd_modlist(int, const char**) {
         Terminal::write("]\n");
     }
 }
+
+#if CONFIG_TIMER_SRV_FAULT_INJECT
+/// @brief Diagnostic fault drill (issue #241, strangler step c).
+/// Terminates the timer-srv PD so the supervisor path (death-notify →
+/// restart → cap re-derive → rebind) can be demonstrated. Diagnostic
+/// only; compiled out by default (never shipped).
+void Shell::cmd_timerfault(int, const char**) {
+    const uint64_t pid = kernel::time::timer_srv::get_timer_srv_pid();
+    if (pid == 0) {
+        Terminal::write("timerfault: timer-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("timer-srv");
+    Terminal::write("S TMR fault kill issued\n");
+}
+#endif
 
 void Shell::cmd_reboot(int, const char**) {
     Terminal::write("Reboot...\n");

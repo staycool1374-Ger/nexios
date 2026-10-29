@@ -26,6 +26,7 @@
 #include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/time/posix_time.hpp>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/elf/elf_shared.hpp>
 #include <kernel/elf/elf_loader.hpp>
 #include <kernel/task/tcb_write_log.hpp>
@@ -2010,6 +2011,11 @@ void TaskControlBlock::complete_teardown() noexcept {
     // registrations held by this task. Same lock position as the recv
     // cancel above (no scheduler lock held — death-drain §12.3).
     time::PosixTime::drain_owner(*this);
+#if CONFIG_TIMER_SRV
+    // Issue #241: latch the dead owner for the timer-srv tombstone ring
+    // (lock-free write, no IPC — cleanup holds no scheduler lock).
+    time::timer_srv::note_dead_owner(static_cast<uint32_t>(id), generation);
+#endif
     kernel::task_step(kernel::TaskCleanupSteps::TimerDrain); // issue #347 Slice C
 
     // Remove self from any message queue's blocked-senders list *before*

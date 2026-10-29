@@ -608,6 +608,28 @@
 #define CONFIG_WATCHDOG_GRACE_TICKS 500
 #endif
 
+/// Timer/Event externalization master switch (issue #241, strangler step a).
+/// 0 = today's in-kernel wheel (shipped default; bit-identical behavior).
+/// 1 = timer-srv PD serves async timeouts; kernel keeps tick + budget only.
+/// All timer-srv kernel code is `#if CONFIG_TIMER_SRV`-guarded (empty TU
+/// when 0); no runtime `if` on this knob. Default: 0.
+#ifndef CONFIG_TIMER_SRV
+#define CONFIG_TIMER_SRV 0
+#endif
+
+/// Timer-srv fault-injection surface (issue #241, strangler step c).
+/// 1 = compile the diagnostic `timerfault` shell command (terminate the
+/// timer-srv PD). Debug-only; never shipped. Default: 0.
+#ifndef CONFIG_TIMER_SRV_FAULT_INJECT
+#define CONFIG_TIMER_SRV_FAULT_INJECT 0
+#endif
+
+/// Timer-srv RTC-degrade leg (issue #241, #194 RTC-degrade probe).
+/// 1 = serve wall-clock tick-derived (RTC unavailable path). Default: 0.
+#ifndef CONFIG_TIMER_SRV_RTC_DEGRADE
+#define CONFIG_TIMER_SRV_RTC_DEGRADE 0
+#endif
+
 /// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
 /// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
 /// static pool.  Bounded so the pool is a fixed .bss allocation — no
@@ -1237,6 +1259,15 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_WATCHDOG_GRACE_TICKS < 0
 #error "CONFIG_WATCHDOG_GRACE_TICKS must be >= 0 (default 500)"
+#endif
+#if CONFIG_TIMER_SRV != 0 && CONFIG_TIMER_SRV != 1
+#error "CONFIG_TIMER_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TIMER_SRV_FAULT_INJECT != 0 && CONFIG_TIMER_SRV_FAULT_INJECT != 1
+#error "CONFIG_TIMER_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TIMER_SRV_RTC_DEGRADE != 0 && CONFIG_TIMER_SRV_RTC_DEGRADE != 1
+#error "CONFIG_TIMER_SRV_RTC_DEGRADE must be 0 or 1 (default 0)"
 #endif
 #if CONFIG_IOPB_MAX_TASKS < 1
 #error "CONFIG_IOPB_MAX_TASKS must be >= 1 (default 4)"
