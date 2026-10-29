@@ -1,0 +1,84 @@
+diff --git a/src/kernel/arch/riscv64/syscall_entry.S b/src/kernel/arch/riscv64/syscall_entry.S
+index 033b0a276..5bd89e6e2 100644
+--- a/src/kernel/arch/riscv64/syscall_entry.S
++++ b/src/kernel/arch/riscv64/syscall_entry.S
+@@ -257,8 +257,17 @@ apply:
+     sub t2, t2, t1
+     srli t2, t2, 12
+     li t1, 8
+-    bgeu t2, t1, 7f
+-    slli t2, t2, 3
++    bltu t2, t1, 99f
++    # Issue #440: foreign tp (U-mode task with unset TLS — exec zeroes it
++    # and only TLS_SET restores it — or pre-percpu-init zero) falls back to
++    # slot 0 instead of skipping: user tasks run ONLY on logical CPU 0
++    # (enqueue_ready_inner CPU0 clamp), the BSP is always logical CPU 0,
++    # and APs never run user tasks, so slot 0 is the rightful slot.
++    # Without this, no deferred switch from user context EVER applies on
++    # rv64 (the arm sits forever while the parked task spins in hlt-wait).
++    # Revisit if APs ever run user tasks (post-C1 SMP).
++    li t2, 0
++99: slli t2, t2, 3
+     la t3, scheduler_switch_generation
+     add t3, t3, t2
+     ld t3, 0(t3)
+@@ -306,8 +315,11 @@ apply:
+     sub t2, t2, t1
+     srli t2, t2, 12
+     li t1, 8
+-    bgeu t2, t1, 7f
+-    slli t2, t2, 3
++    bltu t2, t1, 98f
++    # Issue #440: foreign-tp fallback, same as the apply gate above
++    # (tp is unchanged by the C call above — reserved, never clobbered).
++    li t2, 0
++98: slli t2, t2, 3
+     # Load new SP per-hart (points to save area of next task)
+     la t1, scheduler_load_rsp_from
+     add t1, t1, t2
+@@ -337,8 +349,10 @@ apply:
+     sub t2, t2, t0
+     srli t2, t2, 12
+     li t0, 8
+-    bgeu t2, t0, 7f
+-    slli t2, t2, 3
++    bltu t2, t0, 97f
++    # Issue #440: foreign-tp fallback, same as the apply gate above.
++    li t2, 0
++97: slli t2, t2, 3
+     # Check SATP switch per-hart (FULL SATP via context_id_tag)
+     la t0, scheduler_load_cr3_from
+     add t0, t0, t2
+@@ -389,19 +403,24 @@ abort_switch:
+     # the BSP's pending TLS update AND clobber the AP's own tp with a
+     # user VA (after which cpu_index() misderives to 0 and the AP
+     # impersonates the BSP; issue #351 S3 triage). Derive the index from
+-    # tp itself (the per_hart base): idx = (tp - base) >> 12. Out of
+-    # range (foreign tp, e.g. pre-percpu-init zero) skips the consume;
+-    # the rightful owner's own trap will consume its slot. A direct tp
+-    # write would die at the OFF_TP restore below, and no sfence is
+-    # needed for tp.
+-    mv   t0, tp                       # current per-hart base (pre-consume)
++    # tp itself (the per_hart base): idx = (tp - base) >> 12.
++    # Issue #440: a foreign tp (U-mode task with unset TLS — exec zeroes
++    # it, TLS_SET restores it later — or pre-percpu-init zero) falls back
++    # to slot 0 instead of skipping: user tasks run ONLY on logical CPU 0
++    # (enqueue_ready_inner CPU0 clamp) and the BSP is always logical CPU 0,
++    # so slot 0 is the rightful slot (the old skip wedged every deferred
++    # switch from user context). A direct tp write would die at the
++    # OFF_TP restore below, and no sfence is needed for tp. Revisit if APs
++    # ever run user tasks (post-C1 SMP).
++    mv   t0, tp                       # current per_hart base (pre-consume)
+     la   t1, arch_per_cpu_base
+     ld   t1, 0(t1)                    # &per_cpu[0] (C-linkage anchor)
+     sub  t0, t0, t1                   # byte offset into per_cpu[]
+     srli t0, t0, 12                   # logical index (4 KiB pages)
+     li   t1, 8                        # CONFIG_MAX_CPUS (range guard)
+-    bgeu t0, t1, 8f                   # foreign tp: skip, leave all alone
+-    slli t0, t0, 3                    # slot byte offset
++    bltu t0, t1, 96f                  # in range: use computed index
++    li   t0, 0                        # foreign tp: slot 0 (see above)
++96: slli t0, t0, 3                    # slot byte offset
+     la   t1, scheduler_load_tls_from
+     add  t0, t0, t1                   # &slots[current hart]
+     ld   t1, 0(t0)
