@@ -143,6 +143,11 @@ def main():
             actions.append((8, 'ARM watchdog for #%s: watchdog.sh arm %s (no live ticker - room is unwatched)' % (r['issue'], r['issue'])))
     # 2. worker checks (rows 6-9)
     wstates = {'dev': a.dev, 'qe': a.qe}
+    # single source of truth for table state: worker_state (pane) is current, inbox STATE is stale post
+    # so table state = worker_state.lower() (working/idle), never inbox STATE
+    for role in ('dev','qe'):
+        if wstates.get(role) not in ('WORKING','IDLE'):
+            actions.append((50, 'worker %s state unknown' % role))
     # permission-modal check: dev WORKING as auditor → pane must be checked each tick
     if wstates.get('dev') == 'WORKING':
         # any room with plan/code audit active (auditor enabled or dev note says @nexios-audit)
