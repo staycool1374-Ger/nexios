@@ -449,12 +449,16 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_mpidr) {
     // VBAR is per-CPU: point this AP at the shared vector table (IDT::init
     // only programs the calling CPU; IDT::load is a barrier-only no-op).
     arch::IDT::init();
-    arch::sti();
-    for (;;) {
-        // Timer IRQs drive on_tick() on this CPU (ticks attributed via
-        // the now-live TPIDR identity); wfi parks between ticks.
-        arch::hlt();
-    }
+    // Drop onto the idle task's own kernel stack with interrupts enabled
+    // atomically, then halt (mirrors x86 enter_idle_context + rv64 dispatch
+    // fix: SP = idle top, daif clear, wfi loop). The SP switch and the
+    // unmask must be one atomic step: idling on ap_stacks leaves a
+    // TCB-foreign SP that corrupts owner-resolution on the first AP-side
+    // deferred switch (H2W orphan, same class as rv64 PMM stack).
+    asm volatile("mov sp, %0; msr daif, xzr; 1: wfi; b 1b" ::"r"(
+                     idle->kernel_stack_top)
+                 : "memory");
+    __builtin_unreachable();
 }
 
 } // namespace kernel::smp
