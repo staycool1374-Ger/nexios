@@ -32,6 +32,9 @@ namespace arch {
 ShootdownBatch::CpuSlot ShootdownBatch::slots_[CONFIG_MAX_CPUS] = {};
 uint64_t ShootdownBatch::sends_ = 0;
 uint64_t ShootdownBatch::applied_ = 0;
+uint64_t ShootdownBatch::send_failures_ = 0;
+uint64_t ShootdownBatch::queue_drops_ = 0;
+uint64_t ShootdownBatch::drain_timeouts_ = 0;
 uint64_t ShootdownBatch::applied_log_[ShootdownBatch::APPLIED_LOG] = {};
 uint64_t ShootdownBatch::applied_log_count_ = 0;
 
@@ -81,16 +84,21 @@ uint64_t ShootdownBatch::flush_target(uint64_t cpu) {
             break;
         // Issue #351, slice-4: delivery via the arch IPI interface
         // (x86 leg resolves to the same LAPIC FIXED send as before).
-        if (!arch::send_shootdown_ipi(cpu))
+        if (!arch::send_shootdown_ipi(cpu)) {
+            __atomic_fetch_add(&send_failures_, 1ULL, __ATOMIC_RELAXED);
             break; // entries stay queued
+        }
         __atomic_fetch_add(&sends_, 1ULL, __ATOMIC_RELAXED);
         ++sends;
         // Wait for the serving CPU to drain (bounded: a down target
         // never drains — keep the rest queued instead of spinning).
         uint64_t spins = 0;
         while (__atomic_load_n(&slot.count, __ATOMIC_ACQUIRE) != 0) {
-            if (++spins > 1000000ULL)
+            if (++spins > 1000000ULL) {
+                __atomic_fetch_add(&drain_timeouts_, 1ULL,
+                                   __ATOMIC_RELAXED);
                 return sends;
+            }
             arch::pause();
         }
     }
@@ -147,6 +155,22 @@ uint64_t ShootdownBatch::applied_for_test() {
     return __atomic_load_n(&applied_, __ATOMIC_RELAXED);
 }
 
+void ShootdownBatch::note_queue_drop() {
+    __atomic_fetch_add(&queue_drops_, 1ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t ShootdownBatch::send_failures_for_test() {
+    return __atomic_load_n(&send_failures_, __ATOMIC_RELAXED);
+}
+
+uint64_t ShootdownBatch::queue_drops_for_test() {
+    return __atomic_load_n(&queue_drops_, __ATOMIC_RELAXED);
+}
+
+uint64_t ShootdownBatch::drain_timeouts_for_test() {
+    return __atomic_load_n(&drain_timeouts_, __ATOMIC_RELAXED);
+}
+
 uint64_t ShootdownBatch::applied_va_for_test(uint64_t idx) {
     if (idx >= APPLIED_LOG)
         return 0;
@@ -164,6 +188,9 @@ void ShootdownBatch::reset_for_test() {
     }
     sends_ = 0;
     applied_ = 0;
+    send_failures_ = 0;
+    queue_drops_ = 0;
+    drain_timeouts_ = 0;
     applied_log_count_ = 0;
     for (size_t i = 0; i < APPLIED_LOG; ++i)
         applied_log_[i] = 0;

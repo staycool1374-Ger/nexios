@@ -2190,12 +2190,14 @@ void TaskControlBlock::complete_teardown() noexcept {
         // free below skips them (pages owned by mapping tasks, retention
         // decides frees at zero/zero).
         kernel::elf::ElfLoader::unmap_golden(this);
-        // Issue #352: release the context ID before the address space goes
-        // away (keyed on the live TCB, never after free; 0 is a no-op
-        // for kernel tasks and never-published users).  Arch-neutral.
+        // Issue #352 + #390: release the context ID AFTER the cross-CPU
+        // purge (free_user_pages fans out via tlb_shootdown(0,0,true)).
+        // Releasing first lets the ID be reissued while a remote CPU
+        // still holds entries tagged with it (stale-tag reuse). Keyed on
+        // the live TCB, never after free; 0 is a no-op. Arch-neutral.
+        VMM::free_user_pages(get_page_table());
         arch::context_id_free(pcid_);
         pcid_ = 0;
-        VMM::free_user_pages(get_page_table());
         PMM::free_page(get_page_table());
 #if defined(CONFIG_ARCH_X86_64)
         if (stack_pdpt_phys_) {

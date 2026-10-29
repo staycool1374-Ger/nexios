@@ -119,6 +119,7 @@ struct ShootSlot {
 };
 ShootSlot shoot_slots_[CONFIG_MAX_CPUS] = {};
 uint64_t shoot_applied_ = 0; // Test readback: entries applied by AP ISRs.
+uint64_t shoot_send_failures_ = 0; // Issue #390 S3: refused sends.
 
 /// @brief SBI v0.2+ call result (sbiret: error in a0, value in a1).
 struct SbiRet {
@@ -208,11 +209,22 @@ uint64_t ap_hart(uint8_t logical) {
     return s_ap_hart[logical];
 }
 
+uint64_t cpu_hart(uint8_t logical) {
+    if (logical >= CONFIG_MAX_CPUS) {
+        return ~0ULL;
+    }
+    if (logical == 0) {
+        return arch::per_cpu[0].hart_id;
+    }
+    return s_ap_hart[logical];
+}
+
 bool request_full_fence(uint64_t logical) {
-    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+    if (logical >= CONFIG_MAX_CPUS) {
         return false;
     }
-    const uint64_t hart = s_ap_hart[logical];
+    const uint64_t hart =
+        (logical == 0) ? arch::per_cpu[0].hart_id : s_ap_hart[logical];
     if (hart >= 64U) {
         return false; // Legacy hart-mask is XLEN bits; no silent narrow.
     }
@@ -226,10 +238,11 @@ void publish_scheduler_ready() {
 }
 
 bool send_resched_ipi(uint64_t logical) {
-    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+    if (logical >= CONFIG_MAX_CPUS) {
         return false;
     }
-    const uint64_t hart = s_ap_hart[logical];
+    const uint64_t hart =
+        (logical == 0) ? arch::per_cpu[0].hart_id : s_ap_hart[logical];
     if (hart >= 64U) {
         return false; // Legacy hart-mask is XLEN bits; no silent narrow.
     }
@@ -239,10 +252,11 @@ bool send_resched_ipi(uint64_t logical) {
 }
 
 bool send_shootdown_ipi(uint64_t logical) {
-    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+    if (logical >= CONFIG_MAX_CPUS) {
         return false;
     }
-    const uint64_t hart = s_ap_hart[logical];
+    const uint64_t hart =
+        (logical == 0) ? arch::per_cpu[0].hart_id : s_ap_hart[logical];
     if (hart >= 64U) {
         return false; // Legacy hart-mask is XLEN bits; no silent narrow.
     }
@@ -252,7 +266,7 @@ bool send_shootdown_ipi(uint64_t logical) {
 }
 
 bool queue_shootdown(uint64_t logical, uint64_t addr) {
-    if (logical == 0 || logical >= CONFIG_MAX_CPUS || addr == 0U) {
+    if (logical >= CONFIG_MAX_CPUS || addr == 0U) {
         return false;
     }
     ShootSlot &slot = shoot_slots_[logical];
@@ -265,7 +279,7 @@ bool queue_shootdown(uint64_t logical, uint64_t addr) {
 }
 
 uint64_t flush_shootdowns(uint64_t logical) {
-    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+    if (logical >= CONFIG_MAX_CPUS) {
         return 0;
     }
     ShootSlot &slot = shoot_slots_[logical];
@@ -273,8 +287,9 @@ uint64_t flush_shootdowns(uint64_t logical) {
         return 0; // Nothing queued: no IPI.
     }
     __atomic_fetch_or(&ipi_mailbox_[logical], SMP_IPI_SHOOTDOWN,
-                      __ATOMIC_RELEASE);
-    const uint64_t hart = s_ap_hart[logical];
+                       __ATOMIC_RELEASE);
+    const uint64_t hart =
+        (logical == 0) ? arch::per_cpu[0].hart_id : s_ap_hart[logical];
     if (hart >= 64U) {
         return 0; // Legacy hart-mask is XLEN bits; no silent narrow.
     }
@@ -289,26 +304,38 @@ void apply_shootdowns() {
         // Full-fence request (issue #389): SHOOTDOWN bit with an empty
         // slot means the sender needs a whole-TLB fence (RFENCE-absent
         // fallback for all=true). Bounded single fence, never a wait.
+        // Issue #390 S3-5: the full-fence leg is AP-visible via the
+        // same applied counter as the per-entry leg.
         arch::sfence_vma();
+        __atomic_fetch_add(&shoot_applied_, 1ULL, __ATOMIC_RELAXED);
         return;
     }
     if (count > ShootSlot::SLOTS) {
         // Corrupt count (never written by the bounded BSP path): full
         // fence once, drop the batch — fail-closed and bounded.
         arch::sfence_vma();
+        __atomic_fetch_add(&shoot_applied_, 1ULL, __ATOMIC_RELAXED);
         __atomic_store_n(&slot.count, 0, __ATOMIC_RELEASE);
         return;
     }
     for (uint64_t idx = 0; idx < count; ++idx) {
         // Per-entry range form (rs1 = VA): bounded, no blanket invalidation.
         arch::sfence_vma_va(slot.addrs[idx]);
-        ++shoot_applied_;
+        __atomic_fetch_add(&shoot_applied_, 1ULL, __ATOMIC_RELAXED);
     }
     __atomic_store_n(&slot.count, 0, __ATOMIC_RELEASE);
 }
 
 uint64_t shootdown_applied() {
     return __atomic_load_n(&shoot_applied_, __ATOMIC_ACQUIRE);
+}
+
+uint64_t shootdown_send_failures() {
+    return __atomic_load_n(&shoot_send_failures_, __ATOMIC_RELAXED);
+}
+
+void note_shootdown_send_failure() {
+    __atomic_fetch_add(&shoot_send_failures_, 1ULL, __ATOMIC_RELAXED);
 }
 
 void handle_sswi_ipi() {

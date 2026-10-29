@@ -24,7 +24,8 @@
 ///        bounded 1M-spin drain, issue #159 protocol untouched).  The
 ///        choke point already flushed local first, so self is skipped
 ///        (a self-IPI under IF=0 cannot land — the skip is load-bearing,
-///        not an optimization).  PCID travels in the slot and is honored
+///        not an optimization); all up CPUs minus self are targeted
+///        (BSP included when invoked from an AP, issue #390).  PCID travels in the slot and is honored
 ///        on apply; the all-flag selects a full purge.  No new IDT vector
 ///        (ABI frozen): delivery reuses SHOOTDOWN_BATCH_VECTOR, whose ISR
 ///        is registered in kernel.cpp (shared IDT serves BSP and APs).
@@ -49,7 +50,7 @@ void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
     const uint64_t self_cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
     const uint64_t up_count =
         static_cast<uint64_t>(kernel::smp::ap_count());
-    for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
+    for (uint64_t cpu = 0; cpu <= up_count; ++cpu) {
         if (cpu >= CONFIG_MAX_CPUS) {
             break;
         }
@@ -58,7 +59,10 @@ void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
         }
         if (!arch::ShootdownBatch::queue_remote(cpu, va, context_id, all)) {
             arch::ShootdownBatch::flush_target(cpu);
-            arch::ShootdownBatch::queue_remote(cpu, va, context_id, all);
+            if (!arch::ShootdownBatch::queue_remote(cpu, va, context_id,
+                                                   all)) {
+                arch::ShootdownBatch::note_queue_drop();
+            }
         }
         arch::ShootdownBatch::flush_target(cpu);
     }

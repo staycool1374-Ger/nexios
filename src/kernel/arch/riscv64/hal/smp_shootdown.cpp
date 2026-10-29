@@ -96,16 +96,17 @@ SbiRet sbi_call4(uint64_t eid, uint64_t fid, uint64_t arg0, uint64_t arg1,
 
 /// @brief Probe the RFENCE extension once (base EID 0x10, FID 3).
 bool rfence_usable() {
-    if (s_rfence_override >= 0) {
-        return s_rfence_override > 0;
+    if (__atomic_load_n(&s_rfence_override, __ATOMIC_RELAXED) >= 0) {
+        return __atomic_load_n(&s_rfence_override, __ATOMIC_RELAXED) > 0;
     }
-    if (s_rfence_present < 0) {
+    if (__atomic_load_n(&s_rfence_present, __ATOMIC_RELAXED) < 0) {
         SbiRet probe = sbi_call3(SBI_EID_BASE, SBI_BASE_PROBE_EXTENSION,
                                  SBI_EID_RFENCE);
-        s_rfence_present =
+        const int64_t present =
             (probe.error == 0 && probe.value != 0U) ? 1 : 0;
+        __atomic_store_n(&s_rfence_present, present, __ATOMIC_RELAXED);
     }
-    return s_rfence_present > 0;
+    return __atomic_load_n(&s_rfence_present, __ATOMIC_RELAXED) > 0;
 }
 
 } // namespace
@@ -116,12 +117,12 @@ namespace kernel::smp {
 /// @param present Nonzero pretends RFENCE present, zero forces the
 ///        S-soft fallback path (mirrors `sbi_probe_extension`).
 void set_sbi_rfence_for_test(bool present) {
-    s_rfence_override = present ? 1 : 0;
+    __atomic_store_n(&s_rfence_override, present ? 1 : 0, __ATOMIC_RELAXED);
 }
 
 /// @brief Clear the RFENCE test override (restore probed behavior).
 void clear_sbi_rfence_for_test() {
-    s_rfence_override = -1;
+    __atomic_store_n(&s_rfence_override, -1, __ATOMIC_RELAXED);
 }
 
 } // namespace kernel::smp
@@ -143,12 +144,12 @@ void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
     }
     if (rfence_usable()) {
         uint64_t mask = 0;
-        for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
+        for (uint64_t cpu = 0; cpu <= up_count; ++cpu) {
             if (cpu >= CONFIG_MAX_CPUS) {
                 break;
             }
             const uint64_t hart =
-                kernel::smp::ap_hart(static_cast<uint8_t>(cpu));
+                kernel::smp::cpu_hart(static_cast<uint8_t>(cpu));
             if (hart >= 64U) {
                 mask = ~0ULL;
                 break;
@@ -163,23 +164,30 @@ void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
             if (ret.error == 0U) {
                 return;
             }
+            kernel::smp::note_shootdown_send_failure();
         }
         // Probed present but unusable mask/send: fall through to the
         // mailbox path (report failure upstream by delivering anyway —
         // never silently drop the shootdown).
     }
-    for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
+    for (uint64_t cpu = 0; cpu <= up_count; ++cpu) {
         if (cpu >= CONFIG_MAX_CPUS) {
             break;
         }
         if (all) {
-            kernel::smp::request_full_fence(cpu);
+            if (!kernel::smp::request_full_fence(cpu)) {
+                kernel::smp::note_shootdown_send_failure();
+            }
         } else {
             if (!kernel::smp::queue_shootdown(cpu, va)) {
-                kernel::smp::flush_shootdowns(cpu);
+                if (kernel::smp::flush_shootdowns(cpu) == 0U) {
+                    kernel::smp::note_shootdown_send_failure();
+                }
                 kernel::smp::queue_shootdown(cpu, va);
             }
-            kernel::smp::flush_shootdowns(cpu);
+            if (kernel::smp::flush_shootdowns(cpu) == 0U) {
+                kernel::smp::note_shootdown_send_failure();
+            }
         }
     }
 }

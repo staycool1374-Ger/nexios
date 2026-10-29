@@ -19,7 +19,8 @@
 /// @file smp_shootdown.cpp
 /// @brief AArch64 strong cross-CPU TLB-shootdown hook (issue #389).
 ///        Overrides the weak `VMM::smp_tlb_shootdown_hook` no-op: sends
-///        one SGI SMP_SHOOTDOWN_SGI per up CPU (Aff0 via `ap_aff0`, S4
+///        one SGI SMP_SHOOTDOWN_SGI per up CPU (Aff0 via `cpu_aff0`
+///        (BSP included when invoked from an AP, issue #390), S4
 ///        interface `arch::send_shootdown_ipi`).  Purge-on-receipt: the
 ///        SGI carries no payload, so the target applies a self-purge via
 ///        the existing `tlb_flush_all` primitive (`tlbi vmalle1`) in the
@@ -50,7 +51,7 @@ void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
     const uint64_t self_cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
     const uint64_t up_count =
         static_cast<uint64_t>(kernel::smp::ap_count());
-    for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
+    for (uint64_t cpu = 0; cpu <= up_count; ++cpu) {
         if (cpu >= CONFIG_MAX_CPUS) {
             break;
         }
@@ -58,11 +59,13 @@ void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
             continue;
         }
         const uint64_t aff0 =
-            kernel::smp::ap_aff0(static_cast<uint8_t>(cpu));
+            kernel::smp::cpu_aff0(static_cast<uint8_t>(cpu));
         if (aff0 == 0xFFU) {
             continue;
         }
-        arch::send_shootdown_ipi(cpu);
+        if (!arch::send_shootdown_ipi(cpu)) {
+            kernel::smp::note_shootdown_send_failure();
+        }
     }
 }
 
