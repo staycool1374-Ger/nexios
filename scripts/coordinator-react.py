@@ -143,6 +143,12 @@ def main():
             actions.append((8, 'ARM watchdog for #%s: watchdog.sh arm %s (no live ticker - room is unwatched)' % (r['issue'], r['issue'])))
     # 2. worker checks (rows 6-9)
     wstates = {'dev': a.dev, 'qe': a.qe}
+    # permission-modal check: dev WORKING as auditor → pane must be checked each tick
+    if wstates.get('dev') == 'WORKING':
+        # any room with plan/code audit active (auditor enabled or dev note says @nexios-audit)
+        has_audit = any('audit' in (r.get('pending') or '').lower() for r in rooms)
+        if has_audit:
+            actions.append((6, 'CHECK dev pane for permission modal (△ Permission required) — audit subagent often blocks on ls/cat; Allow once if read-only, Reject if write; never leave audit stalled on modal'))
     for role, sess in SESS.items():
         st = wstates[role]
         if st == '?':
@@ -193,7 +199,6 @@ def main():
         # simplified: if any room is gated idle and no approach file for next lane, ask first
         if wstates.get('dev') == 'IDLE' and wstates.get('qe') == 'IDLE':
             # require at least one qe approach file for the next lane as evidence; if none, ask
-            import glob
             has_approach = bool(glob.glob('/tmp/nexios-*/notes/qe-*.md') or glob.glob('/tmp/nexios-*/notes/*verify-approach.md'))
             if not has_approach and not any('RING' in x[1] for x in actions):
                 actions.append((18, 'EVIDENCE MISSING for gated idle — read qe approach file + prior wall on this tip before assigning; ASK for approach+wall cite'))
