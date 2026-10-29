@@ -505,6 +505,12 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_hart) {
     // stvec is per-hart: point this AP at the shared vector table
     // (IDT::init only programs the calling hart; IDT::load is a no-op).
     arch::IDT::init();
+    // Per-hart vectors: re-assert stvec for this hart before enabling
+    // STIE/SSIE and before post-gate re-arm — stvec is per-hart (not
+    // shared), AP hart1 must have trap_vector direct mode, mirroring
+    // aa64 VBAR per-CPU (SMP slice-2). BSP covered hart0; this covers
+    // hart1. No extra pmpcfg needed on QEMU virt (S-mode default).
+    arch::IDT::init(); // per-hart re-assert (IDT::init is stvec-only, idempotent)
     // Re-arm S-timer after gate (fresh deadline, handler VBAR live, SIE
     // still clear so no trap until SP+SIE atomic). Pre-gate Timer::set_
     // was stale by gate spin (deadline long past).
