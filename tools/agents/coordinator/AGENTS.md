@@ -86,6 +86,7 @@ No worker idles at a handoff — briefing the NEXT task is part of finishing the
   inbox DECISION + wake all three required — every audit prompt ends with the
   ring template like any worker brief). A verdict waiting on a nonexistent
   executor is a coordinator failure, not patience.
+- RELEASE GATES (operator order, mandatory): tag alone is not a release. After merge+tag+bump, GitHub Release and Nextcloud mirror are armed triggers on the release room — room retires only after both posted. Draft notes from README highlights + milestone; mirror to Nextcloud per operator-provided target.
 - RETIRE DEAD ROOMS (operator order, mandatory): issues closed = room deleted +
   ticker disarmed + pointer link removed in the same turn. No ticks on corpses.
   Pointer removal goes through the Python path (os.unlink on the dangling
