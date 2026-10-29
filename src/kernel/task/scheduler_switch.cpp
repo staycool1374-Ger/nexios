@@ -300,7 +300,7 @@ static uint16_t publish_context_id_for(TaskControlBlock &next) noexcept {
 void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                     sync::SpinLock *held_lock = nullptr) {
 #if defined(CONFIG_DEBUG)
-    ++g_diag_switch_count;
+    __atomic_fetch_add(&g_diag_switch_count, 1ULL, __ATOMIC_RELAXED);
 #endif
     auto release_lock = [&]() {
         if (held_lock) {
@@ -835,12 +835,12 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
 
 void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     TaskControlBlock *next;
 
     // Scope for scheduler_lock_ — released before the IRQ-guarded publish step.
     {
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        SchedulerLockGuard guard(scheduler_lock_);
 
         // A deferred switch is already published.  Do NOT publish a second.
         // Issue #221: force-apply the standing arm — the terminating

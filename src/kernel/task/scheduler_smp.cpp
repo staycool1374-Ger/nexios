@@ -25,6 +25,7 @@
 #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1c validate_task_ptr
 #include <kernel/kernel.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/hal/tpr_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/apic.hpp>
 #if defined(CONFIG_ARCH_X86_64)
@@ -69,12 +70,10 @@ void Scheduler::quiesce_enter() noexcept {
     __atomic_store_n(&sched_quiesced_, true, __ATOMIC_RELEASE);
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c)
         cancel_pending_switch_cpu(c);
-#if defined(CONFIG_ARCH_X86_64)
     // Issue #26: a quiesced world must not resume masked — re-assert the
     // calling CPU's class to ACCEPT_ALL (own-CPU only, INV-TPR1).
-    arch::per_cpu_current()->tpr_shadow = arch::APIC::TPR_CLASS_ACCEPT_ALL;
-    arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_ACCEPT_ALL);
-#endif
+    // Arch-neutral call: x86 restores shadow + HW; other arches no-op.
+    arch::tpr_reassert_accept_all();
 }
 
 void Scheduler::quiesce_exit() noexcept {
@@ -83,12 +82,9 @@ void Scheduler::quiesce_exit() noexcept {
     ENSURE(depth > 0 && "quiesce_exit without matching enter");
     if (__atomic_sub_fetch(&sched_quiesce_depth_, 1, __ATOMIC_RELEASE) == 0)
         __atomic_store_n(&sched_quiesced_, false, __ATOMIC_RELEASE);
-#if defined(CONFIG_ARCH_X86_64)
     // Same re-assert on the way out: teardown paths must not leak a
     // raised class into the resumed world.
-    arch::per_cpu_current()->tpr_shadow = arch::APIC::TPR_CLASS_ACCEPT_ALL;
-    arch::APIC::set_tpr_class(arch::APIC::TPR_CLASS_ACCEPT_ALL);
-#endif
+    arch::tpr_reassert_accept_all();
 }
 
 void Scheduler::mailbox_publish(uint64_t cpu, TaskControlBlock &task) noexcept {
@@ -118,7 +114,7 @@ void Scheduler::mailbox_drain() noexcept {
     // IF=0-excluded while we run).
     if (!scheduler_lock_.try_lock())
         return;
-    SpinLockGuard<sync::SpinLock> outer(scheduler_lock_, adopt_lock);
+    SchedulerLockGuard outer(scheduler_lock_, adopt_lock);
     ENSURE(scheduler_lock_.holder() != nullptr); // issue #369 T2a: adopted global held before the leaf take below
     SpinLockGuard<sync::SpinLock> guard(wake_mailbox_lock_[cpu]);
     for (;;) {

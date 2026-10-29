@@ -74,7 +74,15 @@ arch_flags = []
 if arch == 'x86_64'
   arch_flags = ['-fno-pie', '-m64', '-mno-red-zone', '-mgeneral-regs-only', '-mcmodel=large']
 elif arch == 'aarch64'
-  arch_flags = ['-march=armv8-a']
+  # Issue #437: -mno-outline-atomics forces inline LDXR/STXR loops.
+  # Default outline-atomics emits libgcc calls pulling lse-init.o, which on
+  # linux-gnu toolchains needs __getauxval + orphan .plt/.rela.dyn that
+  # collide under linker_aarch64.ld AT() layout. Cortex-a72 is ARMv8.0
+  # (no LSE), so inline atomics are correct and freestanding-clean.
+  # Issue #439: -fno-pie — Debian/Ubuntu linux-gnu drivers default to PIE
+  # (same precedent as x86_64 above, riscv64 below); without it the CI
+  # aarch64-linux-gnu link emits orphan .rela.dyn that collides with .data.
+  arch_flags = ['-march=armv8-a', '-mno-outline-atomics', '-fno-pie']
 elif arch == 'riscv64'
   arch_flags = ['-march=rv64imafdc', '-mabi=lp64d', '-mcmodel=medany', '-fno-pie']
 endif
@@ -132,7 +140,8 @@ cc_base_flags = ['-static', '-nostdlib', '-ffreestanding', '-O2',
 if arch == 'x86_64'
   cc_arch_flags = ['-m64']
 elif arch == 'aarch64'
-  cc_arch_flags = []
+  # Issue #439: -fno-pie (C-side mirror of the arch_flags fix above).
+  cc_arch_flags = ['-fno-pie']
 else
   cc_arch_flags = ['-DCONFIG_ARCH_RISCV64', '-mcmodel=medany', '-fno-pie']
 endif
@@ -169,8 +178,14 @@ if arch == 'aarch64'
   qemu_aarch64 = find_program('qemu-system-aarch64', required : true)
   virt_dtb_raw = custom_target('virt-dtb-dump',
     output : 'virt.dtb',
+    # Issue #351 slice-2: dump with -smp 8 (CONFIG_MAX_CPUS max topology).
+    # QEMU -kernel boots generic ELFs with x0 == 0 (Linux-header images
+    # only get the live DTB), so the kernel always falls back to this
+    # embedded blob.  Max-topology is the honest template: bring_up()
+    # PSCI-probes each DTB cpu and skips refusals (absent CPUs) silently,
+    # parks 0 APs on skew, panics only on start/SGI timeout.
     command : [qemu_aarch64, '-machine', 'virt,dumpdtb=@OUTPUT@',
-      '-cpu', 'cortex-a72', '-m', '256M'],
+      '-cpu', 'cortex-a72', '-m', '256M', '-smp', '8'],
   )
   virt_dtb_trimmed = custom_target('virt-dtb-trim',
     input : virt_dtb_raw,

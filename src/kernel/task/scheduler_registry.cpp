@@ -31,7 +31,7 @@
 #include <kernel/log/dmesg.hpp>                         // issue #323 dmesg ring
 #include <kernel/memory/integrity.hpp>                  // issue #323 integrity checks
 #include <kernel/test/resource_tracker.hpp>             // issue #323 track_task_add
-#include <kernel/arch/apic.hpp>                         // issue #323 arch::APIC (SCHED-IPI path)
+#include <kernel/arch/hal/ipi.hpp>                      // issue #351 arch::send_resched_ipi
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/msr.hpp>
@@ -42,6 +42,10 @@
 #include <assert.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/smp.hpp> // issue #323 ap_count (sched_up_cpus)
+#elif defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/smp.hpp> // issue #351 ap_count (sched_up_cpus)
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/smp.hpp> // issue #351 ap_count (sched_up_cpus)
 #endif
 
 namespace kernel {
@@ -85,10 +89,10 @@ uint64_t Scheduler::loadavg_15min_ = 0;
 void Scheduler::set_priority(TaskControlBlock &task,
                              uint64_t new_prio) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "set_priority"));
     arch::IrqGuard irq_guard{};
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     if (new_prio == task.priority)
         return;
     // Re-bucket in the O(1) ready queue if the task is queued, so the
@@ -107,8 +111,14 @@ void Scheduler::set_priority(TaskControlBlock &task,
 // ---------------------------------------------------------------------------
 
 /// @brief Number of CPUs currently up (BSP + parked/running APs).
+/// Issue #351 (up-cpu fix): x86_64 always counted APs; aarch64/riscv64
+/// fell through to 1, clamping every set_affinity to CPU0. All three
+/// arches publish kernel::smp::ap_count() from bring-up, so the
+/// conditional covers all three (verified on -smp2: AP parked + IPI/SGI
+/// loopback prove the counts before this gate opens).
 static uint64_t sched_up_cpus() noexcept {
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
     return 1 + kernel::smp::ap_count();
 #else
     return 1;
@@ -133,14 +143,14 @@ static uint64_t affinity_allowed_mask(uint64_t up) noexcept {
 errors::SchedulerError
 Scheduler::set_affinity_err(TaskControlBlock &task, uint64_t mask) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "set_affinity_err"));
     // Quiesce window fences the lock-free AP current-apply path (spec
     // §3.4.5): with arms cancelled and AP dispatch parked, the running
     // check below is stable across the dequeue+enqueue.
     arch::IrqGuard irq_guard{};
     quiesce_enter();
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     uint64_t up = sched_up_cpus();
     uint64_t allowed = affinity_allowed_mask(up);
     if ((mask & allowed) == 0) {
@@ -240,13 +250,13 @@ void Scheduler::set_affinity(TaskControlBlock &task, uint64_t mask) noexcept {
 errors::SchedulerError
 Scheduler::set_tls_base_err(TaskControlBlock &task, uint64_t base) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     // Issue #74: IrqGuard spans the gate + live write (re-audit S3) — a
     // preemption between is_current and the register write would load a
     // stale base. The spinlock covers the store only, never a reschedule.
     arch::IrqGuard irq_guard{};
     {
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        SchedulerLockGuard guard(scheduler_lock_);
         TaskControlBlock *cur = current_task();
         if (!cur)
             return errors::SCHED_ERR_NO_CURRENT;
@@ -342,6 +352,7 @@ void Scheduler::balancer_tick() noexcept {
         quiesce_exit();
         return;
     }
+    SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
     // Bounded moves per tick (RT budget); depths recomputed per move.
     for (uint64_t move = 0; move < BALANCER_MAX_MIGRATIONS_PER_TICK;
          ++move) {
@@ -405,7 +416,7 @@ void Scheduler::balancer_tick() noexcept {
         rq_for(idle).enqueue(*candidate, effective_priority(candidate));
         __atomic_fetch_add(&migration_count_[busy], 1ULL, __ATOMIC_RELAXED);
     }
-    scheduler_lock_.unlock();
+    guard.unlock();
     quiesce_exit();
 }
 
@@ -425,19 +436,18 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
         target = 0; // shared-TSS backstop (see enqueue_ready)
     uint64_t here = sched_cpu();
     if (target != here) {
-#if defined(CONFIG_ARCH_X86_64)
         uint64_t up = sched_up_cpus();
         if (target < up && up > 1) {
-            // Remote up CPU: mailbox + SCHED IPI (never direct remote
-            // enqueue). Target drains in its IPI handler and dispatches
-            // on its next tick (≤1 tick latency).
+            // Remote up CPU: mailbox + SCHED IPI via the arch interface
+            // (issue #351, slice-4: x86 LAPIC, aa64 SGI, rv64 SBI).
+            // Target drains in its IPI handler and dispatches on its next
+            // tick (≤1 tick latency). The send result stays unchecked (as
+            // before): a refused send leaves the mailbox queued for the
+            // next IPI/tick.
             mailbox_publish(target, task);
-            uint32_t lapic = arch::per_cpu[target].lapic_id;
-            arch::APIC::send_ipi(lapic, arch::APIC::SCHED_VECTOR,
-                                 arch::APIC::IpiMode::FIXED);
+            (void)arch::send_resched_ipi(target);
             return;
         }
-#endif
         // Target not up (or single-core build): direct-enqueue under the
         // global lock; the task waits like single-core parked work.
         // Issue #250: same wake-while-current deferral as enqueue_ready
@@ -445,8 +455,8 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
         // an affinity change under it).  Issue #369 T2b: assert no
         // reentrant take exactly where the deadlock would occur (callers
         // such as on_tick wake paths may hold the lock on other branches).
-        ENSURE(scheduler_lock_.holder() == nullptr);
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        ENSURE(scheduler_lock_depth_own() == 0);
+        SchedulerLockGuard guard(scheduler_lock_);
         if (&task == Scheduler::current_task()) {
             // Mirror enqueue_ready's defensive unlink (audit): the local
             // current may still be linked on another CPU's queue after an
@@ -516,8 +526,8 @@ TaskControlBlock *Scheduler::create_ap_idle(uint64_t cpu) noexcept {
         return idle_tasks_[cpu];
     // Table mutations under the global lock (blocking; the AP runs IF=0
     // here and the BSP never waits on the AP, so the take completes).
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
+    SchedulerLockGuard guard(scheduler_lock_);
     if (idle_tasks_[cpu] != nullptr)
         return idle_tasks_[cpu];
     TaskControlBlock *idle = TaskControlBlock::create(
@@ -537,9 +547,9 @@ TaskControlBlock *Scheduler::create_ap_idle(uint64_t cpu) noexcept {
 
 void Scheduler::register_task(TaskControlBlock &task) {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "register_task"));
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     ENSURE(id_table_insert(task.id, &task) && "id_table full");
     all_tasks_.append(task);
     if (task.period_ticks > 0 && task.deadline_ticks > 0) {
@@ -553,8 +563,8 @@ void Scheduler::register_task(TaskControlBlock &task) {
 
 void Scheduler::add_task(TaskControlBlock &task) {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
+    SchedulerLockGuard guard(scheduler_lock_);
     ENSURE(validate_task_ptr(&task, "add_task"));
     ENSURE(task.state == TaskState::READY);
     ENSURE(id_table_insert(task.id, &task) && "id_table full");
@@ -621,8 +631,8 @@ void Scheduler::add_task(TaskControlBlock &task) {
 
 void Scheduler::remove_task(TaskControlBlock &task) {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
+    SchedulerLockGuard guard(scheduler_lock_);
     if (task.magic != TaskControlBlock::TCB_MAGIC) [[unlikely]] {
         Logger::error("remove_task: TCB %p magic=0x%lx (expected 0x%lx)",
                       &task, (uint64_t)task.magic,
@@ -676,7 +686,7 @@ bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
     ENSURE(validate_task_ptr(&task, "unregister_task"));
     if (!scheduler_lock_.try_lock())
         return false;
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_, adopt_lock);
+    SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
     ENSURE(scheduler_lock_.holder() != nullptr); // issue #369 T2a: adopted global held before any leaf take below
 
     if (&task == current_task() && own_idle() && own_idle() != &task) {
@@ -750,9 +760,9 @@ SchedulerError Scheduler::init_err(const SchedulerConfig &cfg) {
 
 SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "add_task_err"));
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     if (all_tasks_.size() >= MAX_TASKS) [[unlikely]]
         return SCHED_ERR_TABLE_FULL;
     if (id_table_find(task.id) != nullptr) [[unlikely]]
@@ -799,9 +809,9 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
 
 SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "remove_task_err"));
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     if (id_table_find(task.id) == nullptr) [[unlikely]]
         return SCHED_ERR_NOT_FOUND;
     all_tasks_.remove(task);

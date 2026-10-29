@@ -165,6 +165,7 @@ var structkernel_1_1_task_control_block =
     [ "system_ceiling_", "structkernel_1_1_task_control_block.html#afb8a7aca1e8b77d773feafb479cd5e06", null ],
     [ "task_obj_head_", "structkernel_1_1_task_control_block.html#a2b45b2b4d0f90b6c820a3b9672735248", null ],
     [ "task_obj_tail_", "structkernel_1_1_task_control_block.html#ae0494e9e92436fa6c771c38a076ad34a", null ],
+    [ "teardown_claimed_", "structkernel_1_1_task_control_block.html#a3233ad66d10b843a3531dfeb04ce2a8a", null ],
     [ "teardown_completed_", "structkernel_1_1_task_control_block.html#ad08f82b28fe3541964cc831148325c18", null ],
     [ "text_size_", "structkernel_1_1_task_control_block.html#ada7174027da7a42f24fb09d0b5738d8d", null ],
     [ "tls_base_", "structkernel_1_1_task_control_block.html#a65a9affc522c25beaf1ca7f6d15343e0", null ],

@@ -1545,14 +1545,24 @@ JARVIS_TEST(aarch64_kslot_snapshot_restore_safe) {
     for (size_t idx = 10 * arch::PAGE_SIZE; idx < snap_bytes; ++idx) {
         s_craft_buf[idx] = 0xA5;
     }
-    kernel::kslot_snapshot_restore(s_craft_buf);
-    kernel::kslot_snapshot_capture(s_out_buf);
-    for (size_t idx = 0; idx < snap_bytes; ++idx) {
-        JARVIS_ASSERT_FMT(s_out_buf[idx] == s_craft_buf[idx],
-                          "kslot round-trip mismatch at byte %lx",
-                          static_cast<uint64_t>(idx));
+    // #436: mask timer ticks across the crafted-unwire window — the
+    // crafted buffer unwires live window tables, and any concurrent
+    // touch of a slotted stack in that window (e.g. the per-tick canary
+    // check) aborts with the exact vec-0x25/FAR-window signature seen
+    // 3x in the gate sweep. The test body itself is synchronous, so
+    // masking ticks across restore(crafted)->capture->restore(live)
+    // closes the race without changing what is verified.
+    {
+        arch::IrqGuard _guard{};
+        kernel::kslot_snapshot_restore(s_craft_buf);
+        kernel::kslot_snapshot_capture(s_out_buf);
+        for (size_t idx = 0; idx < snap_bytes; ++idx) {
+            JARVIS_ASSERT_FMT(s_out_buf[idx] == s_craft_buf[idx],
+                              "kslot round-trip mismatch at byte %lx",
+                              static_cast<uint64_t>(idx));
+        }
+        kernel::kslot_snapshot_restore(s_snap_buf);
     }
-    kernel::kslot_snapshot_restore(s_snap_buf);
     JARVIS_ASSERT_FMT(PMM::free_pages_ref() == free_before,
                       "PMM delta %ld pages after aa64 kslot cycle",
                       (long)(PMM::free_pages_ref() - free_before));

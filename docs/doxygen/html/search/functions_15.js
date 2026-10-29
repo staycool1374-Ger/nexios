@@ -21,13 +21,14 @@ var searchData=
   ['unmap_5fpage_5ferr_18',['unmap_page_err',['../classkernel_1_1_v_m_m.html#af16c2a20fa00db35b4aea6f91227818b',1,'kernel::VMM']]],
   ['unmap_5fpage_5fin_5fpml4_19',['unmap_page_in_pml4',['../classkernel_1_1_v_m_m.html#a87e909fad18b6d7d49eb348c5183cbca',1,'kernel::VMM']]],
   ['unmap_5fpage_5fin_5fpml4_5ferr_20',['unmap_page_in_pml4_err',['../classkernel_1_1_v_m_m.html#a818b86723c8492766747bd3dade54dc6',1,'kernel::VMM']]],
-  ['unmask_21',['unmask',['../classarch_1_1_arch_interrupt_controller.html#a3254f6b5ff56ae412a82bce90cfa484e',1,'arch::ArchInterruptController::unmask(uint8_t irq)'],['../classarch_1_1_arch_interrupt_controller.html#ae45ebdb73c93f701d34183eb82489ee1',1,'arch::ArchInterruptController::unmask(uint8_t irq)'],['../classarch_1_1_arch_interrupt_controller.html#ae45ebdb73c93f701d34183eb82489ee1',1,'arch::ArchInterruptController::unmask(uint8_t irq)']]],
-  ['unpin_5fblock_22',['unpin_block',['../classkernel_1_1_mem_pool.html#a675ef93434017b95062071bece7c1e50',1,'kernel::MemPool']]],
-  ['unregister_23',['unregister',['../classkernel_1_1ipc_1_1_pager_registry.html#abab6df4b98248fd07340d2654ca8f09e',1,'kernel::ipc::PagerRegistry']]],
-  ['unregister_5ftask_24',['unregister_task',['../classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9',1,'kernel::Scheduler']]],
-  ['unsafe_5fptr_25',['unsafe_ptr',['../classkernel_1_1_checked_ptr.html#ab6350dcd1a7c92b1b0ba3985950e29fa',1,'kernel::CheckedPtr']]],
-  ['unwatch_26',['unwatch',['../classkernel_1_1ipc_1_1_death_notify.html#ab4d10f3c665ac5d4057565d97beabf99',1,'kernel::ipc::DeathNotify']]],
-  ['up_5fcpu_5fcount_27',['up_cpu_count',['../classkernel_1_1_scheduler.html#a9c6e17630432b15495c6f5eab94323be',1,'kernel::Scheduler']]],
-  ['update_28',['update',['../classnet_1_1_arp_cache.html#af1a9de58388688381eea4b134148a640',1,'net::ArpCache::update()'],['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32::update()']]],
-  ['user_5faccess_5frecover_5fip_29',['user_access_recover_ip',['../namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693',1,'kernel::gs']]]
+  ['unmap_5fwindow_5fpage_21',['unmap_window_page',['../namespacekslot__backend.html#a53f8ef81cada0e969c1ae094c8e1a7b4',1,'kslot_backend']]],
+  ['unmask_22',['unmask',['../classarch_1_1_arch_interrupt_controller.html#a3254f6b5ff56ae412a82bce90cfa484e',1,'arch::ArchInterruptController::unmask(uint8_t irq)'],['../classarch_1_1_arch_interrupt_controller.html#ae45ebdb73c93f701d34183eb82489ee1',1,'arch::ArchInterruptController::unmask(uint8_t irq)'],['../classarch_1_1_arch_interrupt_controller.html#ae45ebdb73c93f701d34183eb82489ee1',1,'arch::ArchInterruptController::unmask(uint8_t irq)']]],
+  ['unpin_5fblock_23',['unpin_block',['../classkernel_1_1_mem_pool.html#a675ef93434017b95062071bece7c1e50',1,'kernel::MemPool']]],
+  ['unregister_24',['unregister',['../classkernel_1_1ipc_1_1_pager_registry.html#abab6df4b98248fd07340d2654ca8f09e',1,'kernel::ipc::PagerRegistry']]],
+  ['unregister_5ftask_25',['unregister_task',['../classkernel_1_1_scheduler.html#a8ff081fb1988f881f037ef8ed51901a9',1,'kernel::Scheduler']]],
+  ['unsafe_5fptr_26',['unsafe_ptr',['../classkernel_1_1_checked_ptr.html#ab6350dcd1a7c92b1b0ba3985950e29fa',1,'kernel::CheckedPtr']]],
+  ['unwatch_27',['unwatch',['../classkernel_1_1ipc_1_1_death_notify.html#ab4d10f3c665ac5d4057565d97beabf99',1,'kernel::ipc::DeathNotify']]],
+  ['up_5fcpu_5fcount_28',['up_cpu_count',['../classkernel_1_1_scheduler.html#a9c6e17630432b15495c6f5eab94323be',1,'kernel::Scheduler']]],
+  ['update_29',['update',['../classnet_1_1_arp_cache.html#af1a9de58388688381eea4b134148a640',1,'net::ArpCache::update()'],['../classkernel_1_1_c_r_c32.html#ac21f4ee9e91b9cd5b189be578a566c01',1,'kernel::CRC32::update()']]],
+  ['user_5faccess_5frecover_5fip_30',['user_access_recover_ip',['../namespacekernel_1_1gs.html#ac114ad146f4bc5f964aba3258c033693',1,'kernel::gs']]]
 ];

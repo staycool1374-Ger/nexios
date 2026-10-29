@@ -118,4 +118,23 @@ inline void plic_complete_s(uint32_t intid) {
     *reinterpret_cast<volatile uint32_t *>(PLIC_CLAIM_S) = intid;
 }
 
+/// @brief S-context index for a hart's S-mode (M-mode takes even slots).
+/// @param hart_id Hardware hart ID (matches the DTB cpu reg).
+/// @return S-mode PLIC context number for that hart.
+inline constexpr uint64_t plic_s_context_for_hart(uint64_t hart_id) {
+    return 2U * hart_id + 1U;
+}
+
+/// @brief Set the priority threshold for a hart's S-context.
+/// Each AP programs its own frame (thresholds are per-context banks); the
+/// BSP frame stays owned by interrupt_controller.cpp init.
+/// @param hart_id Hardware hart ID.
+/// @param threshold Priority threshold (0 = deliver everything enabled).
+inline void plic_threshold_s_for_hart(uint64_t hart_id, uint32_t threshold) {
+    const uint64_t context = plic_s_context_for_hart(hart_id);
+    *reinterpret_cast<volatile uint32_t *>(PLIC_BASE + 0x00200000UL +
+                                           context * 0x1000UL) = threshold;
+    asm volatile("fence iorw, iorw" : : : "memory");
+}
+
 } // namespace arch

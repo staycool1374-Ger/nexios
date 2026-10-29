@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -144,6 +144,9 @@ Functions</h2></td></tr>
 <tr class="memitem:a02d38f1c38acb0313e71b219486d5855" id="r_a02d38f1c38acb0313e71b219486d5855"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a02d38f1c38acb0313e71b219486d5855">JARVIS_TEST</a> (stack_alloc_stack_alignment, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a335fa9a945a9c45b11facbf05a9a9c09" id="r_a335fa9a945a9c45b11facbf05a9a9c09"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a335fa9a945a9c45b11facbf05a9a9c09">JARVIS_TEST</a> (stack_alloc_multiple_tasks_distinct_stacks, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a31ca687659b8dd5a38b9f8bf3c3bfc05" id="r_a31ca687659b8dd5a38b9f8bf3c3bfc05"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a31ca687659b8dd5a38b9f8bf3c3bfc05">stack_overflow_hook</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;task, const <a class="el" href="structkernel_1_1debug_1_1_first_chance_frame.html">kernel::debug::FirstChanceFrame</a> &amp;frame)</td></tr>
+<tr class="memitem:a2dbd9f2b7a220bee9c01f7d7f9e2b140" id="r_a2dbd9f2b7a220bee9c01f7d7f9e2b140"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2dbd9f2b7a220bee9c01f7d7f9e2b140">stack_overflow_hook_latched_task</a> ()</td></tr>
+<tr class="memitem:a9263e1defb6cd43be0cebbfca2c8501e" id="r_a9263e1defb6cd43be0cebbfca2c8501e"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a9263e1defb6cd43be0cebbfca2c8501e">stack_overflow_hook_latched_va</a> ()</td></tr>
+<tr class="memitem:a7773539a843d59e25ca99cb8e35bddd7" id="r_a7773539a843d59e25ca99cb8e35bddd7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a7773539a843d59e25ca99cb8e35bddd7">stack_overflow_hook_reset_latch</a> ()</td></tr>
 <tr class="memitem:a1e45607a7acecd47342f058bebe54290" id="r_a1e45607a7acecd47342f058bebe54290"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a1e45607a7acecd47342f058bebe54290">JARVIS_TEST</a> (stack_alloc_overflow_hook_weak_symbol, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:a5f6f8aac9529154596367ace6432c43e" id="r_a5f6f8aac9529154596367ace6432c43e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a5f6f8aac9529154596367ace6432c43e">JARVIS_TEST</a> (kstack_guard_base_unmapped, &quot;PRE: none | POST: none&quot;)</td></tr>
 <tr class="memitem:ade624542ad80dbf8c870dc2774c68dd8" id="r_ade624542ad80dbf8c870dc2774c68dd8"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#ade624542ad80dbf8c870dc2774c68dd8">JARVIS_TEST</a> (kstack_overflow_invokes_hook, &quot;PRE: none | POST: none&quot;)</td></tr>
@@ -513,6 +516,57 @@ Here is the call graph for this function:</div>
 <div class="center"><img src="test__stack__alloc_8cpp_a31ca687659b8dd5a38b9f8bf3c3bfc05_cgraph.png" border="0" usemap="#atest__stack__alloc_8cpp_a31ca687659b8dd5a38b9f8bf3c3bfc05_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 12 -->
 </div>
+
+</div>
+</div>
+<a id="a2dbd9f2b7a220bee9c01f7d7f9e2b140" name="a2dbd9f2b7a220bee9c01f7d7f9e2b140"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2dbd9f2b7a220bee9c01f7d7f9e2b140">&#9670;&#160;</a></span>stack_overflow_hook_latched_task()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t stack_overflow_hook_latched_task </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9263e1defb6cd43be0cebbfca2c8501e" name="a9263e1defb6cd43be0cebbfca2c8501e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9263e1defb6cd43be0cebbfca2c8501e">&#9670;&#160;</a></span>stack_overflow_hook_latched_va()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t stack_overflow_hook_latched_va </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7773539a843d59e25ca99cb8e35bddd7" name="a7773539a843d59e25ca99cb8e35bddd7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7773539a843d59e25ca99cb8e35bddd7">&#9670;&#160;</a></span>stack_overflow_hook_reset_latch()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void stack_overflow_hook_reset_latch </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>

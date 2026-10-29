@@ -33,6 +33,7 @@
 #include <kernel/task/ready_queue_manager.hpp>
 #include <kernel/task/deadline_list.hpp>
 #include <kernel/task/all_tasks_registry.hpp>
+#include <kernel/task/scheduler_lock_guard.hpp>
 
 namespace kernel {
 

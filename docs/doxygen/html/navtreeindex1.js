@@ -1,5 +1,6 @@
 var NAVTREEINDEX1 =
 {
+"ahci__protocol_8hpp_source.html":[3,0,0,1,7,2],
 "all__tasks__registry_8cpp.html":[3,0,0,1,20,2],
 "all__tasks__registry_8hpp.html":[3,0,0,1,20,3],
 "all__tasks__registry_8hpp_source.html":[3,0,0,1,20,3],
@@ -248,6 +249,5 @@ var NAVTREEINDEX1 =
 "classarch_1_1kernel_1_1_page_address.html#a8ea63e7b8f244f3e3b6c13106e6bdd3d":[0,0,0,2,2,0],
 "classarch_1_1kernel_1_1_page_address.html#a8ea63e7b8f244f3e3b6c13106e6bdd3d":[2,0,0,0,2,0],
 "classarch_1_1kernel_1_1_page_address.html#abdf87ea435a5aaa6f24e44df3e9fb24e":[0,0,0,2,2,1],
-"classarch_1_1kernel_1_1_page_address.html#abdf87ea435a5aaa6f24e44df3e9fb24e":[2,0,0,0,2,1],
-"classarch_1_1kernel_1_1_page_address.html#ad3479bb04e49a3380901d055e092b196":[0,0,0,2,2,4]
+"classarch_1_1kernel_1_1_page_address.html#abdf87ea435a5aaa6f24e44df3e9fb24e":[2,0,0,0,2,1]
 };

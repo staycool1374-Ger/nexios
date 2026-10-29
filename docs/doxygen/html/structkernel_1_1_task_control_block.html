@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -226,8 +226,14 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a1443c8caa63e4d8af39ad150f91d413d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clones the current task — creates a child with copied context.  <br /></td></tr>
 <tr class="memitem:a3c6d103f4da66b64efa1af7f31a5b763" id="r_a3c6d103f4da66b64efa1af7f31a5b763"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#acfb6c673c29495fd20c2656c972a5632">errors::TaskError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3c6d103f4da66b64efa1af7f31a5b763">clone_err</a> (uint64_t *regs, <a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *&amp;out_tcb)</td></tr>
 <tr class="memdesc:a3c6d103f4da66b64efa1af7f31a5b763"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clones the current task with error code.  <br /></td></tr>
+<tr class="memitem:a51b78f02e932107158c082809d43d538" id="r_a51b78f02e932107158c082809d43d538"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a51b78f02e932107158c082809d43d538">provision_kstack</a> (<a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *tcb, uint64_t kstack_phys, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> stack_size) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a51b78f02e932107158c082809d43d538"><td class="mdescLeft">&#160;</td><td class="mdescRight">Provision a TCB's kernel stack through the kslot window (#434 P2): slot attempt via the shared pool, backend map per page, slot fields/stack VAs set; on exhaustion-0 the HHDM fallback with zeroed slot fields (same funnel as create_user — ELF birth sites use this, no arch ifdefs). Restricted to ELF birth use (C3); the <a class="el" href="task_8cpp.html" title="TaskControlBlock lifecycle: creation, initialisation, cloning, and cleanup.">task.cpp</a> birth sites keep their open-coded form. Not a test seam.  <br /></td></tr>
 <tr class="memitem:ab52ff8402135c9d2a8ac6df1c5346f5e" id="r_ab52ff8402135c9d2a8ac6df1c5346f5e"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#ab52ff8402135c9d2a8ac6df1c5346f5e">destroy</a> (<a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:ab52ff8402135c9d2a8ac6df1c5346f5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware three-way branch (issue #373): a live TCB runs <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task(); a REAPED-with-resources-pending TCB (pinned at first destroy, unpinned since) completes the deferred teardown without re-running table removal; a REAPED-after-full-teardown TCB is only freed (safe no-op). No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly.  <br /></td></tr>
+<tr class="memdesc:ab52ff8402135c9d2a8ac6df1c5346f5e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware three-way branch (issue #373): a live TCB runs <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task(); a REAPED-with-resources-pending TCB (pinned at first destroy, unpinned since) completes the deferred teardown without re-running table removal; a REAPED-after-full-teardown TCB is only freed (safe no-op). No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly. Issue #409: claims teardown ownership at entry (try_claim_teardown); a rival-owned or already-torn-down TCB is a no-op — the owner completes the full tail exactly once.  <br /></td></tr>
+<tr class="memitem:a5ba144224ce7d0b2f76f8bb7d9381e3a" id="r_a5ba144224ce7d0b2f76f8bb7d9381e3a"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a5ba144224ce7d0b2f76f8bb7d9381e3a">try_claim_teardown</a> (<a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a5ba144224ce7d0b2f76f8bb7d9381e3a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tries to claim this occupancy's teardown (issue #409). One atomic check-and-set under interrupts-off: succeeds once per occupancy. False on nullptr, poisoned/freed blocks, and when another party already claimed the teardown. A completed- but-unclaimed tail still claims successfully (the claim gates the free, not the tail); completed_/REAPED/unregistered decline a NEW teardown only via the ISR-side predicate.  <br /></td></tr>
+<tr class="memitem:afd04aeeab1542a1aea3e22f42d44bbc2" id="r_afd04aeeab1542a1aea3e22f42d44bbc2"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#afd04aeeab1542a1aea3e22f42d44bbc2">release_teardown_claim</a> (<a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *tcb) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:afd04aeeab1542a1aea3e22f42d44bbc2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Releases a claim taken without completing the tail (issue #409): used only by <a class="el" href="#ab52ff8402135c9d2a8ac6df1c5346f5e" title="Destroys a TCB and returns its MemPool block (H-5: single pool-aware teardown path replacing raw dele...">destroy()</a>'s pinned early-return (pinned blocks are never freed, so no race exists while pinned; the #373 second destroy re-claims fresh once unpinned).  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Data Fields</h2></td></tr>
@@ -381,6 +387,8 @@ Data Fields</h2></td></tr>
 <tr class="memdesc:a56c237cee4a8cfa3c6a4184d6af874ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-task software watchdog armed flag (issue #41). False after every memset site (create/create_user/clone/elf) and on teardown — the on_tick scan skips disarmed tasks outright.  <br /></td></tr>
 <tr class="memitem:ad08f82b28fe3541964cc831148325c18" id="r_ad08f82b28fe3541964cc831148325c18"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ad08f82b28fe3541964cc831148325c18">teardown_completed_</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
 <tr class="memdesc:ad08f82b28fe3541964cc831148325c18"><td class="mdescLeft">&#160;</td><td class="mdescRight">True once <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> ran ExitStats..Finalize to completion (issue #373). Distinguishes "REAPED-with-resources-pending" (pinned at first destroy: REAPED but teardown skipped) from "REAPED-after-full-teardown" (second destroy must be a safe no-op, never a re-teardown). False after every memset site; debug/release parity: plain bool, never CONFIG_DEBUG-gated.  <br /></td></tr>
+<tr class="memitem:a3233ad66d10b843a3531dfeb04ce2a8a" id="r_a3233ad66d10b843a3531dfeb04ce2a8a"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3233ad66d10b843a3531dfeb04ce2a8a">teardown_claimed_</a> = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td></tr>
+<tr class="memdesc:a3233ad66d10b843a3531dfeb04ce2a8a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Teardown ownership claim (issue #409). Set once, under interrupts-off, by the single party that will run this occupancy's teardown to completion; every other party that reaches a freeing path must skip the ENTIRE teardown including the free. The winner is obliged to complete the full tail (never abandoned, never doubled). False after every memset site / init_task_common (per-occupancy state).  <br /></td></tr>
 <tr class="memitem:a445779a670a077b284afbe401bdfbbf5" id="r_a445779a670a077b284afbe401bdfbbf5"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a445779a670a077b284afbe401bdfbbf5">wdog_period_ticks</a> = 0</td></tr>
 <tr class="memdesc:a445779a670a077b284afbe401bdfbbf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).  <br /></td></tr>
 <tr class="memitem:ab3e64bf60d66eef6d2abd01bd3725e32" id="r_ab3e64bf60d66eef6d2abd01bd3725e32"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab3e64bf60d66eef6d2abd01bd3725e32">wdog_last_kick_tick</a> = 0</td></tr>
@@ -1108,7 +1116,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware three-way branch (issue #373): a live TCB runs <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task(); a REAPED-with-resources-pending TCB (pinned at first destroy, unpinned since) completes the deferred teardown without re-running table removal; a REAPED-after-full-teardown TCB is only freed (safe no-op). No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly. </p>
+<p>Destroys a TCB and returns its <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a> block (H-5: single pool-aware teardown path replacing raw <span class="tt">delete</span> on RT error paths — CODING_STYLE §4 forbids new/delete on RT paths). State-aware three-way branch (issue #373): a live TCB runs <a class="el" href="#a15067eade15b4dd699007f2c3c7673eb" title="Frees all resources owned by this task (FDs, pages, page tables). Called by WAITPID after reaping a T...">cleanup()</a> + remove_task(); a REAPED-with-resources-pending TCB (pinned at first destroy, unpinned since) completes the deferred teardown without re-running table removal; a REAPED-after-full-teardown TCB is only freed (safe no-op). No-op on nullptr. Mirrors <a class="el" href="#a9cdd124650c5b54d901b0a704fa4c723" title="Unregisters this TCB from the scheduler (tasks_[] / id_table_ / ready queue) and returns its memory t...">operator delete()</a> semantics exactly. Issue #409: claims teardown ownership at entry (try_claim_teardown); a rival-owned or already-torn-down TCB is a no-op — the owner completes the full tail exactly once. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -1205,7 +1213,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Lazily creates and attaches this task's root CNode (CSpace). Idempotent: a second call with an existing CSpace is a no-op. Called from task context on first capability use. </p>
-<p>Lazily creates this task's root CNode (CSpace) from the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. Idempotent: returns early if the CSpace already exists. The node is pool-backed and attached to this task's intrusive object list so teardown (release_all_objects) reclaims it deterministically. The task's own id serves as the cspace_id decoded from handles (no global registry in iteration-1 CSpace; handles are validated against the current task's root CNode only). Issue #265 contract note: the 8-bit truncation is a same-CNode self-consistency tag, NOT a global identity. lookup() always resolves inside the caller's own CNode with slot+gen+rights fully mediating, so aliased tags across tasks grant no cross-task access and nothing can exhaust (CNodes free on task death). The mask is load-bearing: storing the full id while the wire format stays 8-bit would self-reject every task with id &gt; 255. A future global cspace registry must widen CAP_HANDLE_IDBITS first. </p>
+<p>Lazily creates this task's root CNode (CSpace) from the <a class="el" href="classkernel_1_1_mem_pool.html" title="Fixed-size block memory allocator with 9 pool classes.">MemPool</a>. Idempotent: returns early if the CSpace already exists. The node is pool-backed and attached to this task's intrusive object list so teardown (release_all_objects) reclaims it deterministically. The task's own id serves as the cspace_id decoded from handles (no global registry in iteration-1 CSpace; handles are validated against the current task's root CNode only). Issue #265 contract note: the 8-bit truncation is a same-CNode self-consistency tag, NOT a global identity. lookup() always resolves inside the caller's own CNode with slot+gen+rights fully mediating, so aliased tags across tasks grant no cross-task access and nothing can exhaust (CNodes free on task death). The mask is load-bearing: storing the full id while the wire format stays 8-bit would self-reject every task with id &gt; 255. A future global cspace registry must widen CAP_HANDLE_IDBITS first. Bootstrapping side (issue #171 P4): null-until-first-use IS the creator-seeding invariant — nothing installs caps at task birth, so a driver that never makes a cap syscall keeps a null CSpace and can hold nothing. Idempotent: safe to call on every cap path (syscalls, daemon startup, tests). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -1615,6 +1623,56 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a51b78f02e932107158c082809d43d538" name="a51b78f02e932107158c082809d43d538"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a51b78f02e932107158c082809d43d538">&#9670;&#160;</a></span>provision_kstack()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::TaskControlBlock::provision_kstack </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>kstack_phys</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a></td>          <td class="paramname"><span class="paramname"><em>stack_size</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Provision a TCB's kernel stack through the kslot window (#434 P2): slot attempt via the shared pool, backend map per page, slot fields/stack VAs set; on exhaustion-0 the HHDM fallback with zeroed slot fields (same funnel as create_user — ELF birth sites use this, no arch ifdefs). Restricted to ELF birth use (C3); the <a class="el" href="task_8cpp.html" title="TaskControlBlock lifecycle: creation, initialisation, cloning, and cleanup.">task.cpp</a> birth sites keep their open-coded form. Not a test seam. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">tcb</td><td>Target TCB (stack_phys_ already allocated by caller). </td></tr>
+    <tr><td class="paramname">kstack_phys</td><td>Contiguous physical pages for the stack. </td></tr>
+    <tr><td class="paramname">stack_size</td><td>Kernel stack size in bytes (STACK_SIZE). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_task_control_block_a51b78f02e932107158c082809d43d538_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a51b78f02e932107158c082809d43d538_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 19 -->
+</div>
+
+</div>
+</div>
 <a id="a56a69234e3f9c078f2eab4f896ef2e7c" name="a56a69234e3f9c078f2eab4f896ef2e7c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a56a69234e3f9c078f2eab4f896ef2e7c">&#9670;&#160;</a></span>release_all_objects()</h2>
 
@@ -1645,7 +1703,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a56a69234e3f9c078f2eab4f896ef2e7c_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a56a69234e3f9c078f2eab4f896ef2e7c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 20 -->
+</div>
+
+</div>
+</div>
+<a id="afd04aeeab1542a1aea3e22f42d44bbc2" name="afd04aeeab1542a1aea3e22f42d44bbc2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd04aeeab1542a1aea3e22f42d44bbc2">&#9670;&#160;</a></span>release_teardown_claim()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::TaskControlBlock::release_teardown_claim </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Releases a claim taken without completing the tail (issue #409): used only by <a class="el" href="#ab52ff8402135c9d2a8ac6df1c5346f5e" title="Destroys a TCB and returns its MemPool block (H-5: single pool-aware teardown path replacing raw dele...">destroy()</a>'s pinned early-return (pinned blocks are never freed, so no race exists while pinned; the #373 second destroy re-claims fresh once unpinned). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_task_control_block_afd04aeeab1542a1aea3e22f42d44bbc2_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_afd04aeeab1542a1aea3e22f42d44bbc2_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -1678,7 +1769,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a121ed14dd4f6a9632642bf0dea75416b_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a121ed14dd4f6a9632642bf0dea75416b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -1717,7 +1808,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="structkernel_1_1_task_control_block_a02994288d778ac145ce6758472227cec_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a02994288d778ac145ce6758472227cec_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -1810,6 +1901,39 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Exec-style live swap (issue #377): replaces a live table. The caller frees the old table (exec frees after the swap so the running task never observes a dead root). </p>
+
+</div>
+</div>
+<a id="a5ba144224ce7d0b2f76f8bb7d9381e3a" name="a5ba144224ce7d0b2f76f8bb7d9381e3a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ba144224ce7d0b2f76f8bb7d9381e3a">&#9670;&#160;</a></span>try_claim_teardown()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::TaskControlBlock::try_claim_teardown </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#a9a59d792a7207bc29a804189f0ad7137">TaskControlBlock</a> *</td>          <td class="paramname"><span class="paramname"><em>tcb</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Tries to claim this occupancy's teardown (issue #409). One atomic check-and-set under interrupts-off: succeeds once per occupancy. False on nullptr, poisoned/freed blocks, and when another party already claimed the teardown. A completed- but-unclaimed tail still claims successfully (the claim gates the free, not the tail); completed_/REAPED/unregistered decline a NEW teardown only via the ISR-side predicate. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="structkernel_1_1_task_control_block_a5ba144224ce7d0b2f76f8bb7d9381e3a_cgraph.png" border="0" usemap="#astructkernel_1_1_task_control_block_a5ba144224ce7d0b2f76f8bb7d9381e3a_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 24 -->
+</div>
 
 </div>
 </div>
@@ -4007,6 +4131,22 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3233ad66d10b843a3531dfeb04ce2a8a" name="a3233ad66d10b843a3531dfeb04ce2a8a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3233ad66d10b843a3531dfeb04ce2a8a">&#9670;&#160;</a></span>teardown_claimed_</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::TaskControlBlock::teardown_claimed_ = <a class="el" href="kernel_8cpp.html#a5df37b7f02e5cdc7d9412b7f872b8e01">false</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Teardown ownership claim (issue #409). Set once, under interrupts-off, by the single party that will run this occupancy's teardown to completion; every other party that reaches a freeing path must skip the ENTIRE teardown including the free. The winner is obliged to complete the full tail (never abandoned, never doubled). False after every memset site / init_task_common (per-occupancy state). </p>
 
 </div>
 </div>

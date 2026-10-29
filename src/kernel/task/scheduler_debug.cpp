@@ -60,9 +60,9 @@ void Scheduler::note_debug_tick_pc(uint64_t interrupted_pc) noexcept {
 bool Scheduler::debug_park_stop(TaskControlBlock &tgt, uint64_t kind,
                                uint64_t va) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     arch::IrqGuard irq_guard{};
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     if (__atomic_load_n(&tgt.debugger_id, __ATOMIC_ACQUIRE) == 0)
         return false;
     if (tgt.magic != TaskControlBlock::TCB_MAGIC)
@@ -86,9 +86,9 @@ bool Scheduler::debug_park_stop(TaskControlBlock &tgt, uint64_t kind,
 // detach order (bind -> scheduler) cannot invert.
 void Scheduler::debugger_resume(TaskControlBlock &tgt) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     arch::IrqGuard irq_guard{};
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     __atomic_store_n(&tgt.debug_stop_requested, false, __ATOMIC_RELEASE);
     if (!__atomic_load_n(&tgt.debug_parked, __ATOMIC_ACQUIRE))
         return;

@@ -250,24 +250,34 @@ apply:
     # publishing generation BEFORE touching the arm. A concurrent publisher
     # superseding or half-overwriting the pair between capture and apply
     # must not be applied (half-written RSP/CR3 pair).
+    # H2 generation-lock per-hart (mirrors TLS fix 353-374): idx=(tp-base)>>12
+    mv t2, tp
+    la t1, arch_per_cpu_base
+    ld t1, 0(t1)
+    sub t2, t2, t1
+    srli t2, t2, 12
+    li t1, 8
+    bgeu t2, t1, 7f
+    slli t2, t2, 3
     la t3, scheduler_switch_generation
+    add t3, t3, t2
     ld t3, 0(t3)
-    # Check scheduler_save_rsp_to
+    # Check scheduler_save_rsp_to per-hart
     la t0, scheduler_save_rsp_to
+    add t0, t0, t2
     ld t0, 0(t0)
     beqz t0, 7f
-    # Verify the generation is unchanged (no torn publish in between —
-    # e.g. a nested tick re-arming mid-apply). Mismatch: record the skip
-    # and leave the atoms untouched (the superseding publisher's own arm
-    # is in place; a stale arm is ignored by the next trap's check).
+    # Verify the generation is unchanged per-hart
     la t1, scheduler_switch_generation
+    add t1, t1, t2
     ld t1, 0(t1)
     bne t3, t1, gen_skip
 
-    # Save current SP (pointer to save area — matches x86_64 IRET frame pointer)
+    # Save current SP per-hart (pointer to save area)
     la t1, scheduler_save_rsp_to
-    ld t2, 0(t1)
-    sd sp, 0(t2)
+    add t1, t1, t2
+    ld t0, 0(t1)
+    sd sp, 0(t0)
 
     # H2 apply-side liveness + ownership re-check (mirrors x86_64
     # scheduler_validate_pending_switch): the arm can outlive its trap and
@@ -287,13 +297,26 @@ apply:
     # and undid the publish side effects on abort).
     beqz a0, abort_switch
 
-    # Load new SP (points to save area of next task)
-    la t2, scheduler_load_rsp_from
-    ld sp, 0(t2)
+    # Re-derive per-hart offset: t2 (x7) is caller-saved and the
+    # scheduler_validate_pending_switch call above may clobber it
+    # (x86 preserves r11 via push/pop around the call).
+    mv t2, tp
+    la t1, arch_per_cpu_base
+    ld t1, 0(t1)
+    sub t2, t2, t1
+    srli t2, t2, 12
+    li t1, 8
+    bgeu t2, t1, 7f
+    slli t2, t2, 3
+    # Load new SP per-hart (points to save area of next task)
+    la t1, scheduler_load_rsp_from
+    add t1, t1, t2
+    ld sp, 0(t1)
 
-    # Clear scheduler_save_rsp_to
-    la t2, scheduler_save_rsp_to
-    sd zero, 0(t2)
+    # Clear scheduler_save_rsp_to per-hart
+    la t1, scheduler_save_rsp_to
+    add t1, t1, t2
+    sd zero, 0(t1)
 
     # Issue #206 (E1 note): sscratch is a pure entry spill, not a stack
     # pointer — the trap entry reads the kstack top from
@@ -306,17 +329,25 @@ apply:
     ld ra, 0(sp)
     addi sp, sp, 16
 
-    # Check SATP switch.  load_cr3_from carries the FULL SATP value
-    # (mode|ASID|PPN — issue #352: context_id_tag publishes the tagged
-    # root, so no re-encoding here).  Write it verbatim: decomposing and
-    # re-adding the mode would drop a nonzero ASID.  A raw csrw of a
-    # phys would install MODE=0 (Bare) and switch the MMU off mid-return.
+    # Re-derive per-hart offset: scheduler_on_context_switch may
+    # clobber t2 (caller-saved); recompute from tp (reserved).
+    mv t2, tp
+    la t0, arch_per_cpu_base
+    ld t0, 0(t0)
+    sub t2, t2, t0
+    srli t2, t2, 12
+    li t0, 8
+    bgeu t2, t0, 7f
+    slli t2, t2, 3
+    # Check SATP switch per-hart (FULL SATP via context_id_tag)
     la t0, scheduler_load_cr3_from
+    add t0, t0, t2
     ld t0, 0(t0)
     beqz t0, 7f
     csrw satp, t0
     sfence.vma
     la t0, scheduler_load_cr3_from
+    add t0, t0, t2
     sd zero, 0(t0)
     j 7f
 
@@ -328,6 +359,7 @@ gen_skip:
     # is not stolen. a0/a1 are reloaded from the frame by restore_all.
     mv a0, t3
     la t1, scheduler_switch_generation
+    add t1, t1, t2
     ld a1, 0(t1)
     addi sp, sp, -64
     sd ra, 0(sp)
@@ -351,14 +383,31 @@ abort_switch:
     j 7f
 
 7:  # Issue #74: consume the TLS slot into the trap-frame TP save area.
-    # Both SATP paths converge here, so the slot is consumed
-    # unconditionally. A direct tp write would die at the OFF_TP restore
-    # below, and no sfence is needed for tp.
-    la t0, scheduler_load_tls_from
-    ld t1, 0(t0)
-    sd zero, 0(t0)
+    # Both SATP paths converge here. The slots are per-hart
+    # ([CONFIG_MAX_CPUS], indexed by this_cpu() in C++): index by the
+    # CURRENT hart here — a hardcoded slot 0 lets an AP timer tick steal
+    # the BSP's pending TLS update AND clobber the AP's own tp with a
+    # user VA (after which cpu_index() misderives to 0 and the AP
+    # impersonates the BSP; issue #351 S3 triage). Derive the index from
+    # tp itself (the per_hart base): idx = (tp - base) >> 12. Out of
+    # range (foreign tp, e.g. pre-percpu-init zero) skips the consume;
+    # the rightful owner's own trap will consume its slot. A direct tp
+    # write would die at the OFF_TP restore below, and no sfence is
+    # needed for tp.
+    mv   t0, tp                       # current per-hart base (pre-consume)
+    la   t1, arch_per_cpu_base
+    ld   t1, 0(t1)                    # &per_cpu[0] (C-linkage anchor)
+    sub  t0, t0, t1                   # byte offset into per_cpu[]
+    srli t0, t0, 12                   # logical index (4 KiB pages)
+    li   t1, 8                        # CONFIG_MAX_CPUS (range guard)
+    bgeu t0, t1, 8f                   # foreign tp: skip, leave all alone
+    slli t0, t0, 3                    # slot byte offset
+    la   t1, scheduler_load_tls_from
+    add  t0, t0, t1                   # &slots[current hart]
+    ld   t1, 0(t0)
+    sd   zero, 0(t0)
     beqz t1, 8f
-    sd t1, OFF_TP(sp)
+    sd   t1, OFF_TP(sp)
 8:  # Decrement nesting depth
     la t0, isr_nesting_depth
     ld t1, 0(t0)

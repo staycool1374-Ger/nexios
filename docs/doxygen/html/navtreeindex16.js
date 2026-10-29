@@ -1,5 +1,11 @@
 var NAVTREEINDEX16 =
 {
+"namespacekernel_1_1elf.html#ab17534bb543abbd372af4f9129e7d433":[0,0,5,12,39],
+"namespacekernel_1_1elf.html#ab1b83adb897c2a485a0ac8f73818b795":[0,0,5,12,25],
+"namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796":[0,0,5,12,13],
+"namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796a075f821d155d361ff1eca87ebaf126e1":[0,0,5,12,13,1],
+"namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796a42769f5c0b640211e86c29a70b3ad295":[0,0,5,12,13,2],
+"namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796acd54d99c8efb3c2db794197045f5b83c":[0,0,5,12,13,3],
 "namespacekernel_1_1elf.html#ab90eb39dade009d486ffe40b02839796ae0aa021e21dddbd6d8cecec71e9cf564":[0,0,5,12,13,0],
 "namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6f":[0,0,5,12,15],
 "namespacekernel_1_1elf.html#abce3bf3f65d7f7924bf7925d4bf97f6fa03570470bad94692ce93e32700d2e1cb":[0,0,5,12,15,2],
@@ -243,11 +249,5 @@ var NAVTREEINDEX16 =
 "namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a47c715f852d4c87c7539c70e81135d94":[0,0,5,22,2,0,26],
 "namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a5da573ff164f7cfe414f81acd5e3e4d2":[0,0,5,22,2,0,7],
 "namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a649fb26f337c8bdd7e7c8f08d9dedd50":[0,0,5,22,2,0,10],
-"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a701c3412a9c0109684ee005aec85b35a":[0,0,5,22,2,0,6],
-"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a738f0109825c26664886ed760985774c":[0,0,5,22,2,0,9],
-"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a7b82532b28db6c703c229e13424b6f61":[0,0,5,22,2,0,4],
-"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a85c22fd4f3cc55ac48908e5fadf26fc1":[0,0,5,22,2,0,1],
-"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a86eab8afe620a22929b30e4899254f0b":[0,0,5,22,2,0,15],
-"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a8ad4941c35ba92236c60fb1b8474c76a":[0,0,5,22,2,0,18],
-"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a8de75fa6254ccbe135625e61c6ee7f1a":[0,0,5,22,2,0,24]
+"namespacekernel_1_1iommu_1_1vtd_1_1mmio.html#a701c3412a9c0109684ee005aec85b35a":[0,0,5,22,2,0,6]
 };

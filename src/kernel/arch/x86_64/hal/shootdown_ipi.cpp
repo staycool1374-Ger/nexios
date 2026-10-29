@@ -24,6 +24,7 @@
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/hal/ipi.hpp> // issue #351 send_shootdown_ipi
 #include <kernel/arch/x86_64/hal/page_table_impl.hpp>
 
 namespace arch {
@@ -65,8 +66,6 @@ bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
 uint64_t ShootdownBatch::flush_target(uint64_t cpu) {
     if (cpu >= CONFIG_MAX_CPUS)
         return 0;
-    uint32_t lapic = (cpu == cpu_index()) ? APIC::lapic_id()
-                                          : per_cpu[cpu].lapic_id;
     uint64_t sends = 0;
     CpuSlot &slot = slots_[cpu];
     // NOTE: callers must not hold IF=0 across this call for a self
@@ -74,8 +73,9 @@ uint64_t ShootdownBatch::flush_target(uint64_t cpu) {
     for (;;) {
         if (__atomic_load_n(&slot.count, __ATOMIC_ACQUIRE) == 0)
             break;
-        if (!APIC::send_ipi(lapic, APIC::SHOOTDOWN_BATCH_VECTOR,
-                            APIC::IpiMode::FIXED))
+        // Issue #351, slice-4: delivery via the arch IPI interface
+        // (x86 leg resolves to the same LAPIC FIXED send as before).
+        if (!arch::send_shootdown_ipi(cpu))
             break; // entries stay queued
         __atomic_fetch_add(&sends_, 1ULL, __ATOMIC_RELAXED);
         ++sends;

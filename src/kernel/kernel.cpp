@@ -82,9 +82,14 @@
 #if defined(CONFIG_ARCH_AARCH64)
 #include <kernel/arch/aarch64/hal/asid.hpp>
 #include <kernel/arch/aarch64/hal/fpu.hpp>
+#include <kernel/arch/aarch64/hal/percpu.hpp>
+#include <kernel/arch/aarch64/hal/gic.hpp>
+#include <kernel/arch/aarch64/hal/smp.hpp>
 #elif defined(CONFIG_ARCH_RISCV64)
 #include <kernel/arch/riscv64/hal/asid.hpp>
 #include <kernel/arch/riscv64/hal/fpu.hpp>
+#include <kernel/arch/riscv64/hal/percpu.hpp>
+#include <kernel/arch/riscv64/hal/smp.hpp>
 #endif
 #include <initrd/initrd.hpp>
 #include <services/terminal/framebuffer.hpp>
@@ -1019,6 +1024,20 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // isr_stubs.asm gs:0x20/0x28 slots are valid immediately (zeroed).
     arch::percpu_init_bsp(0);
 #endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: point TPIDR_EL1 at per_cpu[0] before any ISR
+    // can run.  Slice-0 guarantees Aff0 == 0 here (secondaries halt in
+    // boot.S); the slots are valid immediately (zeroed).
+    arch::percpu_init_bsp(arch::read_mpidr_el1());
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-3: point tp at per_cpu[0] before any trap can run.
+    // Harts >0 are firmware-held until HSM bring-up (S2's aa64 slice-0
+    // equivalent is the boot.S hart!=0 halt); the slots are valid
+    // immediately (zeroed).  The boot hart id comes from OpenSBI in a0.
+    arch::percpu_init_bsp(
+        static_cast<uint64_t>(kernel::gs::boot_info().hart_id));
+#endif
 #if defined(CONFIG_ARCH_X86_64)
     // Issue #251: same hidden-visibility binding as the RSP switch above —
     // RSP and TSS.RSP0 must resolve to the identical descriptor value.
@@ -1340,6 +1359,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             arch::APIC::eoi();
         });
 #endif // CONFIG_ARCH_X86_64
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: cross-CPU scheduler wake SGI (the shared vector
+    // table serves both CPUs; the handler drains the calling CPU's
+    // mailbox).  No EOI in-handler — handle_gic_irq closes the SGI at
+    // its tail (an early eoi() would trip the ownership guard).
+    arch::IDT::register_handler_raw(
+        arch::SMP_SCHED_SGI, [](uint64_t, uint64_t, uint64_t) {
+            kernel::Scheduler::sched_ipi_handler();
+        });
+#endif
     boot_mark(kernel::BootStage::ARCH_INIT);
     if (kernel::gs::boot_info().cmdline[0]) {
         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
@@ -1587,6 +1616,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // Issue #25 (Phase B3): wake + park APs.  Single-CPU runs are a silent
     // no-op (MADT ncpus <= 1 or unusable trampoline block).
 #if defined(CONFIG_ARCH_X86_64)
+    kernel::smp::bring_up();
+#endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: DTB-driven PSCI/spin-table bring-up (same
+    // park-or-panic contract; single-CPU DTB is a silent no-op).
+    kernel::smp::bring_up();
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-3: DTB-driven SBI HSM bring-up (same park-or-panic
+    // contract; single-hart DTB is a silent no-op; no HSM = no APs).
     kernel::smp::bring_up();
 #endif
 

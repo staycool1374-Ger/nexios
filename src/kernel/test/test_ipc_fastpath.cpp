@@ -168,8 +168,8 @@ TaskControlBlock *spawn_fast_receiver(FastIpcCtx &ctx) {
 // below MAX_SYSCALL, and the mask popcount equals the list size (mirrors
 // fast_mask_matches_config; the widened 128-bit mask covers numbers >= 64).
 // Input: Pure inspection of Syscall::SYSCALL_FAST_MASK / k_syscall_fast[].
-// Expect: bits 74/75/76 set; popcount == 12 (9 pre-#11 + 3); no bit above
-//         MAX_SYSCALL(77).
+// Expect: bits 74/75/76 set; popcount == 13 (9 pre-#11 + ABI_VERSION (#171)
+//         + 3); no bit above MAX_SYSCALL.
 // Depends: Syscall::SYSCALL_FAST_MASK, Syscall::k_syscall_fast[]
 JARVIS_TEST(fast_mask_membership, "PRE: none | POST: none") {
     constexpr __uint128_t mask = Syscall::SYSCALL_FAST_MASK;
@@ -190,7 +190,7 @@ JARVIS_TEST(fast_mask_membership, "PRE: none | POST: none") {
         bits += (tmp & 1u);
         tmp >>= 1;
     }
-    JARVIS_ASSERT_EQ(12ULL, static_cast<uint64_t>(bits));
+    JARVIS_ASSERT_EQ(13ULL, static_cast<uint64_t>(bits));
     JARVIS_TEST_PASS();
 }
 

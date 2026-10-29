@@ -92,8 +92,8 @@ note_pinned_watchdog_expiry(const TaskControlBlock &task,
 #if CONFIG_DEADLINE_MONITOR_TASK
 void Scheduler::scan_deadlines() noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
+    SchedulerLockGuard guard(scheduler_lock_);
 #if CONFIG_DEADLINE_MISS_DETECTION
     // Scan every live task rather than only deadline_list_.  A task's deadline
     // may be (re)configured after add_task() returned, in which case it is not
@@ -140,7 +140,7 @@ void Scheduler::monitor_task_entry() noexcept {
         arch::pause();
         {
             arch::IrqGuard guard{};
-            scheduler_lock_.lock();
+            SchedulerLockGuard sched_guard(scheduler_lock_);
             dequeue_ready(*me);
             // Set BLOCKED while STILL holding scheduler_lock_ so the on_tick
             // wake path (which also takes the lock before enqueueing) cannot
@@ -148,7 +148,6 @@ void Scheduler::monitor_task_entry() noexcept {
             // (the [WEDGE] INV-5 violation).  dequeue + state change must be
             // atomic with respect to the wake handshake.
             me->state = TaskState::BLOCKED;
-            scheduler_lock_.unlock();
         }
         Scheduler::reschedule();
 
@@ -178,7 +177,7 @@ void Scheduler::ensure_monitor() noexcept {
         s_monitor_task_ = tcb;
         __atomic_store_n(&s_scan_requested_, 0, __ATOMIC_RELEASE);
         add_task(*tcb);
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+        SchedulerLockGuard guard(scheduler_lock_);
         tcb->state = TaskState::BLOCKED;
         dequeue_ready(*tcb);
     }
@@ -397,9 +396,9 @@ void Scheduler::fire_stall_watchdog(TaskControlBlock &task,
                                      uint64_t now,
                                      uint64_t expect_gen) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "fire_stall_watchdog"));
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     if (!watchdog_due(task, now))
         return;
     // Issue #324 Tick 3: scan-vs-seam handshake — the lock-free tick scan

@@ -798,7 +798,7 @@ void Scheduler::process_deferred_kills() noexcept {
     // takes the global per item via remove_task(), whose no-reentrant-take
     // ENSURE would fire on entry under lock.  Issue #324 Tick 1: the prior
     // "under scheduler_lock_" comment was stale (same class as #369 T2b).
-    ENSURE(scheduler_lock_.holder() == nullptr);
+    ENSURE(scheduler_lock_depth_own() == 0);
     // Issue #324 Tick 11: compact-and-retain (matches the drain/flush spare
     // pattern).  Both KILL arms are one-shot — the watchdog scan disarms on
     // fire, the deadline scan skips TERMINATED — so a spared AP-live entry

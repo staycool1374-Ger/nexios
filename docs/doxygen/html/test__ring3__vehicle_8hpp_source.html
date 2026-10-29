@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
    </div>
   </td>
  </tr>
@@ -443,7 +443,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__ring3__v
 <div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span>} <span class="comment">// namespace kernel::test::ring3</span></div>
 <div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span> </div>
 <div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span><span class="preprocessor">#endif </span><span class="comment">// CONFIG_ARCH_X86_64</span></div>
-<div class="ttc" id="aclasskernel_1_1_scheduler_html_a392525912608998bc99fa1a3d4816538"><div class="ttname"><a href="classkernel_1_1_scheduler.html#a392525912608998bc99fa1a3d4816538">kernel::Scheduler::add_task</a></div><div class="ttdeci">static void add_task(TaskControlBlock &amp;task)</div><div class="ttdoc">Adds a task to the scheduler&#39;s run queue.</div><div class="ttdef"><b>Definition</b> scheduler_registry.cpp:540</div></div>
+<div class="ttc" id="aclasskernel_1_1_scheduler_html_a392525912608998bc99fa1a3d4816538"><div class="ttname"><a href="classkernel_1_1_scheduler.html#a392525912608998bc99fa1a3d4816538">kernel::Scheduler::add_task</a></div><div class="ttdeci">static void add_task(TaskControlBlock &amp;task)</div><div class="ttdoc">Adds a task to the scheduler&#39;s run queue.</div><div class="ttdef"><b>Definition</b> scheduler_registry.cpp:554</div></div>
 <div class="ttc" id="aclasskernel_1_1_scheduler_html_a79305bfd1ec5dc31b569e5d2ecfdf544"><div class="ttname"><a href="classkernel_1_1_scheduler.html#a79305bfd1ec5dc31b569e5d2ecfdf544">kernel::Scheduler::terminate</a></div><div class="ttdeci">static void terminate(TaskControlBlock &amp;task, uint64_t exit_code) noexcept</div><div class="ttdoc">Transitions a task to TERMINATED state and removes it from the ready queue. Call this instead of dire...</div><div class="ttdef"><b>Definition</b> scheduler_terminate.cpp:140</div></div>
 <div class="ttc" id="aclasskernel_1_1_scheduler_html_ac92ab8abdaaf924f98d66fd5f8ab2a50"><div class="ttname"><a href="classkernel_1_1_scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50">kernel::Scheduler::reschedule</a></div><div class="ttdeci">static void reschedule() noexcept</div><div class="ttdoc">Forces a reschedule — selects the next task and sets up context switch.</div><div class="ttdef"><b>Definition</b> scheduler_tick.cpp:1122</div></div>
 <div class="ttc" id="aclasskernel_1_1_scheduler_html_ad026a249da546e4b265cf8774b3013cf"><div class="ttname"><a href="classkernel_1_1_scheduler.html#ad026a249da546e4b265cf8774b3013cf">kernel::Scheduler::drain_zombie_list</a></div><div class="ttdeci">static void drain_zombie_list() noexcept</div><div class="ttdoc">Drain ALL zombies from the list synchronously. Takes scheduler_lock_ internally.</div><div class="ttdef"><b>Definition</b> scheduler_lifecycle.cpp:196</div></div>

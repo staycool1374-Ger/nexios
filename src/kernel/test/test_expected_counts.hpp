@@ -261,7 +261,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   38,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
+    {"arch_aarch64",          0,   40,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,      31      },  // S-mode traps, loader probes, UART, RTC (M-mode CSRs deferred)
