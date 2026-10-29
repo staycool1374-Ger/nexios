@@ -293,7 +293,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // core_* — split of the former `core` aggregate. Values filled from
     // measured `dump-counts` output; 0 disables validation.
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
-    {"core_sync",           93,   0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api
+    {"core_sync",           93,  93,      93     },  // synchronization_* port as-is aa64+rv64 (S5 verdict: green)
     {"core_sched",          112,  0,       0      },  // scheduler_*
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         124,  0,       0      },  // memory_* incl. NX/W^X pins
@@ -313,8 +313,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers",             66,   66,      66     },  // servers_* + services_framework
     {"drivers",             107,   62,      62     },  // drivers_* + virtio_blk_req + ahci_deep + net
     {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
-    {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
-    {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain (2-CPU)
+    {"smp",                 81,   3,       3      },  // x86 groups + aa64/rv64 discovery/send-contract/predicate (S5)
+    {"smp_multicpu",        18,   6,       7      },  // x86 2CPU + aa64 bringup/ipi/sched/shootdown/affinity/balancer (S5) + rv64 same + shootdown pair
     {"deadline",            148,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time
     {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov

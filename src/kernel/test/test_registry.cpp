@@ -274,6 +274,12 @@ void register_pipe_blocking_tests();
 #if defined(CONFIG_ARCH_AARCH64)
 void register_aarch64_tests();
 void register_elf_guard_e2e_tests();
+void register_smp_aa64_tests();
+void register_smp_aa64_multicpu_tests();
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+void register_smp_rv64_tests();
+void register_smp_rv64_multicpu_tests();
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
 void register_riscv64_tests();
@@ -1289,6 +1295,25 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
      []() {
          run_smp_bringup_group();
          run_smp_sched_group();
+     }},
+#elif defined(CONFIG_ARCH_AARCH64)
+    // #351 S5: per-arch SMP housing (same class names, same -smp 2 gate).
+    {"smp",
+     []() {
+         register_smp_aa64_tests();
+     }},
+    {"smp_multicpu",
+     []() {
+         register_smp_aa64_multicpu_tests();
+     }},
+#elif defined(CONFIG_ARCH_RISCV64)
+    {"smp",
+     []() {
+         register_smp_rv64_tests();
+     }},
+    {"smp_multicpu",
+     []() {
+         register_smp_rv64_multicpu_tests();
      }},
 #endif
     {"deadline",
