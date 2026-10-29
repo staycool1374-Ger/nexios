@@ -867,6 +867,15 @@ class VMM {
     static void test_arm_table_alloc_fail_at(size_t alloc_index) noexcept;
     /// @brief Disarms the injector unconditionally (issue #361).  Test-only.
     static void test_disarm_table_alloc_fail() noexcept;
+    /// @brief Clears one 4K leaf WITHOUT any TLB invalidation (issue #390).
+    ///        Test-only single-source walk for the shootdown negative
+    ///        control: walk-only via pte_leaf_in_pml4, verify the leaf
+    ///        frame against @p expect_phys (fail-loud on walk drift),
+    ///        then clear. Zero flush, zero hook, zero alloc, zero logging.
+    /// @return False on any missing table, huge/block entry, or frame
+    ///         mismatch. CONFIG_DEBUG only (release has no def).
+    [[nodiscard]] static bool test_unmap_no_shootdown(
+        uint64_t virt_addr, uint64_t pml4_phys, uint64_t expect_phys) noexcept;
 #endif
     /// @brief Clears injector state for snapshot restore (issue #361).
     ///        Unconditional decl so test_isolate.cpp needs no #if;

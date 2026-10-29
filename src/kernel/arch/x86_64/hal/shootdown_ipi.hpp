@@ -83,6 +83,17 @@ class ShootdownBatch {
     static uint64_t applied_for_test();
     /// @brief Applied VA log (ascending-check source for tests).
     static uint64_t applied_va_for_test(uint64_t idx);
+    /// @brief Total IPI sends refused by the transport (issue #390 S3).
+    ///        Monotonic, never gates control flow.
+    static uint64_t send_failures_for_test();
+    /// @brief Total entries dropped when the post-flush retry still fails
+    ///        (issue #390 S3). Monotonic, never gates control flow.
+    static uint64_t queue_drops_for_test();
+    /// @brief Total bounded-drain timeouts (1M-spin, down target,
+    ///        issue #390 S3). Monotonic, never gates control flow.
+    static uint64_t drain_timeouts_for_test();
+    /// @brief Record one undeliverable entry (post-flush retry failed).
+    static void note_queue_drop();
     /// @brief Reset slots, counters and log (test isolation).
     static void reset_for_test();
 
@@ -95,6 +106,9 @@ class ShootdownBatch {
     static CpuSlot slots_[CONFIG_MAX_CPUS];
     static uint64_t sends_;
     static uint64_t applied_;
+    static uint64_t send_failures_;
+    static uint64_t queue_drops_;
+    static uint64_t drain_timeouts_;
     static uint64_t applied_log_[APPLIED_LOG];
     static uint64_t applied_log_count_;
 };

@@ -64,7 +64,7 @@ inline bool send_resched_ipi(uint64_t cpu) noexcept {
         return false;
     }
     const uint32_t target = static_cast<uint32_t>(
-        kernel::smp::ap_aff0(static_cast<uint8_t>(cpu)) & 0xFFU);
+        kernel::smp::cpu_aff0(static_cast<uint8_t>(cpu)) & 0xFFU);
     return gic_send_sgi(target, SMP_SCHED_SGI);
 #elif defined(CONFIG_ARCH_RISCV64)
     return kernel::smp::send_resched_ipi(cpu);
@@ -99,7 +99,7 @@ inline bool send_shootdown_ipi(uint64_t cpu) noexcept {
         return false;
     }
     const uint32_t target = static_cast<uint32_t>(
-        kernel::smp::ap_aff0(static_cast<uint8_t>(cpu)) & 0xFFU);
+        kernel::smp::cpu_aff0(static_cast<uint8_t>(cpu)) & 0xFFU);
     return gic_send_sgi(target, SMP_SHOOTDOWN_SGI);
 #elif defined(CONFIG_ARCH_RISCV64)
     return kernel::smp::send_shootdown_ipi(cpu);

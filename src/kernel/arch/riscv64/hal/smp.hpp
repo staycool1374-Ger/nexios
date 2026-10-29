@@ -85,6 +85,11 @@ bool scheduler_started();
 /// @return DTB hart ID, or ~0ULL when unmapped (fail-closed: the RFENCE
 ///         caller falls back to the mailbox path, never fences blind).
 uint64_t ap_hart(uint8_t logical_id);
+/// @brief Hart ID for any logical CPU incl. the BSP (issue #390).
+/// Logical 0 resolves to the BSP identity (`arch::per_cpu[0].hart_id`,
+/// published by `percpu_init_bsp`); 1..N forward to `ap_hart`.
+/// @return Hart ID, or ~0ULL when unmapped (fail-closed).
+uint64_t cpu_hart(uint8_t logical_id);
 
 /// @brief Request a full-fence shootdown on an AP (issue #389).
 /// Sets the AP's mailbox SHOOTDOWN bit with an empty slot — the apply
@@ -153,6 +158,11 @@ void apply_shootdowns();
 /// without extra instrumentation).
 /// @return Total entries applied by AP ISR runs since boot.
 uint64_t shootdown_applied();
+/// @brief Total shootdown sends refused by the transport (issue #390 S3).
+/// Monotonic, never gates control flow.
+uint64_t shootdown_send_failures();
+/// @brief Record one refused shootdown send.
+void note_shootdown_send_failure();
 
 /// @brief Force the RFENCE presence answer for tests (issue #389).
 /// Nonzero pretends RFENCE present, zero forces the S-soft fallback

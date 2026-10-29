@@ -65,6 +65,16 @@ void note_shootdown_applied();
 /// Maps the compressed logical index to the GIC target (Aff0); identity
 /// only for contiguous topologies. 0xFF when unmapped (fail-closed).
 uint64_t ap_aff0(uint8_t logical);
+/// @brief Aff0 for any logical CPU incl. the BSP (issue #390).
+/// Logical 0 resolves to the BSP identity (`arch::per_cpu[0].mpidr`,
+/// published by `percpu_init_bsp`); 1..N forward to `ap_aff0`.
+/// 0xFF when unmapped (fail-closed skip).
+uint64_t cpu_aff0(uint8_t logical);
+/// @brief Total shootdown SGI sends refused by the transport
+/// (issue #390 S3). Monotonic, never gates control flow.
+uint64_t shootdown_send_failures();
+/// @brief Record one refused shootdown SGI send.
+void note_shootdown_send_failure();
 
 /// @brief Bring up application processors (called once at boot, after
 ///        Timer::init, under interrupt guard).  Fail-closed: any malformed

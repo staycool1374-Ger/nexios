@@ -248,6 +248,19 @@ bool VMM::test_maybe_fail_table_alloc() noexcept {
     }
     return false;
 }
+
+bool VMM::test_unmap_no_shootdown(uint64_t virt_addr, uint64_t pml4_phys,
+                                   uint64_t expect_phys) noexcept {
+    uint64_t *leaf = pte_leaf_in_pml4(virt_addr, pml4_phys);
+    if (leaf == nullptr) {
+        return false;
+    }
+    if (vmm_arch_block_base(*leaf, false) != expect_phys) {
+        return false;
+    }
+    *leaf = 0;
+    return true;
+}
 #endif
 
 void VMM::test_table_alloc_fail_snapshot_reset() noexcept {

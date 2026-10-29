@@ -82,6 +82,9 @@ volatile uint64_t s_sgi_ack[CONFIG_MAX_CPUS] = {};
 // Shootdown purges applied by the SGI-10 handler (issue #389 test
 // readback; mirrors the rv64 `shoot_applied_` counter).
 uint64_t s_shootdown_applied = 0;
+// Shootdown SGI sends refused by the transport (issue #390 S3;
+// monotonic, never gates control flow).
+uint64_t s_shootdown_send_failures = 0;
 
 // Conduit selected from the DTB psci node ("smc" or "hvc"; empty = none).
 bool s_use_smc = true;
@@ -196,6 +199,26 @@ uint64_t ap_aff0(uint8_t logical) {
         return 0xFFU; // unmapped: caller treats as un-targetable (fail-closed)
     }
     return s_ap_mpidr[logical] & 0xFFU;
+}
+
+uint64_t cpu_aff0(uint8_t logical) {
+    // Logical 0 is the BSP: its identity comes from percpu_init_bsp
+    // (per_cpu[0].mpidr), not the AP table above.
+    if (logical >= CONFIG_MAX_CPUS) {
+        return 0xFFU;
+    }
+    if (logical == 0) {
+        return arch::per_cpu[0].mpidr & 0xFFU;
+    }
+    return ap_aff0(logical);
+}
+
+uint64_t shootdown_send_failures() {
+    return __atomic_load_n(&s_shootdown_send_failures, __ATOMIC_RELAXED);
+}
+
+void note_shootdown_send_failure() {
+    __atomic_fetch_add(&s_shootdown_send_failures, 1ULL, __ATOMIC_RELAXED);
 }
 
 void publish_scheduler_ready() {
