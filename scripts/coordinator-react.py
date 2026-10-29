@@ -153,6 +153,12 @@ def main():
         st = wstates[role]
         if st == '?':
             actions.append((50, 'worker %s state unknown (pass --%s); cannot clear rows 6-9' % (sess, role)))
+    # 2b. STATE vocabulary + inference banned: every worker post must have STATE + NEXT; missing → NEED
+    for r in rooms:
+        for role in ('dev','qe'):
+            b=r['boxes'][role]
+            if b['posts'] and (not b.get('state') or not b.get('next')):
+                actions.append((2, 'NEED %s in #%s %s box: missing STATE/NEXT line (wire format 3-line mandatory) — do not infer' % (role, r['issue'], role)))
     # 3. armed triggers (row: evaluate each)
     for r in rooms:
         for arm in r['armed']:
