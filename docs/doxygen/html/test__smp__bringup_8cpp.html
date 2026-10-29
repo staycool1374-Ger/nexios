@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -119,10 +119,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('test__smp__bri
 </div><!--header-->
 <div class="contents">
 
-<p>SMP bring-up tests (issue #25, Phase B4). The fixed-address contract (blob at 0x70000, SIPI vector 0x70) is verified structurally (blob layout vs <a class="el" href="smp_8hpp.html" title="SMP AP bring-up (issue #25, Phase B). The BSP copies the position-locked trampoline blob to physical ...">smp.hpp</a> constants) and functionally: bring_up() stages the blob on EVERY boot, so a memcmp of the low block proves occupancy + copy. The parked count must equal the boot MADT snapshot's AP count on every variant (0 on default single-CPU runs, 1 on the -smp 2 smp_bringup variant), and a parked AP owns per_cpu[1] with a clean (never-interrupted) slot. The MADT walk itself is covered by the smp_madt class; here the CACHED boot snapshot is used so no firmware-table walk (and its kernel-half mappings) happens in test context.  
+<p>SMP bring-up tests (issue #25, Phase B4). The fixed-address contract (blob at 0x70000, SIPI vector 0x70) is verified structurally (blob layout vs smp.hpp constants) and functionally: bring_up() stages the blob on EVERY boot, so a memcmp of the low block proves occupancy + copy. The parked count must equal the boot MADT snapshot's AP count on every variant (0 on default single-CPU runs, 1 on the -smp 2 smp_bringup variant), and a parked AP owns per_cpu[1] with a clean (never-interrupted) slot. The MADT walk itself is covered by the smp_madt class; here the CACHED boot snapshot is used so no firmware-table walk (and its kernel-half mappings) happens in test context.  
 <a href="#details">More...</a></p>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>SMP bring-up tests (issue #25, Phase B4). The fixed-address contract (blob at 0x70000, SIPI vector 0x70) is verified structurally (blob layout vs <a class="el" href="smp_8hpp.html" title="SMP AP bring-up (issue #25, Phase B). The BSP copies the position-locked trampoline blob to physical ...">smp.hpp</a> constants) and functionally: bring_up() stages the blob on EVERY boot, so a memcmp of the low block proves occupancy + copy. The parked count must equal the boot MADT snapshot's AP count on every variant (0 on default single-CPU runs, 1 on the -smp 2 smp_bringup variant), and a parked AP owns per_cpu[1] with a clean (never-interrupted) slot. The MADT walk itself is covered by the smp_madt class; here the CACHED boot snapshot is used so no firmware-table walk (and its kernel-half mappings) happens in test context. </p>
+<div class="textblock"><p>SMP bring-up tests (issue #25, Phase B4). The fixed-address contract (blob at 0x70000, SIPI vector 0x70) is verified structurally (blob layout vs smp.hpp constants) and functionally: bring_up() stages the blob on EVERY boot, so a memcmp of the low block proves occupancy + copy. The parked count must equal the boot MADT snapshot's AP count on every variant (0 on default single-CPU runs, 1 on the -smp 2 smp_bringup variant), and a parked AP owns per_cpu[1] with a clean (never-interrupted) slot. The MADT walk itself is covered by the smp_madt class; here the CACHED boot snapshot is used so no firmware-table walk (and its kernel-half mappings) happens in test context. </p>
 </div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">

@@ -22,6 +22,7 @@ var annotated_dup =
       [ "IrqStormLimiter", "classarch_1_1_irq_storm_limiter.html", "classarch_1_1_irq_storm_limiter" ],
       [ "Keyboard", "classarch_1_1_keyboard.html", "classarch_1_1_keyboard" ],
       [ "PciBdf", "structarch_1_1_pci_bdf.html", "structarch_1_1_pci_bdf" ],
+      [ "PerCpu", "structarch_1_1_per_cpu.html", "structarch_1_1_per_cpu" ],
       [ "QemuDebugcon", "classarch_1_1_qemu_debugcon.html", null ],
       [ "RTC", "classarch_1_1_r_t_c.html", "classarch_1_1_r_t_c" ],
       [ "Serial", "classarch_1_1_serial.html", null ],
@@ -59,6 +60,9 @@ var annotated_dup =
         [ "VirtioBlkComplRecord", "structkernel_1_1block_1_1_virtio_blk_compl_record.html", "structkernel_1_1block_1_1_virtio_blk_compl_record" ],
         [ "VirtioBlkDriver", "classkernel_1_1block_1_1_virtio_blk_driver.html", "classkernel_1_1block_1_1_virtio_blk_driver" ],
         [ "VirtioBlkReqHdr", "structkernel_1_1block_1_1_virtio_blk_req_hdr.html", "structkernel_1_1block_1_1_virtio_blk_req_hdr" ]
+      ] ],
+      [ "boot", "namespacekernel_1_1boot.html", [
+        [ "DtbCpuEntry", "structkernel_1_1boot_1_1_dtb_cpu_entry.html", "structkernel_1_1boot_1_1_dtb_cpu_entry" ]
       ] ],
       [ "cap", "namespacekernel_1_1cap.html", [
         [ "CNode", "classkernel_1_1cap_1_1_c_node.html", "classkernel_1_1cap_1_1_c_node" ],
@@ -276,6 +280,7 @@ var annotated_dup =
       [ "SchedPerCpuPod", "structkernel_1_1_sched_per_cpu_pod.html", "structkernel_1_1_sched_per_cpu_pod" ],
       [ "Scheduler", "classkernel_1_1_scheduler.html", "classkernel_1_1_scheduler" ],
       [ "SchedulerConfig", "structkernel_1_1_scheduler_config.html", "structkernel_1_1_scheduler_config" ],
+      [ "SchedulerLockGuard", "classkernel_1_1_scheduler_lock_guard.html", "classkernel_1_1_scheduler_lock_guard" ],
       [ "ScopedRef", "classkernel_1_1_scoped_ref.html", "classkernel_1_1_scoped_ref" ],
       [ "SignalFrame", "structkernel_1_1_signal_frame.html", "structkernel_1_1_signal_frame" ],
       [ "Span", "classkernel_1_1_span.html", "classkernel_1_1_span" ],
@@ -314,6 +319,7 @@ var annotated_dup =
       [ "TopRow", "structservice_1_1_top_row.html", "structservice_1_1_top_row" ]
     ] ],
     [ "adopt_lock_t", "structadopt__lock__t.html", null ],
+    [ "ApParam", "struct_ap_param.html", "struct_ap_param" ],
     [ "BenchResult", "struct_bench_result.html", "struct_bench_result" ],
     [ "BootInfo", "struct_boot_info.html", "struct_boot_info" ],
     [ "DefaultDeleter", "struct_default_deleter.html", "struct_default_deleter" ],

@@ -1,7 +1,7 @@
 var searchData=
 [
   ['uname_0',['UNAME',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270a358f6fb7b244ee3b66a8e071d055b542',1,'kernel']]],
-  ['unknown_1',['UNKNOWN',['../classkernel_1_1elf_1_1_elf_loader.html#a8286baa9f3c0fec05de8010655439239a696b031073e74bf2cb98e5ef201d4aa3',1,'kernel::elf::ElfLoader']]],
+  ['unknown_1',['UNKNOWN',['../classkernel_1_1elf_1_1_elf_loader.html#a8286baa9f3c0fec05de8010655439239a696b031073e74bf2cb98e5ef201d4aa3',1,'kernel::elf::ElfLoader::UNKNOWN'],['../namespacekernel_1_1boot.html#a8f7a486a815790fbf6e1073d2ede5fb5a696b031073e74bf2cb98e5ef201d4aa3',1,'kernel::boot::UNKNOWN']]],
   ['unlink_2',['UNLINK',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270aa07e75cb3ec757003bb6b1284024135b',1,'kernel']]],
   ['unloaded_3',['UNLOADED',['../namespacekernel.html#a7aad192801037c1b058a87c147f00a19a795b8a51556d0b2cf4fbc11a896f6269',1,'kernel']]],
   ['unregister_4',['Unregister',['../namespacekernel.html#aa6c3b797a7f9c5f662f307dfd8af3704a9d4a8f2dfe3c62f3ce3011035d28fb66',1,'kernel']]],

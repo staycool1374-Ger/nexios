@@ -58,6 +58,7 @@ var searchData=
   ['mount_5ffat32_55',['mount_fat32',['../namespacekernel_1_1vfs.html#a739270d15fe1ac6f5a0e21d0c2e20123',1,'kernel::vfs']]],
   ['move_56',['move',['../utils_8hpp.html#a14dcf5c4e25f516d4fbe68249be2bdbf',1,'utils.hpp']]],
   ['move_5fpriority_57',['move_priority',['../classkernel_1_1_ready_queue_manager.html#ab213aca16e35a1fe9d1702885cde4ef1',1,'kernel::ReadyQueueManager::move_priority()'],['../classkernel_1_1_scheduler.html#ae543d07405d0c21a092c2561cbfe6735',1,'kernel::Scheduler::move_priority()']]],
-  ['msi_5farmed_58',['msi_armed',['../classkernel_1_1block_1_1_ahci_driver.html#ae4fdfe570740190bd60f0d6213bac92f',1,'kernel::block::AhciDriver::msi_armed()'],['../classkernel_1_1block_1_1_virtio_blk_driver.html#a74902d5f381140cd1236d73dc0205956',1,'kernel::block::VirtioBlkDriver::msi_armed()']]],
-  ['mutex_59',['Mutex',['../classkernel_1_1sync_1_1_mutex.html#a4f3663709d2c4a4858f5f05a5448e244',1,'kernel::sync::Mutex']]]
+  ['mpidr_5faff0_58',['mpidr_aff0',['../namespacearch.html#a895eb0962fff5b7a2a9021efddd26b5d',1,'arch']]],
+  ['msi_5farmed_59',['msi_armed',['../classkernel_1_1block_1_1_ahci_driver.html#ae4fdfe570740190bd60f0d6213bac92f',1,'kernel::block::AhciDriver::msi_armed()'],['../classkernel_1_1block_1_1_virtio_blk_driver.html#a74902d5f381140cd1236d73dc0205956',1,'kernel::block::VirtioBlkDriver::msi_armed()']]],
+  ['mutex_60',['Mutex',['../classkernel_1_1sync_1_1_mutex.html#a4f3663709d2c4a4858f5f05a5448e244',1,'kernel::sync::Mutex']]]
 ];

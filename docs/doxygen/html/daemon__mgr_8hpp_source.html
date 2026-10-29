@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('daemon__mgr_8h
 <div class="ttc" id="anamespacekernel_1_1daemon_html_ae09ac16adefc443c674743c771bf7df9"><div class="ttname"><a href="namespacekernel_1_1daemon.html#ae09ac16adefc443c674743c771bf7df9">kernel::daemon::capture_state</a></div><div class="ttdeci">void capture_state(DaemonEntry *out_entries, uint64_t &amp;num_out)</div><div class="ttdoc">Snapshot all daemon entries for test isolation.</div><div class="ttdef"><b>Definition</b> daemon_mgr.cpp:127</div></div>
 <div class="ttc" id="anamespacekernel_1_1daemon_html_ae3e4188f4434a72f6d12df9d801e03b1"><div class="ttname"><a href="namespacekernel_1_1daemon.html#ae3e4188f4434a72f6d12df9d801e03b1">kernel::daemon::is_managed</a></div><div class="ttdeci">bool is_managed(uint64_t pid)</div><div class="ttdoc">True when pid is a currently managed daemon task. Used by snapshot-restore to preserve daemon CSpaces...</div><div class="ttdef"><b>Definition</b> daemon_mgr.cpp:418</div></div>
 <div class="ttc" id="anamespacekernel_1_1daemon_html_af8c94939f398ca91404fdf9f7aef8171"><div class="ttname"><a href="namespacekernel_1_1daemon.html#af8c94939f398ca91404fdf9f7aef8171">kernel::daemon::reset_clear_daemons</a></div><div class="ttdeci">void reset_clear_daemons()</div><div class="ttdoc">Kill and re-register all daemons — resets state and clears count.</div><div class="ttdef"><b>Definition</b> daemon_mgr.cpp:74</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="astructkernel_1_1daemon_1_1_daemon_entry_html"><div class="ttname"><a href="structkernel_1_1daemon_1_1_daemon_entry.html">kernel::daemon::DaemonEntry</a></div><div class="ttdoc">Entry for a single managed daemon.</div><div class="ttdef"><b>Definition</b> daemon_mgr.hpp:34</div></div>
 <div class="ttc" id="astructkernel_1_1daemon_1_1_daemon_entry_html_a31447772290e61280e037518188eaee5"><div class="ttname"><a href="structkernel_1_1daemon_1_1_daemon_entry.html#a31447772290e61280e037518188eaee5">kernel::daemon::DaemonEntry::pid</a></div><div class="ttdeci">uint64_t pid</div><div class="ttdoc">Current PID (0 if not running).</div><div class="ttdef"><b>Definition</b> daemon_mgr.hpp:37</div></div>
 <div class="ttc" id="astructkernel_1_1daemon_1_1_daemon_entry_html_a43d311b62b0fd586d02e363e84116fb3"><div class="ttname"><a href="structkernel_1_1daemon_1_1_daemon_entry.html#a43d311b62b0fd586d02e363e84116fb3">kernel::daemon::DaemonEntry::name</a></div><div class="ttdeci">const char * name</div><div class="ttdoc">Human-readable daemon name.</div><div class="ttdef"><b>Definition</b> daemon_mgr.hpp:35</div></div>

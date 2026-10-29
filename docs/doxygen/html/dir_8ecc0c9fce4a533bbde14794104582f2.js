@@ -11,6 +11,7 @@ var dir_8ecc0c9fce4a533bbde14794104582f2 =
     [ "interrupt_controller.hpp", "hal_2interrupt__controller_8hpp.html", "hal_2interrupt__controller_8hpp" ],
     [ "io.hpp", "hal_2io_8hpp.html", "hal_2io_8hpp" ],
     [ "iopb.hpp", "iopb_8hpp.html", "iopb_8hpp" ],
+    [ "ipi.hpp", "ipi_8hpp.html", "ipi_8hpp" ],
     [ "irq_guard.hpp", "hal_2irq__guard_8hpp.html", "hal_2irq__guard_8hpp" ],
     [ "irq_latency_histogram.hpp", "hal_2irq__latency__histogram_8hpp.html", null ],
     [ "irq_storm.hpp", "irq__storm_8hpp.html", "irq__storm_8hpp" ],

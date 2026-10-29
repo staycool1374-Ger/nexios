@@ -12,13 +12,14 @@ var searchData=
   ['_7emessagequeue_9',['~MessageQueue',['../structkernel_1_1_message_queue.html#a63dafcf01bfefb3194fdc6620b0b6955',1,'kernel::MessageQueue']]],
   ['_7emockblockdevice_10',['~MockBlockDevice',['../classkernel_1_1block_1_1_mock_block_device.html#a4febebbdfb230e0186a0dc3cea5a4d7f',1,'kernel::block::MockBlockDevice']]],
   ['_7enotify_11',['~Notify',['../classkernel_1_1sync_1_1_notify.html#affc31a0555946b13c528049abcd63377',1,'kernel::sync::Notify']]],
-  ['_7escopedcurrenttask_12',['~ScopedCurrentTask',['../classkernel_1_1test_1_1_scoped_current_task.html#af07fb9c054d5c8e690bb75a2e17d1d80',1,'kernel::test::ScopedCurrentTask']]],
-  ['_7escopedref_13',['~ScopedRef',['../classkernel_1_1_scoped_ref.html#a7d248394dfb6298ac07866e55437dacc',1,'kernel::ScopedRef']]],
-  ['_7escopeguard_14',['~ScopeGuard',['../class_scope_guard.html#a09de18ca9299f746a645bd8567b0a108',1,'ScopeGuard']]],
-  ['_7espinlockguard_15',['~SpinLockGuard',['../class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c',1,'SpinLockGuard']]],
-  ['_7etestbase_16',['~TestBase',['../classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a',1,'kernel::test::TestBase']]],
-  ['_7etprguard_17',['~TprGuard',['../classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213',1,'arch::TprGuard']]],
-  ['_7euniqueptr_18',['~UniquePtr',['../class_unique_ptr.html#a391fe31b50f16071462d1e4968d35e8c',1,'UniquePtr']]],
-  ['_7evirtioblkdriver_19',['~VirtioBlkDriver',['../classkernel_1_1block_1_1_virtio_blk_driver.html#aa8b0fd962bc567f6c54b6d2cf199a780',1,'kernel::block::VirtioBlkDriver']]],
-  ['_7evirtionetdevice_20',['~VirtioNetDevice',['../structkernel_1_1net_1_1_virtio_net_device.html#abbc29bb89817f4f25288d5240e3da453',1,'kernel::net::VirtioNetDevice']]]
+  ['_7eschedulerlockguard_12',['~SchedulerLockGuard',['../classkernel_1_1_scheduler_lock_guard.html#aa7cba0dd2755e1ccfa0cda39d166e9e8',1,'kernel::SchedulerLockGuard']]],
+  ['_7escopedcurrenttask_13',['~ScopedCurrentTask',['../classkernel_1_1test_1_1_scoped_current_task.html#af07fb9c054d5c8e690bb75a2e17d1d80',1,'kernel::test::ScopedCurrentTask']]],
+  ['_7escopedref_14',['~ScopedRef',['../classkernel_1_1_scoped_ref.html#a7d248394dfb6298ac07866e55437dacc',1,'kernel::ScopedRef']]],
+  ['_7escopeguard_15',['~ScopeGuard',['../class_scope_guard.html#a09de18ca9299f746a645bd8567b0a108',1,'ScopeGuard']]],
+  ['_7espinlockguard_16',['~SpinLockGuard',['../class_spin_lock_guard.html#a29d70f70e6499f0a1b97ca4282c3974c',1,'SpinLockGuard']]],
+  ['_7etestbase_17',['~TestBase',['../classkernel_1_1test_1_1_test_base.html#ade0e5482ab43dd1ab71c296033c77b3a',1,'kernel::test::TestBase']]],
+  ['_7etprguard_18',['~TprGuard',['../classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213',1,'arch::TprGuard']]],
+  ['_7euniqueptr_19',['~UniquePtr',['../class_unique_ptr.html#a391fe31b50f16071462d1e4968d35e8c',1,'UniquePtr']]],
+  ['_7evirtioblkdriver_20',['~VirtioBlkDriver',['../classkernel_1_1block_1_1_virtio_blk_driver.html#aa8b0fd962bc567f6c54b6d2cf199a780',1,'kernel::block::VirtioBlkDriver']]],
+  ['_7evirtionetdevice_21',['~VirtioNetDevice',['../structkernel_1_1net_1_1_virtio_net_device.html#abbc29bb89817f4f25288d5240e3da453',1,'kernel::net::VirtioNetDevice']]]
 ];

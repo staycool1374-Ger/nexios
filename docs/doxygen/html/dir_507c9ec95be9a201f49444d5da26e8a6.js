@@ -35,6 +35,7 @@ var dir_507c9ec95be9a201f49444d5da26e8a6 =
     [ "scheduler_integrity.hpp", "scheduler__integrity_8hpp.html", "scheduler__integrity_8hpp" ],
     [ "scheduler_lifecycle.cpp", "scheduler__lifecycle_8cpp.html", "scheduler__lifecycle_8cpp" ],
     [ "scheduler_lifecycle_internal.hpp", "scheduler__lifecycle__internal_8hpp.html", "scheduler__lifecycle__internal_8hpp" ],
+    [ "scheduler_lock_guard.hpp", "scheduler__lock__guard_8hpp.html", "scheduler__lock__guard_8hpp" ],
     [ "scheduler_path.hpp", "scheduler__path_8hpp.html", "scheduler__path_8hpp" ],
     [ "scheduler_queue.cpp", "scheduler__queue_8cpp.html", "scheduler__queue_8cpp" ],
     [ "scheduler_queue_internal.hpp", "scheduler__queue__internal_8hpp.html", "scheduler__queue__internal_8hpp" ],

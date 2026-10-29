@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -144,90 +144,106 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('tpr__guard_8hp
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">#include &lt;<a class="code" href="hal_2io_8hpp.html">kernel/arch/hal/io.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="preprocessor">#include &lt;<a class="code" href="apic_8hpp.html">kernel/arch/apic.hpp</a>&gt;</span></div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">#include &lt;<a class="code" href="percpu_8hpp.html">kernel/arch/x86_64/hal/percpu.hpp</a>&gt;</span></div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">#include &lt;<a class="code" href="x86__64_2hal_2percpu_8hpp.html">kernel/arch/x86_64/hal/percpu.hpp</a>&gt;</span></div>
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacearch.html">arch</a> {</div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span></div>
-<div class="foldopen" id="foldopen00044" data-start="{" data-end="};">
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html">   44</a></span><span class="keyword">class </span>[[nodiscard]] <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> {</div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>  <span class="keyword">public</span>:</div>
-<div class="foldopen" id="foldopen00049" data-start="{" data-end="}">
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">   49</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a>(<a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> cls) noexcept : saved_(current_class()) {</div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>        <span class="comment">// INV-TPR2 enforced: the raise/shadow pair is only atomic vs</span></div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span>        <span class="comment">// interrupts under IF=0.  TPR narrows which vectors may preempt;</span></div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span>        <span class="comment">// it never replaces the caller&#39;s lock + cli discipline.</span></div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span>        <a class="code hl_define" href="assert_8hpp.html#aed6cb01692023fc3b2bd46d82db8a3be">ENSURE</a>(!interrupts_enabled());</div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>        <a class="code hl_function" href="signal_8h.html#a08ba0dd26a850108a1746412faba2b21">raise</a>(cls);</div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span>    }</div>
+<div class="foldopen" id="foldopen00044" data-start="{" data-end="}">
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno"><a class="line" href="namespacearch.html#a2b35240c0559a0074110e31570cc8b0c">   44</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacearch.html#a2b35240c0559a0074110e31570cc8b0c">tpr_reassert_accept_all</a>() noexcept {</div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <a class="code hl_function" href="namespacearch.html#ac39f303c8b9ae112945a1c18752b3065">per_cpu_current</a>()-&gt;<a class="code hl_variable" href="structarch_1_1_per_cpu.html#ac34c9d4dec46432ccb49c8bb283a9d9b">tpr_shadow</a> = <a class="code hl_variable" href="classarch_1_1_a_p_i_c.html#a8064163a68d47d44de243b30a2115ad8">APIC::TPR_CLASS_ACCEPT_ALL</a>;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>    <a class="code hl_function" href="classarch_1_1_a_p_i_c.html#ad903889e8587ca2fa1a27d87d06b375c">APIC::set_tpr_class</a>(<a class="code hl_variable" href="classarch_1_1_a_p_i_c.html#a8064163a68d47d44de243b30a2115ad8">APIC::TPR_CLASS_ACCEPT_ALL</a>);</div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>    <span class="comment">// No TPR off-x86: nothing to re-assert (INV-TPR1 is x86-only).</span></div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>}</div>
 </div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span></div>
-<div class="foldopen" id="foldopen00060" data-start="{" data-end="}">
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213">   60</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213">~TprGuard</a>() noexcept {</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>        restore(saved_);</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    }</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span></div>
+<div class="foldopen" id="foldopen00059" data-start="{" data-end="};">
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html">   59</a></span><span class="keyword">class </span>[[nodiscard]] <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> {</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>  <span class="keyword">public</span>:</div>
+<div class="foldopen" id="foldopen00064" data-start="{" data-end="}">
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">   64</a></span>    <span class="keyword">explicit</span> <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a>(<a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> cls) noexcept : saved_(current_class()) {</div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>        <span class="comment">// INV-TPR2 enforced: the raise/shadow pair is only atomic vs</span></div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>        <span class="comment">// interrupts under IF=0.  TPR narrows which vectors may preempt;</span></div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>        <span class="comment">// it never replaces the caller&#39;s lock + cli discipline.</span></div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>        <a class="code hl_define" href="assert_8hpp.html#aed6cb01692023fc3b2bd46d82db8a3be">ENSURE</a>(!interrupts_enabled());</div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>        <a class="code hl_function" href="signal_8h.html#a08ba0dd26a850108a1746412faba2b21">raise</a>(cls);</div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span>    }</div>
 </div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span> </div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a5e1b55e08a1c46c93b3bf14fd81105a2">   64</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#a5e1b55e08a1c46c93b3bf14fd81105a2">TprGuard</a>(<span class="keyword">const</span> <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a3b8b0c9d51ea907ec6df953b0229e549">   65</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;<a class="code hl_function" href="classarch_1_1_tpr_guard.html#a3b8b0c9d51ea907ec6df953b0229e549">operator=</a>(<span class="keyword">const</span> <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a00ad02db3177389610957daf23e542d7">   66</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#a00ad02db3177389610957daf23e542d7">TprGuard</a>(<a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a0a3bed3bd196322e78d707d06a8e7edf">   67</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;<a class="code hl_function" href="classarch_1_1_tpr_guard.html#a0a3bed3bd196322e78d707d06a8e7edf">operator=</a>(<a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span> </div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>  <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> saved_;</div>
-<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span></div>
-<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> current_class() noexcept {</div>
-<div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>        <span class="keywordflow">return</span> <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a><span class="keyword">&gt;</span>(</div>
-<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>            per_cpu_current()-&gt;tpr_shadow &amp; 0xF0U);</div>
-<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00079" name="l00079"></a><span class="lineno">   79</span>        <span class="keywordflow">return</span> 0;</div>
-<div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    }</div>
-<div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span></div>
-<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="signal_8h.html#a08ba0dd26a850108a1746412faba2b21">raise</a>(<a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> cls) <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>        <a class="code hl_function" href="classarch_1_1_a_p_i_c.html#ab63f9b0cbcbcbb282fa17edc51886485">APIC::tpr_raise</a>(cls);</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>        per_cpu_current()-&gt;tpr_shadow =</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>            <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a><span class="keyword">&gt;</span>(<a class="code hl_function" href="classarch_1_1_a_p_i_c.html#a80de8535337d66f30f91810b1880cbb4">APIC::get_tpr_class</a>());</div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>        (void)cls;</div>
-<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>    }</div>
-<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span></div>
-<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> restore(uint8_t cls) <span class="keyword">noexcept</span> {</div>
-<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
-<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span>        APIC::tpr_restore(cls);</div>
-<div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>        per_cpu_current()-&gt;tpr_shadow =</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>            <span class="keyword">static_cast&lt;</span>uint64_t<span class="keyword">&gt;</span>(APIC::get_tpr_class());</div>
-<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span><span class="preprocessor">#else</span></div>
-<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>        (void)cls;</div>
-<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span><span class="preprocessor">#endif</span></div>
-<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>    }</div>
-<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span>};</div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span></div>
+<div class="foldopen" id="foldopen00075" data-start="{" data-end="}">
+<div class="line"><a id="l00075" name="l00075"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213">   75</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213">~TprGuard</a>() noexcept {</div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>        restore(saved_);</div>
+<div class="line"><a id="l00077" name="l00077"></a><span class="lineno">   77</span>    }</div>
 </div>
-<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span> </div>
-<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span>} <span class="comment">// namespace arch</span></div>
+<div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span> </div>
+<div class="line"><a id="l00079" name="l00079"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a5e1b55e08a1c46c93b3bf14fd81105a2">   79</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#a5e1b55e08a1c46c93b3bf14fd81105a2">TprGuard</a>(<span class="keyword">const</span> <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00080" name="l00080"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a3b8b0c9d51ea907ec6df953b0229e549">   80</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;<a class="code hl_function" href="classarch_1_1_tpr_guard.html#a3b8b0c9d51ea907ec6df953b0229e549">operator=</a>(<span class="keyword">const</span> <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00081" name="l00081"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a00ad02db3177389610957daf23e542d7">   81</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#a00ad02db3177389610957daf23e542d7">TprGuard</a>(<a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00082" name="l00082"></a><span class="lineno"><a class="line" href="classarch_1_1_tpr_guard.html#a0a3bed3bd196322e78d707d06a8e7edf">   82</a></span>    <a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;<a class="code hl_function" href="classarch_1_1_tpr_guard.html#a0a3bed3bd196322e78d707d06a8e7edf">operator=</a>(<a class="code hl_function" href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">TprGuard</a> &amp;&amp;) = <span class="keyword">delete</span>;</div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span> </div>
+<div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>  <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> saved_;</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span></div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>    <span class="keyword">static</span> <a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> current_class() noexcept {</div>
+<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>        <span class="keywordflow">return</span> <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a><span class="keyword">&gt;</span>(</div>
+<div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>            <a class="code hl_function" href="namespacearch.html#ac39f303c8b9ae112945a1c18752b3065">per_cpu_current</a>()-&gt;tpr_shadow &amp; 0xF0U);</div>
+<div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>        <span class="keywordflow">return</span> 0;</div>
+<div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00096" name="l00096"></a><span class="lineno">   96</span>    }</div>
+<div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span></div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> <a class="code hl_function" href="signal_8h.html#a08ba0dd26a850108a1746412faba2b21">raise</a>(<a class="code hl_typedef" href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> cls) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00100" name="l00100"></a><span class="lineno">  100</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>        <a class="code hl_function" href="classarch_1_1_a_p_i_c.html#ab63f9b0cbcbcbb282fa17edc51886485">APIC::tpr_raise</a>(cls);</div>
+<div class="line"><a id="l00102" name="l00102"></a><span class="lineno">  102</span>        <a class="code hl_function" href="namespacearch.html#ac39f303c8b9ae112945a1c18752b3065">per_cpu_current</a>()-&gt;tpr_shadow =</div>
+<div class="line"><a id="l00103" name="l00103"></a><span class="lineno">  103</span>            <span class="keyword">static_cast&lt;</span><a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a><span class="keyword">&gt;</span>(<a class="code hl_function" href="classarch_1_1_a_p_i_c.html#a80de8535337d66f30f91810b1880cbb4">APIC::get_tpr_class</a>());</div>
+<div class="line"><a id="l00104" name="l00104"></a><span class="lineno">  104</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00105" name="l00105"></a><span class="lineno">  105</span>        (void)cls;</div>
+<div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    }</div>
+<div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span></div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> restore(uint8_t cls) <span class="keyword">noexcept</span> {</div>
+<div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span><span class="preprocessor">#if defined(CONFIG_ARCH_X86_64)</span></div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>        APIC::tpr_restore(cls);</div>
+<div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span>        per_cpu_current()-&gt;<a class="code hl_variable" href="structarch_1_1_per_cpu.html#ac34c9d4dec46432ccb49c8bb283a9d9b">tpr_shadow</a> =</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>            <span class="keyword">static_cast&lt;</span>uint64_t<span class="keyword">&gt;</span>(APIC::get_tpr_class());</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span>        (void)cls;</div>
+<div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    }</div>
+<div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>};</div>
+</div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span> </div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>} <span class="comment">// namespace arch</span></div>
 <div class="ttc" id="aapic_8hpp_html"><div class="ttname"><a href="apic_8hpp.html">apic.hpp</a></div></div>
 <div class="ttc" id="aassert_8hpp_html"><div class="ttname"><a href="assert_8hpp.html">assert.hpp</a></div><div class="ttdoc">Debug assertion macros and the panic handler declaration.</div></div>
 <div class="ttc" id="aassert_8hpp_html_aed6cb01692023fc3b2bd46d82db8a3be"><div class="ttname"><a href="assert_8hpp.html#aed6cb01692023fc3b2bd46d82db8a3be">ENSURE</a></div><div class="ttdeci">#define ENSURE(cond)</div><div class="ttdoc">Fatal invariant check — panics if the condition is false. Use this for conditions that should never f...</div><div class="ttdef"><b>Definition</b> assert.hpp:48</div></div>
+<div class="ttc" id="aclassarch_1_1_a_p_i_c_html_a8064163a68d47d44de243b30a2115ad8"><div class="ttname"><a href="classarch_1_1_a_p_i_c.html#a8064163a68d47d44de243b30a2115ad8">arch::APIC::TPR_CLASS_ACCEPT_ALL</a></div><div class="ttdeci">static constexpr uint8_t TPR_CLASS_ACCEPT_ALL</div><div class="ttdef"><b>Definition</b> apic.hpp:72</div></div>
 <div class="ttc" id="aclassarch_1_1_a_p_i_c_html_a80de8535337d66f30f91810b1880cbb4"><div class="ttname"><a href="classarch_1_1_a_p_i_c.html#a80de8535337d66f30f91810b1880cbb4">arch::APIC::get_tpr_class</a></div><div class="ttdeci">static uint8_t get_tpr_class()</div><div class="ttdoc">Read the current hardware TPR class (ACCEPT_ALL when off).</div><div class="ttdef"><b>Definition</b> apic.cpp:211</div></div>
 <div class="ttc" id="aclassarch_1_1_a_p_i_c_html_ab63f9b0cbcbcbb282fa17edc51886485"><div class="ttname"><a href="classarch_1_1_a_p_i_c.html#ab63f9b0cbcbcbb282fa17edc51886485">arch::APIC::tpr_raise</a></div><div class="ttdeci">static void tpr_raise(uint8_t cls)</div><div class="ttdoc">Raise toward cls; writes only when cls exceeds current.</div><div class="ttdef"><b>Definition</b> apic.cpp:225</div></div>
+<div class="ttc" id="aclassarch_1_1_a_p_i_c_html_ad903889e8587ca2fa1a27d87d06b375c"><div class="ttname"><a href="classarch_1_1_a_p_i_c.html#ad903889e8587ca2fa1a27d87d06b375c">arch::APIC::set_tpr_class</a></div><div class="ttdeci">static bool set_tpr_class(uint8_t cls)</div><div class="ttdoc">Program a TPR class (sub-class bits forced to 0). No-op when the LAPIC is off. See docs/specs/apic-tp...</div><div class="ttdef"><b>Definition</b> apic.cpp:203</div></div>
 <div class="ttc" id="aclassarch_1_1_tpr_guard_html_a00ad02db3177389610957daf23e542d7"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#a00ad02db3177389610957daf23e542d7">arch::TprGuard::TprGuard</a></div><div class="ttdeci">TprGuard(TprGuard &amp;&amp;)=delete</div></div>
 <div class="ttc" id="aclassarch_1_1_tpr_guard_html_a0a3bed3bd196322e78d707d06a8e7edf"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#a0a3bed3bd196322e78d707d06a8e7edf">arch::TprGuard::operator=</a></div><div class="ttdeci">TprGuard &amp; operator=(TprGuard &amp;&amp;)=delete</div></div>
-<div class="ttc" id="aclassarch_1_1_tpr_guard_html_a2c69ab95e471e276d052bc5ac2d46213"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213">arch::TprGuard::~TprGuard</a></div><div class="ttdeci">~TprGuard() noexcept</div><div class="ttdoc">Restore the class saved at construction.</div><div class="ttdef"><b>Definition</b> tpr_guard.hpp:60</div></div>
+<div class="ttc" id="aclassarch_1_1_tpr_guard_html_a2c69ab95e471e276d052bc5ac2d46213"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#a2c69ab95e471e276d052bc5ac2d46213">arch::TprGuard::~TprGuard</a></div><div class="ttdeci">~TprGuard() noexcept</div><div class="ttdoc">Restore the class saved at construction.</div><div class="ttdef"><b>Definition</b> tpr_guard.hpp:75</div></div>
 <div class="ttc" id="aclassarch_1_1_tpr_guard_html_a3b8b0c9d51ea907ec6df953b0229e549"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#a3b8b0c9d51ea907ec6df953b0229e549">arch::TprGuard::operator=</a></div><div class="ttdeci">TprGuard &amp; operator=(const TprGuard &amp;)=delete</div></div>
 <div class="ttc" id="aclassarch_1_1_tpr_guard_html_a5e1b55e08a1c46c93b3bf14fd81105a2"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#a5e1b55e08a1c46c93b3bf14fd81105a2">arch::TprGuard::TprGuard</a></div><div class="ttdeci">TprGuard(const TprGuard &amp;)=delete</div></div>
-<div class="ttc" id="aclassarch_1_1_tpr_guard_html_ab3d0f8afd0fdf6610c5f7113670aefd5"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">arch::TprGuard::TprGuard</a></div><div class="ttdeci">TprGuard(uint8_t cls) noexcept</div><div class="ttdoc">Raise the own-CPU TPR class, saving the previous class.</div><div class="ttdef"><b>Definition</b> tpr_guard.hpp:49</div></div>
+<div class="ttc" id="aclassarch_1_1_tpr_guard_html_ab3d0f8afd0fdf6610c5f7113670aefd5"><div class="ttname"><a href="classarch_1_1_tpr_guard.html#ab3d0f8afd0fdf6610c5f7113670aefd5">arch::TprGuard::TprGuard</a></div><div class="ttdeci">TprGuard(uint8_t cls) noexcept</div><div class="ttdoc">Raise the own-CPU TPR class, saving the previous class.</div><div class="ttdef"><b>Definition</b> tpr_guard.hpp:64</div></div>
 <div class="ttc" id="ahal_2io_8hpp_html"><div class="ttname"><a href="hal_2io_8hpp.html">io.hpp</a></div><div class="ttdoc">Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:37</div></div>
+<div class="ttc" id="anamespacearch_html_a2b35240c0559a0074110e31570cc8b0c"><div class="ttname"><a href="namespacearch.html#a2b35240c0559a0074110e31570cc8b0c">arch::tpr_reassert_accept_all</a></div><div class="ttdeci">void tpr_reassert_accept_all() noexcept</div><div class="ttdoc">Re-assert the own-CPU TPR to ACCEPT_ALL (issue #351, slice-2). x86_64: restores the shadow + hardware...</div><div class="ttdef"><b>Definition</b> tpr_guard.hpp:44</div></div>
 <div class="ttc" id="anamespacearch_html_abf2008b4b5cca56bc6c26fe0536ed955"><div class="ttname"><a href="namespacearch.html#abf2008b4b5cca56bc6c26fe0536ed955">arch::uint8_t</a></div><div class="ttdeci">unsigned char uint8_t</div><div class="ttdef"><b>Definition</b> serial.cpp:25</div></div>
+<div class="ttc" id="anamespacearch_html_ac39f303c8b9ae112945a1c18752b3065"><div class="ttname"><a href="namespacearch.html#ac39f303c8b9ae112945a1c18752b3065">arch::per_cpu_current</a></div><div class="ttdeci">PerCpu * per_cpu_current()</div><div class="ttdoc">Get pointer to current CPU&#39;s PerCpu block.</div><div class="ttdef"><b>Definition</b> percpu.hpp:117</div></div>
 <div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
-<div class="ttc" id="apercpu_8hpp_html"><div class="ttname"><a href="percpu_8hpp.html">percpu.hpp</a></div><div class="ttdoc">Per-CPU state block (issue #94). One 4 KiB page per logical CPU, indexed by LAPIC ID / logical CPU ID...</div></div>
 <div class="ttc" id="asignal_8h_html_a08ba0dd26a850108a1746412faba2b21"><div class="ttname"><a href="signal_8h.html#a08ba0dd26a850108a1746412faba2b21">raise</a></div><div class="ttdeci">int raise(int sig)</div></div>
+<div class="ttc" id="astructarch_1_1_per_cpu_html_ac34c9d4dec46432ccb49c8bb283a9d9b"><div class="ttname"><a href="structarch_1_1_per_cpu.html#ac34c9d4dec46432ccb49c8bb283a9d9b">arch::PerCpu::tpr_shadow</a></div><div class="ttdeci">uint64_t tpr_shadow</div><div class="ttdef"><b>Definition</b> percpu.hpp:67</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
+<div class="ttc" id="ax86__64_2hal_2percpu_8hpp_html"><div class="ttname"><a href="x86__64_2hal_2percpu_8hpp.html">percpu.hpp</a></div><div class="ttdoc">Per-CPU state block (issue #94). One 4 KiB page per logical CPU, indexed by LAPIC ID / logical CPU ID...</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 </div><!-- container -->

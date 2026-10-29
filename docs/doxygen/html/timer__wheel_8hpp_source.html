@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('timer__wheel_8
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno"><a class="line" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#ad17eaa9732319a7cf304fd67fff7b315">   58</a></span>        uint32_t <a class="code hl_variable" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#ad17eaa9732319a7cf304fd67fff7b315">generation</a>;</div>
 <div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>    };</div>
 </div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keyword">static_assert</span>(<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a> &lt;= 255, <span class="stringliteral">&quot;Handle.cpu width&quot;</span>);</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>    <span class="keyword">static_assert</span>(<a class="code hl_define" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a> &lt;= 255, <span class="stringliteral">&quot;Handle.cpu width&quot;</span>);</div>
 <div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <span class="keyword">static_assert</span>(<a class="code hl_variable" href="classkernel_1_1time_1_1_timer_wheel.html#a0fb270e7f370cdd09ab5c9236d7be4fa">kMaxTimersPerCpu</a> &lt;= 256, <span class="stringliteral">&quot;Handle.slot width&quot;</span>);</div>
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span></div>
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span>    <span class="keyword">static</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="classkernel_1_1time_1_1_timer_wheel.html#ae3dcf5f24986e4e77bbd10ab010901b8">arm</a>(uint32_t cpu, uint64_t expiry_ns,</div>
@@ -192,14 +192,14 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('timer__wheel_8
 <div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>    <span class="keyword">static</span> <span class="keywordtype">void</span> ensure_init_locked() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
 <div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span> </div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>    static <a class="code hl_namespace" href="namespacekernel_1_1sync.html">sync</a>::SpinLock lock_;</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    static CpuWheel wheels_[<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>    static CpuWheel wheels_[<a class="code hl_define" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
 <div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>    static <span class="keywordtype">bool</span> initialized_;</div>
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>};</div>
 </div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span> </div>
 <div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>} <span class="comment">// namespace time</span></div>
 <div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>} <span class="comment">// namespace kernel</span></div>
-<div class="ttc" id="aaarch64_2serial_8cpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div></div>
+<div class="ttc" id="aaarch64_2hal_2percpu_8hpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div><div class="ttdoc">Maximum number of logical CPUs supported. Canonical default lives in nexios_config....</div><div class="ttdef"><b>Definition</b> percpu.hpp:38</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html">kernel::time::TimerWheel</a></div><div class="ttdoc">Per-CPU event-timer wheel with generation-tagged handles.</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:39</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a0fb270e7f370cdd09ab5c9236d7be4fa"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a0fb270e7f370cdd09ab5c9236d7be4fa">kernel::time::TimerWheel::kMaxTimersPerCpu</a></div><div class="ttdeci">static constexpr uint32_t kMaxTimersPerCpu</div><div class="ttdoc">Timer slots per CPU (static bound; scan is O(1)-amortized).</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:42</div></div>
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_a1d8f447f26e546b9beff76cee76693fe"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#a1d8f447f26e546b9beff76cee76693fe">kernel::time::TimerWheel::on_tick</a></div><div class="ttdeci">static uint32_t on_tick(uint64_t now_ns, uint32_t cpu) noexcept</div><div class="ttdoc">Tick hook: fire due expiries for one CPU (bounded). ISR-safe: try-lock, skip on contention (fires nex...</div><div class="ttdef"><b>Definition</b> timer_wheel.cpp:115</div></div>
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('timer__wheel_8
 <div class="ttc" id="aclasskernel_1_1time_1_1_timer_wheel_html_afe22fa289d6ba31f91952284741ae0b0"><div class="ttname"><a href="classkernel_1_1time_1_1_timer_wheel.html#afe22fa289d6ba31f91952284741ae0b0">kernel::time::TimerWheel::kMaxExpirePerTick</a></div><div class="ttdeci">static constexpr uint32_t kMaxExpirePerTick</div><div class="ttdoc">Max expiries fired per on_tick call (RT bound, TlbShootdown precedent). Overflow stays armed and fire...</div><div class="ttdef"><b>Definition</b> timer_wheel.hpp:45</div></div>
 <div class="ttc" id="anamespacekernel_1_1sync_html"><div class="ttname"><a href="namespacekernel_1_1sync.html">kernel::sync</a></div><div class="ttdef"><b>Definition</b> eventgroup.cpp:30</div></div>
 <div class="ttc" id="anamespacekernel_1_1time_html"><div class="ttname"><a href="namespacekernel_1_1time.html">kernel::time</a></div><div class="ttdef"><b>Definition</b> posix_time.cpp:31</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="aspinlock_8hpp_html"><div class="ttname"><a href="spinlock_8hpp.html">spinlock.hpp</a></div><div class="ttdoc">Busy-wait spinlock using atomic exchange.</div></div>

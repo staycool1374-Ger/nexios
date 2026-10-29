@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -629,6 +629,7 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Validate a handle and return its index, or -1. </p>
+<p>Caller-holds contract (issue #402 S6): call with pool_lock_ held (all in-tree callers are the guarded entry points above; direct single-threaded test calls need no lock). </p>
 
 </div>
 </div>

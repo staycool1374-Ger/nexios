@@ -23,11 +23,12 @@ var searchData=
   ['pre_5fboot_20',['PRE_BOOT',['../namespacekernel_1_1gs.html#a76856024b0a520a9012fad1026c4efaaab72a24f2df728fea75ea045bd9bafb0f',1,'kernel::gs']]],
   ['print_21',['PRINT',['../namespacekernel.html#a210a0a299a55c9ad49ab6b2b4542d270af96eee4e48ee90430f17fb3a8388507b',1,'kernel']]],
   ['progress_22',['PROGRESS',['../classkernel_1_1_scheduler.html#aafa9966e76c491b9409a666d5dfd260daee88634543eb5c2b123bab1abd32c497',1,'kernel::Scheduler']]],
-  ['pt_5fdynamic_23',['PT_DYNAMIC',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7ab451b2dd4cbe11c5da4e76a0640db6c2',1,'kernel::elf']]],
-  ['pt_5finterp_24',['PT_INTERP',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7adaa7247c566bf3bbc492e2a2c373cc2f',1,'kernel::elf']]],
-  ['pt_5fload_25',['PT_LOAD',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a52253db63b76b3709f3dc3e993e8ec6d',1,'kernel::elf']]],
-  ['pt_5fnote_26',['PT_NOTE',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a4c31012213e67538bb9b214b6c32f035',1,'kernel::elf']]],
-  ['pt_5fnull_27',['PT_NULL',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a1beec79abed6ad657d663fa56209b414',1,'kernel::elf']]],
-  ['pt_5fphdr_28',['PT_PHDR',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7ad93d86832c835403b548ec32e11c71a9',1,'kernel::elf']]],
-  ['publish_29',['Publish',['../namespacekernel.html#ad70275577c5bd4a37c1c5d01a850b233a110a4b01beabd53b661a47d4b44bd7a8',1,'kernel']]]
+  ['psci_23',['PSCI',['../namespacekernel_1_1boot.html#a8f7a486a815790fbf6e1073d2ede5fb5ad8c0665bb687cdf1ca070eed2604c477',1,'kernel::boot']]],
+  ['pt_5fdynamic_24',['PT_DYNAMIC',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7ab451b2dd4cbe11c5da4e76a0640db6c2',1,'kernel::elf']]],
+  ['pt_5finterp_25',['PT_INTERP',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7adaa7247c566bf3bbc492e2a2c373cc2f',1,'kernel::elf']]],
+  ['pt_5fload_26',['PT_LOAD',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a52253db63b76b3709f3dc3e993e8ec6d',1,'kernel::elf']]],
+  ['pt_5fnote_27',['PT_NOTE',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a4c31012213e67538bb9b214b6c32f035',1,'kernel::elf']]],
+  ['pt_5fnull_28',['PT_NULL',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7a1beec79abed6ad657d663fa56209b414',1,'kernel::elf']]],
+  ['pt_5fphdr_29',['PT_PHDR',['../namespacekernel_1_1elf.html#a93a0c5cb4a73743e4134a09a46455ac7ad93d86832c835403b548ec32e11c71a9',1,'kernel::elf']]],
+  ['publish_30',['Publish',['../namespacekernel.html#ad70275577c5bd4a37c1c5d01a850b233a110a4b01beabd53b661a47d4b44bd7a8',1,'kernel']]]
 ];

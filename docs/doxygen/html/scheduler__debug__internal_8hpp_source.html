@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__deb
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span> </div>
 <div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacekernel_1_1sched__debug.html">kernel::sched_debug</a> {</div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span></div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="keyword">extern</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_variable" href="namespacekernel_1_1sched__debug.html#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a>[<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="keyword">extern</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_variable" href="namespacekernel_1_1sched__debug.html#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a>[<a class="code hl_define" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span></div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1sched__debug.html#af9e4d2f44f2d54a3a4c1144c7bf2202f">is_poisoned_block</a>(<span class="keyword">const</span> <span class="keywordtype">void</span> *p) <span class="keyword">noexcept</span>;</div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__deb
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span> </div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>}  <span class="comment">// namespace kernel::sched_debug</span></div>
-<div class="ttc" id="aaarch64_2serial_8cpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div></div>
+<div class="ttc" id="aaarch64_2hal_2percpu_8hpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div><div class="ttdoc">Maximum number of logical CPUs supported. Canonical default lives in nexios_config....</div><div class="ttdef"><b>Definition</b> percpu.hpp:38</div></div>
 <div class="ttc" id="anamespacearch_html_ad530609e70d68f0070fd8dae621ff22a"><div class="ttname"><a href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">arch::uint64_t</a></div><div class="ttdeci">unsigned long long uint64_t</div><div class="ttdef"><b>Definition</b> serial.cpp:28</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__debug_html"><div class="ttname"><a href="namespacekernel_1_1sched__debug.html">kernel::sched_debug</a></div><div class="ttdef"><b>Definition</b> scheduler_debug.cpp:33</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__debug_html_a4ca3ef7028f1d907439e901e5b17094e"><div class="ttname"><a href="namespacekernel_1_1sched__debug.html#a4ca3ef7028f1d907439e901e5b17094e">kernel::sched_debug::debug_tick_pc_</a></div><div class="ttdeci">constinit uint64_t debug_tick_pc_[CONFIG_MAX_CPUS]</div><div class="ttdoc">Issue #225: per-CPU interrupted-PC slot for the debugger park check. Own CPU writes (timer ISR),...</div><div class="ttdef"><b>Definition</b> scheduler_debug.cpp:34</div></div>

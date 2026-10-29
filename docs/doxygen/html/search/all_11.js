@@ -24,13 +24,14 @@ var searchData=
   ['queue_5fheads_21',['queue_heads',['../structkernel_1_1_ready_queue_p_o_d.html#a59a58c05f78035ebab676ffd6b7d31ba',1,'kernel::ReadyQueuePOD']]],
   ['queue_5fmsix_22',['queue_msix',['../test__virtio__blk__req_8cpp.html#a0d4970f06edd693edcfbbd0ae087078d',1,'test_virtio_blk_req.cpp']]],
   ['queue_5fnotify_5foff_23',['queue_notify_off',['../test__virtio__blk__req_8cpp.html#ac85df60197b98323cf85f8dff0fefa57',1,'test_virtio_blk_req.cpp']]],
-  ['queue_5fremote_24',['queue_remote',['../classarch_1_1_shootdown_batch.html#a7bf540cc427d886e5d4ad7cc8e6a0409',1,'arch::ShootdownBatch']]],
+  ['queue_5fremote_24',['queue_remote',['../classarch_1_1_shootdown_batch.html#a7bf540cc427d886e5d4ad7cc8e6a0409',1,'arch::ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid)'],['../classarch_1_1_shootdown_batch.html#a8a248bd468bb33f0f8fb147cb4804bfe',1,'arch::ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid, bool all)']]],
   ['queue_5fsel_25',['queue_sel',['../test__virtio__blk__req_8cpp.html#abb2504bab2485cba474f63c4cbc68ca9',1,'test_virtio_blk_req.cpp']]],
-  ['queue_5fsize_26',['queue_size',['../structkernel_1_1net_1_1_virtio_net_device.html#a56c285ebe0937050b6663e369b8caf03',1,'kernel::net::VirtioNetDevice::queue_size'],['../test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9',1,'queue_size:&#160;test_virtio_blk_req.cpp']]],
-  ['queue_5ftails_27',['queue_tails',['../structkernel_1_1_ready_queue_p_o_d.html#af82d9d63c8f0f2f4854f9d9c365f9131',1,'kernel::ReadyQueuePOD']]],
-  ['queue_5ftarget_28',['queue_target',['../classkernel_1_1_scheduler.html#a06e0324382db7afdbdb491d3341ca23f',1,'kernel::Scheduler']]],
-  ['queuemessage_29',['QueueMessage',['../structkernel_1_1sync_1_1_queue_message.html',1,'kernel::sync']]],
-  ['quiesce_5fdepth_30',['quiesce_depth',['../classkernel_1_1_scheduler.html#ad451e4e6a8f758693464c15aa889c2cc',1,'kernel::Scheduler']]],
-  ['quiesce_5fenter_31',['quiesce_enter',['../classkernel_1_1_scheduler.html#aa2daa4d9fead7bd6421fd81b283fcaa7',1,'kernel::Scheduler']]],
-  ['quiesce_5fexit_32',['quiesce_exit',['../classkernel_1_1_scheduler.html#a5fe0e89b62ff62fbc33eac920bd0660b',1,'kernel::Scheduler']]]
+  ['queue_5fshootdown_26',['queue_shootdown',['../namespacekernel_1_1smp.html#a5a20f3156d15847b60b7a048de59e959',1,'kernel::smp']]],
+  ['queue_5fsize_27',['queue_size',['../structkernel_1_1net_1_1_virtio_net_device.html#a56c285ebe0937050b6663e369b8caf03',1,'kernel::net::VirtioNetDevice::queue_size'],['../test__virtio__blk__req_8cpp.html#aaa4d2e8d7266d47af455c8340648d3b9',1,'queue_size:&#160;test_virtio_blk_req.cpp']]],
+  ['queue_5ftails_28',['queue_tails',['../structkernel_1_1_ready_queue_p_o_d.html#af82d9d63c8f0f2f4854f9d9c365f9131',1,'kernel::ReadyQueuePOD']]],
+  ['queue_5ftarget_29',['queue_target',['../classkernel_1_1_scheduler.html#a06e0324382db7afdbdb491d3341ca23f',1,'kernel::Scheduler']]],
+  ['queuemessage_30',['QueueMessage',['../structkernel_1_1sync_1_1_queue_message.html',1,'kernel::sync']]],
+  ['quiesce_5fdepth_31',['quiesce_depth',['../classkernel_1_1_scheduler.html#ad451e4e6a8f758693464c15aa889c2cc',1,'kernel::Scheduler']]],
+  ['quiesce_5fenter_32',['quiesce_enter',['../classkernel_1_1_scheduler.html#aa2daa4d9fead7bd6421fd81b283fcaa7',1,'kernel::Scheduler']]],
+  ['quiesce_5fexit_33',['quiesce_exit',['../classkernel_1_1_scheduler.html#a5fe0e89b62ff62fbc33eac920bd0660b',1,'kernel::Scheduler']]]
 ];

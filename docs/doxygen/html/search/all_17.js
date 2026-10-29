@@ -78,8 +78,9 @@ var searchData=
   ['write_5fpinned_5fbitmap_75',['write_pinned_bitmap',['../structkernel_1_1_mem_pool_1_1_pool.html#a72d99ef9f35b74f9fcd2a0a4dfefd395',1,'kernel::MemPool::Pool']]],
   ['write_5fpos_76',['write_pos',['../structkernel_1_1vfs_1_1_pipe_buffer.html#af552d711224e3c2fd4dcaef1a489eda7',1,'kernel::vfs::PipeBuffer']]],
   ['write_5fsector_77',['write_sector',['../classkernel_1_1block_1_1_ahci_driver.html#aa99c80fea14ae9d8ecb91828c518ec87',1,'kernel::block::AhciDriver::write_sector()'],['../classkernel_1_1block_1_1_ata_pio_driver.html#a67e90318b6075777fc4494b19381c316',1,'kernel::block::AtaPioDriver::write_sector()'],['../classkernel_1_1block_1_1_block_device.html#a7b5cf59b19211ba94309727e73ffef60',1,'kernel::block::BlockDevice::write_sector()'],['../classkernel_1_1block_1_1_mock_block_device.html#abd5625d73de2742f08bd34618b788e36',1,'kernel::block::MockBlockDevice::write_sector()'],['../classkernel_1_1block_1_1_virtio_blk_driver.html#afee1d23f846e35528bd2827fa1462ea5',1,'kernel::block::VirtioBlkDriver::write_sector()']]],
-  ['write_5funlock_78',['write_unlock',['../classkernel_1_1sync_1_1_rw_lock.html#a5353b9303dc02ebea42a85e328d07c7e',1,'kernel::sync::RwLock']]],
-  ['writeclass_79',['WriteClass',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495d',1,'kernel::gs']]],
-  ['writecontext_80',['WriteContext',['../structkernel_1_1gs_1_1_write_context.html',1,'kernel::gs']]],
-  ['writer_5ftask_5fid_81',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
+  ['write_5ftpidr_5fel1_78',['write_tpidr_el1',['../namespacearch.html#ae9f22eb47a1687b1952a23a0abcfcdfc',1,'arch']]],
+  ['write_5funlock_79',['write_unlock',['../classkernel_1_1sync_1_1_rw_lock.html#a5353b9303dc02ebea42a85e328d07c7e',1,'kernel::sync::RwLock']]],
+  ['writeclass_80',['WriteClass',['../namespacekernel_1_1gs.html#a00e4c426a26710ffd22f19060907495d',1,'kernel::gs']]],
+  ['writecontext_81',['WriteContext',['../structkernel_1_1gs_1_1_write_context.html',1,'kernel::gs']]],
+  ['writer_5ftask_5fid_82',['writer_task_id',['../structkernel_1_1gs_1_1_write_context.html#a169add7020581cc5f3275ccaf8e8f736',1,'kernel::gs::WriteContext']]]
 ];

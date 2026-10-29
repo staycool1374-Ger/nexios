@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -137,11 +137,24 @@ This graph shows which files directly or indirectly include this file:</div>
 </div>
 <p><a href="dtb_8hpp_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:kernel_3A_3Aboot_3A_3ADtbCpuEntry" id="r_kernel_3A_3Aboot_3A_3ADtbCpuEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1boot_1_1_dtb_cpu_entry.html">kernel::boot::DtbCpuEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One discovered CPU node (/cpus/cpu*).  <a href="structkernel_1_1boot_1_1_dtb_cpu_entry.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:kernel" id="r_kernel"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html">kernel</a></td></tr>
 <tr class="memdesc:namespacekernel"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pull in the central configuration header. <br /></td></tr>
 <tr class="memitem:kernel_3A_3Aboot" id="r_kernel_3A_3Aboot"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html">kernel::boot</a></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a8f7a486a815790fbf6e1073d2ede5fb5" id="r_a8f7a486a815790fbf6e1073d2ede5fb5"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#a8f7a486a815790fbf6e1073d2ede5fb5">kernel::boot::CpuEnableMethod</a> : uint8_t { <a class="el" href="namespacekernel_1_1boot.html#a8f7a486a815790fbf6e1073d2ede5fb5a696b031073e74bf2cb98e5ef201d4aa3">kernel::boot::UNKNOWN</a> = 0
+, <a class="el" href="namespacekernel_1_1boot.html#a8f7a486a815790fbf6e1073d2ede5fb5ad8c0665bb687cdf1ca070eed2604c477">kernel::boot::PSCI</a> = 1
+, <a class="el" href="namespacekernel_1_1boot.html#a8f7a486a815790fbf6e1073d2ede5fb5a5b779081eb09575b014952ab79900bf1">kernel::boot::SPIN_TABLE</a> = 2
+ }</td></tr>
+<tr class="memdesc:a8f7a486a815790fbf6e1073d2ede5fb5"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU enable-method parsed from a cpu node's "enable-method". UNKNOWN covers absent (rv64 HSM-implicit) — never a boot decision.  <a href="namespacekernel_1_1boot.html#a8f7a486a815790fbf6e1073d2ede5fb5">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -153,6 +166,10 @@ Functions</h2></td></tr>
 <tr class="memdesc:abae969bafca4e0421b27619f80a785fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Decode a node's first "reg" tuple using the root #address-cells/#size-cells (1 or 2 each, default 2/2).  <br /></td></tr>
 <tr class="memitem:a1e83e8f48dcaf073fd7e5b40dbfaa6a2" id="r_a1e83e8f48dcaf073fd7e5b40dbfaa6a2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#a1e83e8f48dcaf073fd7e5b40dbfaa6a2">kernel::boot::dtb_node_cells</a> (const void *fdt, int node, const char *prop_name, uint32_t *out_cells, int max_cells, int &amp;cell_count)</td></tr>
 <tr class="memdesc:a1e83e8f48dcaf073fd7e5b40dbfaa6a2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Decode a u32-cell property (e.g. "interrupts") big-endian.  <br /></td></tr>
+<tr class="memitem:a97e92178e2f805566db1134046c73773" id="r_a97e92178e2f805566db1134046c73773"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#a97e92178e2f805566db1134046c73773">kernel::boot::dtb_walk_cpus</a> (const void *fdt, <a class="el" href="structkernel_1_1boot_1_1_dtb_cpu_entry.html">DtbCpuEntry</a> *out_entries, int max_entries)</td></tr>
+<tr class="memdesc:a97e92178e2f805566db1134046c73773"><td class="mdescLeft">&#160;</td><td class="mdescRight">Walk /cpus/cpu* nodes (issue #351 slice-1). Decodes each cpu reg with the /cpus #address-cells (probed, never assumed), parses enable-method + cpu-release-addr. Fail-closed: returns 0 on absent DTB, missing /cpus, missing/non-{1,2} #address-cells, any malformed cpu node, or more CPUs than fit (callers size by CONFIG_MAX_CPUS; overflow cannot boot safely).  <br /></td></tr>
+<tr class="memitem:a6662c2689ca26eb3d641397418c04d52" id="r_a6662c2689ca26eb3d641397418c04d52"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#a6662c2689ca26eb3d641397418c04d52">kernel::boot::dtb_psci_method</a> (const void *fdt, char *out_method, int max_len)</td></tr>
+<tr class="memdesc:a6662c2689ca26eb3d641397418c04d52"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the PSCI conduit ("smc"/"hvc") from the first "arm,psci-*" compatible node (issue #351 slice-1). Fail-closed false when no psci node, no method, or malformed.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('cap_8hpp_sourc
 <div class="ttc" id="anamespacekernel_1_1cap_html_ac4f7bad9f77ba829b23df3c4c1ae586e"><div class="ttname"><a href="namespacekernel_1_1cap.html#ac4f7bad9f77ba829b23df3c4c1ae586e">kernel::cap::retype</a></div><div class="ttdeci">int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type, size_t size, CapRights rights, uint32_t *gen_out=nullptr) noexcept</div><div class="ttdoc">Retypes the Untyped at untyped_handle in cspace into a new capability of target_type,...</div><div class="ttdef"><b>Definition</b> untyped.cpp:131</div></div>
 <div class="ttc" id="anamespacekernel_1_1cap_html_ad15ee7547df28d841aa4f7bddbe9e227"><div class="ttname"><a href="namespacekernel_1_1cap.html#ad15ee7547df28d841aa4f7bddbe9e227">kernel::cap::lookup</a></div><div class="ttdeci">KernelObject * lookup(CNode *cspace, uint64_t handle, CapType want, CapRights need_rights) noexcept</div><div class="ttdoc">Looks up handle in cspace and returns a PREFIX-reference (target-&gt;acquire() already taken) if the slo...</div><div class="ttdef"><b>Definition</b> cap.cpp:163</div></div>
 <div class="ttc" id="anamespacekernel_1_1cap_html_afdd149e43195d36c7cd1534d6aacfdf5"><div class="ttname"><a href="namespacekernel_1_1cap.html#afdd149e43195d36c7cd1534d6aacfdf5">kernel::cap::copy</a></div><div class="ttdeci">int copy(CNode *src, uint64_t src_handle, CNode *dst, uint32_t *gen_out) noexcept</div><div class="ttdoc">Capability lifecycle primitives (task context only). All return -1 on failure (invalid handle,...</div><div class="ttdef"><b>Definition</b> cap.cpp:281</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
 <div class="ttc" id="anexios__config_8h_html"><div class="ttname"><a href="nexios__config_8h.html">nexios_config.h</a></div><div class="ttdoc">Central compile-time configuration for NexIOS RTOS. All tunables currently scattered as constexpr in ...</div></div>
 <div class="ttc" id="aspinlock_8hpp_html"><div class="ttname"><a href="spinlock_8hpp.html">spinlock.hpp</a></div><div class="ttdoc">Busy-wait spinlock using atomic exchange.</div></div>

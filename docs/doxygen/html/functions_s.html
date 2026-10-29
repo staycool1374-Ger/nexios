@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -134,6 +134,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>s8&#160;:&#160;<a class="el" href="structarch_1_1_arch_context.html#a82bbbdcf4859c60afce4fa042114ec27">arch::ArchContext</a></li>
 <li>s9&#160;:&#160;<a class="el" href="structarch_1_1_arch_context.html#a72c8156cad77732cce3d5c9d790bd1b1">arch::ArchContext</a></li>
 <li>sat_add()&#160;:&#160;<a class="el" href="classkernel_1_1time_1_1_posix_time.html#a92252f1c299adc0264d49832cb813678">kernel::time::PosixTime</a></li>
+<li>satp&#160;:&#160;<a class="el" href="struct_ap_param.html#a50b601436bbcf0aef17562f4d796a8cf">ApParam</a></li>
 <li>save()&#160;:&#160;<a class="el" href="classarch_1_1_arch_context_manager.html#a77498407356bad8c8bf0aa682633edb8">arch::ArchContextManager</a></li>
 <li>save_context()&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a9f10ae084c3466bd1d69cde85e791339">kernel::TaskControlBlock</a></li>
 <li>save_rsp_to&#160;:&#160;<a class="el" href="structkernel_1_1_sched_per_cpu_pod.html#a6948ca773425b2e2a88b435daf75cb3b">kernel::SchedPerCpuPod</a>, <a class="el" href="structkernel_1_1_scheduler_1_1_sw_slots.html#aec870842b02fa2e9d6978a93e32f0d39">kernel::Scheduler::SwSlots</a></li>
@@ -150,6 +151,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>sched_ipi_handler()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler.html#a42d074c7f070204bd85737823bce150a">kernel::Scheduler</a></li>
 <li>sched_policy&#160;:&#160;<a class="el" href="structkernel_1_1_scheduler_1_1_task_fields.html#a070de214a76cbaa040b511236225ce25">kernel::Scheduler::TaskFields</a>, <a class="el" href="structkernel_1_1_task_control_block.html#af926084a10e17db27e4b1494479bcae5">kernel::TaskControlBlock</a></li>
 <li>SCHED_VECTOR&#160;:&#160;<a class="el" href="classarch_1_1_a_p_i_c.html#a119fe66aa1954384cb4b6d51758e73f2">arch::APIC</a></li>
+<li>SchedulerLockGuard()&#160;:&#160;<a class="el" href="classkernel_1_1_scheduler_lock_guard.html#ab230f7613cd55b465d412f0937fc7325">kernel::SchedulerLockGuard</a></li>
 <li>ScopedCurrentTask()&#160;:&#160;<a class="el" href="classkernel_1_1test_1_1_scoped_current_task.html#abaa46b4f89a7425f5c8618f79f766031">kernel::test::ScopedCurrentTask</a></li>
 <li>ScopedRef()&#160;:&#160;<a class="el" href="classkernel_1_1_scoped_ref.html#acb2546ff153c5e93e46d59ec1ce98cc1">kernel::ScopedRef</a></li>
 <li>ScopeGuard()&#160;:&#160;<a class="el" href="class_scope_guard.html#a75bfcbc7dc1d0b110015945b48f557ad">ScopeGuard&lt; Fn &gt;</a></li>
@@ -258,7 +260,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>slot&#160;:&#160;<a class="el" href="structkernel_1_1time_1_1_timer_wheel_1_1_handle.html#a38f6cc824dcda0e98db17539f033695e">kernel::time::TimerWheel::Handle</a></li>
 <li>slot_gen()&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#a50c1861513d5f6250caedd8a1cd72b2c">kernel::cap::CNode</a></li>
 <li>slots&#160;:&#160;<a class="el" href="classkernel_1_1cap_1_1_c_node.html#ac02e9e493dd50fbeee17b2740c095c1f">kernel::cap::CNode</a></li>
-<li>smp_tlb_shootdown_hook()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#a7d5545bc151a7c9769696e1129ac086f">kernel::VMM</a></li>
+<li>smp_tlb_shootdown_hook()&#160;:&#160;<a class="el" href="classkernel_1_1_v_m_m.html#af6604ce99223ea279bbf0b504752ff93">kernel::VMM</a></li>
 <li>snap_budget&#160;:&#160;<a class="el" href="structkernel_1_1debug_1_1_stop_event.html#a0d318504635696d3624652a1938520ce">kernel::debug::StopEvent</a></li>
 <li>snap_prio&#160;:&#160;<a class="el" href="structkernel_1_1debug_1_1_stop_event.html#ae7e70a8cce4a9e9b94d366cd0eef1913">kernel::debug::StopEvent</a></li>
 <li>snap_state&#160;:&#160;<a class="el" href="structkernel_1_1debug_1_1_stop_event.html#a15b127dbd2fdd4ca41855a0e64777f74">kernel::debug::StopEvent</a></li>
@@ -302,7 +304,9 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('functions_s.ht
 <li>st_size&#160;:&#160;<a class="el" href="structkernel_1_1elf_1_1_e_l_f64_symbol.html#a9327ad127809ac8e13630684b7646b0f">kernel::elf::ELF64Symbol</a>, <a class="el" href="structkernel_1_1vfs_1_1_vfs_stat.html#a8657640a8fe2bba00dea6939fe2f2197">kernel::vfs::VfsStat</a>, <a class="el" href="structstat.html#a040e19c8b9766f841fde8786ce9297bf">stat</a></li>
 <li>st_value&#160;:&#160;<a class="el" href="structkernel_1_1elf_1_1_e_l_f64_symbol.html#a51681f037da2182307bb1c36bdf855db">kernel::elf::ELF64Symbol</a></li>
 <li>stable_ino&#160;:&#160;<a class="el" href="structkernel_1_1vfs_1_1_vnode_ops.html#ad39eea82cdd3b7c1d324598701b6c338">kernel::vfs::VnodeOps</a></li>
+<li>stack_hh&#160;:&#160;<a class="el" href="struct_ap_param.html#ab54b7b391da99a01ba8f78fc9e4d1497">ApParam</a></li>
 <li>stack_low_water_bytes&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a946cd43cb506d35d1f57a2c13c5c6e34">kernel::TaskControlBlock</a></li>
+<li>stack_pa&#160;:&#160;<a class="el" href="struct_ap_param.html#a4318d52c7d254731a0be3f709cdf3dc2">ApParam</a></li>
 <li>stack_pdpt_phys_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a3ceaa370cd26d918c7cb88094eb4c8b1">kernel::TaskControlBlock</a></li>
 <li>stack_phys_&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a038a9cb3e854cd7adb8f25adf95e961d">kernel::TaskControlBlock</a></li>
 <li>STACK_SIZE&#160;:&#160;<a class="el" href="structkernel_1_1_task_control_block.html#a6874cf3eb23c811bdf5a3c32c600ef68">kernel::TaskControlBlock</a></li>

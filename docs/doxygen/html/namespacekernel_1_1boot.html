@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -119,8 +119,25 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:DtbCpuEntry" id="r_DtbCpuEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1boot_1_1_dtb_cpu_entry.html">DtbCpuEntry</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One discovered CPU node (/cpus/cpu*).  <a href="structkernel_1_1boot_1_1_dtb_cpu_entry.html#details">More...</a><br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
+Enumerations</h2></td></tr>
+<tr class="memitem:a8f7a486a815790fbf6e1073d2ede5fb5" id="r_a8f7a486a815790fbf6e1073d2ede5fb5"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#a8f7a486a815790fbf6e1073d2ede5fb5">CpuEnableMethod</a> : uint8_t { <a class="el" href="#a8f7a486a815790fbf6e1073d2ede5fb5a696b031073e74bf2cb98e5ef201d4aa3">UNKNOWN</a> = 0
+, <a class="el" href="#a8f7a486a815790fbf6e1073d2ede5fb5ad8c0665bb687cdf1ca070eed2604c477">PSCI</a> = 1
+, <a class="el" href="#a8f7a486a815790fbf6e1073d2ede5fb5a5b779081eb09575b014952ab79900bf1">SPIN_TABLE</a> = 2
+ }</td></tr>
+<tr class="memdesc:a8f7a486a815790fbf6e1073d2ede5fb5"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU enable-method parsed from a cpu node's "enable-method". UNKNOWN covers absent (rv64 HSM-implicit) — never a boot decision.  <a href="#a8f7a486a815790fbf6e1073d2ede5fb5">More...</a><br /></td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a97e92178e2f805566db1134046c73773" id="r_a97e92178e2f805566db1134046c73773"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a97e92178e2f805566db1134046c73773">dtb_walk_cpus</a> (const void *fdt, <a class="el" href="structkernel_1_1boot_1_1_dtb_cpu_entry.html">DtbCpuEntry</a> *out_entries, int max_entries)</td></tr>
+<tr class="memdesc:a97e92178e2f805566db1134046c73773"><td class="mdescLeft">&#160;</td><td class="mdescRight">Walk /cpus/cpu* nodes (issue #351 slice-1). Decodes each cpu reg with the /cpus #address-cells (probed, never assumed), parses enable-method + cpu-release-addr. Fail-closed: returns 0 on absent DTB, missing /cpus, missing/non-{1,2} #address-cells, any malformed cpu node, or more CPUs than fit (callers size by CONFIG_MAX_CPUS; overflow cannot boot safely).  <br /></td></tr>
+<tr class="memitem:a6662c2689ca26eb3d641397418c04d52" id="r_a6662c2689ca26eb3d641397418c04d52"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a6662c2689ca26eb3d641397418c04d52">dtb_psci_method</a> (const void *fdt, char *out_method, int max_len)</td></tr>
+<tr class="memdesc:a6662c2689ca26eb3d641397418c04d52"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the PSCI conduit ("smc"/"hvc") from the first "arm,psci-*" compatible node (issue #351 slice-1). Fail-closed false when no psci node, no method, or malformed.  <br /></td></tr>
 <tr class="memitem:ab30e6ea1b60311595c77042da157e17b" id="r_ab30e6ea1b60311595c77042da157e17b"><td class="memItemLeft">const void *&#160;</td><td class="memItemRight"><a class="el" href="#ab30e6ea1b60311595c77042da157e17b">dtb_from_boot_info</a> ()</td></tr>
 <tr class="memdesc:ab30e6ea1b60311595c77042da157e17b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validated DTB pointer from boot info, or nullptr. Checks region containment (usable or reserved RAM), HHDM aliasing, layout + structure validation. Fail-closed on any defect.  <br /></td></tr>
 <tr class="memitem:a02e7a0e863a39279a7065850c07cd847" id="r_a02e7a0e863a39279a7065850c07cd847"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a02e7a0e863a39279a7065850c07cd847">dtb_find_compatible_nodes</a> (const void *fdt, const char *compat, int *out_offsets, int max_offsets)</td></tr>
@@ -135,6 +152,39 @@ Variables</h2></td></tr>
 <tr class="memitem:aeee9cf4f6581a67535fe081f33c7087d" id="r_aeee9cf4f6581a67535fe081f33c7087d"><td class="memItemLeft">constexpr int&#160;</td><td class="memItemRight"><a class="el" href="#aeee9cf4f6581a67535fe081f33c7087d">DTB_MAX_MATCHES</a> = 32</td></tr>
 <tr class="memdesc:aeee9cf4f6581a67535fe081f33c7087d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum compatible-node matches returned per search.  <br /></td></tr>
 </table>
+<a name="doc-enum-members" id="doc-enum-members"></a><h2 id="header-doc-enum-members" class="groupheader">Enumeration Type Documentation</h2>
+<a id="a8f7a486a815790fbf6e1073d2ede5fb5" name="a8f7a486a815790fbf6e1073d2ede5fb5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f7a486a815790fbf6e1073d2ede5fb5">&#9670;&#160;</a></span>CpuEnableMethod</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">enum class <a class="el" href="#a8f7a486a815790fbf6e1073d2ede5fb5">kernel::boot::CpuEnableMethod</a> : uint8_t</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel strong">strong</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>CPU enable-method parsed from a cpu node's "enable-method". UNKNOWN covers absent (rv64 HSM-implicit) — never a boot decision. </p>
+<table class="fieldtable">
+<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="a8f7a486a815790fbf6e1073d2ede5fb5a696b031073e74bf2cb98e5ef201d4aa3" name="a8f7a486a815790fbf6e1073d2ede5fb5a696b031073e74bf2cb98e5ef201d4aa3"></a>UNKNOWN&#160;</td><td class="fielddoc"><p>No (or unrecognized) enable-method property. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a8f7a486a815790fbf6e1073d2ede5fb5ad8c0665bb687cdf1ca070eed2604c477" name="a8f7a486a815790fbf6e1073d2ede5fb5ad8c0665bb687cdf1ca070eed2604c477"></a>PSCI&#160;</td><td class="fielddoc"><p>"psci" — booted via PSCI_CPU_ON (slice-2). </p>
+</td></tr>
+<tr><td class="fieldname"><a id="a8f7a486a815790fbf6e1073d2ede5fb5a5b779081eb09575b014952ab79900bf1" name="a8f7a486a815790fbf6e1073d2ede5fb5a5b779081eb09575b014952ab79900bf1"></a>SPIN_TABLE&#160;</td><td class="fielddoc"><p>"spin-table" — boot via cpu-release-addr (slice-2). </p>
+</td></tr>
+</table>
+
+</div>
+</div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a02e7a0e863a39279a7065850c07cd847" name="a02e7a0e863a39279a7065850c07cd847"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a02e7a0e863a39279a7065850c07cd847">&#9670;&#160;</a></span>dtb_find_compatible_nodes()</h2>
@@ -287,6 +337,76 @@ Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1boot_abae969bafca4e0421b27619f80a785fb_cgraph.png" border="0" usemap="#anamespacekernel_1_1boot_abae969bafca4e0421b27619f80a785fb_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 3 -->
+</div>
+
+</div>
+</div>
+<a id="a6662c2689ca26eb3d641397418c04d52" name="a6662c2689ca26eb3d641397418c04d52"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6662c2689ca26eb3d641397418c04d52">&#9670;&#160;</a></span>dtb_psci_method()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::boot::dtb_psci_method </td>
+          <td>(</td>
+          <td class="paramtype">const void *</td>          <td class="paramname"><span class="paramname"><em>fdt</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">char *</td>          <td class="paramname"><span class="paramname"><em>out_method</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>max_len</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Read the PSCI conduit ("smc"/"hvc") from the first "arm,psci-*" compatible node (issue #351 slice-1). Fail-closed false when no psci node, no method, or malformed. </p>
+<dl class="section return"><dt>Returns</dt><dd>true with the NUL-terminated method on success. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1boot_a6662c2689ca26eb3d641397418c04d52_cgraph.png" border="0" usemap="#anamespacekernel_1_1boot_a6662c2689ca26eb3d641397418c04d52_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="a97e92178e2f805566db1134046c73773" name="a97e92178e2f805566db1134046c73773"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a97e92178e2f805566db1134046c73773">&#9670;&#160;</a></span>dtb_walk_cpus()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int kernel::boot::dtb_walk_cpus </td>
+          <td>(</td>
+          <td class="paramtype">const void *</td>          <td class="paramname"><span class="paramname"><em>fdt</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structkernel_1_1boot_1_1_dtb_cpu_entry.html">DtbCpuEntry</a> *</td>          <td class="paramname"><span class="paramname"><em>out_entries</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>max_entries</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Walk /cpus/cpu* nodes (issue #351 slice-1). Decodes each cpu reg with the /cpus #address-cells (probed, never assumed), parses enable-method + cpu-release-addr. Fail-closed: returns 0 on absent DTB, missing /cpus, missing/non-{1,2} #address-cells, any malformed cpu node, or more CPUs than fit (callers size by CONFIG_MAX_CPUS; overflow cannot boot safely). </p>
+<dl class="section return"><dt>Returns</dt><dd>cpu count stored (0 = none — caller takes the C1 halt path). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1boot_a97e92178e2f805566db1134046c73773_cgraph.png" border="0" usemap="#anamespacekernel_1_1boot_a97e92178e2f805566db1134046c73773_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 5 -->
 </div>
 
 </div>

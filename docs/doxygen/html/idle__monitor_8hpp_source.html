@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('idle__monitor_
 <div class="ttc" id="acrash__dump_8hpp_html"><div class="ttname"><a href="crash__dump_8hpp.html">crash_dump.hpp</a></div><div class="ttdoc">First-chance raw crash dump (issue #308, debugd §8.3): raw polled register dump to UART + halt,...</div></div>
 <div class="ttc" id="aether_8hpp_html_a4339559c17474d904c4e70f54aa6b2aa"><div class="ttname"><a href="ether_8hpp.html#a4339559c17474d904c4e70f54aa6b2aa">dst</a></div><div class="ttdeci">MacAddr dst</div><div class="ttdoc">Destination MAC address.</div><div class="ttdef"><b>Definition</b> ether.hpp:0</div></div>
 <div class="ttc" id="anamespacekernel_1_1task_html"><div class="ttname"><a href="namespacekernel_1_1task.html">kernel::task</a></div><div class="ttdef"><b>Definition</b> dmesg_task.cpp:21</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html_a39e8dac481c31dd6182cf722a37edf6d"><div class="ttname"><a href="namespacekernel.html#a39e8dac481c31dd6182cf722a37edf6d">kernel::idle_monitor_slice</a></div><div class="ttdeci">void idle_monitor_slice() noexcept</div><div class="ttdoc">One bounded idle-monitor slice (M1-M3). Runs the enabled scanners for CONFIG_IDLE_MONITOR_CHUNK TCBs ...</div><div class="ttdef"><b>Definition</b> idle_monitor.cpp:282</div></div>
 <div class="ttc" id="anamespacekernel_html_a557395ebdd63f7e893ea647d8a932949"><div class="ttname"><a href="namespacekernel.html#a557395ebdd63f7e893ea647d8a932949">kernel::idle_note_period_reload</a></div><div class="ttdeci">void idle_note_period_reload(TaskControlBlock &amp;t) noexcept</div><div class="ttdoc">Record a clean period boundary for t (issues #43/#283). Bumps deadline_meets (saturating) iff no miss...</div><div class="ttdef"><b>Definition</b> idle_monitor.cpp:160</div></div>
 <div class="ttc" id="anamespacekernel_html_a5b0a423c64722dbea816b61fcff3adcc"><div class="ttname"><a href="namespacekernel.html#a5b0a423c64722dbea816b61fcff3adcc">kernel::idle_scan_mem</a></div><div class="ttdeci">IdleScanProgress idle_scan_mem(IdleScanCursor &amp;cursor, uint64_t budget) noexcept</div><div class="ttdoc">Scan per-task memory counters for leak suspects (issues #43/#284, P5a). Per visited TCB per pass: out...</div><div class="ttdef"><b>Definition</b> idle_monitor.cpp:185</div></div>
@@ -219,7 +219,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('idle__monitor_
 <div class="ttc" id="astructkernel_1_1_idle_scan_progress_html_ad9ee31bd6f3e45b0232a328c1fabc7b3"><div class="ttname"><a href="structkernel_1_1_idle_scan_progress.html#ad9ee31bd6f3e45b0232a328c1fabc7b3">kernel::IdleScanProgress::scanned</a></div><div class="ttdeci">uint64_t scanned</div><div class="ttdef"><b>Definition</b> idle_monitor.hpp:43</div></div>
 <div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:232</div></div>
 <div class="ttc" id="astructkernel_1_1debug_1_1_first_chance_frame_html"><div class="ttname"><a href="structkernel_1_1debug_1_1_first_chance_frame.html">kernel::debug::FirstChanceFrame</a></div><div class="ttdoc">Arch-neutral first-chance frame. Field slots are reused per arch: x86_64: addr=CR2,...</div><div class="ttdef"><b>Definition</b> crash_dump.hpp:43</div></div>
-<div class="ttc" id="atest__stack__alloc_8cpp_html_a31ca687659b8dd5a38b9f8bf3c3bfc05"><div class="ttname"><a href="test__stack__alloc_8cpp.html#a31ca687659b8dd5a38b9f8bf3c3bfc05">stack_overflow_hook</a></div><div class="ttdeci">bool stack_overflow_hook(kernel::TaskControlBlock &amp;task, const kernel::debug::FirstChanceFrame &amp;frame)</div><div class="ttdef"><b>Definition</b> test_stack_alloc.cpp:120</div></div>
+<div class="ttc" id="atest__stack__alloc_8cpp_html_a31ca687659b8dd5a38b9f8bf3c3bfc05"><div class="ttname"><a href="test__stack__alloc_8cpp.html#a31ca687659b8dd5a38b9f8bf3c3bfc05">stack_overflow_hook</a></div><div class="ttdeci">bool stack_overflow_hook(kernel::TaskControlBlock &amp;task, const kernel::debug::FirstChanceFrame &amp;frame)</div><div class="ttdef"><b>Definition</b> test_stack_alloc.cpp:127</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

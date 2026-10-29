@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -154,12 +154,12 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('path__tracer_8
 </div>
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span> </div>
 <div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="comment">// Backing store: one chain per CPU (defined in path_tracer.cpp).</span></div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="keyword">extern</span> uint64_t <a class="code hl_variable" href="namespacekernel.html#a67b94ac0efe883462e36260fe703bfce">g_path_chain</a>[<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="keyword">extern</span> uint64_t <a class="code hl_variable" href="namespacekernel.html#a67b94ac0efe883462e36260fe703bfce">g_path_chain</a>[<a class="code hl_define" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
 <div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span></div>
 <div class="foldopen" id="foldopen00062" data-start="{" data-end="}">
 <div class="line"><a id="l00062" name="l00062"></a><span class="lineno"><a class="line" href="namespacekernel.html#a8f2fb39a6f3047468e5d7e0d47a055df">   62</a></span>[[nodiscard]] <span class="keyword">inline</span> uint64_t&amp; <a class="code hl_function" href="namespacekernel.html#a8f2fb39a6f3047468e5d7e0d47a055df">path_chain_slot</a>() <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a> {</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    uint32_t cpu = <span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(<a class="code hl_function" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a>());</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <span class="keywordflow">if</span> (cpu &gt;= <span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>)) {</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    uint32_t cpu = <span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(<a class="code hl_function" href="namespacearch.html#a61efca22542889281606077db9458129">arch::cpu_index</a>());</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>    <span class="keywordflow">if</span> (cpu &gt;= <span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(<a class="code hl_define" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>)) {</div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>        cpu = 0;</div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>    }</div>
 <div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>    <span class="keywordflow">return</span> <a class="code hl_variable" href="namespacekernel.html#a67b94ac0efe883462e36260fe703bfce">g_path_chain</a>[cpu];</div>
@@ -215,10 +215,10 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('path__tracer_8
 </div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span> </div>
 <div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>} <span class="comment">// namespace kernel</span></div>
-<div class="ttc" id="aaarch64_2serial_8cpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div></div>
+<div class="ttc" id="aaarch64_2hal_2percpu_8hpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div><div class="ttdoc">Maximum number of logical CPUs supported. Canonical default lives in nexios_config....</div><div class="ttdef"><b>Definition</b> percpu.hpp:38</div></div>
 <div class="ttc" id="acpu__context_8hpp_html"><div class="ttname"><a href="cpu__context_8hpp.html">cpu_context.hpp</a></div><div class="ttdoc">Per-CPU execution context (PfA-B, Phase 8 SMP groundwork).</div></div>
-<div class="ttc" id="anamespacearch_html_ac53772566e53832b14ccedb8d6ae2d4e"><div class="ttname"><a href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a></div><div class="ttdeci">uint64_t cpu_index() noexcept</div><div class="ttdoc">Current CPU index — single-core archs are always CPU 0.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:31</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacearch_html_a61efca22542889281606077db9458129"><div class="ttname"><a href="namespacearch.html#a61efca22542889281606077db9458129">arch::cpu_index</a></div><div class="ttdeci">uint64_t cpu_index()</div><div class="ttdoc">Current CPU&#39;s logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre...</div><div class="ttdef"><b>Definition</b> percpu.hpp:135</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html_a17e67ea7443b3545f273cbe78f7c1a12"><div class="ttname"><a href="namespacekernel.html#a17e67ea7443b3545f273cbe78f7c1a12">kernel::to_underlying</a></div><div class="ttdeci">constexpr auto to_underlying(E value) noexcept</div><div class="ttdef"><b>Definition</b> types.hpp:59</div></div>
 <div class="ttc" id="anamespacekernel_html_a22a7b2029d884e2644e18996f6d32a7a"><div class="ttname"><a href="namespacekernel.html#a22a7b2029d884e2644e18996f6d32a7a">kernel::path_checkpoint</a></div><div class="ttdeci">uint64_t path_checkpoint() noexcept</div><div class="ttdoc">Snapshot the chain for a break/resume handoff (passed by value).</div><div class="ttdef"><b>Definition</b> path_tracer.hpp:104</div></div>
 <div class="ttc" id="anamespacekernel_html_a29af56aad516c628a83f9ba5b5c8a0dd"><div class="ttname"><a href="namespacekernel.html#a29af56aad516c628a83f9ba5b5c8a0dd">kernel::k_path_mix</a></div><div class="ttdeci">constexpr uint64_t k_path_mix</div><div class="ttdoc">Odd golden-ratio constant for the order-sensitive fold.</div><div class="ttdef"><b>Definition</b> path_tracer.hpp:48</div></div>

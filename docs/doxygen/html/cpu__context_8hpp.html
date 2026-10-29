@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -152,8 +152,8 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ac53772566e53832b14ccedb8d6ae2d4e" id="r_ac53772566e53832b14ccedb8d6ae2d4e"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e">arch::cpu_index</a> () noexcept</td></tr>
-<tr class="memdesc:ac53772566e53832b14ccedb8d6ae2d4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index — single-core archs are always CPU 0.  <br /></td></tr>
+<tr class="memitem:a61efca22542889281606077db9458129" id="r_a61efca22542889281606077db9458129"><td class="memItemLeft"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a61efca22542889281606077db9458129">arch::cpu_index</a> ()</td></tr>
+<tr class="memdesc:a61efca22542889281606077db9458129"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU's logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre-TPIDR callers get 0.  <br /></td></tr>
 <tr class="memitem:a20a07952a9e22c0be3a6711567475133" id="r_a20a07952a9e22c0be3a6711567475133"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a20a07952a9e22c0be3a6711567475133">kernel::cpu_ctx</a> (uint64_t cpu)</td></tr>
 <tr class="memdesc:a20a07952a9e22c0be3a6711567475133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU execution context array (issue #25 C1). Namespace-scope (not function-static) so teardown/snapshot paths can scan all CPUs' <span class="tt">current</span> (spare-any-current, capture). First touch is on the BSP during boot (single-threaded; -fno-threadsafe-statics safe).  <br /></td></tr>
 <tr class="memitem:a777bca6dec383faa735ebe34c5bdf749" id="r_a777bca6dec383faa735ebe34c5bdf749"><td class="memItemLeft"><a class="el" href="structkernel_1_1_cpu_context.html">CpuContext</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a777bca6dec383faa735ebe34c5bdf749">kernel::current_cpu</a> ()</td></tr>

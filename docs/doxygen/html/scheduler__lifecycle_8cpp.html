@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -171,7 +171,7 @@ Variables</h2></td></tr>
 <tr class="memitem:ae9678bd39ce74f29e67d1028c705de03" id="r_ae9678bd39ce74f29e67d1028c705de03"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#ae9678bd39ce74f29e67d1028c705de03">kernel::MAX_DEFERRED_KILLS</a></td></tr>
 <tr class="memitem:a063f8b6b3d6489ea29f8bb8e42801ebf" id="r_a063f8b6b3d6489ea29f8bb8e42801ebf"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a063f8b6b3d6489ea29f8bb8e42801ebf">kernel::s_deferred_kill_count</a></td></tr>
 <tr class="memitem:aa89ba7d011f717834ed99cada28854e2" id="r_aa89ba7d011f717834ed99cada28854e2"><td class="memItemLeft">constinit <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#aa89ba7d011f717834ed99cada28854e2">kernel::s_deferred_kill_tasks</a> [<a class="el" href="namespacekernel.html#ae9678bd39ce74f29e67d1028c705de03">MAX_DEFERRED_KILLS</a>]</td></tr>
-<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6ddd4a725dcb1d1a5967b49b5c0fe09e">kernel::edf_ready_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6ddd4a725dcb1d1a5967b49b5c0fe09e">kernel::edf_ready_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Task disposal + zombie reaping for Scheduler (issue #323). Pure move out of <a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a>: no logic changes. </p>

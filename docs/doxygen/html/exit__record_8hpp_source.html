@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('exit__record_8
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span> </div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>} <span class="comment">// namespace kernel</span></div>
 <div class="ttc" id="aaarch64_2serial_8cpp_html_a8125ddc77bbb15588608c8b894dfd1f3"><div class="ttname"><a href="aarch64_2serial_8cpp.html#a8125ddc77bbb15588608c8b894dfd1f3">CONFIG_TASK_NAME_LEN</a></div><div class="ttdeci">#define CONFIG_TASK_NAME_LEN</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html_a7a3e0e56701df314c0bda1619f352aa5"><div class="ttname"><a href="namespacekernel.html#a7a3e0e56701df314c0bda1619f352aa5">kernel::idle_clear_exit_records</a></div><div class="ttdeci">void idle_clear_exit_records() noexcept</div><div class="ttdoc">Test-only reset: invalidate all ring slots.</div><div class="ttdef"><b>Definition</b> exit_record.cpp:107</div></div>
 <div class="ttc" id="anamespacekernel_html_a81f47d51c706c42c9a88694b7b62c4e8"><div class="ttname"><a href="namespacekernel.html#a81f47d51c706c42c9a88694b7b62c4e8">kernel::idle_record_task_exit</a></div><div class="ttdeci">void idle_record_task_exit(const TaskControlBlock &amp;t, uint64_t end_tick) noexcept</div><div class="ttdoc">Record a user task&#39;s exit (issues #294). Called from TaskControlBlock::cleanup() start — the universa...</div><div class="ttdef"><b>Definition</b> exit_record.cpp:40</div></div>
 <div class="ttc" id="anamespacekernel_html_a927c7ddb31b40327f97d6f3b14f09963"><div class="ttname"><a href="namespacekernel.html#a927c7ddb31b40327f97d6f3b14f09963">kernel::idle_find_exit_record</a></div><div class="ttdeci">const TaskExitRecord * idle_find_exit_record(uint64_t id) noexcept</div><div class="ttdoc">Ring entry for a specific task id (post-mortem monstat &lt;id&gt;).</div><div class="ttdef"><b>Definition</b> exit_record.cpp:95</div></div>

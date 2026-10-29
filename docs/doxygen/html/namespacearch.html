@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -162,6 +162,8 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PS/2 keyboard driver with modifier tracking and a character ring buffer.  <a href="classarch_1_1_keyboard.html#details">More...</a><br /></td></tr>
 <tr class="memitem:PciBdf" id="r_PciBdf"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">PCI Bus:Device.Function address.  <a href="structarch_1_1_pci_bdf.html#details">More...</a><br /></td></tr>
+<tr class="memitem:PerCpu" id="r_PerCpu"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_per_cpu.html">PerCpu</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU state block (4 KiB-aligned, one page per logical CPU). Migrates global state that must be per-CPU under SMP.  <a href="structarch_1_1_per_cpu.html#details">More...</a><br /></td></tr>
 <tr class="memitem:QemuDebugcon" id="r_QemuDebugcon"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_qemu_debugcon.html">QemuDebugcon</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimal, lock-free writer to the QEMU debugcon device (I/O port 0xE9). On non-x86_64 targets every method is a no-op so the class can be called unconditionally from shared logging code.  <a href="classarch_1_1_qemu_debugcon.html#details">More...</a><br /></td></tr>
 <tr class="memitem:RTC" id="r_RTC"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_r_t_c.html">RTC</a></td></tr>
@@ -306,6 +308,8 @@ Functions</h2></td></tr>
 <tr class="memitem:addb0aafa44f85ad234abeacf6a11a2a5" id="r_addb0aafa44f85ad234abeacf6a11a2a5"><td class="memItemLeft">volatile <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#addb0aafa44f85ad234abeacf6a11a2a5">gicc_reg</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> offset)</td></tr>
 <tr class="memitem:a4da73406011eca3290f9e1baebeb720e" id="r_a4da73406011eca3290f9e1baebeb720e"><td class="memItemLeft">volatile <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a4da73406011eca3290f9e1baebeb720e">gicr_rd_reg</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> offset)</td></tr>
 <tr class="memitem:a0be0121227150927d9c3e750b7d86455" id="r_a0be0121227150927d9c3e750b7d86455"><td class="memItemLeft">volatile <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0be0121227150927d9c3e750b7d86455">gicr_sgi_reg</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> offset)</td></tr>
+<tr class="memitem:a9f7fa7c0c625f76e7e93134ec97ccce4" id="r_a9f7fa7c0c625f76e7e93134ec97ccce4"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a9f7fa7c0c625f76e7e93134ec97ccce4">gicr_frame_for_aff0</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> aff0)</td></tr>
+<tr class="memdesc:a9f7fa7c0c625f76e7e93134ec97ccce4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find this CPU's redistributor RD frame by MPIDR Aff0 (#351 s2). Spec-correct TYPER match (never a stride assumption): bounded scan over CONFIG_MAX_CPUS frames, first Aff0 match wins, 0 on no match.  <br /></td></tr>
 <tr class="memitem:aa70c4f9e280b82ea0bed328d85e005d0" id="r_aa70c4f9e280b82ea0bed328d85e005d0"><td class="memItemLeft"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa70c4f9e280b82ea0bed328d85e005d0">gic_version</a> ()</td></tr>
 <tr class="memdesc:aa70c4f9e280b82ea0bed328d85e005d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">GIC version from GICD_PIDR2[7:4] (2 = v2, &gt;= 3 = v3). 0/unreadable fails safe to v2; GICD_TYPER[15:11] is NOT a version field.  <br /></td></tr>
 <tr class="memitem:af5ed23cd28797ee6a7a5d9948a2ae11d" id="r_af5ed23cd28797ee6a7a5d9948a2ae11d"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af5ed23cd28797ee6a7a5d9948a2ae11d">gicd_ipriority_off</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> intid)</td></tr>
@@ -317,13 +321,39 @@ Functions</h2></td></tr>
 <tr class="memitem:a423093796d3edd68a735238befb10eab" id="r_a423093796d3edd68a735238befb10eab"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a423093796d3edd68a735238befb10eab">gicd_icfgr_shift</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> intid)</td></tr>
 <tr class="memitem:a8e031cebcfc6e30ae2bc146a6ae85221" id="r_a8e031cebcfc6e30ae2bc146a6ae85221"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8e031cebcfc6e30ae2bc146a6ae85221">gicd_bank</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> intid)</td></tr>
 <tr class="memdesc:a8e031cebcfc6e30ae2bc146a6ae85221"><td class="mdescLeft">&#160;</td><td class="mdescRight">Word index of an INTID's enable bank (0-7).  <br /></td></tr>
+<tr class="memitem:ab28ce5abdad030159a8ee8afbe48e7a9" id="r_ab28ce5abdad030159a8ee8afbe48e7a9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab28ce5abdad030159a8ee8afbe48e7a9">gic_send_sgi</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> target_cpu, <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> intid)</td></tr>
+<tr class="memdesc:ab28ce5abdad030159a8ee8afbe48e7a9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a software-generated interrupt to one CPU (#351 slice-2). v2 path: GICD_SGIR with target-list filter (bit n = CPU interface n, valid for the 8-CPU CONFIG_MAX_CPUS build). v3 path: ICC_SGI1R_EL1 with Aff1 = 0, TargetList = (1 &lt;&lt; cpu) (single-cluster QEMU virt: Aff3 == Aff2 == 0, Aff0 selects the list bit). Fail-closed false on out-of-range cpu/intid; never programs reserved INTIDs.  <br /></td></tr>
+<tr class="memitem:adabc32bf1756fd112eae8ac6b38217eb" id="r_adabc32bf1756fd112eae8ac6b38217eb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#adabc32bf1756fd112eae8ac6b38217eb">gic_ap_init</a> ()</td></tr>
+<tr class="memdesc:adabc32bf1756fd112eae8ac6b38217eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-AP GIC CPU-interface enable (#351 slice-2). GIC CPU interfaces are banked per CPU at shared addresses: the BSP init in interrupt_controller.cpp only programs the BSP's bank, so each AP must enable its own. v2: GICC_PMR + GICC_CTLR (PPI enables live in the shared distributor, BSP-owned). v3: own redistributor frame (wake + PPI 30 + SGIs) plus SRE/PMR/IGRPEN1 (system registers, inherently per-CPU). Runs on the AP itself (own bank/frame).  <br /></td></tr>
+<tr class="memitem:ab2d1354d590df2cc604fcbd6c3fc09cc" id="r_ab2d1354d590df2cc604fcbd6c3fc09cc"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab2d1354d590df2cc604fcbd6c3fc09cc">gic_enable_sgi</a> ()</td></tr>
+<tr class="memdesc:ab2d1354d590df2cc604fcbd6c3fc09cc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable the kernel SGI set for SMP (#351 slice-2). Called from bring_up() only (never on single-CPU runs, never from the shared init path — the existing tests observe the BSP init bit-exact). Enables only (no distributor clears: the SGI pending state is sender-owned — a clear-all would need per-CPU ACKED-idle guarantees this early context cannot provide). v2: distributor (shared bank). v3: own redistributor frame (the AP frames are enabled by gic_ap_init on each AP).  <br /></td></tr>
+<tr class="memitem:a6bf6be7461724bf9c6023cbd2e38790c" id="r_a6bf6be7461724bf9c6023cbd2e38790c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6bf6be7461724bf9c6023cbd2e38790c">percpu_init_bsp</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> bsp_mpidr)</td></tr>
+<tr class="memdesc:a6bf6be7461724bf9c6023cbd2e38790c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize per-CPU state for the BSP (CPU 0). Called early in arch init before any ISR can run; points TPIDR_EL1 at per_cpu[0].  <br /></td></tr>
+<tr class="memitem:a31ec0fff9a609a9b06bf55116f93419d" id="r_a31ec0fff9a609a9b06bf55116f93419d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a31ec0fff9a609a9b06bf55116f93419d">percpu_init_ap</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> logical_id, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> ap_mpidr)</td></tr>
+<tr class="memdesc:a31ec0fff9a609a9b06bf55116f93419d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize per-CPU state for an AP. Called by the AP entry stub after setting its stack, before enabling interrupts on that CPU.  <br /></td></tr>
+<tr class="memitem:a508ee1d241a2e92f2869fd5c7e2b0904" id="r_a508ee1d241a2e92f2869fd5c7e2b0904"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a508ee1d241a2e92f2869fd5c7e2b0904">read_tpidr_el1</a> ()</td></tr>
+<tr class="memdesc:a508ee1d241a2e92f2869fd5c7e2b0904"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read TPIDR_EL1 (per-CPU base register).  <br /></td></tr>
+<tr class="memitem:ae9f22eb47a1687b1952a23a0abcfcdfc" id="r_ae9f22eb47a1687b1952a23a0abcfcdfc"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae9f22eb47a1687b1952a23a0abcfcdfc">write_tpidr_el1</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> base_value)</td></tr>
+<tr class="memdesc:ae9f22eb47a1687b1952a23a0abcfcdfc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write TPIDR_EL1 (per-CPU base register).  <br /></td></tr>
+<tr class="memitem:a332b597a0689353ebfa086cf507d4b7c" id="r_a332b597a0689353ebfa086cf507d4b7c"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a332b597a0689353ebfa086cf507d4b7c">read_mpidr_el1</a> ()</td></tr>
+<tr class="memdesc:a332b597a0689353ebfa086cf507d4b7c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read MPIDR_EL1 (multiprocessor affinity register).  <br /></td></tr>
+<tr class="memitem:a895eb0962fff5b7a2a9021efddd26b5d" id="r_a895eb0962fff5b7a2a9021efddd26b5d"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a895eb0962fff5b7a2a9021efddd26b5d">mpidr_aff0</a> ()</td></tr>
+<tr class="memdesc:a895eb0962fff5b7a2a9021efddd26b5d"><td class="mdescLeft">&#160;</td><td class="mdescRight">MPIDR Aff0 field (level-0 affinity = aa64 cpu id in DTB reg). Slice-0 gates secondaries on Aff0 == 0; slice-2 maps DTB reg to this.  <br /></td></tr>
+<tr class="memitem:ac39f303c8b9ae112945a1c18752b3065" id="r_ac39f303c8b9ae112945a1c18752b3065"><td class="memItemLeft"><a class="el" href="structarch_1_1_per_cpu.html">PerCpu</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac39f303c8b9ae112945a1c18752b3065">per_cpu_current</a> ()</td></tr>
+<tr class="memdesc:ac39f303c8b9ae112945a1c18752b3065"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get pointer to current CPU's <a class="el" href="structarch_1_1_per_cpu.html" title="Per-CPU state block (4 KiB-aligned, one page per logical CPU). Migrates global state that must be per...">PerCpu</a> block.  <br /></td></tr>
+<tr class="memitem:afa3ff42a2158d5cb9c545cc85adfcce1" id="r_afa3ff42a2158d5cb9c545cc85adfcce1"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afa3ff42a2158d5cb9c545cc85adfcce1">cpu_id</a> ()</td></tr>
+<tr class="memdesc:afa3ff42a2158d5cb9c545cc85adfcce1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get current CPU's logical ID (index in per_cpu array).  <br /></td></tr>
+<tr class="memitem:a61efca22542889281606077db9458129" id="r_a61efca22542889281606077db9458129"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a61efca22542889281606077db9458129">cpu_index</a> ()</td></tr>
+<tr class="memdesc:a61efca22542889281606077db9458129"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU's logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre-TPIDR callers get 0.  <br /></td></tr>
+<tr class="memitem:a4468e264f15df485a08e31e5c9301d76" id="r_a4468e264f15df485a08e31e5c9301d76"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4468e264f15df485a08e31e5c9301d76">cpu_mpidr</a> ()</td></tr>
+<tr class="memdesc:a4468e264f15df485a08e31e5c9301d76"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get current CPU's MPIDR value.  <br /></td></tr>
 <tr class="memitem:a46488b8cc19b71e9d4bd3d8ea44603e4" id="r_a46488b8cc19b71e9d4bd3d8ea44603e4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a46488b8cc19b71e9d4bd3d8ea44603e4">exception_entry</a> (void)</td></tr>
 <tr class="memitem:ac7375681b455a01cbd2c161dbb0409c2" id="r_ac7375681b455a01cbd2c161dbb0409c2"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ac7375681b455a01cbd2c161dbb0409c2">gic_redist_ready</a> ()</td></tr>
 <tr class="memdesc:ac7375681b455a01cbd2c161dbb0409c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Redistributor wake state (issue #198): true when the GICv3 redistributor reports Children_Online, or when the GICv2 path read-back proves the distributor and CPU interface are enabled.  <br /></td></tr>
 <tr class="memitem:af44c28e0176ac64b504464bbd30f31b2" id="r_af44c28e0176ac64b504464bbd30f31b2"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af44c28e0176ac64b504464bbd30f31b2">handle_gic_irq</a> (void)</td></tr>
 <tr class="memdesc:af44c28e0176ac64b504464bbd30f31b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">IRQ handler called from vectors.S. Dispatches acknowledged INTIDs via the <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> table. Spurious values (&gt;= 1020) are never EOI'd and never dispatched; the timer INTID is never fed to the storm limiter.  <br /></td></tr>
-<tr class="memitem:a02f1e46be9bd915e24696367061cebf5" id="r_a02f1e46be9bd915e24696367061cebf5"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a02f1e46be9bd915e24696367061cebf5">aarch64_el0_fault_handler</a> ()</td></tr>
-<tr class="memdesc:a02f1e46be9bd915e24696367061cebf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issues #184/#28). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, mark the faulting task TERMINATED (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller applies the pending switch via irq_context_switch_common; if no task is current (no user context to kill) park as a last resort. A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED.  <br /></td></tr>
+<tr class="memitem:aec89ff2b4c047fa45c2dc44ed2fb7104" id="r_aec89ff2b4c047fa45c2dc44ed2fb7104"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aec89ff2b4c047fa45c2dc44ed2fb7104">aarch64_el0_fault_handler</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *frame)</td></tr>
+<tr class="memdesc:aec89ff2b4c047fa45c2dc44ed2fb7104"><td class="mdescLeft">&#160;</td><td class="mdescRight">EL0 synchronous-fault handler called from vectors.S (issues #184/#28, #435 seam). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, then: recover-first via g_user_access_recover_ip (frame ELR slot patched, resume), else debugger stop routing for attached targets, else the guard arm (#434 P3, mirrors the EL1 arm per its §369 comment: same/lower-EL data abort whose FAR falls in the faulting task's kslot guard page routes to the stack_overflow_hook-else-halt path with STACK_OVERFLOW cause — x86 #PF parity), else mark the faulting task TERMINATED (exit_code = -SIGSEGV) and switch off it, mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller restores + erets on a 0 return, else applies the pending switch via irq_context_switch_common; if no switch is armed (no user context to kill, or a debugger park which arms none) the asm parks as a last resort (the fault frame stays on the stack for the debugger). A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED.  <br /></td></tr>
 <tr class="memitem:a3269bc0a72901a59c9d013f16c8d903a" id="r_a3269bc0a72901a59c9d013f16c8d903a"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3269bc0a72901a59c9d013f16c8d903a">aarch64_last_el0_esr</a> ()</td></tr>
 <tr class="memdesc:a3269bc0a72901a59c9d013f16c8d903a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Post-mortem readback of the last latched EL0 fault ESR (tests).  <br /></td></tr>
 <tr class="memitem:ad0544cadf57e71287631554450452dfd" id="r_ad0544cadf57e71287631554450452dfd"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad0544cadf57e71287631554450452dfd">aarch64_el1_unexpected_fault</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> esr, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> far, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> elr, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sp)</td></tr>
@@ -332,8 +362,6 @@ Functions</h2></td></tr>
 <tr class="memitem:aacc243b6f6ab0bbbab1c9d54e9d1be70" id="r_aacc243b6f6ab0bbbab1c9d54e9d1be70"><td class="memItemLeft">void *&#160;</td><td class="memItemRight"><a class="el" href="#aacc243b6f6ab0bbbab1c9d54e9d1be70">operator new[]</a> (unsigned long size, void *ptr) noexcept</td></tr>
 <tr class="memitem:a1c35ec53665b5bbb1c2a397c7fc19ee6" id="r_a1c35ec53665b5bbb1c2a397c7fc19ee6"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1c35ec53665b5bbb1c2a397c7fc19ee6">panic</a> (const char *msg)</td></tr>
 <tr class="memdesc:a1c35ec53665b5bbb1c2a397c7fc19ee6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Overridable assertion macro. Default calls panic on failure.  <br /></td></tr>
-<tr class="memitem:ac53772566e53832b14ccedb8d6ae2d4e" id="r_ac53772566e53832b14ccedb8d6ae2d4e"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac53772566e53832b14ccedb8d6ae2d4e">cpu_index</a> () noexcept</td></tr>
-<tr class="memdesc:ac53772566e53832b14ccedb8d6ae2d4e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index — single-core archs are always CPU 0.  <br /></td></tr>
 <tr class="memitem:a318349d7944f3819f6c02c2aea00a826" id="r_a318349d7944f3819f6c02c2aea00a826"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a318349d7944f3819f6c02c2aea00a826">cache_clean</a> (const void *addr, <a class="el" href="#ab14cee44c8235473f34c47e6a358dd52">size_t</a> len)</td></tr>
 <tr class="memitem:a3000d98b07ed8e714c76ab14ccefeac0" id="r_a3000d98b07ed8e714c76ab14ccefeac0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3000d98b07ed8e714c76ab14ccefeac0">cache_invalidate</a> (const void *addr, <a class="el" href="#ab14cee44c8235473f34c47e6a358dd52">size_t</a> len)</td></tr>
 <tr class="memitem:aab3f8c5c67ebf3a8dd1516342f0fbc19" id="r_aab3f8c5c67ebf3a8dd1516342f0fbc19"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aab3f8c5c67ebf3a8dd1516342f0fbc19">cache_clean_invalidate</a> (const void *addr, <a class="el" href="#ab14cee44c8235473f34c47e6a358dd52">size_t</a> len)</td></tr>
@@ -367,12 +395,18 @@ Functions</h2></td></tr>
 <tr class="memitem:a0ea0ef50c2f375bdb4d4af2539105e37" id="r_a0ea0ef50c2f375bdb4d4af2539105e37"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0ea0ef50c2f375bdb4d4af2539105e37">iopb_ledger_clear_cap</a> (const void *)</td></tr>
 <tr class="memitem:ad518318ebe04c089b55a675f854895b9" id="r_ad518318ebe04c089b55a675f854895b9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad518318ebe04c089b55a675f854895b9">iopb_ledger_drop_task</a> (<a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;)</td></tr>
 <tr class="memitem:a7e628bb18aba285a4f22724b767ea9e2" id="r_a7e628bb18aba285a4f22724b767ea9e2"><td class="memItemLeft"><a class="el" href="#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7e628bb18aba285a4f22724b767ea9e2">iopb_grant_count</a> (const <a class="el" href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a> &amp;)</td></tr>
+<tr class="memitem:ace1f180b4549d373e8d6e7bd004c9348" id="r_ace1f180b4549d373e8d6e7bd004c9348"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ace1f180b4549d373e8d6e7bd004c9348">send_resched_ipi</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu) noexcept</td></tr>
+<tr class="memdesc:ace1f180b4549d373e8d6e7bd004c9348"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a reschedule IPI to a CPU (issue #351, slice-4). The caller owns the wake payload (shared wake mailbox published before this call on x86/aa64; rv64 sets its own mailbox bit here). x86_64: LAPIC FIXED IPI with SCHED_VECTOR (moved verbatim from <a class="el" href="scheduler__registry_8cpp.html" title="Task registry + task-set administration for Scheduler (issue #323). Pure move out of scheduler....">scheduler_registry.cpp</a>). aarch64: SGI SMP_SCHED_SGI to the CPU's Aff0 (GIC targets are Aff0, not the logical index). riscv64: forwards to <a class="el" href="namespacekernel_1_1smp.html#a664b2ec65b4641e289ec751e4b85d27d">kernel::smp::send_resched_ipi</a> (mailbox RESCHED bit + legacy SBI hart-mask ecall, C2: present in QEMU virt OpenSBI).  <br /></td></tr>
+<tr class="memitem:a43bb84f17f1d74b9666828f5ef064db9" id="r_a43bb84f17f1d74b9666828f5ef064db9"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a43bb84f17f1d74b9666828f5ef064db9">send_shootdown_ipi</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu) noexcept</td></tr>
+<tr class="memdesc:a43bb84f17f1d74b9666828f5ef064db9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a TLB-shootdown IPI to a CPU (issue #351, slice-4). Batch framing stays with the caller (queue/flush/apply); this only delivers the notification. x86_64: LAPIC FIXED IPI with SHOOTDOWN_BATCH_VECTOR (moved verbatim from flush_target). aarch64: SGI SMP_SHOOTDOWN_SGI to the CPU's Aff0 (the slice-5 handler owns the apply side). riscv64: forwards to <a class="el" href="namespacekernel_1_1smp.html#af449dcaefceb32a60f421c23db666cfe">kernel::smp::send_shootdown_ipi</a> (mailbox SHOOTDOWN bit + legacy SBI hart-mask ecall, same C2 contract as the resched leg).  <br /></td></tr>
 <tr class="memitem:a395eecc195f20c574c4e92334873411d" id="r_a395eecc195f20c574c4e92334873411d"><td class="memItemLeft">constexpr <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a395eecc195f20c574c4e92334873411d">irq_cap_vector_min</a> ()</td></tr>
 <tr class="memdesc:a395eecc195f20c574c4e92334873411d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Lowest user-claimable IRQ vector (inclusive).  <br /></td></tr>
 <tr class="memitem:a59d331ed0d211d0d3a004bef5b5d0137" id="r_a59d331ed0d211d0d3a004bef5b5d0137"><td class="memItemLeft">constexpr <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a59d331ed0d211d0d3a004bef5b5d0137">irq_cap_vector_max</a> ()</td></tr>
 <tr class="memdesc:a59d331ed0d211d0d3a004bef5b5d0137"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest user-claimable IRQ vector (inclusive).  <br /></td></tr>
 <tr class="memitem:a8f07e98afface06082cfc0e6f1582ed3" id="r_a8f07e98afface06082cfc0e6f1582ed3"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a8f07e98afface06082cfc0e6f1582ed3">irq_cap_vector_valid</a> (<a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> vector)</td></tr>
 <tr class="memdesc:a8f07e98afface06082cfc0e6f1582ed3"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when <code class="param">vector</code> lies in the user-claimable window.  <br /></td></tr>
+<tr class="memitem:a2b35240c0559a0074110e31570cc8b0c" id="r_a2b35240c0559a0074110e31570cc8b0c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2b35240c0559a0074110e31570cc8b0c">tpr_reassert_accept_all</a> () noexcept</td></tr>
+<tr class="memdesc:a2b35240c0559a0074110e31570cc8b0c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Re-assert the own-CPU TPR to ACCEPT_ALL (issue #351, slice-2). x86_64: restores the shadow + hardware class (quiesce windows must not resume masked — INV-TPR1). Other arches: no TPR exists, no-op. Byte-identical x86 behavior; lets shared scheduler TUs call this without CONFIG_ARCH guards (the slice-4 IPI interface extends the same pattern to reschedule/shootdown delivery).  <br /></td></tr>
 <tr class="memitem:a1006eef2991681cab2be76527b4877e3" id="r_a1006eef2991681cab2be76527b4877e3"><td class="memItemLeft">const PciEcamInfo &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a1006eef2991681cab2be76527b4877e3">pci_ecam_info</a> ()</td></tr>
 <tr class="memitem:ad3d99a7e474cab3a76f23b358052d6fe" id="r_ad3d99a7e474cab3a76f23b358052d6fe"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad3d99a7e474cab3a76f23b358052d6fe">pci_ecam_discover</a> ()</td></tr>
 <tr class="memitem:adf555b81d7d72b5c61d212eaf1aa1e69" id="r_adf555b81d7d72b5c61d212eaf1aa1e69"><td class="memItemLeft"><a class="el" href="#ab14cee44c8235473f34c47e6a358dd52">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#adf555b81d7d72b5c61d212eaf1aa1e69">pci_scan_all</a> ()</td></tr>
@@ -393,6 +427,10 @@ Functions</h2></td></tr>
 <tr class="memitem:ab73dfb2ec66dbef323c5e5cd372e3ff8" id="r_ab73dfb2ec66dbef323c5e5cd372e3ff8"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#ab73dfb2ec66dbef323c5e5cd372e3ff8">pci_msix_entry_set_masked</a> (const PciMsixTableInfo &amp;tbl, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry, bool masked)</td></tr>
 <tr class="memitem:a064392a919e573428b1ba326b8cdb64d" id="r_a064392a919e573428b1ba326b8cdb64d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a064392a919e573428b1ba326b8cdb64d">pci_msix_entry_masked</a> (const PciMsixTableInfo &amp;tbl, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry)</td></tr>
 <tr class="memitem:ab8a3d0ed72e0355f607878da738a53e4" id="r_ab8a3d0ed72e0355f607878da738a53e4"><td class="memItemLeft"><a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab8a3d0ed72e0355f607878da738a53e4">pci_enable_msix</a> (<a class="el" href="structarch_1_1_pci_bdf.html">PciBdf</a> bdf, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> entry, <a class="el" href="#abf2008b4b5cca56bc6c26fe0536ed955">uint8_t</a> apic_id)</td></tr>
+<tr class="memitem:a64a9486d181a7cb05e19c5d292bb602b" id="r_a64a9486d181a7cb05e19c5d292bb602b"><td class="memItemLeft"><a class="el" href="structarch_1_1_per_cpu.html">PerCpu</a> *const arch_per_cpu_base&#160;</td><td class="memItemRight"><a class="el" href="#a64a9486d181a7cb05e19c5d292bb602b">__attribute__</a> ((used))</td></tr>
+<tr class="memdesc:a64a9486d181a7cb05e19c5d292bb602b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Linkage anchor for the trap entry (issue #351 S3 fix-2). Holds &amp;per_cpu[0] as a C-linkage constant so assembly can derive the current hart's slot index as (tp - base) &gt;&gt; 12 without a PC-relative reference to the C++-mangled array (out of range is impossible here: same linkage unit, absolute address materialized by the linker). Marked used: no C++ TU references it, only syscall_entry.S.  <br /></td></tr>
+<tr class="memitem:aa4064193135ad5146c2ec495fd7d5125" id="r_aa4064193135ad5146c2ec495fd7d5125"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa4064193135ad5146c2ec495fd7d5125">cpu_hartid</a> ()</td></tr>
+<tr class="memdesc:aa4064193135ad5146c2ec495fd7d5125"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get current hart's hardware hart ID.  <br /></td></tr>
 <tr class="memitem:ae035b7cc5b725012469b59d037ab15b7" id="r_ae035b7cc5b725012469b59d037ab15b7"><td class="memItemLeft">volatile <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ae035b7cc5b725012469b59d037ab15b7">plic_priority_reg</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> irq)</td></tr>
 <tr class="memitem:a6807f252e313e023fb6310b60223e4f6" id="r_a6807f252e313e023fb6310b60223e4f6"><td class="memItemLeft">volatile <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a6807f252e313e023fb6310b60223e4f6">plic_enable_reg</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> irq)</td></tr>
 <tr class="memitem:ad8cf1975e657fd548aa97fd3c37f812e" id="r_ad8cf1975e657fd548aa97fd3c37f812e"><td class="memItemLeft"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad8cf1975e657fd548aa97fd3c37f812e">plic_claim</a> ()</td></tr>
@@ -411,6 +449,10 @@ Functions</h2></td></tr>
 <tr class="memdesc:a3cb78a7a28f7e308e1fd8ed7d5c5ec49"><td class="mdescLeft">&#160;</td><td class="mdescRight">Claim the highest-priority pending S-context interrupt (0 = none).  <br /></td></tr>
 <tr class="memitem:a9c334ce3c7ea35a00c604492d02160b9" id="r_a9c334ce3c7ea35a00c604492d02160b9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9c334ce3c7ea35a00c604492d02160b9">plic_complete_s</a> (<a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> intid)</td></tr>
 <tr class="memdesc:a9c334ce3c7ea35a00c604492d02160b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Complete an S-context interrupt (must match the claim).  <br /></td></tr>
+<tr class="memitem:acc53a9777361ad047e0cdff4c050f76a" id="r_acc53a9777361ad047e0cdff4c050f76a"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#acc53a9777361ad047e0cdff4c050f76a">plic_s_context_for_hart</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> hart_id)</td></tr>
+<tr class="memdesc:acc53a9777361ad047e0cdff4c050f76a"><td class="mdescLeft">&#160;</td><td class="mdescRight">S-context index for a hart's S-mode (M-mode takes even slots).  <br /></td></tr>
+<tr class="memitem:a0105e96ddd9d29e556c9ffd9d6a8b115" id="r_a0105e96ddd9d29e556c9ffd9d6a8b115"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a0105e96ddd9d29e556c9ffd9d6a8b115">plic_threshold_s_for_hart</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> hart_id, <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> threshold)</td></tr>
+<tr class="memdesc:a0105e96ddd9d29e556c9ffd9d6a8b115"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the priority threshold for a hart's S-context. Each AP programs its own frame (thresholds are per-context banks); the BSP frame stays owned by interrupt_controller.cpp init.  <br /></td></tr>
 <tr class="memitem:abcb80cfbe5c335ca7659697f28452a7b" id="r_abcb80cfbe5c335ca7659697f28452a7b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abcb80cfbe5c335ca7659697f28452a7b">handle_plic_trap</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> scause, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sepc, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *regs)</td></tr>
 <tr class="memitem:aa8b1a91c0b864176494c1d844f21da2e" id="r_aa8b1a91c0b864176494c1d844f21da2e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa8b1a91c0b864176494c1d844f21da2e">handle_kernel_exception</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sepc, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> scause, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> stval, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> sp)</td></tr>
 <tr class="memdesc:aa8b1a91c0b864176494c1d844f21da2e"><td class="mdescLeft">&#160;</td><td class="mdescRight">S-mode kernel-fault handler (issue #308 first-chance path): raw register frame over SBI console transport, then halt - no Logger formatting (Logger may be the casualty), no recovery, no SBI shutdown (preserves post-mortem). Transport stays raw SBI console_putchar (a7=1), extended with SP + SATP.  <br /></td></tr>
@@ -438,8 +480,6 @@ Functions</h2></td></tr>
 <tr class="memdesc:a6a7ecf8ae48d16d94a24a43addc6ea79"><td class="mdescLeft">&#160;</td><td class="mdescRight">Restore hardware truth after forced testing (g_supported = has_pcid()). Called by tests at exit and by test isolation on restore.  <br /></td></tr>
 <tr class="memitem:a26f0cec80cb2aa23810e6f3b3a1afad1" id="r_a26f0cec80cb2aa23810e6f3b3a1afad1"><td class="memItemLeft"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a26f0cec80cb2aa23810e6f3b3a1afad1">pcid_tag</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> pml4_phys, <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> pcid)</td></tr>
 <tr class="memdesc:a26f0cec80cb2aa23810e6f3b3a1afad1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Tag a PML4 phys with a PCID for CR3 publish (0 → raw phys). Hot path: single compare; <a class="el" href="#a9153f47be5d498ed8fa40d683e328eb4" title="Allocate a user PCID (1..4095), or 0 when unsupported. On exhaustion: epoch bump + one global flush,...">pcid_alloc()</a> only returns nonzero when tagging is active, so no support check is needed here.  <br /></td></tr>
-<tr class="memitem:aa083df7d97e20366e210c1f978abed5d" id="r_aa083df7d97e20366e210c1f978abed5d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa083df7d97e20366e210c1f978abed5d">percpu_init_bsp</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> bsp_lapic_id)</td></tr>
-<tr class="memitem:ae41ccc115f18da2b4a867210a1a99cd0" id="r_ae41ccc115f18da2b4a867210a1a99cd0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae41ccc115f18da2b4a867210a1a99cd0">percpu_init_ap</a> (<a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> logical_id, <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> lapic_id)</td></tr>
 <tr class="memitem:adeb086e00e87dde9321e77807fa32946" id="r_adeb086e00e87dde9321e77807fa32946"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#adeb086e00e87dde9321e77807fa32946">__attribute__</a> ((weak)) void <a class="el" href="#a88942d15172240805fdfd401a1f68c04">crash_halt</a>() noexcept</td></tr>
 <tr class="memitem:a88942d15172240805fdfd401a1f68c04" id="r_a88942d15172240805fdfd401a1f68c04"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a88942d15172240805fdfd401a1f68c04">crash_halt</a> () noexcept</td></tr>
 <tr class="memdesc:a88942d15172240805fdfd401a1f68c04"><td class="mdescLeft">&#160;</td><td class="mdescRight">Halt the CPU after a first-chance dump (never returns in production). Weak default; CONFIG_DEBUG test override returns only when explicitly armed.  <br /></td></tr>
@@ -518,6 +558,29 @@ Variables</h2></td></tr>
 <tr class="memitem:a7b55eeed8e47404ab1b74ea1ce05ca38" id="r_a7b55eeed8e47404ab1b74ea1ce05ca38"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7b55eeed8e47404ab1b74ea1ce05ca38">INTID_VIRTIO_COUNT</a> = 32</td></tr>
 <tr class="memitem:afe97831d31010696a7be96c938f23aac" id="r_afe97831d31010696a7be96c938f23aac"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#afe97831d31010696a7be96c938f23aac">GIC_MAX_INTID</a> = 256</td></tr>
 <tr class="memdesc:afe97831d31010696a7be96c938f23aac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest INTID the kernel addresses (8 enable banks x 32).  <br /></td></tr>
+<tr class="memitem:aeed84c10544efd908f4c0e9a2e0406b0" id="r_aeed84c10544efd908f4c0e9a2e0406b0"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aeed84c10544efd908f4c0e9a2e0406b0">GICD_SGIR_FILTER_TARGET_LIST</a> = 0U &lt;&lt; 24</td></tr>
+<tr class="memdesc:aeed84c10544efd908f4c0e9a2e0406b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICD_SGIR target-list filter: deliver to the listed CPUs.  <br /></td></tr>
+<tr class="memitem:af7b89d274c8449439c717ed96eab0adc" id="r_af7b89d274c8449439c717ed96eab0adc"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#af7b89d274c8449439c717ed96eab0adc">GICD_SGIR_INTID_MASK</a> = 0xFU</td></tr>
+<tr class="memdesc:af7b89d274c8449439c717ed96eab0adc"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICD_SGIR INTID mask (bits [3:0]: SGI 0-15).  <br /></td></tr>
+<tr class="memitem:a4fe78db7f200565907bacf3741325059" id="r_a4fe78db7f200565907bacf3741325059"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4fe78db7f200565907bacf3741325059">GICD_CPENDSGIR</a> = 0x0F10</td></tr>
+<tr class="memdesc:a4fe78db7f200565907bacf3741325059"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICD SGI clear/set-pending registers (one per SGI, CPU mask).  <br /></td></tr>
+<tr class="memitem:a2842a1705109ee01fe45a09b13a69217" id="r_a2842a1705109ee01fe45a09b13a69217"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a2842a1705109ee01fe45a09b13a69217">GICD_SPENDSGIR</a> = 0x0F20</td></tr>
+<tr class="memitem:a66461f9fec17e21a4cb0071e42c91803" id="r_a66461f9fec17e21a4cb0071e42c91803"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a66461f9fec17e21a4cb0071e42c91803">GICD_SGIR_TARGET_SHIFT</a> = 16</td></tr>
+<tr class="memdesc:a66461f9fec17e21a4cb0071e42c91803"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICD_SGIR CPU-target-list shift (bit n = CPU interface n).  <br /></td></tr>
+<tr class="memitem:ab71c836551259c46a7c17ba356a4446a" id="r_ab71c836551259c46a7c17ba356a4446a"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab71c836551259c46a7c17ba356a4446a">SMP_SCHED_SGI</a> = 9</td></tr>
+<tr class="memdesc:ab71c836551259c46a7c17ba356a4446a"><td class="mdescLeft">&#160;</td><td class="mdescRight">SGI INTIDs reserved for SMP (#351 slice-2). GIC INTID N dispatches to <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> vector N — so SGIs must avoid the named <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> vectors (TIMER=0, KEYBOARD=1, SYSCALL=2) and INTID 30 (remapped to vector 0 by the timer path). 8/9/10 land on free <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> slots.  <br /></td></tr>
+<tr class="memitem:a4387f0bcdf2b6bb2f8e78c50acaa74c0" id="r_a4387f0bcdf2b6bb2f8e78c50acaa74c0"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a4387f0bcdf2b6bb2f8e78c50acaa74c0">SMP_SHOOTDOWN_SGI</a> = 10</td></tr>
+<tr class="memdesc:a4387f0bcdf2b6bb2f8e78c50acaa74c0"><td class="mdescLeft">&#160;</td><td class="mdescRight">SGI INTID reserved for TLB-shootdown batch apply (#351 s2). 1:1-mapped from the x86 SHOOTDOWN_BATCH_VECTOR role.  <br /></td></tr>
+<tr class="memitem:aae734bfea1182e073c01c4454d929662" id="r_aae734bfea1182e073c01c4454d929662"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aae734bfea1182e073c01c4454d929662">SMP_LOOPBACK_SGI</a> = 8</td></tr>
+<tr class="memdesc:aae734bfea1182e073c01c4454d929662"><td class="mdescLeft">&#160;</td><td class="mdescRight">SGI INTID for the boot-time loopback probe + QE use (#351 s2). Kept registered after boot (slice-5 owns the test text).  <br /></td></tr>
+<tr class="memitem:ac3599fe93cd45f7e49270d1168284bbc" id="r_ac3599fe93cd45f7e49270d1168284bbc"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac3599fe93cd45f7e49270d1168284bbc">SMP_SGI_ENABLE_MASK</a></td></tr>
+<tr class="memdesc:ac3599fe93cd45f7e49270d1168284bbc"><td class="mdescLeft">&#160;</td><td class="mdescRight">SGI INTIDs the kernel uses (loopback + scheduler + shootdown). Shared enable mask for distributor (v2) / redistributor (v3) PPI banks.  <br /></td></tr>
+<tr class="memitem:a283d3d1406fd60cc1b2bcb9340d9372d" id="r_a283d3d1406fd60cc1b2bcb9340d9372d"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a283d3d1406fd60cc1b2bcb9340d9372d">GICR_TYPER</a> = 0x0008</td></tr>
+<tr class="memdesc:a283d3d1406fd60cc1b2bcb9340d9372d"><td class="mdescLeft">&#160;</td><td class="mdescRight">GICR_TYPER register offset (64-bit affinity + processor number).  <br /></td></tr>
+<tr class="memitem:ae011dbabb72cddab5e4a4ee6cd9f9431" id="r_ae011dbabb72cddab5e4a4ee6cd9f9431"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ae011dbabb72cddab5e4a4ee6cd9f9431">GICR_STRIDE</a> = 0x20000ULL</td></tr>
+<tr class="memdesc:ae011dbabb72cddab5e4a4ee6cd9f9431"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU redistributor stride (128 KiB: 64 KiB RD + 64 KiB SGI).  <br /></td></tr>
+<tr class="memitem:aac9dd10b41e7a28bdf1f0665ed5b6d11" id="r_aac9dd10b41e7a28bdf1f0665ed5b6d11"><td class="memItemLeft"><a class="el" href="structarch_1_1_per_cpu.html">PerCpu</a>&#160;</td><td class="memItemRight"><a class="el" href="#aac9dd10b41e7a28bdf1f0665ed5b6d11">per_cpu</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:aac9dd10b41e7a28bdf1f0665ed5b6d11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Array of per-CPU blocks (CONFIG_MAX_CPUS pages). In single-core builds (CONFIG_MAX_CPUS == 1), this is one page.  <br /></td></tr>
 <tr class="memitem:a8330daf1138ba3f2466d81406d1ab6c0" id="r_a8330daf1138ba3f2466d81406d1ab6c0"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8330daf1138ba3f2466d81406d1ab6c0">PL031_BASE</a> = 0x09010000ULL</td></tr>
 <tr class="memitem:a585a77a747cf6637b9dfc9119564b96f" id="r_a585a77a747cf6637b9dfc9119564b96f"><td class="memItemLeft">constexpr <a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a585a77a747cf6637b9dfc9119564b96f">PL031_DATA</a> = 0x0000</td></tr>
 <tr class="memdesc:a585a77a747cf6637b9dfc9119564b96f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current time (Unix secs).  <br /></td></tr>
@@ -610,7 +673,6 @@ Variables</h2></td></tr>
 <tr class="memdesc:a01fc41f7bc66d833a4ddd66bbb110727"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum PCID value (12-bit field, 0 reserved for kernel).  <br /></td></tr>
 <tr class="memitem:a3b6a767ab9a831c83dcac5d92a9b2197" id="r_a3b6a767ab9a831c83dcac5d92a9b2197"><td class="memItemLeft">constexpr <a class="el" href="#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a3b6a767ab9a831c83dcac5d92a9b2197">PCID_KERNEL</a> = 0</td></tr>
 <tr class="memdesc:a3b6a767ab9a831c83dcac5d92a9b2197"><td class="mdescLeft">&#160;</td><td class="mdescRight">PCID reserved for the kernel PML4 fallback (never allocated).  <br /></td></tr>
-<tr class="memitem:a74ee5e38b6239c12f5cadd479e625d7d" id="r_a74ee5e38b6239c12f5cadd479e625d7d"><td class="memItemLeft">PerCpu&#160;</td><td class="memItemRight"><a class="el" href="#a74ee5e38b6239c12f5cadd479e625d7d">per_cpu</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:abc331b5c8f8d6906dea8b7f36bdff4cb" id="r_abc331b5c8f8d6906dea8b7f36bdff4cb"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abc331b5c8f8d6906dea8b7f36bdff4cb">FW_CFG_MMIO_BASE</a> = 0x10100000ULL</td></tr>
 <tr class="memitem:a8773fcd1012964369f6c3ae1994504c4" id="r_a8773fcd1012964369f6c3ae1994504c4"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8773fcd1012964369f6c3ae1994504c4">FW_CFG_DATA</a> = 0x00</td></tr>
 <tr class="memitem:a52a467a9b180546731c5af69a1b78775" id="r_a52a467a9b180546731c5af69a1b78775"><td class="memItemLeft">constexpr <a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a52a467a9b180546731c5af69a1b78775">FW_CFG_SELECTOR</a> = 0x08</td></tr>
@@ -1061,7 +1123,7 @@ Variables</h2></td></tr>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
 <a id="a3ca5db21df1fdddf99353ce554fd6d78" name="a3ca5db21df1fdddf99353ce554fd6d78"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3ca5db21df1fdddf99353ce554fd6d78">&#9670;&#160;</a></span>__attribute__() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a3ca5db21df1fdddf99353ce554fd6d78">&#9670;&#160;</a></span>__attribute__() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1077,8 +1139,27 @@ Variables</h2></td></tr>
 
 </div>
 </div>
+<a id="a64a9486d181a7cb05e19c5d292bb602b" name="a64a9486d181a7cb05e19c5d292bb602b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64a9486d181a7cb05e19c5d292bb602b">&#9670;&#160;</a></span>__attribute__() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structarch_1_1_per_cpu.html">PerCpu</a> *const arch_per_cpu_base arch::__attribute__ </td>
+          <td>(</td>
+          <td class="paramtype">(used)</td>          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Linkage anchor for the trap entry (issue #351 S3 fix-2). Holds &amp;per_cpu[0] as a C-linkage constant so assembly can derive the current hart's slot index as (tp - base) &gt;&gt; 12 without a PC-relative reference to the C++-mangled array (out of range is impossible here: same linkage unit, absolute address materialized by the linker). Marked used: no C++ TU references it, only syscall_entry.S. </p>
+
+</div>
+</div>
 <a id="adeb086e00e87dde9321e77807fa32946" name="adeb086e00e87dde9321e77807fa32946"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adeb086e00e87dde9321e77807fa32946">&#9670;&#160;</a></span>__attribute__() <span class="overload">[2/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#adeb086e00e87dde9321e77807fa32946">&#9670;&#160;</a></span>__attribute__() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1102,26 +1183,33 @@ Variables</h2></td></tr>
 
 </div>
 </div>
-<a id="a02f1e46be9bd915e24696367061cebf5" name="a02f1e46be9bd915e24696367061cebf5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a02f1e46be9bd915e24696367061cebf5">&#9670;&#160;</a></span>aarch64_el0_fault_handler()</h2>
+<a id="aec89ff2b4c047fa45c2dc44ed2fb7104" name="aec89ff2b4c047fa45c2dc44ed2fb7104"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aec89ff2b4c047fa45c2dc44ed2fb7104">&#9670;&#160;</a></span>aarch64_el0_fault_handler()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void arch::aarch64_el0_fault_handler </td>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::aarch64_el0_fault_handler </td>
           <td>(</td>
-          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> *</td>          <td class="paramname"><span class="paramname"><em>frame</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-<p>EL0 synchronous-fault handler called from vectors.S (issues #184/#28). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, mark the faulting task TERMINATED (exit_code = -SIGSEGV), and switch off it — mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller applies the pending switch via irq_context_switch_common; if no task is current (no user context to kill) park as a last resort. A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED. </p>
+<p>EL0 synchronous-fault handler called from vectors.S (issues #184/#28, #435 seam). Non-SVC faults from EL0 land here. Latch ESR/FAR/ELR for post-mortem GDB, then: recover-first via g_user_access_recover_ip (frame ELR slot patched, resume), else debugger stop routing for attached targets, else the guard arm (#434 P3, mirrors the EL1 arm per its §369 comment: same/lower-EL data abort whose FAR falls in the faulting task's kslot guard page routes to the stack_overflow_hook-else-halt path with STACK_OVERFLOW cause — x86 #PF parity), else mark the faulting task TERMINATED (exit_code = -SIGSEGV) and switch off it, mirroring the sys_exit self-termination path. Runs with interrupts masked (vector entry); must not re-enable IRQs, and must NOT call Scheduler::terminate (ISR-unsafe: switch_to_task resolves the live exception RSP as the save owner — see <a class="el" href="syscall__handlers__misc_8cpp.html" title="Syscall handlers for miscellaneous operations: yield, print, get_ticks, exit, etc.">syscall_handlers_misc.cpp</a>). The asm caller restores + erets on a 0 return, else applies the pending switch via irq_context_switch_common; if no switch is armed (no user context to kill, or a debugger park which arms none) the asm parks as a last resort (the fault frame stays on the stack for the debugger). A parent BLOCKED in waitpid IS woken (issue #217: wake_waiting_parent delivers status + PID before the switch); polled waiters (wait_for_termination_safe) observe TERMINATED. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">frame</td><td>save_all trap frame base ([sp,#248]=SP_EL0, [sp,#256]=ELR_EL1, [sp,#264]=SPSR_EL1); the recover path patches the ELR slot in-frame. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 resume (asm restore_all + eret), nonzero switch-or-park. </dd></dl>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="namespacearch_a02f1e46be9bd915e24696367061cebf5_cgraph.png" border="0" usemap="#anamespacearch_a02f1e46be9bd915e24696367061cebf5_cgraph" loading="lazy" alt=""/></div>
+<div class="center"><img src="namespacearch_aec89ff2b4c047fa45c2dc44ed2fb7104_cgraph.png" border="0" usemap="#anamespacearch_aec89ff2b4c047fa45c2dc44ed2fb7104_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 0 -->
 </div>
 
@@ -1615,8 +1703,79 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="ac53772566e53832b14ccedb8d6ae2d4e" name="ac53772566e53832b14ccedb8d6ae2d4e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac53772566e53832b14ccedb8d6ae2d4e">&#9670;&#160;</a></span>cpu_index()</h2>
+<a id="aa4064193135ad5146c2ec495fd7d5125" name="aa4064193135ad5146c2ec495fd7d5125"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa4064193135ad5146c2ec495fd7d5125">&#9670;&#160;</a></span>cpu_hartid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::cpu_hartid </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get current hart's hardware hart ID. </p>
+<dl class="section return"><dt>Returns</dt><dd>mhartid snapshot stored at percpu init. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_aa4064193135ad5146c2ec495fd7d5125_cgraph.png" border="0" usemap="#anamespacearch_aa4064193135ad5146c2ec495fd7d5125_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 10 -->
+</div>
+
+</div>
+</div>
+<a id="afa3ff42a2158d5cb9c545cc85adfcce1" name="afa3ff42a2158d5cb9c545cc85adfcce1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afa3ff42a2158d5cb9c545cc85adfcce1">&#9670;&#160;</a></span>cpu_id()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::cpu_id </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get current CPU's logical ID (index in per_cpu array). </p>
+<p>Get current hart's logical ID (index in per_cpu array).</p>
+<dl class="section return"><dt>Returns</dt><dd>Logical CPU index (0..CONFIG_MAX_CPUS-1).</dd>
+<dd>
+Logical hart index (0..CONFIG_MAX_CPUS-1). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_afa3ff42a2158d5cb9c545cc85adfcce1_cgraph.png" border="0" usemap="#anamespacearch_afa3ff42a2158d5cb9c545cc85adfcce1_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 11 -->
+</div>
+
+</div>
+</div>
+<a id="a61efca22542889281606077db9458129" name="a61efca22542889281606077db9458129"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a61efca22542889281606077db9458129">&#9670;&#160;</a></span>cpu_index()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1638,7 +1797,52 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Current CPU index — single-core archs are always CPU 0. </p>
+<p>Current CPU's logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre-TPIDR callers get 0. </p>
+<p>Current hart's logical index (0..CONFIG_MAX_CPUS-1). Derived from the tp range check above: pre-tp callers get 0.</p>
+<p>Current CPU index — single-core archs are always CPU 0.</p>
+<dl class="section return"><dt>Returns</dt><dd>Logical CPU index.</dd>
+<dd>
+Logical hart index. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a61efca22542889281606077db9458129_cgraph.png" border="0" usemap="#anamespacearch_a61efca22542889281606077db9458129_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 12 -->
+</div>
+
+</div>
+</div>
+<a id="a4468e264f15df485a08e31e5c9301d76" name="a4468e264f15df485a08e31e5c9301d76"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4468e264f15df485a08e31e5c9301d76">&#9670;&#160;</a></span>cpu_mpidr()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::cpu_mpidr </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get current CPU's MPIDR value. </p>
+<dl class="section return"><dt>Returns</dt><dd>MPIDR_EL1 snapshot stored at percpu init. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a4468e264f15df485a08e31e5c9301d76_cgraph.png" border="0" usemap="#anamespacearch_a4468e264f15df485a08e31e5c9301d76_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 13 -->
+</div>
 
 </div>
 </div>
@@ -1697,7 +1901,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a78513919ed4d338079bb56b6c548c84f_cgraph.png" border="0" usemap="#anamespacearch_a78513919ed4d338079bb56b6c548c84f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -1722,7 +1926,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ac82b85b800ec3060a62a5921a7d638d8_cgraph.png" border="0" usemap="#anamespacearch_ac82b85b800ec3060a62a5921a7d638d8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -1904,7 +2108,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a3a4003d4798a0615b005a6a0d6162a92_cgraph.png" border="0" usemap="#anamespacearch_a3a4003d4798a0615b005a6a0d6162a92_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -2013,6 +2217,72 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="adabc32bf1756fd112eae8ac6b38217eb" name="adabc32bf1756fd112eae8ac6b38217eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adabc32bf1756fd112eae8ac6b38217eb">&#9670;&#160;</a></span>gic_ap_init()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::gic_ap_init </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Per-AP GIC CPU-interface enable (#351 slice-2). GIC CPU interfaces are banked per CPU at shared addresses: the BSP init in interrupt_controller.cpp only programs the BSP's bank, so each AP must enable its own. v2: GICC_PMR + GICC_CTLR (PPI enables live in the shared distributor, BSP-owned). v3: own redistributor frame (wake + PPI 30 + SGIs) plus SRE/PMR/IGRPEN1 (system registers, inherently per-CPU). Runs on the AP itself (own bank/frame). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_adabc32bf1756fd112eae8ac6b38217eb_cgraph.png" border="0" usemap="#anamespacearch_adabc32bf1756fd112eae8ac6b38217eb_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 17 -->
+</div>
+
+</div>
+</div>
+<a id="ab2d1354d590df2cc604fcbd6c3fc09cc" name="ab2d1354d590df2cc604fcbd6c3fc09cc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2d1354d590df2cc604fcbd6c3fc09cc">&#9670;&#160;</a></span>gic_enable_sgi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::gic_enable_sgi </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Enable the kernel SGI set for SMP (#351 slice-2). Called from bring_up() only (never on single-CPU runs, never from the shared init path — the existing tests observe the BSP init bit-exact). Enables only (no distributor clears: the SGI pending state is sender-owned — a clear-all would need per-CPU ACKED-idle guarantees this early context cannot provide). v2: distributor (shared bank). v3: own redistributor frame (the AP frames are enabled by gic_ap_init on each AP). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_ab2d1354d590df2cc604fcbd6c3fc09cc_cgraph.png" border="0" usemap="#anamespacearch_ab2d1354d590df2cc604fcbd6c3fc09cc_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 18 -->
+</div>
+
+</div>
+</div>
 <a id="ac7375681b455a01cbd2c161dbb0409c2" name="ac7375681b455a01cbd2c161dbb0409c2"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac7375681b455a01cbd2c161dbb0409c2">&#9670;&#160;</a></span>gic_redist_ready()</h2>
 
@@ -2035,7 +2305,52 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ac7375681b455a01cbd2c161dbb0409c2_cgraph.png" border="0" usemap="#anamespacearch_ac7375681b455a01cbd2c161dbb0409c2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 19 -->
+</div>
+
+</div>
+</div>
+<a id="ab28ce5abdad030159a8ee8afbe48e7a9" name="ab28ce5abdad030159a8ee8afbe48e7a9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab28ce5abdad030159a8ee8afbe48e7a9">&#9670;&#160;</a></span>gic_send_sgi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::gic_send_sgi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>target_cpu</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>intid</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Send a software-generated interrupt to one CPU (#351 slice-2). v2 path: GICD_SGIR with target-list filter (bit n = CPU interface n, valid for the 8-CPU CONFIG_MAX_CPUS build). v3 path: ICC_SGI1R_EL1 with Aff1 = 0, TargetList = (1 &lt;&lt; cpu) (single-cluster QEMU virt: Aff3 == Aff2 == 0, Aff0 selects the list bit). Fail-closed false on out-of-range cpu/intid; never programs reserved INTIDs. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">target_cpu</td><td>GIC target (Aff0 / CPU interface, 0..CONFIG_MAX_CPUS-1). </td></tr>
+    <tr><td class="paramname">intid</td><td>SGI INTID (kernel set: SMP_LOOPBACK/SCHED/SHOOTDOWN_SGI). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when the SGI was issued, false when rejected. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_ab28ce5abdad030159a8ee8afbe48e7a9_cgraph.png" border="0" usemap="#anamespacearch_ab28ce5abdad030159a8ee8afbe48e7a9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -2375,6 +2690,40 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a9f7fa7c0c625f76e7e93134ec97ccce4" name="a9f7fa7c0c625f76e7e93134ec97ccce4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f7fa7c0c625f76e7e93134ec97ccce4">&#9670;&#160;</a></span>gicr_frame_for_aff0()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::gicr_frame_for_aff0 </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>aff0</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Find this CPU's redistributor RD frame by MPIDR Aff0 (#351 s2). Spec-correct TYPER match (never a stride assumption): bounded scan over CONFIG_MAX_CPUS frames, first Aff0 match wins, 0 on no match. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">aff0</td><td>MPIDR Aff0 of the calling CPU. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>HHDM-aliased RD frame address, or 0 when not found. </dd></dl>
+
+</div>
+</div>
 <a id="a4da73406011eca3290f9e1baebeb720e" name="a4da73406011eca3290f9e1baebeb720e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a4da73406011eca3290f9e1baebeb720e">&#9670;&#160;</a></span>gicr_rd_reg()</h2>
 
@@ -2445,7 +2794,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_af44c28e0176ac64b504464bbd30f31b2_cgraph.png" border="0" usemap="#anamespacearch_af44c28e0176ac64b504464bbd30f31b2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -2484,7 +2833,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_aa8b1a91c0b864176494c1d844f21da2e_cgraph.png" border="0" usemap="#anamespacearch_aa8b1a91c0b864176494c1d844f21da2e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -2516,7 +2865,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_abcb80cfbe5c335ca7659697f28452a7b_cgraph.png" border="0" usemap="#anamespacearch_abcb80cfbe5c335ca7659697f28452a7b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -2911,7 +3260,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a8f07e98afface06082cfc0e6f1582ed3_cgraph.png" border="0" usemap="#anamespacearch_a8f07e98afface06082cfc0e6f1582ed3_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -2932,6 +3281,40 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>Assembly-level interrupt entry point. </p>
+
+</div>
+</div>
+<a id="a895eb0962fff5b7a2a9021efddd26b5d" name="a895eb0962fff5b7a2a9021efddd26b5d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a895eb0962fff5b7a2a9021efddd26b5d">&#9670;&#160;</a></span>mpidr_aff0()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::mpidr_aff0 </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>MPIDR Aff0 field (level-0 affinity = aa64 cpu id in DTB reg). Slice-0 gates secondaries on Aff0 == 0; slice-2 maps DTB reg to this. </p>
+<dl class="section return"><dt>Returns</dt><dd>Aff0 (bits [7:0] of MPIDR_EL1). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a895eb0962fff5b7a2a9021efddd26b5d_cgraph.png" border="0" usemap="#anamespacearch_a895eb0962fff5b7a2a9021efddd26b5d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 25 -->
+</div>
 
 </div>
 </div>
@@ -3050,7 +3433,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_af42ba0c651229ba30e96c82094e72d88_cgraph.png" border="0" usemap="#anamespacearch_af42ba0c651229ba30e96c82094e72d88_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -3107,7 +3490,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a11748e0603d0f9b77d1198c4e14fd224_cgraph.png" border="0" usemap="#anamespacearch_a11748e0603d0f9b77d1198c4e14fd224_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -3130,7 +3513,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ad3d99a7e474cab3a76f23b358052d6fe_cgraph.png" border="0" usemap="#anamespacearch_ad3d99a7e474cab3a76f23b358052d6fe_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -3174,7 +3557,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_af1db3b0c561e94a99c8f3f6d020093f5_cgraph.png" border="0" usemap="#anamespacearch_af1db3b0c561e94a99c8f3f6d020093f5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -3206,7 +3589,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ab8a3d0ed72e0355f607878da738a53e4_cgraph.png" border="0" usemap="#anamespacearch_ab8a3d0ed72e0355f607878da738a53e4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -3233,7 +3616,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_adc4b509b8ba2e26aae708fff98409565_cgraph.png" border="0" usemap="#anamespacearch_adc4b509b8ba2e26aae708fff98409565_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 31 -->
 </div>
 
 </div>
@@ -3277,7 +3660,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a68057e54d9a90d6545678a5b77d8b604_cgraph.png" border="0" usemap="#anamespacearch_a68057e54d9a90d6545678a5b77d8b604_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 32 -->
 </div>
 
 </div>
@@ -3304,7 +3687,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a064392a919e573428b1ba326b8cdb64d_cgraph.png" border="0" usemap="#anamespacearch_a064392a919e573428b1ba326b8cdb64d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 33 -->
 </div>
 
 </div>
@@ -3336,7 +3719,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ab73dfb2ec66dbef323c5e5cd372e3ff8_cgraph.png" border="0" usemap="#anamespacearch_ab73dfb2ec66dbef323c5e5cd372e3ff8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 34 -->
 </div>
 
 </div>
@@ -3359,7 +3742,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a5f0b29e66c1ded4cde61c7ccd0dc2b4c_cgraph.png" border="0" usemap="#anamespacearch_a5f0b29e66c1ded4cde61c7ccd0dc2b4c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 35 -->
 </div>
 
 </div>
@@ -3386,7 +3769,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ac1b280a31f7bae1f896d90239ed96348_cgraph.png" border="0" usemap="#anamespacearch_ac1b280a31f7bae1f896d90239ed96348_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 36 -->
 </div>
 
 </div>
@@ -3466,7 +3849,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a7b9a139f7af44bc665d24c1731c6f19c_cgraph.png" border="0" usemap="#anamespacearch_a7b9a139f7af44bc665d24c1731c6f19c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 37 -->
 </div>
 
 </div>
@@ -3489,7 +3872,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a8fd92f41ff58ee30a496023a66c4482f_cgraph.png" border="0" usemap="#anamespacearch_a8fd92f41ff58ee30a496023a66c4482f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 30 -->
+<!-- MAP 38 -->
 </div>
 
 </div>
@@ -3512,7 +3895,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph.png" border="0" usemap="#anamespacearch_adf555b81d7d72b5c61d212eaf1aa1e69_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 31 -->
+<!-- MAP 39 -->
 </div>
 
 </div>
@@ -3681,8 +4064,45 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="ae41ccc115f18da2b4a867210a1a99cd0" name="ae41ccc115f18da2b4a867210a1a99cd0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae41ccc115f18da2b4a867210a1a99cd0">&#9670;&#160;</a></span>percpu_init_ap()</h2>
+<a id="ac39f303c8b9ae112945a1c18752b3065" name="ac39f303c8b9ae112945a1c18752b3065"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac39f303c8b9ae112945a1c18752b3065">&#9670;&#160;</a></span>per_cpu_current()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structarch_1_1_per_cpu.html">PerCpu</a> * arch::per_cpu_current </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get pointer to current CPU's <a class="el" href="structarch_1_1_per_cpu.html" title="Per-CPU state block (4 KiB-aligned, one page per logical CPU). Migrates global state that must be per...">PerCpu</a> block. </p>
+<p>Get pointer to current hart's <a class="el" href="structarch_1_1_per_cpu.html" title="Per-CPU state block (4 KiB-aligned, one page per logical CPU). Migrates global state that must be per...">PerCpu</a> block.</p>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to current CPU's <a class="el" href="structarch_1_1_per_cpu.html" title="Per-CPU state block (4 KiB-aligned, one page per logical CPU). Migrates global state that must be per...">PerCpu</a> struct (via TPIDR_EL1). TPIDR_EL1 is range-checked against per_cpu[]: callers running before TPIDR is valid (early boot, TPIDR=0) resolve to &amp;per_cpu[0].</dd>
+<dd>
+Pointer to current hart's <a class="el" href="structarch_1_1_per_cpu.html" title="Per-CPU state block (4 KiB-aligned, one page per logical CPU). Migrates global state that must be per...">PerCpu</a> struct (via tp). tp is range-checked against per_cpu[]: callers running before tp is valid (early boot, tp=0) resolve to &amp;per_cpu[0]. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_ac39f303c8b9ae112945a1c18752b3065_cgraph.png" border="0" usemap="#anamespacearch_ac39f303c8b9ae112945a1c18752b3065_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 40 -->
+</div>
+
+</div>
+</div>
+<a id="a31ec0fff9a609a9b06bf55116f93419d" name="a31ec0fff9a609a9b06bf55116f93419d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31ec0fff9a609a9b06bf55116f93419d">&#9670;&#160;</a></span>percpu_init_ap()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3695,15 +4115,33 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>lapic_id</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>ap_hart</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Initialize per-CPU state for an AP. Called by the AP entry stub after setting its stack, before enabling interrupts on that CPU. </p>
+<p>Initialize per-hart state for an AP. Called by the AP entry stub after setting its stack, before enabling interrupts on that hart.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">logical_id</td><td>Index into per_cpu[] (1..CONFIG_MAX_CPUS-1). </td></tr>
+    <tr><td class="paramname">ap_mpidr</td><td>This AP's MPIDR_EL1 value (must match its DTB reg).</td></tr>
+    <tr><td class="paramname">logical_id</td><td>Index into per_cpu[] (1..CONFIG_MAX_CPUS-1). </td></tr>
+    <tr><td class="paramname">ap_hart</td><td>This AP's mhartid value (must match its DTB reg). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a31ec0fff9a609a9b06bf55116f93419d_cgraph.png" border="0" usemap="#anamespacearch_a31ec0fff9a609a9b06bf55116f93419d_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 41 -->
+</div>
+
 </div>
 </div>
-<a id="aa083df7d97e20366e210c1f978abed5d" name="aa083df7d97e20366e210c1f978abed5d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa083df7d97e20366e210c1f978abed5d">&#9670;&#160;</a></span>percpu_init_bsp()</h2>
+<a id="a6bf6be7461724bf9c6023cbd2e38790c" name="a6bf6be7461724bf9c6023cbd2e38790c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6bf6be7461724bf9c6023cbd2e38790c">&#9670;&#160;</a></span>percpu_init_bsp()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -3711,11 +4149,27 @@ Here is the call graph for this function:</div>
         <tr>
           <td class="memname">void arch::percpu_init_bsp </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>bsp_lapic_id</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>bsp_hart</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Initialize per-CPU state for the BSP (CPU 0). Called early in arch init before any ISR can run; points TPIDR_EL1 at per_cpu[0]. </p>
+<p>Initialize per-hart state for the BSP (hart 0). Called early in arch init before any trap can run; points tp at per_cpu[0].</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">bsp_mpidr</td><td>BSP MPIDR_EL1 value (Aff0 == 0 by the slice-0 gate).</td></tr>
+    <tr><td class="paramname">bsp_hart</td><td>BSP mhartid value (boot hart, whatever firmware chose). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a6bf6be7461724bf9c6023cbd2e38790c_cgraph.png" border="0" usemap="#anamespacearch_a6bf6be7461724bf9c6023cbd2e38790c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 42 -->
+</div>
 
 </div>
 </div>
@@ -3954,6 +4408,40 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="acc53a9777361ad047e0cdff4c050f76a" name="acc53a9777361ad047e0cdff4c050f76a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc53a9777361ad047e0cdff4c050f76a">&#9670;&#160;</a></span>plic_s_context_for_hart()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::plic_s_context_for_hart </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>hart_id</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>S-context index for a hart's S-mode (M-mode takes even slots). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">hart_id</td><td>Hardware hart ID (matches the DTB cpu reg). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>S-mode PLIC context number for that hart. </dd></dl>
+
+</div>
+</div>
 <a id="ac7af0d9af24b6d0067e8deb19bff2404" name="ac7af0d9af24b6d0067e8deb19bff2404"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac7af0d9af24b6d0067e8deb19bff2404">&#9670;&#160;</a></span>plic_set_priority()</h2>
 
@@ -4012,6 +4500,106 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a0105e96ddd9d29e556c9ffd9d6a8b115" name="a0105e96ddd9d29e556c9ffd9d6a8b115"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0105e96ddd9d29e556c9ffd9d6a8b115">&#9670;&#160;</a></span>plic_threshold_s_for_hart()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::plic_threshold_s_for_hart </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>hart_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a></td>          <td class="paramname"><span class="paramname"><em>threshold</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the priority threshold for a hart's S-context. Each AP programs its own frame (thresholds are per-context banks); the BSP frame stays owned by interrupt_controller.cpp init. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">hart_id</td><td>Hardware hart ID. </td></tr>
+    <tr><td class="paramname">threshold</td><td>Priority threshold (0 = deliver everything enabled). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a0105e96ddd9d29e556c9ffd9d6a8b115_cgraph.png" border="0" usemap="#anamespacearch_a0105e96ddd9d29e556c9ffd9d6a8b115_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 43 -->
+</div>
+
+</div>
+</div>
+<a id="a332b597a0689353ebfa086cf507d4b7c" name="a332b597a0689353ebfa086cf507d4b7c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a332b597a0689353ebfa086cf507d4b7c">&#9670;&#160;</a></span>read_mpidr_el1()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::read_mpidr_el1 </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read MPIDR_EL1 (multiprocessor affinity register). </p>
+<dl class="section return"><dt>Returns</dt><dd>Raw MPIDR_EL1 value (Aff3..Aff0 + U bit). </dd></dl>
+
+</div>
+</div>
+<a id="a508ee1d241a2e92f2869fd5c7e2b0904" name="a508ee1d241a2e92f2869fd5c7e2b0904"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a508ee1d241a2e92f2869fd5c7e2b0904">&#9670;&#160;</a></span>read_tpidr_el1()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::read_tpidr_el1 </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Read TPIDR_EL1 (per-CPU base register). </p>
+<dl class="section return"><dt>Returns</dt><dd>Raw TPIDR_EL1 value. </dd></dl>
+
+</div>
+</div>
 <a id="a2e08cb6a99be2296fd2c32a5f33a22da" name="a2e08cb6a99be2296fd2c32a5f33a22da"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2e08cb6a99be2296fd2c32a5f33a22da">&#9670;&#160;</a></span>riscv64_exception_dispatch()</h2>
 
@@ -4043,7 +4631,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a2e08cb6a99be2296fd2c32a5f33a22da_cgraph.png" border="0" usemap="#anamespacearch_a2e08cb6a99be2296fd2c32a5f33a22da_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 32 -->
+<!-- MAP 44 -->
 </div>
 
 </div>
@@ -4127,7 +4715,120 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_ae334d0e2cfa3562725380393b13ad72f_cgraph.png" border="0" usemap="#anamespacearch_ae334d0e2cfa3562725380393b13ad72f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 33 -->
+<!-- MAP 45 -->
+</div>
+
+</div>
+</div>
+<a id="ace1f180b4549d373e8d6e7bd004c9348" name="ace1f180b4549d373e8d6e7bd004c9348"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ace1f180b4549d373e8d6e7bd004c9348">&#9670;&#160;</a></span>send_resched_ipi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::send_resched_ipi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Send a reschedule IPI to a CPU (issue #351, slice-4). The caller owns the wake payload (shared wake mailbox published before this call on x86/aa64; rv64 sets its own mailbox bit here). x86_64: LAPIC FIXED IPI with SCHED_VECTOR (moved verbatim from <a class="el" href="scheduler__registry_8cpp.html" title="Task registry + task-set administration for Scheduler (issue #323). Pure move out of scheduler....">scheduler_registry.cpp</a>). aarch64: SGI SMP_SCHED_SGI to the CPU's Aff0 (GIC targets are Aff0, not the logical index). riscv64: forwards to <a class="el" href="namespacekernel_1_1smp.html#a664b2ec65b4641e289ec751e4b85d27d">kernel::smp::send_resched_ipi</a> (mailbox RESCHED bit + legacy SBI hart-mask ecall, C2: present in QEMU virt OpenSBI). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cpu</td><td>Target logical CPU index. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when the send was accepted, false when rejected (out-of-range target or transport refusal; queued payloads stay queued for the next IPI/tick). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_ace1f180b4549d373e8d6e7bd004c9348_cgraph.png" border="0" usemap="#anamespacearch_ace1f180b4549d373e8d6e7bd004c9348_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 46 -->
+</div>
+
+</div>
+</div>
+<a id="a43bb84f17f1d74b9666828f5ef064db9" name="a43bb84f17f1d74b9666828f5ef064db9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43bb84f17f1d74b9666828f5ef064db9">&#9670;&#160;</a></span>send_shootdown_ipi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::send_shootdown_ipi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Send a TLB-shootdown IPI to a CPU (issue #351, slice-4). Batch framing stays with the caller (queue/flush/apply); this only delivers the notification. x86_64: LAPIC FIXED IPI with SHOOTDOWN_BATCH_VECTOR (moved verbatim from flush_target). aarch64: SGI SMP_SHOOTDOWN_SGI to the CPU's Aff0 (the slice-5 handler owns the apply side). riscv64: forwards to <a class="el" href="namespacekernel_1_1smp.html#af449dcaefceb32a60f421c23db666cfe">kernel::smp::send_shootdown_ipi</a> (mailbox SHOOTDOWN bit + legacy SBI hart-mask ecall, same C2 contract as the resched leg). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cpu</td><td>Target logical CPU index. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>true when the send was accepted, false otherwise (entries stay queued for the caller's retry). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a43bb84f17f1d74b9666828f5ef064db9_cgraph.png" border="0" usemap="#anamespacearch_a43bb84f17f1d74b9666828f5ef064db9_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 47 -->
+</div>
+
+</div>
+</div>
+<a id="a2b35240c0559a0074110e31570cc8b0c" name="a2b35240c0559a0074110e31570cc8b0c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2b35240c0559a0074110e31570cc8b0c">&#9670;&#160;</a></span>tpr_reassert_accept_all()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::tpr_reassert_accept_all </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Re-assert the own-CPU TPR to ACCEPT_ALL (issue #351, slice-2). x86_64: restores the shadow + hardware class (quiesce windows must not resume masked — INV-TPR1). Other arches: no TPR exists, no-op. Byte-identical x86 behavior; lets shared scheduler TUs call this without CONFIG_ARCH guards (the slice-4 IPI interface extends the same pattern to reschedule/shootdown delivery). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacearch_a2b35240c0559a0074110e31570cc8b0c_cgraph.png" border="0" usemap="#anamespacearch_a2b35240c0559a0074110e31570cc8b0c_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 48 -->
 </div>
 
 </div>
@@ -4154,7 +4855,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a12155265301dd4e78b8ed8523ff7353f_cgraph.png" border="0" usemap="#anamespacearch_a12155265301dd4e78b8ed8523ff7353f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 34 -->
+<!-- MAP 49 -->
 </div>
 
 </div>
@@ -4213,7 +4914,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a1888fb8a7b37d30dec1c191cacb1fbf2_cgraph.png" border="0" usemap="#anamespacearch_a1888fb8a7b37d30dec1c191cacb1fbf2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 35 -->
+<!-- MAP 50 -->
 </div>
 
 </div>
@@ -4240,7 +4941,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a61b1d4d8c642abd27d65bb1f64405e58_cgraph.png" border="0" usemap="#anamespacearch_a61b1d4d8c642abd27d65bb1f64405e58_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 36 -->
+<!-- MAP 51 -->
 </div>
 
 </div>
@@ -4287,8 +4988,41 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacearch_a9feefbea1a3cdebff8c58cb8dec3d426_cgraph.png" border="0" usemap="#anamespacearch_a9feefbea1a3cdebff8c58cb8dec3d426_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 37 -->
+<!-- MAP 52 -->
 </div>
+
+</div>
+</div>
+<a id="ae9f22eb47a1687b1952a23a0abcfcdfc" name="ae9f22eb47a1687b1952a23a0abcfcdfc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9f22eb47a1687b1952a23a0abcfcdfc">&#9670;&#160;</a></span>write_tpidr_el1()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void arch::write_tpidr_el1 </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>base_value</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Write TPIDR_EL1 (per-CPU base register). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">base_value</td><td>Value to store (normally &amp;per_cpu[cpu]). </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -5396,6 +6130,30 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="a4fe78db7f200565907bacf3741325059" name="a4fe78db7f200565907bacf3741325059"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4fe78db7f200565907bacf3741325059">&#9670;&#160;</a></span>GICD_CPENDSGIR</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::GICD_CPENDSGIR = 0x0F10</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>GICD SGI clear/set-pending registers (one per SGI, CPU mask). </p>
+
+</div>
+</div>
 <a id="ac7f969e6cdfb3ba30b1cd75aec7265ae" name="ac7f969e6cdfb3ba30b1cd75aec7265ae"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac7f969e6cdfb3ba30b1cd75aec7265ae">&#9670;&#160;</a></span>GICD_CTLR</h2>
 
@@ -5728,6 +6486,100 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
+<a id="aeed84c10544efd908f4c0e9a2e0406b0" name="aeed84c10544efd908f4c0e9a2e0406b0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeed84c10544efd908f4c0e9a2e0406b0">&#9670;&#160;</a></span>GICD_SGIR_FILTER_TARGET_LIST</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::GICD_SGIR_FILTER_TARGET_LIST = 0U &lt;&lt; 24</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>GICD_SGIR target-list filter: deliver to the listed CPUs. </p>
+
+</div>
+</div>
+<a id="af7b89d274c8449439c717ed96eab0adc" name="af7b89d274c8449439c717ed96eab0adc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af7b89d274c8449439c717ed96eab0adc">&#9670;&#160;</a></span>GICD_SGIR_INTID_MASK</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::GICD_SGIR_INTID_MASK = 0xFU</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>GICD_SGIR INTID mask (bits [3:0]: SGI 0-15). </p>
+
+</div>
+</div>
+<a id="a66461f9fec17e21a4cb0071e42c91803" name="a66461f9fec17e21a4cb0071e42c91803"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66461f9fec17e21a4cb0071e42c91803">&#9670;&#160;</a></span>GICD_SGIR_TARGET_SHIFT</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::GICD_SGIR_TARGET_SHIFT = 16</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>GICD_SGIR CPU-target-list shift (bit n = CPU interface n). </p>
+
+</div>
+</div>
+<a id="a2842a1705109ee01fe45a09b13a69217" name="a2842a1705109ee01fe45a09b13a69217"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2842a1705109ee01fe45a09b13a69217">&#9670;&#160;</a></span>GICD_SPENDSGIR</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::GICD_SPENDSGIR = 0x0F20</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="aadb69e090b70cb8ed04861bb776ab546" name="aadb69e090b70cb8ed04861bb776ab546"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aadb69e090b70cb8ed04861bb776ab546">&#9670;&#160;</a></span>GICD_TYPER</h2>
 
@@ -5879,6 +6731,54 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae011dbabb72cddab5e4a4ee6cd9f9431" name="ae011dbabb72cddab5e4a4ee6cd9f9431"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae011dbabb72cddab5e4a4ee6cd9f9431">&#9670;&#160;</a></span>GICR_STRIDE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> arch::GICR_STRIDE = 0x20000ULL</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Per-CPU redistributor stride (128 KiB: 64 KiB RD + 64 KiB SGI). </p>
+
+</div>
+</div>
+<a id="a283d3d1406fd60cc1b2bcb9340d9372d" name="a283d3d1406fd60cc1b2bcb9340d9372d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a283d3d1406fd60cc1b2bcb9340d9372d">&#9670;&#160;</a></span>GICR_TYPER</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::GICR_TYPER = 0x0008</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>GICR_TYPER register offset (64-bit affinity + processor number). </p>
 
 </div>
 </div>
@@ -6673,17 +7573,20 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a74ee5e38b6239c12f5cadd479e625d7d" name="a74ee5e38b6239c12f5cadd479e625d7d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a74ee5e38b6239c12f5cadd479e625d7d">&#9670;&#160;</a></span>per_cpu</h2>
+<a id="aac9dd10b41e7a28bdf1f0665ed5b6d11" name="aac9dd10b41e7a28bdf1f0665ed5b6d11"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac9dd10b41e7a28bdf1f0665ed5b6d11">&#9670;&#160;</a></span>per_cpu</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">PerCpu arch::per_cpu[<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td>
+          <td class="memname"><a class="el" href="structarch_1_1_per_cpu.html">PerCpu</a> arch::per_cpu</td>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Array of per-CPU blocks (CONFIG_MAX_CPUS pages). In single-core builds (CONFIG_MAX_CPUS == 1), this is one page. </p>
+<p>Array of per-hart blocks (CONFIG_MAX_CPUS pages). In single-core builds (CONFIG_MAX_CPUS == 1), this is one page. </p>
 
 </div>
 </div>
@@ -7605,6 +8508,108 @@ Here is the call graph for this function:</div>
 </div><div class="memdoc">
 
 <p>SBI legacy SET_TIMER extension id (ecall a7 = 0). </p>
+
+</div>
+</div>
+<a id="aae734bfea1182e073c01c4454d929662" name="aae734bfea1182e073c01c4454d929662"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aae734bfea1182e073c01c4454d929662">&#9670;&#160;</a></span>SMP_LOOPBACK_SGI</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::SMP_LOOPBACK_SGI = 8</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>SGI INTID for the boot-time loopback probe + QE use (#351 s2). Kept registered after boot (slice-5 owns the test text). </p>
+
+</div>
+</div>
+<a id="ab71c836551259c46a7c17ba356a4446a" name="ab71c836551259c46a7c17ba356a4446a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab71c836551259c46a7c17ba356a4446a">&#9670;&#160;</a></span>SMP_SCHED_SGI</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::SMP_SCHED_SGI = 9</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>SGI INTIDs reserved for SMP (#351 slice-2). GIC INTID N dispatches to <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> vector N — so SGIs must avoid the named <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> vectors (TIMER=0, KEYBOARD=1, SYSCALL=2) and INTID 30 (remapped to vector 0 by the timer path). 8/9/10 land on free <a class="el" href="classarch_1_1_i_d_t.html" title="x86-64 Interrupt Descriptor Table manager.">IDT</a> slots. </p>
+
+</div>
+</div>
+<a id="ac3599fe93cd45f7e49270d1168284bbc" name="ac3599fe93cd45f7e49270d1168284bbc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac3599fe93cd45f7e49270d1168284bbc">&#9670;&#160;</a></span>SMP_SGI_ENABLE_MASK</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::SMP_SGI_ENABLE_MASK</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">                                          =</div>
+<div class="line">(1U &lt;&lt; <a class="code hl_variable" href="#aae734bfea1182e073c01c4454d929662">SMP_LOOPBACK_SGI</a>) | (1U &lt;&lt; <a class="code hl_variable" href="#ab71c836551259c46a7c17ba356a4446a">SMP_SCHED_SGI</a>) |</div>
+<div class="line">(1U &lt;&lt; <a class="code hl_variable" href="#a4387f0bcdf2b6bb2f8e78c50acaa74c0">SMP_SHOOTDOWN_SGI</a>)</div>
+<div class="ttc" id="anamespacearch_html_a4387f0bcdf2b6bb2f8e78c50acaa74c0"><div class="ttname"><a href="#a4387f0bcdf2b6bb2f8e78c50acaa74c0">arch::SMP_SHOOTDOWN_SGI</a></div><div class="ttdeci">constexpr uint32_t SMP_SHOOTDOWN_SGI</div><div class="ttdoc">SGI INTID reserved for TLB-shootdown batch apply (#351 s2). 1:1-mapped from the x86 SHOOTDOWN_BATCH_V...</div><div class="ttdef"><b>Definition</b> gic.hpp:153</div></div>
+<div class="ttc" id="anamespacearch_html_aae734bfea1182e073c01c4454d929662"><div class="ttname"><a href="#aae734bfea1182e073c01c4454d929662">arch::SMP_LOOPBACK_SGI</a></div><div class="ttdeci">constexpr uint32_t SMP_LOOPBACK_SGI</div><div class="ttdoc">SGI INTID for the boot-time loopback probe + QE use (#351 s2). Kept registered after boot (slice-5 ow...</div><div class="ttdef"><b>Definition</b> gic.hpp:156</div></div>
+<div class="ttc" id="anamespacearch_html_ab71c836551259c46a7c17ba356a4446a"><div class="ttname"><a href="#ab71c836551259c46a7c17ba356a4446a">arch::SMP_SCHED_SGI</a></div><div class="ttdeci">constexpr uint32_t SMP_SCHED_SGI</div><div class="ttdoc">SGI INTIDs reserved for SMP (#351 slice-2). GIC INTID N dispatches to IDT vector N — so SGIs must avo...</div><div class="ttdef"><b>Definition</b> gic.hpp:150</div></div>
+</div><!-- fragment -->
+<p>SGI INTIDs the kernel uses (loopback + scheduler + shootdown). Shared enable mask for distributor (v2) / redistributor (v3) PPI banks. </p>
+
+</div>
+</div>
+<a id="a4387f0bcdf2b6bb2f8e78c50acaa74c0" name="a4387f0bcdf2b6bb2f8e78c50acaa74c0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4387f0bcdf2b6bb2f8e78c50acaa74c0">&#9670;&#160;</a></span>SMP_SHOOTDOWN_SGI</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> arch::SMP_SHOOTDOWN_SGI = 10</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>SGI INTID reserved for TLB-shootdown batch apply (#351 s2). 1:1-mapped from the x86 SHOOTDOWN_BATCH_VECTOR role. </p>
 
 </div>
 </div>

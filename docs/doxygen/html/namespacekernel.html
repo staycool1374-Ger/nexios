@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -240,6 +240,8 @@ Data Structures</h2></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Test-only override for the NOTIFY_MONITOR action target PID. When CONFIG_DEADLINE_MONITOR_PID == 0 (default), the deadline-miss handler's action=4 path delivers SIGUSR1 to the task whose id equals this value instead. PfA-A: this now lives in the injected <a class="el" href="structkernel_1_1_test_context.html" title="Test-runner state that the scheduler&#39;s ISR-visible paths must read.">TestContext</a> (<a class="el" href="structkernel_1_1_test_context.html#a42c00c04818407f47f5fc9882cbf0101">TestContext::deadline_monitor_pid</a>); see <a class="el" href="classkernel_1_1_scheduler.html#a9276d18a6cae34b677e7d36f39dc0bae" title="Returns the injected test context, or nullptr.">Scheduler::get_test_context()</a>. Harmless in production (0).  <a href="classkernel_1_1_scheduler.html#details">More...</a><br /></td></tr>
 <tr class="memitem:SchedulerConfig" id="r_SchedulerConfig"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_scheduler_config.html">SchedulerConfig</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Boot-time scheduler configuration, injected from kernel_init.  <a href="structkernel_1_1_scheduler_config.html#details">More...</a><br /></td></tr>
+<tr class="memitem:SchedulerLockGuard" id="r_SchedulerLockGuard"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_scheduler_lock_guard.html">SchedulerLockGuard</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checked RAII guard for scheduler_lock_ ONLY (#417). Drop-in replacement for <a class="el" href="class_spin_lock_guard.html" title="RAII lock guard for any lock type with lock()/unlock() methods.">SpinLockGuard&lt;sync::SpinLock&gt;</a> on scheduler_lock_: the blocking constructor takes the lock, the adopt constructor takes ownership of a lock acquired via try_lock(); both mark this CPU's depth slot, the destructor (or early <a class="el" href="classkernel_1_1_scheduler_lock_guard.html#a07d6b827639496b833ef023ae15465ee" title="Release early (the destructor becomes a no-op).">unlock()</a>) clears it. Mark AFTER a successful take and unmark BEFORE release, so an observer never sees a taken-but-unmarked slot (a same-CPU re-take then trips the entry ENSUREs deterministically); another CPU's slot is never touched, so legal cross-CPU contention spins instead of tripping (the #417 fix). Free functions must not outlive the scope (same rule as <a class="el" href="class_spin_lock_guard.html" title="RAII lock guard for any lock type with lock()/unlock() methods.">SpinLockGuard</a>).  <a href="classkernel_1_1_scheduler_lock_guard.html#details">More...</a><br /></td></tr>
 <tr class="memitem:ScopedRef" id="r_ScopedRef"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classkernel_1_1_scoped_ref.html">ScopedRef</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">RAII scoped reference guard for <a class="el" href="classkernel_1_1_kernel_object.html" title="Intrusive shared-reference-counted base for kernel objects.">KernelObject</a> objects.  <a href="classkernel_1_1_scoped_ref.html#details">More...</a><br /></td></tr>
 <tr class="memitem:SignalFrame" id="r_SignalFrame"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structkernel_1_1_signal_frame.html">SignalFrame</a></td></tr>
@@ -705,6 +707,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a39e8dac481c31dd6182cf722a37edf6d"><td class="mdescLeft">&#160;</td><td class="mdescRight">One bounded idle-monitor slice (M1-M3). Runs the enabled scanners for CONFIG_IDLE_MONITOR_CHUNK TCBs total, then returns. BSP-idle only; never blocks, allocates, or skips hlt.  <br /></td></tr>
 <tr class="memitem:aadf277954fd86eeba0a08c68e1f25c06" id="r_aadf277954fd86eeba0a08c68e1f25c06"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#aadf277954fd86eeba0a08c68e1f25c06">__attribute__</a> ((weak)) void watchdog_expiry_handler(<a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;<a class="el" href="namespacekernel_1_1task.html">task</a></td></tr>
 <tr class="memdesc:aadf277954fd86eeba0a08c68e1f25c06"><td class="mdescLeft">&#160;</td><td class="mdescRight">Weak callback invoked when a task's watchdog expires. Called from ISR context (on_tick) under scheduler_lock_ — must not block; KILL action defers via defer_kill() (deadline ACTION==3 precedent). Always enters the ring (TIMING+6 ERROR, fail-closed).  <br /></td></tr>
+<tr class="memitem:a4d72486ca89ba12aa6c085900f13377f" id="r_a4d72486ca89ba12aa6c085900f13377f"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4d72486ca89ba12aa6c085900f13377f">scheduler_lock_depth_own</a> () <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
+<tr class="memdesc:a4d72486ca89ba12aa6c085900f13377f"><td class="mdescLeft">&#160;</td><td class="mdescRight">This CPU's take depth — the per-CPU equivalent of the old global holder() check. Returns 0 iff this CPU holds nothing.  <br /></td></tr>
 <tr class="memitem:a3a7f1bcc985d92d3fd4933485ae502f4" id="r_a3a7f1bcc985d92d3fd4933485ae502f4"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3a7f1bcc985d92d3fd4933485ae502f4">dispatch_step</a> (uint64_t step_bit) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a3a7f1bcc985d92d3fd4933485ae502f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record one dispatch step (honors the test skip mask in debug).  <br /></td></tr>
 <tr class="memitem:ae5d48d078d93dfa08b5cbf031809c099" id="r_ae5d48d078d93dfa08b5cbf031809c099"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae5d48d078d93dfa08b5cbf031809c099">dispatch_step</a> (<a class="el" href="#ad70275577c5bd4a37c1c5d01a850b233">SchedDispatchSteps</a> step_value) <a class="el" href="#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
@@ -903,7 +907,7 @@ Variables</h2></td></tr>
 <tr class="memdesc:ac685742eaa07e592bff0bab7216c0253"><td class="mdescLeft">&#160;</td><td class="mdescRight">Recovery address for safe user memory access. Non-zero while we are inside a user memory copy attempt. Page fault handler checks this and redirects here on fault.  <br /></td></tr>
 <tr class="memitem:a29af56aad516c628a83f9ba5b5c8a0dd" id="r_a29af56aad516c628a83f9ba5b5c8a0dd"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a29af56aad516c628a83f9ba5b5c8a0dd">k_path_mix</a> = 0x9E3779B97F4A7C15ULL</td></tr>
 <tr class="memdesc:a29af56aad516c628a83f9ba5b5c8a0dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Odd golden-ratio constant for the order-sensitive fold.  <br /></td></tr>
-<tr class="memitem:a67b94ac0efe883462e36260fe703bfce" id="r_a67b94ac0efe883462e36260fe703bfce"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a67b94ac0efe883462e36260fe703bfce">g_path_chain</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
+<tr class="memitem:a67b94ac0efe883462e36260fe703bfce" id="r_a67b94ac0efe883462e36260fe703bfce"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a67b94ac0efe883462e36260fe703bfce">g_path_chain</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>] = {}</td></tr>
 <tr class="memitem:a1f2097a483b8b9b8bf08efcacf47df7a" id="r_a1f2097a483b8b9b8bf08efcacf47df7a"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a1f2097a483b8b9b8bf08efcacf47df7a">k_fast_word_regs</a> [IPC_FAST_PAYLOAD_BYTES/8]</td></tr>
 <tr class="memdesc:a1f2097a483b8b9b8bf08efcacf47df7a"><td class="mdescLeft">&#160;</td><td class="mdescRight">regs[] indices of the 6 fastpath payload words (issue #11, paper §3.2): rsi(4), rdi(5), r8(7), r9(8), r10(9), r11(10). Single source of truth shared by the fast handlers and the ABI test (anti-drift). rbp(6) is deliberately excluded (frame-pointer safety); rcx(2)/rdx(3) carry type/data_size in the live ABI.  <br /></td></tr>
 <tr class="memitem:ad6ca324811bf34cc24e412c7353d1c31" id="r_ad6ca324811bf34cc24e412c7353d1c31"><td class="memItemLeft">constexpr uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ad6ca324811bf34cc24e412c7353d1c31">IRQ_VECTOR_MIN</a> = 33</td></tr>
@@ -941,22 +945,22 @@ Variables</h2></td></tr>
 <tr class="memitem:a3bc3a31c6af358bc14fd59ca1ec1d75e" id="r_a3bc3a31c6af358bc14fd59ca1ec1d75e"><td class="memItemLeft">&#160;</td><td class="memItemRight"><a class="el" href="#a3bc3a31c6af358bc14fd59ca1ec1d75e">return</a></td></tr>
 <tr class="memitem:aee5d1a5418bf1d00cf1dc061ff2832b8" id="r_aee5d1a5418bf1d00cf1dc061ff2832b8"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aee5d1a5418bf1d00cf1dc061ff2832b8">kTaskExitRingDepth</a> = 4</td></tr>
 <tr class="memdesc:aee5d1a5418bf1d00cf1dc061ff2832b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ring depth: last 4 user exits, oldest overwritten.  <br /></td></tr>
-<tr class="memitem:a8817c181097f042b8820d9cee86cc4b7" id="r_a8817c181097f042b8820d9cee86cc4b7"><td class="memItemLeft">uint64_t *&#160;</td><td class="memItemRight"><a class="el" href="#a8817c181097f042b8820d9cee86cc4b7">scheduler_save_rsp_to</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memdesc:a8817c181097f042b8820d9cee86cc4b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot).  <br /></td></tr>
-<tr class="memitem:abc2636a4499534ec927314c4986490c9" id="r_abc2636a4499534ec927314c4986490c9"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abc2636a4499534ec927314c4986490c9">scheduler_load_rsp_from</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:ab2ec048806a6cd223e72e927ab792e6b" id="r_ab2ec048806a6cd223e72e927ab792e6b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2ec048806a6cd223e72e927ab792e6b">scheduler_load_cr3_from</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a5f0ed8f52ab6874d2938edb23d258ada" id="r_a5f0ed8f52ab6874d2938edb23d258ada"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5f0ed8f52ab6874d2938edb23d258ada">scheduler_load_tls_from</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a34491a1a1dfdbb4bc359f8110d283e93" id="r_a34491a1a1dfdbb4bc359f8110d283e93"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a34491a1a1dfdbb4bc359f8110d283e93">scheduler_next_task_id</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a37bdeed47659d598826673faf0480073" id="r_a37bdeed47659d598826673faf0480073"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a37bdeed47659d598826673faf0480073">scheduler_load_kstack_base</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a8817c181097f042b8820d9cee86cc4b7" id="r_a8817c181097f042b8820d9cee86cc4b7"><td class="memItemLeft">uint64_t *&#160;</td><td class="memItemRight"><a class="el" href="#a8817c181097f042b8820d9cee86cc4b7">scheduler_save_rsp_to</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:a8817c181097f042b8820d9cee86cc4b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#a61efca22542889281606077db9458129" title="Current CPU&#39;s logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre...">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot).  <br /></td></tr>
+<tr class="memitem:abc2636a4499534ec927314c4986490c9" id="r_abc2636a4499534ec927314c4986490c9"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abc2636a4499534ec927314c4986490c9">scheduler_load_rsp_from</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:ab2ec048806a6cd223e72e927ab792e6b" id="r_ab2ec048806a6cd223e72e927ab792e6b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ab2ec048806a6cd223e72e927ab792e6b">scheduler_load_cr3_from</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a5f0ed8f52ab6874d2938edb23d258ada" id="r_a5f0ed8f52ab6874d2938edb23d258ada"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a5f0ed8f52ab6874d2938edb23d258ada">scheduler_load_tls_from</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a34491a1a1dfdbb4bc359f8110d283e93" id="r_a34491a1a1dfdbb4bc359f8110d283e93"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a34491a1a1dfdbb4bc359f8110d283e93">scheduler_next_task_id</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a37bdeed47659d598826673faf0480073" id="r_a37bdeed47659d598826673faf0480073"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a37bdeed47659d598826673faf0480073">scheduler_load_kstack_base</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a37bdeed47659d598826673faf0480073"><td class="mdescLeft">&#160;</td><td class="mdescRight">Kernel-stack range of the task being dispatched. isr_stubs.asm verifies scheduler_load_rsp_from lies within [scheduler_load_kstack_base, scheduler_load_kstack_top) before iretq.  <br /></td></tr>
-<tr class="memitem:a687798275dc6880000977475427d7f60" id="r_a687798275dc6880000977475427d7f60"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a687798275dc6880000977475427d7f60">scheduler_load_kstack_top</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a7f4d2c64ad76e92277ca6d410d650da4" id="r_a7f4d2c64ad76e92277ca6d410d650da4"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7f4d2c64ad76e92277ca6d410d650da4">scheduler_switch_generation</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a687798275dc6880000977475427d7f60" id="r_a687798275dc6880000977475427d7f60"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a687798275dc6880000977475427d7f60">scheduler_load_kstack_top</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a7f4d2c64ad76e92277ca6d410d650da4" id="r_a7f4d2c64ad76e92277ca6d410d650da4"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7f4d2c64ad76e92277ca6d410d650da4">scheduler_switch_generation</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a7f4d2c64ad76e92277ca6d410d650da4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU generation sequence counter for the deferred-switch pair (publish-then-bump-then-arm protocol; asm re-verifies before apply).  <br /></td></tr>
 <tr class="memitem:a45c7ed02104a8f2dc79052a0301a16c3" id="r_a45c7ed02104a8f2dc79052a0301a16c3"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a45c7ed02104a8f2dc79052a0301a16c3">scheduler_kernel_cr3</a></td></tr>
 <tr class="memdesc:a45c7ed02104a8f2dc79052a0301a16c3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Static kernel PML4 (physical). isr_stubs.asm falls back to this when scheduler_load_cr3_from is null/outdated while returning to the kernel/harness context.  <br /></td></tr>
-<tr class="memitem:afb68be65bad6d813cd555b20b9500a4f" id="r_afb68be65bad6d813cd555b20b9500a4f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb68be65bad6d813cd555b20b9500a4f">scheduler_need_resched</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:afb68be65bad6d813cd555b20b9500a4f" id="r_afb68be65bad6d813cd555b20b9500a4f"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#afb68be65bad6d813cd555b20b9500a4f">scheduler_need_resched</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:afb68be65bad6d813cd555b20b9500a4f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU reschedule request flag (task-context producers; each CPU's timer ISR is the sole publisher of its own switch buffer — the single-writer-per-tick discipline from the two-publisher fix).  <br /></td></tr>
-<tr class="memitem:a914ef87f8e792f89a48aafc7c67b3112" id="r_a914ef87f8e792f89a48aafc7c67b3112"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a914ef87f8e792f89a48aafc7c67b3112">scheduler_force_apply</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a914ef87f8e792f89a48aafc7c67b3112" id="r_a914ef87f8e792f89a48aafc7c67b3112"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a914ef87f8e792f89a48aafc7c67b3112">scheduler_force_apply</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a914ef87f8e792f89a48aafc7c67b3112"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU one-shot force-apply for terminate-driven arms (issue #221). Set by switch_away_from_terminating when it publishes (or keeps) a switch-away arm; the riscv64 trap epilogue applies the pending arm unconditionally while set, then clears it. Without this, a terminating task's epilogue can gate-skip the arm and sret back into the dead task (double-fault park, IRQs masked).  <br /></td></tr>
 <tr class="memitem:a48b013f336f1cc7c0546ff7a5aa9db11" id="r_a48b013f336f1cc7c0546ff7a5aa9db11"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a48b013f336f1cc7c0546ff7a5aa9db11">scheduler_corruption_count</a></td></tr>
 <tr class="memdesc:a48b013f336f1cc7c0546ff7a5aa9db11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on every detected scheduler corruption (invalid TCB magic, RSP outside kernel-stack range, etc). Reset to zero in test_isolate restore; test framework fails any test where the counter advanced.  <br /></td></tr>
@@ -964,6 +968,8 @@ Variables</h2></td></tr>
 <tr class="memdesc:a9280448447d20124500fb1be0a0ed68f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monotonic counter incremented on each successful deadline- detection scan in on_tick(). Used by tests to verify that the scan completes without aborting. If a test expects the scan to run (e.g. after setting up a deadline miss) but the counter did not advance, the try_lock was contended or a corruption panic aborted the scan.  <br /></td></tr>
 <tr class="memitem:a0635983d70bccde24c7125eba436d74e" id="r_a0635983d70bccde24c7125eba436d74e"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a0635983d70bccde24c7125eba436d74e">fpu_nm_depth_max</a></td></tr>
 <tr class="memdesc:a0635983d70bccde24c7125eba436d74e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Highest isr_nesting_depth observed inside the #NM handler (issue #93, INV-FPU2 pin). Reset in test_isolate restore; a #NM storm must keep it &lt;= baseline + 1 (interrupt-gate #NM can never nest a timer ISR inside the owner-swap).  <br /></td></tr>
+<tr class="memitem:a183ea0751fe24cb824ef0e50d34d531c" id="r_a183ea0751fe24cb824ef0e50d34d531c"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a183ea0751fe24cb824ef0e50d34d531c">scheduler_lock_depth</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memdesc:a183ea0751fe24cb824ef0e50d34d531c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Per-CPU scheduler_lock_ take depth (#417; defined in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>, zero-initialised). Slot [cpu] counts takes of scheduler_lock_ by that CPU not yet released. Single-CPU invariant: 0 outside a take, 1 inside (the lock is non-recursive). SMP: a CPU only ever touches its own slot. NOT part of <a class="el" href="structkernel_1_1_sched_per_cpu_pod.html" title="POD snapshot of all per-CPU scheduler runtime (issue #25 C1). Plain data; memcpy-safe....">SchedPerCpuPod</a> snapshots: the depth is transient by construction — test boundaries and quiesce run with the lock released, the same assumption the old global holder_ slot already relied on.  <br /></td></tr>
 <tr class="memitem:a432cfda35c27a0178e3df0ab62301bc0" id="r_a432cfda35c27a0178e3df0ab62301bc0"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a432cfda35c27a0178e3df0ab62301bc0">k_dispatch_arm_expected</a></td></tr>
 <tr class="memdesc:a432cfda35c27a0178e3df0ab62301bc0"><td class="mdescLeft">&#160;</td><td class="mdescRight">reschedule() arm segment: peek + publish only.  <br /></td></tr>
 <tr class="memitem:a371739af8778e4b6f3977689cdf7d562" id="r_a371739af8778e4b6f3977689cdf7d562"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a371739af8778e4b6f3977689cdf7d562">k_dispatch_select_expected</a></td></tr>
@@ -1017,27 +1023,27 @@ Variables</h2></td></tr>
 <tr class="memitem:a74cc18daff81587aac344bfc7b70f645" id="r_a74cc18daff81587aac344bfc7b70f645"><td class="memTemplParams" colspan="2">template&lt;typename T&gt; </td></tr>
 <tr class="memitem:a74cc18daff81587aac344bfc7b70f645 template"><td class="memItemLeft">constexpr bool&#160;</td><td class="memItemRight"><a class="el" href="#a74cc18daff81587aac344bfc7b70f645">_is_reference_v&lt; T &amp;&amp; &gt;</a> = true</td></tr>
 <tr class="memitem:a1ef5e4f152e0a8f0e76f0db3d237f53f" id="r_a1ef5e4f152e0a8f0e76f0db3d237f53f"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1ef5e4f152e0a8f0e76f0db3d237f53f">H2_EV_CLR_RMS</a></td></tr>
-<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:afb951a0a8f6e63af6dd190d0bd0b2a8b" id="r_afb951a0a8f6e63af6dd190d0bd0b2a8b"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#afb951a0a8f6e63af6dd190d0bd0b2a8b">LIU_LEYLAND_BOUNDS</a> [<a class="el" href="#a16fea4c5faf20db44d262d6ea0e8424c">LIU_LEYLAND_MAX_TASKS</a>+1]</td></tr>
 <tr class="memitem:a674447c3137d6dc175c76b3406a816ef" id="r_a674447c3137d6dc175c76b3406a816ef"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a674447c3137d6dc175c76b3406a816ef">LIU_LEYLAND_LIMIT</a></td></tr>
 <tr class="memitem:a16fea4c5faf20db44d262d6ea0e8424c" id="r_a16fea4c5faf20db44d262d6ea0e8424c"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a16fea4c5faf20db44d262d6ea0e8424c">LIU_LEYLAND_MAX_TASKS</a></td></tr>
-<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a4ca3ef7028f1d907439e901e5b17094e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Issue #225: per-CPU interrupted-PC slot for the debugger park check. Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.  <br /></td></tr>
 <tr class="memitem:a063f8b6b3d6489ea29f8bb8e42801ebf" id="r_a063f8b6b3d6489ea29f8bb8e42801ebf"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a063f8b6b3d6489ea29f8bb8e42801ebf">s_deferred_kill_count</a></td></tr>
 <tr class="memitem:afb951a0a8f6e63af6dd190d0bd0b2a8b" id="r_afb951a0a8f6e63af6dd190d0bd0b2a8b"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#afb951a0a8f6e63af6dd190d0bd0b2a8b">LIU_LEYLAND_BOUNDS</a> [<a class="el" href="#a16fea4c5faf20db44d262d6ea0e8424c">LIU_LEYLAND_MAX_TASKS</a>+1]</td></tr>
 <tr class="memitem:a674447c3137d6dc175c76b3406a816ef" id="r_a674447c3137d6dc175c76b3406a816ef"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a674447c3137d6dc175c76b3406a816ef">LIU_LEYLAND_LIMIT</a></td></tr>
 <tr class="memitem:a16fea4c5faf20db44d262d6ea0e8424c" id="r_a16fea4c5faf20db44d262d6ea0e8424c"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a16fea4c5faf20db44d262d6ea0e8424c">LIU_LEYLAND_MAX_TASKS</a></td></tr>
-<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a4ca3ef7028f1d907439e901e5b17094e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Issue #225: per-CPU interrupted-PC slot for the debugger park check. Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.  <br /></td></tr>
 <tr class="memitem:ae9678bd39ce74f29e67d1028c705de03" id="r_ae9678bd39ce74f29e67d1028c705de03"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#ae9678bd39ce74f29e67d1028c705de03">MAX_DEFERRED_KILLS</a></td></tr>
 <tr class="memitem:a063f8b6b3d6489ea29f8bb8e42801ebf" id="r_a063f8b6b3d6489ea29f8bb8e42801ebf"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a063f8b6b3d6489ea29f8bb8e42801ebf">s_deferred_kill_count</a></td></tr>
 <tr class="memitem:aa89ba7d011f717834ed99cada28854e2" id="r_aa89ba7d011f717834ed99cada28854e2"><td class="memItemLeft">constinit <a class="el" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> *&#160;</td><td class="memItemRight"><a class="el" href="#aa89ba7d011f717834ed99cada28854e2">s_deferred_kill_tasks</a> [<a class="el" href="#ae9678bd39ce74f29e67d1028c705de03">MAX_DEFERRED_KILLS</a>]</td></tr>
-<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
-<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:afb951a0a8f6e63af6dd190d0bd0b2a8b" id="r_afb951a0a8f6e63af6dd190d0bd0b2a8b"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#afb951a0a8f6e63af6dd190d0bd0b2a8b">LIU_LEYLAND_BOUNDS</a> [<a class="el" href="#a16fea4c5faf20db44d262d6ea0e8424c">LIU_LEYLAND_MAX_TASKS</a>+1]</td></tr>
 <tr class="memitem:a674447c3137d6dc175c76b3406a816ef" id="r_a674447c3137d6dc175c76b3406a816ef"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a674447c3137d6dc175c76b3406a816ef">LIU_LEYLAND_LIMIT</a></td></tr>
 <tr class="memitem:a16fea4c5faf20db44d262d6ea0e8424c" id="r_a16fea4c5faf20db44d262d6ea0e8424c"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a16fea4c5faf20db44d262d6ea0e8424c">LIU_LEYLAND_MAX_TASKS</a></td></tr>
-<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:aa1ef3eff1e4cfbe8f74e274147275b20" id="r_aa1ef3eff1e4cfbe8f74e274147275b20"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#aa1ef3eff1e4cfbe8f74e274147275b20">IRET_CS_IDX</a></td></tr>
 <tr class="memdesc:aa1ef3eff1e4cfbe8f74e274147275b20"><td class="mdescLeft">&#160;</td><td class="mdescRight">CS.  <br /></td></tr>
 <tr class="memitem:abf413b3b054aa58ae5811a2d8b41af20" id="r_abf413b3b054aa58ae5811a2d8b41af20"><td class="memItemLeft">constexpr <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#abf413b3b054aa58ae5811a2d8b41af20">IRET_RFLAGS_IDX</a></td></tr>
@@ -1056,7 +1062,7 @@ Variables</h2></td></tr>
 <tr class="memitem:a4333b7e9e0f4c429cbcbbd13ac742847" id="r_a4333b7e9e0f4c429cbcbbd13ac742847"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4333b7e9e0f4c429cbcbbd13ac742847">H2_EV_IDLE_ARM</a></td></tr>
 <tr class="memitem:a1ef5e4f152e0a8f0e76f0db3d237f53f" id="r_a1ef5e4f152e0a8f0e76f0db3d237f53f"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1ef5e4f152e0a8f0e76f0db3d237f53f">H2_EV_CLR_RMS</a></td></tr>
 <tr class="memitem:a063f8b6b3d6489ea29f8bb8e42801ebf" id="r_a063f8b6b3d6489ea29f8bb8e42801ebf"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a063f8b6b3d6489ea29f8bb8e42801ebf">s_deferred_kill_count</a></td></tr>
-<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4ca3ef7028f1d907439e901e5b17094e">debug_tick_pc_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a4ca3ef7028f1d907439e901e5b17094e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Issue #225: per-CPU interrupted-PC slot for the debugger park check. Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
@@ -1093,7 +1099,7 @@ Variables</h2></td></tr>
 </div><div class="memdoc">
 <b>Initial value:</b><div class="fragment"><div class="line">uint64_t (*)(uint64_t arg0, uint64_t arg1, uint64_t arg2,</div>
 <div class="line">                                   uint64_t arg3, uint64_t *<a class="code hl_variable" href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a>)</div>
-<div class="ttc" id="akernel_8cpp_html_acf673abd8f09c5656f8e1093ef6ef708"><div class="ttname"><a href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a></div><div class="ttdeci">uint64_t uint64_t uint64_t * regs</div><div class="ttdef"><b>Definition</b> kernel.cpp:1930</div></div>
+<div class="ttc" id="akernel_8cpp_html_acf673abd8f09c5656f8e1093ef6ef708"><div class="ttname"><a href="kernel_8cpp.html#acf673abd8f09c5656f8e1093ef6ef708">regs</a></div><div class="ttdeci">uint64_t uint64_t uint64_t * regs</div><div class="ttdef"><b>Definition</b> kernel.cpp:1992</div></div>
 </div><!-- fragment -->
 <p>System call handler function signature. §2 binding: uint64_t return; success ≥ 0, failure (uint64_t)-errno; libc predicate in <a class="el" href="syscall_8h.html">syscall.h</a>. Reachable failures return codes only. </p>
 
@@ -2477,12 +2483,6 @@ template&lt;typename To, TriviallyCopiable From&gt; </div>
 </div><div class="memdoc">
 
 <p>Raw entry stamp for the boot budget gate (issue #45). </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacekernel_ae369e3a5b4081280571e619d0877856d_cgraph.png" border="0" usemap="#anamespacekernel_ae369e3a5b4081280571e619d0877856d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
-</div>
 
 </div>
 </div>
@@ -2508,12 +2508,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacekernel_ad2597cced737d422c403d4c25437f61e_cgraph.png" border="0" usemap="#anamespacekernel_ad2597cced737d422c403d4c25437f61e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
-</div>
 
 </div>
 </div>
@@ -2539,12 +2533,6 @@ Here is the call graph for this function:</div>
   </tr>
 </table>
 </div><div class="memdoc">
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="namespacekernel_afe82421db302cf9007f1bfe16cff939d_cgraph.png" border="0" usemap="#anamespacekernel_afe82421db302cf9007f1bfe16cff939d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 4 -->
-</div>
 
 </div>
 </div>
@@ -2657,7 +2645,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph.png" border="0" usemap="#anamespacekernel_a59203fb708dcb70f7046b645fb81052e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 5 -->
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -2702,7 +2690,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph.png" border="0" usemap="#anamespacekernel_a772626334577fb34746dd85c3e6e3b9c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 6 -->
+<!-- MAP 3 -->
 </div>
 
 </div>
@@ -2758,7 +2746,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a53fa9d70d7a01fd1f30b7746a449654d_cgraph.png" border="0" usemap="#anamespacekernel_a53fa9d70d7a01fd1f30b7746a449654d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 7 -->
+<!-- MAP 4 -->
 </div>
 
 </div>
@@ -2793,7 +2781,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a1d1f72f7161fa8a1f32d2692b7c90d8c_cgraph.png" border="0" usemap="#anamespacekernel_a1d1f72f7161fa8a1f32d2692b7c90d8c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 8 -->
+<!-- MAP 5 -->
 </div>
 
 </div>
@@ -2832,7 +2820,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a71315692485213213eadc2ba69cc1aa8_cgraph.png" border="0" usemap="#anamespacekernel_a71315692485213213eadc2ba69cc1aa8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 9 -->
+<!-- MAP 6 -->
 </div>
 
 </div>
@@ -2892,7 +2880,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph.png" border="0" usemap="#anamespacekernel_a777bca6dec383faa735ebe34c5bdf749_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 10 -->
+<!-- MAP 7 -->
 </div>
 
 </div>
@@ -2917,7 +2905,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph.png" border="0" usemap="#anamespacekernel_a0ecf34d3e30ff218069c96a3645cf261_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 11 -->
+<!-- MAP 8 -->
 </div>
 
 </div>
@@ -3123,7 +3111,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ae5d48d078d93dfa08b5cbf031809c099_cgraph.png" border="0" usemap="#anamespacekernel_ae5d48d078d93dfa08b5cbf031809c099_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 12 -->
+<!-- MAP 9 -->
 </div>
 
 </div>
@@ -3156,7 +3144,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a7f1bcc985d92d3fd4933485ae502f4_cgraph.png" border="0" usemap="#anamespacekernel_a3a7f1bcc985d92d3fd4933485ae502f4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 13 -->
+<!-- MAP 10 -->
 </div>
 
 </div>
@@ -3993,7 +3981,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afcb17dd10fbc535bd63bb71f13f14272_cgraph.png" border="0" usemap="#anamespacekernel_afcb17dd10fbc535bd63bb71f13f14272_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 14 -->
+<!-- MAP 11 -->
 </div>
 
 </div>
@@ -4062,7 +4050,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ad5b4191fcd81829821bf9a34fb3e6609_cgraph.png" border="0" usemap="#anamespacekernel_ad5b4191fcd81829821bf9a34fb3e6609_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 15 -->
+<!-- MAP 12 -->
 </div>
 
 </div>
@@ -4124,7 +4112,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa63c25ddb5169f04129d082f0840e7c2_cgraph.png" border="0" usemap="#anamespacekernel_aa63c25ddb5169f04129d082f0840e7c2_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 16 -->
+<!-- MAP 13 -->
 </div>
 
 </div>
@@ -4157,7 +4145,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a39e8dac481c31dd6182cf722a37edf6d_cgraph.png" border="0" usemap="#anamespacekernel_a39e8dac481c31dd6182cf722a37edf6d_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 17 -->
+<!-- MAP 14 -->
 </div>
 
 </div>
@@ -4191,7 +4179,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ab716281fc620e28eba1868befe8eff05_cgraph.png" border="0" usemap="#anamespacekernel_ab716281fc620e28eba1868befe8eff05_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 18 -->
+<!-- MAP 15 -->
 </div>
 
 </div>
@@ -4337,7 +4325,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a81f47d51c706c42c9a88694b7b62c4e8_cgraph.png" border="0" usemap="#anamespacekernel_a81f47d51c706c42c9a88694b7b62c4e8_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 16 -->
 </div>
 
 </div>
@@ -4374,7 +4362,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a5b0a423c64722dbea816b61fcff3adcc_cgraph.png" border="0" usemap="#anamespacekernel_a5b0a423c64722dbea816b61fcff3adcc_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 17 -->
 </div>
 
 </div>
@@ -4420,7 +4408,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a6f5906a123859e1a431b15e664ddcbc1_cgraph.png" border="0" usemap="#anamespacekernel_a6f5906a123859e1a431b15e664ddcbc1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 18 -->
 </div>
 
 </div>
@@ -4527,7 +4515,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph.png" border="0" usemap="#anamespacekernel_abb9b26c8d76b814b9ed2a3c78bad290e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 19 -->
 </div>
 
 </div>
@@ -4841,7 +4829,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a25626431fd5ef9ee4a6698a65b1f0895_cgraph.png" border="0" usemap="#anamespacekernel_a25626431fd5ef9ee4a6698a65b1f0895_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -4866,7 +4854,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afa5566867274b1950bc3ed7acc375508_cgraph.png" border="0" usemap="#anamespacekernel_afa5566867274b1950bc3ed7acc375508_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -4891,7 +4879,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a74d19182fedd131cc4450ebe5242359e_cgraph.png" border="0" usemap="#anamespacekernel_a74d19182fedd131cc4450ebe5242359e_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -4974,7 +4962,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_affaa475d1e0ac61cef604410e598aef5_cgraph.png" border="0" usemap="#anamespacekernel_affaa475d1e0ac61cef604410e598aef5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -5011,7 +4999,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a482dceb71eed911e238f19118e3b99db_cgraph.png" border="0" usemap="#anamespacekernel_a482dceb71eed911e238f19118e3b99db_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -5048,7 +5036,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa495f96fbf4a3d25bb1afcace8d3d05c_cgraph.png" border="0" usemap="#anamespacekernel_aa495f96fbf4a3d25bb1afcace8d3d05c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -5081,7 +5069,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a8f2fb39a6f3047468e5d7e0d47a055df_cgraph.png" border="0" usemap="#anamespacekernel_a8f2fb39a6f3047468e5d7e0d47a055df_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -5114,7 +5102,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a22a7b2029d884e2644e18996f6d32a7a_cgraph.png" border="0" usemap="#anamespacekernel_a22a7b2029d884e2644e18996f6d32a7a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 30 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -5149,7 +5137,7 @@ template&lt;typename... E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ac0dfc57c0ca659f41aec20aa95a6ee87_cgraph.png" border="0" usemap="#anamespacekernel_ac0dfc57c0ca659f41aec20aa95a6ee87_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 31 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -5213,7 +5201,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a6a834ef9a5be3f74d413f335a5e8dcb5_cgraph.png" border="0" usemap="#anamespacekernel_a6a834ef9a5be3f74d413f335a5e8dcb5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 32 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -5246,7 +5234,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a94e0b0f3cccf9c2ac2a901f8f57de7a5_cgraph.png" border="0" usemap="#anamespacekernel_a94e0b0f3cccf9c2ac2a901f8f57de7a5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 33 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -5281,7 +5269,7 @@ template&lt;Enum E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a60ced87cba5aa87864a6cbc268bc66d6_cgraph.png" border="0" usemap="#anamespacekernel_a60ced87cba5aa87864a6cbc268bc66d6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 34 -->
+<!-- MAP 31 -->
 </div>
 
 </div>
@@ -5314,7 +5302,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a86a023bc72a32ad58b7d72e845565c03_cgraph.png" border="0" usemap="#anamespacekernel_a86a023bc72a32ad58b7d72e845565c03_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 35 -->
+<!-- MAP 32 -->
 </div>
 
 </div>
@@ -5347,7 +5335,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ac1a6a8f9c61fb801dd07e17dc160aad0_cgraph.png" border="0" usemap="#anamespacekernel_ac1a6a8f9c61fb801dd07e17dc160aad0_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 36 -->
+<!-- MAP 33 -->
 </div>
 
 </div>
@@ -5401,7 +5389,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph.png" border="0" usemap="#anamespacekernel_a3a9da091bb2229af08f856b08498fa51_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 37 -->
+<!-- MAP 34 -->
 </div>
 
 </div>
@@ -5502,7 +5490,40 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afd055fda8598441f99e25ff68ddfd338_cgraph.png" border="0" usemap="#anamespacekernel_afd055fda8598441f99e25ff68ddfd338_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 38 -->
+<!-- MAP 35 -->
+</div>
+
+</div>
+</div>
+<a id="a4d72486ca89ba12aa6c085900f13377f" name="a4d72486ca89ba12aa6c085900f13377f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d72486ca89ba12aa6c085900f13377f">&#9670;&#160;</a></span>scheduler_lock_depth_own()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::scheduler_lock_depth_own </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>This CPU's take depth — the per-CPU equivalent of the old global holder() check. Returns 0 iff this CPU holds nothing. </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_a4d72486ca89ba12aa6c085900f13377f_cgraph.png" border="0" usemap="#anamespacekernel_a4d72486ca89ba12aa6c085900f13377f_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 36 -->
 </div>
 
 </div>
@@ -5618,7 +5639,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_ad809cb492189b631f97f59e576ca4566_cgraph.png" border="0" usemap="#anamespacekernel_ad809cb492189b631f97f59e576ca4566_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 39 -->
+<!-- MAP 37 -->
 </div>
 
 </div>
@@ -5684,7 +5705,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph.png" border="0" usemap="#anamespacekernel_a9bbea2daa70fd81363d98ce7b9c9f943_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 40 -->
+<!-- MAP 38 -->
 </div>
 
 </div>
@@ -5716,7 +5737,7 @@ The fd index, or VFS_INVALID on failure. </dd></dl>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph.png" border="0" usemap="#anamespacekernel_a9799f9b32ab65aeb956ce8717fe91bc4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 41 -->
+<!-- MAP 39 -->
 </div>
 
 </div>
@@ -5742,7 +5763,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph.png" border="0" usemap="#anamespacekernel_aa7278439c20dc6234a77d3b08290701f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 42 -->
+<!-- MAP 40 -->
 </div>
 
 </div>
@@ -5774,7 +5795,7 @@ The fd index, or VFS_INVALID on failure. </dd></dl>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph.png" border="0" usemap="#anamespacekernel_afbcf504abb27c24da8a91380e1f73882_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 43 -->
+<!-- MAP 41 -->
 </div>
 
 </div>
@@ -5917,7 +5938,7 @@ template&lt;typename E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aede26da92b8e8907e42f8360f5f5d4d6_cgraph.png" border="0" usemap="#anamespacekernel_aede26da92b8e8907e42f8360f5f5d4d6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 44 -->
+<!-- MAP 42 -->
 </div>
 
 </div>
@@ -5950,7 +5971,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a4c23531a101e27c4223754109ba5b89c_cgraph.png" border="0" usemap="#anamespacekernel_a4c23531a101e27c4223754109ba5b89c_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 45 -->
+<!-- MAP 43 -->
 </div>
 
 </div>
@@ -5983,7 +6004,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_affb587aabb41091e32d5cf0f3c232149_cgraph.png" border="0" usemap="#anamespacekernel_affb587aabb41091e32d5cf0f3c232149_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 46 -->
+<!-- MAP 44 -->
 </div>
 
 </div>
@@ -6016,7 +6037,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a579cd1e79fb3b12f9a592183c66b3f7f_cgraph.png" border="0" usemap="#anamespacekernel_a579cd1e79fb3b12f9a592183c66b3f7f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 47 -->
+<!-- MAP 45 -->
 </div>
 
 </div>
@@ -6063,7 +6084,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph.png" border="0" usemap="#anamespacekernel_aa583fe65545291d14aa9afd4b95f2576_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 48 -->
+<!-- MAP 46 -->
 </div>
 
 </div>
@@ -6532,7 +6553,7 @@ template&lt;Enum E&gt; </div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a56febead1e6ad1b0808a6b0807c5aebf_cgraph.png" border="0" usemap="#anamespacekernel_a56febead1e6ad1b0808a6b0807c5aebf_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 49 -->
+<!-- MAP 47 -->
 </div>
 
 </div>
@@ -6565,7 +6586,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a86b16fba95948e6798ebd256bf7cb80b_cgraph.png" border="0" usemap="#anamespacekernel_a86b16fba95948e6798ebd256bf7cb80b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 50 -->
+<!-- MAP 48 -->
 </div>
 
 </div>
@@ -6604,7 +6625,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a6b5ee8c17a9a6bdac4152aff1443b58b_cgraph.png" border="0" usemap="#anamespacekernel_a6b5ee8c17a9a6bdac4152aff1443b58b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 51 -->
+<!-- MAP 49 -->
 </div>
 
 </div>
@@ -6646,7 +6667,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_a58d591caf1b230899994e1ab11a29415_cgraph.png" border="0" usemap="#anamespacekernel_a58d591caf1b230899994e1ab11a29415_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 52 -->
+<!-- MAP 50 -->
 </div>
 
 </div>
@@ -9056,6 +9077,30 @@ template&lt;typename T&gt; </div>
 
 </div>
 </div>
+<a id="a183ea0751fe24cb824ef0e50d34d531c" name="a183ea0751fe24cb824ef0e50d34d531c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a183ea0751fe24cb824ef0e50d34d531c">&#9670;&#160;</a></span>scheduler_lock_depth</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::scheduler_lock_depth[<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel extern">extern</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Per-CPU scheduler_lock_ take depth (#417; defined in <a class="el" href="global__state_8cpp.html" title="Single definition point for all cross-TU kernel globals.">core/global_state.cpp</a>, zero-initialised). Slot [cpu] counts takes of scheduler_lock_ by that CPU not yet released. Single-CPU invariant: 0 outside a take, 1 inside (the lock is non-recursive). SMP: a CPU only ever touches its own slot. NOT part of <a class="el" href="structkernel_1_1_sched_per_cpu_pod.html" title="POD snapshot of all per-CPU scheduler runtime (issue #25 C1). Plain data; memcpy-safe....">SchedPerCpuPod</a> snapshots: the depth is transient by construction — test boundaries and quiesce run with the lock released, the same assumption the old global holder_ slot already relied on. </p>
+
+</div>
+</div>
 <a id="afb68be65bad6d813cd555b20b9500a4f" name="afb68be65bad6d813cd555b20b9500a4f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#afb68be65bad6d813cd555b20b9500a4f">&#9670;&#160;</a></span>scheduler_need_resched</h2>
 
@@ -9122,7 +9167,7 @@ template&lt;typename T&gt; </div>
 </table>
 </div><div class="memdoc">
 
-<p>Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot). </p>
+<p>Per-CPU deferred-switch atoms (issue #25 C1). Each CPU's timer ISR publishes to its own slots; each CPU's ISR epilogue consumes its own. C++ indexes by <a class="el" href="namespacearch.html#a61efca22542889281606077db9458129" title="Current CPU&#39;s logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre...">arch::cpu_index()</a>; x86_64 asm indexes via gs:0x10 (INV-PC4 forbids BARE [rel scheduler_*]); riscv asm uses the array base (== [0], single-core there). scheduler_kernel_cr3 stays scalar (read-only after boot). </p>
 
 </div>
 </div>
