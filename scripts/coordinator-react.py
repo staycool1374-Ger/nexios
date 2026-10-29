@@ -17,7 +17,7 @@ import argparse, glob, json, os, re, sys
 
 ROOMS_GLOB = '/tmp/nexios-*'
 SESS = {'dev': 'nexios-dev', 'qe': 'nexios-qe'}
-RUNBOOK_VERSION = 'v6 2026-10-29 (rows 1-12; ts-based new-post)'
+RUNBOOK_VERSION = 'v7 2026-10-29 (rows 1-12; ts-based new-post)'
 
 def tail(path, n=6):
     try:
@@ -116,6 +116,31 @@ def main():
             if b['new']:
                 actions.append((1, '#%s %s NEW POSTS x%d: %s'
                     % (r['issue'], box, len(b['new']), ' // '.join(x[:150] for x in b['new']))))
+    # 1a. retire dead rooms: CLOSED phase + room dir still present.
+    # Execution stays coordinator-side (disarm ticker + rm dir + unlink
+    # pointer in one turn); the machine only flags. Never auto-delete.
+    for r in rooms:
+        if str(r.get('phase', '')).startswith('CLOSED'):
+            actions.append((7, 'RETIRE room #%s (phase CLOSED, dir present): disarm ticker, rm %s, unlink .nexios-runtime/%s - same turn, verify gone' % (r['issue'], r['dir'], r['issue'])))
+    # 1b. watchdog coverage: every live room needs a live ticker, else no
+    # automatic wakes for it. Check watch.pid + kill-0 (no tickers = blindness).
+    import signal, subprocess
+    for r in rooms:
+        if not r.get('armed'):
+            continue  # parked/retired rooms need no ticker; live pipeline (armed) must be watched
+        pidf = os.path.join(r['dir'], 'watch.pid')
+        alive = False
+        try:
+            with open(pidf) as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)
+            ps = subprocess.run(['ps', '-o', 'args=', '-p', str(pid)],
+                                capture_output=True, text=True, timeout=10)
+            alive = ('__ticker' in ps.stdout) and (str(r['issue']) in ps.stdout)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            alive = False
+        if not alive:
+            actions.append((8, 'ARM watchdog for #%s: watchdog.sh arm %s (no live ticker - room is unwatched)' % (r['issue'], r['issue'])))
     # 2. worker checks (rows 6-9)
     wstates = {'dev': a.dev, 'qe': a.qe}
     for role, sess in SESS.items():
