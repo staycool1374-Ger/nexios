@@ -212,6 +212,7 @@ void register_stack_alloc_tests();
 void register_page_tables_tests();
 void register_kernel_isolation_tests();
 void register_memory_isolation_tests();
+void register_tlb_shootdown_tests();
 void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
 void register_stress_hrt_tests();
@@ -571,6 +572,7 @@ static void run_ipi_batching_group() { register_ipi_batching_tests(); }
 static void run_tlb_latency_group() { register_tlb_latency_tests(); }
 static void run_pml4_sync_group() { register_pml4_sync_tests(); }
 #endif
+static void run_tlb_shootdown_group() { register_tlb_shootdown_tests(); }
 static void run_drivers_core_group() { register_driver_tests(); }
 static void run_drivers_block_group() { register_block_device_tests(); }
 static void run_drivers_pci_group() { register_pci_tests(); }
@@ -891,6 +893,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
      []() { run_memory_kernel_isolation_group(); }},
     {"memory_isolation", []() { run_memory_isolation_group(); }},
     {"memory_vmm", []() { run_memory_vmm_group(); }},
+    {"tlb_shootdown", []() { run_tlb_shootdown_group(); }},
 
     // -- wcet / deadline: worst-case execution time and deadline handling --
     {"wcet_overrun", []() { run_wcet_overrun_group(); }},
@@ -1284,12 +1287,15 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // smp_multicpu: the SMP classes requiring a second CPU (issue #173).
     // Needs `-smp 2` (Makefile CLASS gate); every other aggregate keeps
     // the default single-CPU topology (variant-topology trap, issue #23).
+#endif
     {"smp_multicpu",
      []() {
+#if defined(CONFIG_ARCH_X86_64)
          run_smp_bringup_group();
          run_smp_sched_group();
-     }},
 #endif
+         run_tlb_shootdown_group();
+     }},
     {"deadline",
      []() {
          run_wcet_overrun_group();

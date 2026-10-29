@@ -314,7 +314,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers",             107,   62,      62     },  // drivers_* + virtio_blk_req + ahci_deep + net
     {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
-    {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain (2-CPU)
+    {"smp_multicpu",        21,   3,       3      },  // smp_bringup + smp_sched (x86) + tlb_shootdown E2E (2-CPU)
+    {"tlb_shootdown",          3,   3,       3      },  // cross-CPU shootdown E2E (skips single-CPU)
     {"deadline",            148,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time
     {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov

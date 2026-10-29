@@ -39,6 +39,41 @@
 
 using namespace kernel;
 
+namespace {
+
+/// @brief Single IOCD request/response from a dispatched kernel task
+///        (fixture-safe: the daemon replies to args[0], so the caller
+///        passes its own live pid; a bogus args[0] would strand the
+///        send_sync). Returns the reply result, or -99 on transport
+///        failure. data0_out is filled when non-null.
+int64_t iocd_roundtrip(uint64_t self_pid, uint64_t type, uint64_t arg1,
+                       uint64_t *data0_out) {
+    const uint64_t iocd_pid = kernel::iocd::get_iocd_pid();
+    if (iocd_pid == 0)
+        return -99;
+    kernel::iocd::Msg req{};
+    req.type = type;
+    req.args[0] = self_pid;
+    req.args[1] = arg1;
+    kernel::Message send{};
+    send.sender_id = self_pid;
+    send.type = type;
+    send.data_size = sizeof(req);
+    __builtin_memcpy(send.data, &req, sizeof(req));
+    kernel::Message reply{};
+    if (!kernel::IPC::send_sync(iocd_pid, send, reply))
+        return -99;
+    if (reply.data_size < sizeof(kernel::iocd::Reply))
+        return -99;
+    kernel::iocd::Reply rpl{};
+    __builtin_memcpy(&rpl, reply.data, sizeof(rpl));
+    if (data0_out != nullptr)
+        *data0_out = rpl.data[0];
+    return rpl.result;
+}
+
+} // namespace
+
 // Runmode: kernel
 // Testidea: Tests that an existing driver ("keyboard") can be found by name
 // and that a nonexistent driver returns nullptr
@@ -82,29 +117,104 @@ JARVIS_TEST(driver_registry_count, "PRE: iocd | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: STUB - Verifies the IOCD server boots successfully
-// Input: None (stub)
-// Expect: JARVIS_TEST_PASS() (stub, no actual assertion yet)
-// Depends: IOCD server, IPC
+// Testidea: Verifies the IOCD server boots and registers its PID, mirroring
+// the vfsd boot pin: the recorded PID is non-zero and resolves to a live
+// task. Fails loud if the daemon never registered (fail-closed boot).
+// Input: iocd::get_iocd_pid() + Scheduler::find_task(pid)
+// Expect: pid != 0 and the task lookup succeeds
+// Depends: IOCD server, Scheduler
 JARVIS_TEST(iocd_server_boots, "PRE: iocd | POST: none") {
+    uint64_t pid = iocd::get_iocd_pid();
+    JARVIS_ASSERT(pid != 0);
+    auto *task = Scheduler::find_task(pid);
+    JARVIS_ASSERT(task != nullptr);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
-// Testidea: STUB - Verifies the keyboard driver is integrated in IOCD
-// Input: None (stub)
-// Expect: JARVIS_TEST_PASS() (stub, no actual assertion yet)
-// Depends: IOCD server, keyboard driver, IPC
+// Testidea: Keyboard path integrated in IOCD end-to-end over live IPC: a
+// REAL dispatched kernel task drains the daemon byte queue, then proves the
+// empty-queue contract (result 0 + data 0). Serve-path proof (the daemon
+// responds, never blocks); decode tables are pinned separately by
+// hal_keyboard_decode (24 tests), so this test owns the IPC round-trip.
+// Input: dispatched task drives IOCD_KEYBOARD_READ until empty, then one
+// final read; harness joins and asserts
+// Expect: drain terminates with result 0; final read result 0, data[0] 0;
+// zero tracker delta (harness)
+// Depends: IOCD server, live IPC, Scheduler
 JARVIS_TEST(keyboard_driver_in_iocd, "PRE: iocd | POST: none") {
+    static int64_t g_kbd_drain_result = -99;
+    static uint64_t g_kbd_drain_data = 1;
+    static int64_t g_kbd_final_result = -99;
+    static uint64_t g_kbd_final_data = 1;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            const uint64_t self = cur ? cur->id : 0;
+            uint64_t data = 0;
+            int64_t last = -99;
+            for (int i = 0; i < 64; ++i) {
+                last = iocd_roundtrip(self, iocd::IOCD_KEYBOARD_READ, 0,
+                                      &data);
+                if (last != 1)
+                    break;
+            }
+            g_kbd_drain_result = last;
+            g_kbd_drain_data = data;
+            g_kbd_final_result =
+                iocd_roundtrip(self, iocd::IOCD_KEYBOARD_READ, 0, &data);
+            g_kbd_final_data = data;
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    kernel::test::terminate_if_live(t);
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_FMT(g_kbd_drain_result == 0, "drain end: %ld",
+                      g_kbd_drain_result);
+    JARVIS_ASSERT_EQ(0ULL, g_kbd_drain_data);
+    JARVIS_ASSERT_FMT(g_kbd_final_result == 0, "empty read: %ld",
+                      g_kbd_final_result);
+    JARVIS_ASSERT_EQ(0ULL, g_kbd_final_data);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
-// Testidea: STUB - Verifies the serial driver is integrated in IOCD
-// Input: None (stub)
-// Expect: JARVIS_TEST_PASS() (stub, no actual assertion yet)
-// Depends: IOCD server, serial driver, IPC
+// Testidea: Serial path via IOCD fails closed: the daemon's serial handlers
+// are unimplemented stubs that deny every request. The test pins the
+// fail-closed contract (never silent success, never a hang) from a REAL
+// dispatched kernel task over live IPC.
+// Input: dispatched task drives IOCD_SERIAL_READ + IOCD_SERIAL_WRITE;
+// harness joins and asserts
+// Expect: both replies arrive with result -1
+// Depends: IOCD server, live IPC, Scheduler
 JARVIS_TEST(serial_driver_in_iocd, "PRE: iocd | POST: none") {
+    static int64_t g_ser_read = -99;
+    static int64_t g_ser_write = -99;
+
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            const uint64_t self = cur ? cur->id : 0;
+            g_ser_read = iocd_roundtrip(self, iocd::IOCD_SERIAL_READ, 0,
+                                        nullptr);
+            g_ser_write = iocd_roundtrip(self, iocd::IOCD_SERIAL_WRITE, 0,
+                                         nullptr);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    kernel::test::terminate_if_live(t);
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_FMT(g_ser_read == -1, "serial read: %ld", g_ser_read);
+    JARVIS_ASSERT_FMT(g_ser_write == -1, "serial write: %ld", g_ser_write);
     JARVIS_TEST_PASS();
 }
 
