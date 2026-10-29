@@ -700,9 +700,26 @@ def main():
     with open(log_path, encoding="utf-8", errors="replace") as handle:
         text = handle.read()
     text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    # ENTER tracking (issue #351): find last ENTER without following S: = hung test
+    hung = None
+    lines = text.splitlines()
+    last_enter = None
+    last_enter_idx = -1
+    for idx, line in enumerate(lines):
+        if line.strip().startswith("ENTER "):
+            last_enter = line.strip()
+            last_enter_idx = idx
+    if last_enter is not None:
+        has_s_after = any(l.lstrip().startswith("S:") for l in lines[last_enter_idx+1:])
+        if not has_s_after:
+            hung = last_enter
+            # Also capture LEAK detail for that hung test if present in next lines
     rc, passed, failed, elapsed_ms, status = classify_verdict(text, args.cls)
     import datetime
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if hung:
+        # Append hung test info to status for visibility (keeps LEAK capture per ENTER)
+        status = status + " HUNG: %s" % hung if status else " HUNG: %s" % hung
     row = "%s %s PASSED: %s FAILED: %s TIME: %s%s" % (
         stamp, args.cls, passed, failed, elapsed_ms, status)
     if not args.no_history:
