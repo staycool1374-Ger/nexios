@@ -78,7 +78,7 @@ def load_room(rdir):
         # unacked coordinator order: FILE ORDER, not timestamps (session
         # clocks skew; a worker post filed after the order acks it even with
         # an older stamp). coord_idx/worker_idx over the full file.
-        cidx = [i for i, l in enumerate(fulllines) if ' FROM=coord NOTE' in l and '+ACK' in l]
+        cidx = [i for i, l in enumerate(fulllines) if (' FROM=coord NOTE' in l or ' FROM=coord NEED' in l) and '+ACK' in l]
         widx = [i for i, l in enumerate(fulllines) if re.match(r'^\d{4}-\d{2}-\d{2}T.* FROM=(dev|qe|audit|auditor) (READY|NEED|NOTE) ::', l)]
         unacked = bool(cidx) and (not widx or widx[-1] < cidx[-1])
         room['boxes'][box]['coord_last'] = fulllines[cidx[-1]][:160] if cidx else None
@@ -188,6 +188,9 @@ def main():
     if paused_rooms and not lb.get('paused'):
         actions.append((25, 'ROOM-PENDING PAUSE (rooms %s) but logbook not paused - reconcile pause flag' % ','.join(paused_rooms)))
     elif not lb.get('paused'):
+        if wstates.get('dev') == 'IDLE' and wstates.get('qe') == 'IDLE':
+            if not any('RING' in x[1] for x in actions):
+                actions.append((19, 'BOTH WORKERS IDLE on tick — assign next backlog immediately (never leave both idle); split by capability (dev product, qe testbed) or pull from milestone open set'))
         for role, sess in SESS.items():
             if wstates[role] == 'IDLE':
                 if not any(x[1].startswith('RING %s' % sess) for x in actions):
