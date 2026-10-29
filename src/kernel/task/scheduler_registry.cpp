@@ -42,6 +42,10 @@
 #include <assert.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/smp.hpp> // issue #323 ap_count (sched_up_cpus)
+#elif defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/smp.hpp> // issue #351 ap_count (sched_up_cpus)
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/smp.hpp> // issue #351 ap_count (sched_up_cpus)
 #endif
 
 namespace kernel {
@@ -107,8 +111,14 @@ void Scheduler::set_priority(TaskControlBlock &task,
 // ---------------------------------------------------------------------------
 
 /// @brief Number of CPUs currently up (BSP + parked/running APs).
+/// Issue #351 (up-cpu fix): x86_64 always counted APs; aarch64/riscv64
+/// fell through to 1, clamping every set_affinity to CPU0. All three
+/// arches publish kernel::smp::ap_count() from bring-up, so the
+/// conditional covers all three (verified on -smp2: AP parked + IPI/SGI
+/// loopback prove the counts before this gate opens).
 static uint64_t sched_up_cpus() noexcept {
-#if defined(CONFIG_ARCH_X86_64)
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
+    defined(CONFIG_ARCH_RISCV64)
     return 1 + kernel::smp::ap_count();
 #else
     return 1;
