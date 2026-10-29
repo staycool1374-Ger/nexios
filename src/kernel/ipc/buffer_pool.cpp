@@ -25,6 +25,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/hal/page_table.hpp>
+#include <kernel/sync/irq_spinlock_guard.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <assert.hpp>
 #include <string.hpp>
@@ -33,6 +34,15 @@ namespace kernel {
 
 BufferPool::Entry BufferPool::entries[MAX_BUFFERS];
 constinit int32_t BufferPool::free_head_ = BufferPool::LIST_EMPTY;
+
+/// @brief BufferPool serialization (issue #402 S6): free-list, entries,
+/// per-task lists. Caller-holds contract for TU-local helpers
+/// (list_insert/list_remove/alloc_entry/free_entry/validate); entry
+/// points (alloc/free/map/unmap/transfer/unmap_all) take it.
+/// Lock order DAG: global → q.lock → pool → pmm (pool never takes the
+/// global/scheduler lock; PMM never takes pool) — acyclic by
+/// construction. ISR-safe (leaf lock, no blocking, no scheduler calls).
+static sync::SpinLock pool_lock_{};
 constinit uint32_t BufferPool::next_cookie_ = 1;
 uint64_t BufferPool::pool_pages_[POOL_PAGES];
 constinit size_t BufferPool::pool_count_ = 0;
@@ -168,6 +178,9 @@ static void list_remove(TaskControlBlock &task, int32_t idx) {
 
 /// @brief Initialise the pool — build the free list, pre-allocate pages.
 void BufferPool::init() {
+    // S6: guard for uniformity (boot-time single-threaded today; keeps
+    // the free-list build under the same contract as every other entry).
+    sync::IrqSpinLockGuard guard(pool_lock_);
     free_head_ = -1;
     next_cookie_ = 1;
     for (size_t i = 0; i < MAX_BUFFERS; ++i) {
@@ -299,6 +312,9 @@ static inline void bp_check_guard() {
 #endif
 }
 
+/// Caller-holds contract (issue #402 S6): call with pool_lock_ held
+/// (all in-tree callers are the guarded entry points above; direct
+/// single-threaded test calls need no lock).
 int32_t BufferPool::validate(uint64_t handle) noexcept {
     if (handle == 0)
         return BufferPool::BUF_INVALID_HANDLE;
@@ -320,6 +336,10 @@ int32_t BufferPool::validate(uint64_t handle) noexcept {
 /// @return handle, or 0 on failure.
 uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
     bp_check_guard();
+    // S6: serialize free-list + entries + per-task lists (concurrent
+    // syscalls on SMP would double-alloc/lose entries). VMM map + PMM
+    // alloc run under the guard (pool → pmm order; PMM never takes pool).
+    sync::IrqSpinLockGuard guard(pool_lock_);
     // v0.4.0 MP-1: every task owns a private PML4, so this address-space gate
     // is effectively always open — kernel driver tasks (is_user_ == false)
     // may still map a user buffer through their (otherwise empty) user half.
@@ -360,6 +380,11 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
 /// @return true on success.
 bool BufferPool::free(TaskControlBlock &task, uint64_t handle) noexcept {
     bp_check_guard();
+    // S6: same serialization as alloc; PTE-clear + PMM free stay inside
+    // the guard so fence-before-free order holds (unmap before the
+    // entry is recyclable — a recycled-then-remapped entry with a stale
+    // remote TLB would alias two tasks to one page).
+    sync::IrqSpinLockGuard guard(pool_lock_);
     int32_t idx = validate(handle);
     if (idx < 0)
         return false;
@@ -387,6 +412,8 @@ bool BufferPool::free(TaskControlBlock &task, uint64_t handle) noexcept {
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) noexcept {
     bp_check_guard();
+    // S6: serialize entry checks + PTE install + field writes.
+    sync::IrqSpinLockGuard guard(pool_lock_);
     int32_t idx = validate(handle);
     if (idx < 0)
         return false;
@@ -420,6 +447,8 @@ bool BufferPool::map(TaskControlBlock &task, uint64_t handle, uint64_t va) noexc
 /// @brief Unmap a buffer (PTE clear, list remove) without freeing the page.
 bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) noexcept {
     bp_check_guard();
+    // S6: serialize PTE clear + field write + list unlink.
+    sync::IrqSpinLockGuard guard(pool_lock_);
     int32_t idx = validate(handle);
     if (idx < 0)
         return false;
@@ -439,6 +468,9 @@ bool BufferPool::unmap(TaskControlBlock &task, uint64_t handle) noexcept {
 bool BufferPool::transfer(uint64_t handle, TaskControlBlock &from,
                           TaskControlBlock &to) noexcept {
     bp_check_guard();
+    // S6: serialize PTE clear + unlink + re-owner + re-link as one step
+    // so a concurrent map/unmap/free on the same handle cannot interleave.
+    sync::IrqSpinLockGuard guard(pool_lock_);
     int32_t idx = validate(handle);
     if (idx < 0)
         return false;
@@ -498,6 +530,10 @@ void BufferPool::restore_state(kernel::Span<const uint8_t> src) {
 /// cleanup/exec).
 void BufferPool::unmap_all(TaskControlBlock &task) {
     bp_check_guard();
+    // S6: serialize the whole teardown walk (bounded: ≤ MAX_BUFFERS
+    // iterations, no allocation, no blocking — same shape as the
+    // per-handle paths above).
+    sync::IrqSpinLockGuard guard(pool_lock_);
     int32_t idx = task.buf_list_head;
     uint32_t loop_guard = 0;
     while (idx != -1) {
