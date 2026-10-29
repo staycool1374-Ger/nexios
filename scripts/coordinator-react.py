@@ -17,7 +17,7 @@ import argparse, glob, json, os, re, sys
 
 ROOMS_GLOB = '/tmp/nexios-*'
 SESS = {'dev': 'nexios-dev', 'qe': 'nexios-qe'}
-RUNBOOK_VERSION = 'v3 2026-10-29 (rows 1-12; ts-based new-post)'
+RUNBOOK_VERSION = 'v6 2026-10-29 (rows 1-12; ts-based new-post)'
 
 def tail(path, n=6):
     try:
@@ -52,7 +52,12 @@ def load_room(rdir):
     room['mark'] = False
     room['boxes'] = {}
     for box in ('dev', 'qe', 'auditor'):
-        lines = tail(os.path.join(rdir, 'inbox', box + '.md'), 12)
+        try:
+            with open(os.path.join(rdir, 'inbox', box + '.md'), errors='replace') as f:
+                fulllines = f.read().splitlines()
+        except OSError:
+            fulllines = []
+        lines = fulllines[-12:]
         try:
             with open(os.path.join(rdir, 'inbox', box + '.md'), errors='replace') as f:
                 allposts = from_lines(f.read().splitlines())
@@ -70,9 +75,14 @@ def load_room(rdir):
                               'new': fresh[-3:],
                               'cursor_init': since is None}
         room['boxes'][box]['state'], room['boxes'][box]['next'] = last_state_next(lines)
-        # unacked coordinator order: newest coord NOTE vs newest worker post
-        coord = [l for l in lines if ' FROM=coord NOTE' in l]
-        room['boxes'][box]['coord_last'] = coord[-1][:160] if coord else None
+        # unacked coordinator order: FILE ORDER, not timestamps (session
+        # clocks skew; a worker post filed after the order acks it even with
+        # an older stamp). coord_idx/worker_idx over the full file.
+        cidx = [i for i, l in enumerate(fulllines) if ' FROM=coord NOTE' in l and '+ACK' in l]
+        widx = [i for i, l in enumerate(fulllines) if re.match(r'^\d{4}-\d{2}-\d{2}T.* FROM=(dev|qe|audit|auditor) (READY|NEED|NOTE) ::', l)]
+        unacked = bool(cidx) and (not widx or widx[-1] < cidx[-1])
+        room['boxes'][box]['coord_last'] = fulllines[cidx[-1]][:160] if cidx else None
+        room['boxes'][box]['unacked'] = unacked
     return room
 
 def main():
@@ -83,6 +93,8 @@ def main():
     ap.add_argument('--streak', action='append', default=[], help='"<issue>:<n>" unchanged streak')
     ap.add_argument('--rooms', default='', help='comma list of issues to scan (default: all)')
     ap.add_argument('--mark', action='store_true', help='advance handled cursors to current lasts (run after processing a wake)')
+    ap.add_argument('--logbook', default='/tmp/nexios-coord-logbook.json', help='coordinator pipeline logbook (pause flag, workers, triggers, owner queue)')
+    ap.add_argument('--sync', action='store_true', help='record this wake tick into the logbook last_wake (with --mark)')
     a = ap.parse_args()
     only = set(a.rooms.split(',')) if a.rooms else None
     rooms = []
@@ -94,6 +106,9 @@ def main():
     actions = []  # (prio, text)
     print('== coordinator-react %s ==' % RUNBOOK_VERSION)
     print('tick: %s | dev=%s qe=%s' % (a.tick or '-', a.dev, a.qe))
+    # 0. input trust: WORKING without any post since the latest order is
+    # UNCONFIRMED activity, never a fact. Emit ASK (row 8b). Table cells may
+    # only cite fresh worker_state + posts/pane from THIS wake.
     # 1. new posts per room (rows 1-5)
     for r in rooms:
         for box in ('dev', 'qe', 'auditor'):
@@ -113,22 +128,41 @@ def main():
             on, do = arm.get('on', ''), arm.get('do', '')
             actions.append((30, '#%s ARMED [%s] -> %s (verify fired/hold from box tails)'
                 % (r['issue'], on, do[:140])))
-    # 4. unacked orders -> ring candidates (rows 6-7)
+    # 4. unacked orders -> ring candidates (rows 6-7). Armed rooms only:
+    # an order without a tracked trigger is parked history, never a ring.
     for r in rooms:
+        if not r['armed']:
+            continue
         for role, sess in SESS.items():
             b = r['boxes'][role]
-            if b['coord_last'] and (not b['posts'] or b['coord_last'][:19] > b['posts'][-1][:19]):
+            if b.get('unacked'):
                 w = wstates[role]
                 if w == 'IDLE':
                     actions.append((10, 'RING %s: unacked order in #%s %s box (%s) -- send: inbox: <short> - read inbox/%s.md'
                         % (sess, r['issue'], role, b['coord_last'][:100], role)))
                 else:
-                    pass  # WORKING reads at boundary; never ring, never nag
+                    actions.append((15, 'ASK %s: WORKING but nothing posted since order in #%s %s box (%s) - ring for immediate STATE/NEXT report; content unknown until it posts' % (sess, r['issue'], role, b['coord_last'][:90])))
     # 5. idle + nothing -> backlog (row 8)
-    for role, sess in SESS.items():
-        if wstates[role] == 'IDLE':
-            if not any(x[1].startswith('RING %s' % sess) for x in actions):
-                actions.append((20, '%s IDLE with no unacked order: assign next backlog task (never relay idleness)' % sess))
+    lb = {}
+    try:
+        with open(a.logbook) as f:
+            lb = json.load(f)
+    except (OSError, ValueError):
+        pass
+    if lb.get('paused'):
+        actions.append((25, 'OPERATOR PAUSE in effect (%s) - hold ALL assignments and rings except pause-ack confirmation' % lb.get('pause_note', 'see logbook')[:100]))
+    for t in lb.get('triggers', []):
+        actions.append((32, 'LOGBOOK [%s] %s -> %s' % (t.get('status', '?'), t.get('on'), (t.get('do') or '')[:120])))
+    for o in lb.get('owner_queue', []):
+        actions.append((60, 'OWNER: %s [needs: %s]' % (o.get('item'), o.get('needs'))))
+    paused_rooms = [str(r['issue']) for r in rooms if 'PAUSED' in (r.get('pending') or '')]
+    if paused_rooms and not lb.get('paused'):
+        actions.append((25, 'ROOM-PENDING PAUSE (rooms %s) but logbook not paused - reconcile pause flag' % ','.join(paused_rooms)))
+    elif not lb.get('paused'):
+        for role, sess in SESS.items():
+            if wstates[role] == 'IDLE':
+                if not any(x[1].startswith('RING %s' % sess) for x in actions):
+                    actions.append((20, '%s IDLE with no unacked order: assign next backlog task (never relay idleness)' % sess))
     # 6. unchanged streaks (row 10)
     for s in a.streak:
         try:
@@ -153,6 +187,14 @@ def main():
     if not hit:
         print('NOTHING OWED.')
     if a.mark:
+        if lb:
+            lb['updated'] = [x for x in [__import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')]][0]
+            lb['last_wake'] = {'tick': a.tick, 'actions_taken': []}
+            try:
+                with open(a.logbook, 'w') as f:
+                    json.dump(lb, f, indent=1)
+            except OSError:
+                pass
         for r in rooms:
             if r['mark'] or any(r['boxes'][b]['new'] for b in ('dev', 'qe', 'auditor')):
                 st = r['state']
