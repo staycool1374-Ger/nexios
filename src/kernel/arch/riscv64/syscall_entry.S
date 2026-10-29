@@ -250,24 +250,34 @@ apply:
     # publishing generation BEFORE touching the arm. A concurrent publisher
     # superseding or half-overwriting the pair between capture and apply
     # must not be applied (half-written RSP/CR3 pair).
+    # H2 generation-lock per-hart (mirrors TLS fix 353-374): idx=(tp-base)>>12
+    mv t2, tp
+    la t1, arch_per_cpu_base
+    ld t1, 0(t1)
+    sub t2, t2, t1
+    srli t2, t2, 12
+    li t1, 8
+    bgeu t2, t1, 7f
+    slli t2, t2, 3
     la t3, scheduler_switch_generation
+    add t3, t3, t2
     ld t3, 0(t3)
-    # Check scheduler_save_rsp_to
+    # Check scheduler_save_rsp_to per-hart
     la t0, scheduler_save_rsp_to
+    add t0, t0, t2
     ld t0, 0(t0)
     beqz t0, 7f
-    # Verify the generation is unchanged (no torn publish in between —
-    # e.g. a nested tick re-arming mid-apply). Mismatch: record the skip
-    # and leave the atoms untouched (the superseding publisher's own arm
-    # is in place; a stale arm is ignored by the next trap's check).
+    # Verify the generation is unchanged per-hart
     la t1, scheduler_switch_generation
+    add t1, t1, t2
     ld t1, 0(t1)
     bne t3, t1, gen_skip
 
-    # Save current SP (pointer to save area — matches x86_64 IRET frame pointer)
+    # Save current SP per-hart (pointer to save area)
     la t1, scheduler_save_rsp_to
-    ld t2, 0(t1)
-    sd sp, 0(t2)
+    add t1, t1, t2
+    ld t0, 0(t1)
+    sd sp, 0(t0)
 
     # H2 apply-side liveness + ownership re-check (mirrors x86_64
     # scheduler_validate_pending_switch): the arm can outlive its trap and
@@ -287,13 +297,15 @@ apply:
     # and undid the publish side effects on abort).
     beqz a0, abort_switch
 
-    # Load new SP (points to save area of next task)
-    la t2, scheduler_load_rsp_from
-    ld sp, 0(t2)
+    # Load new SP per-hart (points to save area of next task)
+    la t1, scheduler_load_rsp_from
+    add t1, t1, t2
+    ld sp, 0(t1)
 
-    # Clear scheduler_save_rsp_to
-    la t2, scheduler_save_rsp_to
-    sd zero, 0(t2)
+    # Clear scheduler_save_rsp_to per-hart
+    la t1, scheduler_save_rsp_to
+    add t1, t1, t2
+    sd zero, 0(t1)
 
     # Issue #206 (E1 note): sscratch is a pure entry spill, not a stack
     # pointer — the trap entry reads the kstack top from
@@ -306,17 +318,15 @@ apply:
     ld ra, 0(sp)
     addi sp, sp, 16
 
-    # Check SATP switch.  load_cr3_from carries the FULL SATP value
-    # (mode|ASID|PPN — issue #352: context_id_tag publishes the tagged
-    # root, so no re-encoding here).  Write it verbatim: decomposing and
-    # re-adding the mode would drop a nonzero ASID.  A raw csrw of a
-    # phys would install MODE=0 (Bare) and switch the MMU off mid-return.
+    # Check SATP switch per-hart (FULL SATP via context_id_tag)
     la t0, scheduler_load_cr3_from
+    add t0, t0, t2
     ld t0, 0(t0)
     beqz t0, 7f
     csrw satp, t0
     sfence.vma
     la t0, scheduler_load_cr3_from
+    add t0, t0, t2
     sd zero, 0(t0)
     j 7f
 
