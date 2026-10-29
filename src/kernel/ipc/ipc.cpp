@@ -557,6 +557,69 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
     }
 }
 
+#if CONFIG_TIMER_SRV
+/// @brief Bounded send_sync for the timer-srv proxy (issue #241).
+bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
+                            Message &reply,
+                            uint64_t timeout_ticks) noexcept {
+    if (!send(dest_id, msg)) {
+        return false;
+    }
+    auto *cur = Scheduler::current_task();
+    if (!cur) {
+        return false;
+    }
+    if (timeout_ticks != 0) {
+        if (!recv_wait_arm(*cur, timeout_ticks)) {
+            return false; // fail-closed: no arm, no block (never park)
+        }
+    }
+    bool was_blocked = false;
+    bool armed_here = (timeout_ticks != 0);
+    for (;;) {
+        bool got = cur->msg_queue.pop_from_sender(reply, dest_id);
+        if (got) {
+            cur->reply_wait = false;
+            if (armed_here) {
+                recv_wait_cancel(*cur);
+            }
+            if (was_blocked) {
+                cur->remaining_ticks = cur->period_ticks;
+            }
+            return true;
+        }
+        if (cur->recv_timed_out) {
+            cur->reply_wait = false;
+            cur->recv_timed_out = false;
+            recv_wait_cancel(*cur);
+            return false; // bounded expiry: fail-closed, no silent success
+        }
+        auto *dest = Scheduler::find_task(dest_id);
+        if (!dest || dest->state == TaskState::TERMINATED) {
+            if (cur->msg_queue.has_from(dest_id)) {
+                continue; // unclamped match present: consume next iteration
+            }
+            if (armed_here) {
+                recv_wait_cancel(*cur);
+            }
+            return false;
+        }
+        cur->reply_wait = true;
+        cur->state = TaskState::BLOCKED;
+        Scheduler::dequeue_ready(*cur);
+        was_blocked = true;
+        Scheduler::reschedule();
+        if (cur->is_user_) {
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+        } else {
+            arch::hlt();
+        }
+    }
+}
+#endif // CONFIG_TIMER_SRV
+
 /// @brief Return a reference to a task's message queue (asserts existence).
 MessageQueue &IPC::queue(uint64_t task_id) {
     auto *tcb = Scheduler::find_task(task_id);

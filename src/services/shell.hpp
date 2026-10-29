@@ -22,6 +22,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <kernel/nexios_config.h>
 
 namespace service {
 
@@ -122,6 +123,10 @@ private:
     static void cmd_meminfo(int argc, const char** argv);
     /// @brief Built-in: reboots the system.
     static void cmd_reboot(int argc, const char** argv);
+#if CONFIG_TIMER_SRV_FAULT_INJECT
+    /// @brief Diagnostic: terminate timer-srv PD (issue #241 fault drill).
+    static void cmd_timerfault(int argc, const char** argv);
+#endif
     /// @brief Built-in: runs a program by name.
     static void cmd_run(int argc, const char** argv);
     /// @brief Built-in: shows kernel version.

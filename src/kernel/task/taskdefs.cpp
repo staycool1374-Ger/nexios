@@ -28,6 +28,7 @@
 #include <kernel/driver/iocd.hpp>
 #include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/watchdog/watchdogd.hpp>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
 #include <services/shell.hpp>
@@ -94,6 +95,15 @@ constexpr TaskDef g_task_defs[] = {
     {"ramdiskd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/ramdiskd.c.elf",
      20, 10, 0, 2, 10, 0, "ramdiskd", ramdiskd::set_ramdiskd_pid,
      ramdiskd::get_ramdiskd_pid, 1, 0, false},
+#if CONFIG_TIMER_SRV
+    // timer-srv: Timer/Event externalization PD (issue #241, strangler a).
+    // Sporadic server, cheapest share SS(1,10,0). Guarded row: absent at
+    // OFF (shipped default), so the boot table is unchanged when 0.
+    {"timer-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/timer-srv.c.elf", 20, 10, 0, 1, 10, 0, "timer-srv",
+     time::timer_srv::set_timer_srv_pid,
+     time::timer_srv::get_timer_srv_pid, 1, 0, false},
+#endif
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values
     // kept here for documentation/validation parity.

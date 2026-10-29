@@ -26,6 +26,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/time/posix_time.hpp>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/vfs/vfs.hpp>
@@ -71,7 +72,10 @@ uint32_t timerfd_tag_gen(uint64_t tag) {
     return static_cast<uint32_t>((tag >> 32) & 0xFFFFFFFFULL);
 }
 
-uint64_t make_timerfd_tag(uint32_t index, uint32_t gen) {
+// [[maybe_unused]]: with CONFIG_TIMER_SRV=1 the four entry handlers stub
+// out to the server proxy and these TU-local copy/tag helpers go quiet;
+// they stay for the OFF/fallback path (no forked code).
+[[maybe_unused]] uint64_t make_timerfd_tag(uint32_t index, uint32_t gen) {
     return (static_cast<uint64_t>(gen) << 32) | static_cast<uint64_t>(index);
 }
 
@@ -113,7 +117,7 @@ const vfs::VnodeOps timerfd_ops = {
     nullptr,       // create
 };
 
-bool copy_timespec_in(const AbiTimespec *user_ptr, bool is_user,
+[[maybe_unused]] bool copy_timespec_in(const AbiTimespec *user_ptr, bool is_user,
                       time::TimespecU &out) {
     if (user_ptr == nullptr) {
         return false;
@@ -135,7 +139,7 @@ bool copy_timespec_in(const AbiTimespec *user_ptr, bool is_user,
     return true;
 }
 
-bool copy_timespec_out(AbiTimespec *user_ptr, bool is_user,
+[[maybe_unused]] bool copy_timespec_out(AbiTimespec *user_ptr, bool is_user,
                        const time::TimespecU &value) {
     if (user_ptr == nullptr) {
         return false;
@@ -168,6 +172,12 @@ bool is_timerfd_vnode(const vfs::Vnode *node) {
 
 uint64_t Syscall::sys_clock_gettime(uint64_t arg0, uint64_t arg1, uint64_t,
                                     uint64_t, uint64_t *) {
+#if CONFIG_TIMER_SRV
+    // Issue #241 (strangler step a): server path serves the read; the
+    // in-kernel wheel below stays the OFF/fallback path. Not flipped.
+    return static_cast<uint64_t>(
+        time::timer_srv::sys_clock_gettime_srv(arg0, arg1));
+#else
     const uint64_t clock_id = arg0;
     if (clock_id != static_cast<uint64_t>(time::PosixClock::REALTIME) &&
         clock_id != static_cast<uint64_t>(time::PosixClock::MONOTONIC)) {
@@ -193,10 +203,17 @@ uint64_t Syscall::sys_clock_gettime(uint64_t arg0, uint64_t arg1, uint64_t,
         return kNeg(time::kPosixErrFault);
     }
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
+#endif
 }
 
 uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
                                 uint64_t, uint64_t *) {
+#if CONFIG_TIMER_SRV
+    // Issue #241 (strangler step a): bounded server wait; no EINTR path
+    // yet (documented pre-flip limitation, ON not shipped).
+    return static_cast<uint64_t>(
+        time::timer_srv::sys_nanosleep_srv(arg0, arg1));
+#else
     auto *cur = syscall_task();
     if (cur == nullptr) {
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -287,10 +304,18 @@ uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
         return kNeg(time::kPosixErrIntr);
     }
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
+#endif
 }
 
 uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                    uint64_t arg3, uint64_t *) {
+#if CONFIG_TIMER_SRV
+    // Issue #241 (strangler step a): full op multiplex proxies to the
+    // server; user-pointer copy/validation stays in-kernel there.
+    (void)arg3;
+    return static_cast<uint64_t>(
+        time::timer_srv::sys_timer_create_srv(arg0, arg1, arg2));
+#else
     auto *cur = syscall_task();
     if (cur == nullptr) {
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -411,10 +436,17 @@ uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         return static_cast<uint64_t>(errors::SYS_ERR_OK);
     }
     return kNeg(time::kPosixErrInvalid);
+#endif
 }
 
 uint64_t Syscall::sys_timerfd_create(uint64_t arg0, uint64_t arg1, uint64_t,
                                      uint64_t, uint64_t *) {
+#if CONFIG_TIMER_SRV
+    // Issue #241 (strangler step a): slot alloc + vnode wiring proxy to
+    // the server; the -ENOSYS stub shape proves the seam pre-flip.
+    return static_cast<uint64_t>(
+        time::timer_srv::sys_timerfd_create_srv(arg0, arg1));
+#else
     auto *cur = syscall_task();
     if (cur == nullptr) {
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -465,6 +497,7 @@ uint64_t Syscall::sys_timerfd_create(uint64_t arg0, uint64_t arg1, uint64_t,
         return kNeg(time::kPosixErrAgain);
     }
     return static_cast<uint64_t>(created_fd);
+#endif
 }
 
 /// @brief Blocking timerfd read helper (sys_read branch target).

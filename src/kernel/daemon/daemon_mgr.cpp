@@ -21,6 +21,7 @@
 
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/ramdisk/ramdiskd.hpp>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf.hpp>
@@ -222,7 +223,10 @@ void restart_stale_daemons() {
         {
             uint64_t bg = 0;
             uint64_t budget =
-                (strcmp(entries_[i].name, "iocd") == 0) ? 3ULL : 2ULL;
+                (strcmp(entries_[i].name, "iocd") == 0)
+                    ? 3ULL
+                    : ((strcmp(entries_[i].name, "timer-srv") == 0) ? 1ULL
+                                                                    : 2ULL);
             task->init_sporadic_server(budget, 10, bg, 1);
         }
 
@@ -233,6 +237,12 @@ void restart_stale_daemons() {
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
         }
+#if CONFIG_TIMER_SRV
+        if (entries_[i].name != nullptr &&
+            strcmp(entries_[i].name, "timer-srv") == 0) {
+            kernel::time::timer_srv::on_restart(task->id);
+        }
+#endif
         // Issue #275: a restarted ramdiskd lost its CSpace with the old
         // task — re-grant storage and push the handles (fail-closed).
         if (entries_[i].name != nullptr &&
@@ -320,7 +330,10 @@ void ensure_running(const char *name) {
         {
             uint64_t bg = 0;
             uint64_t budget =
-                (strcmp(entries_[i].name, "iocd") == 0) ? 3ULL : 2ULL;
+                (strcmp(entries_[i].name, "iocd") == 0)
+                    ? 3ULL
+                    : ((strcmp(entries_[i].name, "timer-srv") == 0) ? 1ULL
+                                                                    : 2ULL);
             task->init_sporadic_server(budget, 10, bg, 1);
         }
 
@@ -331,6 +344,12 @@ void ensure_running(const char *name) {
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
         }
+#if CONFIG_TIMER_SRV
+        if (entries_[i].name != nullptr &&
+            strcmp(entries_[i].name, "timer-srv") == 0) {
+            kernel::time::timer_srv::on_restart(task->id);
+        }
+#endif
         // Issue #275: re-grant storage to a (re)spawned ramdiskd.
         if (entries_[i].name != nullptr &&
             strcmp(entries_[i].name, "ramdiskd") == 0)
