@@ -44,16 +44,28 @@ class ShootdownBatch {
     /// @brief Max log entries kept for order checks.
     static constexpr size_t APPLIED_LOG = 64;
 
-    /// @brief One shootdown entry (VA + owning PCID).
+    /// @brief One shootdown entry (VA + owning PCID + full-flush flag).
+    ///        all selects a full purge on apply (issue #389 teardown/
+    ///        ASID-recycle path); otherwise the entry applies VA+PCID
+    ///        targeted (INVPCID single-address, purge fallback).
     struct BatchEntry {
         uint64_t va;
         uint16_t pcid;
+        bool all;
     };
 
     /// @brief Queue one entry for @p cpu (no IPI yet).
     /// @return true when queued; false when the slot is full (caller
     ///         flushes first, then retries) or arguments invalid.
     static bool queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid);
+    /// @brief Queue one entry with full-flush selection (issue #389).
+    ///        all=true marks the entry for full purge on apply; the
+    ///        VA is still recorded for the applied-VA log.  The 3-arg
+    ///        overload above forwards with all=false (existing callers
+    ///        and tests keep their shape).
+    /// @return true when queued; false on full slot/invalid arguments.
+    static bool queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid,
+                             bool all);
     /// @brief Deliver @p cpu's queued entries in bounded batches.
     ///        Polls each batch drained before refilling (never overwrites
     ///        a live batch).  Entries stay queued on send failure.

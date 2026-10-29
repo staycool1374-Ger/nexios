@@ -197,6 +197,30 @@ uint8_t ap_count() {
     return g_aps_up;
 }
 
+bool scheduler_started() {
+    return __atomic_load_n(&scheduler_ready_, __ATOMIC_ACQUIRE);
+}
+
+uint64_t ap_hart(uint8_t logical) {
+    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+        return ~0ULL;
+    }
+    return s_ap_hart[logical];
+}
+
+bool request_full_fence(uint64_t logical) {
+    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
+        return false;
+    }
+    const uint64_t hart = s_ap_hart[logical];
+    if (hart >= 64U) {
+        return false; // Legacy hart-mask is XLEN bits; no silent narrow.
+    }
+    __atomic_fetch_or(&ipi_mailbox_[logical], SMP_IPI_SHOOTDOWN,
+                      __ATOMIC_RELEASE);
+    return sbi_send_ipi_mask(1ULL << hart);
+}
+
 void publish_scheduler_ready() {
     __atomic_store_n(&scheduler_ready_, true, __ATOMIC_RELEASE);
 }
@@ -261,6 +285,13 @@ void apply_shootdowns() {
     const uint64_t here = arch::cpu_index() % CONFIG_MAX_CPUS;
     ShootSlot &slot = shoot_slots_[here];
     uint64_t count = __atomic_load_n(&slot.count, __ATOMIC_ACQUIRE);
+    if (count == 0U) {
+        // Full-fence request (issue #389): SHOOTDOWN bit with an empty
+        // slot means the sender needs a whole-TLB fence (RFENCE-absent
+        // fallback for all=true). Bounded single fence, never a wait.
+        arch::sfence_vma();
+        return;
+    }
     if (count > ShootSlot::SLOTS) {
         // Corrupt count (never written by the bounded BSP path): full
         // fence once, drop the batch — fail-closed and bounded.

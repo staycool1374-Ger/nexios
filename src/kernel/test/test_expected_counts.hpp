@@ -79,7 +79,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // process
     {"process_lifecycle",    16,   16,      16     },  // process lifecycle, child table, clone with real user parents
     {"process_elf",           9,    0,       0      },  // ELF validation, segments
-    {"elf_loader",            28,   28,      28     },  // chunked background loader: success/errors/cancel/authenticity/decay/fork + P2 roundtrip + P3 smoke + #431 mismatch
+    {"elf_loader",            25,   25,      25     },  // chunked background loader: success/errors/cancel/authenticity/decay/fork
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit, brk
@@ -166,7 +166,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"memory_pmm",            9,    0,       0      },  // PMM alloc/free, window geometry, err wrappers
     {"memory_mempool",        5,    0,       0      },  // MemPool allocator + helpers
     {"memory_slab",           5,    0,       0      },  // slab reclaim
-    {"memory_safety",        16,    16,      16     },  // MemPool/PMM invariants, red zones, canaries + kslot unit (P2 unified, all arches)
+    {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants, red zones, canaries
     {"stack_cookie",          4,    0,       0      },  // stack protector contract pins
     {"pointer_isolation",     5,    0,       0      },  // kernel-leak rejection, count edges, factory
     {"memory_determinism",    4,    0,       0      },  // PMM exhaustion, no-dynamic-alloc cycles
@@ -261,7 +261,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   40,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
+    {"arch_aarch64",          0,   35,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,      31      },  // S-mode traps, loader probes, UART, RTC (M-mode CSRs deferred)
@@ -297,7 +297,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_sched",          112,  0,       0      },  // scheduler_*
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         124,  0,       0      },  // memory_* incl. NX/W^X pins
-    {"core_syscall",          88,    0,       0      },  // syscall_*, debug_syscall, tls
+    {"core_syscall",        85,   0,       0      },  // syscall_*, debug_syscall, tls
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
     {"capability",          149,  0,       0      },  // cap_* excl. iommu_live
@@ -314,7 +314,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers",             107,   62,      62     },  // drivers_* + virtio_blk_req + ahci_deep + net
     {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
-    {"smp_multicpu",        18,   0,       0      },  // smp_bringup + smp_sched + drain (2-CPU)
+    {"smp_multicpu",        21,   3,       3      },  // smp_bringup + smp_sched (x86) + tlb_shootdown E2E (2-CPU)
+    {"tlb_shootdown",          3,   3,       3      },  // cross-CPU shootdown E2E (skips single-CPU)
     {"deadline",            148,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time
     {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov

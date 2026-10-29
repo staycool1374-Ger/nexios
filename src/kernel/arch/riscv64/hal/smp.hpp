@@ -73,6 +73,28 @@ inline constexpr uint64_t SMP_IPI_LOOPBACK = 1ULL << 2U;
 /// @brief Number of APs woken AND parked (0 on single-CPU runs).
 uint8_t ap_count();
 
+/// @brief True once the scheduler start-gate is published (issue #389).
+/// RFENCE is synchronous-block and the S-soft target drains via its
+/// ISR — both need an interrupt-live AP — so the shootdown hook fans
+/// out only when true (pre-gate the target cannot drain).
+/// @return True after publish_scheduler_ready(), false before.
+bool scheduler_started();
+
+/// @brief Hart ID for a parked AP (issue #389: RFENCE fan-out mask).
+/// @param logical_id Target AP index (1..CONFIG_MAX_CPUS-1).
+/// @return DTB hart ID, or ~0ULL when unmapped (fail-closed: the RFENCE
+///         caller falls back to the mailbox path, never fences blind).
+uint64_t ap_hart(uint8_t logical_id);
+
+/// @brief Request a full-fence shootdown on an AP (issue #389).
+/// Sets the AP's mailbox SHOOTDOWN bit with an empty slot — the apply
+/// side treats empty-slot-with-bit as a whole-TLB fence — and sends the
+/// S-soft IPI. RFENCE-absent fallback for all=true (the batch slots
+/// carry per-VA entries only, never a full-fence encoding).
+/// @param logical_id Target AP index (1..CONFIG_MAX_CPUS-1).
+/// @return true when the SBI call was accepted, false otherwise.
+bool request_full_fence(uint64_t logical_id);
+
 /// @brief Bring up application processors (called once at boot, after
 ///        Timer::init, under interrupt guard).  Fail-closed: HSM absent,
 ///        unusable DTB, unknown enable-method, or an AP start timeout
@@ -131,6 +153,16 @@ void apply_shootdowns();
 /// without extra instrumentation).
 /// @return Total entries applied by AP ISR runs since boot.
 uint64_t shootdown_applied();
+
+/// @brief Force the RFENCE presence answer for tests (issue #389).
+/// Nonzero pretends RFENCE present, zero forces the S-soft fallback
+/// path (mirrors `sbi_probe_extension`); cleared via
+/// `clear_sbi_rfence_for_test` (ScopeGuard on every use — the
+/// override is not ResourceTracker state).
+void set_sbi_rfence_for_test(bool present);
+
+/// @brief Clear the RFENCE test override (restore probed behavior).
+void clear_sbi_rfence_for_test();
 
 /// @brief S-mode software-IRQ demux (issue #351 slice-3).
 /// Called from handle_plic_trap AFTER it clears sip.SSIP (the line stays

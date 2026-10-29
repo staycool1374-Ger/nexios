@@ -221,7 +221,11 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
         pml4[pml4_idx] = 0;
     }
 #endif
-    // TLB flush is the caller's responsibility (via CR3 reload)
+    // Issue #389: purge remote CPUs at AS teardown — they may hold
+    // entries tagged with the dying ASID, and the ASID allocator can
+    // recycle it to a live AS (local purge rides the choke; the CR3
+    // reload path keeps its own local responsibility).
+    tlb_shootdown(0, 0, true);
 }
 
 /// @brief Ownership test for a huge/block entry hit during fork

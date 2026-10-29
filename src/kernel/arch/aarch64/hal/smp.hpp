@@ -45,6 +45,22 @@ inline constexpr uint64_t PSCI_RET_SUCCESS = 0U;
 /// @brief Number of APs woken AND parked (0 on single-CPU runs).
 uint8_t ap_count();
 
+/// @brief True once the scheduler start-gate is published (issue #389).
+/// Fan-out targets park pre-gate (no drain yet), so the shootdown hook
+/// fans out only when true — matching the x86/rv64 contract.
+/// @return True after publish_scheduler_ready(), false before.
+bool scheduler_started();
+
+/// @brief Applied-shootdown counter for test readback (issue #389).
+/// Mirrors the rv64 `shootdown_applied()` observable; incremented once
+/// per SGI-10 purge by the shootdown handler. Lets QE observe AP-side
+/// apply end to end (`s_sgi_ack` slots stay file-static, GDB-only).
+/// @return Total shootdown purges applied by AP handlers since boot.
+uint64_t shootdown_applied();
+
+/// @brief Record one AP-side shootdown purge (SGI-10 handler path).
+void note_shootdown_applied();
+
 /// @brief DTB reg (MPIDR Aff0) for a parked AP (issue #351 slice-2).
 /// Maps the compressed logical index to the GIC target (Aff0); identity
 /// only for contiguous topologies. 0xFF when unmapped (fail-closed).

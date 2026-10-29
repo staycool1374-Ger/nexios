@@ -34,6 +34,7 @@
 #include <kernel/arch/serial.hpp>
 #include <kernel/profiling/sampler.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/arch/page_table.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/iommu/iommu.hpp>
@@ -74,6 +75,7 @@
 #include <kernel/arch/x86_64/hal/pcid.hpp>
 #include <kernel/arch/x86_64/madt.hpp>
 #include <kernel/arch/x86_64/hal/smp.hpp>
+#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
 #endif
 #include <kernel/vfs/devfs.hpp>
 #include <kernel/vfs/procfs.hpp>
@@ -1358,6 +1360,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             kernel::Scheduler::sched_ipi_handler();
             arch::APIC::eoi();
         });
+    // Issue #389: cross-CPU TLB-shootdown batch vector (shared IDT
+    // serves BSP and APs — one registration covers every CPU).  The
+    // apply side is lock-free (per-entry INVPCID/purge, no allocation),
+    // so the hook's remote drain can never deadlock on a held lock.
+    arch::IDT::register_handler_raw(
+        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
+        [](uint64_t, uint64_t, uint64_t) {
+            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
+            arch::APIC::eoi();
+        });
 #endif // CONFIG_ARCH_X86_64
 #if defined(CONFIG_ARCH_AARCH64)
     // Issue #351 slice-2: cross-CPU scheduler wake SGI (the shared vector
@@ -1367,6 +1379,17 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     arch::IDT::register_handler_raw(
         arch::SMP_SCHED_SGI, [](uint64_t, uint64_t, uint64_t) {
             kernel::Scheduler::sched_ipi_handler();
+        });
+    // Issue #389: cross-CPU TLB-shootdown SGI (purge-on-receipt — the
+    // SGI carries no payload, so the target self-purges via the
+    // existing `tlb_flush_all` primitive; IS form explicitly not
+    // required).  The shared vector table serves BSP and APs.  No EOI
+    // in-handler — handle_gic_irq closes the SGI at its tail (an early
+    // eoi() would trip the ownership guard as unmatched).
+    arch::IDT::register_handler_raw(
+        arch::SMP_SHOOTDOWN_SGI, [](uint64_t, uint64_t, uint64_t) {
+            arch::ArchPageTable::tlb_flush_all();
+            kernel::smp::note_shootdown_applied();
         });
 #endif
     boot_mark(kernel::BootStage::ARCH_INIT);
