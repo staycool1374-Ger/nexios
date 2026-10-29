@@ -193,7 +193,7 @@ __tick_alarm() { # $1 issue (internal: one tick + exactly one doorbell attempt)
   first=$(printf '%s\n' "$out" | head -n 1)
   line="inbox: TICK — $first — read watch.log"
   if "$AGENT_UP" msg "$COORD_SESS" "$line" >/dev/null 2>&1; then
-    echo "$line" >> "$room/watch.silent.log"
+    echo "silent: TICK — $first — read watch.silent.log" >> "$room/watch.silent.log"
   else
     echo "DOORBELL-FAILED $first" >> "$room/watch.silent.log"
   fi
