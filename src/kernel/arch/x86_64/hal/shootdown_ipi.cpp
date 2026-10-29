@@ -36,7 +36,12 @@ uint64_t ShootdownBatch::applied_log_[ShootdownBatch::APPLIED_LOG] = {};
 uint64_t ShootdownBatch::applied_log_count_ = 0;
 
 bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
-                                  uint16_t pcid) {
+                                   uint16_t pcid) {
+    return queue_remote(cpu, va, pcid, false);
+}
+
+bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid,
+                                   bool all) {
     if (cpu >= CONFIG_MAX_CPUS)
         return false;
     if ((va & (ArchPageTable::PAGE_SIZE - 1)) != 0)
@@ -59,6 +64,7 @@ bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
     }
     slot.entries[pos].va = va;
     slot.entries[pos].pcid = pcid;
+    slot.entries[pos].all = all;
     __atomic_store_n(&slot.count, count + 1, __ATOMIC_RELEASE);
     return true;
 }
@@ -106,7 +112,15 @@ void ShootdownBatch::handle_cpu(uint64_t cpu) {
         if (count > BATCH_SLOTS)
             count = BATCH_SLOTS;
         for (uint64_t i = 0; i < count; ++i) {
-            ArchPageTable::tlb_flush(slot.entries[i].va);
+            // Issue #389: the stored PCID is honored (INVPCID
+            // single-address, purge fallback); the all-flag selects a
+            // full purge (teardown/ASID-recycle path).
+            if (slot.entries[i].all) {
+                tlb_purge_all();
+            } else {
+                ArchPageTable::tlb_flush_va_asid(slot.entries[i].va,
+                                                 slot.entries[i].pcid);
+            }
             if (applied_log_count_ < APPLIED_LOG) {
                 applied_log_[applied_log_count_] = slot.entries[i].va;
                 ++applied_log_count_;
@@ -145,6 +159,7 @@ void ShootdownBatch::reset_for_test() {
         for (size_t i = 0; i < BATCH_SLOTS; ++i) {
             slots_[c].entries[i].va = 0;
             slots_[c].entries[i].pcid = 0;
+            slots_[c].entries[i].all = false;
         }
     }
     sends_ = 0;

@@ -193,7 +193,9 @@ void VMM::harden_kernel_half() {
             *leaf = vmm_arch_encode_ro(*leaf, exec);
         if (exec)
             *leaf = vmm_arch_kernel_text_exec(*leaf);
-        arch::ArchPageTable::tlb_flush(va);
+        // Issue #389: route through the shootdown choke (local-first,
+        // then cross-CPU fan-out; PCID default-(b) — kernel-half va).
+        tlb_shootdown(va, 0, false);
     };
 
     for (uint64_t va = text_start; va < text_end; va += arch::PAGE_SIZE)
@@ -202,7 +204,9 @@ void VMM::harden_kernel_half() {
         harden_page(va, false, true);
     for (uint64_t va = data_start; va < bss_end; va += arch::PAGE_SIZE)
         harden_page(va, false, false);
-    arch::ArchPageTable::tlb_flush_all();
+    // Issue #389: post-harden full purge through the choke (remote CPUs
+    // may hold entries for the remapped image half).
+    tlb_shootdown(0, 0, true);
 }
 
 /// @brief Walk or create a page-table entry at the current level.
@@ -434,7 +438,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
     }
 
     l2[l2_idx] = 0;
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    // Issue #389: rv64 unmap leg through the choke (PCID default-(b)).
+    tlb_shootdown(virt_addr, 0, false);
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
@@ -467,7 +472,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
     }
 
     pt[pt_idx] = 0;
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    // Issue #389: x86 unmap leg through the choke (PCID default-(b)).
+    tlb_shootdown(virt_addr, 0, false);
 #endif
 }
 

@@ -79,6 +79,10 @@ uint8_t g_aps_up = 0;
 // receiving CPU's handler — C=0 on both sides, so all accesses hit RAM).
 volatile uint64_t s_sgi_ack[CONFIG_MAX_CPUS] = {};
 
+// Shootdown purges applied by the SGI-10 handler (issue #389 test
+// readback; mirrors the rv64 `shoot_applied_` counter).
+uint64_t s_shootdown_applied = 0;
+
 // Conduit selected from the DTB psci node ("smc" or "hvc"; empty = none).
 bool s_use_smc = true;
 bool s_have_psci = false;
@@ -170,6 +174,18 @@ void clean_to_ram(const void *base, uint64_t size) {
 
 uint8_t ap_count() {
     return g_aps_up;
+}
+
+bool scheduler_started() {
+    return __atomic_load_n(&scheduler_ready_, __ATOMIC_ACQUIRE);
+}
+
+uint64_t shootdown_applied() {
+    return __atomic_load_n(&s_shootdown_applied, __ATOMIC_ACQUIRE);
+}
+
+void note_shootdown_applied() {
+    __atomic_fetch_add(&s_shootdown_applied, 1ULL, __ATOMIC_RELAXED);
 }
 
 uint64_t ap_aff0(uint8_t logical) {

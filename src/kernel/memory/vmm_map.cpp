@@ -91,7 +91,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
                "map_page: KERNEL page mapped as user-accessible");
 
     l2[idx[2]] = vmm_arch_encode_kernel_leaf(phys_addr, user);
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    tlb_shootdown(virt_addr, 0, false);
     return errors::VMM_ERR_OK;
 #else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
@@ -148,7 +148,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
                "map_page: KERNEL page mapped as user-accessible");
 
     pt[idx[3]] = vmm_arch_encode_kernel_leaf(phys_addr, user);
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    tlb_shootdown(virt_addr, 0, false);
 #endif
     return errors::VMM_ERR_OK;
 }
@@ -249,7 +249,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
     // file. Harmless when these tables are not current (local INVLPG);
     // required when they are (present→present remaps would otherwise
     // serve stale TLB/PCID entries, globals included).
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    tlb_shootdown(virt_addr, 0, false);
     return errors::VMM_ERR_OK;
 }
 
@@ -303,7 +303,7 @@ void VMM::map_page_ro_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
     // Arch RO encoding (issue #363 P2): aarch64 AP_RO, riscv W-clear,
     // x86_64 RW-clear (+NX when non-executable, idempotent here).
     *leaf = vmm_arch_encode_ro(*leaf, executable);
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    tlb_shootdown(virt_addr, 0, false);
 }
 
 bool VMM::pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
@@ -374,7 +374,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     }
     // Unconditional flush (issue #225): the pre-convergence walk flushed
     // whenever it reached the leaf parent, including absent-leaf clears.
-    arch::ArchPageTable::tlb_flush(virt_addr);
+    tlb_shootdown(virt_addr, 0, false);
 }
 
 errors::VmmError VMM::unmap_page_in_pml4_err(uint64_t virt_addr,
