@@ -152,7 +152,11 @@ def main():
     if lb.get('paused'):
         actions.append((25, 'OPERATOR PAUSE in effect (%s) - hold ALL assignments and rings except pause-ack confirmation' % lb.get('pause_note', 'see logbook')[:100]))
     for t in lb.get('triggers', []):
-        actions.append((32, 'LOGBOOK [%s] %s -> %s' % (t.get('status', '?'), t.get('on'), (t.get('do') or '')[:120])))
+        rm = t.get('room')
+        if rm is not None and not os.path.isdir('/tmp/nexios-%s' % rm):
+            actions.append((8, 'LOGBOOK ORPHAN: trigger [%s] references retired room %s - drop it from logbook triggers' % (t.get('on'), rm)))
+        else:
+            actions.append((32, 'LOGBOOK [%s] %s -> %s' % (t.get('status', '?'), t.get('on'), (t.get('do') or '')[:120])))
     for o in lb.get('owner_queue', []):
         actions.append((60, 'OWNER: %s [needs: %s]' % (o.get('item'), o.get('needs'))))
     paused_rooms = [str(r['issue']) for r in rooms if 'PAUSED' in (r.get('pending') or '')]
