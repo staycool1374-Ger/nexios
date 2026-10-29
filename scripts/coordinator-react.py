@@ -121,7 +121,7 @@ def main():
     # pointer in one turn); the machine only flags. Never auto-delete.
     for r in rooms:
         if str(r.get('phase', '')).startswith('CLOSED'):
-            actions.append((7, 'RETIRE room #%s (phase CLOSED, dir present): disarm ticker, rm %s, unlink .nexios-runtime/%s - same turn, verify gone' % (r['issue'], r['dir'], r['issue'])))
+            actions.append((7, 'RETIRE CANDIDATE #%s (phase CLOSED, dir present): FIRST verify issue closed on GitHub (phase lies - see #417), then disarm ticker + rm dir + unlink pointer same turn' % (r['issue'],)))
     # 1b. watchdog coverage: every live room needs a live ticker, else no
     # automatic wakes for it. Check watch.pid + kill-0 (no tickers = blindness).
     import signal, subprocess
