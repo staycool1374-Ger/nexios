@@ -449,6 +449,13 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_mpidr) {
     // VBAR is per-CPU: point this AP at the shared vector table (IDT::init
     // only programs the calling CPU; IDT::load is a barrier-only no-op).
     arch::IDT::init();
+    // Re-arm CNTP after gate (fresh CVAL+CTL, handler VBAR live, DAIF
+    // still set so no IRQ until SP+DAIF atomic). Pre-gate Timer::set_
+    // was stale by gate spin (CVAL long past).
+    {
+        const uint32_t hz = kernel::BootParams::instance().timer_hz;
+        arch::Timer::set_frequency(hz);
+    }
     // Drop onto the idle task's own kernel stack with interrupts enabled
     // atomically, then halt (mirrors x86 enter_idle_context + rv64 dispatch
     // fix: SP = idle top, daif clear, wfi loop). The SP switch and the

@@ -505,6 +505,13 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_hart) {
     // stvec is per-hart: point this AP at the shared vector table
     // (IDT::init only programs the calling hart; IDT::load is a no-op).
     arch::IDT::init();
+    // Re-arm S-timer after gate (fresh deadline, handler VBAR live, SIE
+    // still clear so no trap until SP+SIE atomic). Pre-gate Timer::set_
+    // was stale by gate spin (deadline long past).
+    {
+        const uint32_t hz = kernel::BootParams::instance().timer_hz;
+        arch::Timer::set_frequency(hz);
+    }
     // Enable the S-soft IPI + S-timer lines (still masked globally via
     // sstatus.SIE clear, so no trap yet). STIE needed for ap_tick().
     {
