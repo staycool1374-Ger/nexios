@@ -325,6 +325,13 @@ write_protocol() {
 - State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator, and the
   only sanctioned write path is `agent_up.sh state <issue> key=value` (python3
   fcntl lock on `state.lock`, atomic replace + fsync, keys/vocabulary validated).
+- Proactive pipelining (operator order, mandatory — no idle):
+  While a fix sits in audit/QE gates, dev starts next lane's plan/read-only phase (no branch, no code) — a parked worker is a coordinator failure, not patience.
+  Brief NEXT before current completes: QE's verification approach for feature N is briefed while it verifies fix N-1; auditor takes plan audit the moment plan lands.
+  Pair plans: dev drafts implementation plan + QE drafts verification approach in parallel, plan audit cross-checks build-vs-verify before code.
+  NO IDLE: when an agent finishes its actual task, coordinator commands next pipeline task immediately — an agent never sits idle waiting for gates.
+  BLOCKED-ON-QE: gates are not input — if dev's next step needs QE output and pipeline cannot proceed, coordinator moves dev to another open issue from backlog until QE delivers, then re-anchors.
+  ARMED: queued triggers (e.g., `on dev READY -> verify`, `on QE VERIFIED -> merge`) are input-wait, not idleness — coordinator parks on them and rings only when they fire.
 - `audit_branch` (optional, string): the branch the auditor's checkout must be
   on. Write it with `agent_up.sh state <issue> audit_branch=<branch>`; `audit
   <issue>` passes it to the launch branch check. Empty/unset = skip the check.
@@ -416,6 +423,31 @@ check_branch() {
   local cur
   cur=$(git -C "$1" branch --show-current)
   [ -z "$2" ] || [ "$cur" = "$2" ] || fail "$1 on '$cur', want '$2'"
+}
+
+# resume normalization: a worker closed on a feature branch must not block
+# `up`/`workers` (the fence only allows launching from the role root).
+# $1 checkout dir, $2 role (for messages), $3 expected root branch.
+# On root: no-op. Elsewhere + clean tree: checkout root. Elsewhere + dirty
+# tree: named TRACKED-ONLY stash, then checkout root (untracked build
+# artifacts and QEMU logs are never stashed). Detached HEAD: same rules.
+normalize_checkout() {
+  local dir="$1" role="$2" want="$3" cur ts
+  cur=$(git -C "$dir" branch --show-current)
+  [ "${cur:-HEAD}" = "$want" ] && return 0
+  if git -C "$dir" diff --quiet && git -C "$dir" diff --cached --quiet; then
+    git -C "$dir" checkout "$want" --quiet \
+      || fail "$role checkout: cannot return to '$want' from '${cur:-HEAD}'"
+    info "$role checkout: '${cur:-HEAD}' (clean) -> '$want'"
+  else
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    git -C "$dir" stash push -m "agent_up.sh workers: $role ${cur:-HEAD} $ts (auto, resume-normalize)" \
+      || fail "$role checkout: stash failed on '${cur:-HEAD}', resolve manually"
+    git -C "$dir" checkout "$want" --quiet \
+      || fail "$role checkout: cannot return to '$want' after stash"
+    info "$role checkout: '${cur:-HEAD}' (dirty, tracked-only stash) -> '$want'"
+    git -C "$dir" stash list | head -n 3
+  fi
 }
 
 # clean-tree guard: refuse when tracked files (minus listed prefixes) are dirty.
@@ -762,8 +794,8 @@ mode_workers() {
     qp="$rt/prompts/$(role_field qe prompt)"
     need_file "$dp"; need_file "$qp"
   fi
-  check_branch "$DEV_DIR" main
-  check_branch "$QE_DIR" testbed
+  normalize_checkout "$DEV_DIR" dev main
+  normalize_checkout "$QE_DIR" qe testbed
   run_session "$DEV_SESS" "$DEV_DIR" dev "$dp"
   run_session "$QE_SESS" "$QE_DIR" qe "$qp"
 }
