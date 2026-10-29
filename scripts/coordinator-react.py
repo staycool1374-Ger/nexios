@@ -188,9 +188,17 @@ def main():
     if paused_rooms and not lb.get('paused'):
         actions.append((25, 'ROOM-PENDING PAUSE (rooms %s) but logbook not paused - reconcile pause flag' % ','.join(paused_rooms)))
     elif not lb.get('paused'):
+        # evidence-required gate: gated idle must cite approach + prior wall; else ASK for the reads
+        gated = [r for r in rooms if r.get('armed') and any('gated' in (r.get('pending') or '').lower() or 'holding for' in (r.get('pending') or '').lower() for _ in [1])]
+        # simplified: if any room is gated idle and no approach file for next lane, ask first
         if wstates.get('dev') == 'IDLE' and wstates.get('qe') == 'IDLE':
-            if not any('RING' in x[1] for x in actions):
-                actions.append((19, 'BOTH WORKERS IDLE on tick — assign next backlog immediately (never leave both idle); split by capability (dev product, qe testbed) or pull from milestone open set'))
+            # require at least one qe approach file for the next lane as evidence; if none, ask
+            import glob
+            has_approach = bool(glob.glob('/tmp/nexios-*/notes/qe-*.md') or glob.glob('/tmp/nexios-*/notes/*verify-approach.md'))
+            if not has_approach and not any('RING' in x[1] for x in actions):
+                actions.append((18, 'EVIDENCE MISSING for gated idle — read qe approach file + prior wall on this tip before assigning; ASK for approach+wall cite'))
+            elif not any('RING' in x[1] for x in actions):
+                actions.append((19, 'BOTH WORKERS IDLE on tick — assign next backlog immediately (never leave both idle); cite approach + prior wall as next estimate'))
         for role, sess in SESS.items():
             if wstates[role] == 'IDLE':
                 if not any(x[1].startswith('RING %s' % sess) for x in actions):
