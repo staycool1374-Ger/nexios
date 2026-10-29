@@ -49,8 +49,18 @@ void Serial::init() {
 }
 
 /// @brief Write a single character to the serial port.
-/// Automatically expands '\\n' to "\\r\\n" for carriage-return line-feed.
+/// Automatically expands '\n' to "\r\n" for carriage-return line-feed.
 /// @param c Character to transmit.
+///
+/// Issue #386 item 2 (documented-and-accepted, NOT locked — explicit):
+/// concurrent CPUs can interleave bytes on the wire (cosmetic only).
+/// A spinlock here would trade a cosmetic artifact for a crash-path
+/// liveness hazard: this putchar runs on the panic / first-chance-halt
+/// / ISR diagnostic paths, where blocking on a cross-CPU lock wedges
+/// frame emission if the holding CPU dies mid-byte (fail-open
+/// diagnostics are worse than interleaved ones). Entry integrity for
+/// the persisted log is owned by the RingBuffer CAS claim (#386 item
+/// 1); per-byte volume stays observable via s_serial_write_count.
 void Serial::putchar(char c) {
     if (c == '\n') {
         int i = 0;

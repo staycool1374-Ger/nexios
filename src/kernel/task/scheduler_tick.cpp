@@ -66,7 +66,7 @@ using sched_debug::g_diag_tick_count;
 
 void Scheduler::on_tick() noexcept {
 #if defined(CONFIG_DEBUG)
-    ++g_diag_tick_count;
+    __atomic_fetch_add(&g_diag_tick_count, 1ULL, __ATOMIC_RELAXED);
 #endif
     // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
     // body below is BSP-only (unchanged); the AP skips accounting,
@@ -931,7 +931,7 @@ void Scheduler::on_tick() noexcept {
 
 void Scheduler::rate_monotonic_schedule() noexcept {
 #if defined(CONFIG_DEBUG)
-    ++g_diag_rms_count;
+    __atomic_fetch_add(&g_diag_rms_count, 1ULL, __ATOMIC_RELAXED);
 #endif
     // Issue #26: RMS never raises TPR itself.  It tolerates preemption
     // only from strictly higher classes (the tick at 0xE0 is above every
