@@ -297,6 +297,17 @@ apply:
     # and undid the publish side effects on abort).
     beqz a0, abort_switch
 
+    # Re-derive per-hart offset: t2 (x7) is caller-saved and the
+    # scheduler_validate_pending_switch call above may clobber it
+    # (x86 preserves r11 via push/pop around the call).
+    mv t2, tp
+    la t1, arch_per_cpu_base
+    ld t1, 0(t1)
+    sub t2, t2, t1
+    srli t2, t2, 12
+    li t1, 8
+    bgeu t2, t1, 7f
+    slli t2, t2, 3
     # Load new SP per-hart (points to save area of next task)
     la t1, scheduler_load_rsp_from
     add t1, t1, t2
@@ -318,6 +329,16 @@ apply:
     ld ra, 0(sp)
     addi sp, sp, 16
 
+    # Re-derive per-hart offset: scheduler_on_context_switch may
+    # clobber t2 (caller-saved); recompute from tp (reserved).
+    mv t2, tp
+    la t0, arch_per_cpu_base
+    ld t0, 0(t0)
+    sub t2, t2, t0
+    srli t2, t2, 12
+    li t0, 8
+    bgeu t2, t0, 7f
+    slli t2, t2, 3
     # Check SATP switch per-hart (FULL SATP via context_id_tag)
     la t0, scheduler_load_cr3_from
     add t0, t0, t2
@@ -338,6 +359,7 @@ gen_skip:
     # is not stolen. a0/a1 are reloaded from the frame by restore_all.
     mv a0, t3
     la t1, scheduler_switch_generation
+    add t1, t1, t2
     ld a1, 0(t1)
     addi sp, sp, -64
     sd ra, 0(sp)
