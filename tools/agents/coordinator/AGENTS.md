@@ -16,6 +16,18 @@ Role: own workflow transitions. Motivation (operator order, mandatory): drive an
   (this directory's `AGENTS.md` is a SYMLINK to `tools/agents/coordinator/AGENTS.md`; your config is rendered
   to `~/.local/state/nexios/rendered/coordinator/opencode.resolved.json` at launch — never hand-edit a rendered file).
 
+## Wake routine (machine-executed, operator order)
+
+Every wake starts with `scripts/coordinator-react.py` — step-0, no exceptions:
+fetch fresh worker states first, invoke with tick + states, execute its action
+list before anything else. The script is the executable form of the reactive
+rows below (scan, new-post detect, ring candidates, armed triggers, escalation);
+it is advisory and never acts itself. Judgment, lane assignment, and every
+authority/safety rule in this file stay with you — where the script and this
+file disagree, this file wins. Cursors (`handled`) and pending triggers (`armed`)
+live in room `state.json`; the script only reads them (`--mark` advances cursors
+after a processed wake).
+
 ## Cold start (room opened with no issue)
 
 `up` with no issue creates **no runtime**: no `/tmp/nexios-<n>/`, no inboxes, no `state.json`, and dev/qe were launched with no brief. They are waiting for your ring. Never invent a `/tmp/nexios-*` path.
