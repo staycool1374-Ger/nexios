@@ -481,12 +481,13 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_hart) {
     // Interrupts stay disabled until the idle phase below.
     arch::percpu_init_ap(logical_id, ap_hart);
     arch::plic_threshold_s_for_hart(ap_hart, 0);
-    // S3 scope: the AP stays timer-quiet. Arming the AP timer would let
-    // ap_tick run scheduling decisions on hart1, but cross-CPU dispatch
-    // gating lands in slice-4; until then AP ticks only race the BSP
-    // scheduler (loaded -smp2 post-suite corruption). The AP still idles
-    // in wfi and services S-soft IPIs via the trap path (no timer needed).
-    // (Deliberately no Timer::set_frequency here.)
+    // Issue #351 dispatch fix (C5): arm this hart's S-timer so ap_tick()
+    // runs and drains need_resched from IPI + periodic dispatch. S3 kept
+    // the AP timer-quiet to avoid racing the BSP scheduler pre-slice-4;
+    // slice-4+ gates are now live (set_task_ready mailbox+IPI, IPI loopback
+    // verified), so AP must tick. Mirrors aa64 smp.cpp:434.
+    const uint32_t timer_hz = kernel::BootParams::instance().timer_hz;
+    arch::Timer::set_frequency(timer_hz);
     ap_ready[logical_id] = 1;
 
     // Start-gate: spin parked until the BSP publishes scheduler_ready
@@ -504,11 +505,13 @@ extern "C" void ap_main(uint64_t logical_id, uint64_t ap_hart) {
     // stvec is per-hart: point this AP at the shared vector table
     // (IDT::init only programs the calling hart; IDT::load is a no-op).
     arch::IDT::init();
-    // Enable the S-soft IPI line (still masked globally, so no trap yet).
+    // Enable the S-soft IPI + S-timer lines (still masked globally via
+    // sstatus.SIE clear, so no trap yet). STIE needed for ap_tick().
     {
         uint64_t sie_bits = 0;
         asm volatile("csrr %0, sie" : "=r"(sie_bits));
         sie_bits |= (1ULL << 1); // SSIE: S-mode software interrupts (IPIs)
+        sie_bits |= (1ULL << 5); // STIE: S-mode timer (ap_tick dispatch)
         asm volatile("csrw sie, %0" : : "r"(sie_bits) : "memory");
     }
     // Drop onto the idle task's own kernel stack with interrupts on, then
