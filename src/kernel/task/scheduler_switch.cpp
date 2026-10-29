@@ -300,7 +300,7 @@ static uint16_t publish_context_id_for(TaskControlBlock &next) noexcept {
 void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                     sync::SpinLock *held_lock = nullptr) {
 #if defined(CONFIG_DEBUG)
-    ++g_diag_switch_count;
+    __atomic_fetch_add(&g_diag_switch_count, 1ULL, __ATOMIC_RELAXED);
 #endif
     auto release_lock = [&]() {
         if (held_lock) {
