@@ -50,7 +50,7 @@ var searchData=
   ['fpu_5ffpcr_5foffset_47',['FPU_FPCR_OFFSET',['../namespacearch.html#aab111b2531bf07268f3ee3bbb9561fcf',1,'arch']]],
   ['fpu_5ffpsr_5foffset_48',['FPU_FPSR_OFFSET',['../namespacearch.html#a470b134c1176e0bcd5cf5ce68d66d17e',1,'arch']]],
   ['fpu_5fnm_5fdepth_5fmax_49',['fpu_nm_depth_max',['../global__state_8cpp.html#ac5cd42fea610f44e7de0179a68eaca95',1,'fpu_nm_depth_max:&#160;global_state.cpp'],['../namespacekernel.html#a0635983d70bccde24c7125eba436d74e',1,'kernel::fpu_nm_depth_max']]],
-  ['fpu_5fowner_50',['fpu_owner',['../namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829',1,'kernel::fpu_owner'],['../global__state_8cpp.html#a9cb0eb86a3c6ddd3eff34b67b4a9d525',1,'fpu_owner:&#160;global_state.cpp']]],
+  ['fpu_5fowner_50',['fpu_owner',['../structarch_1_1_per_cpu.html#a8c1efdce002ccd0502d3cc09091f92d9',1,'arch::PerCpu::fpu_owner'],['../namespacekernel.html#a18ec7fa3e1cedad227d48e45f9633829',1,'kernel::fpu_owner'],['../global__state_8cpp.html#a9cb0eb86a3c6ddd3eff34b67b4a9d525',1,'fpu_owner:&#160;global_state.cpp']]],
   ['fpu_5fstate_51',['fpu_state',['../structkernel_1_1_task_control_block.html#a8de713df6ba4aa50b6eade5b1018ee4d',1,'kernel::TaskControlBlock']]],
   ['fpu_5fstate_5farea_5falign_52',['FPU_STATE_AREA_ALIGN',['../namespacearch.html#a3e5f82b30390ddb49bf6258d3f2d33b6',1,'arch']]],
   ['fpu_5fstate_5farea_5fsize_53',['FPU_STATE_AREA_SIZE',['../namespacearch.html#a31425c73373ccc2d2e3339e0a3083473',1,'arch']]],

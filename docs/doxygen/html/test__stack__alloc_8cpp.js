@@ -16,5 +16,6 @@ var test__stack__alloc_8cpp =
     [ "stack_overflow_hook", "test__stack__alloc_8cpp.html#a31ca687659b8dd5a38b9f8bf3c3bfc05", null ],
     [ "stack_overflow_hook_latched_task", "test__stack__alloc_8cpp.html#a2dbd9f2b7a220bee9c01f7d7f9e2b140", null ],
     [ "stack_overflow_hook_latched_va", "test__stack__alloc_8cpp.html#a9263e1defb6cd43be0cebbfca2c8501e", null ],
-    [ "stack_overflow_hook_reset_latch", "test__stack__alloc_8cpp.html#a7773539a843d59e25ca99cb8e35bddd7", null ]
+    [ "stack_overflow_hook_reset_latch", "test__stack__alloc_8cpp.html#a7773539a843d59e25ca99cb8e35bddd7", null ],
+    [ "stack_overflow_hook_set_force_false", "test__stack__alloc_8cpp.html#ae48fa24a6614be5afb05ff256f494e22", null ]
 ];

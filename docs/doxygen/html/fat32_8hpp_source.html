@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('fat32_8hpp_sou
 <div class="ttc" id="anamespacekernel_1_1fat32_html_ad96c400fa4e603f70ae0ecd41241cbbf"><div class="ttname"><a href="namespacekernel_1_1fat32.html#ad96c400fa4e603f70ae0ecd41241cbbf">kernel::fat32::format_short_name</a></div><div class="ttdeci">void format_short_name(const uint8_t raw_name[11], char *out, size_t out_size)</div><div class="ttdoc">Format a raw 8.3 directory entry name into &quot;NAME.EXT&quot;.</div><div class="ttdef"><b>Definition</b> fat32.cpp:224</div></div>
 <div class="ttc" id="anamespacekernel_1_1fat32_html_ae85fd58e1ca6c4db8cc25e966936083c"><div class="ttname"><a href="namespacekernel_1_1fat32.html#ae85fd58e1ca6c4db8cc25e966936083c">kernel::fat32::lookup_in_dir</a></div><div class="ttdeci">bool lookup_in_dir(Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry)</div><div class="ttdoc">Look up a name in a directory cluster chain.</div><div class="ttdef"><b>Definition</b> fat32.cpp:361</div></div>
 <div class="ttc" id="anamespacekernel_1_1fat32_html_ae93a85e2f3b7cee00022a3e34747d9ac"><div class="ttname"><a href="namespacekernel_1_1fat32.html#ae93a85e2f3b7cee00022a3e34747d9ac">kernel::fat32::lookup_in_dir_at</a></div><div class="ttdeci">bool lookup_in_dir_at(Fat32Partition &amp;fs, uint32_t dir_cluster, const char *name, DirEntry &amp;entry, uint64_t &amp;out_index)</div><div class="ttdoc">Look up a name, reporting the matched on-disk slot index. read_dir_entry leaves pos one past the retu...</div><div class="ttdef"><b>Definition</b> fat32.cpp:371</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="astructkernel_1_1fat32_1_1_dir_entry_html"><div class="ttname"><a href="structkernel_1_1fat32_1_1_dir_entry.html">kernel::fat32::DirEntry</a></div><div class="ttdoc">Parsed directory entry.</div><div class="ttdef"><b>Definition</b> fat32.hpp:156</div></div>
 <div class="ttc" id="astructkernel_1_1fat32_1_1_dir_entry_html_a1ef9640a81f4cc75556b0939020463c1"><div class="ttname"><a href="structkernel_1_1fat32_1_1_dir_entry.html#a1ef9640a81f4cc75556b0939020463c1">kernel::fat32::DirEntry::name</a></div><div class="ttdeci">char name[13]</div><div class="ttdoc">8.3 null-terminated (8+1+3+1).</div><div class="ttdef"><b>Definition</b> fat32.hpp:157</div></div>
 <div class="ttc" id="astructkernel_1_1fat32_1_1_dir_entry_html_a272dde2b04ddb04f582be48da624526a"><div class="ttname"><a href="structkernel_1_1fat32_1_1_dir_entry.html#a272dde2b04ddb04f582be48da624526a">kernel::fat32::DirEntry::attrs</a></div><div class="ttdeci">uint8_t attrs</div><div class="ttdoc">File attributes.</div><div class="ttdef"><b>Definition</b> fat32.hpp:158</div></div>

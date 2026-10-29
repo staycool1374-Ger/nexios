@@ -13,12 +13,12 @@
 
 <p align="center">
   <a href="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml"><img src="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml/badge.svg" alt="CI Build"/></a>
-  <img src="https://img.shields.io/badge/tests-1873%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
+  <img src="https://img.shields.io/badge/tests-1744%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/C++20-freestanding-00599C?style=flat-square&logo=cplusplus" alt="C++20 Freestanding"/>
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
   <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
   <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.5.6-blue?style=flat-square" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-v0.5.7-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
@@ -32,7 +32,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal)
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.6 — Meson build system cutover, userspace SDK with reference driver, kernel-stack window parity + guard-page abort
+* **Status:** v0.5.7 — SMP multicore enablement across all three architectures (AP bring-up, cross-CPU TLB shootdown, scheduler/IPC hardening), rv64 trap fix (1744/2 debug, 89/0 release; aa64 1029/0, rv64 646/0 — 2 x86-debug FAILs waived pre-existing/flaky, zero product delta)
 * **License:** GPLv3
 
 NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
@@ -88,6 +88,14 @@ Done roadmap archived in `prompts/README_done.md`.
 ---
 
 ## Recent Release Highlights
+
+### v0.5.7: SMP Multicore Enablement & Cross-CPU Shootdown
+* **SMP Bring-Up (#351, slices 0–4):** DTB CPU discovery (fail-closed), aarch64 PSCI bring-up + SGI IPI, riscv64 HSM bring-up + SBI IPI + per-CPU identity, arch-neutral IPI send interface, per-hart scheduler slots + AP tick/upcpu/IPI delivery on both AP arches.
+* **Cross-CPU TLB Shootdown (#389):** strong per-arch hook overrides (x86 Batch via S4 iface with PCID-precise + all-bit apply, aa64 SGI-10 purge-on-receipt, rv64 RFENCE broadcast + S-soft fallback) adopted at all VMM unmap/teardown/map-split sites through the `tlb_shootdown` choke point; boot-phase fan-out gated on scheduler start.
+* **Scheduler + IPC Hardening (#402 S4/S6):** PI re-bucket of queued owners on boost/restore (mutex/semaphore, mirroring queue/IPC) and `pool_lock_` guarding of the BufferPool free-list/entries (SMP race fix); full S0–S6 SMP spec audited with carry-not-redo discipline.
+* **RV64 Trap Fix (#440):** foreign-tp slot-0 fallback in the trap epilogue unblocks deferred-switch apply from user context (exec zeroes user tp), fixing the rv64 boot stall.
+* **Foundations carried in:** SMP-safe globals (#386), EL0 guard-arm E2E (#435), toolchain parity (#437 aarch64 atomics, #439 `-fno-pie`), QE shootdown E2E probes.
+* **Test counts:** x86 debug 1744/2 (24/26 classes; smp 79/81 + hal STALL waived pre-existing/flaky), x86 release 89/0 (23/24; smp_multicpu STALL-RECOVERED flake), aarch64 1029/0 (22/22), riscv64 646/0 (19/19).
 
 ### v0.5.6: Meson Cutover, Userspace SDK & kstack Guard Parity
 * **Meson Build System (#170):** full Meson cutover for build, test registry, and QEMU harness flows (build.sh, qemu_test.py, gen_test_registry).

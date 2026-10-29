@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -121,22 +121,98 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('namespacekerne
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a50951b19127b15afab09ae971163ff13" id="r_a50951b19127b15afab09ae971163ff13"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a50951b19127b15afab09ae971163ff13">trampoline_block_usable</a> ()</td></tr>
-<tr class="memdesc:a50951b19127b15afab09ae971163ff13"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when [TRAMPOLINE_ADDR, +4KiB) is firmware-usable RAM (multiboot2 memory map type 1) — the occupancy contract the fixed-address copy depends on. This checks the firmware map only: overlap with the LIVE multiboot info range is handled by the stomper (bring_up relocates the info first, issue #153).  <br /></td></tr>
 <tr class="memitem:ab58969d3c15f3181c4317a6491b56b12" id="r_ab58969d3c15f3181c4317a6491b56b12"><td class="memItemLeft">uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab58969d3c15f3181c4317a6491b56b12">ap_count</a> ()</td></tr>
 <tr class="memdesc:ab58969d3c15f3181c4317a6491b56b12"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of APs woken AND parked (0 on single-CPU runs).  <br /></td></tr>
+<tr class="memitem:a19c2df93be430ff3534c07f8e180987e" id="r_a19c2df93be430ff3534c07f8e180987e"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a19c2df93be430ff3534c07f8e180987e">scheduler_started</a> ()</td></tr>
+<tr class="memdesc:a19c2df93be430ff3534c07f8e180987e"><td class="mdescLeft">&#160;</td><td class="mdescRight">True once the scheduler start-gate is published (issue #389). Fan-out targets park pre-gate (no drain yet), so the shootdown hook fans out only when true — matching the x86/rv64 contract.  <br /></td></tr>
+<tr class="memitem:a2cc32026bc6f50d17e920839590c5085" id="r_a2cc32026bc6f50d17e920839590c5085"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a2cc32026bc6f50d17e920839590c5085">shootdown_applied</a> ()</td></tr>
+<tr class="memdesc:a2cc32026bc6f50d17e920839590c5085"><td class="mdescLeft">&#160;</td><td class="mdescRight">Applied-shootdown counter for test readback (issue #389). Mirrors the rv64 <span class="tt"><a class="el" href="#a2cc32026bc6f50d17e920839590c5085" title="Applied-shootdown counter for test readback (issue #389). Mirrors the rv64 shootdown_applied() observ...">shootdown_applied()</a></span> observable; incremented once per SGI-10 purge by the shootdown handler. Lets QE observe AP-side apply end to end (<span class="tt">s_sgi_ack</span> slots stay file-static, GDB-only).  <br /></td></tr>
+<tr class="memitem:acf70540640457dea30ac1090ae807fd7" id="r_acf70540640457dea30ac1090ae807fd7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acf70540640457dea30ac1090ae807fd7">note_shootdown_applied</a> ()</td></tr>
+<tr class="memdesc:acf70540640457dea30ac1090ae807fd7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Record one AP-side shootdown purge (SGI-10 handler path).  <br /></td></tr>
+<tr class="memitem:abbaf7d1cb3d281239e0068ac2005d5dc" id="r_abbaf7d1cb3d281239e0068ac2005d5dc"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#abbaf7d1cb3d281239e0068ac2005d5dc">ap_aff0</a> (uint8_t logical)</td></tr>
+<tr class="memdesc:abbaf7d1cb3d281239e0068ac2005d5dc"><td class="mdescLeft">&#160;</td><td class="mdescRight">DTB reg (MPIDR Aff0) for a parked AP (issue #351 slice-2). Maps the compressed logical index to the GIC target (Aff0); identity only for contiguous topologies. 0xFF when unmapped (fail-closed).  <br /></td></tr>
 <tr class="memitem:ae4fc4bdd31c0c6cd357ec5d46f55289a" id="r_ae4fc4bdd31c0c6cd357ec5d46f55289a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae4fc4bdd31c0c6cd357ec5d46f55289a">publish_scheduler_ready</a> ()</td></tr>
-<tr class="memdesc:ae4fc4bdd31c0c6cd357ec5d46f55289a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Publish the scheduler start-gate (called once by the BSP after reboot_from_table() finishes spawning, before its idle loop).  <br /></td></tr>
+<tr class="memdesc:ae4fc4bdd31c0c6cd357ec5d46f55289a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Publish the scheduler start-gate (BSP only, after <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> finishes parking verified APs, before the idle loop). APs spin parked until this lands.  <br /></td></tr>
+<tr class="memitem:abf26a6a85fe60bbad0a6fb41b45bd276" id="r_abf26a6a85fe60bbad0a6fb41b45bd276"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276">bring_up</a> ()</td></tr>
+<tr class="memdesc:abf26a6a85fe60bbad0a6fb41b45bd276"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bring up application processors (called once at boot, after Timer::init, under interrupt guard). Fail-closed: any malformed state (no DTB, unusable conduit, AP start timeout) parks with zero APs or panics naming the MPIDR — never half-woken. Single-CPU topologies (DTB cpu count &lt;= 1) are a silent no-op.  <br /></td></tr>
+<tr class="memitem:aa7852449f90735aeb243867be1d6685b" id="r_aa7852449f90735aeb243867be1d6685b"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa7852449f90735aeb243867be1d6685b">verify_booted_aps</a> ()</td></tr>
+<tr class="memdesc:aa7852449f90735aeb243867be1d6685b"><td class="mdescLeft">&#160;</td><td class="mdescRight">One-shot cross-CPU SGI verification (issue #351, slice-2). Called once from the BSP idle-loop entry (post-gate, IRQs live, APs IRQ-live): sends each parked AP the loopback SGI and polls its ack. Panics on delivery failure (fail-closed); silent on success. Never called during bring_up (the BSP is IRQ-masked there and the APs are pre-gate — probing then would deadlock by design).  <br /></td></tr>
+<tr class="memitem:a37b0c598b4dad69585fd7503d6ec3fea" id="r_a37b0c598b4dad69585fd7503d6ec3fea"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a37b0c598b4dad69585fd7503d6ec3fea">ap_main</a> (uint64_t logical_id, uint64_t ap_mpidr)</td></tr>
+<tr class="memdesc:a37b0c598b4dad69585fd7503d6ec3fea"><td class="mdescLeft">&#160;</td><td class="mdescRight">Application-processor C entry (called from the ap_entry stub with MMU on, own stack live, TPIDR_EL1 set). Never returns.  <br /></td></tr>
+<tr class="memitem:a809f6cddc8001623de5865f5475680fe" id="r_a809f6cddc8001623de5865f5475680fe"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a809f6cddc8001623de5865f5475680fe">aa64_ap_entry</a> ()</td></tr>
+<tr class="memdesc:a809f6cddc8001623de5865f5475680fe"><td class="mdescLeft">&#160;</td><td class="mdescRight">AP entry stub (assembly, .boot.text, MMU-off safe). PSCI_CPU_ON / spin-table release target. x0 = context id (logical id). Installs the published kernel TTBRs, enables the MMU, switches to the AP's stack + TPIDR, then calls <a class="el" href="#a37b0c598b4dad69585fd7503d6ec3fea" title="Application-processor C entry (called from the ap_entry stub with MMU on, own stack live,...">ap_main()</a>. Address is VA == PA.  <br /></td></tr>
+<tr class="memitem:a4dd0dff6112460ee0877000f1967780b" id="r_a4dd0dff6112460ee0877000f1967780b"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a4dd0dff6112460ee0877000f1967780b">rv64_ap_entry_pa</a> ()</td></tr>
+<tr class="memdesc:a4dd0dff6112460ee0877000f1967780b"><td class="mdescLeft">&#160;</td><td class="mdescRight">AP entry PA (linker-computed absolute address, see the rv64_ap_entry_pa_slot QUAD in linker_riscv64.ld: VMA==LMA==PA for the low .boot region, so the absolute value IS the physical address firmware needs). Fail-closed (0) when the slot is out of range.  <br /></td></tr>
+<tr class="memitem:a1379d26dac2397035357682c23ba4091" id="r_a1379d26dac2397035357682c23ba4091"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a1379d26dac2397035357682c23ba4091">ap_hart</a> (uint8_t logical)</td></tr>
+<tr class="memitem:a33fc093f9c0af9cb86eb3dd31b100c21" id="r_a33fc093f9c0af9cb86eb3dd31b100c21"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a33fc093f9c0af9cb86eb3dd31b100c21">request_full_fence</a> (uint64_t logical)</td></tr>
+<tr class="memitem:a664b2ec65b4641e289ec751e4b85d27d" id="r_a664b2ec65b4641e289ec751e4b85d27d"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a664b2ec65b4641e289ec751e4b85d27d">send_resched_ipi</a> (uint64_t logical)</td></tr>
+<tr class="memitem:af449dcaefceb32a60f421c23db666cfe" id="r_af449dcaefceb32a60f421c23db666cfe"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#af449dcaefceb32a60f421c23db666cfe">send_shootdown_ipi</a> (uint64_t logical)</td></tr>
+<tr class="memitem:a5a20f3156d15847b60b7a048de59e959" id="r_a5a20f3156d15847b60b7a048de59e959"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a5a20f3156d15847b60b7a048de59e959">queue_shootdown</a> (uint64_t logical, uint64_t addr)</td></tr>
+<tr class="memitem:a3d7665f01c3dec745ee77d41e5bbca57" id="r_a3d7665f01c3dec745ee77d41e5bbca57"><td class="memItemLeft">uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a3d7665f01c3dec745ee77d41e5bbca57">flush_shootdowns</a> (uint64_t logical)</td></tr>
+<tr class="memitem:a1af16e3ac590af4a1be09feec730c2cd" id="r_a1af16e3ac590af4a1be09feec730c2cd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1af16e3ac590af4a1be09feec730c2cd">apply_shootdowns</a> ()</td></tr>
+<tr class="memitem:aacb547e2cb7c198f9bb4f8f0160e50ac" id="r_aacb547e2cb7c198f9bb4f8f0160e50ac"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aacb547e2cb7c198f9bb4f8f0160e50ac">handle_sswi_ipi</a> ()</td></tr>
+<tr class="memitem:a857f6307d1677acd4fa979870f48ef92" id="r_a857f6307d1677acd4fa979870f48ef92"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a857f6307d1677acd4fa979870f48ef92">set_sbi_rfence_for_test</a> (bool present)</td></tr>
+<tr class="memdesc:a857f6307d1677acd4fa979870f48ef92"><td class="mdescLeft">&#160;</td><td class="mdescRight">Force the RFENCE presence answer for tests (issue #389).  <br /></td></tr>
+<tr class="memitem:abdab675b2b242d29e1e09ffff5b007bd" id="r_abdab675b2b242d29e1e09ffff5b007bd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abdab675b2b242d29e1e09ffff5b007bd">clear_sbi_rfence_for_test</a> ()</td></tr>
+<tr class="memdesc:abdab675b2b242d29e1e09ffff5b007bd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the RFENCE test override (restore probed behavior).  <br /></td></tr>
+<tr class="memitem:a50951b19127b15afab09ae971163ff13" id="r_a50951b19127b15afab09ae971163ff13"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a50951b19127b15afab09ae971163ff13">trampoline_block_usable</a> ()</td></tr>
+<tr class="memdesc:a50951b19127b15afab09ae971163ff13"><td class="mdescLeft">&#160;</td><td class="mdescRight">True when [TRAMPOLINE_ADDR, +4KiB) is firmware-usable RAM (multiboot2 memory map type 1) — the occupancy contract the fixed-address copy depends on. This checks the firmware map only: overlap with the LIVE multiboot info range is handled by the stomper (bring_up relocates the info first, issue #153).  <br /></td></tr>
 <tr class="memitem:adf4c7c3638cf5ca19596e47b8335f84d" id="r_adf4c7c3638cf5ca19596e47b8335f84d"><td class="memItemLeft">const <a class="el" href="structkernel_1_1acpi_1_1_madt_info.html">kernel::acpi::MadtInfo</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#adf4c7c3638cf5ca19596e47b8335f84d">boot_madt</a> ()</td></tr>
 <tr class="memdesc:adf4c7c3638cf5ca19596e47b8335f84d"><td class="mdescLeft">&#160;</td><td class="mdescRight">The MADT snapshot <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> consumed at boot (cached — firmware tables are static). Tests read this instead of re-walking the tables (re-walks map kernel-half pages that test isolation reports as <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> leaks).  <br /></td></tr>
 <tr class="memitem:aa1df9605095d501cda9d27baa52ad1e1" id="r_aa1df9605095d501cda9d27baa52ad1e1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa1df9605095d501cda9d27baa52ad1e1">reserve_block_early</a> ()</td></tr>
 <tr class="memdesc:aa1df9605095d501cda9d27baa52ad1e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Claim the trampoline block from <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a>. Must run right after <a class="el" href="classkernel_1_1_p_m_m.html#a36e93eea368c86e6699b74cc39091bc5" title="Initialize the physical memory manager with a bitmap.">PMM::init()</a>, before any allocation (low pages go first-come). <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> refuses to copy when this never ran (init-order fail-closed: never write a block <a class="el" href="classkernel_1_1_p_m_m.html" title="Physical memory manager using a bitmap to track free 4 KiB pages.">PMM</a> may own).  <br /></td></tr>
-<tr class="memitem:abf26a6a85fe60bbad0a6fb41b45bd276" id="r_abf26a6a85fe60bbad0a6fb41b45bd276"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276">bring_up</a> ()</td></tr>
-<tr class="memdesc:abf26a6a85fe60bbad0a6fb41b45bd276"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bring up application processors (called once at boot, after Timer::init, under interrupt guard). Fail-closed: any malformed state (no MADT, unusable block, AP start timeout) parks with zero APs or panics naming the LAPIC ID — never half-woken.  <br /></td></tr>
 <tr class="memitem:a56bcb36fec3264043b7ee22403f91ca0" id="r_a56bcb36fec3264043b7ee22403f91ca0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a56bcb36fec3264043b7ee22403f91ca0">ap_main</a> (uint64_t logical_id, uint32_t lapic_id)</td></tr>
 <tr class="memdesc:a56bcb36fec3264043b7ee22403f91ca0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Application-processor entry (called from the trampoline's 64-bit stage with logical ID + LAPIC ID). Never returns.  <br /></td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a2a25f19a4b3fa0738a2c92adc954a3a1" id="r_a2a25f19a4b3fa0738a2c92adc954a3a1"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a2a25f19a4b3fa0738a2c92adc954a3a1">PSCI_VERSION_MIN</a> = 0x00010000U</td></tr>
+<tr class="memdesc:a2a25f19a4b3fa0738a2c92adc954a3a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">PSCI version for the CPU_ON primitive (32-bit calling convention). PSCI 0.2+ is required; the version is probed at boot and anything older (or absent) fails the bring-up closed (0 APs, never half-woken).  <br /></td></tr>
+<tr class="memitem:af695e938404bf80344a379bb07a73219" id="r_af695e938404bf80344a379bb07a73219"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#af695e938404bf80344a379bb07a73219">PSCI_FN_VERSION</a> = 0x84000000U</td></tr>
+<tr class="memdesc:af695e938404bf80344a379bb07a73219"><td class="mdescLeft">&#160;</td><td class="mdescRight">PSCI function IDs (SMC32 calling convention).  <br /></td></tr>
+<tr class="memitem:a4ffeacf7cecc47eb617d39ab9fb2f097" id="r_a4ffeacf7cecc47eb617d39ab9fb2f097"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a4ffeacf7cecc47eb617d39ab9fb2f097">PSCI_FN_CPU_ON</a> = 0xC4000003U</td></tr>
+<tr class="memitem:a7e486fe838013553e8f8efe1b6c7b6f2" id="r_a7e486fe838013553e8f8efe1b6c7b6f2"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a7e486fe838013553e8f8efe1b6c7b6f2">PSCI_RET_SUCCESS</a> = 0U</td></tr>
+<tr class="memdesc:a7e486fe838013553e8f8efe1b6c7b6f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">PSCI return codes we distinguish (all others fail closed alike).  <br /></td></tr>
 </table>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
+<a id="a809f6cddc8001623de5865f5475680fe" name="a809f6cddc8001623de5865f5475680fe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a809f6cddc8001623de5865f5475680fe">&#9670;&#160;</a></span>aa64_ap_entry()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::aa64_ap_entry </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>AP entry stub (assembly, .boot.text, MMU-off safe). PSCI_CPU_ON / spin-table release target. x0 = context id (logical id). Installs the published kernel TTBRs, enables the MMU, switches to the AP's stack + TPIDR, then calls <a class="el" href="#a37b0c598b4dad69585fd7503d6ec3fea" title="Application-processor C entry (called from the ap_entry stub with MMU on, own stack live,...">ap_main()</a>. Address is VA == PA. </p>
+
+</div>
+</div>
+<a id="abbaf7d1cb3d281239e0068ac2005d5dc" name="abbaf7d1cb3d281239e0068ac2005d5dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abbaf7d1cb3d281239e0068ac2005d5dc">&#9670;&#160;</a></span>ap_aff0()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::smp::ap_aff0 </td>
+          <td>(</td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>logical</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>DTB reg (MPIDR Aff0) for a parked AP (issue #351 slice-2). Maps the compressed logical index to the GIC target (Aff0); identity only for contiguous topologies. 0xFF when unmapped (fail-closed). </p>
+
+</div>
+</div>
 <a id="ab58969d3c15f3181c4317a6491b56b12" name="ab58969d3c15f3181c4317a6491b56b12"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab58969d3c15f3181c4317a6491b56b12">&#9670;&#160;</a></span>ap_count()</h2>
 
@@ -156,8 +232,25 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a1379d26dac2397035357682c23ba4091" name="a1379d26dac2397035357682c23ba4091"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1379d26dac2397035357682c23ba4091">&#9670;&#160;</a></span>ap_hart()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::smp::ap_hart </td>
+          <td>(</td>
+          <td class="paramtype">uint8_t</td>          <td class="paramname"><span class="paramname"><em>logical</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a56bcb36fec3264043b7ee22403f91ca0" name="a56bcb36fec3264043b7ee22403f91ca0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a56bcb36fec3264043b7ee22403f91ca0">&#9670;&#160;</a></span>ap_main()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a56bcb36fec3264043b7ee22403f91ca0">&#9670;&#160;</a></span>ap_main() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -178,7 +271,7 @@ Functions</h2></td></tr>
 <p>Application-processor entry (called from the trampoline's 64-bit stage with logical ID + LAPIC ID). Never returns. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">logical_id</td><td>Index into <a class="el" href="namespacearch.html#a74ee5e38b6239c12f5cadd479e625d7d">arch::per_cpu</a>[] (1..CONFIG_MAX_CPUS-1). </td></tr>
+    <tr><td class="paramname">logical_id</td><td>Index into <a class="el" href="namespacearch.html#aac9dd10b41e7a28bdf1f0665ed5b6d11" title="Array of per-CPU blocks (CONFIG_MAX_CPUS pages). In single-core builds (CONFIG_MAX_CPUS == 1),...">arch::per_cpu</a>[] (1..CONFIG_MAX_CPUS-1). </td></tr>
     <tr><td class="paramname">lapic_id</td><td>This AP's LAPIC ID (matches the MADT entry). </td></tr>
   </table>
   </dd>
@@ -188,6 +281,65 @@ Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1smp_a56bcb36fec3264043b7ee22403f91ca0_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_a56bcb36fec3264043b7ee22403f91ca0_cgraph" loading="lazy" alt=""/></div>
 <!-- MAP 0 -->
+</div>
+
+</div>
+</div>
+<a id="a37b0c598b4dad69585fd7503d6ec3fea" name="a37b0c598b4dad69585fd7503d6ec3fea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a37b0c598b4dad69585fd7503d6ec3fea">&#9670;&#160;</a></span>ap_main() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::ap_main </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>logical_id</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>ap_mpidr</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Application-processor C entry (called from the ap_entry stub with MMU on, own stack live, TPIDR_EL1 set). Never returns. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">logical_id</td><td>Index into <a class="el" href="namespacearch.html#aac9dd10b41e7a28bdf1f0665ed5b6d11" title="Array of per-CPU blocks (CONFIG_MAX_CPUS pages). In single-core builds (CONFIG_MAX_CPUS == 1),...">arch::per_cpu</a>[] (1..CONFIG_MAX_CPUS-1). </td></tr>
+    <tr><td class="paramname">ap_mpidr</td><td>This AP's MPIDR_EL1 value (matches its DTB reg). </td></tr>
+  </table>
+  </dd>
+</dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1smp_a37b0c598b4dad69585fd7503d6ec3fea_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_a37b0c598b4dad69585fd7503d6ec3fea_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 1 -->
+</div>
+
+</div>
+</div>
+<a id="a1af16e3ac590af4a1be09feec730c2cd" name="a1af16e3ac590af4a1be09feec730c2cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1af16e3ac590af4a1be09feec730c2cd">&#9670;&#160;</a></span>apply_shootdowns()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::apply_shootdowns </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1smp_a1af16e3ac590af4a1be09feec730c2cd_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_a1af16e3ac590af4a1be09feec730c2cd_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
 </div>
 
 </div>
@@ -226,13 +378,92 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
+<p>Bring up application processors (called once at boot, after Timer::init, under interrupt guard). Fail-closed: any malformed state (no DTB, unusable conduit, AP start timeout) parks with zero APs or panics naming the MPIDR — never half-woken. Single-CPU topologies (DTB cpu count &lt;= 1) are a silent no-op. </p>
 <p>Bring up application processors (called once at boot, after Timer::init, under interrupt guard). Fail-closed: any malformed state (no MADT, unusable block, AP start timeout) parks with zero APs or panics naming the LAPIC ID — never half-woken. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1smp_abf26a6a85fe60bbad0a6fb41b45bd276_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_abf26a6a85fe60bbad0a6fb41b45bd276_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 1 -->
+<!-- MAP 3 -->
 </div>
+
+</div>
+</div>
+<a id="abdab675b2b242d29e1e09ffff5b007bd" name="abdab675b2b242d29e1e09ffff5b007bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abdab675b2b242d29e1e09ffff5b007bd">&#9670;&#160;</a></span>clear_sbi_rfence_for_test()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::clear_sbi_rfence_for_test </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Clear the RFENCE test override (restore probed behavior). </p>
+
+</div>
+</div>
+<a id="a3d7665f01c3dec745ee77d41e5bbca57" name="a3d7665f01c3dec745ee77d41e5bbca57"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3d7665f01c3dec745ee77d41e5bbca57">&#9670;&#160;</a></span>flush_shootdowns()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::smp::flush_shootdowns </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>logical</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aacb547e2cb7c198f9bb4f8f0160e50ac" name="aacb547e2cb7c198f9bb4f8f0160e50ac"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aacb547e2cb7c198f9bb4f8f0160e50ac">&#9670;&#160;</a></span>handle_sswi_ipi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::handle_sswi_ipi </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1smp_aacb547e2cb7c198f9bb4f8f0160e50ac_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_aacb547e2cb7c198f9bb4f8f0160e50ac_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 4 -->
+</div>
+
+</div>
+</div>
+<a id="acf70540640457dea30ac1090ae807fd7" name="acf70540640457dea30ac1090ae807fd7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acf70540640457dea30ac1090ae807fd7">&#9670;&#160;</a></span>note_shootdown_applied()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::note_shootdown_applied </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Record one AP-side shootdown purge (SGI-10 handler path). </p>
 
 </div>
 </div>
@@ -251,8 +482,47 @@ Here is the call graph for this function:</div>
       </table>
 </div><div class="memdoc">
 
+<p>Publish the scheduler start-gate (BSP only, after <a class="el" href="#abf26a6a85fe60bbad0a6fb41b45bd276" title="Bring up application processors (called once at boot, after Timer::init, under interrupt guard)....">bring_up()</a> finishes parking verified APs, before the idle loop). APs spin parked until this lands. </p>
+<p>Publish the scheduler start-gate (BSP only, after reboot_from_table() finishes spawning, before its idle loop). APs spin parked until this lands (spec §3.4.3).</p>
 <p>Publish the scheduler start-gate (called once by the BSP after reboot_from_table() finishes spawning, before its idle loop). </p>
-<p>Publish the scheduler start-gate (BSP only, after reboot_from_table() finishes spawning, before its idle loop). APs spin parked until this lands (spec §3.4.3). </p>
+
+</div>
+</div>
+<a id="a5a20f3156d15847b60b7a048de59e959" name="a5a20f3156d15847b60b7a048de59e959"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a20f3156d15847b60b7a048de59e959">&#9670;&#160;</a></span>queue_shootdown()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::smp::queue_shootdown </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>logical</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>addr</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a33fc093f9c0af9cb86eb3dd31b100c21" name="a33fc093f9c0af9cb86eb3dd31b100c21"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a33fc093f9c0af9cb86eb3dd31b100c21">&#9670;&#160;</a></span>request_full_fence()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::smp::request_full_fence </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>logical</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>
@@ -276,8 +546,135 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1smp_aa1df9605095d501cda9d27baa52ad1e1_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_aa1df9605095d501cda9d27baa52ad1e1_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 2 -->
+<!-- MAP 5 -->
 </div>
+
+</div>
+</div>
+<a id="a4dd0dff6112460ee0877000f1967780b" name="a4dd0dff6112460ee0877000f1967780b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4dd0dff6112460ee0877000f1967780b">&#9670;&#160;</a></span>rv64_ap_entry_pa()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::smp::rv64_ap_entry_pa </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>AP entry PA (linker-computed absolute address, see the rv64_ap_entry_pa_slot QUAD in linker_riscv64.ld: VMA==LMA==PA for the low .boot region, so the absolute value IS the physical address firmware needs). Fail-closed (0) when the slot is out of range. </p>
+
+</div>
+</div>
+<a id="a19c2df93be430ff3534c07f8e180987e" name="a19c2df93be430ff3534c07f8e180987e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19c2df93be430ff3534c07f8e180987e">&#9670;&#160;</a></span>scheduler_started()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::smp::scheduler_started </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>True once the scheduler start-gate is published (issue #389). Fan-out targets park pre-gate (no drain yet), so the shootdown hook fans out only when true — matching the x86/rv64 contract. </p>
+<p>True once the scheduler start-gate is published (issue #389). Fan-out targets park with IF=0 until this lands (Phase-B behavior), so the shootdown hook fans out only when true — otherwise the target cannot drain and every flush burns its bounded spin.</p>
+<dl class="section return"><dt>Returns</dt><dd>True after <a class="el" href="#ae4fc4bdd31c0c6cd357ec5d46f55289a" title="Publish the scheduler start-gate (BSP only, after bring_up() finishes parking verified APs,...">publish_scheduler_ready()</a>, false before. </dd></dl>
+
+</div>
+</div>
+<a id="a664b2ec65b4641e289ec751e4b85d27d" name="a664b2ec65b4641e289ec751e4b85d27d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a664b2ec65b4641e289ec751e4b85d27d">&#9670;&#160;</a></span>send_resched_ipi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::smp::send_resched_ipi </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>logical</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af449dcaefceb32a60f421c23db666cfe" name="af449dcaefceb32a60f421c23db666cfe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af449dcaefceb32a60f421c23db666cfe">&#9670;&#160;</a></span>send_shootdown_ipi()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool kernel::smp::send_shootdown_ipi </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>logical</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a857f6307d1677acd4fa979870f48ef92" name="a857f6307d1677acd4fa979870f48ef92"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a857f6307d1677acd4fa979870f48ef92">&#9670;&#160;</a></span>set_sbi_rfence_for_test()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::set_sbi_rfence_for_test </td>
+          <td>(</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>present</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Force the RFENCE presence answer for tests (issue #389). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">present</td><td>Nonzero pretends RFENCE present, zero forces the S-soft fallback path (mirrors <span class="tt">sbi_probe_extension</span>). </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a2cc32026bc6f50d17e920839590c5085" name="a2cc32026bc6f50d17e920839590c5085"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2cc32026bc6f50d17e920839590c5085">&#9670;&#160;</a></span>shootdown_applied()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::smp::shootdown_applied </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Applied-shootdown counter for test readback (issue #389). Mirrors the rv64 <span class="tt"><a class="el" href="#a2cc32026bc6f50d17e920839590c5085" title="Applied-shootdown counter for test readback (issue #389). Mirrors the rv64 shootdown_applied() observ...">shootdown_applied()</a></span> observable; incremented once per SGI-10 purge by the shootdown handler. Lets QE observe AP-side apply end to end (<span class="tt">s_sgi_ack</span> slots stay file-static, GDB-only). </p>
+<dl class="section return"><dt>Returns</dt><dd>Total shootdown purges applied by AP handlers since boot. </dd></dl>
 
 </div>
 </div>
@@ -301,8 +698,128 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="namespacekernel_1_1smp_a50951b19127b15afab09ae971163ff13_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_a50951b19127b15afab09ae971163ff13_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 3 -->
+<!-- MAP 6 -->
 </div>
+
+</div>
+</div>
+<a id="aa7852449f90735aeb243867be1d6685b" name="aa7852449f90735aeb243867be1d6685b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7852449f90735aeb243867be1d6685b">&#9670;&#160;</a></span>verify_booted_aps()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void kernel::smp::verify_booted_aps </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>One-shot cross-CPU SGI verification (issue #351, slice-2). Called once from the BSP idle-loop entry (post-gate, IRQs live, APs IRQ-live): sends each parked AP the loopback SGI and polls its ack. Panics on delivery failure (fail-closed); silent on success. Never called during bring_up (the BSP is IRQ-masked there and the APs are pre-gate — probing then would deadlock by design). </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="namespacekernel_1_1smp_aa7852449f90735aeb243867be1d6685b_cgraph.png" border="0" usemap="#anamespacekernel_1_1smp_aa7852449f90735aeb243867be1d6685b_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 7 -->
+</div>
+
+</div>
+</div>
+<a name="doc-var-members" id="doc-var-members"></a><h2 id="header-doc-var-members" class="groupheader">Variable Documentation</h2>
+<a id="a4ffeacf7cecc47eb617d39ab9fb2f097" name="a4ffeacf7cecc47eb617d39ab9fb2f097"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4ffeacf7cecc47eb617d39ab9fb2f097">&#9670;&#160;</a></span>PSCI_FN_CPU_ON</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::smp::PSCI_FN_CPU_ON = 0xC4000003U</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af695e938404bf80344a379bb07a73219" name="af695e938404bf80344a379bb07a73219"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af695e938404bf80344a379bb07a73219">&#9670;&#160;</a></span>PSCI_FN_VERSION</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::smp::PSCI_FN_VERSION = 0x84000000U</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>PSCI function IDs (SMC32 calling convention). </p>
+
+</div>
+</div>
+<a id="a7e486fe838013553e8f8efe1b6c7b6f2" name="a7e486fe838013553e8f8efe1b6c7b6f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7e486fe838013553e8f8efe1b6c7b6f2">&#9670;&#160;</a></span>PSCI_RET_SUCCESS</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::smp::PSCI_RET_SUCCESS = 0U</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>PSCI return codes we distinguish (all others fail closed alike). </p>
+
+</div>
+</div>
+<a id="a2a25f19a4b3fa0738a2c92adc954a3a1" name="a2a25f19a4b3fa0738a2c92adc954a3a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a25f19a4b3fa0738a2c92adc954a3a1">&#9670;&#160;</a></span>PSCI_VERSION_MIN</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint32_t kernel::smp::PSCI_VERSION_MIN = 0x00010000U</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel inline">inline</span><span class="mlabel constexpr">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>PSCI version for the CPU_ON primitive (32-bit calling convention). PSCI 0.2+ is required; the version is probed at boot and anything older (or absent) fails the bring-up closed (0 APs, never half-woken). </p>
 
 </div>
 </div>

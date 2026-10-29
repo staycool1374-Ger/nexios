@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -193,6 +193,8 @@ Files</h2></td></tr>
 <tr class="memdesc:scheduler__lifecycle_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Task disposal + zombie reaping for Scheduler (issue #323). Pure move out of <a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a>: no logic changes. <br /></td></tr>
 <tr class="memitem:scheduler_5Flifecycle_5Finternal_2Ehpp" id="r_scheduler_5Flifecycle_5Finternal_2Ehpp"><td class="memItemLeft"><a href="scheduler__lifecycle__internal_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="scheduler__lifecycle__internal_8hpp.html">scheduler_lifecycle_internal.hpp</a></td></tr>
 <tr class="memdesc:scheduler__lifecycle__internal_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared cross-TU declarations for <a class="el" href="scheduler__lifecycle_8cpp.html" title="Task disposal + zombie reaping for Scheduler (issue #323). Pure move out of scheduler....">scheduler_lifecycle.cpp</a> (issue #323). Pure move: no logic change. P5a deferred-kill worklist statics; the list is drained by the on_tick tail in <a class="el" href="scheduler_8cpp.html" title="Scheduler implementation: task lifecycle, ready-queue management, rate-monotonic dispatch,...">scheduler.cpp</a>, which observes only the count. <br /></td></tr>
+<tr class="memitem:scheduler_5Flock_5Fguard_2Ehpp" id="r_scheduler_5Flock_5Fguard_2Ehpp"><td class="memItemLeft"><a href="scheduler__lock__guard_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="scheduler__lock__guard_8hpp.html">scheduler_lock_guard.hpp</a></td></tr>
+<tr class="memdesc:scheduler__lock__guard_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Checked guard + per-CPU take-depth for scheduler_lock_ (#417). <br /></td></tr>
 <tr class="memitem:scheduler_5Fpath_2Ehpp" id="r_scheduler_5Fpath_2Ehpp"><td class="memItemLeft"><a href="scheduler__path_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="scheduler__path_8hpp.html">scheduler_path.hpp</a></td></tr>
 <tr class="memdesc:scheduler__path_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatch-path step registry (issue #347 Slice B) + teardown segment (issue #324 Tick 13). <br /></td></tr>
 <tr class="memitem:scheduler_5Fqueue_2Ecpp" id="r_scheduler_5Fqueue_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="scheduler__queue_8cpp.html">scheduler_queue.cpp</a></td></tr>

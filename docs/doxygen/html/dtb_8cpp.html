@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -143,6 +143,10 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a97e92178e2f805566db1134046c73773" id="r_a97e92178e2f805566db1134046c73773"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#a97e92178e2f805566db1134046c73773">kernel::boot::dtb_walk_cpus</a> (const void *fdt, <a class="el" href="structkernel_1_1boot_1_1_dtb_cpu_entry.html">DtbCpuEntry</a> *out_entries, int max_entries)</td></tr>
+<tr class="memdesc:a97e92178e2f805566db1134046c73773"><td class="mdescLeft">&#160;</td><td class="mdescRight">Walk /cpus/cpu* nodes (issue #351 slice-1). Decodes each cpu reg with the /cpus #address-cells (probed, never assumed), parses enable-method + cpu-release-addr. Fail-closed: returns 0 on absent DTB, missing /cpus, missing/non-{1,2} #address-cells, any malformed cpu node, or more CPUs than fit (callers size by CONFIG_MAX_CPUS; overflow cannot boot safely).  <br /></td></tr>
+<tr class="memitem:a6662c2689ca26eb3d641397418c04d52" id="r_a6662c2689ca26eb3d641397418c04d52"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#a6662c2689ca26eb3d641397418c04d52">kernel::boot::dtb_psci_method</a> (const void *fdt, char *out_method, int max_len)</td></tr>
+<tr class="memdesc:a6662c2689ca26eb3d641397418c04d52"><td class="mdescLeft">&#160;</td><td class="mdescRight">Read the PSCI conduit ("smc"/"hvc") from the first "arm,psci-*" compatible node (issue #351 slice-1). Fail-closed false when no psci node, no method, or malformed.  <br /></td></tr>
 <tr class="memitem:ab30e6ea1b60311595c77042da157e17b" id="r_ab30e6ea1b60311595c77042da157e17b"><td class="memItemLeft">const void *&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#ab30e6ea1b60311595c77042da157e17b">kernel::boot::dtb_from_boot_info</a> ()</td></tr>
 <tr class="memdesc:ab30e6ea1b60311595c77042da157e17b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Validated DTB pointer from boot info, or nullptr. Checks region containment (usable or reserved RAM), HHDM aliasing, layout + structure validation. Fail-closed on any defect.  <br /></td></tr>
 <tr class="memitem:a02e7a0e863a39279a7065850c07cd847" id="r_a02e7a0e863a39279a7065850c07cd847"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel_1_1boot.html#a02e7a0e863a39279a7065850c07cd847">kernel::boot::dtb_find_compatible_nodes</a> (const void *fdt, const char *compat, int *out_offsets, int max_offsets)</td></tr>

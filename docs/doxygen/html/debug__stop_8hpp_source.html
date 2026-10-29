@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('debug__stop_8h
 <div class="ttc" id="anamespacekernel_1_1debug_html_ab418a7dead513550e8631285e3856e75"><div class="ttname"><a href="namespacekernel_1_1debug.html#ab418a7dead513550e8631285e3856e75">kernel::debug::debug_bp_match</a></div><div class="ttdeci">uint64_t debug_bp_match(TaskControlBlock &amp;target, uint64_t pc) noexcept</div><div class="ttdoc">Match a trap PC against target&#39;s shadows.</div><div class="ttdef"><b>Definition</b> debug_stop.cpp:569</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html_abc4ac3085cdd74f5bd69a449260bd1fe"><div class="ttname"><a href="namespacekernel_1_1debug.html#abc4ac3085cdd74f5bd69a449260bd1fe">kernel::debug::debug_drop_target</a></div><div class="ttdeci">void debug_drop_target(uint64_t target_id, uint32_t target_gen) noexcept</div><div class="ttdoc">Drop all queued events + shadows for a target by id (detach and dead-target paths — works after the T...</div><div class="ttdef"><b>Definition</b> debug_stop.cpp:798</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html_ae06768db20c0174541f81596c57c0b3d"><div class="ttname"><a href="namespacekernel_1_1debug.html#ae06768db20c0174541f81596c57c0b3d">kernel::debug::debug_publish_death</a></div><div class="ttdeci">void debug_publish_death(TaskControlBlock &amp;dying) noexcept</div><div class="ttdoc">Publish a task-death stop event (reserved slot, never dropped) and poke the debugger....</div><div class="ttdef"><b>Definition</b> debug_stop.cpp:758</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
 <div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:232</div></div>
 <div class="ttc" id="astructkernel_1_1debug_1_1_stop_event_html"><div class="ttname"><a href="structkernel_1_1debug_1_1_stop_event.html">kernel::debug::StopEvent</a></div><div class="ttdoc">Stop event (64 bytes, plain layout — also the user ABI for the ATTACH selector-2 poll: copied verbati...</div><div class="ttdef"><b>Definition</b> debug_stop.hpp:49</div></div>

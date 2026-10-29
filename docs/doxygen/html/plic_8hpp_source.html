@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -227,10 +227,26 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('plic_8hpp_sour
 <div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    *<span class="keyword">reinterpret_cast&lt;</span><span class="keyword">volatile </span><a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *<span class="keyword">&gt;</span>(<a class="code hl_variable" href="namespacearch.html#ad35ebc948e642e03a45fe89c82c9511c">PLIC_CLAIM_S</a>) = intid;</div>
 <div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>}</div>
 </div>
-<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span> </div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>} <span class="comment">// namespace arch</span></div>
+<div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span></div>
+<div class="foldopen" id="foldopen00124" data-start="{" data-end="}">
+<div class="line"><a id="l00124" name="l00124"></a><span class="lineno"><a class="line" href="namespacearch.html#acc53a9777361ad047e0cdff4c050f76a">  124</a></span><span class="keyword">inline</span> <span class="keyword">constexpr</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> <a class="code hl_function" href="namespacearch.html#acc53a9777361ad047e0cdff4c050f76a">plic_s_context_for_hart</a>(<a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> hart_id) {</div>
+<div class="line"><a id="l00125" name="l00125"></a><span class="lineno">  125</span>    <span class="keywordflow">return</span> 2U * hart_id + 1U;</div>
+<div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span>}</div>
+</div>
+<div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span></div>
+<div class="foldopen" id="foldopen00133" data-start="{" data-end="}">
+<div class="line"><a id="l00133" name="l00133"></a><span class="lineno"><a class="line" href="namespacearch.html#a0105e96ddd9d29e556c9ffd9d6a8b115">  133</a></span><span class="keyword">inline</span> <span class="keywordtype">void</span> <a class="code hl_function" href="namespacearch.html#a0105e96ddd9d29e556c9ffd9d6a8b115">plic_threshold_s_for_hart</a>(<a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> hart_id, <a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> threshold) {</div>
+<div class="line"><a id="l00134" name="l00134"></a><span class="lineno">  134</span>    <span class="keyword">const</span> <a class="code hl_typedef" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> context = <a class="code hl_function" href="namespacearch.html#acc53a9777361ad047e0cdff4c050f76a">plic_s_context_for_hart</a>(hart_id);</div>
+<div class="line"><a id="l00135" name="l00135"></a><span class="lineno">  135</span>    *<span class="keyword">reinterpret_cast&lt;</span><span class="keyword">volatile </span><a class="code hl_typedef" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> *<span class="keyword">&gt;</span>(<a class="code hl_variable" href="namespacearch.html#a430ef23b1e75c1574e6b7147df85da0a">PLIC_BASE</a> + 0x00200000UL +</div>
+<div class="line"><a id="l00136" name="l00136"></a><span class="lineno">  136</span>                                           context * 0x1000UL) = threshold;</div>
+<div class="line"><a id="l00137" name="l00137"></a><span class="lineno">  137</span>    <span class="keyword">asm</span> <span class="keyword">volatile</span>(<span class="stringliteral">&quot;fence iorw, iorw&quot;</span> : : : <span class="stringliteral">&quot;memory&quot;</span>);</div>
+<div class="line"><a id="l00138" name="l00138"></a><span class="lineno">  138</span>}</div>
+</div>
+<div class="line"><a id="l00139" name="l00139"></a><span class="lineno">  139</span> </div>
+<div class="line"><a id="l00140" name="l00140"></a><span class="lineno">  140</span>} <span class="comment">// namespace arch</span></div>
 <div class="ttc" id="ahal_2io_8hpp_html"><div class="ttname"><a href="hal_2io_8hpp.html">io.hpp</a></div><div class="ttdoc">Port I/O (x86_64) and memory-mapped I/O (AArch64, RISC-V) primitives.</div></div>
 <div class="ttc" id="anamespacearch_html"><div class="ttname"><a href="namespacearch.html">arch</a></div><div class="ttdoc">AArch64 GICv2/v3 register definitions and accessors.</div><div class="ttdef"><b>Definition</b> early_init.cpp:37</div></div>
+<div class="ttc" id="anamespacearch_html_a0105e96ddd9d29e556c9ffd9d6a8b115"><div class="ttname"><a href="namespacearch.html#a0105e96ddd9d29e556c9ffd9d6a8b115">arch::plic_threshold_s_for_hart</a></div><div class="ttdeci">void plic_threshold_s_for_hart(uint64_t hart_id, uint32_t threshold)</div><div class="ttdoc">Set the priority threshold for a hart&#39;s S-context. Each AP programs its own frame (thresholds are per...</div><div class="ttdef"><b>Definition</b> plic.hpp:133</div></div>
 <div class="ttc" id="anamespacearch_html_a08d0f1184159bb46a90e0ddabfa14312"><div class="ttname"><a href="namespacearch.html#a08d0f1184159bb46a90e0ddabfa14312">arch::PLIC_THRESHOLD_S</a></div><div class="ttdeci">constexpr uint64_t PLIC_THRESHOLD_S</div><div class="ttdef"><b>Definition</b> plic.hpp:40</div></div>
 <div class="ttc" id="anamespacearch_html_a16143d92dac1c3554ad07d9a89dbbfcc"><div class="ttname"><a href="namespacearch.html#a16143d92dac1c3554ad07d9a89dbbfcc">arch::IRQ_RTC</a></div><div class="ttdeci">constexpr uint32_t IRQ_RTC</div><div class="ttdef"><b>Definition</b> plic.hpp:56</div></div>
 <div class="ttc" id="anamespacearch_html_a3933704bb1a46f6e6f4bd8e4bb66294a"><div class="ttname"><a href="namespacearch.html#a3933704bb1a46f6e6f4bd8e4bb66294a">arch::PLIC_THRESHOLD</a></div><div class="ttdeci">constexpr uint64_t PLIC_THRESHOLD</div><div class="ttdef"><b>Definition</b> plic.hpp:31</div></div>
@@ -256,6 +272,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('plic_8hpp_sour
 <div class="ttc" id="anamespacearch_html_abb1979d1597b729886beeba2e2bf02e9"><div class="ttname"><a href="namespacearch.html#abb1979d1597b729886beeba2e2bf02e9">arch::PLIC_PENDING</a></div><div class="ttdeci">constexpr uint64_t PLIC_PENDING</div><div class="ttdef"><b>Definition</b> plic.hpp:29</div></div>
 <div class="ttc" id="anamespacearch_html_abf2e1f00c3daa866f33b06562a43f162"><div class="ttname"><a href="namespacearch.html#abf2e1f00c3daa866f33b06562a43f162">arch::PLIC_PRIORITY</a></div><div class="ttdeci">constexpr uint64_t PLIC_PRIORITY</div><div class="ttdef"><b>Definition</b> plic.hpp:28</div></div>
 <div class="ttc" id="anamespacearch_html_ac7af0d9af24b6d0067e8deb19bff2404"><div class="ttname"><a href="namespacearch.html#ac7af0d9af24b6d0067e8deb19bff2404">arch::plic_set_priority</a></div><div class="ttdeci">void plic_set_priority(uint32_t irq, uint32_t prio)</div><div class="ttdoc">Set an S-context source priority (0 = never interrupt).</div><div class="ttdef"><b>Definition</b> plic.hpp:80</div></div>
+<div class="ttc" id="anamespacearch_html_acc53a9777361ad047e0cdff4c050f76a"><div class="ttname"><a href="namespacearch.html#acc53a9777361ad047e0cdff4c050f76a">arch::plic_s_context_for_hart</a></div><div class="ttdeci">constexpr uint64_t plic_s_context_for_hart(uint64_t hart_id)</div><div class="ttdoc">S-context index for a hart&#39;s S-mode (M-mode takes even slots).</div><div class="ttdef"><b>Definition</b> plic.hpp:124</div></div>
 <div class="ttc" id="anamespacearch_html_acf2202c3651c1f2a99e5c2650c7341c3"><div class="ttname"><a href="namespacearch.html#acf2202c3651c1f2a99e5c2650c7341c3">arch::plic_set_threshold</a></div><div class="ttdeci">void plic_set_threshold(uint32_t threshold)</div><div class="ttdoc">Set the S-context priority threshold.</div><div class="ttdef"><b>Definition</b> plic.hpp:96</div></div>
 <div class="ttc" id="anamespacearch_html_ad0579e7ee01bc5a2cdd0a4d4a16831ab"><div class="ttname"><a href="namespacearch.html#ad0579e7ee01bc5a2cdd0a4d4a16831ab">arch::IRQ_VIRTIO_COUNT</a></div><div class="ttdeci">constexpr uint32_t IRQ_VIRTIO_COUNT</div><div class="ttdoc">virtio-mmio IRQ window size (issue #350: IRQs 1-8).</div><div class="ttdef"><b>Definition</b> plic.hpp:54</div></div>
 <div class="ttc" id="anamespacearch_html_ad2568b9c1aac835e738c348ab3e0b2cb"><div class="ttname"><a href="namespacearch.html#ad2568b9c1aac835e738c348ab3e0b2cb">arch::PLIC_MAX_SOURCES</a></div><div class="ttdeci">constexpr uint32_t PLIC_MAX_SOURCES</div><div class="ttdoc">Highest source ID the kernel addresses (96 sources, 3 words).</div><div class="ttdef"><b>Definition</b> plic.hpp:45</div></div>

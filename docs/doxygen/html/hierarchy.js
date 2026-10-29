@@ -4,6 +4,7 @@ var hierarchy =
     [ "kernel::block::AhciComplRecord", "structkernel_1_1block_1_1_ahci_compl_record.html", null ],
     [ "kernel::AllTasksRegistry", "classkernel_1_1_all_tasks_registry.html", null ],
     [ "arch::APIC", "classarch_1_1_a_p_i_c.html", null ],
+    [ "ApParam", "struct_ap_param.html", null ],
     [ "arch::ArchContext", "structarch_1_1_arch_context.html", null ],
     [ "arch::ArchContextManager", "classarch_1_1_arch_context_manager.html", null ],
     [ "arch::ArchInterruptController", "classarch_1_1_arch_interrupt_controller.html", null ],
@@ -54,6 +55,7 @@ var hierarchy =
     [ "kernel::log::DmesgService", "classkernel_1_1log_1_1_dmesg_service.html", null ],
     [ "kernel::Driver", "structkernel_1_1_driver.html", null ],
     [ "kernel::DriverRegistry", "classkernel_1_1_driver_registry.html", null ],
+    [ "kernel::boot::DtbCpuEntry", "structkernel_1_1boot_1_1_dtb_cpu_entry.html", null ],
     [ "kernel::elf::DynView", "structkernel_1_1elf_1_1_dyn_view.html", null ],
     [ "kernel::sched_queue::EdfReadyList", "structkernel_1_1sched__queue_1_1_edf_ready_list.html", null ],
     [ "kernel::elf::ELF64Dynamic", "structkernel_1_1elf_1_1_e_l_f64_dynamic.html", null ],
@@ -183,6 +185,7 @@ var hierarchy =
     [ "kernel::ipc::PagerRegistry", "classkernel_1_1ipc_1_1_pager_registry.html", null ],
     [ "arch::PciBdf", "structarch_1_1_pci_bdf.html", null ],
     [ "kernel::vfs::PciVnode", "structkernel_1_1vfs_1_1_pci_vnode.html", null ],
+    [ "arch::PerCpu", "structarch_1_1_per_cpu.html", null ],
     [ "arch::kernel::PhysicalAddress", "classarch_1_1kernel_1_1_physical_address.html", [
       [ "arch::kernel::PageAddress", "classarch_1_1kernel_1_1_page_address.html", null ]
     ] ],
@@ -237,6 +240,7 @@ var hierarchy =
     [ "kernel::SchedPerCpuPod", "structkernel_1_1_sched_per_cpu_pod.html", null ],
     [ "kernel::Scheduler", "classkernel_1_1_scheduler.html", null ],
     [ "kernel::SchedulerConfig", "structkernel_1_1_scheduler_config.html", null ],
+    [ "kernel::SchedulerLockGuard", "classkernel_1_1_scheduler_lock_guard.html", null ],
     [ "kernel::test::ScopedCurrentTask", "classkernel_1_1test_1_1_scoped_current_task.html", null ],
     [ "kernel::ScopedRef", "classkernel_1_1_scoped_ref.html", null ],
     [ "ScopeGuard&lt; Fn &gt;", "class_scope_guard.html", null ],

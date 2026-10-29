@@ -34,5 +34,6 @@ var searchData=
   ['write_5flock_31',['write_lock',['../classkernel_1_1sync_1_1_rw_lock.html#a2a84475bdb812b3e52fe81b890c77df5',1,'kernel::sync::RwLock']]],
   ['write_5fpinned_5fbitmap_32',['write_pinned_bitmap',['../structkernel_1_1_mem_pool_1_1_pool.html#a72d99ef9f35b74f9fcd2a0a4dfefd395',1,'kernel::MemPool::Pool']]],
   ['write_5fsector_33',['write_sector',['../classkernel_1_1block_1_1_ahci_driver.html#aa99c80fea14ae9d8ecb91828c518ec87',1,'kernel::block::AhciDriver::write_sector()'],['../classkernel_1_1block_1_1_ata_pio_driver.html#a67e90318b6075777fc4494b19381c316',1,'kernel::block::AtaPioDriver::write_sector()'],['../classkernel_1_1block_1_1_block_device.html#a7b5cf59b19211ba94309727e73ffef60',1,'kernel::block::BlockDevice::write_sector()'],['../classkernel_1_1block_1_1_mock_block_device.html#abd5625d73de2742f08bd34618b788e36',1,'kernel::block::MockBlockDevice::write_sector()'],['../classkernel_1_1block_1_1_virtio_blk_driver.html#afee1d23f846e35528bd2827fa1462ea5',1,'kernel::block::VirtioBlkDriver::write_sector()']]],
-  ['write_5funlock_34',['write_unlock',['../classkernel_1_1sync_1_1_rw_lock.html#a5353b9303dc02ebea42a85e328d07c7e',1,'kernel::sync::RwLock']]]
+  ['write_5ftpidr_5fel1_34',['write_tpidr_el1',['../namespacearch.html#ae9f22eb47a1687b1952a23a0abcfcdfc',1,'arch']]],
+  ['write_5funlock_35',['write_unlock',['../classkernel_1_1sync_1_1_rw_lock.html#a5353b9303dc02ebea42a85e328d07c7e',1,'kernel::sync::RwLock']]]
 ];

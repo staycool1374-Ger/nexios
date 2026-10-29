@@ -9,5 +9,10 @@ var dir_5388e8f8e0288c01be8d73796fdfcd89 =
     [ "io_impl.hpp", "aarch64_2hal_2io__impl_8hpp.html", null ],
     [ "page_table_impl.hpp", "aarch64_2hal_2page__table__impl_8hpp.html", null ],
     [ "pci_impl.hpp", "aarch64_2hal_2pci__impl_8hpp.html", null ],
-    [ "rand_impl.hpp", "aarch64_2hal_2rand__impl_8hpp.html", null ]
+    [ "percpu.cpp", "aarch64_2hal_2percpu_8cpp.html", "aarch64_2hal_2percpu_8cpp" ],
+    [ "percpu.hpp", "aarch64_2hal_2percpu_8hpp.html", "aarch64_2hal_2percpu_8hpp" ],
+    [ "rand_impl.hpp", "aarch64_2hal_2rand__impl_8hpp.html", null ],
+    [ "smp.cpp", "aarch64_2hal_2smp_8cpp.html", "aarch64_2hal_2smp_8cpp" ],
+    [ "smp.hpp", "aarch64_2hal_2smp_8hpp.html", "aarch64_2hal_2smp_8hpp" ],
+    [ "smp_shootdown.cpp", "aarch64_2hal_2smp__shootdown_8cpp.html", null ]
 ];

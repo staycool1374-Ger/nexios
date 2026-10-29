@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -394,7 +394,7 @@ Test-isolation helpers</h2></td></tr>
 <tr class="memitem:a42d074c7f070204bd85737823bce150a" id="r_a42d074c7f070204bd85737823bce150a"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a42d074c7f070204bd85737823bce150a">sched_ipi_handler</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a42d074c7f070204bd85737823bce150a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU wake handler (issue #25 C1): drains the calling CPU's mailbox (validated entries → own queue) and arms its reschedule flag. Runs in the SCHED-IPI ISR (IF=0); takes only the mailbox leaf lock. Must EOI via the caller.  <br /></td></tr>
 <tr class="memitem:a08909dbd61fc213d9a5a36cc7b6c072a" id="r_a08909dbd61fc213d9a5a36cc7b6c072a"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a08909dbd61fc213d9a5a36cc7b6c072a">sched_cpu</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
-<tr class="memdesc:a08909dbd61fc213d9a5a36cc7b6c072a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index for scheduler routing (<a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>).  <br /></td></tr>
+<tr class="memdesc:a08909dbd61fc213d9a5a36cc7b6c072a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Current CPU index for scheduler routing (<a class="el" href="namespacearch.html#a61efca22542889281606077db9458129" title="Current CPU&#39;s logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre...">arch::cpu_index()</a>).  <br /></td></tr>
 <tr class="memitem:a4ccb033d573b2be28237a346ff9860e1" id="r_a4ccb033d573b2be28237a346ff9860e1"><td class="memItemLeft">static <a class="el" href="classkernel_1_1_ready_queue_manager.html">ReadyQueueManager</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a4ccb033d573b2be28237a346ff9860e1">rq_for</a> (uint64_t c) <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
 <tr class="memdesc:a4ccb033d573b2be28237a346ff9860e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ready queue for CPU c (clamped into range).  <br /></td></tr>
 <tr class="memitem:a8c06d8f568f07da6d9f749c4cec581b1" id="r_a8c06d8f568f07da6d9f749c4cec581b1"><td class="memItemLeft">static <a class="el" href="classkernel_1_1_ready_queue_manager.html">ReadyQueueManager</a> &amp;&#160;</td><td class="memItemRight"><a class="el" href="#a8c06d8f568f07da6d9f749c4cec581b1">rq_own</a> () <a class="el" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a></td></tr>
@@ -3889,7 +3889,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Current CPU index for scheduler routing (<a class="el" href="namespacearch.html#ac53772566e53832b14ccedb8d6ae2d4e" title="Current CPU index — single-core archs are always CPU 0.">arch::cpu_index()</a>). </p>
+<p>Current CPU index for scheduler routing (<a class="el" href="namespacearch.html#a61efca22542889281606077db9458129" title="Current CPU&#39;s logical index (0..CONFIG_MAX_CPUS-1). Derived from the TPIDR_EL1 range check above: pre...">arch::cpu_index()</a>). </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

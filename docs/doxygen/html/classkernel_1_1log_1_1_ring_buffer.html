@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -133,7 +133,7 @@ Collaboration diagram for kernel::log::RingBuffer:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-pub-methods" class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:ad971787349e9be0a4ff889920bc9c35a" id="r_ad971787349e9be0a4ff889920bc9c35a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad971787349e9be0a4ff889920bc9c35a">putchar</a> (char c)</td></tr>
-<tr class="memdesc:ad971787349e9be0a4ff889920bc9c35a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a single character (discards if full).  <br /></td></tr>
+<tr class="memdesc:ad971787349e9be0a4ff889920bc9c35a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a single character (discards if full). Issue #386 item 1: the slot claim is a CAS loop, not a plain read + store. Two producers (BSP + AP, or an IRQ-preempted task plus its preempter) racing the old sequence claimed the SAME slot and the second store clobbered the first byte (torn dmesg entries). The CAS publishes exactly one winner per slot; the loser re-reads the fresh index and retries, so every byte lands exactly once. Uncontended (SPSC) cost is one CAS — no locks, no added branches on the fast path beyond the pre-existing full-check.  <br /></td></tr>
 <tr class="memitem:a1df984ebae363f81498eff87693a458e" id="r_a1df984ebae363f81498eff87693a458e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1df984ebae363f81498eff87693a458e">puts</a> (const char *s)</td></tr>
 <tr class="memdesc:a1df984ebae363f81498eff87693a458e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Write a null-terminated string.  <br /></td></tr>
 <tr class="memitem:a5309c609c20d75a14d2ca9d2c471a270" id="r_a5309c609c20d75a14d2ca9d2c471a270"><td class="memItemLeft"><a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5309c609c20d75a14d2ca9d2c471a270">read</a> (char *dst, <a class="el" href="types_8h.html#acf18a0d6c4b39d531e021702e9a77984">size_t</a> size)</td></tr>
@@ -267,7 +267,7 @@ Here is the call graph for this function:</div>
 </table>
 </div><div class="memdoc">
 
-<p>Write a single character (discards if full). </p>
+<p>Write a single character (discards if full). Issue #386 item 1: the slot claim is a CAS loop, not a plain read + store. Two producers (BSP + AP, or an IRQ-preempted task plus its preempter) racing the old sequence claimed the SAME slot and the second store clobbered the first byte (torn dmesg entries). The CAS publishes exactly one winner per slot; the loser re-reads the fresh index and retries, so every byte lands exactly once. Uncontended (SPSC) cost is one CAS — no locks, no added branches on the fast path beyond the pre-existing full-check. </p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">

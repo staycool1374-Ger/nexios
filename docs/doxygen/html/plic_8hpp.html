@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -160,6 +160,10 @@ Functions</h2></td></tr>
 <tr class="memdesc:a3cb78a7a28f7e308e1fd8ed7d5c5ec49"><td class="mdescLeft">&#160;</td><td class="mdescRight">Claim the highest-priority pending S-context interrupt (0 = none).  <br /></td></tr>
 <tr class="memitem:a9c334ce3c7ea35a00c604492d02160b9" id="r_a9c334ce3c7ea35a00c604492d02160b9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a9c334ce3c7ea35a00c604492d02160b9">arch::plic_complete_s</a> (<a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> intid)</td></tr>
 <tr class="memdesc:a9c334ce3c7ea35a00c604492d02160b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Complete an S-context interrupt (must match the claim).  <br /></td></tr>
+<tr class="memitem:acc53a9777361ad047e0cdff4c050f76a" id="r_acc53a9777361ad047e0cdff4c050f76a"><td class="memItemLeft">constexpr <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#acc53a9777361ad047e0cdff4c050f76a">arch::plic_s_context_for_hart</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> hart_id)</td></tr>
+<tr class="memdesc:acc53a9777361ad047e0cdff4c050f76a"><td class="mdescLeft">&#160;</td><td class="mdescRight">S-context index for a hart's S-mode (M-mode takes even slots).  <br /></td></tr>
+<tr class="memitem:a0105e96ddd9d29e556c9ffd9d6a8b115" id="r_a0105e96ddd9d29e556c9ffd9d6a8b115"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="namespacearch.html#a0105e96ddd9d29e556c9ffd9d6a8b115">arch::plic_threshold_s_for_hart</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> hart_id, <a class="el" href="namespacearch.html#ab42586e970f36ee70a86a866bb1fd44a">uint32_t</a> threshold)</td></tr>
+<tr class="memdesc:a0105e96ddd9d29e556c9ffd9d6a8b115"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the priority threshold for a hart's S-context. Each AP programs its own frame (thresholds are per-context banks); the BSP frame stays owned by interrupt_controller.cpp init.  <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-var-members" class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>

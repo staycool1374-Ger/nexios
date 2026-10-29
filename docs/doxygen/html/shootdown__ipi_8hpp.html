@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -142,7 +142,7 @@ This graph shows which files directly or indirectly include this file:</div>
 Data Structures</h2></td></tr>
 <tr class="memitem:arch_3A_3AShootdownBatch" id="r_arch_3A_3AShootdownBatch"><td class="memItemLeft">class &#160;</td><td class="memItemRight"><a class="el" href="classarch_1_1_shootdown_batch.html">arch::ShootdownBatch</a></td></tr>
 <tr class="memitem:arch_3A_3AShootdownBatch_3A_3ABatchEntry" id="r_arch_3A_3AShootdownBatch_3A_3ABatchEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_shootdown_batch_1_1_batch_entry.html">arch::ShootdownBatch::BatchEntry</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One shootdown entry (VA + owning PCID).  <a href="structarch_1_1_shootdown_batch_1_1_batch_entry.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One shootdown entry (VA + owning PCID + full-flush flag). all selects a full purge on apply (issue #389 teardown/ ASID-recycle path); otherwise the entry applies VA+PCID targeted (INVPCID single-address, purge fallback).  <a href="structarch_1_1_shootdown_batch_1_1_batch_entry.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-namespaces" class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('debug__regs_8h
 <div class="ttc" id="anamespacekernel_1_1debug_html_aa12d00119d664f5407c3ef417781baf6"><div class="ttname"><a href="namespacekernel_1_1debug.html#aa12d00119d664f5407c3ef417781baf6">kernel::debug::debug_step_arm</a></div><div class="ttdeci">bool debug_step_arm(TaskControlBlock &amp;tcb) noexcept</div><div class="ttdoc">Arm a single step in the task&#39;s live U-trap frame (issue #226): x86 sets TF (RFLAGS bit 8,...</div><div class="ttdef"><b>Definition</b> debug_regs.cpp:253</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html_adc84da64ce75071400ed00b1705acb96"><div class="ttname"><a href="namespacekernel_1_1debug.html#adc84da64ce75071400ed00b1705acb96">kernel::debug::debug_blob_bytes</a></div><div class="ttdeci">size_t debug_blob_bytes() noexcept</div><div class="ttdoc">GDB register blob size in bytes for this arch (164/272/264).</div><div class="ttdef"><b>Definition</b> debug_regs.cpp:71</div></div>
 <div class="ttc" id="anamespacekernel_1_1debug_html_ae70a742c8c462e516c06a9af82b55258"><div class="ttname"><a href="namespacekernel_1_1debug.html#ae70a742c8c462e516c06a9af82b55258">kernel::debug::debug_write_regs</a></div><div class="ttdeci">bool debug_write_regs(TaskControlBlock &amp;tcb, const uint64_t *blob_in, size_t blob_qwords) noexcept</div><div class="ttdoc">Write blob_in into the task&#39;s live U-trap frame (takes effect on resume — the return path restores fr...</div><div class="ttdef"><b>Definition</b> debug_regs.cpp:192</div></div>
-<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> cpu_context.hpp:37</div></div>
+<div class="ttc" id="anamespacekernel_html"><div class="ttname"><a href="namespacekernel.html">kernel</a></div><div class="ttdoc">Pull in the central configuration header.</div><div class="ttdef"><b>Definition</b> smp.cpp:60</div></div>
 <div class="ttc" id="anamespacekernel_html_ae4d161da19fc465fa4e81d74e0a5b4f8"><div class="ttname"><a href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">kernel::noexcept</a></div><div class="ttdeci">const TaskControlBlock *const uint64_t num_priorities noexcept</div><div class="ttdef"><b>Definition</b> all_tasks_registry.cpp:149</div></div>
 <div class="ttc" id="astructkernel_1_1_task_control_block_html"><div class="ttname"><a href="structkernel_1_1_task_control_block.html">kernel::TaskControlBlock</a></div><div class="ttdoc">Task control block — represents a single thread of execution.</div><div class="ttdef"><b>Definition</b> task.hpp:232</div></div>
 <div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Fundamental type definitions for the kernel (no standard library).</div></div>

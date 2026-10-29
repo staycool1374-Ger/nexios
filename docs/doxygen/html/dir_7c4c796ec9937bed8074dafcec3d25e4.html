@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -142,7 +142,7 @@ Files</h2></td></tr>
 <tr class="memitem:kslot_5Fbackend_2Ecpp" id="r_kslot_5Fbackend_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2kslot__backend_8cpp.html">kslot_backend.cpp</a></td></tr>
 <tr class="memdesc:x86__64_2kslot__backend_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">#434 P1: x86_64 kslot window backend — moved verbatim from <a class="el" href="task_8cpp.html" title="TaskControlBlock lifecycle: creation, initialisation, cloning, and cleanup.">task.cpp</a> init_kstack_window/map_kstack_page/unmap_kstack_page (plus snapshot PT bytes + flush). Build-selected via arch/&lt;arch&gt;/ discovery; no CONFIG_ARCH guard in this TU is needed (it only compiles on x86_64). <br /></td></tr>
 <tr class="memitem:madt_2Ehpp" id="r_madt_2Ehpp"><td class="memItemLeft"><a href="madt_8hpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="madt_8hpp.html">madt.hpp</a></td></tr>
-<tr class="memdesc:madt_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pure-data result of the ACPI MADT scan (issue #25, Phase B). The parser (<a class="el" href="acpi_8cpp.html" title="ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map onl...">arch/x86_64/acpi.cpp</a>) fills this bounded struct; the SMP bring-up (<a class="el" href="smp_8cpp.html" title="SMP AP bring-up implementation (issue #25, Phase B3). Copies the position-locked trampoline blob to p...">hal/smp.cpp</a>) consumes it. Deliberately a value type — no pointers into the ACPI tables survive the parse (the tables live in firmware memory that test isolation may rewind). x86_64-only. <br /></td></tr>
+<tr class="memdesc:madt_8hpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">Pure-data result of the ACPI MADT scan (issue #25, Phase B). The parser (<a class="el" href="acpi_8cpp.html" title="ACPI table discovery implementation (issues #9 DMAR, #25 MADT). The boot page tables identity-map onl...">arch/x86_64/acpi.cpp</a>) fills this bounded struct; the SMP bring-up (hal/smp.cpp) consumes it. Deliberately a value type — no pointers into the ACPI tables survive the parse (the tables live in firmware memory that test isolation may rewind). x86_64-only. <br /></td></tr>
 <tr class="memitem:rtc_2Ecpp" id="r_rtc_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2rtc_8cpp.html">rtc.cpp</a></td></tr>
 <tr class="memdesc:x86__64_2rtc_8cpp"><td class="mdescLeft">&#160;</td><td class="mdescRight">CMOS Real-Time Clock driver — reads and configures the RTC for timekeeping. <br /></td></tr>
 <tr class="memitem:serial_2Ecpp" id="r_serial_2Ecpp"><td class="memItemLeft"><span class="icondoc"><div class="doc-icon"></div></span>&#160;</td><td class="memItemRight"><a class="el" href="x86__64_2serial_8cpp.html">serial.cpp</a></td></tr>

@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -130,12 +130,14 @@ Collaboration diagram for arch::ShootdownBatch:</div>
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Data Structures</h2></td></tr>
 <tr class="memitem:BatchEntry" id="r_BatchEntry"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structarch_1_1_shootdown_batch_1_1_batch_entry.html">BatchEntry</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One shootdown entry (VA + owning PCID).  <a href="structarch_1_1_shootdown_batch_1_1_batch_entry.html#details">More...</a><br /></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One shootdown entry (VA + owning PCID + full-flush flag). all selects a full purge on apply (issue #389 teardown/ ASID-recycle path); otherwise the entry applies VA+PCID targeted (INVPCID single-address, purge fallback).  <a href="structarch_1_1_shootdown_batch_1_1_batch_entry.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a7bf540cc427d886e5d4ad7cc8e6a0409" id="r_a7bf540cc427d886e5d4ad7cc8e6a0409"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a7bf540cc427d886e5d4ad7cc8e6a0409">queue_remote</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> va, <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> pcid)</td></tr>
 <tr class="memdesc:a7bf540cc427d886e5d4ad7cc8e6a0409"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queue one entry for <code class="param">cpu</code> (no IPI yet).  <br /></td></tr>
+<tr class="memitem:a8a248bd468bb33f0f8fb147cb4804bfe" id="r_a8a248bd468bb33f0f8fb147cb4804bfe"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a8a248bd468bb33f0f8fb147cb4804bfe">queue_remote</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu, <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> va, <a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a> pcid, bool all)</td></tr>
+<tr class="memdesc:a8a248bd468bb33f0f8fb147cb4804bfe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Queue one entry with full-flush selection (issue #389). all=true marks the entry for full purge on apply; the VA is still recorded for the applied-VA log. The 3-arg overload above forwards with all=false (existing callers and tests keep their shape).  <br /></td></tr>
 <tr class="memitem:a5a61027e54f1a54d2630486bddf241ef" id="r_a5a61027e54f1a54d2630486bddf241ef"><td class="memItemLeft">static <a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a5a61027e54f1a54d2630486bddf241ef">flush_target</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu)</td></tr>
 <tr class="memdesc:a5a61027e54f1a54d2630486bddf241ef"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deliver <code class="param">cpu's</code> queued entries in bounded batches. Polls each batch drained before refilling (never overwrites a live batch). Entries stay queued on send failure. Callers must not hold IF=0 across the call for a self target (the delivery ISR cannot land until sti).  <br /></td></tr>
 <tr class="memitem:a7273c2d0deb75ef5795dbfd769546b3f" id="r_a7273c2d0deb75ef5795dbfd769546b3f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7273c2d0deb75ef5795dbfd769546b3f">handle_cpu</a> (<a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a> cpu)</td></tr>
@@ -273,7 +275,7 @@ Here is the call graph for this function:</div>
 </div>
 </div>
 <a id="a7bf540cc427d886e5d4ad7cc8e6a0409" name="a7bf540cc427d886e5d4ad7cc8e6a0409"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7bf540cc427d886e5d4ad7cc8e6a0409">&#9670;&#160;</a></span>queue_remote()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a7bf540cc427d886e5d4ad7cc8e6a0409">&#9670;&#160;</a></span>queue_remote() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -306,6 +308,54 @@ Here is the call graph for this function:</div>
 
 <p>Queue one entry for <code class="param">cpu</code> (no IPI yet). </p>
 <dl class="section return"><dt>Returns</dt><dd>true when queued; false when the slot is full (caller flushes first, then retries) or arguments invalid. </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classarch_1_1_shootdown_batch_a7bf540cc427d886e5d4ad7cc8e6a0409_cgraph.png" border="0" usemap="#aclassarch_1_1_shootdown_batch_a7bf540cc427d886e5d4ad7cc8e6a0409_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 2 -->
+</div>
+
+</div>
+</div>
+<a id="a8a248bd468bb33f0f8fb147cb4804bfe" name="a8a248bd468bb33f0f8fb147cb4804bfe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8a248bd468bb33f0f8fb147cb4804bfe">&#9670;&#160;</a></span>queue_remote() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool arch::ShootdownBatch::queue_remote </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>cpu</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#ad530609e70d68f0070fd8dae621ff22a">uint64_t</a></td>          <td class="paramname"><span class="paramname"><em>va</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacearch.html#aa151be51b9f762a1628c2336d87ebd5d">uint16_t</a></td>          <td class="paramname"><span class="paramname"><em>pcid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>all</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Queue one entry with full-flush selection (issue #389). all=true marks the entry for full purge on apply; the VA is still recorded for the applied-VA log. The 3-arg overload above forwards with all=false (existing callers and tests keep their shape). </p>
+<dl class="section return"><dt>Returns</dt><dd>true when queued; false on full slot/invalid arguments. </dd></dl>
 
 </div>
 </div>

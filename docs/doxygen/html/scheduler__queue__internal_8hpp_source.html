@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__que
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>};</div>
 </div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span> </div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="keyword">extern</span> <a class="code hl_struct" href="structkernel_1_1sched__queue_1_1_edf_ready_list.html">EdfReadyList</a> <a class="code hl_variable" href="namespacekernel_1_1sched__queue.html#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a>[<a class="code hl_define" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="keyword">extern</span> <a class="code hl_struct" href="structkernel_1_1sched__queue_1_1_edf_ready_list.html">EdfReadyList</a> <a class="code hl_variable" href="namespacekernel_1_1sched__queue.html#a6ddd4a725dcb1d1a5967b49b5c0fe09e">edf_ready_</a>[<a class="code hl_define" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>];</div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span> </div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1sched__queue.html#a5ff304a846a7b761c265696fd07bade2">edf_eligible</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;t) <span class="keyword">noexcept</span>;</div>
 <div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="keywordtype">bool</span> <a class="code hl_function" href="namespacekernel_1_1sched__queue.html#a80f5333030c1e7cb1fb735503ceeb2b0">edf_earlier</a>(<span class="keyword">const</span> <a class="code hl_struct" href="structkernel_1_1_task_control_block.html">TaskControlBlock</a> &amp;a,</div>
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded',() => { initNavTree('scheduler__que
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacekernel_1_1sched__queue.html#aa7f25156e51b597a6747dc080959a347">invalidate_pending_switch_to</a>(uint64_t task_id) <a class="code hl_variable" href="namespacekernel.html#ae4d161da19fc465fa4e81d74e0a5b4f8">noexcept</a>;</div>
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span> </div>
 <div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span>}  <span class="comment">// namespace kernel::sched_queue</span></div>
-<div class="ttc" id="aaarch64_2serial_8cpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div></div>
+<div class="ttc" id="aaarch64_2hal_2percpu_8hpp_html_ad199022145d96f66cc77e4b84255faf6"><div class="ttname"><a href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a></div><div class="ttdeci">#define CONFIG_MAX_CPUS</div><div class="ttdoc">Maximum number of logical CPUs supported. Canonical default lives in nexios_config....</div><div class="ttdef"><b>Definition</b> percpu.hpp:38</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__queue_html"><div class="ttname"><a href="namespacekernel_1_1sched__queue.html">kernel::sched_queue</a></div><div class="ttdef"><b>Definition</b> scheduler_queue.cpp:35</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__queue_html_a3f664988eb5bc438c59f0ecfbcd50343"><div class="ttname"><a href="namespacekernel_1_1sched__queue.html#a3f664988eb5bc438c59f0ecfbcd50343">kernel::sched_queue::edf_preempt_candidate</a></div><div class="ttdeci">TaskControlBlock * edf_preempt_candidate() noexcept</div><div class="ttdoc">The EDF task that should preempt the current task, or nullptr. Shared by needs_switch(),...</div><div class="ttdef"><b>Definition</b> scheduler_queue.cpp:170</div></div>
 <div class="ttc" id="anamespacekernel_1_1sched__queue_html_a5c9851048ceea2e3bfedc7d3217f5962"><div class="ttname"><a href="namespacekernel_1_1sched__queue.html#a5c9851048ceea2e3bfedc7d3217f5962">kernel::sched_queue::edf_peek_valid_own</a></div><div class="ttdeci">TaskControlBlock * edf_peek_valid_own() noexcept</div><div class="ttdoc">Earliest dispatchable EDF task on the calling CPU, or nullptr. Lazily drops stale heads (dead/moved/i...</div><div class="ttdef"><b>Definition</b> scheduler_queue.cpp:150</div></div>

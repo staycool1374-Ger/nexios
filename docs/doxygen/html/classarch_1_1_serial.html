@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.6</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -297,17 +297,20 @@ The received character, or '\0' when no data arrives within the bounded wait (FL
 </div><div class="memdoc">
 
 <p>Transmit a single character. </p>
-<p>Write a single character to the serial port. Automatically expands '\n' to "\\r\\n" for carriage-return line-feed.</p>
+<p>Write a single character to the serial port. Automatically expands '<br  />
+' to "\r\n" for carriage-return line-feed.</p>
 <p>Write a single character via SBI ecall.</p>
 <p>Write a single character to the serial port. Translates LF to CR+LF. Waits (bounded) for TX FIFO space; drops the byte when the UART never drains.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir"></td><td class="paramname">c</td><td>Character to transmit.</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">c</td><td>Character to transmit.</td></tr>
-    <tr><td class="paramdir"></td><td class="paramname">c</td><td>Character to output (\n is expanded to \r\n). </td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">c</td><td>Character to output (\n is expanded to \r\n).</td></tr>
+    <tr><td class="paramdir"></td><td class="paramname">c</td><td>Character to transmit.</td></tr>
   </table>
   </dd>
 </dl>
+<p>Issue #386 item 2 (documented-and-accepted, NOT locked — explicit): concurrent CPUs can interleave bytes on the wire (cosmetic only). A spinlock here would trade a cosmetic artifact for a crash-path liveness hazard: this putchar runs on the panic / first-chance-halt / ISR diagnostic paths, where blocking on a cross-CPU lock wedges frame emission if the holding CPU dies mid-byte (fail-open diagnostics are worse than interleaved ones). Entry integrity for the persisted log is owned by the RingBuffer CAS claim (#386 item 1); per-byte volume stays observable via s_serial_write_count. </p>
 
 </div>
 </div>
