@@ -27,6 +27,8 @@
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/time/posix_time.hpp>
 #include <kernel/time/timer_wheel.hpp>
+#include <kernel/nexios_config.h>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include "test_sched_helpers.hpp"
@@ -84,6 +86,12 @@ void sleep_entry() {
 // Expect: Second sample >= first.
 // Depends: PosixTime::clock_monotonic_ns, arch::Timer::ns_monotonic
 JARVIS_TEST(posix_clock_monotonic_nondecreasing, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     AbiTs first{};
     AbiTs second{};
     JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&first),
@@ -103,6 +111,12 @@ JARVIS_TEST(posix_clock_monotonic_nondecreasing, "PRE: none | POST: none") {
 // Expect: REALTIME within tolerance of anchor + delta; sec/nsec in range.
 // Depends: PosixTime::boot_latch, arch::RTC::read_seconds
 JARVIS_TEST(posix_clock_realtime_anchored, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     AbiTs mono{};
     AbiTs real{};
     JARVIS_ASSERT_EQ(0ULL, sys_call(80, 1, reinterpret_cast<uint64_t>(&mono),
@@ -123,6 +137,12 @@ JARVIS_TEST(posix_clock_realtime_anchored, "PRE: none | POST: none") {
 // Expect: -EINVAL, -EFAULT; errno path intact.
 // Depends: Syscall::sys_clock_gettime argument validation
 JARVIS_TEST(posix_clock_bad_id, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     AbiTs out{};
     JARVIS_ASSERT_EQ(kNegErrno(22),
                      sys_call(80, 99, reinterpret_cast<uint64_t>(&out), 0, 0));
@@ -136,6 +156,12 @@ JARVIS_TEST(posix_clock_bad_id, "PRE: none | POST: none") {
 // Expect: Returns 0; wheel live_count unchanged.
 // Depends: Syscall::sys_nanosleep zero fast-path
 JARVIS_TEST(posix_nanosleep_zero_returns, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     const uint32_t live_before = time::TimerWheel::live_count(0);
     AbiTs req{};
     req.tv_sec = 0;
@@ -152,6 +178,12 @@ JARVIS_TEST(posix_nanosleep_zero_returns, "PRE: none | POST: none") {
 // Expect: -EINVAL; no wheel arm.
 // Depends: Syscall::sys_nanosleep range check
 JARVIS_TEST(posix_nanosleep_bad_nsec, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     const uint32_t live_before = time::TimerWheel::live_count(0);
     AbiTs req{};
     req.tv_sec = 0;
@@ -168,6 +200,12 @@ JARVIS_TEST(posix_nanosleep_bad_nsec, "PRE: none | POST: none") {
 // Expect: Returns 0; elapsed >= budget; wheel residue zero; arm cleared.
 // Depends: sleep_fire, scheduler on_tick sleep re-apply scan
 JARVIS_TEST(posix_nanosleep_expiry_bound, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     SleepCtx ctx{};
     ctx.budget_ns = 20000000ULL;
     ctx.result = 0xAAAAAAAAAAAAAAAAULL;
@@ -200,6 +238,12 @@ JARVIS_TEST(posix_nanosleep_expiry_bound, "PRE: none | POST: none") {
 // Expect: Returns -EINTR; rem holds approximately the remaining time.
 // Depends: sys_nanosleep signal check, recv-style cancel-first
 JARVIS_TEST(posix_nanosleep_killed_by_signal, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     SleepCtx ctx{};
     ctx.budget_ns = 60000000000ULL;
     ctx.result = 0xAAAAAAAAAAAAAAAAULL;
@@ -240,6 +284,12 @@ JARVIS_TEST(posix_nanosleep_killed_by_signal, "PRE: none | POST: none") {
 // Expect: Expiry counter 1 then 2+ for periodic; slot freed on delete.
 // Depends: PosixTime timer registry, timer_fire re-arm chain
 JARVIS_TEST(posix_timer_oneshot_and_periodic, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     uint64_t timer_id = 0;
     JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
                                     reinterpret_cast<uint64_t>(&timer_id), 0));
@@ -278,6 +328,12 @@ JARVIS_TEST(posix_timer_oneshot_and_periodic, "PRE: none | POST: none") {
 // Expect: Last CREATE returns -EAGAIN; ResourceTracker delta zero.
 // Depends: PosixTime registry bound, track_posix_timer_add/remove
 JARVIS_TEST(posix_timer_table_full, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     uint64_t ids[32] = {0};
     for (size_t i = 0; i < 32; ++i) {
         JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
@@ -303,6 +359,12 @@ JARVIS_TEST(posix_timer_table_full, "PRE: none | POST: none") {
 // close drains; stale state none.
 // Depends: sys_timerfd_create, sys_read timerfd branch, timerfd_close
 JARVIS_TEST(posix_timerfd_read_semantics, "PRE: none | POST: none") {
+#if CONFIG_TIMER_SRV
+    if (kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+#endif
     const uint64_t fd = sys_call(83, 1, 0, 0, 0); // MONOTONIC, blocking
     JARVIS_ASSERT(fd <= 0x7FFFFFFFULL);
     const int timer_fd = static_cast<int>(fd);
@@ -332,9 +394,80 @@ JARVIS_TEST(posix_timerfd_read_semantics, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+#if CONFIG_TIMER_SRV
+// Runmode: kernel
+// Testidea: ON stub-shape — 80 CLOCK_GETTIME returns -ENOSYS without hang.
+// Input: clock_gettime(MONOTONIC) via syscall 80 while the PD is live.
+// Expect: -ENOSYS (38); returns immediately (no server round-trip yet).
+// Depends: sys_clock_gettime_srv stub (strangler step a, #241).
+JARVIS_TEST(posix_stub_clock_gettime_enosys, "PRE: timer-srv live | POST: none") {
+    if (!kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    AbiTs out{};
+    JARVIS_ASSERT_EQ(kNegErrno(38),
+                     sys_call(80, 1, reinterpret_cast<uint64_t>(&out), 0, 0));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: ON stub-shape — 81 NANOSLEEP returns -ENOSYS without hang.
+// Input: nanosleep via syscall 81 while the PD is live.
+// Expect: -ENOSYS (38); returns immediately, no wheel arm, no block.
+// Depends: sys_nanosleep_srv stub (strangler step a, #241).
+JARVIS_TEST(posix_stub_nanosleep_enosys, "PRE: timer-srv live | POST: none") {
+    if (!kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    AbiTs req{};
+    req.tv_nsec = 1000000;
+    AbiTs rem{};
+    JARVIS_ASSERT_EQ(kNegErrno(38),
+                     sys_call(81, reinterpret_cast<uint64_t>(&req),
+                              reinterpret_cast<uint64_t>(&rem), 0, 0));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: ON stub-shape — 82 TIMER_CREATE returns -ENOSYS without hang.
+// Input: timer_create via syscall 82 while the PD is live.
+// Expect: -ENOSYS (38); returns immediately.
+// Depends: sys_timer_create_srv stub (strangler step a, #241).
+JARVIS_TEST(posix_stub_timer_create_enosys, "PRE: timer-srv live | POST: none") {
+    if (!kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    JARVIS_ASSERT_EQ(kNegErrno(38), sys_call(82, 0, 0, 0, 0));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: ON stub-shape — 83 TIMERFD_CREATE returns -ENOSYS without hang.
+// Input: timerfd_create via syscall 83 while the PD is live.
+// Expect: -ENOSYS (38); returns immediately.
+// Depends: sys_timerfd_create_srv stub (strangler step a, #241).
+JARVIS_TEST(posix_stub_timerfd_create_enosys, "PRE: timer-srv live | POST: none") {
+    if (!kernel::time::timer_srv::timer_srv_alive()) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    JARVIS_ASSERT_EQ(kNegErrno(38), sys_call(83, 1, 0, 0, 0));
+    JARVIS_TEST_PASS();
+}
+#endif
+
 void register_posix_time_tests() {
     Logger::info("Registering POSIX time tests");
     JARVIS_REGISTER_TEST(posix_clock_monotonic_nondecreasing);
+#if CONFIG_TIMER_SRV
+    JARVIS_REGISTER_TEST(posix_stub_clock_gettime_enosys);
+    JARVIS_REGISTER_TEST(posix_stub_nanosleep_enosys);
+    JARVIS_REGISTER_TEST(posix_stub_timer_create_enosys);
+    JARVIS_REGISTER_TEST(posix_stub_timerfd_create_enosys);
+#endif
     JARVIS_REGISTER_TEST(posix_clock_realtime_anchored);
     JARVIS_REGISTER_TEST(posix_clock_bad_id);
     JARVIS_REGISTER_TEST(posix_nanosleep_zero_returns);
