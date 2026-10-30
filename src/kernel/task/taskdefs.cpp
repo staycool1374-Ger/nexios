@@ -29,6 +29,8 @@
 #include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/watchdog/watchdogd.hpp>
 #include <kernel/time/timer_srv.hpp>
+#include <kernel/task/boot_sdf.hpp>
+#include <kernel/driver/driver_pds.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
 #include <services/shell.hpp>
@@ -63,6 +65,81 @@ namespace {
 // implying a live daemon.
 uint64_t g_debugd_pid_cell = 0;
 
+#if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+    CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET
+// Driver-PD restart trampolines (issue #48): the DaemonEntry hook carries
+// only a pid, so each role re-resolves its task and runs sdf_rebind
+// (re-derive, never inherit) + the role PID cell bump.
+namespace {
+void pd_rebind_role(kernel::sdf::PdRole role, uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, role)) {
+        return;
+    }
+    kernel::driver_pds::pd_on_restart(role, pid);
+}
+} // namespace
+
+void pd_restart_serial(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::SERIAL, pid);
+}
+void pd_restart_kbd(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::KBD, pid);
+}
+void pd_restart_rtc(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::RTC, pid);
+}
+void pd_restart_fb(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::FB, pid);
+}
+void pd_restart_block(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::BLOCK, pid);
+}
+void pd_restart_net(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::NET, pid);
+}
+uint64_t pd_pid_serial() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::SERIAL);
+}
+uint64_t pd_pid_kbd() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::KBD);
+}
+uint64_t pd_pid_rtc() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::RTC);
+}
+uint64_t pd_pid_fb() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::FB);
+}
+uint64_t pd_pid_block() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::BLOCK);
+}
+uint64_t pd_pid_net() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::NET);
+}
+void pd_set_serial(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::SERIAL, pid);
+}
+void pd_set_kbd(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::KBD, pid);
+}
+void pd_set_rtc(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::RTC, pid);
+}
+void pd_set_fb(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::FB, pid);
+}
+void pd_set_block(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::BLOCK, pid);
+}
+void pd_set_net(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::NET, pid);
+}
+#endif
+
 // ── Task definition table ────────────────────────────────────────────────
 
 constexpr TaskDef g_task_defs[] = {
@@ -95,6 +172,50 @@ constexpr TaskDef g_task_defs[] = {
     {"ramdiskd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/ramdiskd.c.elf",
      20, 10, 0, 2, 10, 0, "ramdiskd", ramdiskd::set_ramdiskd_pid,
      ramdiskd::get_ramdiskd_pid, 1, 0, false},
+#if CONFIG_DRIVER_PD_SERIAL
+    // drv-serial: RX-only console PD (issue #48, strangler step a).
+    // Sporadic server SS(1,10,0); TX stays kernel (console + panic).
+    {"drv-serial", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/serial-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-serial",
+     pd_set_serial, pd_pid_serial, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_serial, 0},
+#endif
+#if CONFIG_DRIVER_PD_KBD
+    // drv-kbd: PS/2 keyboard PD (x86; arch stub elsewhere).
+    {"drv-kbd", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/kbd-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-kbd",
+     pd_set_kbd, pd_pid_kbd, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_kbd, 1},
+#endif
+#if CONFIG_DRIVER_PD_RTC
+    // drv-rtc: RTC PD (CMOS/PL031/Goldfish per arch).
+    {"drv-rtc", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/rtc-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-rtc",
+     pd_set_rtc, pd_pid_rtc, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_rtc, 2},
+#endif
+#if CONFIG_DRIVER_PD_FB
+    // drv-fb: framebuffer device PD (caps + PD isolation only;
+    // emulation stays #51 term-srv; zero IRQ by design).
+    {"drv-fb", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/fb-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-fb",
+     pd_set_fb, pd_pid_fb, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_fb, 3},
+#endif
+#if CONFIG_DRIVER_PD_BLOCK
+    // drv-block: block-storage PD (AHCI/virtio-blk, DMA domains).
+    {"drv-block", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/block-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-block",
+     pd_set_block, pd_pid_block, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_block, 4},
+#endif
+#if CONFIG_DRIVER_PD_NET
+    // drv-net: virtio-net PD (RX rings + TX + DMA domain).
+    {"drv-net", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/net-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-net",
+     pd_set_net, pd_pid_net, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_net, 5},
+#endif
 #if CONFIG_TIMER_SRV
     // timer-srv: Timer/Event externalization PD (issue #241, strangler a).
     // Sporadic server, cheapest share SS(1,10,0). Guarded row: absent at
@@ -161,6 +282,14 @@ constexpr bool server_params_valid(const TaskDef &d) {
         return false;
     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
         return false;
+    // Issue #48: an SDF row needs its supervisor hook (re-derive on
+    // restart, never inherit) and a valid role index.
+    if (d.sdf_role != 0xFF) {
+        if (d.on_restart_fn == nullptr)
+            return false;
+        if (d.sdf_role > 5)
+            return false;
+    }
     return true;
 }
 
@@ -450,8 +579,37 @@ void reboot_from_table() {
 
         if (def.type == TaskType::SPORADIC_SERVER) {
             def.set_pid_fn(task->id);
-            daemon::register_daemon(def.daemon_name, def.elf_path,
-                                    def.set_pid_fn, def.get_pid_fn);
+            if (def.on_restart_fn != nullptr) {
+                daemon::register_daemon_ex(
+                    def.daemon_name, def.elf_path, def.set_pid_fn,
+                    def.get_pid_fn, def.ss_budget, def.on_restart_fn);
+            } else {
+                daemon::register_daemon(def.daemon_name, def.elf_path,
+                                        def.set_pid_fn, def.get_pid_fn);
+            }
+#if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                      \
+    CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET
+            if (def.sdf_role != 0xFF) {
+                // SDF compose (issue #48): mint the role caps into the
+                // fresh task. Fail-closed: compose failure destroys the
+                // task and skips the row (invalid-ELF precedent below).
+                // Compile-guarded: boot_sdf.cpp is an empty TU when all
+                // PD knobs are 0, so the call must not be emitted at OFF.
+                const auto role = static_cast<sdf::PdRole>(def.sdf_role);
+                if (!sdf::sdf_compose(*task, role)) {
+                    Logger::warn(
+                        "reboot: SDF compose failed for task '%s', skipping",
+                        def.name);
+                    kernel::log::dmesg_push_sev(
+                        kernel::log::ErrorSubsystem::INIT,
+                        kernel::log::kDmesgBase_INIT + 13,
+                        kernel::log::LogSeverity::ERROR, def.name, 0);
+                    TaskControlBlock::destroy(task);
+                    task = nullptr;
+                }
+            }
+#endif // any CONFIG_DRIVER_PD_* (sdf_compose lives in boot_sdf.cpp)
         }
     }
 

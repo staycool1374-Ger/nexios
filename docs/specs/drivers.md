@@ -598,3 +598,11 @@ only. Ordering at `shell_try_get_key_impl`: decoder (pump + ring)
 first on aarch64/riscv64, raw Serial poll as fail-open fallback,
 then iocd, then the hardware ring. `Terminal::readline` has no pump
 (no second UART consumer).
+
+## 11. Driver PD externalization (issue #48, strangler step a)
+
+Userspace driver PDs (serial/kbd/RTC/fb-device/block/net) behind
+per-role `CONFIG_DRIVER_PD_*` (default 0). Full contract (SDF rows, cap
+exactness, supervision, strangler gates): `docs/specs/driver-pds.md`.
+This file keeps the in-kernel driver reference (probes, oracles, parity
+baselines); PD behavior deltas land in `driver-pds.md`, never here.

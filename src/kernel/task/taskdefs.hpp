@@ -71,9 +71,19 @@ struct TaskDef {
     bool is_shell; ///< call Scheduler::set_shell_task after creation
 
     ServerMode ss_mode = ServerMode::SPORADIC; ///< server discipline
-                                              ///< (issue #22; trailing so
-                                              ///< existing rows keep binding;
-                                              ///< default = SPORADIC)
+                                               ///< (issue #22; trailing so
+                                               ///< existing rows keep binding;
+                                               ///< default = SPORADIC)
+
+    // Driver-PD extensions (issue #48; trailing so existing rows keep
+    // binding; defaults = legacy daemon behavior).
+    /// Supervisor hook run after every (re)spawn (sdf_rebind pattern).
+    /// Null = pid-cell only (all pre-#48 daemons).
+    void (*on_restart_fn)(uint64_t) = nullptr;
+    /// SDF role index (sdf::PdRole value) or 0xFF = none. When set, the
+    /// boot table composes the role's caps after add_task (fail-closed:
+    /// compose failure destroys the task and skips the row).
+    uint64_t sdf_role = 0xFF;
 };
 
 /// @brief Kills all tasks (except idle), spawns the system from g_task_defs[],

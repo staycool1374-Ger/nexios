@@ -38,6 +38,12 @@ struct DaemonEntry {
     uint64_t restart_count;       ///< Number of automatic restarts performed.
     void (*set_pid_fn)(uint64_t); ///< Callback to store the PID.
     uint64_t (*get_pid_fn)();     ///< Callback to retrieve the current PID.
+    /// @brief Sporadic-server budget for (re)spawn (issue #48).
+    /// 0 = legacy name-based default (iocd 3 else 2); non-zero overrides.
+    uint64_t ss_budget = 0;
+    /// @brief Supervisor hook on (re)spawn: re-derive caps (issue #48:
+    /// sdf_rebind; #191 pattern). Null = pid-cell only (legacy daemons).
+    void (*on_restart_fn)(uint64_t) = nullptr;
 };
 
 /// @brief Initialize the daemon manager and spawn registered daemons.
@@ -54,6 +60,14 @@ void reset_clear_daemons();
 /// @return true if registered successfully.
 bool register_daemon(const char *name, const char *initrd_path,
                      void (*set_pid)(uint64_t), uint64_t (*get_pid)());
+/// @brief Extended registration with sporadic-server budget + supervisor
+/// restart hook (issue #48 driver PDs; timer-srv pattern generalized).
+/// @param ss_budget Sporadic-server budget (0 = legacy name-based default).
+/// @param on_restart Supervisor hook run after every (re)spawn (may be null).
+/// @return true if registered successfully.
+bool register_daemon_ex(const char *name, const char *initrd_path,
+                        void (*set_pid)(uint64_t), uint64_t (*get_pid)(),
+                        uint64_t ss_budget, void (*on_restart)(uint64_t));
 /// @brief Notify the daemon manager that a daemon has exited.
 /// @param pid      PID of the daemon that died.
 /// @param log_only If true, skip dmesg push (test isolation cleanup).

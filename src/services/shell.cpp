@@ -351,8 +351,14 @@ void Shell::init() {
     register_command("cat",     "Print file contents to terminal",   cmd_cat);
     register_command("touch",   "Create an empty file",              cmd_touch);
     register_command("dmesg",   "Print kernel log buffer",           cmd_dmesg);
-#if CONFIG_TIMER_SRV_FAULT_INJECT
+#if CONFIG_TIMER_SRV_FAULT_INJECT && CONFIG_TIMER_SRV
     register_command("timerfault", "Terminate timer-srv PD (fault drill)", cmd_timerfault);
+#endif
+#if CONFIG_DRIVER_PD_FAULT_INJECT &&                                           \
+    (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                           \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET)
+    register_command("driverfault", "Terminate driver PD by role (fault drill)", cmd_driverfault);
 #endif
     register_command("lspci",   "List PCI devices",                  cmd_lspci);
 
@@ -2526,7 +2532,7 @@ void Shell::cmd_modlist(int, const char**) {
     }
 }
 
-#if CONFIG_TIMER_SRV_FAULT_INJECT
+#if CONFIG_TIMER_SRV_FAULT_INJECT && CONFIG_TIMER_SRV
 /// @brief Diagnostic fault drill (issue #241, strangler step c).
 /// Terminates the timer-srv PD so the supervisor path (death-notify →
 /// restart → cap re-derive → rebind) can be demonstrated. Diagnostic
@@ -2539,6 +2545,36 @@ void Shell::cmd_timerfault(int, const char**) {
     }
     kernel::daemon::terminate("timer-srv");
     Terminal::write("S TMR fault kill issued\n");
+}
+#endif
+
+#if CONFIG_DRIVER_PD_FAULT_INJECT &&                                         \
+    (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                           \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET)
+/// @brief Diagnostic fault drill (issue #48, strangler step c).
+/// Terminates one driver PD by role so the supervisor path (death-notify
+/// → sdf_rebind → rebind) can be demonstrated. Diagnostic only;
+/// compiled out by default (never shipped).
+void Shell::cmd_driverfault(int argc, const char** argv) {
+    if (argc < 2) {
+        Terminal::write("Usage: driverfault <serial|kbd|rtc|fb|block|net>\n");
+        return;
+    }
+    const char *role = argv[1];
+    char name[16] = "drv-";
+    size_t i = 4;
+    for (size_t j = 0; role[j] && i < 15; ++j) {
+        char c = role[j];
+        if (c < 'a' || c > 'z') {
+            Terminal::write("Usage: driverfault <serial|kbd|rtc|fb|block|net>\n");
+            return;
+        }
+        name[i++] = c;
+    }
+    name[i] = '\0';
+    kernel::daemon::terminate(name);
+    Terminal::write("S DRV fault kill issued\n");
 }
 #endif
 

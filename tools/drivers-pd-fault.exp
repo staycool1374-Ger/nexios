@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+# drivers-pd fault demo (issue #48, strangler step c): boot ON+fault-inject
+# ISO, run parity probe, `driverfault <role>`, wait for restart + rebind,
+# then run again. Serial tee is the §9.3 artifact: copy the log path.
+# Args: <iso> <serial_log> <role>
+set iso [lindex $argv 0]
+set serial_log [lindex $argv 1]
+set role [lindex $argv 2]
+set timeout 180
+spawn qemu-system-x86_64 -cdrom $iso -m 256M -serial file:$serial_log -display none -boot order=d -cpu max
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT waiting for prompt"; exit 1 }
+}
+send "loadelf /bin/driver-pd-parity.c.elf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after loadelf"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after first run"; exit 1 }
+}
+send "driverfault $role\r"
+expect {
+    -re "restarted" {}
+    timeout { puts "EXPECT-TIMEOUT waiting for restart"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after second run"; exit 1 }
+}
+puts "FAULT-DEMO-OK role=$role see $serial_log"

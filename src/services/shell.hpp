@@ -123,9 +123,16 @@ private:
     static void cmd_meminfo(int argc, const char** argv);
     /// @brief Built-in: reboots the system.
     static void cmd_reboot(int argc, const char** argv);
-#if CONFIG_TIMER_SRV_FAULT_INJECT
+#if CONFIG_TIMER_SRV_FAULT_INJECT && CONFIG_TIMER_SRV
     /// @brief Diagnostic: terminate timer-srv PD (issue #241 fault drill).
     static void cmd_timerfault(int argc, const char** argv);
+#endif
+#if CONFIG_DRIVER_PD_FAULT_INJECT &&                                          \
+    (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                       \
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                          \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET)
+    /// @brief Diagnostic: terminate driver PD by role (issue #48 fault drill).
+    static void cmd_driverfault(int argc, const char** argv);
 #endif
     /// @brief Built-in: runs a program by name.
     static void cmd_run(int argc, const char** argv);

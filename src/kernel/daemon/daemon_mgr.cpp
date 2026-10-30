@@ -64,10 +64,23 @@ bool register_daemon(const char *name, const char *initrd_path,
     entries_[num_daemons_].restart_count = 0;
     entries_[num_daemons_].set_pid_fn = set_pid;
     entries_[num_daemons_].get_pid_fn = get_pid;
+    entries_[num_daemons_].ss_budget = 0;
+    entries_[num_daemons_].on_restart_fn = nullptr;
     ++num_daemons_;
 
     Logger::info("daemon_mgr: registered '%s' at path '%s' (PID=%d)", name,
                  initrd_path, entries_[num_daemons_ - 1].pid);
+    return true;
+}
+
+bool register_daemon_ex(const char *name, const char *initrd_path,
+                        void (*set_pid)(uint64_t), uint64_t (*get_pid)(),
+                        uint64_t ss_budget, void (*on_restart)(uint64_t)) {
+    if (!register_daemon(name, initrd_path, set_pid, get_pid)) {
+        return false;
+    }
+    entries_[num_daemons_ - 1].ss_budget = ss_budget;
+    entries_[num_daemons_ - 1].on_restart_fn = on_restart;
     return true;
 }
 
@@ -222,11 +235,17 @@ void restart_stale_daemons() {
         }
         {
             uint64_t bg = 0;
-            uint64_t budget =
-                (strcmp(entries_[i].name, "iocd") == 0)
-                    ? 3ULL
-                    : ((strcmp(entries_[i].name, "timer-srv") == 0) ? 1ULL
-                                                                    : 2ULL);
+            // Entry budget wins when set (register_daemon_ex); legacy
+            // name-based defaults preserved otherwise (unchanged behavior).
+            uint64_t budget = entries_[i].ss_budget;
+            if (budget == 0) {
+                budget =
+                    (strcmp(entries_[i].name, "iocd") == 0)
+                        ? 3ULL
+                        : ((strcmp(entries_[i].name, "timer-srv") == 0)
+                               ? 1ULL
+                               : 2ULL);
+            }
             task->init_sporadic_server(budget, 10, bg, 1);
         }
 
@@ -243,6 +262,9 @@ void restart_stale_daemons() {
             kernel::time::timer_srv::on_restart(task->id);
         }
 #endif
+        if (entries_[i].on_restart_fn != nullptr) {
+            entries_[i].on_restart_fn(task->id);
+        }
         // Issue #275: a restarted ramdiskd lost its CSpace with the old
         // task — re-grant storage and push the handles (fail-closed).
         if (entries_[i].name != nullptr &&
@@ -329,11 +351,15 @@ void ensure_running(const char *name) {
         }
         {
             uint64_t bg = 0;
-            uint64_t budget =
-                (strcmp(entries_[i].name, "iocd") == 0)
-                    ? 3ULL
-                    : ((strcmp(entries_[i].name, "timer-srv") == 0) ? 1ULL
-                                                                    : 2ULL);
+            uint64_t budget = entries_[i].ss_budget;
+            if (budget == 0) {
+                budget =
+                    (strcmp(entries_[i].name, "iocd") == 0)
+                        ? 3ULL
+                        : ((strcmp(entries_[i].name, "timer-srv") == 0)
+                               ? 1ULL
+                               : 2ULL);
+            }
             task->init_sporadic_server(budget, 10, bg, 1);
         }
 
@@ -350,6 +376,9 @@ void ensure_running(const char *name) {
             kernel::time::timer_srv::on_restart(task->id);
         }
 #endif
+        if (entries_[i].on_restart_fn != nullptr) {
+            entries_[i].on_restart_fn(task->id);
+        }
         // Issue #275: re-grant storage to a (re)spawned ramdiskd.
         if (entries_[i].name != nullptr &&
             strcmp(entries_[i].name, "ramdiskd") == 0)
