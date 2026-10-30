@@ -134,6 +134,14 @@ private:
     /// @brief Diagnostic: terminate driver PD by role (issue #48 fault drill).
     static void cmd_driverfault(int argc, const char** argv);
 #endif
+#if CONFIG_VFS_SRV_FAULT_INJECT && CONFIG_VFS_SRV
+    /// @brief Diagnostic: terminate vfs-srv PD (issue #47 fault drill).
+    static void cmd_vfsfault(int argc, const char** argv);
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && CONFIG_BLOCK_SRV
+    /// @brief Diagnostic: terminate block-srv PD (issue #47 fault drill).
+    static void cmd_blockfault(int argc, const char** argv);
+#endif
     /// @brief Built-in: runs a program by name.
     static void cmd_run(int argc, const char** argv);
     /// @brief Built-in: shows kernel version.

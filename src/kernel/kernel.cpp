@@ -1518,8 +1518,9 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
     // Probe AHCI controller first, fall back to legacy ATA PIO.
     // Issue #48: with the block PD live, the PD owns AHCI/ATA probing.
+    // Issue #47: same for the block-srv PD (mutually exclusive).
 #if defined(CONFIG_ARCH_X86_64)
-#if !CONFIG_DRIVER_PD_BLOCK
+#if !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV
     {
         auto *ahci = kernel::block::AhciDriver::probe();
         if (ahci) {
@@ -1572,12 +1573,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             }
         }
     }
-#endif // !CONFIG_DRIVER_PD_BLOCK (AHCI/ATA owned by the block PD)
+#endif // !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV (AHCI/ATA owned by the block PD)
 #endif // CONFIG_ARCH_X86_64
 
     // Probe virtio-blk device (arch-independent, uses unified PCI HAL).
     // Issue #48: with the block PD live, the PD owns block probing.
-#if !CONFIG_DRIVER_PD_BLOCK
+    // Issue #47: same for the block-srv PD (mutually exclusive).
+#if !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV
     {
         auto *vblk = kernel::block::VirtioBlkDriver::probe();
         if (vblk) {
@@ -1608,7 +1610,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] No virtio-blk device found\n");
         }
     }
-#endif // !CONFIG_DRIVER_PD_BLOCK (virtio-blk owned by the block PD)
+#endif // !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV (virtio-blk owned by the block PD)
 
     // Probe virtio-net NIC and initialize network stack.
     // Issue #350: ungated — the MMIO finder serves aarch64/riscv64

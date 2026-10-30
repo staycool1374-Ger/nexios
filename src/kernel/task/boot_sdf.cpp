@@ -2,7 +2,8 @@
 
 #if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
-    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET
+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
+    CONFIG_VFS_SRV || CONFIG_BLOCK_SRV
 
 #include <kernel/task/task.hpp>
 #include <kernel/arch/hal/device_regions.hpp>
@@ -12,10 +13,18 @@
 #include <kernel/cap/iommu.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/arch/pci.hpp>
+#include <kernel/arch/virtio.hpp>
+#include <kernel/iommu/iommu.hpp>
 
 namespace kernel {
 namespace sdf {
 namespace {
+
+// Captured block topology (issue #47 S2): set once by
+// capture_block_topology() before reboot_from_table()'s IrqGuard.
+CapSpec g_block_mmio[kMaxCapsPerRole] = {};
+uint64_t g_block_mmio_count = 0;
+bool g_block_dma = false;
 
 /// @brief Mint one CapSpec into the task CSpace (all-or-nothing caller).
 /// @return slot index or -1. Created caps are disposed by the caller on
@@ -163,15 +172,96 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // (planner S5/S6); the shape (MSI-X/INTID + DMA + SHM) is declared
         // in docs/specs/driver-pds.md. No static row yet.
         return 0;
+    case PdRole::VFS_SRV:
+        // No ambient authority: the vfs-srv row IS the empty set (planner
+        // SDF rules). Compose succeeds with zero caps; the PD talks to
+        // clients over its endpoint only.
+        return 0;
+    case PdRole::BLOCK_SRV: {
+        // Captured block topology (planner S2): MMIO specs recorded by
+        // capture_block_topology() + an optional DMA domain grant when an
+        // IOMMU was probed at capture time. Degraded (no controller/IOMMU)
+        // composes zero caps — allowed explicitly, logged by the caller.
+        uint64_t n = 0;
+        for (uint64_t i = 0; i < g_block_mmio_count && n < kMaxCapsPerRole;
+             ++i) {
+            out[n++] = g_block_mmio[i];
+        }
+        if (g_block_dma && n < kMaxCapsPerRole) {
+            out[n++] = CapSpec{CapKind::DMA, 0, 0, 0, 0};
+        }
+        return n;
+    }
     }
     return 0;
+}
+
+bool sdf_zero_caps_allowed(PdRole role) {
+    // Explicit allowlist (planner S2): only VFS_SRV (empty set by design)
+    // and degraded BLOCK_SRV (no controller/IOMMU captured) may start
+    // capless. Every other zero-cap row is a compose failure.
+    return role == PdRole::VFS_SRV || role == PdRole::BLOCK_SRV;
+}
+
+bool capture_block_topology() {
+    g_block_mmio_count = 0;
+    g_block_dma = false;
+    for (uint64_t i = 0; i < kMaxCapsPerRole; ++i) {
+        g_block_mmio[i] = CapSpec{CapKind::MMIO, 0, 0, 0, 0};
+    }
+    uint64_t n = 0;
+    auto push_mmio = [&](uint64_t phys, uint64_t size) {
+        if (n >= kMaxCapsPerRole || phys == 0 || size == 0) {
+            return;
+        }
+        const uint64_t base = phys & ~(static_cast<uint64_t>(arch::PAGE_SIZE) - 1);
+        const uint64_t end = phys + size;
+        const uint64_t aligned_end =
+            (end + arch::PAGE_SIZE - 1) & ~(static_cast<uint64_t>(arch::PAGE_SIZE) - 1);
+        if (aligned_end <= base) {
+            return;
+        }
+        g_block_mmio[n++] =
+            CapSpec{CapKind::MMIO, base, aligned_end - base, 0, 0};
+    };
+#if defined(CONFIG_ARCH_X86_64)
+    // AHCI HBA: class 0x01/subclass 0x06, BAR5 = ABAR.
+    if (const arch::PciDeviceInfo *ahci =
+            arch::pci_find_device(0x01, 0x06);
+        ahci != nullptr) {
+        arch::PciDeviceInfo info = *ahci;
+        arch::pci_parse_bars(info);
+        if (info.bar_count > 5) {
+            push_mmio(info.bars[5].address, info.bars[5].size);
+        }
+    }
+#endif
+    // Virtio-blk transport window (any arch with a finder).
+    {
+        arch::VirtioTransport transport{};
+        if (arch::virtio_find_device(arch::VIRTIO_DEVICE_BLOCK,
+                                     transport) ||
+            arch::virtio_find_device(arch::VIRTIO_DEVICE_BLOCK_LEGACY,
+                                     transport)) {
+            push_mmio(transport.common_cfg.phys_addr,
+                      transport.common_cfg.length);
+        }
+    }
+    g_block_mmio_count = n;
+    g_block_dma = kernel::iommu::IoMmuManager::probe_hardware();
+    return true;
 }
 
 bool sdf_compose(TaskControlBlock &task, PdRole role) {
     CapSpec specs[kMaxCapsPerRole] = {};
     const uint64_t count = sdf_row(role, specs);
-    if (count == 0 || count > kMaxCapsPerRole) {
+    if (count > kMaxCapsPerRole) {
         return false;
+    }
+    if (count == 0) {
+        // Zero-cap rows compose empty only on the explicit allowlist
+        // (planner S2); anything else is a fail-closed compose failure.
+        return sdf_zero_caps_allowed(role);
     }
     int slots[kMaxCapsPerRole] = {-1, -1, -1, -1, -1, -1};
     for (uint64_t i = 0; i < count; ++i) {
@@ -205,6 +295,10 @@ bool pd_owns_device(PdRole role) {
         return CONFIG_DRIVER_PD_BLOCK != 0;
     case PdRole::NET:
         return CONFIG_DRIVER_PD_NET != 0;
+    case PdRole::VFS_SRV:
+        return CONFIG_VFS_SRV != 0;
+    case PdRole::BLOCK_SRV:
+        return CONFIG_BLOCK_SRV != 0;
     }
     return false;
 }
@@ -212,4 +306,4 @@ bool pd_owns_device(PdRole role) {
 } // namespace sdf
 } // namespace kernel
 
-#endif // any CONFIG_DRIVER_PD_*
+#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV

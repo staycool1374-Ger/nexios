@@ -16,12 +16,14 @@ int main(void) {
     static unsigned char rbuf[64];
     for (;;) {
         int rc = drv_recv(rbuf, sizeof(rbuf), 0);
-        if (rc <= 0)
-            continue;
+        if (rc < 0)
+            continue; // fail-closed: no reply on transport error
         struct DriverRpc req;
         memset(&req, 0, sizeof(req));
         unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
         memcpy(&req, rbuf, copy);
+        if ((unsigned long)rc != req.op)
+            continue; // torn/stale payload: kernel type must match body op
 
         struct DriverRpc rep;
         memset(&rep, 0, sizeof(rep));

@@ -65,6 +65,8 @@
 #include <kernel/sync/notify.hpp>
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/time/timer_srv.hpp>
+#include <kernel/vfs/vfs_srv.hpp>
+#include <kernel/driver/block_srv.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
@@ -359,6 +361,12 @@ void Shell::init() {
      CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                           \
      CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET)
     register_command("driverfault", "Terminate driver PD by role (fault drill)", cmd_driverfault);
+#endif
+#if CONFIG_VFS_SRV_FAULT_INJECT && CONFIG_VFS_SRV
+    register_command("vfsfault", "Terminate vfs-srv PD (fault drill)", cmd_vfsfault);
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && CONFIG_BLOCK_SRV
+    register_command("blockfault", "Terminate block-srv PD (fault drill)", cmd_blockfault);
 #endif
     register_command("lspci",   "List PCI devices",                  cmd_lspci);
 
@@ -2575,6 +2583,38 @@ void Shell::cmd_driverfault(int argc, const char** argv) {
     name[i] = '\0';
     kernel::daemon::terminate(name);
     Terminal::write("S DRV fault kill issued\n");
+}
+#endif
+
+#if CONFIG_VFS_SRV_FAULT_INJECT && CONFIG_VFS_SRV
+/// @brief Diagnostic fault drill (issue #47, strangler step c).
+/// Terminates the vfs-srv PD so the supervisor path (death-notify →
+/// restart → cap re-derive → rebind) can be demonstrated. Diagnostic
+/// only; compiled out by default (never shipped).
+void Shell::cmd_vfsfault(int, const char**) {
+    const uint64_t pid = kernel::vfs_srv::get_vfs_srv_pid();
+    if (pid == 0) {
+        Terminal::write("vfsfault: vfs-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("vfs-srv");
+    Terminal::write("S VFS fault kill issued\n");
+}
+#endif
+
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && CONFIG_BLOCK_SRV
+/// @brief Diagnostic fault drill (issue #47, strangler step c).
+/// Terminates the block-srv PD so the supervisor path (death-notify →
+/// restart → cap re-derive → rebind) can be demonstrated. Diagnostic
+/// only; compiled out by default (never shipped).
+void Shell::cmd_blockfault(int, const char**) {
+    const uint64_t pid = kernel::block_srv::get_block_srv_pid();
+    if (pid == 0) {
+        Terminal::write("blockfault: block-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("block-srv");
+    Terminal::write("S BLK fault kill issued\n");
 }
 #endif
 

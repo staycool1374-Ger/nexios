@@ -32,3 +32,16 @@ epoch+gen-validated replies; tombstone drain for dead owners.
 - #192 owns irq-mux policy; this lane uses route-only delivery.
 - #241/#194 timer-srv consumes RTC reads; #193 supervises restarts.
 - #168 SMMU keeps ARM DMA honest; legacy ATA PIO stays non-DMA.
+
+## VFS/block rows (#47, issue #47 PDs share this SDF)
+
+- `VFS_SRV` (vfs-srv PD): zero-cap row by design (no ambient authority).
+  Composes empty; the PD talks to clients over its endpoint only.
+- `BLOCK_SRV` (block-srv PD): captured PCI/virtio MMIO CapSpecs (page
+  aligned, ≤6) + optional DMA domain (only when an IOMMU was probed at
+  capture). Degraded (no controller/IOMMU) composes empty with a logged
+  warning — allowed, never silent. See `docs/specs/block-srv.md`.
+- Single device owner: `CONFIG_DRIVER_PD_BLOCK` and `CONFIG_BLOCK_SRV`
+  are mutually exclusive (hard build error); kernel probing is gated
+  off only by exactly one of them; #47 owns this table's block row
+  (S4/S5/S6 wire the fb/block/net PDs here).
