@@ -65,13 +65,15 @@ namespace {
 // implying a live daemon.
 uint64_t g_debugd_pid_cell = 0;
 
+// Driver-PD restart trampolines (issue #48): the DaemonEntry hook carries
+// only a pid, so each role re-resolves its task and runs sdf_rebind
+// (re-derive, never inherit) + the role PID cell bump. Each role triple
+// is guarded by its own knob (a single-role ON build must not warn on
+// the other roles' TU-local helpers under -Werror=unused-function).
+namespace {
 #if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET
-// Driver-PD restart trampolines (issue #48): the DaemonEntry hook carries
-// only a pid, so each role re-resolves its task and runs sdf_rebind
-// (re-derive, never inherit) + the role PID cell bump.
-namespace {
 void pd_rebind_role(kernel::sdf::PdRole role, uint64_t pid) {
     auto *t = kernel::Scheduler::find_task(pid);
     if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
@@ -82,58 +84,70 @@ void pd_rebind_role(kernel::sdf::PdRole role, uint64_t pid) {
     }
     kernel::driver_pds::pd_on_restart(role, pid);
 }
+#endif
 } // namespace
 
+#if CONFIG_DRIVER_PD_SERIAL
 void pd_restart_serial(uint64_t pid) {
     pd_rebind_role(kernel::sdf::PdRole::SERIAL, pid);
-}
-void pd_restart_kbd(uint64_t pid) {
-    pd_rebind_role(kernel::sdf::PdRole::KBD, pid);
-}
-void pd_restart_rtc(uint64_t pid) {
-    pd_rebind_role(kernel::sdf::PdRole::RTC, pid);
-}
-void pd_restart_fb(uint64_t pid) {
-    pd_rebind_role(kernel::sdf::PdRole::FB, pid);
-}
-void pd_restart_block(uint64_t pid) {
-    pd_rebind_role(kernel::sdf::PdRole::BLOCK, pid);
-}
-void pd_restart_net(uint64_t pid) {
-    pd_rebind_role(kernel::sdf::PdRole::NET, pid);
 }
 uint64_t pd_pid_serial() {
     return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::SERIAL);
 }
-uint64_t pd_pid_kbd() {
-    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::KBD);
-}
-uint64_t pd_pid_rtc() {
-    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::RTC);
-}
-uint64_t pd_pid_fb() {
-    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::FB);
-}
-uint64_t pd_pid_block() {
-    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::BLOCK);
-}
-uint64_t pd_pid_net() {
-    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::NET);
-}
 void pd_set_serial(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::SERIAL, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_KBD
+void pd_restart_kbd(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::KBD, pid);
+}
+uint64_t pd_pid_kbd() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::KBD);
 }
 void pd_set_kbd(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::KBD, pid);
 }
+#endif
+#if CONFIG_DRIVER_PD_RTC
+void pd_restart_rtc(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::RTC, pid);
+}
+uint64_t pd_pid_rtc() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::RTC);
+}
 void pd_set_rtc(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::RTC, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_FB
+void pd_restart_fb(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::FB, pid);
+}
+uint64_t pd_pid_fb() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::FB);
 }
 void pd_set_fb(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::FB, pid);
 }
+#endif
+#if CONFIG_DRIVER_PD_BLOCK
+void pd_restart_block(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::BLOCK, pid);
+}
+uint64_t pd_pid_block() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::BLOCK);
+}
 void pd_set_block(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::BLOCK, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_NET
+void pd_restart_net(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::NET, pid);
+}
+uint64_t pd_pid_net() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::NET);
 }
 void pd_set_net(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::NET, pid);
