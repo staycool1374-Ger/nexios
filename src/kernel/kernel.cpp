@@ -1487,7 +1487,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::PMM::mark_init_done();
     boot_mark(kernel::BootStage::MEMORY_INIT);
 
+#if !CONFIG_DRIVER_PD_FB
+    // Issue #48: with the fb-device PD live, the PD owns mode-set/present;
+    // the kernel skips its own init (Terminal degrades to serial-only).
     service::Framebuffer::init();
+#endif
     service::Terminal::init();
     if (service::Terminal::instance()) {
         service::Terminal::show_splash();
@@ -1495,7 +1499,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
 #if defined(CONFIG_ARCH_X86_64)
     init_pic();
+#if !CONFIG_DRIVER_PD_KBD
+    // Issue #48: with the kbd PD live, the PD owns the PS/2 port + IRQ.
     arch::Keyboard::init();
+#endif
 #endif
 
     kernel::vfs::devfs_init();
@@ -1509,8 +1516,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // degraded (boot continues; the grant below is skipped).
     kernel::ramdiskd::boot_allocate();
 
-    // Probe AHCI controller first, fall back to legacy ATA PIO
+    // Probe AHCI controller first, fall back to legacy ATA PIO.
+    // Issue #48: with the block PD live, the PD owns AHCI/ATA probing.
 #if defined(CONFIG_ARCH_X86_64)
+#if !CONFIG_DRIVER_PD_BLOCK
     {
         auto *ahci = kernel::block::AhciDriver::probe();
         if (ahci) {
@@ -1563,10 +1572,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             }
         }
     }
+#endif // !CONFIG_DRIVER_PD_BLOCK (AHCI/ATA owned by the block PD)
+#endif // CONFIG_ARCH_X86_64
 
-#endif
-
-    // Probe virtio-blk device (arch-independent, uses unified PCI HAL)
+    // Probe virtio-blk device (arch-independent, uses unified PCI HAL).
+    // Issue #48: with the block PD live, the PD owns block probing.
+#if !CONFIG_DRIVER_PD_BLOCK
     {
         auto *vblk = kernel::block::VirtioBlkDriver::probe();
         if (vblk) {
@@ -1597,10 +1608,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] No virtio-blk device found\n");
         }
     }
+#endif // !CONFIG_DRIVER_PD_BLOCK (virtio-blk owned by the block PD)
 
     // Probe virtio-net NIC and initialize network stack.
     // Issue #350: ungated — the MMIO finder serves aarch64/riscv64
     // (QEMU virtio-net-device); the PCI finder serves x86_64.
+    // Issue #48: with the net PD live, the PD owns the NIC.
+#if !CONFIG_DRIVER_PD_NET
     {
         static net::Nic g_boot_nic{};
         if (kernel::net::virtio_net_probe(g_boot_nic)) {
@@ -1613,6 +1627,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] No virtio-net NIC found\n");
         }
     }
+#endif // !CONFIG_DRIVER_PD_NET (NIC owned by the net PD)
     boot_mark(kernel::BootStage::DRIVER_PROBE);
 
     // Initialize sampling profiler (must be before Timer::init() so record_sample is safe)
@@ -1668,7 +1683,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::IrqLatencyHistogram::init();
 #endif
 
+#if !CONFIG_DRIVER_PD_RTC
+    // Issue #48: with the RTC PD live, the PD owns the RTC; the kernel
+    // falls back to the documented available()==false path.
     arch::RTC::init();
+#endif
     kernel::gs::WriteContext bctx{kernel::gs::StatePhase::BOOT, 0};
     kernel::gs::try_set_boot_epoch(arch::RTC::read_seconds(), bctx);
     kernel::random_init();

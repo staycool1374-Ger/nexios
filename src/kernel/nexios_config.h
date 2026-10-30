@@ -630,6 +630,42 @@
 #define CONFIG_TIMER_SRV_RTC_DEGRADE 0
 #endif
 
+/// Driver PD externalization (issue #48, strangler step a). One knob per
+/// role so each PD flips independently; 0 = in-kernel driver (shipped
+/// default, bit-identical behavior). All driver-PD kernel code is
+/// `#if`-guarded (empty TUs when 0); no runtime `if` on these knobs.
+#ifndef CONFIG_DRIVER_PD_SERIAL
+#define CONFIG_DRIVER_PD_SERIAL 0
+#endif
+#ifndef CONFIG_DRIVER_PD_KBD
+#define CONFIG_DRIVER_PD_KBD 0
+#endif
+#ifndef CONFIG_DRIVER_PD_RTC
+#define CONFIG_DRIVER_PD_RTC 0
+#endif
+#ifndef CONFIG_DRIVER_PD_FB
+#define CONFIG_DRIVER_PD_FB 0
+#endif
+#ifndef CONFIG_DRIVER_PD_BLOCK
+#define CONFIG_DRIVER_PD_BLOCK 0
+#endif
+#ifndef CONFIG_DRIVER_PD_NET
+#define CONFIG_DRIVER_PD_NET 0
+#endif
+
+/// Driver-PD fault-injection surface (issue #48, strangler step c).
+/// 1 = compile the diagnostic `driverfault` shell command (terminate a
+/// driver PD by role; supervisor restarts it). Debug-only, never shipped.
+#ifndef CONFIG_DRIVER_PD_FAULT_INJECT
+#define CONFIG_DRIVER_PD_FAULT_INJECT 0
+#endif
+
+/// Maximum caps minted per driver PD in one SDF compose (issue #48).
+/// Bounds the all-or-nothing install chain. Default: 6.
+#ifndef CONFIG_DRIVER_PD_MAX_CAPS
+#define CONFIG_DRIVER_PD_MAX_CAPS 6
+#endif
+
 /// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
 /// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
 /// static pool.  Bounded so the pool is a fixed .bss allocation — no
@@ -1268,6 +1304,30 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_TIMER_SRV_RTC_DEGRADE != 0 && CONFIG_TIMER_SRV_RTC_DEGRADE != 1
 #error "CONFIG_TIMER_SRV_RTC_DEGRADE must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_SERIAL != 0 && CONFIG_DRIVER_PD_SERIAL != 1
+#error "CONFIG_DRIVER_PD_SERIAL must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_KBD != 0 && CONFIG_DRIVER_PD_KBD != 1
+#error "CONFIG_DRIVER_PD_KBD must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_RTC != 0 && CONFIG_DRIVER_PD_RTC != 1
+#error "CONFIG_DRIVER_PD_RTC must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_FB != 0 && CONFIG_DRIVER_PD_FB != 1
+#error "CONFIG_DRIVER_PD_FB must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_BLOCK != 0 && CONFIG_DRIVER_PD_BLOCK != 1
+#error "CONFIG_DRIVER_PD_BLOCK must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_NET != 0 && CONFIG_DRIVER_PD_NET != 1
+#error "CONFIG_DRIVER_PD_NET must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_FAULT_INJECT != 0 && CONFIG_DRIVER_PD_FAULT_INJECT != 1
+#error "CONFIG_DRIVER_PD_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_MAX_CAPS < 1
+#error "CONFIG_DRIVER_PD_MAX_CAPS must be >= 1 (default 6)"
 #endif
 #if CONFIG_IOPB_MAX_TASKS < 1
 #error "CONFIG_IOPB_MAX_TASKS must be >= 1 (default 4)"

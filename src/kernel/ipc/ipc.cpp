@@ -557,8 +557,7 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
     }
 }
 
-#if CONFIG_TIMER_SRV
-/// @brief Bounded send_sync for the timer-srv proxy (issue #241).
+/// @brief Bounded send_sync for server proxies (issues #241, #48).
 bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
                             Message &reply,
                             uint64_t timeout_ticks) noexcept {
@@ -618,7 +617,6 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
         }
     }
 }
-#endif // CONFIG_TIMER_SRV
 
 /// @brief Return a reference to a task's message queue (asserts existence).
 MessageQueue &IPC::queue(uint64_t task_id) {
