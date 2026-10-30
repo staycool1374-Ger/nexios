@@ -56,7 +56,8 @@ struct CapSpec {
     uint32_t io_port;///< 1 = IO-port MmioCap, 0 = memory MmioCap.
 };
 
-/// @brief Driver PD roles (one SDF row each).
+/// @brief Driver PD roles (one SDF row each; VFS_SRV/BLOCK_SRV are
+/// issue #47 and share this table + compose path).
 enum class PdRole : uint8_t {
     SERIAL = 0,
     KBD = 1,
@@ -64,6 +65,8 @@ enum class PdRole : uint8_t {
     FB = 3,
     BLOCK = 4,
     NET = 5,
+    VFS_SRV = 6,
+    BLOCK_SRV = 7,
 };
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
@@ -91,6 +94,18 @@ bool sdf_rebind(TaskControlBlock &task, PdRole role);
 /// @return true when @p role owns the device (its OFF knob compiled out
 /// the kernel bring-up), false when the kernel keeps it.
 bool pd_owns_device(PdRole role);
+
+/// @brief Capture block topology for the BLOCK_SRV row (issue #47 S2):
+/// AHCI ABAR (PCI-discovered, x86) or virtio-blk transport ranges.
+/// Idempotent; keeps at most kMaxCapsPerRole page-aligned MMIO specs.
+/// @return true when capture ran (row may still be empty on unknown hw).
+bool capture_block_topology();
+
+/// @brief True when @p role may compose with zero caps (explicit
+/// allowlist): VFS_SRV always (no ambient authority — the row IS the
+/// empty set); degraded BLOCK_SRV when no controller/IOMMU was captured
+/// (logged at the call site; never a silent start).
+bool sdf_zero_caps_allowed(PdRole role);
 
 } // namespace sdf
 } // namespace kernel

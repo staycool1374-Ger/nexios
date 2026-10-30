@@ -30,6 +30,8 @@
 #include <kernel/watchdog/watchdogd.hpp>
 #include <kernel/time/timer_srv.hpp>
 #include <kernel/task/boot_sdf.hpp>
+#include <kernel/vfs/vfs_srv.hpp>
+#include <kernel/driver/block_srv.hpp>
 #include <kernel/driver/driver_pds.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
@@ -153,6 +155,42 @@ void pd_set_net(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::NET, pid);
 }
 #endif
+#if CONFIG_VFS_SRV
+void pd_restart_vfs_srv(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::VFS_SRV)) {
+        return;
+    }
+    kernel::vfs_srv::vfs_srv_on_restart(pid);
+}
+uint64_t pd_pid_vfs_srv() {
+    return kernel::vfs_srv::get_vfs_srv_pid();
+}
+void pd_set_vfs_srv(uint64_t pid) {
+    kernel::vfs_srv::set_vfs_srv_pid(pid);
+}
+#endif
+#if CONFIG_BLOCK_SRV
+void pd_restart_block_srv(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::BLOCK_SRV)) {
+        return;
+    }
+    kernel::block_srv::block_srv_on_restart(pid);
+}
+uint64_t pd_pid_block_srv() {
+    return kernel::block_srv::get_block_srv_pid();
+}
+void pd_set_block_srv(uint64_t pid) {
+    kernel::block_srv::set_block_srv_pid(pid);
+}
+#endif
 
 // ── Task definition table ────────────────────────────────────────────────
 
@@ -239,6 +277,22 @@ constexpr TaskDef g_task_defs[] = {
      time::timer_srv::set_timer_srv_pid,
      time::timer_srv::get_timer_srv_pid, 1, 0, false},
 #endif
+#if CONFIG_VFS_SRV
+    // vfs-srv: VFS backend server PD (issue #47, strangler step a).
+    // Sporadic server SS(1,10,0); authorize stays kernel-side.
+    {"vfs-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/vfs-srv.c.elf", 20, 10, 0, 1, 10, 0, "vfs-srv",
+     pd_set_vfs_srv, pd_pid_vfs_srv, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_vfs_srv, 6},
+#endif
+#if CONFIG_BLOCK_SRV
+    // block-srv: block-storage server PD (issue #47, strangler step a).
+    // Sporadic server SS(1,10,0); kernel skips AHCI/ATA+virtio-blk probe.
+    {"block-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/block-srv.c.elf", 20, 10, 0, 1, 10, 0, "block-srv",
+     pd_set_block_srv, pd_pid_block_srv, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_block_srv, 7},
+#endif
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values
     // kept here for documentation/validation parity.
@@ -301,7 +355,8 @@ constexpr bool server_params_valid(const TaskDef &d) {
     if (d.sdf_role != 0xFF) {
         if (d.on_restart_fn == nullptr)
             return false;
-        if (d.sdf_role > 5)
+        if (d.sdf_role >
+            static_cast<uint64_t>(sdf::PdRole::BLOCK_SRV))
             return false;
     }
     return true;
@@ -418,6 +473,11 @@ bool taskdefs_valid() noexcept {
 void reboot_from_table() {
 #if defined(CONFIG_DEBUG)
     debug_write("[REBOOT] Rebuilding system from task-definition table\n");
+#endif
+#if CONFIG_BLOCK_SRV
+    // Issue #47 S2: capture block topology before interrupts go off —
+    // discovery must never run under IrqGuard (no IRQ-off allocation).
+    kernel::sdf::capture_block_topology();
 #endif
     arch::IrqGuard guard{};
 

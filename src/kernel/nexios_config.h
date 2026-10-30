@@ -1323,6 +1323,57 @@ extern "C" void panic(const char *msg);
 #if CONFIG_DRIVER_PD_NET != 0 && CONFIG_DRIVER_PD_NET != 1
 #error "CONFIG_DRIVER_PD_NET must be 0 or 1 (default 0)"
 #endif
+#if CONFIG_VFS_SRV != 0 && CONFIG_VFS_SRV != 1
+#error "CONFIG_VFS_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_BLOCK_SRV != 0 && CONFIG_BLOCK_SRV != 1
+#error "CONFIG_BLOCK_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
+#error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT != 0 && CONFIG_BLOCK_SRV_FAULT_INJECT != 1
+#error "CONFIG_BLOCK_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_BLOCK_SRV && CONFIG_DRIVER_PD_BLOCK
+#error "CONFIG_BLOCK_SRV and CONFIG_DRIVER_PD_BLOCK are mutually exclusive (one block owner: #47 block-srv)"
+#endif
+#if CONFIG_VFS_SRV_FAULT_INJECT && !CONFIG_VFS_SRV
+#error "CONFIG_VFS_SRV_FAULT_INJECT requires CONFIG_VFS_SRV=1"
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && !CONFIG_BLOCK_SRV
+#error "CONFIG_BLOCK_SRV_FAULT_INJECT requires CONFIG_BLOCK_SRV=1"
+#endif
+
+/// vfs-srv externalization master switch (issue #47, strangler step a).
+/// 0 = in-kernel VFS backends (shipped default, bit-identical behavior).
+/// 1 = vfs-srv PD serves backends; authorize stays kernel-side.
+/// All vfs-srv kernel code is `#if CONFIG_VFS_SRV`-guarded (empty TU
+/// when 0); no runtime `if` on this knob. Default: 0.
+#ifndef CONFIG_VFS_SRV
+#define CONFIG_VFS_SRV 0
+#endif
+
+/// block-srv externalization master switch (issue #47, strangler step a).
+/// 0 = in-kernel block probing (shipped default, bit-identical behavior).
+/// 1 = block-srv PD serves block I/O via SDF MMIO/DMA; the kernel skips
+/// AHCI/ATA + virtio-blk probing. Mutually exclusive with
+/// CONFIG_DRIVER_PD_BLOCK (hard error below). Default: 0.
+#ifndef CONFIG_BLOCK_SRV
+#define CONFIG_BLOCK_SRV 0
+#endif
+
+/// vfs-srv fault-injection surface (issue #47, strangler step c).
+/// 1 = compile the diagnostic `vfsfault` shell command. Debug-only.
+#ifndef CONFIG_VFS_SRV_FAULT_INJECT
+#define CONFIG_VFS_SRV_FAULT_INJECT 0
+#endif
+
+/// block-srv fault-injection surface (issue #47, strangler step c).
+/// 1 = compile the diagnostic `blockfault` shell command. Debug-only.
+#ifndef CONFIG_BLOCK_SRV_FAULT_INJECT
+#define CONFIG_BLOCK_SRV_FAULT_INJECT 0
+#endif
 #if CONFIG_DRIVER_PD_FAULT_INJECT != 0 && CONFIG_DRIVER_PD_FAULT_INJECT != 1
 #error "CONFIG_DRIVER_PD_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif

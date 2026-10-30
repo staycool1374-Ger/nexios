@@ -99,13 +99,14 @@ int main(void) {
         int rc = ipc_recv_timeout(rbuf, sizeof(rbuf), timeout);
         now = tmr_now_ticks();
         tmr_fire_due(now);
-        if (rc <= 0)
-            continue;
-
+        if (rc < 0)
+            continue; // fail-closed: no reply on transport error
         struct TimerRpc req;
         memset(&req, 0, sizeof(req));
         unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
         memcpy(&req, rbuf, copy);
+        if ((unsigned long)rc != req.op)
+            continue; // torn/stale payload: kernel type must match body op
 
         struct TimerRpc rep;
         memset(&rep, 0, sizeof(rep));

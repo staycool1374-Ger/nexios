@@ -218,3 +218,14 @@ Other actions must pass the class normally.  Kills leftover QEMU between runs.
 - **Compile-time guard block** (`nexios_config.h`, issue #407 item 5):
   `#if`/`#error` guards for knobs with no validator rule and no use-site
    assert; `meson compile check-config` is unchanged and still not part of `tools/meson/build.sh`.
+
+### 1.12 Server PD externalization (issues #47, #48, #241, strangler step a)
+`CONFIG_TIMER_SRV` (0) · `CONFIG_VFS_SRV` (0) · `CONFIG_BLOCK_SRV` (0) ·
+`CONFIG_DRIVER_PD_{SERIAL,KBD,RTC,FB,BLOCK,NET}` (0 each) ·
+`CONFIG_*_FAULT_INJECT` (0 each) · `CONFIG_DRIVER_PD_MAX_CAPS` (6).
+All default 0 = in-kernel behavior, bit-identical. Rules enforced by
+`#error` guards in `nexios_config.h`: every knob is 0|1; fault-inject
+requires its server knob; `CONFIG_BLOCK_SRV` and `CONFIG_DRIVER_PD_BLOCK`
+are mutually exclusive (single block owner); fb/block/net PD knobs fail
+closed until the S4/S5/S6 SDF rows land. See `docs/specs/driver-pds.md`,
+`docs/specs/timer-srv.md`, `docs/specs/vfs-srv.md`, `docs/specs/block-srv.md`.
