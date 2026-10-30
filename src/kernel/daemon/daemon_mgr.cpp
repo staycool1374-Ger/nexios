@@ -249,6 +249,14 @@ void restart_stale_daemons() {
             task->init_sporadic_server(budget, 10, bg, 1);
         }
 
+        // Issue #48 (VERIFY NEED step-a blocker 3): a restarted daemon
+        // must rejoin under the same exemption the boot path grants
+        // (taskdefs reboot_from_table: set_edf_exempt for every
+        // SPORADIC_SERVER). Without it the replacement stays admission-
+        // counted and every restart permanently consumes Liu-Leyland
+        // budget until runelf is denied — a restart reservation leak.
+        Scheduler::set_edf_exempt(*task, true);
+
         kernel::Scheduler::add_task(*task);
 
         ++entries_[i].restart_count;
@@ -362,6 +370,11 @@ void ensure_running(const char *name) {
             }
             task->init_sporadic_server(budget, 10, bg, 1);
         }
+
+        // Issue #48 (VERIFY NEED step-a blocker 3): same boot-path
+        // exemption as restart_stale_daemons above — a re-spawned daemon
+        // must not become admission-counted.
+        Scheduler::set_edf_exempt(*task, true);
 
         Scheduler::add_task(*task);
 

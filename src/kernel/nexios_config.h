@@ -1329,6 +1329,20 @@ extern "C" void panic(const char *msg);
 #if CONFIG_DRIVER_PD_MAX_CAPS < 1
 #error "CONFIG_DRIVER_PD_MAX_CAPS must be >= 1 (default 6)"
 #endif
+// Issue #48 (VERIFY NEED step-a blocker 1): fb/block/net SDF rows land
+// with S4/S5/S6 (scanout-RAM Frame caps, PCI/virtio discovery binds).
+// Enabling these knobs before the rows exist would compose-fail the PD
+// at boot while the kernel already yielded the devices — fail closed
+// here instead (build-time, unmistakable), never a runtime wedge.
+#if CONFIG_DRIVER_PD_FB
+#error "CONFIG_DRIVER_PD_FB=1 needs the S4 fb-device row (not landed yet)"
+#endif
+#if CONFIG_DRIVER_PD_BLOCK
+#error "CONFIG_DRIVER_PD_BLOCK=1 needs the S5 block-device rows (not landed yet)"
+#endif
+#if CONFIG_DRIVER_PD_NET
+#error "CONFIG_DRIVER_PD_NET=1 needs the S6 net-device row (not landed yet)"
+#endif
 #if CONFIG_IOPB_MAX_TASKS < 1
 #error "CONFIG_IOPB_MAX_TASKS must be >= 1 (default 4)"
 #endif
