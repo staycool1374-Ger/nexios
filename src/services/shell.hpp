@@ -127,6 +127,22 @@ private:
     /// @brief Diagnostic: terminate timer-srv PD (issue #241 fault drill).
     static void cmd_timerfault(int argc, const char** argv);
 #endif
+#if CONFIG_TERM_SRV
+    /// @brief Probe term-srv PD liveness (issue #51 parity harness).
+    static void cmd_termprobe(int argc, const char** argv);
+#endif
+#if CONFIG_LOG_SRV
+    /// @brief Probe log-srv PD liveness (issue #51 parity harness).
+    static void cmd_logprobe(int argc, const char** argv);
+#endif
+#if CONFIG_TERM_SRV_FAULT_INJECT && CONFIG_TERM_SRV
+    /// @brief Diagnostic: terminate term-srv PD (issue #51 fault drill).
+    static void cmd_termfault(int argc, const char** argv);
+#endif
+#if CONFIG_LOG_SRV_FAULT_INJECT && CONFIG_LOG_SRV
+    /// @brief Diagnostic: terminate log-srv PD (issue #51 fault drill).
+    static void cmd_logfault(int argc, const char** argv);
+#endif
 #if CONFIG_DRIVER_PD_FAULT_INJECT &&                                          \
     (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                       \
      CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                          \

@@ -57,7 +57,8 @@ struct CapSpec {
 };
 
 /// @brief Driver PD roles (one SDF row each; VFS_SRV/BLOCK_SRV are
-/// issue #47 and share this table + compose path).
+/// issue #47 and TERM_SRV/LOG_SRV are issue #51; all share this
+/// table + compose path).
 enum class PdRole : uint8_t {
     SERIAL = 0,
     KBD = 1,
@@ -67,6 +68,8 @@ enum class PdRole : uint8_t {
     NET = 5,
     VFS_SRV = 6,
     BLOCK_SRV = 7,
+    TERM_SRV = 8,
+    LOG_SRV = 9,
 };
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
@@ -94,6 +97,14 @@ bool sdf_rebind(TaskControlBlock &task, PdRole role);
 /// @return true when @p role owns the device (its OFF knob compiled out
 /// the kernel bring-up), false when the kernel keeps it.
 bool pd_owns_device(PdRole role);
+
+/// @brief Structural policy-only predicate (issues #47/#51): true only
+/// for roles whose SDF row MUST stay empty (no device caps ever —
+/// VFS_SRV by design, TERM_SRV/LOG_SRV policy PDs). Used by compose to
+/// reject any non-empty row for these roles, and by #48's SDF boundary
+/// test to prove the emulation side holds no device caps.
+/// @return True for VFS_SRV, TERM_SRV, LOG_SRV; false otherwise.
+bool sdf_policy_only(PdRole role);
 
 /// @brief Capture block topology for the BLOCK_SRV row (issue #47 S2):
 /// AHCI ABAR (PCI-discovered, x86) or virtio-blk transport ranges.
