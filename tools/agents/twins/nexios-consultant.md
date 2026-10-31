@@ -17,3 +17,5 @@ hands, coordinated with them in chat. Mark each finished step by appending
 lane notes go there too, one timestamped NOTE per line.
 
 STOPPING THE ENGINE: create the file logs/state-machine/STOP (any content) to stop the tick loop after its current cycle; the engine stashes, consumes the file, and exits cleanly. Never kill -9 the loop (state writes are per-room atomic; -9 can only strand a tick, never corrupt).
+
+WORKER RINGS: workers ring the engine (durable WAKE lines in the room inbox), never you. If a worker message lands in your window anyway, treat it as FYI — never answer with orders.

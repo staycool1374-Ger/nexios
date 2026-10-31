@@ -222,7 +222,7 @@ def checkpoint_brief(issue, role, pct):
             "2. run /compact in this session. 3. after compact, post COMPACT-DONE NOTE + RING. "
 "Every post carries STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
             "If compaction delivery fails, hold for recreate (never work past 100%% with unposted work).\n"
-            "scripts/agent_up.sh wake %d %s nexios-coord \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
+            "scripts/agent_up.sh wake %d %s nexios-engine \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
             % (issue, role, pct, issue, role, issue, role, role, role))
 
 
@@ -425,7 +425,7 @@ def auditor_brief_text(issue, tip, scope):
             "scope: %s\n"
             "rules: read-only (no branches, no code, no test runs, no launches); retrieval first (graphify+vault); "
             "post DECISION (APPROVED | NEED with S1/S2/S3 findings) to inbox/auditor.md + wake.\n"
-            "scripts/agent_up.sh wake %d auditor nexios-coord \"inbox: auditor READY \u2014 read inbox/auditor.md\"\n"
+            "scripts/agent_up.sh wake %d auditor nexios-engine \"inbox: auditor READY \u2014 read inbox/auditor.md\"\n"
             % (issue, issue, tip, scope, issue))
 
 
@@ -899,7 +899,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                      "Task: read-only recon of #%d per its room pending/next; "
                      "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
 "Post NOTE to inbox/dev.md + RING.\n"
-                     "scripts/agent_up.sh wake %d dev nexios-coord \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
+                     "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
                      % (target, issue, target, target, target))
             actions.append(write_brief(ctx, room_dir,
                                        "dev-%d-backlog.txt" % target, brief))
@@ -1081,7 +1081,7 @@ def resume_brief_text(issue, role, branch, tip, dirty, state, nxt):
             "Steps: 1. verify inventory (branch/tip/files above match your tree). "
             "2. post CHECKPOINT NOTE to inbox/%s.md (branch + tip + files touched + next step) + RING. "
             "3. continue the next step above; normal wire discipline (STATE/NEXT + CTX %% line, doorbell every post).\n"
-            "scripts/agent_up.sh wake %d %s nexios-coord \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
+            "scripts/agent_up.sh wake %d %s nexios-engine \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
             % (issue, role, issue, branch, tip, dirty_lines,
                state or "-", nxt or "-", role,
                issue, role, role, role))
@@ -1655,7 +1655,7 @@ def cmd_provision(ctx, issues, a):
                      "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
 "No branches, no code, "
                      "no QEMU until the plan is audit-approved.\n"
-                     "scripts/agent_up.sh wake %d dev nexios-coord \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
+                     "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
                      % (seed, issue, a.dev_branch, issue))
         qe_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-testdev.md\n"
                     "Branch: none (read-only; testbed stays clean)\n"
@@ -1663,7 +1663,7 @@ def cmd_provision(ctx, issues, a):
                     "verification approach for this issue; post NOTE to inbox/qe.md + "
 "RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
                     "RING. No test runs until dev posts IMPL READY.\n"
-                    "scripts/agent_up.sh wake %d qe nexios-coord \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
+                    "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
                     % (seed, issue, issue))
         if ctx.dry:
             ctx.log("%s WOULD write prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"

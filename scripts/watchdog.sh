@@ -8,7 +8,7 @@ set -euo pipefail
 DEV_SESS="${NEXIOS_DEV_SESS:-nexios-dev}"
 QE_SESS="${NEXIOS_QE_SESS:-nexios-qe}"
 AUDIT_SESS="${NEXIOS_AUDIT_SESS:-nexios-audit}"
-COORD_SESS="${NEXIOS_COORD_SESS:-nexios-coord}"
+DOORBELL_SESS="${NEXIOS_DOORBELL_SESS:-nexios-engine}"
 AGENT_UP="${NEXIOS_AGENT_UP:-$(cd "$(dirname "$0")" && pwd)/agent_up.sh}"
 
 fail() { echo "watchdog: ERROR: $*" >&2; exit 1; }
@@ -192,7 +192,7 @@ __tick_alarm() { # $1 issue (internal: one tick + exactly one doorbell attempt)
   fi
   first=$(printf '%s\n' "$out" | head -n 1)
   line="inbox: TICK — $first — read watch.log"
-  if "$AGENT_UP" msg "$COORD_SESS" "$line" >/dev/null 2>&1; then
+  if "$AGENT_UP" wake "$1" coord "$DOORBELL_SESS" "$line" >/dev/null 2>&1; then
     echo "silent: TICK — $first — read watch.coord.log" >> "$room/watch.coord.log"
   else
     echo "DOORBELL-FAILED $first" >> "$room/watch.coord.log"
