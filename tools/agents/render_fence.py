@@ -24,7 +24,7 @@ import os
 import sys
 from typing import Any, NoReturn
 
-ROLES = ("dev", "qe", "auditor", "coordinator", "consultant")
+ROLES = ("dev", "qe", "auditor", "consultant")
 BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
 NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
 DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
@@ -80,11 +80,11 @@ def mirror(path):
 
 def expand(key, repo, role):
     if "{repo}" in key:
-        expect(role in ("coordinator", "consultant"),
-               "{repo} is coordinator/consultant-only (role %s)" % role)
+        expect(role == "consultant",
+               "{repo} is consultant-only (role %s)" % role)
         key = key.replace("{repo}", repo)
-    elif role == "coordinator" and not key.startswith("/"):
-        fail("relative repo path in coordinator role: %r" % key)
+    elif role == "consultant" and not key.startswith("/"):
+        fail("relative repo path in consultant role: %r" % key)
     return key
 
 

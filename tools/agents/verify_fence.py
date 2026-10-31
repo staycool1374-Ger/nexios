@@ -12,11 +12,11 @@ PROPERTIES of what the renderer emits, per role:
   F3  every /tmp rule has its /private/tmp mirror and vice versa, same decision
       (macOS canonicalizes before matching: an unmirrored rule is dead)
   F4  no host-dependent path leaks: no /var/folders, no $HOME, no "{repo}"
-      residue; worker configs carry no repo-absolute path at all; coordinator
-      repo keys are exactly the documented prompt/audit reads
+      residue; worker configs carry no repo-absolute path at all; consultant
+      repo keys are exactly the documented advisory reads
   F5  no wildcard leaks: "*" appears only as the role's edit_default (last rule
       wins, so a "*" allow anywhere else would undo the fence)
-  F6  coordinator keeps its mcp block (harness+github); workers have none
+  F6  consultant keeps its mcp block (harness+github); workers have none
   F7  if a rendered config exists under the runtime root, it is FRESH: byte
       equality with a fresh render (a stale file silently defuses the fence)
   F8  every generated subagent file carries its OWN permission block equal to
@@ -41,8 +41,8 @@ RENDERER = os.path.join(ROOT, "tools", "agents", "render_fence.py")
 RUNTIME = os.environ.get(
     "NEXIOS_HOME", os.path.join(os.path.expanduser("~"), ".local", "state", "nexios"))
 RENDERED = os.path.join(RUNTIME, "rendered")
-ROLES = ("dev", "qe", "auditor", "coordinator")
-COORD_REPO_KEYS = ("{repo}/prompts/LEARNINGS.md", "{repo}/prompts/**", "{repo}/audits/**")
+ROLES = ("dev", "qe", "auditor", "consultant")
+CONSULT_REPO_KEYS = ("{repo}/prompts/**", "{repo}/audits/**", "{repo}/scripts/**", "{repo}/tools/agents/**", "{repo}/logs/**")
 
 FAILS = []
 
@@ -111,8 +111,8 @@ def check_paths(role, cfg, repo):
     if "$HOME" in text or "~/" in text:
         fail("F4", "%s: shell-dependent home path in a config" % role)
     repo_keys = {k for k in list(ext) + list(edit) if k.startswith(repo)}
-    if role == "coordinator":
-        want = {repo + k[len("{repo}"):] for k in COORD_REPO_KEYS}
+    if role == "consultant":
+        want = {repo + k[len("{repo}"):] for k in CONSULT_REPO_KEYS}
         if repo_keys != want:
             fail("F4", "%s: repo keys %s != %s"
                  % (role, sorted(repo_keys), sorted(want)))
@@ -150,10 +150,10 @@ def check_wildcards(role, cfg, repo=None):
 
 def check_mcp(role, cfg):
     has = isinstance(cfg.get("mcp"), dict)
-    if role == "coordinator":
+    if role == "consultant":
         if not has or "github" not in cfg.get("mcp", {}) \
                 or "harness" not in cfg.get("mcp", {}):
-            fail("F6", "coordinator: mcp block missing harness/github")
+            fail("F6", "consultant: mcp block missing harness/github")
     elif has:
         fail("F6", "%s: worker carries an mcp block" % role)
 

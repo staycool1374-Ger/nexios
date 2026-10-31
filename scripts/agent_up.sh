@@ -8,21 +8,24 @@
 #
 # WHAT IT SETS UP (one command, zero out-of-repo prerequisites):
 #   workers    named fenced tmux sessions (nexios-dev, nexios-qe, nexios-audit)
-#   coordinator named tmux session (nexios-coord) — the STABLE ADDRESS every
-#              doorbell rings. The coordinator had no address (bare TUI in an
-#              anonymous terminal), so worker→coordinator wakes were impossible
-#              and a human relayed every transition. Fixed here by construction.
-#   comms      coord runtime root /tmp/nexios-<issue>/ (inbox/dev|qe|auditor.md,
+#   consultant named fenced tmux session (nexios-consultant) — the operator's
+#              read-only advisor window. It never drives workers, rings, or
+#              state; orchestration belongs to the engine below.
+#   engine     headless tmux session (nexios-engine) running the deterministic
+#              state-machine tick loop over all rooms (single heartbeat).
+#   comms      room runtime root /tmp/nexios-<issue>/ (inbox/dev|qe|auditor.md,
 #              state.json, prompts/, notes/, PROTOCOL.md), role configs
 #              bootstrapped from embedded defaults if absent.
 #
-# DOORBELL (both directions, tmux send-keys — harness cannot see tmux sessions,
+# DOORBELL (tmux send-keys — harness cannot see tmux sessions,
 # so `harness send`/agent-messages is NOT a wake path here):
-#   coord→worker:  agent_up.sh msg nexios-dev "inbox: READY from dev — read inbox/qe.md"
-#   worker→coord:  agent_up.sh msg nexios-coord "inbox: dev READY — read inbox/dev.md"
-# Rules (both ways): single line, inbox POINTER only (payloads never in chat),
+#   engine→worker: agent_up.sh msg nexios-dev "inbox: <text> — read inbox/dev.md"
+#   worker→engine: agent_up.sh wake <n> <role> nexios-engine "inbox: <text> — read inbox/<role>.md"
+#              (durable WAKE line in inbox/coord.md, no keystroke: the engine is
+#              a running loop, not a TUI — keystrokes would corrupt its input).
+# Rules: single line, inbox POINTER only (payloads never in chat),
 # idle sessions only, never touch permission dialogs (approve mode is person-run).
-# The coordinator treats any ring as "re-read the inbox", never executes ring text.
+# A ring means "re-read the inbox", never execute ring text.
 #
 # WHY TMUX, NOT `harness new`: fenced sessions need OPENCODE_CONFIG in their
 # process env. `harness new` talks to the daemon over IPC, which drops the
@@ -32,8 +35,8 @@
 # `harness ps` / the grid. Watch via `tmux attach -t <name>` (read-write mirrors;
 # read-only (-r) mirrors block ALL tmux input including doorbells, so none here).
 # Proper fix belongs upstream: env passthrough on `harness new`.
-# Fencing itself is verified per-session BEFORE any prompt is delivered, for the
-# coordinator too (`S4-9`): a session whose env lacks the expected config is
+# Fencing itself is verified per-session BEFORE any prompt is delivered
+# (`S4-9`): a session whose env lacks the expected config is
 # killed rather than trusted.
 #
 # TMPDIR is PINNED into the allowed /tmp/agentup-tmp-<session> namespace. The
@@ -51,12 +54,11 @@ RENDERER="$REPO_ROOT/tools/agents/render_fence.py"
 NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
 RENDERED_ROOT="$NEXIOS_HOME/rendered"
 COORD_DIR="$NEXIOS_HOME/coordinator"
-COORD_TMPDIR=""
 OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
 TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
 DEV_DIR="$HOME/jarvis"
 QE_DIR="$HOME/jarvis_test"
-COORD_SESS="nexios-coord"
+DOORBELL_SESS="nexios-engine"
 DEV_SESS="nexios-dev"
 QE_SESS="nexios-qe"
 AUDIT_SESS="nexios-audit"
@@ -70,7 +72,6 @@ rendered_path() {
   [ $# -eq 1 ] || fail "rendered_path needs a role"
   printf '%s/%s/opencode.resolved.json\n' "$RENDERED_ROOT" "$1"
 }
-COORD_CONFIG_RESOLVED="$(rendered_path coordinator)"
 CONSULT_SESS="nexios-consultant"
 CONSULT_CONFIG_RESOLVED="$(rendered_path consultant)"
 CONSULT_TMPDIR=""
@@ -82,33 +83,28 @@ usage: agent_up.sh <mode> [...]
   setup <issue>      create coord runtime (/tmp/nexios-<issue>/: inbox, state,
                      prompts, notes, PROTOCOL) + render every role fence into
                      $RENDERED_ROOT. Idempotent: never overwrites state/inbox.
-  coord [taskfile]   ensure $COORD_SESS tmux session (cwd=coordinator home,
-                     env scrubbed) running the coordinator TUI; attach to it.
-                     Optional taskfile is pasted as the first message.
   consult [taskfile] ensure $CONSULT_SESS tmux session (read-only advisor TUI,
                      no attach, engine-safe). Optional taskfile is pasted as
                      the first message; default is a standby line.
   windows            open visible Terminal windows for consultant + dev + qe
-                     (read-write mirrors). The coordinator session stays
-                     headless (legacy doorbell address until cutover).
+                     (read-write mirrors). No coordinator session exists anymore;
+                     the engine loop owns every lane.
   workers [issue]    launch $DEV_SESS + $QE_SESS (detached tmux). With an issue
-                     they get prompts/dev.txt + prompts/qe.txt from the coord
+                     they get prompts/dev.txt + prompts/qe.txt from the room
                      runtime; without one they start bare and wait for a ring.
-  up [issue] ["task"] FULL ROOM from one zsh command: setup (only if an issue is
-                     given) + workers + consultant + three visible Terminal
-                     windows for consultant/dev/qe (read-write mirrors;
-                     read-only mirrors block ALL tmux input including
-                     doorbells). The coordinator session is ensured headless
-                     (legacy doorbell address). Bare 'up' resumes the three
-                     sessions in their last state (no runtime created, no
-                     briefs written — cold starts go through provision with
-                     an issue list).
-                      Every 'up' also disarms legacy per-room tickers and
-                      ensures the headless engine loop (single heartbeat);
-                      parked lanes resume from their declared NEXT on the
-                      first loop cycle (ring ledger caps re-rings).
+  up [issue] ["task"] FULL SYSTEM from one zsh command: setup (only if an
+                     issue is given) + workers + consultant + headless engine
+                     loop + three visible Terminal windows for
+                     consultant/dev/qe (read-write mirrors; read-only mirrors
+                     block ALL tmux input including doorbells). Bare 'up'
+                     resumes every session in its last state (no runtime
+                     created, no briefs written — cold starts go through
+                     provision with an issue list).
+                      Every 'up' also disarms legacy per-room tickers; parked
+                      lanes resume from their declared NEXT on the first loop
+                      cycle (ring ledger caps re-rings).
   run ...            launch ONE session: run <name> <dir> <role> <prompt.txt> [branch]
-                     <role> is dev|qe|auditor|coordinator — the fence for it is
+                     <role> is dev|qe|auditor|consultant — the fence for it is
                      rendered from tools/agents/fence/ at launch (never a path).
   audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
   audit-diff [branch] [--base <rev>]
@@ -120,9 +116,10 @@ usage: agent_up.sh <mode> [...]
                      abort-on-conflict restores code state. Run in QE checkout.
   msg <sess> <text>  single-line doorbell to a tmux session (both directions).
   wake <issue> <from> <sess> <text>
-                     durable wake to the coordinator: msg doorbell PLUS an
-                     ordered WAKE line in /tmp/nexios-<issue>/inbox/coord.md
-                     (fails loud when the runtime/inbox is absent).
+                     durable wake: msg doorbell PLUS an ordered WAKE line in
+                     /tmp/nexios-<issue>/inbox/coord.md (fails loud when the
+                     runtime/inbox is absent). Target nexios-engine skips the
+                     keystroke (append-only): the engine is a running loop.
   comms-test [issue] prove the doorbell end-to-end in BOTH directions using two
                      scratch echo sessions (no opencode, no tokens).
   state <issue> key=value [...]  locked state.json write (validated keys/values).
@@ -135,14 +132,16 @@ usage: agent_up.sh <mode> [...]
                      under <dir>/.opencode/agents (default: this checkout).
   render-self-test   fence renderer/verifier matrix (no tmux, no opencode).
   self-test          guard + helper self-tests (scratch tmux names only; never
-                     touches $DEV_SESS/$QE_SESS/$AUDIT_SESS/$COORD_SESS).
+                     touches $DEV_SESS/$QE_SESS/$AUDIT_SESS/$CONSULT_SESS/$ENGINE_SESS).
   approve <sess>     drive one Allow-always on the session's CURRENT permission
                      dialog (checks first; person-run only).
-  close [--all]      kill worker tmux sessions; --all also kills $COORD_SESS.
+  close [--all]      kill worker tmux sessions; --all also kills the
+                     consultant + engine loop (+ legacy nexios-coord if present).
   clean <issue> [--dry-run]  remove a CLOSED lane's merged branches + room;
                      refuses on open issue, unpushed main, live room.
   watch <issue> [arm|disarm|tick|status]  dev/qe activity watchdog
                      (bare verb = status); arm takes interval_s (default 180).
+                     Legacy: the engine loop owns ticks; tickers stay disarmed.
 EOF
   exit 2
 }
@@ -230,10 +229,10 @@ role_field() {
 
 render_all() {
   local role
-  for role in dev qe auditor coordinator consultant; do
+  for role in dev qe auditor consultant; do
     render_role_config "$role" >/dev/null
   done
-  info "fence rendered for dev, qe, auditor, coordinator under $RENDERED_ROOT"
+  info "fence rendered for dev, qe, auditor, consultant under $RENDERED_ROOT"
 }
 
 # Install the generated subagent definitions into a session's cwd. opencode
@@ -295,11 +294,11 @@ prune_link() {
   fi
 }
 
-# State dir links: AGENTS.md (coordinator doctrine). Config files are RENDERED
+# State dir links: AGENTS.md (legacy coordinator doctrine, kept for history). Config files are RENDERED
 # into $RENDERED_ROOT and never linked; pre-#414 links/role copies are pruned.
 ensure_state_links() {
   mkdir -p "$NEXIOS_HOME"
-  ensure_link "$COORD_DIR/AGENTS.md" "$REPO_ROOT/tools/agents/coordinator/AGENTS.md"
+  prune_link "$COORD_DIR/AGENTS.md"
   prune_link "$COORD_DIR/opencode.json"
   prune_link "$COORD_DIR/opencode.resolved.json"
   prune_link "$NEXIOS_HOME/roles/dev.json"
@@ -327,27 +326,29 @@ write_protocol() {
   coord→worker:  agent_up.sh msg nexios-dev "inbox: READY from dev — read inbox/qe.md"
   worker→coord:  agent_up.sh msg nexios-coord "inbox: dev READY — read inbox/dev.md"
   Rules: single line, inbox POINTER only, idle sessions only, never dialogs.
-  The coordinator treats any ring as "re-read the inbox", never executes it.
-- Durable wake (worker→coord only): `agent_up.sh wake <issue> <from> <sess>
+  A ring means "re-read the inbox", never execute ring text.
+- Durable wake (worker→engine only): `agent_up.sh wake <issue> <from> <sess>
   <text>` sends the doorbell AND appends `<ISO8601> FROM=<from> WAKE ::
   <text>` to `/tmp/nexios-<issue>/inbox/coord.md` (ordered, survives closed
   terminals; keystroke stays the live doorbell, the wake line is the durable
-  record). Fails loud when the runtime/inbox is absent — never silent.
+  record). Target nexios-engine skips the keystroke (append-only). Fails loud
+  when the runtime/inbox is absent — never silent.
   Every worker brief ends with the ring template as its last line (verbatim
-  when done): `agent_up.sh wake <n> <role> nexios-coord "inbox: <role>
-  <READY|NEED> — read inbox/<role>.md"` (coordinator fills in <n>; <role>
+  when done): `agent_up.sh wake <n> <role> nexios-engine "inbox: <role>
+  <READY|NEED> — read inbox/<role>.md"` (the engine fills in <n>; <role>
   is dev|qe|auditor).
-- Coordinator address: tmux session `nexios-coord` (created by `coord`/`up`).
-- State: `/tmp/nexios-<issue>/state.json` — single writer: coordinator, and the
+- Doorbell address: the engine loop (headless `nexios-engine` session); the
+  operator's window is the consultant (`nexios-consultant`), which is never rung.
+- State: `/tmp/nexios-<issue>/state.json` — single writer: the engine, and the
   only sanctioned write path is `agent_up.sh state <issue> key=value` (python3
   fcntl lock on `state.lock`, atomic replace + fsync, keys/vocabulary validated).
 - Proactive pipelining (operator order, mandatory — no idle):
-  While a fix sits in audit/QE gates, dev starts next lane's plan/read-only phase (no branch, no code) — a parked worker is a coordinator failure, not patience.
+  While a fix sits in audit/QE gates, dev starts next lane's plan/read-only phase (no branch, no code) — a parked worker is an engine failure, not patience.
   Brief NEXT before current completes: QE's verification approach for feature N is briefed while it verifies fix N-1; auditor takes plan audit the moment plan lands.
   Pair plans: dev drafts implementation plan + QE drafts verification approach in parallel, plan audit cross-checks build-vs-verify before code.
-  NO IDLE: when an agent finishes its actual task, coordinator commands next pipeline task immediately — an agent never sits idle waiting for gates.
-  BLOCKED-ON-QE: gates are not input — if dev's next step needs QE output and pipeline cannot proceed, coordinator moves dev to another open issue from backlog until QE delivers, then re-anchors.
-  ARMED: queued triggers (e.g., `on dev READY -> verify`, `on QE VERIFIED -> merge`) are input-wait, not idleness — coordinator parks on them and rings only when they fire.
+  NO IDLE: when an agent finishes its actual task, the engine commands the next pipeline task immediately — an agent never sits idle waiting for gates.
+  BLOCKED-ON-QE: gates are not input — if dev's next step needs QE output and pipeline cannot proceed, the engine moves dev to another open issue from backlog until QE delivers, then re-anchors.
+  ARMED: queued triggers (e.g., `on dev READY -> verify`, `on QE VERIFIED -> merge`) are input-wait, not idleness — the engine parks on them and rings only when they fire.
 - `audit_branch` (optional, string): the branch the auditor's checkout must be
   on. Write it with `agent_up.sh state <issue> audit_branch=<branch>`; `audit
   <issue>` passes it to the launch branch check. Empty/unset = skip the check.
@@ -605,7 +606,7 @@ mode_run() {
   local prompt="$4"
   local want_branch="${5:-}"
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
-  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "run takes a role name (dev|qe|auditor|coordinator), not a config path: '$role'" ;; esac
+  case "$role" in dev|qe|auditor|consultant) ;; *) fail "run takes a role name (dev|qe|auditor|consultant), not a config path: '$role'" ;; esac
   need_file "$prompt"
   [ -d "$dir" ] || fail "workdir missing: $dir"
   check_branch "$dir" "$want_branch"
@@ -636,7 +637,7 @@ run_session() {
   local prompt="$4"
   [ -d "$dir" ] || fail "workdir missing: $dir"
   [ -z "$prompt" ] || need_file "$prompt"
-  case "$role" in dev|qe|auditor|coordinator) ;; *) fail "unknown role: '$role'" ;; esac
+  case "$role" in dev|qe|auditor|consultant) ;; *) fail "unknown role: '$role'" ;; esac
   # install_agents installs the generated subagent definitions into the
   # session's cwd; render_role_config then re-renders THIS role fresh. Never
   # trust the file on disk here: a pre-planted or stale config under
@@ -685,8 +686,8 @@ run_session() {
     if [ "$reused" = 1 ]; then info "reused '$name' (fenced, prompt delivered)"
     else info "launched '$name' (fenced, prompt delivered)"; fi
   else
-    if [ "$reused" = 1 ]; then info "reused '$name' (fenced, no brief yet — the coordinator rings it)"
-    else info "launched '$name' (fenced, no brief yet — the coordinator rings it)"; fi
+    if [ "$reused" = 1 ]; then info "reused '$name' (fenced, no brief yet — the engine rings it)"
+    else info "launched '$name' (fenced, no brief yet — the engine rings it)"; fi
   fi
 }
 
@@ -731,49 +732,6 @@ check_fenced() {
   return 1
 }
 
-# ---coordinator (addressable endpoint)-----------------------------------------
-# The coordinator fence is a role delta like every other one: `{repo}` tokens
-# are expanded to THIS checkout at render time, so a moved clone cannot leave a
-# stale machine path behind (S3-2R). Rendered path comes from rendered_path().
-coord_tui_cmd() {
-  local v
-  for v in "$COORD_TMPDIR" "$COORD_CONFIG_RESOLVED"; do
-    case "$v" in
-      *[[:space:]]*) fail "coordinator launch path contains whitespace, which the fenced env line cannot express: '$v'" ;;
-    esac
-  done
-  echo "env -u OPENCODE_CONFIG_CONTENT TMPDIR=$COORD_TMPDIR OPENCODE_CONFIG=$COORD_CONFIG_RESOLVED NEXIOS_AGENT_ROLE=coordinator $OPENCODE_BIN"
-}
-
-# ensure nexios-coord tmux session exists running the coordinator TUI.
-ensure_coord_session() {
-  need_cmd tmux; need_cmd "$OPENCODE_BIN"
-  ensure_state_links
-  render_role_config coordinator >/dev/null
-  need_file "$COORD_CONFIG_RESOLVED"
-  if tmux has-session -t "$COORD_SESS" 2>/dev/null; then
-    # Never trust a session this launch did not create: a pre-fence
-    # coordinator (launched with no OPENCODE_CONFIG at all) or a moved repo
-    # leaves a running session whose env is not the resolved config. Workers
-    # refuse reuse outright; the coordinator kills the stale session so the
-    # block below rebuilds it fenced (S4-9: reuse must assert too).
-    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" coordinator 2>/dev/null || {
-      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
-    }
-  fi
-  if ! tmux has-session -t "$COORD_SESS" 2>/dev/null; then
-    COORD_TMPDIR=$(ensure_session_tmpdir "$COORD_SESS")
-    tmux new-session -d -s "$COORD_SESS" -c "$COORD_DIR" -x 200 -y 50
-    tmux send-keys -t "$COORD_SESS" "$(coord_tui_cmd)" Enter
-    sleep "$TUI_BOOT_WAIT"
-    check_fenced "$COORD_SESS" "$COORD_DIR" "$COORD_CONFIG_RESOLVED" coordinator || {
-      tmux kill-session -t "$COORD_SESS" 2>/dev/null || true
-      fail "coordinator launched UNFENCED (resolved config not in its env) — killed, fix before retry"
-    }
-    info "started $COORD_SESS (fenced, config=$COORD_CONFIG_RESOLVED)"
-  fi
-}
-
 consult_tui_cmd() {
   local v
   for v in "$CONSULT_TMPDIR" "$CONSULT_CONFIG_RESOLVED"; do
@@ -785,7 +743,7 @@ consult_tui_cmd() {
 }
 
 # ensure nexios-consultant tmux session exists running the consultant TUI
-# (read-only advisor; the coordinator session stays the doorbell address).
+# (read-only advisor; workers never ring it, the engine tasks it via notes).
 ensure_consultant_session() {
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
   ensure_state_links
@@ -806,28 +764,6 @@ ensure_consultant_session() {
       fail "consultant launched UNFENCED (resolved config not in its env) — killed, fix before retry"
     }
     info "started $CONSULT_SESS (fenced, config=$CONSULT_CONFIG_RESOLVED)"
-  fi
-}
-
-# $1 optional taskfile to paste as the coordinator's first message
-mode_coord() {
-  [ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" ] || fail "GITHUB_PERSONAL_ACCESS_TOKEN unset (github MCP needs it)"
-  if [ -n "${OPENCODE_CONFIG:-}${OPENCODE_CONFIG_CONTENT:-}" ]; then
-    info "scrubbing leaky OPENCODE_CONFIG* from coordinator env"
-  fi
-  ensure_coord_session
-  if [ $# -ge 1 ]; then
-    need_file "$1"
-    tmux load-buffer "$1"
-    tmux paste-buffer -t "$COORD_SESS"
-    sleep 2
-    tmux send-keys -t "$COORD_SESS" Enter
-    info "delivered first message to $COORD_SESS"
-  fi
-  if [ -n "${TMUX:-}" ]; then
-    tmux switch-client -t "$COORD_SESS"
-  else
-    tmux attach -t "$COORD_SESS"
   fi
 }
 
@@ -879,8 +815,7 @@ ensure_engine_loop() {
   info "engine loop started ($ENGINE_SESS, logs/state-machine/)"
 }
 
-# visible mirrors for the three live roles. The coordinator session stays
-# headless: legacy doorbell address until cutover (never a window).
+# visible mirrors for the three live roles (consultant = your window).
 mode_windows() {
   local s
   for s in "$CONSULT_SESS" "$DEV_SESS" "$QE_SESS"; do
@@ -893,7 +828,7 @@ mode_windows() {
 
 # ---modes----------------------------------------------------------------------
 # workers [issue] — without an issue the sessions start bare (no brief): the
-# coordinator writes the briefs after setup and rings each worker. Briefs are
+# engine writes the briefs after setup and rings each worker. Briefs are
 # only required when an issue was named, so a no-issue room creates no runtime.
 mode_workers() {
   [ $# -le 1 ] || fail "workers takes at most one issue number (got $#)"
@@ -919,23 +854,22 @@ open_watch_window() {
   info "opened watch window for '$1' (read-write attach; type only deliberate input, never paste chat logs)"
 }
 
-# Full room from one zsh command: setup + workers + visible watch mirrors +
-# coordinator in tmux (addressable doorbell endpoint) with the task pasted.
-# up [issue] ["task"] — the issue is optional: `up` alone opens the room and
-# you type the issue number or your idea into the coordinator window.
+# Full system from one zsh command: setup + workers + consultant + engine loop
+# + visible watch mirrors, with an optional task pasted to the consultant.
+# up [issue] ["task"] — the issue is optional: bare `up` resumes every session
+# in its last state (cold starts go through provision with an issue list).
 mode_up() {
   [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
   local issue="" task=""
   if [ $# -ge 1 ]; then
     # runtime_dir is the validator: a non-numeric first argument is an error,
-    # never an "idea" (use bare `up` and type the idea in the coordinator window).
+    # never an "idea" (cold starts go through provision with an issue list).
     runtime_dir "$1" >/dev/null
     issue="$1"
     task="${2:-}"
     mode_setup "$issue"
   fi
   mode_workers ${issue:+"$issue"}
-  ensure_coord_session
   ensure_consultant_session
   disarm_all_tickers
   ensure_engine_loop
@@ -946,23 +880,22 @@ mode_up() {
 watch: three Terminal windows opened (read-write mirrors). Detach with Ctrl-b d.
 watch: Harness.app grid stays empty by design (tmux sessions are not discovered).
        Do NOT start opencode in app panes (that would duplicate live workers).
-next: the consultant runs in tmux session '$CONSULT_SESS'; '$COORD_SESS' stays headless (legacy doorbell address).
+next: consultant '$CONSULT_SESS' (your window) + engine loop '$ENGINE_SESS' (headless heartbeat).
 EOF
   if [ -n "$task" ]; then
     if [ -f "$task" ]; then
-      mode_coord "$task"
+      mode_consult "$task"
     else
       local tf; tf=$(mktemp)
       printf '%s\n' "$task" > "$tf"
-      mode_coord "$tf"
+      mode_consult "$tf"
       rm -f "$tf"
     fi
   elif [ -n "$issue" ]; then
-    echo "(no task given — attach and paste: 'You are nexios-coord. Read AGENTS.md. Report readiness.')"
+    echo "(no task given — the consultant window is yours; the engine drives the lanes.)"
   else
-    echo "(no issue selected — no runtime created. In the coordinator window type the"
-    echo " issue number or your idea; it runs 'setup <n>', writes both briefs and rings"
-    echo " the workers: 'agent_up.sh msg nexios-dev \"inbox: brief ready\"')"
+    echo "(no issue selected — no runtime created. Cold starts go through"
+    echo " provision with an issue list; parked lanes resume from their NEXT.)"
   fi
 }
 
@@ -1053,10 +986,12 @@ mode_msg() {
   info "doorbell sent to '$1'"
 }
 
-# Durable wake to the coordinator (worker -> coord): the live keystroke
-# doorbell PLUS an ordered wake line in the issue inbox, so the wake
-# survives closed terminals and is re-readable at step boundaries.
+# Durable wake (worker -> engine): the live keystroke doorbell PLUS an
+# ordered wake line in the issue inbox, so the wake survives closed
+# terminals and is re-readable at step boundaries.
 # usage: wake <issue> <from-role> <sess> <text>
+# Target nexios-engine skips the keystroke (append-only): the engine is a
+# running loop, not a TUI — keystrokes would corrupt its input.
 # Fails loud (never silent) when the runtime or inbox is absent: no
 # keystroke is sent and nothing is appended in that case.
 mode_wake() {
@@ -1066,15 +1001,19 @@ mode_wake() {
   case "$4" in *$'\n'*) fail "wake text must be a single line (payloads live in inbox)";; esac
   [ -d "$rt/inbox" ] || fail "no runtime inbox for issue $1 (run setup $1 first)"
   [ -f "$rt/inbox/coord.md" ] || fail "no inbox/coord.md for issue $1 (run setup $1 first)"
-  mode_msg "$3" "$4"
+  if [ "$3" = "$ENGINE_SESS" ]; then
+    info "engine sink: keystroke skipped (append-only)"
+  else
+    mode_msg "$3" "$4"
+  fi
   printf '%s FROM=%s WAKE :: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$4" >> "$rt/inbox/coord.md" \
-    || fail "wake delivered to '$3' but the inbox append failed (not durable)"
+    || fail "wake not durable for '$3' (inbox append failed)"
   info "wake recorded in '$rt/inbox/coord.md'"
 }
 
 # End-to-end transport self-test: proves msg delivers text+Enter INTO a live
 # tmux pane in both directions, using two scratch echo sessions (no opencode,
-# no tokens, no $DEV_SESS/$QE_SESS/$COORD_SESS touched).
+# no tokens, no $DEV_SESS/$QE_SESS/$CONSULT_SESS/$ENGINE_SESS touched).
 mode_comms_test() {
   local issue="${1:-999999}"
   local rt; rt=$(runtime_dir "$issue")
@@ -1091,12 +1030,12 @@ EOF
   tmux new-session -d -s "$b" "sh $rt/notes/echo_agent.sh"
   sleep 1
   local ok=1
-  # coord -> worker direction / worker -> coord direction (same mode_msg path)
+  # engine -> worker direction / worker -> engine direction (same mode_msg path)
   mode_msg "$a" "PING-$$" >/dev/null || ok=0
   mode_msg "$b" "PONG-$$" >/dev/null || ok=0
   sleep 1
-  tmux capture-pane -p -t "$a" | grep -q "GOT:PING-$$" || { echo "FAIL: coord->worker not delivered"; ok=0; }
-  tmux capture-pane -p -t "$b" | grep -q "GOT:PONG-$$" || { echo "FAIL: worker->coord not delivered"; ok=0; }
+  tmux capture-pane -p -t "$a" | grep -q "GOT:PING-$$" || { echo "FAIL: engine->worker not delivered"; ok=0; }
+  tmux capture-pane -p -t "$b" | grep -q "GOT:PONG-$$" || { echo "FAIL: worker->engine not delivered"; ok=0; }
   # guard still fails loud on a missing session
   if ( mode_msg "agentup-ct-missing-$$" "x" ) >/dev/null 2>&1; then
     echo "FAIL: msg accepted a nonexistent session"; ok=0
@@ -1239,7 +1178,7 @@ mode_self_test() {
   rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan)
   chk bash -c 'printf "%s" "$1" | grep -qx "issue=none"' _ "$rp"
   chk bash -c 'printf "%s" "$1" | grep -qx "dev_prompt=none"' _ "$rp"
-  chk bash -c 'printf "%s" "$1" | grep -qx "sessions=nexios-dev,nexios-qe,nexios-coord"' _ "$rp"
+  chk bash -c 'printf "%s" "$1" | grep -qx "sessions=nexios-dev,nexios-qe,nexios-consultant"' _ "$rp"
   # ... with an issue the briefs come from the runtime (and only then are required)
   rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 4199999)
   chk bash -c 'printf "%s" "$1" | grep -qx "dev_prompt=/tmp/nexios-4199999/prompts/dev.txt"' _ "$rp"
@@ -1256,13 +1195,13 @@ mode_self_test() {
   chk "$SCRIPT_DIR/agent_up.sh" render-self-test
   # ... and the verifier agrees with what the launcher renders (one source)
   chk python3 "$REPO_ROOT/tools/agents/verify_fence.py" --self-test
-  # the coordinator launch command carries the RESOLVED config + pinned TMPDIR
+  # the consultant launch command carries the RESOLVED config + pinned TMPDIR
   # (S4-9: the fence assertion is only meaningful if the env is the fenced one)
-  local cc; cc=$("$SCRIPT_DIR/agent_up.sh" __coord-cmd)
-  chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*coordinator/opencode.resolved.json"' _ "$cc"
+  local cc; cc=$("$SCRIPT_DIR/agent_up.sh" __consult-cmd)
+  chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*consultant/opencode.resolved.json"' _ "$cc"
   chk bash -c 'printf "%s" "$1" | grep -q "TMPDIR=/tmp/agentup-tmp-"' _ "$cc"
   chk bash -c 'printf "%s" "$1" | grep -q -- "-u OPENCODE_CONFIG_CONTENT"' _ "$cc"
-  chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=coordinator"' _ "$cc"
+  chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=consultant"' _ "$cc"
   # L1/L2 renderer path + role are derived per role, never hand-passed
   local dc qc
   dc=$("$SCRIPT_DIR/agent_up.sh" __run-cmd dev)
@@ -1273,7 +1212,7 @@ mode_self_test() {
   chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=qe"' _ "$qc"
   # L3 traversal / unknown roles are refused before launching
   chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd ../../../tmp/evil
-  chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd coordinator/../dev
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd consultant/../dev
   # a slash-free but unknown role is refused too (allowlist, not a path heuristic)
   chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd evil
   chk_neg "$SCRIPT_DIR/agent_up.sh" run "agentup-st-$$" /tmp evil /dev/null
@@ -1295,8 +1234,7 @@ mode_self_test() {
   ln -sfn "$REPO_ROOT/tools/agents/roles/dev.json" "$st/home/roles/dev.json"
   ln -sfn /nonexistent "$st/home/coordinator/opencode.json"
   chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
-  chk test -L "$st/home/coordinator/AGENTS.md"
-  chk test "$(readlink "$st/home/coordinator/AGENTS.md")" = "$REPO_ROOT/tools/agents/coordinator/AGENTS.md"
+  chk_neg test -e "$st/home/coordinator/AGENTS.md"
   chk_neg test -e "$st/home/coordinator/opencode.json"
   chk_neg test -e "$st/home/roles/dev.json"
   # leading-zero issue numbers canonicalize onto ONE runtime (never alias 410)
@@ -1307,16 +1245,14 @@ mode_self_test() {
   chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup "$zraw"
   chk test -f "/tmp/nexios-$zcan/state.json"
   chk_neg test -e "/tmp/nexios-$zraw"
-  # every role is rendered by setup; coordinator {repo} keys are expanded
+  # every role is rendered by setup; consultant {repo} keys are expanded
   local rr
-  for rr in dev qe auditor coordinator consultant; do
+  for rr in dev qe auditor consultant; do
     chk test -f "$st/home/rendered/$rr/opencode.resolved.json"
   done
-  chk_neg grep -q '{repo}' "$st/home/rendered/coordinator/opencode.resolved.json"
-  chk grep -q "$(cd "$REPO_ROOT" && pwd -P)/prompts/LEARNINGS.md" \
-      "$st/home/rendered/coordinator/opencode.resolved.json"
+  chk_neg grep -q '{repo}' "$st/home/rendered/consultant/opencode.resolved.json"
   chk python3 -c "import json,sys; json.load(open(sys.argv[1]))" \
-      "$st/home/rendered/coordinator/opencode.resolved.json"
+      "$st/home/rendered/consultant/opencode.resolved.json"
   # state writer: validated keys/vocabulary, locked, atomic
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
@@ -1571,7 +1507,7 @@ mode_self_test() {
 mode_fence_show() {
   case "${1:-}" in
     show)
-      [ $# -eq 2 ] || fail "fence show needs a role (dev|qe|auditor|coordinator)"
+      [ $# -eq 2 ] || fail "fence show needs a role (dev|qe|auditor|consultant)"
       need_cmd python3
       need_file "$RENDERER"
       python3 "$RENDERER" --role "$2" --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR"
@@ -1604,12 +1540,12 @@ mode_room_plan() {
   fi
   printf 'issue=%s\ntask=%s\ndev_prompt=%s\nqe_prompt=%s\nsessions=%s,%s,%s\n' \
     "${issue:-none}" "${task:-none}" "${dp:-none}" "${qp:-none}" \
-    "$DEV_SESS" "$QE_SESS" "$COORD_SESS"
+    "$DEV_SESS" "$QE_SESS" "$CONSULT_SESS"
 }
 
 mode_launch_cmd() {
   [ $# -eq 1 ] || fail "__run-cmd needs a role"
-  case "$1" in dev|qe|auditor|coordinator) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|coordinator), got '$1'" ;; esac
+  case "$1" in dev|qe|auditor|consultant) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|consultant), got '$1'" ;; esac
   local cfg
   cfg=$(render_role_config "$1")
   printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=/tmp/agentup-tmp-agentup-probe OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s\n' \
@@ -1644,20 +1580,6 @@ for sect in ("external_directory", "edit"):
 PY
   }
   no_host_tmp() { ! grep -q '/var/folders' "$1"; }
-  coord_ok() {
-    python3 - "$1" "$REPO_ROOT" <<'PY'
-import json, sys
-cfg = json.load(open(sys.argv[1]))
-repo = sys.argv[2]
-assert "mcp" in cfg and "github" in cfg["mcp"], "mcp lost"
-edit = cfg["permission"]["edit"]
-ext = cfg["permission"]["external_directory"]
-repos = {k: v for k, v in list(edit.items()) + list(ext.items()) if k.startswith(repo)}
-assert set(repos) == {repo + "/prompts/LEARNINGS.md", repo + "/prompts/**",
-                      repo + "/audits/**"}, repos
-assert all(v == "allow" for v in repos.values())
-PY
-  }
   consultant_ok() {
     python3 - "$1" "$REPO_ROOT" <<'PY'
 import json, sys
@@ -1730,7 +1652,7 @@ PY
 
   # R1-R4 role polarity + validity
   local r f
-  for r in dev qe auditor coordinator consultant; do
+  for r in dev qe auditor consultant; do
     f="$out/$r/opencode.resolved.json"
     chk render "$r" "$f" --twins-out "$out/$r"
     chk test -s "$f"
@@ -1748,13 +1670,12 @@ PY
   else
     hashes=$(shasum -a 256 "$out"/*/opencode.resolved.json | awk '{print $1}' | sort -u | wc -l | tr -d ' ')
   fi
-  chk test "$hashes" = 5
-  # R7 mirrors, R8 host TMPDIR, R9 coordinator keys, R10 worker purity
-  for r in dev qe auditor coordinator consultant; do
+  chk test "$hashes" = 4
+  # R7 mirrors, R8 host TMPDIR, R9 consultant keys, R10 worker purity
+  for r in dev qe auditor consultant; do
     chk mirrors_ok "$out/$r/opencode.resolved.json"
     chk no_host_tmp "$out/$r/opencode.resolved.json"
   done
-  chk coord_ok "$out/coordinator/opencode.resolved.json"
   chk consultant_ok "$out/consultant/opencode.resolved.json"
   for r in dev qe auditor; do
     chk worker_ok "$out/$r/opencode.resolved.json" "$REPO_ROOT"
@@ -1764,7 +1685,6 @@ PY
   chk twin_ok "$out/qe/nexios-qe.md" "$out/qe/opencode.resolved.json"
   chk twin_ok "$out/auditor/nexios-audit.md" "$out/auditor/opencode.resolved.json"
   chk twin_ok "$out/consultant/nexios-consultant.md" "$out/consultant/opencode.resolved.json"
-  chk_neg test -e "$out/coordinator/nexios-coordinator.md"
 
   # N1-N13 fail-closed probes
   chk_neg python3 "$RENDERER" --role bogus --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR"
@@ -1773,8 +1693,8 @@ PY
   chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
   d=$(fixture n3); mutate "$d/roles/dev.json" 'd["edit_deny"].append("{repo}/src/x")'
   chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
-  d=$(fixture n4); mutate "$d/roles/coordinator.json" 'd["edit_allow"].append("prompts/LEARNINGS.md")'
-  chk_neg python3 "$RENDERER" --role coordinator --print --repo-root "$REPO_ROOT" --fence-root "$d"
+  d=$(fixture n4); mutate "$d/roles/consultant.json" 'd["edit_allow"].append("prompts/LEARNINGS.md")'
+  chk_neg python3 "$RENDERER" --role consultant --print --repo-root "$REPO_ROOT" --fence-root "$d"
   d=$(fixture n5); mutate "$d/roles/dev.json" 'd["external_allow"].append("/tmp/nexios-*")'
   chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
   d=$(fixture n6); mutate "$d/roles/qe.json" 'd["edit_deny"].append("/tmp/jarvis-*")'
@@ -2043,7 +1963,7 @@ mode_watch() {
   fi
   export NEXIOS_AGENT_UP="$SCRIPT_DIR/agent_up.sh"
   export NEXIOS_DEV_SESS="$DEV_SESS" NEXIOS_QE_SESS="$QE_SESS"
-  export NEXIOS_COORD_SESS="$COORD_SESS"
+  export NEXIOS_DOORBELL_SESS="$ENGINE_SESS"
   exec "$SCRIPT_DIR/watchdog.sh" "$act" "$issue" "$@"
 }
 
@@ -2053,14 +1973,15 @@ mode_close() {
     if tmux has-session -t "$s" 2>/dev/null; then tmux kill-session -t "$s"; info "killed $s"; fi
   done
   if [ "$all" = 1 ]; then
-    if tmux has-session -t "$COORD_SESS" 2>/dev/null; then tmux kill-session -t "$COORD_SESS"; info "killed $COORD_SESS"; fi
+    for s in "$CONSULT_SESS" "$ENGINE_SESS" "nexios-coord"; do
+      if tmux has-session -t "$s" 2>/dev/null; then tmux kill-session -t "$s"; info "killed $s"; fi
+    done
   fi
 }
 
 mode="${1:-}"; shift || true
 case "$mode" in
   setup) mode_setup "$@" ;;
-  coord) mode_coord "$@" ;;
   workers) mode_workers "$@" ;;
   up) mode_up "$@" ;;
   run) mode_run "$@" ;;
@@ -2080,7 +2001,7 @@ case "$mode" in
   __check-clean-tree) mode_check_clean_tree "$@" ;;
   __run-cmd) mode_launch_cmd "$@" ;;
   __room-plan) mode_room_plan "$@" ;;
-  __coord-cmd) COORD_TMPDIR=/tmp/agentup-tmp-probe; coord_tui_cmd ;;
+  __consult-cmd) CONSULT_TMPDIR=/tmp/agentup-tmp-probe; consult_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
   watch) mode_watch "$@" ;;
