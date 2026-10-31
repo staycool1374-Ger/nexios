@@ -15,5 +15,8 @@
     "twin": "nexios-qe.md",
     "description": "Nexios quality engineer (fenced to testbed worktree, may edit only test trees)",
     "mode": "subagent"
+  },
+  "config_extra": {
+    "model": "opencode-go/muse-spark-1.3-contributor"
   }
 }

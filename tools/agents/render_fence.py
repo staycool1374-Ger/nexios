@@ -24,7 +24,7 @@ import os
 import sys
 from typing import Any, NoReturn
 
-ROLES = ("dev", "qe", "auditor", "coordinator")
+ROLES = ("dev", "qe", "auditor", "coordinator", "consultant")
 BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
 NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
 DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
@@ -80,7 +80,8 @@ def mirror(path):
 
 def expand(key, repo, role):
     if "{repo}" in key:
-        expect(role == "coordinator", "{repo} is coordinator-only (role %s)" % role)
+        expect(role in ("coordinator", "consultant"),
+               "{repo} is coordinator/consultant-only (role %s)" % role)
         key = key.replace("{repo}", repo)
     elif role == "coordinator" and not key.startswith("/"):
         fail("relative repo path in coordinator role: %r" % key)
@@ -239,7 +240,11 @@ def compose(base, delta, repo, role):
 
     out["permission"] = permission
     for key, value in delta.get("config_extra", {}).items():
-        expect(key == "mcp", "config_extra may only carry 'mcp' (got %r)" % key)
+        expect(key in ("mcp", "model"),
+               "config_extra may only carry 'mcp'/'model' (got %r)" % key)
+        if key == "model":
+            expect(isinstance(value, str) and "/" in value,
+                   "config_extra model must be a provider/model id")
         expect(key not in out, "config_extra collision on %r" % key)
         out[key] = value
     return out
