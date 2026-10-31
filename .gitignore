@@ -31,3 +31,4 @@ tools/gdb/*.gdb
 .opencode/
 .obsidian/
 .nexios-runtime/
+logs/
