@@ -1,0 +1,83 @@
+{
+  "role": "consultant",
+  "edit_default": "deny",
+  "edit_allow": [
+    "{repo}/logs/**"
+  ],
+  "edit_deny": [],
+  "external_allow": [
+    "{repo}/prompts/**",
+    "{repo}/audits/**",
+    "{repo}/scripts/**",
+    "{repo}/tools/agents/**",
+    "{repo}/logs/**"
+  ],
+  "launch": {
+    "cwd": "coord"
+  },
+  "agent": {
+    "name": "nexios-consultant",
+    "twin": "nexios-consultant.md",
+    "description": "Nexios workflow consultant (read-only advisor; never tasks workers, rings, or writes)",
+    "mode": "subagent",
+    "bash": {
+      "*": "ask",
+      "cat *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "ls *": "allow",
+      "grep *": "allow",
+      "wc *": "allow",
+      "find *": "allow",
+      "sed *": "allow",
+      "diff *": "allow",
+      "date *": "allow",
+      "printf *": "allow",
+      "echo *": "allow",
+      "test *": "allow",
+      "command *": "allow",
+      "rg *": "allow",
+      "git log*": "allow",
+      "git show*": "allow",
+      "git diff*": "allow",
+      "git status*": "allow",
+      "git branch*": "allow",
+      "git ls-files*": "allow",
+      "git rev-parse*": "allow",
+      "git merge-base*": "allow",
+      "git check-ignore*": "allow",
+      "tmux ls*": "allow",
+      "tmux has-session*": "allow",
+      "tmux list-panes*": "allow",
+      "tmux capture-pane*": "allow",
+      "python3 *": "allow",
+      "gh issue view *": "allow",
+      "gh issue list*": "allow",
+      "scripts/agent_up.sh status*": "allow",
+      "scripts/agent_up.sh fence show*": "allow",
+      "scripts/agent_up.sh watch * status": "allow"
+    }
+  },
+  "config_extra": {
+    "model": "opencode-go/muse-spark-1.3-contributor",
+    "mcp": {
+      "harness": {
+        "type": "local",
+        "command": [
+          "harness",
+          "mcp"
+        ],
+        "enabled": true
+      },
+      "github": {
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "enabled": true,
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+        }
+      }
+    }
+  }
+}
