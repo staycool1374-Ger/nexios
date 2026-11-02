@@ -160,8 +160,8 @@ def validate_delta(delta, role):
     if "launch" in delta:
         launch = delta["launch"]
         closed(launch, LAUNCH_KEYS, "delta launch")
-        expect(launch.get("cwd") in ("dev", "qe", "audit", "coord"),
-               "launch.cwd must be dev|qe|audit|coord")
+        expect(launch.get("cwd") in ("dev", "qe", "audit", "coord", "consultant"),
+               "launch.cwd must be dev|qe|audit|coord|consultant")
     if "agent" in delta:
         agent = delta["agent"]
         closed(agent, AGENT_KEYS, "delta agent")

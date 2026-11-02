@@ -58,7 +58,7 @@ qemu_count() {
 
 latest_report() { # $1 room -> newest audit report for this issue, or none
   # The auditor has no working doorbell; verdicts land as files.
-  # The coordinator polls this (doctrine) instead of waiting for a ring.
+  # The engine polls this (doctrine) instead of waiting for a ring.
   local issue rep
   issue=$(basename "$1"); issue=${issue#nexios-}
   rep=$(ls -t /Users/arnold/jarvis/audits/report-*-"${issue}".md /Users/arnold/jarvis/audits/report-*-"${issue}"-*.md 2>/dev/null | head -n 1 || true)
@@ -75,9 +75,9 @@ fingerprint() { # $1 room -> full multi-line fingerprint on stdout
     return 0
   fi
   local box bf n last
-  # Worker-authored lines ONLY: the coordinator's own FROM=coord orders
-  # live in these same boxes and must never tick the room (a tick means
-  # a worker posted, never that the coordinator wrote).
+  # Worker-authored lines ONLY: engine/operator FROM=coord orders live in
+  # these same boxes and must never tick the room (a tick means a worker
+  # posted, never that an order was written).
   for box in dev qe auditor; do
     bf="$1/inbox/$box.md"
     if [ -f "$bf" ]; then

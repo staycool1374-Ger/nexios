@@ -2,23 +2,27 @@
   "role": "consultant",
   "edit_default": "deny",
   "edit_allow": [
-    "{repo}/logs/**"
+    "{repo}/**"
   ],
-  "edit_deny": [],
+  "edit_deny": [
+    "{repo}/src",
+    "{repo}/src/**",
+    "{repo}/tools/agents/fence",
+    "{repo}/tools/agents/fence/**",
+    "{repo}/tools/agents/render_fence.py",
+    "{repo}/tools/agents/verify_fence.py",
+    "{repo}/scripts/agent_up.sh"
+  ],
   "external_allow": [
-    "{repo}/prompts/**",
-    "{repo}/audits/**",
-    "{repo}/scripts/**",
-    "{repo}/tools/agents/**",
-    "{repo}/logs/**"
+    "{repo}/**"
   ],
   "launch": {
-    "cwd": "coord"
+    "cwd": "consultant"
   },
   "agent": {
     "name": "nexios-consultant",
     "twin": "nexios-consultant.md",
-    "description": "Nexios workflow consultant (read-only advisor; never tasks workers, rings, or writes)",
+    "description": "Nexios workflow consultant (writes repo except src/ + full /tmp; GitHub issues/PRs/releases; never orchestrates workers)",
     "mode": "subagent",
     "bash": {
       "*": "ask",
@@ -46,6 +50,14 @@
       "git rev-parse*": "allow",
       "git merge-base*": "allow",
       "git check-ignore*": "allow",
+      "git add *": "allow",
+      "git commit*": "allow",
+      "git push*": "allow",
+      "git checkout*": "allow",
+      "git merge*": "allow",
+      "git fetch*": "allow",
+      "git tag*": "allow",
+      "git -C *": "allow",
       "tmux ls*": "allow",
       "tmux has-session*": "allow",
       "tmux list-panes*": "allow",
@@ -53,6 +65,26 @@
       "python3 *": "allow",
       "gh issue view *": "allow",
       "gh issue list*": "allow",
+      "gh issue create*": "allow",
+      "gh issue comment*": "allow",
+      "gh issue edit*": "allow",
+      "gh issue close*": "allow",
+      "gh issue reopen*": "allow",
+      "gh pr view*": "allow",
+      "gh pr list*": "allow",
+      "gh pr create*": "allow",
+      "gh pr comment*": "allow",
+      "gh pr review*": "allow",
+      "gh pr edit*": "allow",
+      "gh pr close*": "allow",
+      "gh pr reopen*": "allow",
+      "gh pr merge*": "allow",
+      "gh release view*": "allow",
+      "gh release list*": "allow",
+      "gh release create*": "allow",
+      "gh release edit*": "allow",
+      "gh release upload*": "allow",
+      "gh api repos/*": "allow",
       "scripts/agent_up.sh status*": "allow",
       "scripts/agent_up.sh fence show*": "allow",
       "scripts/agent_up.sh watch * status": "allow"
