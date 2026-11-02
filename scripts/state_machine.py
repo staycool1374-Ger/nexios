@@ -946,6 +946,32 @@ def dev_impl_ready_ts(posts):
     return found
 
 
+def qe_baseline_posted(posts):
+    """Whether any qe post carries a baseline tally. Pure.
+
+    A baseline tally is a qe-authored post mentioning baseline plus a
+    result token (PASS/PASSED/tally or an n/m count). Proves the parked
+    QE ran the loop/build/baseline while waiting for IMPL READY (#460)."""
+    for post in posts or []:
+        low = post.lower()
+        if "baseline" not in low:
+            continue
+        if ("pass" in low or "tally" in low or re.search(r"\d+\s*/\s*\d+", post)):
+            return True
+    return False
+
+
+def qe_baseline_due(qe_posts, impl_ts):
+    """Missing-baseline NEED gate pre-IMPL (#460). Pure.
+
+    True when no IMPL READY is on file and no baseline tally is on
+    file: parked QE still owes the pipeline work (loop + build +
+    baseline + tally), so the engine must NEED it, not idle-approve."""
+    if impl_ts:
+        return False
+    return not qe_baseline_posted(qe_posts)
+
+
 def backlog_idle_due(role, probe, deaf_lanes, unacked_lanes, fresh_posts,
                      declared_next, rang, recreating, pending):
     """Generic WORKING->WAITING queue check for an idle lane (G5).
@@ -1544,6 +1570,9 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     impl_ts = dev_impl_ready_ts(fresh_all.get("dev", []))
     qe_order_for = (st.get("qe_order") or {}).get("for")
     qe_will_file = bool(impl_ts and qe_order_due(qe_order_for, impl_ts))
+    if qe_baseline_due(boxes["qe"]["all"], impl_ts):
+        actions.append("NEED qe baseline #%d: no baseline tally on file pre-IMPL; build testbed @ tip, boot QEMU, run baseline suites, post tally with STATE:/NEXT:" % issue)
+        events.append("qe-baseline-missing")
     for peer in LANES:
         if not ack_since:
             for oid in peer_handoff_done_oids(boxes, peer, rings):
@@ -2789,7 +2818,7 @@ def issue_briefs_text(issue, dev_branch, title, body):
                 "verification approach for this issue; post NOTE to inbox/qe.md + "
                 "RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
                 "Every engine order carries its id ([oid <id>] in the ring or coord NOTE); ACK it in your next post via post_update ref=<id> (a post without ref is FYI only and never clears an order). "
-                "RING. No test runs until dev posts IMPL READY.\n"
+                "No diff-verification runs until dev posts IMPL READY. While parked: build testbed @ tip, boot QEMU, run the baseline suites from your approach, post the tally with STATE:/NEXT: trailers.\n"
                 "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
                 % (seed, issue, issue))
     return dev_brief, qe_brief
@@ -3426,6 +3455,20 @@ def mode_self_test():
                                      "state": None, "next": None, "ctx": None},
                               dict(stt, rings={"qe:2026-11-02T08:00:00": -1}, ack_since="2026-11-02T07:30:00"),
                               "IDLE-static") == "pending: provisioned from issue text", True)
+    check("qe-baseline-missing-due",
+          qe_baseline_due([], None) is True, True)
+    check("qe-baseline-posted-not-due",
+          qe_baseline_due(["2026-11-02T08:00:00Z FROM=qe NOTE :: baseline capability 155/155 PASSED STATE: idle NEXT: idle"],
+                          None) is False, True)
+    check("qe-baseline-impl-suppresses",
+          qe_baseline_due([], "2026-11-02T08:03:09Z") is False, True)
+    check("qe-baseline-posted-true",
+          qe_baseline_posted(["2026-11-02T08:00:00Z FROM=qe NOTE :: baseline 155/155 tally"]) is True, True)
+    check("qe-baseline-posted-false",
+          qe_baseline_posted(["2026-11-02T08:00:00Z FROM=qe NOTE :: approach only"]) is False, True)
+    check("qe-brief-narrows-gate",
+          "No diff-verification runs until dev posts IMPL READY." in issue_briefs_text(1, "b", "t", "x")[1]
+          and "While parked:" in issue_briefs_text(1, "b", "t", "x")[1], True)
     print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
     return 0 if passed == total else 1
 
