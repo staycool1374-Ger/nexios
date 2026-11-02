@@ -19,6 +19,7 @@ Never:  kernel code, test files, worker checkouts, fence sources.
 Usage:
   state_machine.py tick [--issues 51,52 | --all] [--interval S] [--once]
                          [--dry-run] [--log-dir DIR] [--repo DIR]
+                         [--no-audit-teardown]
   state_machine.py status [--issues ...]   # read-only serial table, no mutation
   state_machine.py brief --issues 52,53 [--dev-branch main]  # RECON briefs only
 """
@@ -83,6 +84,10 @@ RING_ESCALATED = RING_LIMIT + 1  # ledger sentinel: order escalated as ACK-MISSI
 CTX_WARN = 70  # log watch-only
 CTX_CRIT = 85  # checkpoint NOTE first, then /compact; never die at 100%% with unposted work
 AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
+AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
+AUDIT_RETASK_S = 300  # re-ring a lost/idle auditor order after ~2 ticks
+AUDIT_TEARDOWN_TICKS = 2  # idle ticks after verdict handoff before teardown
+AUDIT_REASK_MAX = RING_LIMIT  # same 3-ring doctrine for audit orders
 
 
 def utcnow():
@@ -116,6 +121,9 @@ class Ctx:
             qd = sib if os.path.isdir(sib) else None
         self.qe_dir = os.path.abspath(qd) if qd else None
         self.notes_file = getattr(args, "notes_file", None)
+        self.audit_sess = os.environ.get("STATE_MACHINE_AUDIT_SESS") or SESS["audit"]
+        self.allow_audit_teardown = not bool(getattr(args, "no_audit_teardown", False))
+        self.audit_claimed = (0, None)
         self._gh_dead = False
         self._gh_need = False
         self.tick_seq = 0
@@ -266,6 +274,21 @@ def reset_resume_rings(rings):
     for oid in doomed:
         del rings[oid]
     return len(doomed)
+
+
+def room_rings(st):
+    """The room's ledger dict, shared by reference.
+
+    Every writer in a tick must mutate THIS object: `st.get(...) or {}`
+    hands each caller a private throwaway when the stored value is empty,
+    silently dropping cross-function writes (auditor rings lost while the
+    ack/session state persisted). Mutates st only to install the entry.
+    """
+    rings = st.get("rings")
+    if not isinstance(rings, dict):
+        rings = {}
+        st["rings"] = rings
+    return rings
 
 
 def ack_scan_posts(role, boxes, handled, fresh):
@@ -561,8 +584,22 @@ def latest_audit_report(ctx, issue):
     return max(cands)[1] if cands else None
 
 
+def kill_audit_session(ctx, reason):
+    """Best-effort teardown of the auditor session. Never raises, never fails
+    the tick: every outcome is a plain string. Dry-run never touches tmux."""
+    if ctx.dry:
+        return "WOULD kill %s (%s)" % (ctx.audit_sess, reason)
+    rc, out = tmux(ctx, "kill-session", "-t", ctx.audit_sess)
+    if rc != 0:
+        return "TEARDOWN-FAILED %s (%s): %s" % (ctx.audit_sess, reason, out.strip()[:100])
+    rc2, _out2 = tmux(ctx, "has-session", "-t", ctx.audit_sess)
+    if rc2 == 0:
+        return "KILL-UNCONFIRMED %s (%s): session still present" % (ctx.audit_sess, reason)
+    return "auditor teardown %s (%s); confirmed ABSENT" % (ctx.audit_sess, reason)
+
+
 def audit_session_live(ctx):
-    rc, _ = tmux(ctx, "has-session", "-t", SESS["audit"])
+    rc, _ = tmux(ctx, "has-session", "-t", ctx.audit_sess)
     return rc == 0
 
 
@@ -599,40 +636,231 @@ def pending_age_s(stored):
         return None
 
 
-def auditor_brief_text(issue, tip, scope):
+def auditor_brief_text(issue, tip, scope, room_dir=None):
     return ("AUDIT EXECUTOR (#%d) -- bounded read-only audit\n"
             "issue: %d\ntip: %s (audit this tip only; anything else is out of scope)\n"
+            "room: %s\n"
             "scope: %s\n"
             "rules: read-only (no branches, no code, no test runs, no launches); retrieval first (graphify+vault); "
             "post DECISION (APPROVED | NEED with S1/S2/S3 findings) to inbox/auditor.md + wake.\n"
             "Auditor verdicts use the DECISION schema and never carry ref/ACK (the bridge rejects ref on box=auditor).\n"
-            "scripts/agent_up.sh wake %d auditor nexios-engine \"inbox: auditor READY \u2014 read inbox/auditor.md\"\n"
-            % (issue, issue, tip, scope, issue))
+            "scripts/agent_up.sh wake %d auditor nexios-engine \"inbox: auditor READY \u2014 read %s/inbox/auditor.md\"\n"
+            % (issue, issue, tip, room_dir or "room inbox", scope, issue,
+               room_dir or "the room"))
 
 
-def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
-    """Request-driven audit cycle with an invisible auditor session.
+def audit_demand_key(requester, text):
+    """Stable id for one audit request (mirrors resume_now hashing). Pure."""
+    return "%s:%s" % (requester, hashlib.md5(text.encode()).hexdigest()[:8])
+
+
+def audit_brief_tip(path):
+    """Tip pinned in an auditor brief, or None. Read-only file read."""
+    try:
+        with open(path, errors="replace") as f:
+            for line in f.read().splitlines():
+                m = re.match(r"^tip:\s*(\S+)", line.strip())
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+    return None
+
+
+def audit_verdict_ts(box_all):
+    """Newest DECISION post ts (19 chars, no trailing Z), or None.
+    Read-only; display stays in auditor_decision."""
+    best = None
+    for line in box_all or []:
+        m = POST_RE.match(line)
+        if m and m.group(3) == "DECISION" and (best is None or line[:19] > best):
+            best = line[:19]
+    return best
+
+
+def audit_state_demand(st, boxes=None):
+    """Fallback demand from room pending/phase, plus dev/qe NEXT waiting audit.
+
+    Covers #240-style stalls: no NEED-audit post and pending None, but a
+    lane NEXT says `waiting auditor plan-review` / `waiting ... audit`.
+    Pure."""
+    pending = (st.get("pending") or "")
+    if re.search(r"audit", pending, re.I) or st.get("phase") == "AUDIT":
+        return {"requester": "dev", "text": pending[:200]}
+    for box in ("dev", "qe"):
+        nxt = ((boxes or {}).get(box) or {}).get("next") or ""
+        if re.search(r"waiting.*audit|plan-review", nxt, re.I):
+            return {"requester": box, "text": nxt[:200]}
+    return None
+
+
+def audit_fresh_need(fresh):
+    """Newest fresh dev/qe NEED-audit post, or None. Pure."""
+    cands = [(box, q) for box in ("dev", "qe") for q in (fresh or {}).get(box, [])
+             if (lambda m: m and m.group(3) == "NEED" and "audit" in q.lower())(POST_RE.match(q))]
+    if not cands:
+        return None
+    box, q = cands[-1]
+    return {"requester": box, "text": q[-200:]}
+
+
+def audit_demand(boxes, st, fresh=None):
+    """Outstanding audit demand, fresh posts first, then unhandled history,
+    then the room pending/phase/NEXT fallback. Pure."""
+    hit = audit_fresh_need(fresh or {})
+    if hit:
+        return hit
+    if fresh is not None:
+        handled = st.get("handled") or {}
+        for box in ("dev", "qe"):
+            since = handled.get(box) or ""
+            for line in (boxes.get(box) or {}).get("all", []):
+                if line[:20] > since[:20]:
+                    m = POST_RE.match(line)
+                    if m and m.group(3) == "NEED" and "audit" in line.lower():
+                        return {"requester": box, "text": line[-200:]}
+    return audit_state_demand(st, boxes)
+
+
+def audit_queue_head(issue, demand, rooms_all):
+    """Oldest outstanding audit demand (self included). Pure; FIFO, no starvation."""
+    if demand is None:
+        return None
+    best = (utcnow(), issue)
+    for iss, _rdir, ost in rooms_all or []:
+        if iss == issue:
+            continue
+        ost = ost or {}
+        if ost.get("audit_pending") and not (ost.get("halt") or (ost.get("state") or "") in ("CLOSED", "HOLD")):
+            since = (ost["audit_pending"].get("since") or "9" * 20)
+            if (since, iss) < best:
+                best = (since, iss)
+    if best[1] != issue and best < (utcnow(), issue):
+        return best[1]
+    return issue
+
+
+def audit_ring_action(n):
+    """Ring/escalate/await for an audit order count. Pure (mirrors order_ring_action)."""
+    if n < RING_LIMIT:
+        return "ring"
+    if n == RING_LIMIT:
+        return "escalate"
+    return "awaiting"
+
+
+def audit_retask_gate(demand, fresh_need, probe, live, brief_present, brief_tip, cur_tip,
+                      verdict_on_file, demand_key, handled_demand, oid, rings, claimed_by, age_s):
+    """One-word gate for the audit lane. Pure. Vocabulary:
+    skip-no-demand | launch | defer-working | defer-busy | skip-done |
+    brief-then-ring | ring | escalate | awaiting | ring-again | hold-stale."""
+    if demand is None:
+        return "skip-no-demand"
+    if not live:
+        return "launch"
+    if not str(probe).startswith("IDLE"):
+        return "defer-working"
+    if claimed_by not in (None,):
+        return "defer-busy"
+    if verdict_on_file and not fresh_need and demand_key == handled_demand:
+        return "skip-done"
+    if not brief_present or (cur_tip and brief_tip and brief_tip != cur_tip):
+        return "brief-then-ring"
+    n = (rings or {}).get(oid, 0) if oid else 0
+    if isinstance(n, int) and n < 0:
+        return "skip-done"
+    if n <= 0:
+        return "ring"
+    if n == RING_LIMIT:
+        return "escalate"
+    if n > RING_LIMIT:
+        return "awaiting"
+    if (age_s or 0) >= AUDIT_RETASK_S:
+        return "ring-again"
+    return "awaiting"
+
+
+def audit_teardown_gate(live, probe, verdict_on_file, handled_past_verdict, demand, fresh_need,
+                        other_demand, dup_audit, idle_ticks, n_ticks, teardown_enabled, dry):
+    """(new_idle_ticks, action) for auditor teardown. Pure except dry flag use.
+    Actions: absent | disabled | hold-dup | hold-demand | hold-verdict |
+    hold-working | countdown | kill | would-kill."""
+    if not live:
+        return 0, "absent"
+    if not teardown_enabled:
+        return 0, "disabled"
+    if dup_audit:
+        return 0, "hold-dup"
+    if fresh_need or demand or other_demand:
+        return 0, "hold-demand"
+    if not verdict_on_file or not handled_past_verdict:
+        return 0, "hold-verdict"
+    if not str(probe).startswith("IDLE"):
+        return 0, "hold-working"
+    k = (idle_ticks or 0) + 1
+    if k < (n_ticks or 2):
+        return k, "countdown"
+    return k, ("would-kill" if dry else "kill")
+
+
+def audit_planned_text(verdict_on_file, report_on_file, live, stored_pending, demand,
+                       queue_head, issue):
+    """Next-step text for the audit lane. Pure; never returns bare 'collect verdict'
+    when nothing asks for one."""
+    if verdict_on_file:
+        return "verdict on file"
+    if report_on_file:
+        return "report on file"
+    if stored_pending:
+        return "awaiting verdict"
+    if demand is not None and queue_head is not None and queue_head != issue:
+        return "queued behind #%d" % queue_head
+    if demand is not None:
+        return "ring audit lane" if live else "queued: launch audit"
+    if live:
+        return "idle: no audit requested"
+    return "no audit requested"
+
+
+def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+    """Request-driven audit cycle with a single shared auditor session.
 
     Dev/qe post NEED-audit (request); the engine generates the tip-pinned
     brief, starts the auditor via `agent_up.sh audit` (headless tmux session
     with --auto: asks auto-approved, denies hold; never windowed, and a modal
     there means a stale pre-auto session that must be relaunched),
-    awaits the verdict, and hands findings back to the requester (NOTE + ring).
-    Legacy pending/phase heuristic stays as fallback. Returns
-    (acted, need_verdict, ap_store) with ap_store None (leave), {} (clear),
-    or the audit_pending dict to persist.
+    re-tasks the live session with a fresh brief + ring when another room
+    needs it (FIFO across rooms, one claim per tick), awaits the verdict,
+    hands findings back to the requester (NOTE + ring), and tears the
+    session down after AUDIT_TEARDOWN_TICKS quiet post-verdict ticks.
+    Legacy pending/phase heuristic stays as fallback. Returns (acted,
+    need_verdict, ap_store, as_store, audit_note): ap_store as before ({} or
+    the audit_pending dict); as_store is the audit_session record to persist
+    (None = leave untouched); audit_note feeds the tick/status tables.
     """
     acted = []
     pending = (st.get("pending") or "")
     stored = st.get("audit_pending") or {}
     store = None
+    asess = dict(st.get("audit_session") or {})
+    rings = room_rings(st)
+    fresh_need = audit_fresh_need(fresh)
+    verdict_ts = audit_verdict_ts(boxes["auditor"]["all"])
+    handled_past = bool(verdict_ts) and (st.get("handled") or {}).get("auditor", "")[:19] >= verdict_ts
+    live = audit_session_live(ctx)
+    aprobe = fast_probe(ctx, ctx.audit_sess) if live else "ABSENT"
+    rep = latest_audit_report(ctx, issue)
+    seen_verdict = False
     for post in fresh.get("auditor", []):
         if "DECISION" not in post:
             continue
-        target = stored.get("requester", "dev")
+        if seen_verdict:
+            acted.append("duplicate audit verdict suppressed (same tick)")
+            continue
+        seen_verdict = True
+        target = ((fresh_need or {}).get("requester") if isinstance(fresh_need, dict) else None) or stored.get("requester", "dev")
         note, oid = coord_note(target, "AUDIT %s (#%d): detail inbox/auditor.md"
                                % ("APPROVED" if "APPROVED" in post else "NEED", issue))
-        rep = latest_audit_report(ctx, issue)
         if rep:
             note += "; report %s" % os.path.basename(rep)
         if ctx.dry:
@@ -640,6 +868,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
         else:
             if append_box_note(room_dir, target, note):
                 acted.append("audit verdict handed to %s" % target)
+                asess["handled_demand"] = asess.get("demand_key")
                 if target in SESS and fast_probe(ctx, SESS[target]).startswith("IDLE"):
                     acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid,
                                       issue=issue))
@@ -647,57 +876,215 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
                 acted.append("HAND-BACK-FAILED %s" % target)
     if any("audit verdict handed to" in a or "WOULD hand audit verdict" in a for a in acted):
         store = {}
-    reqs = [(box, q) for box in ("dev", "qe") for q in fresh.get(box, [])
-            if (lambda m: m and m.group(3) == "NEED" and "audit" in q.lower())(POST_RE.match(q))]
-    demand = None
-    if reqs:
-        demand = {"requester": reqs[-1][0], "text": reqs[-1][1][-200:]}
-    elif re.search(r"audit", pending, re.I) or st.get("phase") == "AUDIT":
-        demand = {"requester": "dev", "text": pending[:200]}
+    demand = audit_demand(boxes, st, fresh)
+    demand_key = audit_demand_key(demand["requester"], demand["text"]) if demand else None
+    qhead = audit_queue_head(issue, demand, rooms_all)
+    other_demand = False
+    for iss, _rdir, ost in rooms_all or []:
+        if iss != issue and (ost or {}).get("audit_pending"):
+            other_demand = True
+            break
+    cur_idle = asess.get("idle_ticks", 0) if isinstance(asess.get("idle_ticks"), int) else 0
+    new_idle, t_act = audit_teardown_gate(
+        live, aprobe, bool(verdict_ts), handled_past, demand is not None,
+        fresh_need is not None, other_demand,
+        (len(pane_role_sessions(ctx).get("audit", [])) > 1) if live and not (fresh_need or demand or other_demand) and verdict_ts and handled_past else False,
+        cur_idle, AUDIT_TEARDOWN_TICKS, ctx.allow_audit_teardown, ctx.dry)
+    if t_act in ("kill", "would-kill"):
+        res = kill_audit_session(ctx, "verdict %s handled, idle %d/%d, no demand"
+                                 % (verdict_ts or "-", new_idle, AUDIT_TEARDOWN_TICKS))
+        acted.append(res)
+        if not ctx.dry and res.startswith("auditor teardown"):
+            for o in list(rings):
+                if o.startswith(AUDIT_OID_PREFIX) and isinstance(rings.get(o), int) and rings[o] > 0:
+                    rings[o] = -1
+            asess = {"state": "parked", "idle_ticks": 0,
+                     "handled_demand": asess.get("handled_demand"),
+                     "verdict_ts": verdict_ts}
+            store = {}
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), False,
+                                        bool(stored), demand, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
+    if t_act == "disabled":
+        acted.append("auditor teardown disabled (--no-audit-teardown); session held live")
+        if not ctx.dry:
+            asess["idle_ticks"] = 0
+            if asess.get("state") != "live":
+                asess["state"] = "live"
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), True,
+                                        bool(stored), demand, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
+    if t_act == "countdown":
+        asess["state"] = "live"
+        asess["idle_ticks"] = new_idle
+        if new_idle == 1:
+            acted.append("auditor idle %d/%d since verdict; teardown when quiet" % (new_idle, AUDIT_TEARDOWN_TICKS))
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), True,
+                                        bool(stored), demand, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
+    if t_act == "absent" and asess.get("state") == "live":
+        asess = {"state": "absent", "idle_ticks": 0,
+                 "handled_demand": asess.get("handled_demand"),
+                 "verdict_ts": verdict_ts}
     dec = auditor_decision(boxes["auditor"]["all"])
-    if dec and not reqs:
+    if dec and not fresh_need and not demand:
         if stored and store is None:
             acted.append("verdict on file; stale audit_pending cleared")
             store = {}
-        return acted, False, store
-    if not demand and not stored:
-        return acted, False, store
+        audit_note = audit_planned_text(True, bool(rep), live, bool(stored), None, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
+    if demand is None and not stored:
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, False, None, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
     requester = (demand or {}).get("requester") or stored.get("requester", "dev")
     brief = os.path.join(room_dir, "prompts", "auditor.txt")
+    brief_present = os.path.exists(brief)
+    brief_tip = audit_brief_tip(brief) if brief_present else None
     tip = stored.get("tip")
-    if not os.path.exists(brief):
+    cur_tip = None
+    if not brief_present or brief_tip is None:
         info = git_info(ctx.dev_dir)
         if not info:
             acted.append("NEED audit brief ungeneratable: dev checkout tip unreadable")
-            return acted, True, store
+            audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+            return acted, True, store, (asess or None), audit_note
         tip = info[1]
+        cur_tip = tip
+    else:
+        info = git_info(ctx.dev_dir)
+        cur_tip = info[1] if info else tip
+        tip = cur_tip or tip
+    oid = None
+    for o in list(rings):
+        if o.startswith(AUDIT_OID_PREFIX) and isinstance(rings.get(o), int) and rings[o] > 0:
+            oid = o
+            break
+    if demand and (oid is None or asess.get("demand_key") != demand_key):
+        for o in list(rings):
+            if o.startswith(AUDIT_OID_PREFIX) and isinstance(rings.get(o), int) and rings[o] > 0:
+                rings[o] = -1
+        oid = None
+    claimed = ctx.audit_claimed[1] if (ctx.audit_claimed[0] == ctx.tick_seq
+                                       and ctx.audit_claimed[1] not in (None, issue)) else None
+    age_s = pending_age_s(stored)
+    act = audit_retask_gate(demand, fresh_need, aprobe, live, brief_present, brief_tip, cur_tip,
+                            bool(verdict_ts), demand_key, asess.get("handled_demand"), oid, rings,
+                            claimed, age_s)
+    if act == "skip-no-demand":
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, bool(stored), None, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
+    if act == "skip-done":
+        audit_note = audit_planned_text(True, bool(rep), live, bool(stored), demand, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
+    if act == "defer-working":
+        acted.append("NEED audit #%d deferred: auditor busy (probe %s); re-task when idle" % (issue, aprobe))
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+        return acted, True, store, (asess or None), audit_note
+    if act == "defer-busy":
+        acted.append("audit #%d queued behind #%s (lane busy this tick)" % (issue, claimed))
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+        return acted, True, store, (asess or None), audit_note
+    if qhead is not None and qhead != issue and act in ("launch", "ring", "ring-again", "brief-then-ring"):
+        acted.append("audit #%d queued behind #%d (FIFO); re-task when head clears" % (issue, qhead))
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+        return acted, True, store, (asess or None), audit_note
+    if act == "launch":
+        if not brief_present:
+            scope_txt = (demand or {}).get("text") or pending[:200] or "lane audit"
+            notes = sorted(glob.glob(os.path.join(room_dir, "notes", "*.md")))
+            if notes:
+                scope_txt += "; room notes: %s" % os.path.basename(notes[-1])
+            if ctx.dry:
+                acted.append("WOULD write brief %s (lane audit)" % brief)
+            else:
+                bw = write_brief(ctx, room_dir, "auditor.txt",
+                                 auditor_brief_text(issue, tip or cur_tip or "unknown", scope_txt[:220], room_dir))
+                acted.append(bw)
+                if bw.startswith("BRIEF-FAILED"):
+                    audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+                    return acted, True, store, (asess or None), audit_note
+        if ctx.dry:
+            acted.append("WOULD launch auditor: agent_up.sh audit %s" % issue)
+            audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+            return acted, True, {"requester": requester, "since": utcnow(), "tip": tip, "demand_key": demand_key}, (asess or None), audit_note
+        rc, out = ctx.run([ctx.agent_up, "audit", str(issue)], timeout=180)
+        acted.append("auditor launched rc=%d %s" % (rc, (out.strip().splitlines() or ["?"])[-1][:100]))
+        if rc != 0:
+            audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+            return acted, True, store, (asess or None), audit_note
+        asess["state"] = "live"
+        asess["idle_ticks"] = 0
+        asess["demand_key"] = demand_key
+        ctx.audit_claimed = (ctx.tick_seq, issue)
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), True, True, demand, qhead, issue)
+        return acted, True, {"requester": requester,
+                             "since": stored.get("since") or utcnow(), "tip": tip,
+                             "demand_key": demand_key}, asess, audit_note
+    if act in ("ring", "ring-again"):
+        if not oid:
+            oid = "%s%s" % (AUDIT_OID_PREFIX, utcnow()[:19])
+        new_store = {"requester": requester, "since": stored.get("since") or utcnow(),
+                     "tip": tip or cur_tip, "demand_key": demand_key}
+        if ctx.dry:
+            acted.append("WOULD ring audit lane (oid %s)" % oid)
+            audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+            return acted, True, new_store, (asess or None), audit_note
+        else:
+            if aprobe.startswith("IDLE"):
+                acted.append(ring(ctx, ctx.audit_sess, "auditor", "AUDIT #%d" % issue,
+                                  oid=oid, pointer=os.path.join(room_dir, "prompts", "auditor.txt"), tag_oid=False))
+                n = rings.get(oid, 0)
+                rings[oid] = (n + 1) if isinstance(n, int) and n >= 0 else 1
+                asess["demand_key"] = demand_key
+                asess["oid"] = oid
+                asess["state"] = "live"
+                asess["idle_ticks"] = 0
+                ctx.audit_claimed = (ctx.tick_seq, issue)
+            else:
+                acted.append("audit #%d ring deferred: lane busy at ring time" % issue)
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+        return acted, True, new_store, (asess or None), audit_note
+    if act == "brief-then-ring":
         scope_txt = (demand or {}).get("text") or pending[:200] or "lane audit"
         notes = sorted(glob.glob(os.path.join(room_dir, "notes", "*.md")))
         if notes:
             scope_txt += "; room notes: %s" % os.path.basename(notes[-1])
-        bw = write_brief(ctx, room_dir, "auditor.txt",
-                         auditor_brief_text(issue, tip, scope_txt[:220]))
-        acted.append(bw)
-        if bw.startswith("BRIEF-FAILED"):
-            return acted, True, store
-    if audit_session_live(ctx):
-        age = pending_age_s(stored)
-        if age is not None and age > AUDIT_TIMEOUT_S:
-            acted.append("NEED auditor stuck: session live, no verdict for %ds (tip %s)"
-                         % (int(age), tip or stored.get("tip", "?")))
+        new_store = {"requester": requester, "since": stored.get("since") or utcnow(),
+                     "tip": tip or cur_tip, "demand_key": demand_key}
+        if ctx.dry:
+            acted.append("WOULD write audit brief + ring audit lane")
+            audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+            return acted, True, new_store, (asess or None), audit_note
         else:
-            acted.append("auditor session live; awaiting verdict")
-        return acted, True, {"requester": requester,
-                             "since": stored.get("since") or utcnow(), "tip": tip}
-    if ctx.dry:
-        acted.append("WOULD launch auditor: agent_up.sh audit %s" % issue)
-        return acted, True, {"requester": requester, "since": utcnow(), "tip": tip}
-    rc, out = ctx.run([ctx.agent_up, "audit", str(issue)], timeout=180)
-    acted.append("auditor launched rc=%d %s" % (rc, (out.strip().splitlines() or ["?"])[-1][:100]))
-    if rc != 0:
-        return acted, True, store
-    return acted, True, {"requester": requester,
-                         "since": stored.get("since") or utcnow(), "tip": tip}
+            bw = write_brief(ctx, room_dir, "auditor.txt",
+                             auditor_brief_text(issue, tip or cur_tip or "unknown", scope_txt[:220], room_dir))
+            acted.append(bw)
+            if bw.startswith("BRIEF-FAILED"):
+                audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+                return acted, True, store, (asess or None), audit_note
+            oid = "%s:%s" % (AUDIT_OID_PREFIX, utcnow()[:19])
+            rings[oid] = 1
+            asess["demand_key"] = demand_key
+            asess["oid"] = oid
+            asess["tip"] = tip or cur_tip
+            asess["state"] = "live"
+            asess["idle_ticks"] = 0
+            if aprobe.startswith("IDLE"):
+                acted.append(ring(ctx, ctx.audit_sess, "auditor", "AUDIT #%d" % issue,
+                                  oid=oid, pointer=os.path.join(room_dir, "prompts", "auditor.txt"), tag_oid=False))
+                ctx.audit_claimed = (ctx.tick_seq, issue)
+            else:
+                acted.append("audit #%d brief rewritten; ring deferred (probe %s)" % (issue, aprobe))
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+        return acted, True, new_store, (asess or None), audit_note
+    if act == "escalate":
+        acted.append("ACK-MISSING audit #%d order %s: rung %d times, no verdict; re-brief next tick" % (issue, oid, AUDIT_REASK_MAX))
+        if oid:
+            rings[oid] = RING_ESCALATED
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
+        return acted, True, store, (asess or None), audit_note
+    audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, bool(stored), demand, qhead, issue)
+    return acted, True, store, (asess or None), audit_note
 
 
 def dev_blocked_on_qe(dev_next):
@@ -836,14 +1223,22 @@ def ring_line(box, text, oid=None, issue=None):
     return "inbox [#%s/%s]: %s%s -- read inbox/%s.md" % (issue, box, text, suffix, box)
 
 
-def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None):
+def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None, pointer=None, tag_oid=True):
     """Doorbell. Idle sessions only (caller checks). inbox = box pointer,
     notes = consultant channel (logs/consultant-notes.md). oid, when given,
-    is the ledger order id the worker must ACK (post_update ref=<oid>)."""
+    is the ledger order id the worker must ACK (post_update ref=<oid>).
+    pointer overrides the box path hint (for cross-room pointers);
+    tag_oid=False suppresses the [oid ...] suffix (auditor lanes are never
+    asked to ACK)."""
     if channel == "notes":
         line = "notes: %s -- read logs/consultant-notes.md" % text
     else:
-        line = ring_line(box, text, oid=oid, issue=issue)
+        if pointer:
+            line = "inbox: %s%s -- read %s" % (
+                text, (" [oid %s]" % oid) if (oid and tag_oid) else "",
+                pointer)
+        else:
+            line = ring_line(box, text, oid=(oid if tag_oid else None), issue=issue)
     if ctx.dry:
         return "WOULD ring %s: %s" % (sess, line)
     rc, out = ctx.run([ctx.agent_up, "msg", sess, line], timeout=60)
@@ -1367,12 +1762,12 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     probes = {}
     for role in ("dev", "qe"):
         probes[role] = fast_probe(ctx, SESS[role])
-    guard = modal_guard(ctx, [SESS["dev"], SESS["qe"], SESS["audit"],
+    guard = modal_guard(ctx, [SESS["dev"], SESS["qe"], ctx.audit_sess,
                            SESS["consultant"]])
     for sess, acted, detail in guard:
         if acted or "WOULD" in detail:
             actions.append("modal-guard %s: %s" % (sess, detail))
-            if sess == SESS["audit"] and acted:
+            if sess == ctx.audit_sess and acted:
                 actions.append("NEED auditor modal under --auto: stale pre-auto session; kill nexios-audit + relaunch audit")
     ctxp = {}
     deaf = set()
@@ -1428,14 +1823,16 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                            % (role, posted[role], pc))
     node["context_posted"] = posted
 
-    a_acts, need_verdict, ap_store = auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh)
+    a_acts, need_verdict, ap_store, as_store, audit_note = auditor_lifecycle(
+        ctx, issue, room_dir, st, boxes, fresh, rooms_all)
     actions.extend(a_acts)
+    node["audit_planned"] = audit_note
     r_acts, rel_store = release_tick(ctx, issue, boxes, st)
     actions.extend(r_acts)
 
     dev_next = boxes["dev"]["next"]
 
-    rings = st.get("rings") or {}
+    rings = room_rings(st)
     ack_since = st.get("ack_since") or None
     ack_failures = int(st.get("ack_failures", 0) or 0)
     resume_now = {}
@@ -1525,6 +1922,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             continue  # retired only by peer_handoff_done_oids below
         if oid.startswith("first:"):
             continue  # one-shot; virginity ends it
+        if oid.startswith("audit:"):
+            continue  # auditor oids die only via explicit ACK (-1) or teardown
         orole, _, ots = oid.partition(":")
         cur = (boxes.get(orole) or {}).get("coord_last")
         if cur and ots < cur[:19]:
@@ -1879,6 +2278,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if ack_since:
             s["ack_since"] = ack_since
         s["ack_failures"] = ack_failures
+        if isinstance(as_store, dict) and as_store:
+            s["audit_session"] = as_store
         s["retries"] = retries
         if isinstance(ap_store, dict):
             if ap_store:
@@ -1934,7 +2335,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             rep = latest_audit_report(ctx, issue)
             activity = ("report %s" % os.path.basename(rep)) if rep else (
                 auditor_decision(boxes["auditor"]["all"]) or "no verdict")
-            planned = "collect verdict" if need_verdict else "-"
+            planned = node.get("audit_planned") or ("collect verdict" if need_verdict else "-")
             state = audit_state(audit_session_live(ctx))
         else:
             activity = boxes[role]["state"] or boxes[role]["next"] or "-"
@@ -2337,7 +2738,7 @@ PRODUCTIVE_PREFIXES = ("rang ", "wrote ", "auditor launched", "relaunch",
     "testbed staged", "state ", "clean #", "pointer ", "consultant note",
     "audit verdict handed", "checkpoint NOTE filed", "gh note posted",
     "release #", "HALT ", "learnings draft", "verdict on file", "WOULD ",
-    "order filed", "WAKE ")
+    "order filed", "WAKE ", "audit ring ", "auditor teardown ", "audit brief ")
 
 
 def cycle_productive(all_actions):
@@ -2724,15 +3125,17 @@ def status_planned_lane(role, box, st, probe):
     return "-"
 
 
-def status_planned_audit(ctx, issue, boxes):
+def status_planned_audit(ctx, issue, boxes, st):
     """Next-step read for the audit lane. Read-only (existing readers)."""
-    if auditor_decision((boxes.get("auditor") or {}).get("all", [])):
-        return "verdict on file"
-    if audit_session_live(ctx):
-        return "awaiting verdict"
-    if latest_audit_report(ctx, issue):
-        return "report on file"
-    return "collect verdict"
+    boxes = boxes or {}
+    st = st or {}
+    verdict = bool(auditor_decision((boxes.get("auditor") or {}).get("all", [])))
+    report = bool(latest_audit_report(ctx, issue))
+    live = audit_session_live(ctx)
+    stored = bool(st.get("audit_pending"))
+    demand = audit_demand(boxes, st, None)
+    qhead = audit_queue_head(issue, demand, None)
+    return audit_planned_text(verdict, report, live, stored, demand, qhead, issue)
 
 
 def cmd_status(ctx, issues):
@@ -2753,7 +3156,7 @@ def cmd_status(ctx, issues):
                     auditor_decision(boxes["auditor"]["all"]) or "no verdict")
                 state = audit_state(audit_session_live(ctx))
                 rows.append((role, state, activity,
-                             status_planned_audit(ctx, issue, boxes)))
+                             status_planned_audit(ctx, issue, boxes, st)))
             else:
                 probe = fast_probe(ctx, sess)
                 activity = boxes[role]["state"] or boxes[role]["next"] or "-"
@@ -3469,6 +3872,133 @@ def mode_self_test():
     check("qe-brief-narrows-gate",
           "No diff-verification runs until dev posts IMPL READY." in issue_briefs_text(1, "b", "t", "x")[1]
           and "While parked:" in issue_briefs_text(1, "b", "t", "x")[1], True)
+    from types import SimpleNamespace
+    check("audit-demand-fresh",
+          audit_demand({"dev": {"all": ["2026-11-02T08:00:00Z FROM=dev NEED :: audit x"]}, "qe": {"all": []}},
+                       {}, {"dev": ["2026-11-02T08:00:00Z FROM=dev NEED :: audit x"]}) == {"requester": "dev", "text": "2026-11-02T08:00:00Z FROM=dev NEED :: audit x"[-200:]}, True)
+    check("audit-demand-pending",
+          audit_demand({"dev": {"all": []}, "qe": {"all": []}}, {"pending": "awaiting audit review"}, None) == {"requester": "dev", "text": "awaiting audit review"}, True)
+    check("audit-demand-phase",
+          audit_demand({"dev": {"all": []}, "qe": {"all": []}}, {"phase": "AUDIT", "pending": "x"}, None) == {"requester": "dev", "text": "x"}, True)
+    check("audit-demand-none",
+          audit_demand({"dev": {"all": []}, "qe": {"all": []}}, {"pending": "plain work"}, None) is None, True)
+    check("audit-demand-key-stable",
+          audit_demand_key("dev", "same text") == audit_demand_key("dev", "same text"), True)
+    check("audit-demand-key-differs",
+          audit_demand_key("dev", "text a") != audit_demand_key("dev", "text b"), True)
+    check("audit-brief-tip-missing",
+          audit_brief_tip("/nonexistent-999/brief.txt") is None, True)
+    check("audit-state-demand-pending",
+          audit_state_demand({"pending": "awaiting audit review"}) == {"requester": "dev", "text": "awaiting audit review"}, True)
+    check("audit-state-demand-phase",
+          audit_state_demand({"phase": "AUDIT", "pending": "x"}) == {"requester": "dev", "text": "x"}, True)
+    check("audit-state-demand-none",
+          audit_state_demand({"pending": "plain work"}) is None, True)
+    check("audit-fresh-need-newest",
+          audit_fresh_need({"dev": ["2026-11-02T08:00:00Z FROM=dev NEED :: audit a"],
+                            "qe": ["2026-11-02T09:00:00Z FROM=qe NEED :: audit b"]}) == {"requester": "qe", "text": "2026-11-02T09:00:00Z FROM=qe NEED :: audit b"[-200:]}, True)
+    check("audit-fresh-need-none",
+          audit_fresh_need({"dev": ["2026-11-02T08:00:00Z FROM=dev NOTE :: x"], "qe": []}) is None, True)
+    import tempfile as _st_tmp
+    _st_fd, _st_path = _st_tmp.mkstemp(prefix="audit-brief-tip-")
+    try:
+        with os.fdopen(_st_fd, "w") as _st_f:
+            _st_f.write("# room inbox\ntip: abc1234 some scope\n")
+        check("audit-brief-tip-present", audit_brief_tip(_st_path) == "abc1234", True)
+    finally:
+        try:
+            os.unlink(_st_path)
+        except OSError:
+            pass
+    check("audit-verdict-ts",
+          audit_verdict_ts(["2026-11-02T08:00:00Z FROM=auditor NOTE :: x",
+                            "2026-11-02T09:00:00Z FROM=audit DECISION :: APPROVED"]) == "2026-11-02T09:00:00", True)
+    check("audit-verdict-ts-none", audit_verdict_ts(["2026-11-02T08:00:00Z FROM=auditor NOTE :: x"]) is None, True)
+    check("audit-queue-self", audit_queue_head(51, {"requester": "dev", "text": "t"}, None) == 51, True)
+    check("audit-queue-none", audit_queue_head(51, None, None) is None, True)
+    check("audit-queue-other-older",
+          audit_queue_head(52, {"requester": "dev", "text": "t"},
+                           [(51, "/r", {"audit_pending": {"since": "2026-11-02T07:00:00Z"}}),
+                            (52, "/r", {})]) == 51, True)
+    check("audit-queue-oldest-wins",
+          audit_queue_head(51, {"requester": "dev", "text": "t"},
+                           [(51, "/r", {}),
+                            (52, "/r", {"audit_pending": {"since": "2026-11-02T09:00:00Z"}})]) == 52, True)
+    check("audit-ring-0", audit_ring_action(0) == "ring", True)
+    check("audit-ring-2", audit_ring_action(2) == "ring", True)
+    check("audit-ring-3-escalate", audit_ring_action(3) == "escalate", True)
+    check("audit-ring-4-await", audit_ring_action(4) == "awaiting", True)
+    check("audit-retask-none", audit_retask_gate(None, None, "IDLE", False, False, None, None, False, None, None, {}, None, None, None) == "skip-no-demand", True)
+    check("audit-retask-launch", audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", False, False, None, None, False, None, None, {}, None, None, None) == "launch", True)
+    check("audit-retask-defer-working",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "WORKING-markers", True, True, "tip", "tip", False, "k", None, "audit:x", {}, None, None) == "defer-working", True)
+    check("audit-retask-defer-modal",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "BLOCKED-modal", True, True, "tip", "tip", False, "k", None, "audit:x", {}, None, None) == "defer-working", True)
+    check("audit-retask-defer-busy",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", False, "k", None, "audit:x", {}, 54, None) == "defer-busy", True)
+    check("audit-retask-skip-done",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", True, "k", "k", "audit:x", {}, None, None) == "skip-done", True)
+    check("audit-retask-brief-missing",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, False, None, None, False, "k", None, None, {}, None, None) == "brief-then-ring", True)
+    check("audit-retask-tip-changed",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "old", "new", False, "k", None, None, {}, None, None) == "brief-then-ring", True)
+    check("audit-retask-new-ring",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", False, "k", None, "audit:ts", {}, None, None) == "ring", True)
+    check("audit-retask-rung-awaiting",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", False, "k", None, "audit:ts", {"audit:ts": 4}, None, 9999) == "awaiting", True)
+    check("audit-retask-escalate",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", False, "k", None, "audit:ts", {"audit:ts": 3}, None, 9999) == "escalate", True)
+    check("audit-retask-ring-again",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", False, "k", None, "audit:ts", {"audit:ts": 1}, None, 9999) == "ring-again", True)
+    check("audit-retask-hold-stale",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "ABSENT", False, False, None, None, False, "k", None, None, {}, None, None) == "launch", True)
+    check("audit-teardown-absent", audit_teardown_gate(False, "ABSENT", False, False, None, None, False, False, 0, 2, True, False) == (0, "absent"), True)
+    check("audit-teardown-disabled", audit_teardown_gate(True, "IDLE", True, True, None, None, False, False, 0, 2, False, False) == (0, "disabled"), True)
+    check("audit-teardown-hold-dup", audit_teardown_gate(True, "IDLE", True, True, None, None, False, True, 0, 2, True, False) == (0, "hold-dup"), True)
+    check("audit-teardown-hold-demand", audit_teardown_gate(True, "IDLE", True, True, {"requester": "dev"}, None, False, False, 0, 2, True, False) == (0, "hold-demand"), True)
+    check("audit-teardown-hold-fresh", audit_teardown_gate(True, "IDLE", True, True, None, {"requester": "dev"}, False, False, 0, 2, True, False) == (0, "hold-demand"), True)
+    check("audit-teardown-hold-verdict", audit_teardown_gate(True, "IDLE", False, False, None, None, False, False, 0, 2, True, False) == (0, "hold-verdict"), True)
+    check("audit-teardown-hold-unhandled", audit_teardown_gate(True, "IDLE", True, False, None, None, False, False, 0, 2, True, False) == (0, "hold-verdict"), True)
+    check("audit-teardown-hold-working", audit_teardown_gate(True, "WORKING", True, True, None, None, False, False, 0, 2, True, False) == (0, "hold-working"), True)
+    check("audit-teardown-countdown", audit_teardown_gate(True, "IDLE-static", True, True, None, None, False, False, 0, 2, True, False) == (1, "countdown"), True)
+    check("audit-teardown-kill", audit_teardown_gate(True, "IDLE-static", True, True, None, None, False, False, 1, 2, True, False) == (2, "kill"), True)
+    check("audit-teardown-would-kill", audit_teardown_gate(True, "IDLE-static", True, True, None, None, False, False, 1, 2, True, True) == (2, "would-kill"), True)
+    check("audit-teardown-hold-other",
+          audit_teardown_gate(True, "IDLE-static", True, True, None, None, True, False, 0, 2, True, False) == (0, "hold-demand"), True)
+    check("audit-retask-neg-skip-done",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", True, "k", "k", "audit:ts", {"audit:ts": -1}, None, 0) == "skip-done", True)
+    check("audit-state-demand-next-plan-review",
+          audit_state_demand({"pending": "plain work"},
+                             {"dev": {"next": "waiting auditor plan-review"}, "qe": {"next": None}}) == {"requester": "dev", "text": "waiting auditor plan-review"}, True)
+    check("audit-state-demand-next-qe",
+          audit_state_demand({"pending": "plain work"},
+                             {"dev": {"next": None}, "qe": {"next": "waiting audit verdict"}}) == {"requester": "qe", "text": "waiting audit verdict"}, True)
+    check("audit-demand-next-fallback",
+          audit_demand({"dev": {"all": [], "next": "waiting auditor plan-review"}, "qe": {"all": [], "next": None}},
+                       {"pending": "plain work"},
+                       {"dev": [], "qe": []}) == {"requester": "dev", "text": "waiting auditor plan-review"}, True)
+    check("audit-planned-verdict", audit_planned_text(True, True, True, {"requester": "d"}, {"requester": "d"}, 51, 51) == "verdict on file", True)
+    check("audit-planned-report", audit_planned_text(False, True, False, {}, None, None, 51) == "report on file", True)
+    check("audit-planned-stored", audit_planned_text(False, False, True, {"requester": "d"}, None, None, 51) == "awaiting verdict", True)
+    check("audit-planned-queued", audit_planned_text(False, False, True, {}, {"requester": "d"}, 52, 51) == "queued behind #52", True)
+    check("audit-planned-ring", audit_planned_text(False, False, True, {}, {"requester": "d"}, 51, 51) == "ring audit lane", True)
+    check("audit-planned-queued-launch", audit_planned_text(False, False, False, {}, {"requester": "d"}, None, 51) == "queued: launch audit", True)
+    check("audit-planned-idle", audit_planned_text(False, False, True, {}, None, None, 51) == "idle: no audit requested", True)
+    check("audit-planned-absent", audit_planned_text(False, False, False, {}, None, None, 51) == "no audit requested", True)
+    check("reset-resume-counts", reset_resume_rings({"next:qe:a": 1, "dev:x": 2, "next:dev:b": 0}) == 2, True)
+    check("ring-pointer-override",
+          ring(SimpleNamespace(dry=True), "s", "dev", "t", oid="audit:x",
+               pointer="/tmp/r/inbox/auditor.md", tag_oid=False).endswith("read /tmp/r/inbox/auditor.md"), True)
+    check("ring-oid-audit-tagged",
+          "[oid audit:x]" in ring(SimpleNamespace(dry=True), "s", "dev", "t", oid="audit:x"), True)
+    check("kill-would-not-run",
+          kill_audit_session(SimpleNamespace(dry=True, audit_sess="s", run=lambda *a, **k: (_ for _ in ()).throw(AssertionError("ran"))), "r") == "WOULD kill s (r)", True)
+    _rs = {}
+    _r1 = room_rings(_rs)
+    _r1["audit:x"] = 1
+    check("room-rings-shared-virgin", room_rings(_rs) == {"audit:x": 1} and _rs.get("rings") == {"audit:x": 1}, True)
+    check("room-rings-keeps-existing", room_rings({"rings": {"a:b": 2}}) == {"a:b": 2}, True)
+    check("room-rings-replaces-nondict", room_rings({"rings": [1]}) == {}, True)
     print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
     return 0 if passed == total else 1
 
@@ -3488,6 +4018,8 @@ def main(argv=None):
     t.add_argument("--dev-dir", default=None)
     t.add_argument("--qe-dir", default=None)
     t.add_argument("--notes-file", default=None)
+    t.add_argument("--no-audit-teardown", action="store_true",
+                   help="never kill the auditor session (observe only)")
     s = sub.add_parser("status")
     s.add_argument("--issues", default="")
     s.add_argument("--all", action="store_true")
