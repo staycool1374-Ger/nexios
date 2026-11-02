@@ -603,27 +603,42 @@ def audit_session_live(ctx):
     return rc == 0
 
 
-def auditor_decision(box_all):
-    """Newest DECISION line in auditor box, or None."""
-    for l in reversed(box_all):
+def auditor_decision(box_all, full=None):
+    """Newest DECISION line in auditor box, or None. Trailer-aware (#447)."""
+    best_ts = None
+    best_txt = None
+    for l in reversed(box_all or []):
         if "DECISION" in l:
-            return l[:220]
-    return None
+            best_ts, best_txt = l[:19], l[:220]
+            break
+    tts, ttext = audit_trailer_verdict(full or [])
+    if tts and (best_ts is None or tts > best_ts):
+        return "%s %s" % (tts, ttext)
+    return best_txt
 
 
-def auditor_approved(box_all):
+def auditor_approved(box_all, full=None):
     """Strict APPROVED verdict: the newest auditor verdict line says
     APPROVED. Pure. Only the auditor's own posts count (sender audit or
     auditor) and only verdict-shaped ones (kind DECISION, or a DECISION:
     marker in the body as the READY/NEED verdicts carry) — a dev NOTE
-    merely mentioning DECISION can neither spoof nor shadow (Gap A gate)."""
+    merely mentioning DECISION can neither spoof nor shadow (Gap A gate).
+    Trailer-aware (#447): a DECISION: trailer after an audit READY/NEED
+    post counts with the parent post's sender/kind."""
     for line in reversed(box_all or []):
         m = POST_RE.match(line)
         if not m or m.group(2) not in ("audit", "auditor"):
             continue
         if m.group(3) != "DECISION" and "DECISION:" not in m.group(4):
             continue
-        return bool(re.search(r"\bAPPROVED\b", m.group(4)))
+        post_ts, post_ok = line[:19], bool(re.search(r"\bAPPROVED\b", m.group(4)))
+        tts, ttext = audit_trailer_verdict(full or [])
+        if tts and tts > post_ts:
+            return bool(re.search(r"\bAPPROVED\b", ttext or ""))
+        return post_ok
+    tts, ttext = audit_trailer_verdict(full or [])
+    if tts:
+        return bool(re.search(r"\bAPPROVED\b", ttext or ""))
     return False
 
 
@@ -676,6 +691,59 @@ def audit_verdict_ts(box_all):
         if m and m.group(3) == "DECISION" and (best is None or line[:19] > best):
             best = line[:19]
     return best
+
+
+def audit_trailer_verdict(full_lines):
+    """Newest DECISION: trailer verdict with parent POST ts. Pure (#447).
+
+    The auditor wire schema puts the verdict on trailer lines
+    (DECISION: APPROVED ...), not on the POST line (FROM=audit READY).
+    Scans full box lines for ^DECISION:, attributing each to the nearest
+    preceding POST_RE line's ts. Returns (ts19, text) or (None, None)."""
+    best_ts = None
+    best_text = None
+    last_post_ts = None
+    for line in full_lines or []:
+        m = POST_RE.match(line)
+        if m:
+            last_post_ts = line[:19]
+            continue
+        s = (line or "").strip()
+        if s.startswith("DECISION:"):
+            if last_post_ts and (best_ts is None or last_post_ts > best_ts):
+                best_ts = last_post_ts
+                best_text = s[:220]
+    return best_ts, best_text
+
+
+def audit_verdict_ts_full(box_all, full_lines=None):
+    """Newest verdict ts from POST DECISION or DECISION: trailer. Pure."""
+    best = audit_verdict_ts(box_all)
+    tts, _ = audit_trailer_verdict(full_lines or [])
+    if tts and (best is None or tts > best):
+        best = tts
+    return best
+
+
+def audit_unhandled_verdict(box_all, full_lines, handled_ts):
+    """Newest unhandled verdict (POST or trailer) newer than handled. Pure.
+
+    Fixes first-sight loss: new_posts() reports [] when the handled
+    cursor is unset, while the tick cursor still advances past the
+    verdict. Scanning unhandled history makes the first sight actionable."""
+    since = (handled_ts or "")[:19]
+    best_ts = None
+    best_text = None
+    for line in box_all or []:
+        m = POST_RE.match(line)
+        if m and m.group(3) == "DECISION" and line[:19] > since:
+            if best_ts is None or line[:19] > best_ts:
+                best_ts = line[:19]
+                best_text = line[-200:]
+    tts, ttext = audit_trailer_verdict(full_lines or [])
+    if tts and tts > since and (best_ts is None or tts > best_ts):
+        best_ts, best_text = tts, ttext
+    return (best_ts, best_text) if best_ts else (None, None)
 
 
 def audit_state_demand(st, boxes=None):
@@ -845,7 +913,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     asess = dict(st.get("audit_session") or {})
     rings = room_rings(st)
     fresh_need = audit_fresh_need(fresh)
-    verdict_ts = audit_verdict_ts(boxes["auditor"]["all"])
+    verdict_ts = audit_verdict_ts_full(boxes["auditor"]["all"], boxes["auditor"].get("full"))
     handled_past = bool(verdict_ts) and (st.get("handled") or {}).get("auditor", "")[:19] >= verdict_ts
     live = audit_session_live(ctx)
     aprobe = fast_probe(ctx, ctx.audit_sess) if live else "ABSENT"
@@ -874,6 +942,28 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
                                       issue=issue))
             else:
                 acted.append("HAND-BACK-FAILED %s" % target)
+    if not seen_verdict:
+        uhts, uhtext = audit_unhandled_verdict(
+            boxes["auditor"]["all"], boxes["auditor"].get("full"),
+            (st.get("handled") or {}).get("auditor", ""))
+        if uhts and uhts > (st.get("handled") or {}).get("auditor", "")[:19]:
+            seen_verdict = True
+            target = ((fresh_need or {}).get("requester") if isinstance(fresh_need, dict) else None) or stored.get("requester", "dev")
+            note, oid = coord_note(target, "AUDIT %s (#%d): detail inbox/auditor.md"
+                                   % ("APPROVED" if "APPROVED" in (uhtext or "") else "NEED", issue))
+            if rep:
+                note += "; report %s" % os.path.basename(rep)
+            if ctx.dry:
+                acted.append("WOULD hand audit verdict to %s + ring-if-idle" % target)
+            else:
+                if append_box_note(room_dir, target, note):
+                    acted.append("audit verdict handed to %s (unhandled scan)" % target)
+                    asess["handled_demand"] = asess.get("demand_key")
+                    if target in SESS and fast_probe(ctx, SESS[target]).startswith("IDLE"):
+                        acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid,
+                                          issue=issue))
+                else:
+                    acted.append("HAND-BACK-FAILED %s" % target)
     if any("audit verdict handed to" in a or "WOULD hand audit verdict" in a for a in acted):
         store = {}
     demand = audit_demand(boxes, st, fresh)
@@ -926,7 +1016,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
         asess = {"state": "absent", "idle_ticks": 0,
                  "handled_demand": asess.get("handled_demand"),
                  "verdict_ts": verdict_ts}
-    dec = auditor_decision(boxes["auditor"]["all"])
+    dec = auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full"))
     if dec and not fresh_need and not demand:
         if stored and store is None:
             acted.append("verdict on file; stale audit_pending cleared")
@@ -2122,7 +2212,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     if stored_impl and stored_impl.get("next") != (boxes["dev"]["next"] or ""):
         di_store = {}
     _dev_next = boxes["dev"]["next"] or ""
-    _approved = auditor_approved(boxes["auditor"]["all"])
+    _approved = auditor_approved(boxes["auditor"]["all"], boxes["auditor"].get("full"))
     if impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
                           fresh.get("dev"), _approved, rings, has_unacked,
                           stored_impl):
@@ -2221,7 +2311,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 actions.append("NOTE-FAILED qe IMPL READY #%d" % issue)
         events.append("qe-order-filed")
 
-    dec = auditor_decision(boxes["auditor"]["all"])
+    dec = auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full"))
     qe_ready = any("READY" in l for l in boxes["qe"]["all"][-3:])
     node["merge_ready"] = bool(dec and "APPROVED" in dec and qe_ready)
     qm_store = None
@@ -2334,7 +2424,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if role == "audit":
             rep = latest_audit_report(ctx, issue)
             activity = ("report %s" % os.path.basename(rep)) if rep else (
-                auditor_decision(boxes["auditor"]["all"]) or "no verdict")
+                auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full")) or "no verdict")
             planned = node.get("audit_planned") or ("collect verdict" if need_verdict else "-")
             state = audit_state(audit_session_live(ctx))
         else:
@@ -2721,7 +2811,7 @@ def learnings_draft_text(issue, st, boxes):
     ndev = len(boxes["dev"]["all"])
     nqe = len(boxes["qe"]["all"])
     naud = len(boxes["auditor"]["all"])
-    dec = auditor_decision(boxes["auditor"]["all"]) or "none on file"
+    dec = auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full")) or "none on file"
     return ("# LEARNINGS DRAFT -- lane #%d retired %s (for curation; NOT the curated file)\n\n"
             "- closeout: room phase CLOSED, issue closed, `clean` rc 0.\n"
             "- effort: %s retries recorded; halt=%s.\n"
@@ -3129,7 +3219,7 @@ def status_planned_audit(ctx, issue, boxes, st):
     """Next-step read for the audit lane. Read-only (existing readers)."""
     boxes = boxes or {}
     st = st or {}
-    verdict = bool(auditor_decision((boxes.get("auditor") or {}).get("all", [])))
+    verdict = bool(auditor_decision((boxes.get("auditor") or {}).get("all", []), (boxes.get("auditor") or {}).get("full", [])))
     report = bool(latest_audit_report(ctx, issue))
     live = audit_session_live(ctx)
     stored = bool(st.get("audit_pending"))
@@ -3153,7 +3243,7 @@ def cmd_status(ctx, issues):
             if role == "audit":
                 rep = latest_audit_report(ctx, issue)
                 activity = ("report %s" % os.path.basename(rep)) if rep else (
-                    auditor_decision(boxes["auditor"]["all"]) or "no verdict")
+                    auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full")) or "no verdict")
                 state = audit_state(audit_session_live(ctx))
                 rows.append((role, state, activity,
                              status_planned_audit(ctx, issue, boxes, st)))
@@ -3712,6 +3802,24 @@ def mode_self_test():
     check("auditor-approved-note-spoof",
           auditor_approved(["2026-11-02T08:00:00Z FROM=dev NOTE :: mentions DECISION APPROVED"]) is False, True)
     check("auditor-approved-none", auditor_approved([]) is False, True)
+    check("audit-trailer-ts",
+          audit_trailer_verdict(["2026-11-02T10:01:22Z FROM=audit READY :: verdict ready",
+                                 "STATE: x", "NEXT: y", "DECISION: APPROVED step-a"]) == ("2026-11-02T10:01:22", "DECISION: APPROVED step-a"), True)
+    check("audit-trailer-none",
+          audit_trailer_verdict(["2026-11-02T10:01:22Z FROM=audit READY :: x", "STATE: x"]) == (None, None), True)
+    check("audit-verdict-ts-full-trailer",
+          audit_verdict_ts_full([], ["2026-11-02T10:01:22Z FROM=audit READY :: x", "DECISION: NEED rework"]) == "2026-11-02T10:01:22", True)
+    check("audit-unhandled-first-sight",
+          audit_unhandled_verdict(["2026-11-02T10:01:22Z FROM=audit READY :: x"],
+                                  ["2026-11-02T10:01:22Z FROM=audit READY :: x", "DECISION: APPROVED y"],
+                                  "")[0] == "2026-11-02T10:01:22", True)
+    check("audit-unhandled-past",
+          audit_unhandled_verdict(["2026-11-02T10:01:22Z FROM=audit DECISION :: APPROVED"],
+                                  [], "2026-11-02T10:01:22Z") == (None, None), True)
+    check("auditor-decision-trailer",
+          "DECISION: APPROVED" in (auditor_decision([], ["2026-11-02T10:01:22Z FROM=audit READY :: x", "DECISION: APPROVED y"]) or ""), True)
+    check("auditor-approved-trailer",
+          auditor_approved([], ["2026-11-02T10:01:22Z FROM=audit READY :: x", "DECISION: APPROVED y"]) is True, True)
     _iw = "waiting IMPL order (plan-approved)"
     check("impl-due-true",
           impl_promotion_due(_iw, True, [], True, {}, set(), {}), True)
