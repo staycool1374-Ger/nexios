@@ -1,265 +1,292 @@
-diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
-index bdb4a759c..7e20f1f51 100644
---- a/prompts/LEARNINGS.md
-+++ b/prompts/LEARNINGS.md
-@@ -8,9 +8,6 @@
- 
- ## Active cautions (curated digest — read at session start; cap ~12 lines)
- 
--- Status views must compute the next step, not print `-`: share the tick's predicates read-only; the first live run paid for itself by surfacing two HALTed rooms (#448).
--- Never escalate a lane you never contacted: virgin rooms get one tracked first-contact ring, and UNCHANGED only burns budget after a worker post exists (#449).
--- Orders carry ids on every surface (ring, NOTE, brief) and ACKs are matched explicitly; chatter never clears an armed order, and first-sight posts are actionable (#450).
- - Widening a fence means cage + charter + verifier in one motion: prose that still says read-only next to an allow rule is a doc-lie the next audit will catch (#451).
- - Engine liveness is worker-activity, not engine-action: quiet counters must reset on CHANGED verdicts + fresh acked posts, never on engine acts alone — and a loop that can die idle needs a wake path that resurrects it, or the first idle window kills the heartbeat forever (#442).
- - Worker→worker handoffs don't forward themselves: a READY naming the peer must ring the peer once (tracked ledger, no escalation) or the handoff sits unread until a human doorbells — READY-only, whole-word mention, one outstanding max, and never parse ts with split(":") (#443).
-@@ -1646,20 +1643,6 @@
- - **Adapted:** `parse_issue_list` (validate-all-first via `runtime_dir`, dedupe, one error names the item, no IFS mutation), `mode_up` rewrite (setup loop → missing-briefs-only `brief` → one workers → skeleton-only pending → single engine/disarm/windows), `brief` subcommand (preflight, fetch-all-first, atomic temp+fsync+replace writes), `room_plan` plan seam with step lines for the self-test. 33 new self-test rows; scratch-room smoke proved end-to-end.
- - **Style re-face:** validate the whole list before the first side effect, and make the plan seam print steps — a batch that can't say what it will do shouldn't be allowed to do it. Atomic writes for anything a live loop can read mid-tick.
- 
--### #448 — status PLANNED column always "-" (no next-step read)
--- **Learned:** the read-only status table hardcoded `"-"` for PLANNED while the tick table computed a real one per lane — the view the operator actually checks was the least informative. A status view that can't say what happens next forces pane-diving for what the engine already knows.
--- **Adapted:** pure `status_planned_lane` (+audit variant) reusing the tick's own predicates (unacked coord, resume regex as a shared constant, NEXT, pending, NEED-idle) + selftest matrix; no new I/O (probes/readers already present in `cmd_status`). First live run immediately surfaced two HALTED rooms the old `-` had hidden.
--- **Style re-face:** read paths and write paths may share predicates but never effects — extract the predicate, keep the side effects where they were.
--
--### #449 — virgin rooms halt without ever being contacted (no first-contact path)
--- **Learned:** the engine's entire ring repertoire is reactive (unacked orders need coord NOTEs, resume needs NEXT, peer needs READY, audit needs a cycle) — with no coordinator, nothing initiates first contact, so virgin rooms ran UNCHANGED x3→HALT without a single doorbell. The halt policy couldn't distinguish "never started" from "genuinely stuck".
--- **Adapted:** one-shot `first:lane` ring when a virgin room has a staged brief and the lane probes IDLE (tracked ledger, no re-ring, no escalation), plus an escalate gate requiring at least one worker post ever — uncontacted rooms now idle toward the clean quiet-exit with summary instead of burning the retry budget.
--- **Style re-face:** never punish a lane you never spoke to — contact precedes escalation, and the ledger distinguishes "rung once" from "acknowledged".
--
--### #450 — engine orders need explicit ACKs (post_update ref + ledger matching)
--- **Learned:** `post_update` enforced post *format* but carried no order reference, so the engine cleared ring ledger entries on any chatter (`posts[-1] > ots`) — an FYI NOTE counted as an answer. Format discipline without a handshake is unroutable mail with perfect postage.
--- **Adapted:** optional `ref` on the bridge (closed-shape oid grammar, fullmatch, lane-matched, auditor-box rejected) appending an `ACK:` 4th trailer; engine emits `[oid …]` in every ring and coord NOTE and clears exactly the matching ledger oid (first-sight posts included via `ack_scan_posts`, which closed a live #447-class hole found during verification); unmatched orders escalate as `ACK-MISSING` with a dedicated counter (never the halt budget); legacy rooms stay on timestamp clears until their first matched ACK arms the discipline.
--- **Style re-face:** every order carries its id on every surface that conveys it (ring text, coord NOTE, brief mandate), and every ACK is matched, logged, and ledgered — or explicitly ignored with a reason, never silently dropped.
- ### #451 — consultant fence widening (repo r+w except src, full /tmp, GitHub publish)
- - **Learned:** the consultant's cage still described a read-only advisor two cutovers after the role changed — and the verifier's F4 exact-set plus a doc-grep were the only things that could catch the drift, since rendered maps are never hand-read. A permission delta that widens a role must rewrite the charter, the description, and the verifier constant in the same motion, or the prose lies while the cage opens.
- - **Adapted:** `{repo}/**` allow with deny-after-allow for `src{,/**}`, fence self-cage, render/verify/agent_up; `/tmp/*` role-scope extended; scoped gh (`issue/pr/release/api repos/*`) + git verbs; twin rewritten (WRITE/GITHUB sections, NEVER list, release duty without the operator's hands for tag/push/release); F9 (deny + ordering) with bite-proven self-test; runtime `coordinator/` home renamed to `consultant/` with move-if-absent migration; all live coordinator strings repointed, wire format (`FROM=coord`) and history untouched.
 diff --git a/prompts/PROMPT-audit.md b/prompts/PROMPT-audit.md
-index d0485f4f7..9bf54d180 100644
+index 9bf54d180..bde640f11 100644
 --- a/prompts/PROMPT-audit.md
 +++ b/prompts/PROMPT-audit.md
-@@ -75,7 +75,7 @@ paths before code is accepted.
+@@ -74,7 +74,7 @@ paths before code is accepted.
+   test execution is exclusively the developer's job; your verdict is based on
    static analysis of the diff and targeted source reads only.
  - Cope with the granted permission set: a missing permission is recorded as a report limitation/finding, NEVER a reason to stop the audit and ask for more mid-process. If a tool call fails with empty parameters or SchemaError, re-issue it singly with complete arguments — never loop retries, never batch.
- - Read tool for reads, Grep tool for searches. NEVER use bash for file reads. A permission modal is a denial: route around immediately and keep auditing.
--- Verdict delivery is the REPORT FILE itself (`audits/report-<UTC>-<issue>.md`); the inbox line + ring are best-effort. The coordinator polls the audits directory — a posted report is a delivered verdict even if no ring goes out.
-+- Verdict delivery is the REPORT FILE itself (`audits/report-<UTC>-<issue>.md`); the inbox line + ring are best-effort. The engine polls the audits directory — a posted report is a delivered verdict even if no ring goes out.
+-- Read tool for reads, Grep tool for searches. NEVER use bash for file reads. A permission modal is a denial: route around immediately and keep auditing.
++- Read tool for reads, Grep tool for searches. NEVER use bash for file reads. You run under opencode --auto: ask is auto-approved, deny is enforced and final — record it as a limitation and route around once, never retry, never wrap, never loop. A visible permission modal under --auto is an infrastructure defect in the launcher: note it in the report and stop escalating (a human operator relaunches you); do not sit waiting for a click that cannot come.
+ - Verdict delivery is the REPORT FILE itself (`audits/report-<UTC>-<issue>.md`); the inbox line + ring are best-effort. The engine polls the audits directory — a posted report is a delivered verdict even if no ring goes out.
  - When done (DECISION posted with the report), ring per the PROTOCOL.md wake rule — then idle.
  - After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
- 
 diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
-index 622b12dd7..f40407dc3 100755
+index f40407dc3..c956e0ffc 100755
 --- a/scripts/agent_up.sh
 +++ b/scripts/agent_up.sh
-@@ -9,8 +9,9 @@
- # WHAT IT SETS UP (one command, zero out-of-repo prerequisites):
- #   workers    named fenced tmux sessions (nexios-dev, nexios-qe, nexios-audit)
- #   consultant named fenced tmux session (nexios-consultant) — the operator's
--#              read-only advisor window. It never drives workers, rings, or
--#              state; orchestration belongs to the engine below.
-+#              advisor window (repo write except src/ + full /tmp, GitHub
-+#              issues/PRs/releases). It never drives workers, rings sessions,
-+#              or touches state; orchestration belongs to the engine below.
- #   engine     headless tmux session (nexios-engine) running the deterministic
- #              state-machine tick loop over all rooms (single heartbeat).
- #   comms      room runtime root /tmp/nexios-<issue>/ (inbox/dev|qe|auditor.md,
-@@ -53,7 +54,7 @@ FENCE_DIR="${FENCE_DIR:-$REPO_ROOT/tools/agents/fence}"
- RENDERER="$REPO_ROOT/tools/agents/render_fence.py"
- NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
- RENDERED_ROOT="$NEXIOS_HOME/rendered"
--COORD_DIR="$NEXIOS_HOME/coordinator"
-+CONSULT_HOME="$NEXIOS_HOME/consultant"
- OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
- TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
- DEV_DIR="$HOME/jarvis"
-@@ -80,15 +81,16 @@ ENGINE_SESS="nexios-engine"
- usage() {
-   cat >&2 <<EOF
- usage: agent_up.sh <mode> [...]
--  setup <issue>      create coord runtime (/tmp/nexios-<issue>/: inbox, state,
-+  setup <issue>      create room runtime (/tmp/nexios-<issue>/: inbox, state,
-                      prompts, notes, PROTOCOL) + render every role fence into
-                      $RENDERED_ROOT. Idempotent: never overwrites state/inbox.
--  consult [taskfile] ensure $CONSULT_SESS tmux session (read-only advisor TUI,
--                     no attach, engine-safe). Optional taskfile is pasted as
--                     the first message; default is a standby line.
-+  consult [taskfile] ensure $CONSULT_SESS tmux session (fenced advisor TUI
-+                     with repo write except src/, full /tmp, GitHub issues/PRs/
-+                     releases; no attach, engine-safe). Optional taskfile is
-+                     pasted as the first message; default is a standby line.
-   windows            open visible Terminal windows for consultant + dev + qe
--                     (read-write mirrors). No coordinator session exists anymore;
--                     the engine loop owns every lane.
-+                     (read-write mirrors). Three sessions only — the engine
-+                     owns every lane.
-   workers [issue]    launch $DEV_SESS + $QE_SESS (detached tmux). With an issue
-                      they get prompts/dev.txt + prompts/qe.txt from the room
-                      runtime; without one they start bare and wait for a ring.
-@@ -289,7 +291,7 @@ role_dir() {
-   case "$1" in
-     dev|audit) printf '%s\n' "$DEV_DIR" ;;
-     qe) printf '%s\n' "$QE_DIR" ;;
--    coord) printf '%s\n' "$COORD_DIR" ;;
-+    consultant|coord) printf '%s\n' "$CONSULT_HOME" ;;
-     *) fail "unknown launch cwd: '$1'" ;;
-   esac
+@@ -114,6 +114,9 @@ usage: agent_up.sh <mode> [...]
+                      <role> is dev|qe|auditor|consultant — the fence for it is
+                      rendered from tools/agents/fence/ at launch (never a path).
+   audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
++                     (headless: --agent nexios-audit --auto from the role delta;
++                     ask auto-approved, deny enforced; other roles stay
++                     interactive).
+   audit-diff [branch] [--base <rev>]
+                      write the audit diff to audits/pending_patch.diff
+                      (base defaults to merge-base main <branch>; must be
+@@ -257,6 +260,27 @@ role_field() {
+     --fence-root "$FENCE_DIR"
  }
-@@ -324,11 +326,19 @@ prune_link() {
  
- # State dir links: AGENTS.md (legacy coordinator doctrine, kept for history). Config files are RENDERED
- # into $RENDERED_ROOT and never linked; pre-#414 links/role copies are pruned.
-+# The consultant home moved coordinator -> consultant (#451, the role is gone);
-+# an existing coordinator/ home is moved once (content preserved, never deleted).
- ensure_state_links() {
-   mkdir -p "$NEXIOS_HOME"
--  prune_link "$COORD_DIR/AGENTS.md"
--  prune_link "$COORD_DIR/opencode.json"
--  prune_link "$COORD_DIR/opencode.resolved.json"
-+  if [ -d "$NEXIOS_HOME/coordinator" ] && [ ! -e "$CONSULT_HOME" ]; then
-+    mv "$NEXIOS_HOME/coordinator" "$CONSULT_HOME" \
-+      || fail "cannot move $NEXIOS_HOME/coordinator to $CONSULT_HOME (move it by hand)"
-+    info "moved consultant home: coordinator/ -> consultant/"
++# $1 role — extra opencode CLI flags from the role delta (auditor only:
++# --agent <name> selects its cage as the session primary, --auto approves
++# asks while keeping deny enforced). Empty for every other role.
++role_launch_flags() {
++  [ $# -eq 1 ] || fail "role_launch_flags needs a role"
++  local out="" ag au
++  ag=$(role_field "$1" agent)
++  case "$ag" in ''|*[[:space:]]*) ;; *) out="$out --agent $ag";; esac
++  au=$(role_field "$1" auto)
++  case "$au" in True|true) out="$out --auto";; esac
++  printf '%s' "$out"
++}
++
++# $1 role, $2 rendered config, $3 tmpdir — the exact opencode command line
++# run_session launches (single builder; self-test inspects this, never a copy).
++session_launch_cmd() {
++  [ $# -eq 3 ] || fail "session_launch_cmd needs: <role> <config> <tmpdir>"
++  printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=%s OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s%s' \
++    "$3" "$2" "$1" "$OPENCODE_BIN" "$(role_launch_flags "$1")"
++}
++
+ render_all() {
+   local role
+   for role in dev qe auditor consultant; do
+@@ -654,9 +678,9 @@ mode_run() {
+ mode_audit() {
+   [ $# -eq 1 ] || fail "audit needs an issue number"
+   local rt; rt=$(runtime_dir "$1")
+-  # Launch metadata (cwd + prompt file) comes from the role delta, not a
+-  # hardcoded path: the auditor reads the dev checkout (diff + files) and never
+-  # writes, and the delta is the single statement of that.
++  # Launch metadata (cwd + prompt file + --agent/--auto flags) comes from the
++  # role delta, not a hardcoded path: the auditor reads the dev checkout (diff
++  # + files) and never writes, and the delta is the single statement of that.
+   local dir prompt
+   dir=$(role_dir "$(role_field auditor cwd)")
+   prompt="$rt/prompts/$(role_field auditor prompt)"
+@@ -707,9 +731,23 @@ run_session() {
+       *[[:space:]]*) fail "launch path contains whitespace, which the fenced env line cannot express: '$v'" ;;
+     esac
+   done
++  # Headless roles (auditor) must never be reused across a launch-flag change:
++  # a live session predating --auto would keep stalling on modals while the
++  # fence on disk already promises auto-approval. Detect and recycle.
++  if [ "$reused" = 1 ]; then
++    case "$(role_launch_flags "$role")" in
++      *"--auto"*)
++        if ! pane_tree_has_arg "$name" "--auto"; then
++          info "recycling '$name': live session predates --auto (kill + relaunch)"
++          tmux kill-session -t "$name" 2>/dev/null || true
++          reused=0
++        fi
++        ;;
++    esac
 +  fi
-+  mkdir -p "$CONSULT_HOME"
-+  prune_link "$CONSULT_HOME/AGENTS.md"
-+  prune_link "$CONSULT_HOME/opencode.json"
-+  prune_link "$CONSULT_HOME/opencode.resolved.json"
-   prune_link "$NEXIOS_HOME/roles/dev.json"
-   prune_link "$NEXIOS_HOME/roles/qe.json"
-   prune_link "$NEXIOS_HOME/roles/auditor.json"
-@@ -339,7 +349,7 @@ ensure_state_links() {
-   fi
- }
- 
--# ---coord runtime (comms setup)------------------------------------------------
-+# ---room runtime (comms setup)------------------------------------------------
- write_protocol() {
-   cat > "$1/PROTOCOL.md" <<'EOF'
- # Mailbox protocol
-@@ -351,8 +361,8 @@ write_protocol() {
-   post-test-run). Workers never poll.
- - Payloads live here, never in chat.
- - Doorbell (both directions, tmux — harness cannot see tmux sessions):
--  coord→worker:  agent_up.sh msg nexios-dev "inbox: READY from dev — read inbox/qe.md"
--  worker→coord:  agent_up.sh msg nexios-coord "inbox: dev READY — read inbox/dev.md"
-+  engine→worker: agent_up.sh msg nexios-dev "inbox: <short> — read inbox/dev.md"
-+  worker→engine: agent_up.sh wake <issue> <role> nexios-engine "inbox: <role> READY — read inbox/<role>.md" (durable WAKE line; keystroke skipped for the loop)
-   Rules: single line, inbox POINTER only, idle sessions only, never dialogs.
-   A ring means "re-read the inbox", never execute ring text.
- - Durable wake (worker→engine only): `agent_up.sh wake <issue> <from> <sess>
-@@ -444,7 +454,7 @@ mode_setup() {
-   write_protocol "$rt"
-   write_anchor "$rt"
-   link_runtime "$1" "$rt"
--  info "coord runtime ready: $rt"
-+  info "room runtime ready: $rt"
- }
- 
- # In-repo discovery pointer for the /tmp runtime. The payload (inbox, state,
-@@ -771,23 +781,24 @@ consult_tui_cmd() {
- }
- 
- # ensure nexios-consultant tmux session exists running the consultant TUI
--# (read-only advisor; workers never ring it, the engine tasks it via notes).
-+# (fenced advisor: repo write except src/, full /tmp, GitHub issues/PRs/
-+# releases; workers never ring it, the engine tasks it via notes).
- ensure_consultant_session() {
-   need_cmd tmux; need_cmd "$OPENCODE_BIN"
-   ensure_state_links
-   render_role_config consultant >/dev/null
-   need_file "$CONSULT_CONFIG_RESOLVED"
-   if tmux has-session -t "$CONSULT_SESS" 2>/dev/null; then
--    check_fenced "$CONSULT_SESS" "$COORD_DIR" "$CONSULT_CONFIG_RESOLVED" consultant 2>/dev/null || {
-+    check_fenced "$CONSULT_SESS" "$CONSULT_HOME" "$CONSULT_CONFIG_RESOLVED" consultant 2>/dev/null || {
-       tmux kill-session -t "$CONSULT_SESS" 2>/dev/null || true
-     }
-   fi
-   if ! tmux has-session -t "$CONSULT_SESS" 2>/dev/null; then
-     CONSULT_TMPDIR=$(ensure_session_tmpdir "$CONSULT_SESS")
--    tmux new-session -d -s "$CONSULT_SESS" -c "$COORD_DIR" -x 200 -y 50
-+    tmux new-session -d -s "$CONSULT_SESS" -c "$CONSULT_HOME" -x 200 -y 50
-     tmux send-keys -t "$CONSULT_SESS" "$(consult_tui_cmd)" Enter
+   if [ "$reused" = 0 ]; then
+     tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
+-    tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$cfg NEXIOS_AGENT_ROLE=$role $OPENCODE_BIN" Enter
++    tmux send-keys -t "$name" "$(session_launch_cmd "$role" "$cfg" "$tdir")" Enter
      sleep "$TUI_BOOT_WAIT"
--    check_fenced "$CONSULT_SESS" "$COORD_DIR" "$CONSULT_CONFIG_RESOLVED" consultant || {
-+    check_fenced "$CONSULT_SESS" "$CONSULT_HOME" "$CONSULT_CONFIG_RESOLVED" consultant || {
-       tmux kill-session -t "$CONSULT_SESS" 2>/dev/null || true
-       fail "consultant launched UNFENCED (resolved config not in its env) — killed, fix before retry"
-     }
-@@ -807,7 +818,7 @@ mode_consult() {
-     tmux send-keys -t "$CONSULT_SESS" Enter
-     info "delivered task to $CONSULT_SESS"
-   else
--    tmux send-keys -t "$CONSULT_SESS" "You are nexios-consultant (read-only advisor). Read $REPO_ROOT/tools/agents/twins/nexios-consultant.md for your charter. Report readiness, then stand by." Enter
-+    tmux send-keys -t "$CONSULT_SESS" "You are nexios-consultant (fenced advisor: repo write except src/, GitHub issues/PRs/releases). Read $REPO_ROOT/tools/agents/twins/nexios-consultant.md for your charter. Report readiness, then stand by." Enter
-     info "delivered standby line to $CONSULT_SESS"
-   fi
+     check_fenced "$name" "$dir" "$cfg" "$role" || {
+       tmux kill-session -t "$name" 2>/dev/null || true
+@@ -770,6 +808,28 @@ check_fenced() {
+   return 1
  }
-@@ -1343,15 +1354,15 @@ mode_self_test() {
-   # out-of-repo policy: a REAL file where a rendered config belongs hard-fails
-   # (silent adoption of pre-#414 state is forbidden), legacy LINKS are pruned,
-   # and the one surviving link (AGENTS.md) is versioned in-repo.
--  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator" "$st/home/roles"
--  printf 'drift\n' > "$st/home/coordinator/opencode.json"
-+  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/consultant" "$st/home/roles"
-+  printf 'drift\n' > "$st/home/consultant/opencode.json"
-   chk_neg env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
--  rm -f "$st/home/coordinator/opencode.json"
-+  rm -f "$st/home/consultant/opencode.json"
-   ln -sfn "$REPO_ROOT/tools/agents/roles/dev.json" "$st/home/roles/dev.json"
--  ln -sfn /nonexistent "$st/home/coordinator/opencode.json"
-+  ln -sfn /nonexistent "$st/home/consultant/opencode.json"
-   chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
--  chk_neg test -e "$st/home/coordinator/AGENTS.md"
--  chk_neg test -e "$st/home/coordinator/opencode.json"
-+  chk_neg test -e "$st/home/consultant/AGENTS.md"
-+  chk_neg test -e "$st/home/consultant/opencode.json"
-   chk_neg test -e "$st/home/roles/dev.json"
-   # leading-zero issue numbers canonicalize onto ONE runtime (never alias 410)
-   local zcan
-@@ -1747,12 +1758,22 @@ ext = cfg["permission"]["external_directory"]
- allows = {k for k, v in edit.items() if v == "allow"}
- assert allows == {"/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
-                   "/tmp/nexios-*/**/*", "/private/tmp/nexios-*/**/*",
--                  repo + "/logs/**"}, allows
-+                  "/tmp/*", "/private/tmp/*",
-+                  "/tmp/*/**", "/private/tmp/*/**",
-+                  repo + "/**"}, allows
- repos = {k: v for k, v in list(edit.items()) + list(ext.items()) if k.startswith(repo)}
--assert set(repos) == {repo + "/prompts/**", repo + "/audits/**",
--                      repo + "/scripts/**", repo + "/tools/agents/**",
--                      repo + "/logs/**"}, repos
--assert all(v == "allow" for v in repos.values())
-+assert repos == {repo + "/**": "allow",
-+                 repo + "/src": "deny",
-+                 repo + "/src/**": "deny",
-+                 repo + "/tools/agents/fence": "deny",
-+                 repo + "/tools/agents/fence/**": "deny",
-+                 repo + "/tools/agents/render_fence.py": "deny",
-+                 repo + "/tools/agents/verify_fence.py": "deny",
-+                 repo + "/scripts/agent_up.sh": "deny"}, repos
-+keys = list(edit)
-+assert keys.index(repo + "/**") < keys.index(repo + "/src/**")
-+assert keys.index(repo + "/**") < keys.index(repo + "/tools/agents/fence/**")
-+assert keys.index(repo + "/**") < keys.index(repo + "/scripts/agent_up.sh")
- PY
-   }
-   worker_ok() {  # $1 file, $2 repo
+ 
++# $1 tmux session, $2 literal argv token — true iff any process in the
++# session pane's tree carries the token as an exact argv word (self-test seam
++# for the --auto recycle guard; never launches anything itself).
++pane_tree_has_arg() {
++  local name="$1" want="$2"
++  local pane pid i
++  pane=$(tmux list-panes -t "$name" -F '#{pane_pid}' 2>/dev/null | head -1)
++  [ -n "$pane" ] || return 1
++  local pids=("$pane")
++  i=0
++  while [ "$i" -lt "${#pids[@]}" ]; do
++    for pid in $(pgrep -P "${pids[$i]}" 2>/dev/null); do pids[${#pids[@]}]="$pid"; done
++    i=$((i + 1))
++  done
++  for pid in "${pids[@]}"; do
++    if ps -ww -o args= -p "$pid" 2>/dev/null | tr ' ' '\n' | grep -qx -- "$want"; then
++      return 0
++    fi
++  done
++  return 1
++}
++
+ consult_tui_cmd() {
+   local v
+   for v in "$CONSULT_TMPDIR" "$CONSULT_CONFIG_RESOLVED"; do
+@@ -1337,6 +1397,21 @@ mode_self_test() {
+   chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*/rendered/qe/opencode.resolved.json"' _ "$qc"
+   chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=dev"' _ "$dc"
+   chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=qe"' _ "$qc"
++  # auditor launches headless with --agent + --auto (deny still enforced);
++  # every other role stays interactive (no flags).
++  local ac; ac=$("$SCRIPT_DIR/agent_up.sh" __run-cmd auditor)
++  chk bash -c 'printf "%s" "$1" | grep -q -- "--agent nexios-audit"' _ "$ac"
++  chk bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$ac"
++  chk bash -c 'test $(printf "%s" "$1" | grep -o -- "--auto" | wc -l) = 1' _ "$ac"
++  chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$dc"
++  chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$qc"
++  chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--agent"' _ "$dc"
++  # __has-arg: session pane-tree argv probe (self-test seam only)
++  tmux new-session -d -s "agentup-arg-$$" "sleep 30" >/dev/null
++  chk "$SCRIPT_DIR/agent_up.sh" __has-arg "agentup-arg-$$" sleep
++  chk_neg "$SCRIPT_DIR/agent_up.sh" __has-arg "agentup-arg-$$" --auto
++  chk_neg "$SCRIPT_DIR/agent_up.sh" __has-arg "agentup-nosuch-$$" sleep
++  tmux kill-session -t "agentup-arg-$$" >/dev/null 2>&1 || true
+   # L3 traversal / unknown roles are refused before launching
+   chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd ../../../tmp/evil
+   chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd consultant/../dev
+@@ -1715,8 +1790,8 @@ mode_launch_cmd() {
+   case "$1" in dev|qe|auditor|consultant) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|consultant), got '$1'" ;; esac
+   local cfg
+   cfg=$(render_role_config "$1")
+-  printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=/tmp/agentup-tmp-agentup-probe OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s\n' \
+-    "$cfg" "$1" "$OPENCODE_BIN"
++  session_launch_cmd "$1" "$cfg" /tmp/agentup-tmp-agentup-probe
++  printf '\n'
+ }
+ 
+ # Renderer/verifier matrix. No tmux, no opencode, no $NEXIOS_HOME: everything
+@@ -2177,6 +2252,7 @@ case "$mode" in
+   fence) mode_fence_show "$@" ;;
+   __check-clean-tree) mode_check_clean_tree "$@" ;;
+   __run-cmd) mode_launch_cmd "$@" ;;
++  __has-arg) pane_tree_has_arg "$@" ;;
+   __room-plan) mode_room_plan "$@" ;;
+   __consult-cmd) CONSULT_TMPDIR=/tmp/agentup-tmp-probe; consult_tui_cmd ;;
+   approve) mode_approve "$@" ;;
 diff --git a/scripts/coordinator-react.py b/scripts/coordinator-react.py
-index 959c57138..b5e370539 100644
+deleted file mode 100644
+index 959c57138..000000000
 --- a/scripts/coordinator-react.py
-+++ b/scripts/coordinator-react.py
-@@ -17,7 +17,7 @@ import argparse, glob, json, os, re, sys
- 
- ROOMS_GLOB = '/tmp/nexios-*'
- SESS = {'dev': 'nexios-dev', 'qe': 'nexios-qe'}
++++ /dev/null
+@@ -1,184 +0,0 @@
+-#!/usr/bin/env python3
+-"""coordinator-react.py -- wake-step-0 advisor for the nexios coordinator.
+-
+-Reads room runtimes (/tmp/nexios-*) plus argv worker states, prints an
+-ordered action checklist. READ-ONLY ALWAYS: never writes files, never
+-rings sessions, never touches git. The coordinator executes; this script
+-only remembers (runbook rows 1-12 live here, not in anyone's recall).
+-
+-Usage:
+-  python3 scripts/coordinator-react.py --tick "351:CHANGED:8" \
+-      --dev WORKING --qe IDLE [--streak 351:1] [--rooms 351,389,402]
+-
+-Output sections: NEW POSTS / WORKER CHECKS / ARMED TRIGGERS / ACTIONS
+-(highest priority first) / NOTHING OWED if the wake owes no one anything.
+-"""
+-import argparse, glob, json, os, re, sys
+-
+-ROOMS_GLOB = '/tmp/nexios-*'
+-SESS = {'dev': 'nexios-dev', 'qe': 'nexios-qe'}
 -RUNBOOK_VERSION = 'v4 2026-11-02 (rows 1-12; ts-based new-post; ACK-aware unacked advice with [oid])'
-+RUNBOOK_VERSION = 'v3 2026-10-29 (rows 1-12; ts-based new-post)'
- 
- def tail(path, n=6):
-     try:
-@@ -118,19 +118,10 @@ def main():
-         for role, sess in SESS.items():
-             b = r['boxes'][role]
-             if b['coord_last'] and (not b['posts'] or b['coord_last'][:19] > b['posts'][-1][:19]):
+-
+-def tail(path, n=6):
+-    try:
+-        with open(path, errors='replace') as f:
+-            return f.read().splitlines()[-n:]
+-    except OSError:
+-        return []
+-
+-def from_lines(lines):
+-    """Worker-authored posts only (coordinator writes don't count)."""
+-    return [l for l in lines if re.match(r'^\d{4}-\d{2}-\d{2}T.* FROM=(dev|qe|audit|auditor) (READY|NEED|NOTE) ::', l)]
+-
+-def last_state_next(lines):
+-    st = nx = None
+-    for l in lines:
+-        m = re.match(r'^STATE:\s*(.*)', l.strip())
+-        if m: st = m.group(1)[:100]
+-        m = re.match(r'^NEXT:\s*(.*)', l.strip())
+-        if m: nx = m.group(1)[:160]
+-    return st, nx
+-
+-def load_room(rdir):
+-    try:
+-        with open(os.path.join(rdir, 'state.json')) as f:
+-            st = json.load(f)
+-    except (OSError, ValueError):
+-        return None
+-    room = {'dir': rdir, 'issue': st.get('issue'), 'phase': st.get('phase'),
+-            'pending': (st.get('pending') or '')[:220],
+-            'armed': st.get('armed') or [], 'state': st}
+-    room['handled'] = st.get('handled') or {}
+-    room['mark'] = False
+-    room['boxes'] = {}
+-    for box in ('dev', 'qe', 'auditor'):
+-        lines = tail(os.path.join(rdir, 'inbox', box + '.md'), 12)
+-        try:
+-            with open(os.path.join(rdir, 'inbox', box + '.md'), errors='replace') as f:
+-                allposts = from_lines(f.read().splitlines())
+-        except OSError:
+-            allposts = []
+-        posts = from_lines(lines)
+-        since = room['handled'].get(box)
+-        if since is None:
+-            fresh = []  # first sight: init cursor, report nothing (no flood)
+-            room['mark'] = True
+-        else:
+-            fresh = [x for x in allposts if x[:20] > since[:20]]
+-        room['boxes'][box] = {'posts': posts, 'count': len(allposts),
+-                              'last': posts[-1][:180] if posts else None,
+-                              'new': fresh[-3:],
+-                              'cursor_init': since is None}
+-        room['boxes'][box]['state'], room['boxes'][box]['next'] = last_state_next(lines)
+-        # unacked coordinator order: newest coord NOTE vs newest worker post
+-        coord = [l for l in lines if ' FROM=coord NOTE' in l]
+-        room['boxes'][box]['coord_last'] = coord[-1][:160] if coord else None
+-    return room
+-
+-def main():
+-    ap = argparse.ArgumentParser()
+-    ap.add_argument('--tick', default='', help='"<issue>:<CHANGED|UNCHANGED>[:<n>]"')
+-    ap.add_argument('--dev', default='?', help='dev worker state: WORKING|IDLE|...')
+-    ap.add_argument('--qe', default='?', help='qe worker state')
+-    ap.add_argument('--streak', action='append', default=[], help='"<issue>:<n>" unchanged streak')
+-    ap.add_argument('--rooms', default='', help='comma list of issues to scan (default: all)')
+-    ap.add_argument('--mark', action='store_true', help='advance handled cursors to current lasts (run after processing a wake)')
+-    a = ap.parse_args()
+-    only = set(a.rooms.split(',')) if a.rooms else None
+-    rooms = []
+-    for rdir in sorted(glob.glob(ROOMS_GLOB)):
+-        r = load_room(rdir)
+-        if r and r['issue'] is not None and (only is None or str(r['issue']) in only):
+-            rooms.append(r)
+-    tick_issue = (a.tick.split(':')[0] if a.tick else '')
+-    actions = []  # (prio, text)
+-    print('== coordinator-react %s ==' % RUNBOOK_VERSION)
+-    print('tick: %s | dev=%s qe=%s' % (a.tick or '-', a.dev, a.qe))
+-    # 1. new posts per room (rows 1-5)
+-    for r in rooms:
+-        for box in ('dev', 'qe', 'auditor'):
+-            b = r['boxes'][box]
+-            if b['new']:
+-                actions.append((1, '#%s %s NEW POSTS x%d: %s'
+-                    % (r['issue'], box, len(b['new']), ' // '.join(x[:150] for x in b['new']))))
+-    # 2. worker checks (rows 6-9)
+-    wstates = {'dev': a.dev, 'qe': a.qe}
+-    for role, sess in SESS.items():
+-        st = wstates[role]
+-        if st == '?':
+-            actions.append((50, 'worker %s state unknown (pass --%s); cannot clear rows 6-9' % (sess, role)))
+-    # 3. armed triggers (row: evaluate each)
+-    for r in rooms:
+-        for arm in r['armed']:
+-            on, do = arm.get('on', ''), arm.get('do', '')
+-            actions.append((30, '#%s ARMED [%s] -> %s (verify fired/hold from box tails)'
+-                % (r['issue'], on, do[:140])))
+-    # 4. unacked orders -> ring candidates (rows 6-7)
+-    for r in rooms:
+-        for role, sess in SESS.items():
+-            b = r['boxes'][role]
+-            if b['coord_last'] and (not b['posts'] or b['coord_last'][:19] > b['posts'][-1][:19]):
 -                oid = "%s:%s" % (role, b['coord_last'][:19])
 -                rings = (r['state'].get('rings') or {})
 -                ack_since = r['state'].get('ack_since')
@@ -269,1272 +296,490 @@ index 959c57138..b5e370539 100644
 -                    adv = ' (already rung; awaiting ACK %s)' % oid
 -                else:
 -                    adv = ''
-                 w = wstates[role]
-                 if w == 'IDLE':
+-                w = wstates[role]
+-                if w == 'IDLE':
 -                    actions.append((10, 'RING %s: unacked order in #%s %s box (%s) [oid %s]%s -- send: inbox: <short> [oid %s] -- read inbox/%s.md'
 -                        % (sess, r['issue'], role, b['coord_last'][:100], oid, adv, oid, role)))
-+                    actions.append((10, 'RING %s: unacked order in #%s %s box (%s) -- send: inbox: <short> - read inbox/%s.md'
-+                        % (sess, r['issue'], role, b['coord_last'][:100], role)))
-                 else:
-                     pass  # WORKING reads at boundary; never ring, never nag
-     # 5. idle + nothing -> backlog (row 8)
-diff --git a/scripts/nexios-bin/mcp-worker-state.py b/scripts/nexios-bin/mcp-worker-state.py
-index 6904c2785..df655665d 100755
---- a/scripts/nexios-bin/mcp-worker-state.py
-+++ b/scripts/nexios-bin/mcp-worker-state.py
-@@ -1,12 +1,9 @@
- #!/usr/bin/env python3
- """nexios-worker-state MCP server (stdio, stdlib only).
- Tools: worker_state(session) -> WORKING|IDLE|STUCK verdict; worker_states() -> both.
--post_update accepts an optional ref (engine order id) and appends an
--ACK: <ref> trailer line after NEXT. --selftest runs the built-in matrix.
- Backed by worker-state.sh next to this file.
- """
- import json, subprocess, sys, os
--import re
- 
- HERE = os.path.dirname(os.path.abspath(__file__))
- SH = os.path.join(HERE, "worker-state.sh")
-@@ -69,26 +66,12 @@ import datetime as _dt
- _VALID_KIND = ("READY", "NEED", "NOTE")
- _VALID_BOX = ("dev", "qe", "auditor")
- _VALID_STATE = ("idle", "working", "waiting", "blocked")
--_TS19 = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
--# Order-id grammar — keep byte-identical with ACK_OID_RE in scripts/state_machine.py.
--_OID_RE = re.compile(r"^(?:(dev|qe):" + _TS19 + r"|next:(dev|qe):[0-9a-f]{8}|peer:(dev|qe):" + _TS19 + r"|first:(dev|qe))$")
+-                else:
+-                    pass  # WORKING reads at boundary; never ring, never nag
+-    # 5. idle + nothing -> backlog (row 8)
+-    for role, sess in SESS.items():
+-        if wstates[role] == 'IDLE':
+-            if not any(x[1].startswith('RING %s' % sess) for x in actions):
+-                actions.append((20, '%s IDLE with no unacked order: assign next backlog task (never relay idleness)' % sess))
+-    # 6. unchanged streaks (row 10)
+-    for s in a.streak:
+-        try:
+-            iss, n = s.split(':'); n = int(n)
+-        except ValueError:
+-            continue
+-        if n >= 3:
+-            actions.append((5, '#%s UNCHANGED x%d ESCALATE: sess_state -> ring once -> checkpoint/compact -> recreate'
+-                % (iss, n)))
+-    # 7. owner-blocked rooms (row 11)
+-    for r in rooms:
+-        if re.search(r'owner|retire|close issue|accept-and-retire|merge order|needs merge', r['pending'], re.I):
+-            actions.append((60, '#%s owner-gated: %s' % (r['issue'], r['pending'][:140])))
+-    actions.sort(key=lambda x: x[0])
+-    print('--- ACTIONS (priority order) ---')
+-    hit = False
+-    for prio, text in actions:
+-        if prio >= 50 and len([x for x in actions if x[0] < 50]):
+-            continue
+-        hit = True
+-        print('[P%d] %s' % (prio, text))
+-    if not hit:
+-        print('NOTHING OWED.')
+-    if a.mark:
+-        for r in rooms:
+-            if r['mark'] or any(r['boxes'][b]['new'] for b in ('dev', 'qe', 'auditor')):
+-                st = r['state']
+-                h = st.get('handled') or {}
+-                for b in ('dev', 'qe', 'auditor'):
+-                    posts_here = []
+-                    try:
+-                        with open(os.path.join(r['dir'], 'inbox', b + '.md'), errors='replace') as f:
+-                            posts_here = from_lines(f.read().splitlines())
+-                    except OSError:
+-                        pass
+-                    if posts_here:
+-                        h[b] = max(x[:20] for x in posts_here)  # max ts, not last line: clocks skew across sessions
+-                st['handled'] = h
+-                with open(os.path.join(r['dir'], 'state.json'), 'w') as f:
+-                    json.dump(st, f, indent=2)
+-        print('cursors advanced.')
+-    print('--- (advisory only; coordinator executes; verify before acting) ---')
 -
--
--def _ref_lane(ref):
--    """Lane addressed by an order id, or None. fullmatch is mandatory ($ matches
--    before a trailing newline; a ref with \\n must never inject a post line)."""
--    m = _OID_RE.fullmatch(ref or "")
--    if not m or m.lastindex is None:
--        return None
--    return m.group(m.lastindex)
- def _tool_post_update(a):
-     errs = []
-     room, box = str(a.get("room", "")), a.get("box", "")
-     kind, summary = a.get("kind", ""), (a.get("summary", "") or "").strip()
-     state, detail = a.get("state", ""), (a.get("state_detail", "") or "").strip()
-     nxt, body = (a.get("next", "") or "").strip(), (a.get("body", "") or "").rstrip()
--    ref = (a.get("ref") or "").strip()
--    role = {"dev": "dev", "qe": "qe", "auditor": "audit"}.get(box, "")
-     d = _room_dir(room)
-     if not d:
-         errs.append("no room /tmp/nexios-" + room)
-@@ -105,17 +88,11 @@ def _tool_post_update(a):
-         errs.append("next must be idle or working|waiting|blocked <what>")
-     if not summary:
-         errs.append("summary is required (one line)")
--    if ref and box == "auditor":
--        errs.append("ref is not allowed on box=auditor (verdict schema has no ACK trailer; omit ref)")
--    elif ref and not _OID_RE.fullmatch(ref):
--        errs.append("ref '" + ref + "' is not a valid order id; expected <dev|qe>:<YYYY-MM-DDTHH:MM:SS> | next:<lane>:<hash8> | peer:<lane>:<YYYY-MM-DDTHH:MM:SS> | first:<lane> (omit ref for an FYI post)")
--    elif ref and _ref_lane(ref) != role:
--        errs.append("ref '" + ref + "' targets lane '" + str(_ref_lane(ref)) + "' but box is '" + role + "'; ACK only orders addressed to your lane")
-     if errs:
--        return True, "REJECTED - fix and resend:\n- " + "\n".join(errs)
-+        return True, "REJECTED - fix and resend:\n- " + "\n- ".join(errs)
-+    role = {"dev": "dev", "qe": "qe", "auditor": "audit"}[box]
-     ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
--    ack = ("ACK: " + ref + "\n") if ref else ""
--    post = ts + " FROM=" + role + " " + kind + " :: " + summary + "\nSTATE: " + state + " :: " + detail + "\nNEXT: " + nxt + "\n" + ack + body + "\n"
-+    post = ts + " FROM=" + role + " " + kind + " :: " + summary + "\nSTATE: " + state + " :: " + detail + "\nNEXT: " + nxt + "\n" + body + "\n"
-     with open(os.path.join(d, "inbox", box + ".md"), "a") as fh:
-         fh.write(post)
-     return False, "posted to " + d + "/inbox/" + box + ".md:\n" + post
-@@ -165,7 +142,7 @@ TOOLS = [
-      "description": "Watchdog arm state + unchanged streak for a room (armed pid / disarmed + streak).",
-      "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}}, "required": ["room"]}},
-     {"name": "post_update",
--     "description": "Post a worker status update to a room inbox with ENFORCED wire format. Validates kind/state/next against the closed vocabulary and appends the 3-line post. When ref is given, appends an ACK: <ref> trailer after NEXT (order ids: <dev|qe>:<ts19>, next:<lane>:<hash8>, peer:<lane>:<ts19>, first:<lane>). Omit ref for FYI posts. Rejects anything else with the exact fix.",
-+     "description": "Post a worker status update to a room inbox with ENFORCED wire format. Validates kind/state/next against the closed vocabulary and appends the 3-line post. Rejects anything else with the exact fix.",
-      "inputSchema": {"type": "object", "properties": {
-        "room": {"type": "string", "description": "numeric issue id"},
-        "box": {"type": "string", "description": "dev, qe or auditor"},
-@@ -174,73 +151,16 @@ TOOLS = [
-        "state": {"type": "string", "description": "idle | working | waiting | blocked"},
-        "state_detail": {"type": "string", "description": "what is true right now"},
-        "next": {"type": "string", "description": "idle | working <what> | waiting <on-what> | blocked <on-what>"},
--       "ref": {"type": "string", "description": "optional order id this post acknowledges (copy it from the engine ring/NOTE [oid ...]); omit for FYI"},
-        "body": {"type": "string", "description": "evidence, numbers, file:lines (free text)"}},
-        "required": ["room", "box", "kind", "summary", "state", "state_detail", "next"]}}
- ]
- 
--def run_selftest():
--    import shutil
--    passed = 0
--    total = 0
--
--    def check(name, cond):
--        nonlocal passed, total
--        total += 1
--        print("%s %s" % ("PASS" if cond else "FAIL", name), flush=True)
--        if cond:
--            passed += 1
--
--    room = "9990"
--    d = "/tmp/nexios-" + room
--    if os.path.exists(d):
--        print("FAIL selftest room exists (refusing to touch live room)", flush=True)
--        return 1
--    os.makedirs(os.path.join(d, "inbox"))
--    open(os.path.join(d, "inbox", "dev.md"), "w").write("# inbox/dev.md\n")
--    open(os.path.join(d, "inbox", "qe.md"), "w").write("# inbox/qe.md\n")
--    try:
--        base = {"room": room, "box": "dev", "kind": "NOTE",
--                "summary": "s", "state": "idle", "state_detail": "d",
--                "next": "idle"}
--        err, _out = _tool_post_update(dict(base))
--        check("ref-absent-legacy",
--              not err and "ACK:" not in open(os.path.join(d, "inbox", "dev.md")).read().split("# inbox", 1)[-1])
--        err, out = _tool_post_update(dict(base, ref="dev:2026-11-02T08:00:00"))
--        check("ref-order",
--              not err and "\nACK: dev:2026-11-02T08:00:00\n" in out)
--        err, out = _tool_post_update(dict(base, box="qe", ref="next:qe:abcdef01"))
--        check("ref-next", not err and "\nACK: next:qe:abcdef01\n" in out)
--        err, out = _tool_post_update(dict(base, box="qe", ref="peer:qe:2026-11-02T08:00:00"))
--        check("ref-peer", not err and "ACK: peer:qe:" in out)
--        err, out = _tool_post_update(dict(base, ref="first:dev"))
--        check("ref-first", not err and "\nACK: first:dev\n" in out)
--        err, _out = _tool_post_update(dict(base, ref="banana"))
--        check("ref-reject-garbage", err and "not a valid order id" in _out)
--        err, _out = _tool_post_update(dict(base, ref="dev:2026-11-02"))
--        check("ref-reject-short-ts", err and "not a valid order id" in _out)
--        err, _out = _tool_post_update(dict(base, ref="dev:2026-11-02T08:00:00\nX"))
--        check("ref-reject-newline", err and "not a valid order id" in _out)
--        err, _out = _tool_post_update(dict(base, box="qe", ref="dev:2026-11-02T08:00:00"))
--        check("ref-reject-lane-mismatch", err and "targets lane" in _out)
--        err, _out = _tool_post_update(dict(base, box="auditor", ref="dev:2026-11-02T08:00:00"))
--        check("ref-reject-auditor", err and "not allowed on box=auditor" in _out)
--        err, _out = _tool_post_update(dict(base, ref="dev:2026-11-02T08:00:00Z"))
--        check("ref-reject-ts20", err and "not a valid order id" in _out)
--    finally:
--        shutil.rmtree(d, ignore_errors=True)
--    print("bridge self-test: %d/%d PASS" % (passed, total), flush=True)
--    return 0 if passed == total else 1
--
--
- def respond(rid, result=None, error=None):
-     msg = {"jsonrpc": "2.0", "id": rid}
-     msg["result" if error is None else "error"] = result if error is None else {"code": -32603, "message": error}
-     sys.stdout.write(json.dumps(msg) + "\n"); sys.stdout.flush()
- 
- def main():
--    if "--selftest" in sys.argv:
--        return run_selftest()
-     for line in sys.stdin:
-         line = line.strip()
-         if not line:
-@@ -264,4 +184,4 @@ def main():
-             respond(rid, error=f"unknown method '{method}'")
- 
- if __name__ == "__main__":
--    sys.exit(main())
-+    main()
+-main()
 diff --git a/scripts/state_machine.py b/scripts/state_machine.py
-index 24aae4283..4aaa14ed1 100644
+index dbc156068..114d5924f 100644
 --- a/scripts/state_machine.py
 +++ b/scripts/state_machine.py
-@@ -1,13 +1,13 @@
- #!/usr/bin/env python3
- """Deterministic multi-issue state machine & concurrency engine for NexIOS.
+@@ -479,6 +479,9 @@ def slow_probe(ctx, sess):
+ def modal_guard(ctx, sessions):
+     """Deny-default: send Escape to any session showing a permission modal.
  
--Replaces the coordinator role (now a read-only Consultant): all orchestration,
--worker execution orders, workflow transitions, auditor lifecycle, and modal
--mitigation run here, driven by watchdog ticks. Deterministic: identical room
-+Replaces the former coordinator role outright (the engine is the code-driven
-+coordinator; the consultant is a publishing advisor, never an orchestrator):
-+all orchestration, worker execution orders, workflow transitions, auditor
-+lifecycle, and modal mitigation run here, driven by watchdog ticks.
-+Deterministic: identical room
- inputs always produce identical decisions; every decision is logged and every
--incoming worker post is ACKed with a recorded transition. Worker posts may
--carry an optional `ACK: <oid>` 4th trailer line; the engine clears exactly
--that ledger oid (explicit acknowledgment of an engine order).
-+incoming worker post is ACKed with a recorded transition.
- 
- Reads:  room runtimes (/tmp/nexios-<issue>/), tmux panes (probes), audits/.
- Writes: repo-bound logs only (<repo>/logs/state-machine/), /tmp room briefs,
-@@ -53,28 +53,14 @@ MODAL_RE = (r"allow once|allow always|permission required|needs approval|"
- POST_RE = re.compile(
-     r"^(\d{4}-\d{2}-\d{2}T\S*) FROM=(dev|qe|audit|auditor) "
-     r"(READY|NEED|NOTE|DECISION) :: (.*)$")
--RESUME_RE = (r"(hold|waiting|awaiting|parked)[^.]*re-?ring|on re-?ring")
- STATE_RE = re.compile(r"^STATE:\s*(.*)$")
- NEXT_RE = re.compile(r"^NEXT:\s*(.*)$")
--ACK_RE = re.compile(r"^ACK:\s*(\S+)\s*$")
--# Order-id grammar — keep byte-identical with _OID_RE in scripts/nexios-bin/mcp-worker-state.py.
--_TS19 = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
--ACK_OID_RE = re.compile(r"^(?:(dev|qe):" + _TS19 + r"|next:(dev|qe):[0-9a-f]{8}|peer:(dev|qe):" + _TS19 + r"|first:(dev|qe))$")
--
--
--def ref_lane(ref):
--    """Lane addressed by an order id, or None. fullmatch is mandatory."""
--    m = ACK_OID_RE.fullmatch(ref or "")
--    if not m or m.lastindex is None:
--        return None
--    return m.group(m.lastindex)
- 
- VALID_ROOM_STATES = ("IN_PROGRESS", "AUDITED", "VERIFIED", "PLANNED",
-                      "QUEUED", "CLOSED", "HOLD")
- 
- 
- RING_LIMIT = 3  # doctrine: ring an order max 3x; then NEED-recreate, never a 4th ring
--RING_ESCALATED = RING_LIMIT + 1  # ledger sentinel: order escalated as ACK-MISSING, ring no more
- CTX_WARN = 70  # log watch-only
- CTX_CRIT = 85  # checkpoint NOTE first, then /compact; never die at 100%% with unposted work
- AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
-@@ -192,11 +178,7 @@ def last_state_next(tail_lines):
- 
- 
- def wire_gaps(full_lines, post):
--    """Missing STATE:/NEXT: trailer lines after a fresh post (wire format).
--
--    The i+1:i+4 window intentionally also covers the optional ACK: 4th
--    trailer line, so an ACK never trips a gap.
--    """
-+    """Missing STATE:/NEXT: trailer lines after a fresh post (wire format)."""
-     try:
-         i = full_lines.index(post)
-     except ValueError:
-@@ -210,96 +192,6 @@ def wire_gaps(full_lines, post):
-     return gaps
- 
- 
--def post_ack(full_lines, post):
--    """Order id ACKed by a post, or None. Pure.
--
--    Accepts the ACK only on the fixed 3rd trailer line (header/STATE/NEXT/ACK),
--    so a body line starting with ACK: can never clear a ledger oid.
--    """
--    try:
--        i = full_lines.index(post)
--    except ValueError:
--        return None
--    if len(full_lines) < i + 4:
--        return None
--    if not full_lines[i + 1].strip().startswith("STATE:"):
--        return None
--    if not full_lines[i + 2].strip().startswith("NEXT:"):
--        return None
--    m = ACK_RE.match(full_lines[i + 3].strip())
--    return m.group(1) if m else None
--
--
--def order_outstanding(role, coord_last, posts, rings, ack_since):
--    """Whether a coord order still awaits its ACK. Pure.
--
--    Grandfathered (pre-arm or older-than-arm) orders keep the legacy
--    timestamp rule; armed orders stay outstanding until an explicit ACK.
--    """
--    if not coord_last:
--        return False
--    oid = "%s:%s" % (role, coord_last[:19])
--    if rings.get(oid) == -1:
--        return False
--    if not ack_since or coord_last[:19] < ack_since[:19]:
--        return bool(not posts or coord_last[:19] > posts[-1][:19])
--    return True
--
--
--def order_ring_action(n, ack_gated):
--    """Ring/escalate/await decision for an outstanding order count. Pure."""
--    if n < RING_LIMIT:
--        return "ring"
--    if n == RING_LIMIT:
--        return "escalate" if ack_gated else "recreate"
--    return "awaiting"
--
--
--def reset_resume_rings(rings):
--    """Delete every next: ledger entry. Pure. Returns the deleted count."""
--    doomed = [oid for oid in rings if oid.startswith("next:")]
--    for oid in doomed:
--        del rings[oid]
--    return len(doomed)
--
--
--def ack_scan_posts(role, boxes, handled, fresh):
--    """Posts to scan for ACK trailers. Pure.
--
--    Fresh posts normally; but on first sight of a lane (no handled cursor
--    yet) the full history is scanned, so a virgin lane's first post —
--    which may carry the order's ACK — is actionable instead of being
--    consumed silently while the cursor jumps past it.
--    """
--    if fresh:
--        return list(fresh)
--    if (handled or {}).get(role) is None:
--        return list((boxes.get(role) or {}).get("all", []))
--    return []
--
--
--def match_ack(ref, role, boxes, rings, resume_now):
--    """Classify a fresh ACK trailer. Pure. Returns (verdict, oid).
--
--    verdict is "ack" (clear exactly this oid), "ignore-malformed" (bad
--    shape or wrong lane), "ignore-stale" (not outstanding), or (None, None)
--    when there is no ref to classify.
--    """
--    if not ref:
--        return None, None
--    if not ACK_OID_RE.fullmatch(ref) or ref_lane(ref) != role:
--        return "ignore-malformed", ref
--    boxes = boxes or {}
--    rings = rings or {}
--    resume_now = resume_now or {}
--    cur = None
--    if (boxes.get(role) or {}).get("coord_last"):
--        cur = "%s:%s" % (role, boxes[role]["coord_last"][:19])
--    if ref == cur or ref in rings or ref in resume_now.values():
--        return "ack", ref
--    return "ignore-stale", ref
--
--
- CTX_RE = re.compile(r"(\d+(?:\.\d+)?K)\s*\((\d+)%\)")
- 
- def pane_ctx_pct(pane_text):
-@@ -335,7 +227,6 @@ def checkpoint_brief(issue, role, pct):
-             "Steps: 1. post CHECKPOINT NOTE to inbox/%s.md (branch + tip + files touched + next step) + RING. "
-             "2. run /compact in this session. 3. after compact, post COMPACT-DONE NOTE + RING. "
- "Every post carries STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
--            "If the order that triggered this carries [oid <id>], pass ref=<id> on the CHECKPOINT NOTE and the COMPACT-DONE NOTE; ref-less posts never clear the order. "
-             "If compaction delivery fails, hold for recreate (never work past 100%% with unposted work).\n"
-             "scripts/agent_up.sh wake %d %s nexios-engine \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
-             % (issue, role, pct, issue, role, issue, role, role, role))
-@@ -423,7 +314,7 @@ def load_boxes(room_dir):
-     return boxes
- 
- 
--def new_posts(boxes, handled, limit=5):
-+def new_posts(boxes, handled):
-     """Posts newer than handled cursors (ts compare; clocks skew, so max-ts)."""
-     fresh = {}
-     for box in BOXES:
-@@ -431,8 +322,7 @@ def new_posts(boxes, handled, limit=5):
-         if since is None:
-             fresh[box] = []  # first sight: init cursor, report nothing
-         else:
--            posts = [l for l in boxes[box]["all"] if l[:20] > since[:20]]
--            fresh[box] = posts[-limit:] if limit else posts
-+            fresh[box] = [l for l in boxes[box]["all"] if l[:20] > since[:20]][-5:]
-     return fresh
- 
- 
-@@ -541,7 +431,6 @@ def auditor_brief_text(issue, tip, scope):
-             "scope: %s\n"
-             "rules: read-only (no branches, no code, no test runs, no launches); retrieval first (graphify+vault); "
-             "post DECISION (APPROVED | NEED with S1/S2/S3 findings) to inbox/auditor.md + wake.\n"
--            "Auditor verdicts use the DECISION schema and never carry ref/ACK (the bridge rejects ref on box=auditor).\n"
-             "scripts/agent_up.sh wake %d auditor nexios-engine \"inbox: auditor READY \u2014 read inbox/auditor.md\"\n"
-             % (issue, issue, tip, scope, issue))
- 
-@@ -565,8 +454,8 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
-         if "DECISION" not in post:
-             continue
-         target = stored.get("requester", "dev")
--        note, oid = coord_note(target, "AUDIT %s (#%d): detail inbox/auditor.md"
--                               % ("APPROVED" if "APPROVED" in post else "NEED", issue))
-+        note = ("%s FROM=coord NOTE :: AUDIT %s (#%d): detail inbox/auditor.md"
-+                % (utcnow(), "APPROVED" if "APPROVED" in post else "NEED", issue))
-         rep = latest_audit_report(ctx, issue)
-         if rep:
-             note += "; report %s" % os.path.basename(rep)
-@@ -576,7 +465,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
-             if append_box_note(room_dir, target, note):
-                 acted.append("audit verdict handed to %s" % target)
-                 if target in SESS and fast_probe(ctx, SESS[target]).startswith("IDLE"):
--                    acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid))
-+                    acted.append(ring(ctx, SESS[target], target, "audit verdict ready"))
-             else:
-                 acted.append("HAND-BACK-FAILED %s" % target)
-     if any("audit verdict handed to" in a or "WOULD hand audit verdict" in a for a in acted):
-@@ -753,15 +642,13 @@ def retire_room(ctx, issue, room_dir, st, boxes=None):
-     return acts, True
- 
- 
--def ring(ctx, sess, box, text, channel="inbox", oid=None):
-+def ring(ctx, sess, box, text, channel="inbox"):
-     """Doorbell. Idle sessions only (caller checks). inbox = box pointer,
--    notes = consultant channel (logs/consultant-notes.md). oid, when given,
--    is the ledger order id the worker must ACK (post_update ref=<oid>)."""
-+    notes = consultant channel (logs/consultant-notes.md)."""
-     if channel == "notes":
-         line = "notes: %s -- read logs/consultant-notes.md" % text
-     else:
--        line = "inbox: %s%s -- read inbox/%s.md" % (
--            text, (" [oid %s]" % oid) if oid else "", box)
-+        line = "inbox: %s -- read inbox/%s.md" % (text, box)
-     if ctx.dry:
-         return "WOULD ring %s: %s" % (sess, line)
-     rc, out = ctx.run([ctx.agent_up, "msg", sess, line], timeout=60)
-@@ -770,17 +657,6 @@ def ring(ctx, sess, box, text, channel="inbox", oid=None):
-     return "RING-FAILED %s: %s" % (sess, out.strip()[:120])
- 
- 
--def coord_note(role, text):
--    """Engine order line for a lane box + its ledger oid. Pure.
--
--    The oid embeds the post timestamp exactly as has_unacked derives it,
--    so the written id and the ledger key always agree.
--    """
--    ts = utcnow()
--    oid = "%s:%s" % (role, ts[:19])
--    return ("%s FROM=coord NOTE :: %s [oid %s]" % (ts, text, oid)), oid
--
--
- def write_brief(ctx, room_dir, name, content):
-     p = os.path.join(room_dir, "prompts", name)
-     if ctx.dry:
-@@ -888,9 +764,7 @@ def peer_handoff_pick(peer, offers, rings, peer_ts):
-     already holds 1 for the picked oid.
++    The auditor runs headless with --auto (asks auto-approved, denies hold),
++    so an auditor modal means a stale pre-auto session: Escape still
++    applies, but the lane needs a relaunch, not another tick.
+     Returns [(sess, acted_bool, detail)]. Dry-run only reports.
      """
-     for oid in sorted(rings):
--        if not oid.startswith("peer:%s:" % peer) or not rings.get(oid):
--            continue
--        if rings.get(oid) == -1:
-+        if not oid.startswith("peer:%s:" % peer) or rings.get(oid) != 1:
-             continue
-         ots = oid[len("peer:%s:" % peer):]
-         if not peer_ts or peer_ts < ots:
-@@ -899,10 +773,9 @@ def peer_handoff_pick(peer, offers, rings, peer_ts):
-                     return dict(o, rung=True)
-             return {"sender": PEER[peer], "ts": ots, "oid": oid,
-                     "post": "", "rung": True}
--    live = [o for o in offers if rings.get(o["oid"]) != -1]
--    if not live:
-+    if not offers:
-         return None
--    pick = dict(live[0])
-+    pick = dict(offers[0])
-     pick["rung"] = rings.get(pick["oid"]) == 1
-     return pick
+     res = []
+@@ -552,8 +555,9 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
+     """Request-driven audit cycle with an invisible auditor session.
  
-@@ -948,26 +821,10 @@ def recreating_peers(actions):
-     return out
- 
- 
--def first_contact_due(role, has_posts, brief_present, probe, deaf, rings):
--    """One-shot first ring for a virgin lane. Pure.
--
--    Fires only when the lane never posted, a staged brief exists, the lane
--    probes IDLE and reachable, and no prior first-contact ring is ledgered.
--    """
--    if has_posts or not brief_present:
--        return False, None
--    oid = "first:%s" % role
--    if rings.get(oid):
--        return False, None
--    if deaf or not str(probe).startswith("IDLE"):
--        return False, None
--    return True, oid
--
--
--def ring_peer_handoff(ctx, peer, sender, ts, oid):
-+def ring_peer_handoff(ctx, peer, sender, ts):
-     """Doorbell peer, pointing at the SENDER box holding the READY."""
-     return ring(ctx, SESS[peer], sender,
--                "peer handoff from %s READY %s" % (sender, ts), oid=oid)
-+                "peer handoff from %s READY %s" % (sender, ts))
- 
- 
- def tick_room(ctx, issue, room_dir, st, rooms_all):
-@@ -1072,13 +929,13 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-                 actions.append("WOULD post checkpoint NOTE + ring-if-idle (%s @%d%%)"
-                                % (role, pct))
-             else:
--                note, oid = coord_note(role, "CHECKPOINT pre-compaction (@%d%% ctx): "
--                                             "post CHECKPOINT NOTE, run /compact, RING" % pct)
-+                note = ("%s FROM=coord NOTE :: CHECKPOINT pre-compaction (@%d%% ctx): "
-+                        "post CHECKPOINT NOTE, run /compact, RING" % (utcnow(), pct))
-                 if append_box_note(room_dir, role, note):
-                     actions.append("checkpoint NOTE filed for %s @%d%%" % (role, pct))
-                     if role not in deaf and probes[role].startswith("IDLE"):
-                         actions.append(ring(ctx, SESS[role], role,
--                                            "checkpoint brief @%d%%" % pct, oid=oid))
-+                                            "checkpoint brief @%d%%" % pct))
-                     else:
-                         actions.append("%s WORKING: checkpoint NOTE filed, ring deferred to boundary"
-                                        % role)
-@@ -1115,128 +972,69 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-     dev_next = boxes["dev"]["next"]
- 
-     rings = st.get("rings") or {}
--    ack_since = st.get("ack_since") or None
--    ack_failures = int(st.get("ack_failures", 0) or 0)
--    resume_now = {}
--    for role in ("dev", "qe"):
--        nx = (boxes[role]["next"] or "")
--        if re.search(RESUME_RE, nx, re.I):
--            resume_now[role] = "next:%s:%s" % (role, hashlib.md5(nx.encode()).hexdigest()[:8])
--    fresh_all = new_posts(boxes, handled, limit=0)  # 0 = no cap: no ACK lost
--    for role in LANES:
--        for post in ack_scan_posts(role, boxes, handled, fresh_all.get(role, [])):
--            ack_verdict, ack_ref = match_ack(post_ack(boxes[role]["full"], post),
--                                            role, boxes, rings, resume_now)
--            if ack_verdict is None:
--                continue
--            if ack_verdict == "ignore-malformed":
--                actions.append("ack-ignored %s from %s (malformed or wrong lane)" % (ack_ref, role))
--            elif ack_verdict == "ignore-stale":
--                actions.append("ack-ignored %s from %s (not outstanding)" % (ack_ref, role))
--            else:
--                rings[ack_ref] = -1
--                actions.append("ack %s from %s" % (ack_ref, role))
--                events.append("%s ACK" % role)
--                if not ack_since:
--                    ack_since = utcnow()[:19]
--                    n = reset_resume_rings(rings)
--                    actions.append("ack-discipline armed at %s by %s (legacy resume counters reset: %d)"
--                                   % (ack_since, role, n))
-     has_unacked = set()
+     Dev/qe post NEED-audit (request); the engine generates the tip-pinned
+-    brief, starts the auditor via `agent_up.sh audit` (headless tmux session,
+-    never windowed, so its permission modals can only ever meet deny-default),
++    brief, starts the auditor via `agent_up.sh audit` (headless tmux session
++    with --auto: asks auto-approved, denies hold; never windowed, and a modal
++    there means a stale pre-auto session that must be relaunched),
+     awaits the verdict, and hands findings back to the requester (NOTE + ring).
+     Legacy pending/phase heuristic stays as fallback. Returns
+     (acted, need_verdict, ap_store) with ap_store None (leave), {} (clear),
+@@ -1055,6 +1059,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
+     for sess, acted, detail in guard:
+         if acted or "WOULD" in detail:
+             actions.append("modal-guard %s: %s" % (sess, detail))
++            if sess == SESS["audit"] and acted:
++                actions.append("NEED auditor modal under --auto: stale pre-auto session; kill nexios-audit + relaunch audit")
+     ctxp = {}
+     deaf = set()
      for role in ("dev", "qe"):
-         b = boxes[role]
--        if not b["coord_last"]:
--            continue
--        oid = "%s:%s" % (role, b["coord_last"][:19])
--        ack_gated = bool(ack_since) and b["coord_last"][:19] >= ack_since[:19]
--        if not order_outstanding(role, b["coord_last"], b["all"], rings, ack_since):
--            continue
--        has_unacked.add(role)
--        n = rings.get(oid, 0)
--        act = order_ring_action(n, ack_gated)
--        if role in deaf or not probes[role].startswith("IDLE"):
--            actions.append("%s WORKING reads at boundary; no ring" % role)
--        elif act == "ring":
--            disp = re.sub(r"\s*\[oid [^]]+\]\s*$", "", b["coord_last"])[:80]
--            actions.append(ring(ctx, SESS[role], role,
--                                "unacked order -- %s" % disp, oid=oid))
--            rings[oid] = n + 1
--            events.append("ring-%s" % role)
--        elif act == "recreate":
--            r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
--                "order %s unacked after %d rings" % (b["coord_last"][:19], n),
--                b["state"], b["next"])
--            actions.extend(r_acts)
--            rings[oid] = -1 if _rel else n + 1
--        elif act == "escalate":
--            actions.append("ACK-MISSING %s order %s after %d rings (no ACK post)"
--                           % (role, oid, n))
--            rings[oid] = RING_ESCALATED
--            ack_failures += 1
--            events.append("ack-missing-%s" % role)
--        else:
--            if ack_gated:
--                actions.append("ack-awaiting %s: order %s (no repeat rings; awaiting ACK)"
--                               % (SESS[role], oid))
-+        if b["coord_last"] and (not b["all"] or
-+                                b["coord_last"][:19] > b["all"][-1][:19]):
-+            has_unacked.add(role)
-+            order_id = "%s:%s" % (role, b["coord_last"][:19])
-+            n = rings.get(order_id, 0)
-+            if role not in deaf and probes[role].startswith("IDLE"):
-+                if n < RING_LIMIT:
-+                    actions.append(ring(ctx, SESS[role], role,
-+                                        "unacked order -- %s" % b["coord_last"][:80]))
-+                    rings[order_id] = n + 1
-+                    events.append("ring-%s" % role)
-+                elif n == RING_LIMIT:
-+                    r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
-+                        "order %s unacked after %d rings" % (b["coord_last"][:19], n),
-+                        b["state"], b["next"])
-+                    actions.extend(r_acts)
-+                    rings[order_id] = -1 if _rel else n + 1
-+                else:
-+                    actions.append("recreate-awaiting %s: order %s (no repeat orders)"
-+                                   % (SESS[role], b["coord_last"][:19]))
-             else:
--                actions.append("recreate-awaiting %s: order %s (no repeat orders)"
--                               % (SESS[role], b["coord_last"][:19]))
-+                actions.append("%s WORKING reads at boundary; no ring" % role)
-+    resume_now = {}
-+    for role in ("dev", "qe"):
-+        nx = (boxes[role]["next"] or "")
-+        if re.search(r"(hold|waiting|awaiting|parked)[^.]*re-?ring|on re-?ring", nx, re.I):
-+            resume_now[role] = "next:%s:%s" % (role, hashlib.md5(nx.encode()).hexdigest()[:8])
-     for oid in list(rings):
-         if oid.startswith("next:"):
-             _p, _r, _h = oid.split(":")
--            if oid not in resume_now.values():
--                del rings[oid]
--                continue
--            if not ack_since and fresh.get(_r):
-+            if oid not in resume_now.values() or fresh.get(_r):
-                 del rings[oid]
-             continue
-         if oid.startswith("peer:"):
-             continue  # retired only by peer_handoff_done_oids below
--        if oid.startswith("first:"):
--            continue  # one-shot; virginity ends it
-         orole, _, ots = oid.partition(":")
--        cur = (boxes.get(orole) or {}).get("coord_last")
--        if cur and ots < cur[:19]:
--            del rings[oid]  # superseded by a newer order
--            continue
--        if not ack_since or ots < ack_since[:19]:
--            posts = boxes.get(orole, {}).get("all", [])
--            if posts and posts[-1][:19] > ots:
--                del rings[oid]
-+        posts = boxes.get(orole, {}).get("all", [])
-+        if posts and posts[-1][:19] > ots:
-+            del rings[oid]
-     for role, oid in resume_now.items():
-         if role in has_unacked or role in deaf:
-             continue
-         if not probes[role].startswith("IDLE"):
-             continue
-         n = rings.get(oid, 0)
--        act = order_ring_action(n, bool(ack_since))
--        if act == "ring":
--            actions.append(ring(ctx, SESS[role], role, "resume per declared NEXT", oid=oid))
-+        if 0 <= n < RING_LIMIT:
-+            actions.append(ring(ctx, SESS[role], role, "resume per declared NEXT"))
-             rings[oid] = n + 1
-             events.append("ring-%s-resume" % role)
--        elif act == "recreate":
-+        elif n == RING_LIMIT:
-             r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
-                 "parked-awaiting ring unacked after %d rings" % n,
-                 boxes[role]["state"], boxes[role]["next"])
-             actions.extend(r_acts)
-             rings[oid] = -1 if _rel else n + 1
--        elif act == "escalate":
--            actions.append("ACK-MISSING %s resume %s after %d rings (no ACK post)"
--                           % (role, oid, n))
--            rings[oid] = RING_ESCALATED
--            ack_failures += 1
--            events.append("ack-missing-%s" % role)
--        elif ack_since:
--            actions.append("ack-awaiting %s: resume %s (no repeat rings; awaiting ACK)"
--                           % (SESS[role], oid))
--    if ack_failures == 3:
--        actions.append("NEED ack-discipline: 3 orders reached RING_LIMIT without ACK; refresh briefs/wake lanes")
- 
-     for peer in LANES:
--        if not ack_since:
--            for oid in peer_handoff_done_oids(boxes, peer, rings):
--                rings[oid] = -1
--                events.append("peer-handoff-done-%s" % peer)
-+        for oid in peer_handoff_done_oids(boxes, peer, rings):
-+            rings[oid] = -1
-+            events.append("peer-handoff-done-%s" % peer)
-         offers = peer_ready_offers(boxes, peer)
-         peer_posts = boxes[peer]["all"]
-         peer_ts = peer_posts[-1][:19] if peer_posts else ""
-@@ -1247,7 +1045,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-                                   rang_session(actions, SESS[peer]),
-                                   peer in recreating_peers(actions))
-         if act == "ring":
--            res = ring_peer_handoff(ctx, peer, pick["sender"], pick["ts"], pick["oid"])
-+            res = ring_peer_handoff(ctx, peer, pick["sender"], pick["ts"])
-             actions.append(res)
-             if res.startswith(("rang ", "WOULD ring ")):
-                 rings[pick["oid"]] = 1
-@@ -1258,23 +1056,6 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-                            % (peer, pick["sender"], pick["ts"], probes[peer]))
-             events.append("peer-handoff-hold-%s" % peer)
- 
--    for role in ("dev", "qe"):
--        brief_p = os.path.join(room_dir, "prompts", "%s.txt" % role)
--        try:
--            brief_present = os.path.getsize(brief_p) > 0
--        except OSError:
--            brief_present = False
--        due, oid = first_contact_due(role, bool(boxes[role]["all"]),
--                                     brief_present, probes[role],
--                                     role in deaf, rings)
--        if due and not rang_session(actions, SESS[role]):
--            res = ring(ctx, SESS[role], role,
--                       "first brief -- read prompts/%s.txt" % role, oid=oid)
--            actions.append(res)
--            if res.startswith(("rang ", "WOULD ring ")):
--                rings[oid] = 1
--            events.append("first-contact-%s" % role)
--
-     if dev_blocked_on_qe(dev_next) and not probes["qe"].startswith("IDLE"):
-         target = pick_backlog(rooms_all, issue)
-         if target is None:
-@@ -1284,7 +1065,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-                      "issue: %d\nbranch: none yet (read-only until recalled)\n"
-                      "Task: read-only recon of #%d per its room pending/next; "
-                      "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
--"Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment itself has no id.\n"
-+"Post NOTE to inbox/dev.md + RING.\n"
-                      "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
-                      % (target, issue, target, target, target))
-             actions.append(write_brief(ctx, room_dir,
-@@ -1301,8 +1082,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-                              fresh.get(role), boxes[role]["next"], rang):
-             actions.append("NEED %s idle with no briefed work (no invention)" % role)
- 
--    contacted = bool(boxes["dev"]["all"] or boxes["qe"]["all"])
--    if verdict.get("escalate") and contacted:
-+    if verdict.get("escalate"):
-         slow = {r: slow_probe(ctx, SESS[r]) for r in ("dev", "qe")}
-         node["slow_probes"] = slow
-         actions.append("ESCALATE #%d UNCHANGED x%d: slow=%s" %
-@@ -1368,7 +1148,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-     failed = any(a.startswith(("RING-FAILED", "STATE-FAILED", "BRIEF-FAILED",
-                                "POINTER-FAILED", "STATE-WRITE-FAILED"))
-                  for a in actions)
--    escalated = bool(verdict.get("escalate")) and contacted
-+    escalated = bool(verdict.get("escalate"))
-     retries = int(st.get("retries", 0) or 0)
-     budget = int(st.get("retry_budget", 3) or 0)
-     if escalated or failed:
-@@ -1388,9 +1168,6 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-                 h[box] = max(x[:20] for x in boxes[box]["all"])
-         s["handled"] = h
-         s["rings"] = rings
--        if ack_since:
--            s["ack_since"] = ack_since
--        s["ack_failures"] = ack_failures
-         s["retries"] = retries
-         if isinstance(ap_store, dict):
-             if ap_store:
-@@ -1470,8 +1247,7 @@ def resume_brief_text(issue, role, branch, tip, dirty, state, nxt):
-             "last STATE: %s\nlast NEXT: %s\n"
-             "Steps: 1. verify inventory (branch/tip/files above match your tree). "
-             "2. post CHECKPOINT NOTE to inbox/%s.md (branch + tip + files touched + next step) + RING. "
--            "3. continue the next step above; normal wire discipline (STATE/NEXT + CTX %% line, doorbell every post); "
--            "engine orders carry [oid <id>] and must be ACKed via post_update ref=<id>.\n"
-+            "3. continue the next step above; normal wire discipline (STATE/NEXT + CTX %% line, doorbell every post).\n"
-             "scripts/agent_up.sh wake %d %s nexios-engine \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
-             % (issue, role, issue, branch, tip, dirty_lines,
-                state or "-", nxt or "-", role,
-@@ -1590,14 +1366,14 @@ def recreate_worker(ctx, issue, room_dir, role, reason, state, nxt):
-     return acts, True
- 
- 
--RELEASE_OWNERS = {1: "consultant", 2: "consultant", 3: "operator",
--                  4: "consultant", 5: "operator", 6: "consultant", 7: "engine"}
-+RELEASE_OWNERS = {1: "consultant", 2: "consultant", 3: "consultant",
-+                  4: "consultant", 5: "consultant", 6: "consultant", 7: "engine"}
- RELEASE_TEXTS = {
-     1: "Verify merge: lane branch merged into main; main==origin/main; tree clean.",
-     2: "Confirm release version with operator (repo convention + milestone); record as STEP 2 DONE :: vX.Y.Z.",
--    3: "OPERATOR: create annotated tag + push (consultant prepares exact commands).",
-+    3: "Create annotated tag + push for vX.Y.Z.",
-     4: "Draft release notes (README highlights + milestone + lane evidence) to logs/release-<issue>-notes.md.",
--    5: "OPERATOR: create GitHub Release from draft + mirror to Nextcloud target.",
-+    5: "Create GitHub Release from draft; the Nextcloud mirror remains OPERATOR (coordinate in chat).",
-     6: "Verify release exists + mirror present; record evidence.",
-     7: "ENGINE: API-verify + close case.",
- }
-@@ -2155,41 +1931,6 @@ def cmd_tick(ctx, issues, interval):
-     return rc
- 
- 
--def status_planned_lane(role, box, st, probe):
--    """Next-step read for one worker lane. Pure, read-only (no rings)."""
--    if (st or {}).get("halt"):
--        return "HALTED: no actions"
--    box = box or {}
--    posts = box.get("all", [])
--    coord_last = box.get("coord_last")
--    if coord_last and order_outstanding(
--            role, coord_last, posts, (st or {}).get("rings") or {},
--            (st or {}).get("ack_since")):
--        return "ring: unacked order"
--    nxt = box.get("next") or ""
--    if re.search(RESUME_RE, nxt, re.I):
--        return "ring: resume per NEXT"
--    if nxt:
--        return "awaits: %s" % clip_text(nxt, 42)
--    pending = (st or {}).get("pending") or ""
--    if pending:
--        return "pending: %s" % clip_text(pending, 42)
--    if str(probe).startswith("IDLE"):
--        return "NEED idle: no briefed work"
--    return "-"
--
--
--def status_planned_audit(ctx, issue, boxes):
--    """Next-step read for the audit lane. Read-only (existing readers)."""
--    if auditor_decision((boxes.get("auditor") or {}).get("all", [])):
--        return "verdict on file"
--    if audit_session_live(ctx):
--        return "awaiting verdict"
--    if latest_audit_report(ctx, issue):
--        return "report on file"
--    return "collect verdict"
--
--
- def cmd_status(ctx, issues):
-     rooms = discover_rooms(issues)
-     if not rooms:
-@@ -2205,13 +1946,11 @@ def cmd_status(ctx, issues):
-                 activity = ("report %s" % os.path.basename(rep)) if rep else (
-                     auditor_decision(boxes["auditor"]["all"]) or "no verdict")
-                 state = "LIVE" if audit_session_live(ctx) else "ABSENT"
--                rows.append((role, state, activity,
--                             status_planned_audit(ctx, issue, boxes)))
-+                rows.append((role, state, activity, "-"))
-             else:
-                 probe = fast_probe(ctx, sess)
-                 activity = boxes[role]["state"] or boxes[role]["next"] or "-"
--                rows.append((role, probe, activity,
--                             status_planned_lane(role, boxes[role], st, probe)))
-+                rows.append((role, probe, activity, "-"))
-         print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
-                         rows), flush=True)
-     return 0
-@@ -2259,7 +1998,6 @@ def issue_briefs_text(issue, dev_branch, title, body):
-                  "Task: RECON phase (read-only, no branch, no code): read the issue "
-                  "text above + relevant code/tests; draft the implementation plan; "
-                  "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
--                 "Every engine order carries its id ([oid <id>] in the ring or coord NOTE); ACK it in your next post via post_update ref=<id> (a post without ref is FYI only and never clears an order). "
-                  "No branches, no code, "
-                  "no QEMU until the plan is audit-approved.\n"
-                  "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
-@@ -2269,7 +2007,6 @@ def issue_briefs_text(issue, dev_branch, title, body):
-                 "Task: parallel RECON (read-only, no branch, no code): draft the "
-                 "verification approach for this issue; post NOTE to inbox/qe.md + "
-                 "RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
--                "Every engine order carries its id ([oid <id>] in the ring or coord NOTE); ACK it in your next post via post_update ref=<id> (a post without ref is FYI only and never clears an order). "
-                 "RING. No test runs until dev posts IMPL READY.\n"
-                 "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
-                 % (seed, issue, issue))
-@@ -2491,8 +2228,7 @@ def mode_self_test():
-     check("rang-session-dry", rang_session(["WOULD ring nexios-qe: x"], "nexios-qe"), True)
-     check("rang-session-false", rang_session(["NOTE idle"], "nexios-qe"), False)
-     dry_ctx = SimpleNamespace(dry=True)
--    rp = ring_peer_handoff(dry_ctx, "qe", "dev", "2026-11-02T08:03:09",
--                            "peer:qe:2026-11-02T08:03:09")
-+    rp = ring_peer_handoff(dry_ctx, "qe", "dev", "2026-11-02T08:03:09")
-     check("peer-ring-points-at-sender-box",
-           "WOULD ring nexios-qe" in rp and rp.rstrip().endswith("read inbox/dev.md"), True)
-     check("recreating-peers",
-@@ -2585,150 +2321,6 @@ def mode_self_test():
-     check("tracker-observe-retired",
-           51 in trA.retired and trA.states[51] == {"phase": "CLOSED"}, True)
-     check("tracker-tracked-fixed", RunTracker({51}, []).tracked_issues() == {51}, True)
--    b_idle = {"all": [], "coord_last": None, "state": None,
--              "next": None, "ctx": None}
--    check("status-plan-unacked",
--          status_planned_lane("qe", {"all": ["2026-11-02T07:44:32Z FROM=qe NOTE :: x"],
--                                     "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: order",
--                                     "state": None, "next": None, "ctx": None},
--                              {"pending": "p"}, "IDLE-static") == "ring: unacked order", True)
--    check("status-plan-acked-order",
--          status_planned_lane("qe", {"all": ["2026-11-02T08:05:00Z FROM=qe NOTE :: x"],
--                                     "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: order",
--                                     "state": None, "next": None, "ctx": None},
--                              {"pending": "p"}, "IDLE-static") == "pending: p", True)
--    check("status-plan-resume",
--          status_planned_lane("dev", dict(b_idle, next="parked; on re-ring continue"),
--                              {"pending": "p"}, "IDLE-static") == "ring: resume per NEXT", True)
--    check("status-plan-resume-shared-regex",
--          status_planned_lane("dev", dict(b_idle, next="hold for re-ring"),
--                              {}, "IDLE-static") == "ring: resume per NEXT"
--          and re.search(RESUME_RE, "awaiting parked, re-ring now", re.I) is not None, True)
--    check("status-plan-awaits-next",
--          status_planned_lane("dev", dict(b_idle, next="working :: parked"),
--                              {"pending": "p"}, "IDLE-static") == "awaits: working :: parked", True)
--    check("status-plan-pending",
--          status_planned_lane("dev", b_idle, {"pending": "provisioned from issue text"},
--                              "WORKING-markers") == "pending: provisioned from issue text", True)
--    check("status-plan-need-idle",
--          status_planned_lane("dev", b_idle, {}, "IDLE-static") == "NEED idle: no briefed work", True)
--    check("status-plan-working-bare",
--          status_planned_lane("dev", b_idle, {}, "WORKING-markers") == "-", True)
--    check("status-plan-halted",
--          status_planned_lane("dev", dict(b_idle, next="x"), {"halt": True},
--                              "IDLE-static") == "HALTED: no actions", True)
--    check("first-due-virgin-idle",
--          first_contact_due("dev", False, True, "IDLE-static", False, {}) == (True, "first:dev"), True)
--    check("first-due-contacted",
--          first_contact_due("dev", True, True, "IDLE-static", False, {}) == (False, None), True)
--    check("first-due-no-brief",
--          first_contact_due("dev", False, False, "IDLE-static", False, {}) == (False, None), True)
--    check("first-due-working",
--          first_contact_due("dev", False, True, "WORKING-markers", False, {}) == (False, None), True)
--    check("first-due-deaf",
--          first_contact_due("dev", False, True, "IDLE-static", True, {}) == (False, None), True)
--    check("first-due-rung-once",
--          first_contact_due("dev", False, True, "IDLE-static", False,
--                            {"first:dev": 1}) == (False, None), True)
--    check("first-due-namespace-isolated",
--          first_contact_due("qe", False, True, "IDLE-static", False,
--                            {"first:dev": 1}) == (True, "first:qe"), True)
--    check("ack-regex-order",
--          ACK_OID_RE.fullmatch("dev:2026-11-02T08:00:00") is not None
--          and ref_lane("dev:2026-11-02T08:00:00") == "dev", True)
--    check("ack-regex-next",
--          ACK_OID_RE.fullmatch("next:qe:abcdef01") is not None
--          and ref_lane("next:qe:abcdef01") == "qe", True)
--    check("ack-regex-peer",
--          ACK_OID_RE.fullmatch("peer:qe:2026-11-02T08:00:00") is not None
--          and ref_lane("peer:qe:2026-11-02T08:00:00") == "qe", True)
--    check("ack-regex-first",
--          ACK_OID_RE.fullmatch("first:dev") is not None
--          and ref_lane("first:dev") == "dev", True)
--    check("ack-regex-reject-garbage", ACK_OID_RE.fullmatch("banana") is None, True)
--    check("ack-regex-reject-short-ts", ACK_OID_RE.fullmatch("dev:2026-11-02") is None, True)
--    check("ack-regex-reject-ts20", ACK_OID_RE.fullmatch("dev:2026-11-02T08:00:00Z") is None, True)
--    check("ack-regex-reject-upper-hash", ACK_OID_RE.fullmatch("next:qe:ABCDEF01") is None, True)
--    check("ack-regex-wrong-lane", ref_lane("nope") is None, True)
--    hp = ["2026-11-02T08:00:00Z FROM=dev READY :: s", "STATE: idle :: d",
--          "NEXT: waiting x", "ACK: dev:2026-11-02T07:59:00", "body"]
--    check("post-ack-fourth-line", post_ack(hp, hp[0]) == "dev:2026-11-02T07:59:00", True)
--    check("post-ack-none", post_ack(hp[:3], hp[0]) is None, True)
--    hp2 = ["2026-11-02T08:00:00Z FROM=dev NOTE :: s", "ACK: dev:2026-11-02T07:59:00"]
--    check("post-ack-body-collision-guard", post_ack(hp2, hp2[0]) is None, True)
--    check("post-ack-no-state", post_ack(["2026-11-02T08:00:00Z FROM=dev NOTE :: s", "x",
--                                         "NEXT: idle", "ACK: dev:2026-11-02T07:59:00"],
--                                        "2026-11-02T08:00:00Z FROM=dev NOTE :: s") is None, True)
--    check("wire-gaps-tolerates-ack",
--          wire_gaps(hp + ["tail"], hp[0]) == [], True)
--    check("order-outstanding-armed-chatter",
--          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T07:00:00Z FROM=qe NOTE :: y"],
--                            {}, "2026-11-02T07:30:00") is True, True)
--    check("order-outstanding-acked",
--          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"],
--                            {"qe:2026-11-02T08:00:00": -1}, "2026-11-02T07:30:00") is False, True)
--    check("order-outstanding-grandfathered",
--          order_outstanding("qe", "2026-11-02T06:00:00Z FROM=x", ["2026-11-02T07:00:00Z FROM=qe NOTE :: y"],
--                            {}, "2026-11-02T07:30:00") is False, True)
--    check("order-outstanding-legacy-current",
--          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T07:00:00Z FROM=qe NOTE :: y"],
--                            {}, None) is True, True)
--    check("order-outstanding-legacy-answered",
--          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"],
--                            {}, None) is False, True)
--    check("order-outstanding-no-coord",
--          order_outstanding("qe", None, ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"], {}, None) is False, True)
--    check("order-ring-action",
--          [order_ring_action(n, True) for n in (0, 2, 3, 4)] == ["ring", "ring", "escalate", "awaiting"]
--          and [order_ring_action(n, False) for n in (0, 2, 3, 4)] == ["ring", "ring", "recreate", "awaiting"],
--          True)
--    check("reset-resume-rings",
--          reset_resume_rings({"next:qe:a": 1, "dev:x": 2, "next:dev:b": 3}) == 2, True)
--    mb = {"dev": {"all": ["2026-11-02T08:00:00Z FROM=dev READY :: s"],
--                   "coord_last": "2026-11-02T07:59:00Z FROM=coord NOTE :: o"},
--          "qe": {"all": []}}
--    check("match-ack-current-order",
--          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}) == ("ack", "dev:2026-11-02T07:59:00"), True)
--    check("match-ack-in-rings",
--          match_ack("first:dev", "dev", {"dev": {"all": []}},
--                    {"first:dev": 1}, {}) == ("ack", "first:dev"), True)
--    check("match-ack-in-resume",
--          match_ack("next:dev:abcdef01", "dev", {"dev": {"all": []}}, {},
--                    {"dev": "next:dev:abcdef01"}) == ("ack", "next:dev:abcdef01"), True)
--    check("match-ack-unmatched",
--          match_ack("dev:2026-11-02T07:59:00", "dev",
--                    {"dev": {"all": [], "coord_last": None}}, {}, {}) == ("ignore-stale", "dev:2026-11-02T07:59:00"),
--          True)
--    check("match-ack-wrong-lane",
--          match_ack("qe:2026-11-02T07:59:00", "dev", mb, {}, {})[0] == "ignore-malformed", True)
--    check("match-ack-garbage",
--          match_ack("banana", "dev", mb, {}, {})[0] == "ignore-malformed", True)
--    check("match-ack-none", match_ack(None, "dev", mb, {}, {}) == (None, None), True)
--    check("match-ack-auditor-excluded",
--          match_ack("dev:2026-11-02T07:59:00", "auditor", {"auditor": {"all": []}}, {}, {})[0] == "ignore-malformed",
--          True)
--    check("match-ack-clears-peer",
--          match_ack("peer:qe:2026-11-02T07:59:00", "qe", {"qe": {"all": []}},
--                    {"peer:qe:2026-11-02T07:59:00": 1}, {}) == ("ack", "peer:qe:2026-11-02T07:59:00"), True)
--    stt = {"pending": "provisioned from issue text"}
--    check("status-plan-armed-unacked",
--          status_planned_lane("qe", {"all": [], "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
--                                     "state": None, "next": None, "ctx": None},
--                              dict(stt, rings={"qe:2026-11-02T08:00:00": 1}, ack_since="2026-11-02T07:30:00"),
--                              "IDLE-static") == "ring: unacked order", True)
--    check("ack-scan-fresh-wins",
--          ack_scan_posts("dev", {"dev": {"all": ["a", "b"]}}, {"dev": "t"},
--                         ["b"]) == ["b"], True)
--    check("ack-scan-first-sight-full",
--          ack_scan_posts("dev", {"dev": {"all": ["a", "b"]}}, {}, []) == ["a", "b"], True)
--    check("ack-scan-handled-empty",
--          ack_scan_posts("dev", {"dev": {"all": ["a"]}}, {"dev": "t"}, []) == [], True)
--    check("status-plan-armed-acked",
--          status_planned_lane("qe", {"all": ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"],
--                                     "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
--                                     "state": None, "next": None, "ctx": None},
--                              dict(stt, rings={"qe:2026-11-02T08:00:00": -1}, ack_since="2026-11-02T07:30:00"),
--                              "IDLE-static") == "pending: provisioned from issue text", True)
-     print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
-     return 0 if passed == total else 1
- 
-diff --git a/scripts/watchdog.sh b/scripts/watchdog.sh
-index cd7f5afce..53aada36d 100755
---- a/scripts/watchdog.sh
-+++ b/scripts/watchdog.sh
-@@ -58,7 +58,7 @@ qemu_count() {
- 
- latest_report() { # $1 room -> newest audit report for this issue, or none
-   # The auditor has no working doorbell; verdicts land as files.
--  # The coordinator polls this (doctrine) instead of waiting for a ring.
-+  # The engine polls this (doctrine) instead of waiting for a ring.
-   local issue rep
-   issue=$(basename "$1"); issue=${issue#nexios-}
-   rep=$(ls -t /Users/arnold/jarvis/audits/report-*-"${issue}".md /Users/arnold/jarvis/audits/report-*-"${issue}"-*.md 2>/dev/null | head -n 1 || true)
-@@ -75,9 +75,9 @@ fingerprint() { # $1 room -> full multi-line fingerprint on stdout
-     return 0
-   fi
-   local box bf n last
--  # Worker-authored lines ONLY: the coordinator's own FROM=coord orders
--  # live in these same boxes and must never tick the room (a tick means
--  # a worker posted, never that the coordinator wrote).
-+  # Worker-authored lines ONLY: engine/operator FROM=coord orders live in
-+  # these same boxes and must never tick the room (a tick means a worker
-+  # posted, never that an order was written).
-   for box in dev qe auditor; do
-     bf="$1/inbox/$box.md"
-     if [ -f "$bf" ]; then
 diff --git a/tools/agents/consultant/AGENTS.md b/tools/agents/consultant/AGENTS.md
-index ae3defd47..5d936a8c9 100644
+index 5d936a8c9..34d721095 100644
 --- a/tools/agents/consultant/AGENTS.md
 +++ b/tools/agents/consultant/AGENTS.md
-@@ -12,9 +12,9 @@ Role: own workflow transitions. Motivation (operator order, mandatory): drive an
- - Role prompts live read-only in the repo: `{repo}/prompts/PROMPT-{dev,testdev,audit}.md` (the
-   launched config resolves `{repo}` to the absolute repo root; the shipped files never carry a
-   machine path). Reference, don't copy. LEARNINGS closeout writes `{repo}/prompts/LEARNINGS.md`.
--- Your own fence is versioned in repo: `tools/agents/fence/base.json` + `tools/agents/fence/roles/coordinator.json`
--  (this directory's `AGENTS.md` is a SYMLINK to `tools/agents/coordinator/AGENTS.md`; your config is rendered
--  to `~/.local/state/nexios/rendered/coordinator/opencode.resolved.json` at launch — never hand-edit a rendered file).
-+- Your own fence is versioned in repo: `tools/agents/fence/base.json` + `tools/agents/fence/roles/consultant.json`
-+  (this file is versioned in-repo at `tools/agents/consultant/AGENTS.md`, kept for history: coordinator doctrine; your config is rendered
-+  to `~/.local/state/nexios/rendered/consultant/opencode.resolved.json` at launch — never hand-edit a rendered file).
+@@ -16,17 +16,18 @@ Role: own workflow transitions. Motivation (operator order, mandatory): drive an
+   (this file is versioned in-repo at `tools/agents/consultant/AGENTS.md`, kept for history: coordinator doctrine; your config is rendered
+   to `~/.local/state/nexios/rendered/consultant/opencode.resolved.json` at launch — never hand-edit a rendered file).
  
- ## Wake routine (machine-executed, operator order)
+-## Wake routine (machine-executed, operator order)
++## Wake routine (operator order; the coordinator-react.py advisor was removed
++when the coordinator role was — the engine owns orchestration now)
  
-diff --git a/tools/agents/fence/base.json b/tools/agents/fence/base.json
-index eef97a73a..5fb7dc2a2 100644
---- a/tools/agents/fence/base.json
-+++ b/tools/agents/fence/base.json
-@@ -63,7 +63,8 @@
-       "root": "/tmp/*",
-       "decision": "allow",
-       "roles": [
--        "auditor"
-+        "auditor",
-+        "consultant"
-       ],
-       "external_variants": [
-         "",
-diff --git a/tools/agents/fence/roles/consultant.json b/tools/agents/fence/roles/consultant.json
-index abf086853..e98dfd97a 100644
---- a/tools/agents/fence/roles/consultant.json
-+++ b/tools/agents/fence/roles/consultant.json
-@@ -2,23 +2,27 @@
-   "role": "consultant",
-   "edit_default": "deny",
-   "edit_allow": [
--    "{repo}/logs/**"
-+    "{repo}/**"
-+  ],
-+  "edit_deny": [
-+    "{repo}/src",
-+    "{repo}/src/**",
-+    "{repo}/tools/agents/fence",
-+    "{repo}/tools/agents/fence/**",
-+    "{repo}/tools/agents/render_fence.py",
-+    "{repo}/tools/agents/verify_fence.py",
-+    "{repo}/scripts/agent_up.sh"
-   ],
--  "edit_deny": [],
-   "external_allow": [
--    "{repo}/prompts/**",
--    "{repo}/audits/**",
--    "{repo}/scripts/**",
--    "{repo}/tools/agents/**",
--    "{repo}/logs/**"
-+    "{repo}/**"
-   ],
+-Every wake starts with `scripts/coordinator-react.py` — step-0, no exceptions:
+-fetch fresh worker states first, invoke with tick + states, execute its action
+-list before anything else. The script is the executable form of the reactive
+-rows below (scan, new-post detect, ring candidates, armed triggers, escalation);
+-it is advisory and never acts itself. Judgment, lane assignment, and every
+-authority/safety rule in this file stay with you — where the script and this
+-file disagree, this file wins. Cursors (`handled`) and pending triggers (`armed`)
+-live in room `state.json`; the script only reads them (`--mark` advances cursors
+-after a processed wake).
++Every wake starts with fresh reads, no exceptions: tail each room inbox
++(`/tmp/nexios-<n>/inbox/*.md`), read `state.json` (phase, pending, handled
++cursors, rings), then act on what changed. No script stands between you and the
++rooms; the tick tables below are the reactive rows (scan, new-post detect,
++ring candidates, armed triggers, escalation). Judgment, lane assignment, and
++every authority/safety rule in this file stay with you — where the rows below
++and this file disagree, this file wins. Cursors (`handled`) and pending
++triggers (`armed`) live in room `state.json` and are advanced by whoever
++consumes the posts (engine ticks, coordinator-react historically via `--mark`).
+ 
+ ## Cold start (room opened with no issue)
+ 
+diff --git a/tools/agents/fence/README.md b/tools/agents/fence/README.md
+index 2fc2b1f50..2ee332817 100644
+--- a/tools/agents/fence/README.md
++++ b/tools/agents/fence/README.md
+@@ -32,7 +32,9 @@ $NEXIOS_HOME/rendered/<role>/opencode.resolved.json     config for a launched se
+    and the `sil3_auditor.md` alias into `<cwd>/.opencode/agents/` (gitignored,
+    launcher-owned).
+ 3. `tmux` starts `opencode` with `OPENCODE_CONFIG=<rendered>`,
+-   `NEXIOS_AGENT_ROLE=<role>` and `TMPDIR=/tmp/agentup-tmp-<session>`.
++   `NEXIOS_AGENT_ROLE=<role>` and `TMPDIR=/tmp/agentup-tmp-<session>`, plus
++   role-delta launch flags (auditor only: `--agent nexios-audit --auto`;
++   every other role launches bare and interactive).
+ 4. `check_fenced` walks the pane's own process tree and requires all four values
+    in the process environment; a mismatch kills the session.
+ 
+@@ -46,6 +48,11 @@ auditor invoked from a dev session would otherwise inherit `edit: allow`.
+ 
+ - `edit`: `"*"` → base namespaces → role allows → base denies → role denies
+ - `external_directory`: `"*"` → base namespaces → role allows
++- `bash` (roles with `launch.agent` only, today just the auditor): the role's
++  `agent.bash` map verbatim. Deny entries must be the tail — the renderer
++  rejects any allow/ask after the first deny, and the F2 pin test
++  (`verify_fence.py` self-test) proves it bites. (F9 covers consultant
++  *edit*-map ordering, not bash.)
+ 
+ `/tmp/<name>` mirrors are **derived**, never typed: macOS canonicalizes `/tmp`
+ to `/private/tmp` before matching, so every rule is emitted twice with the same
+@@ -61,13 +68,16 @@ rendered artifact, a twin, or an agent file under `.opencode/`.
+ - role delta keys are confined: an absolute `edit_allow`/`edit_deny`/
+   `external_allow` entry must sit under a declared namespace root (a
+   hand-typed `/private/tmp` entry is an error, and `/etc/...` cannot be
+-  introduced by a delta at all).
++  introduced by a delta at all). `{repo}` entries are exempt (expanded per
++  launch, validated by exact-set matching instead).
+ - role delta: `edit_default`, `edit_allow`, `edit_deny`, `external_allow`,
+-  `launch` (`cwd`, `prompt`), `agent` (`name`, `twin`, `description`, `mode`,
+-  optional `model`, `temperature`, `bash`, `alias`), `config_extra` (only the
+-  coordinator uses it, for `mcp`).
+-- `{repo}` is allowed only in the coordinator delta and expands to the checkout
+-  being launched; keys are restricted to `prompts/**` and `audits/**`.
++  `launch` (`cwd`, `prompt`, optional `agent`, optional `auto`),
++  `agent` (`name`, `twin`, `description`, `mode`, optional `model`,
++  `temperature`, `bash`, `alias`), `config_extra` (only the consultant uses
++  it, for `mcp`). `launch.agent` must equal the role's own `agent.name`
++  and requires `agent.mode` `primary`|`all`.
++- `{repo}` is allowed in any role delta and expands to the checkout being
++  launched (consultant: whole repo r+w except `src/` + fence self-cage).
+ 
+ Dev keeps bash as the documented maintenance path and has no edit-tool access to
+ this directory (`tools/agents/fence/**`, `.opencode/agents/**` are denied). The
+@@ -86,12 +96,19 @@ filter, so a `/tmp/*` rule appearing in a worker's map is still a failure.
+ ## The auditor's shell is the boundary, not its edit map
+ 
+ The auditor keeps `edit_default: deny` (it writes only `audits/rejected_patch.diff`
+-and `audits/report-*.md`) and needs no MCP. Its bash map is intentionally broad —
+-`bash *`, `python3 *`, `git apply *`, `sed *`, `cp *`, `mkdir *` — because
+-reviewing a patch means reproducing builds, diffs and scratch harnesses. That
+-means the `edit` map no longer bounds what the auditor can touch: the shell can
+-reach the repo. The controls that remain are the ones that actually apply:
+-
++and `audits/report-*.md`) and needs no MCP. It launches headless with
++`--agent nexios-audit --auto`: `ask` rules auto-approve, explicit `deny` rules
++still hold. The bash map is reads plus a deny tail (destructive, mutating-VCS,
++network-exfil, wrapper and session-driving verbs) instead of an allowlist with
++a bare `*`: under `--auto` an allowlist-with-`*` would auto-approve everything,
++so the tail is the control. Residual holes are documented, not closed:
++`cp`/`mv`/glob-writes reach the repo through bash (same class as the historic
++`edit`-vs-shell gap); `python3 <script>` runs arbitrary files; `git apply`
++reproduces patches (intended). The controls that remain are the ones that
++actually apply:
++
++- `--auto` never overrides `deny`; a denial ends that command (recorded as a
++  limitation, never retried or wrapped).
+ - `audits/rejected_patch.diff` is the only sanctioned output; the developer
+   applies it, never the auditor (`PROMPT-audit.md`).
+ - `tools/check_no_cross_edits.sh` reviews a change set, so an auditor that
+@@ -110,6 +127,7 @@ python3 tools/agents/verify_fence.py --self-test
+ ```
+ 
+ The gate checks properties rather than a golden file (a golden would be one more
+-copy): per-role polarity, mirror completeness, no host-dependent path, no
+-wildcard leak, coordinator `mcp`, self-contained agent cages, and freshness of
++copy): per-role polarity (plus the auditor session-bash pin), mirror
++completeness, no host-dependent path, no wildcard leak, consultant `mcp`,
++self-contained agent cages, consultant src-deny ordering (F9), and freshness of
+ any config already on disk under `$NEXIOS_HOME/rendered/`.
+diff --git a/tools/agents/fence/roles/auditor.json b/tools/agents/fence/roles/auditor.json
+index 2a435e18e..f2415e146 100644
+--- a/tools/agents/fence/roles/auditor.json
++++ b/tools/agents/fence/roles/auditor.json
+@@ -9,13 +9,15 @@
+   "external_allow": [],
    "launch": {
--    "cwd": "coord"
-+    "cwd": "consultant"
+     "cwd": "audit",
+-    "prompt": "auditor.txt"
++    "prompt": "auditor.txt",
++    "agent": "nexios-audit",
++    "auto": true
    },
    "agent": {
-     "name": "nexios-consultant",
-     "twin": "nexios-consultant.md",
--    "description": "Nexios workflow consultant (read-only advisor; never tasks workers, rings, or writes)",
-+    "description": "Nexios workflow consultant (writes repo except src/ + full /tmp; GitHub issues/PRs/releases; never orchestrates workers)",
-     "mode": "subagent",
+     "name": "nexios-audit",
+     "twin": "nexios-audit.md",
+-    "description": "NexIOS SIL 3 safety auditor (read-only, never edits)",
+-    "mode": "subagent",
++    "description": "NexIOS SIL 3 safety auditor (read-only, never edits; runs --auto: ask auto-approved, deny enforced)",
++    "mode": "all",
+     "model": "opencode-go/muse-spark-1.3-contributor",
+     "temperature": 0.0,
      "bash": {
-       "*": "ask",
-@@ -46,6 +50,14 @@
-       "git rev-parse*": "allow",
-       "git merge-base*": "allow",
-       "git check-ignore*": "allow",
-+      "git add *": "allow",
-+      "git commit*": "allow",
-+      "git push*": "allow",
-+      "git checkout*": "allow",
-+      "git merge*": "allow",
-+      "git fetch*": "allow",
-+      "git tag*": "allow",
-+      "git -C *": "allow",
-       "tmux ls*": "allow",
-       "tmux has-session*": "allow",
-       "tmux list-panes*": "allow",
-@@ -53,6 +65,26 @@
-       "python3 *": "allow",
-       "gh issue view *": "allow",
-       "gh issue list*": "allow",
-+      "gh issue create*": "allow",
-+      "gh issue comment*": "allow",
-+      "gh issue edit*": "allow",
-+      "gh issue close*": "allow",
-+      "gh issue reopen*": "allow",
-+      "gh pr view*": "allow",
-+      "gh pr list*": "allow",
-+      "gh pr create*": "allow",
-+      "gh pr comment*": "allow",
-+      "gh pr review*": "allow",
-+      "gh pr edit*": "allow",
-+      "gh pr close*": "allow",
-+      "gh pr reopen*": "allow",
-+      "gh pr merge*": "allow",
-+      "gh release view*": "allow",
-+      "gh release list*": "allow",
-+      "gh release create*": "allow",
-+      "gh release edit*": "allow",
-+      "gh release upload*": "allow",
-+      "gh api repos/*": "allow",
-       "scripts/agent_up.sh status*": "allow",
-       "scripts/agent_up.sh fence show*": "allow",
-       "scripts/agent_up.sh watch * status": "allow"
+@@ -34,8 +36,6 @@
+       "echo *": "allow",
+       "mkdir *": "allow",
+       "cp *": "allow",
+-      "bash *": "allow",
+-      "command *": "allow",
+       "test *": "allow",
+       "printf *": "allow",
+       "cat *": "allow",
+@@ -61,7 +61,118 @@
+       "od *": "allow",
+       "git merge-tree *": "allow",
+       "git cat-file *": "allow",
+-      "true*": "allow"
++      "true*": "allow",
++      "rm *": "deny",
++      "rmdir *": "deny",
++      "shred *": "deny",
++      "srm *": "deny",
++      "truncate *": "deny",
++      "sudo *": "deny",
++      "su *": "deny",
++      "doas *": "deny",
++      "mkfs*": "deny",
++      "mke2fs *": "deny",
++      "newfs *": "deny",
++      "dd *": "deny",
++      "fdisk *": "deny",
++      "parted *": "deny",
++      "diskutil *": "deny",
++      "wipefs *": "deny",
++      "blkdiscard *": "deny",
++      "mount *": "deny",
++      "umount *": "deny",
++      "chmod *": "deny",
++      "chown *": "deny",
++      "chgrp *": "deny",
++      "kill *": "deny",
++      "killall *": "deny",
++      "pkill *": "deny",
++      "reboot*": "deny",
++      "shutdown *": "deny",
++      "halt *": "deny",
++      "launchctl *": "deny",
++      "crontab *": "deny",
++      "git clean *": "deny",
++      "git reset *": "deny",
++      "git restore *": "deny",
++      "git checkout *": "deny",
++      "git stash *": "deny",
++      "git push *": "deny",
++      "git fetch *": "deny",
++      "git pull *": "deny",
++      "git clone *": "deny",
++      "git merge *": "deny",
++      "git rebase *": "deny",
++      "git cherry-pick *": "deny",
++      "git revert *": "deny",
++      "git am *": "deny",
++      "git config *": "deny",
++      "git remote *": "deny",
++      "git init *": "deny",
++      "git gc *": "deny",
++      "git prune *": "deny",
++      "git worktree add*": "deny",
++      "git worktree remove*": "deny",
++      "git worktree prune*": "deny",
++      "git branch -D*": "deny",
++      "git branch -d*": "deny",
++      "git branch -m*": "deny",
++      "git branch -f*": "deny",
++      "git tag -d*": "deny",
++      "git tag -f*": "deny",
++      "gh pr *": "deny",
++      "gh release *": "deny",
++      "gh repo *": "deny",
++      "gh api *": "deny",
++      "gh auth *": "deny",
++      "gh secret *": "deny",
++      "gh variable *": "deny",
++      "gh workflow *": "deny",
++      "gh run *": "deny",
++      "gh issue create*": "deny",
++      "gh issue close*": "deny",
++      "gh issue reopen*": "deny",
++      "gh issue edit*": "deny",
++      "gh issue delete*": "deny",
++      "gh issue comment*": "deny",
++      "curl *": "deny",
++      "wget *": "deny",
++      "ssh *": "deny",
++      "scp *": "deny",
++      "sftp *": "deny",
++      "rsync *": "deny",
++      "nc *": "deny",
++      "ncat *": "deny",
++      "socat *": "deny",
++      "telnet *": "deny",
++      "ftp *": "deny",
++      "bash *": "deny",
++      "bash": "deny",
++      "sh *": "deny",
++      "sh": "deny",
++      "zsh *": "deny",
++      "command *": "deny",
++      "env *": "deny",
++      "xargs *": "deny",
++      "osascript *": "deny",
++      "open *": "deny",
++      "tee *": "deny",
++      "install *": "deny",
++      "ln *": "deny",
++      "sed -i*": "deny",
++      "sed --in-place*": "deny",
++      "sed -E -i*": "deny",
++      "sed -n -i*": "deny",
++      "sed -nE -i*": "deny",
++      "find * -delete*": "deny",
++      "find * -exec*": "deny",
++      "python3 -c*": "deny",
++      "python3 -m http.server*": "deny",
++      "python3 -m pip*": "deny",
++      "tmux kill*": "deny",
++      "tmux send-keys*": "deny",
++      "tmux new-session*": "deny",
++      "scripts/agent_up.sh *": "deny"
+     },
+     "alias": [
+       "sil3_auditor.md"
 diff --git a/tools/agents/render_fence.py b/tools/agents/render_fence.py
-index 82e2ce3c6..b43b7dcfa 100644
+index b43b7dcfa..1bcdeea4c 100644
 --- a/tools/agents/render_fence.py
 +++ b/tools/agents/render_fence.py
-@@ -160,8 +160,8 @@ def validate_delta(delta, role):
-     if "launch" in delta:
-         launch = delta["launch"]
+@@ -10,6 +10,8 @@ necessarily concrete - it is rendered per launch, never committed.
+ Order is significant (opencode: the LAST matching rule wins):
+   edit:                "*" -> base namespaces -> role allows -> base denies -> role denies
+   external_directory:  "*" -> base namespaces -> role allows
++  bash (roles with `launch.agent`): the role's `agent.bash` map verbatim;
++  deny entries must be the tail (the renderer rejects allow/ask after deny).
+ 
+ Mirrors are DERIVED: every "/tmp/X" also emits "/private/tmp/X" with the same
+ decision, because macOS canonicalizes /tmp before matching (#410). A hand-typed
+@@ -29,7 +31,7 @@ BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
+ NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
+ DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
+               "external_allow", "launch", "agent", "config_extra"}
+-LAUNCH_KEYS = {"cwd", "prompt"}
++LAUNCH_KEYS = {"cwd", "prompt", "agent", "auto"}
+ AGENT_KEYS = {"name", "twin", "description", "mode", "model", "temperature",
+               "bash", "alias"}
+ POLARITY = ("allow", "deny")
+@@ -162,6 +164,13 @@ def validate_delta(delta, role):
          closed(launch, LAUNCH_KEYS, "delta launch")
--        expect(launch.get("cwd") in ("dev", "qe", "audit", "coord"),
--               "launch.cwd must be dev|qe|audit|coord")
-+        expect(launch.get("cwd") in ("dev", "qe", "audit", "coord", "consultant"),
-+               "launch.cwd must be dev|qe|audit|coord|consultant")
+         expect(launch.get("cwd") in ("dev", "qe", "audit", "coord", "consultant"),
+                "launch.cwd must be dev|qe|audit|coord|consultant")
++        if "agent" in launch:
++            expect(isinstance(launch["agent"], str) and launch["agent"]
++                   and not any(c.isspace() for c in launch["agent"]),
++                   "launch.agent must be a whitespace-free agent name")
++        if "auto" in launch:
++            expect(isinstance(launch["auto"], bool),
++                   "launch.auto must be a boolean (got %r)" % (launch["auto"],))
      if "agent" in delta:
          agent = delta["agent"]
          closed(agent, AGENT_KEYS, "delta agent")
-diff --git a/tools/agents/twins/nexios-consultant.md b/tools/agents/twins/nexios-consultant.md
-index 4a3f1b822..083cf14c8 100644
---- a/tools/agents/twins/nexios-consultant.md
-+++ b/tools/agents/twins/nexios-consultant.md
-@@ -1,21 +1,23 @@
--You are nexios-consultant, the Nexios workflow consultant. You advise; you never orchestrate. Orchestration (briefs, rings, launches, state, merges, cleanup) belongs exclusively to the state machine; workers own their checkouts.
-+You are nexios-consultant, the Nexios workflow consultant. You advise and you publish; you never orchestrate. Orchestration (briefs, rings, launches, state ticks, lane cleanup) belongs exclusively to the state machine; workers own their checkouts.
+@@ -196,6 +205,13 @@ def validate_delta(delta, role):
+                 expect(isinstance(name, str) and name.endswith(".md")
+                        and "/" not in name and name not in (".", ".."),
+                        "agent.alias must be a bare .md filename: %r" % (name,))
++        if "bash" in agent and isinstance(agent["bash"], dict):
++            validate_bash_order(agent["bash"], "delta agent.bash")
++    if "launch" in delta and "agent" in delta.get("launch", {}):
++        expect(delta["launch"]["agent"] == delta.get("agent", {}).get("name"),
++               "launch.agent must select the role's own agent (got %r)" % (delta["launch"]["agent"],))
++        expect(delta.get("agent", {}).get("mode") in ("primary", "all"),
++               "launch.agent requires agent.mode primary|all (subagents cannot be the CLI-selected primary)")
+     if "config_extra" in delta:
+         expect(isinstance(delta["config_extra"], dict), "config_extra must be an object")
  
--READ (only): room runtimes (/tmp/nexios-*/ inbox, state.json, prompts, PROTOCOL, ANCHOR), checkout prompts/audits/scripts/fence sources, live tmux panes (look, never send keys), GitHub issues (view/list only).
-+READ everything: the whole checkout including src/ (never modify it), room runtimes (/tmp/nexios-*/ inbox, state.json, prompts, PROTOCOL, ANCHOR), live tmux panes (look, never send keys), GitHub issues, PRs and releases (view and manage).
+@@ -206,9 +222,24 @@ def ns_applies(ns, role):
+     return roles is None or role in roles
  
--NEVER: brief, ring, launch, kill, or otherwise task worker sessions; write rooms, repo files, or state; approve permission modals; answer a worker ring with orders (a ring means "re-read", never a command).
-+WRITE: anywhere in the checkout EXCEPT src/ (src/ + src/**), your own cage (tools/agents/fence + fence/**, tools/agents/render_fence.py, tools/agents/verify_fence.py) and scripts/agent_up.sh -- all deny-listed AFTER the allow (last rule wins, so the denies hold) -- and anywhere under /tmp (room runtimes, scratch, notes). You can never rewrite kernel sources, your own cage, or the launcher. Your durable trail stays the same: one timestamped NOTE per line in logs/consultant-notes.md for advisory findings.
  
--SOLE WRITE TARGET: append timestamped advisory NOTEs to logs/consultant-notes.md in the checkout (nothing else, ever). Findings that need action become a NOTE there plus a message to the operator in chat; the state machine and the operator decide.
-+NEVER: brief, ring, launch, kill, or otherwise task worker sessions; write rooms state, src/, or fence sources; approve permission modals; answer a worker ring with orders (a ring means "re-read", never a command); delete issues, releases, branches or tags you did not create; touch repository settings, visibility, transfer, collaborators, secrets, Actions, org or billing surfaces; force-push a shared branch.
- 
--This file carries prose only: the permission cage is generated at launch by tools/agents/render_fence.py from tools/agents/fence/roles/consultant.json, so there is nothing here to keep in sync.
-+GITHUB: you may create issues and PRs, comment, label, edit, close and reopen them, review and merge PRs, and create/edit/upload releases (always name the repo explicitly with -R staycool1374-Ger/nexios; pass --repo or -R on every gh call). API use stays under repos/ (issues, pulls, releases, labels). When in doubt whether an action publishes or deletes, ask the operator in chat first.
- 
- RELEASE DUTY: the state machine opens release tickets by appending a step list
- (with owners) to logs/consultant-notes.md and ringing you. Work your steps in
--order; you may read anything, but you publish nothing and mirror nothing —
--tag/push, GitHub Release creation, and the Nextcloud mirror are the operator's
--hands, coordinated with them in chat. Mark each finished step by appending
-+order; you may create the annotated tag, push it, and create the GitHub Release
-+yourself — the Nextcloud mirror remains the operator's hands, coordinated with
-+them in chat. Mark each finished step by appending
- `RELEASE <issue> STEP <n> DONE :: <evidence>` to the same file. Your other
- lane notes go there too, one timestamped NOTE per line.
- 
- STOPPING THE ENGINE: create the file logs/state-machine/STOP (any content) to stop the tick loop after its current cycle; the engine stashes, consumes the file, and exits cleanly. Never kill -9 the loop (state writes are per-room atomic; -9 can only strand a tick, never corrupt).
- 
- WORKER RINGS: workers ring the engine (durable WAKE lines in the room inbox), never you. If a worker message lands in your window anyway, treat it as FYI — never answer with orders.
++def validate_bash_order(bash, what):
++    """Denies must be the tail: once a deny appears, no allow/ask may follow
++    (last-match-wins makes a later allow undo the deny)."""
++    seen_deny = False
++    for pattern, decision in bash.items():
++        if decision == "deny":
++            seen_deny = True
++        elif seen_deny:
++            fail("%s: allow/ask after deny (denies must be the tail): %r" % (what, pattern))
 +
-+This file carries prose only: the permission cage is generated at launch by tools/agents/render_fence.py from tools/agents/fence/roles/consultant.json, so there is nothing here to keep in sync.
++
+ def compose(base, delta, repo, role):
+     out = {"$schema": base["$schema"]}
+-    permission = {"bash": base["bash"]}
++    if delta.get("launch", {}).get("agent"):
++        agent_bash = (delta.get("agent") or {}).get("bash", {})
++        permission = {"bash": agent_bash}
++    else:
++        permission = {"bash": base["bash"]}
+ 
+     ext = {"*": base["external_default"]}
+     for ns in base["namespaces"]:
+diff --git a/tools/agents/twins/nexios-audit.md b/tools/agents/twins/nexios-audit.md
+index 0844bd3bc..9a6b87623 100644
+--- a/tools/agents/twins/nexios-audit.md
++++ b/tools/agents/twins/nexios-audit.md
+@@ -1 +1 @@
+-You are nexios-audit. You review diffs statically and post verdicts (APPROVED/REJECTED + report file). You never commit, merge, or push anything. Read-only means read-only. This file carries prose only: the permission cage is generated at launch by tools/agents/render_fence.py from tools/agents/fence/roles/auditor.json.
++You are nexios-audit. You review diffs statically and post verdicts (APPROVED/REJECTED + report file). You never commit, merge, or push anything. Read-only means read-only. You run under opencode --auto: ask is auto-approved, deny is final. A denied command is recorded as a report limitation — never retry it, never wrap it in another interpreter or shell, and never loop. This file carries prose only: the permission cage is generated at launch by tools/agents/render_fence.py from tools/agents/fence/roles/auditor.json.
 diff --git a/tools/agents/verify_fence.py b/tools/agents/verify_fence.py
-index 1e0523f7c..1605f5b05 100644
+index 1605f5b05..fcdff3427 100644
 --- a/tools/agents/verify_fence.py
 +++ b/tools/agents/verify_fence.py
-@@ -13,15 +13,19 @@ PROPERTIES of what the renderer emits, per role:
+@@ -8,7 +8,9 @@ against (a golden would be the 14th copy) - this gate instead asserts the
+ PROPERTIES of what the renderer emits, per role:
+ 
+   F1  the renderer succeeds for every role (fail-closed path is intact)
+-  F2  polarity is per-role: only dev has edit "*" allow; every role keeps bash
++  F2  polarity is per-role: only dev has edit "*" allow; bash is a plain
++      "allow" except the auditor, whose session bash must equal its agent.bash
++      map (launch.agent roles run the agent cage in-session)
+   F3  every /tmp rule has its /private/tmp mirror and vice versa, same decision
        (macOS canonicalizes before matching: an unmirrored rule is dead)
    F4  no host-dependent path leaks: no /var/folders, no $HOME, no "{repo}"
-       residue; worker configs carry no repo-absolute path at all; consultant
--      repo keys are exactly the documented advisory reads
-+      repo keys are exactly the documented write set ({repo}/** allow;
-+      src/ and fence sources denied)
-   F5  no wildcard leaks: "*" appears only as the role's edit_default (last rule
-       wins, so a "*" allow anywhere else would undo the fence)
-   F6  consultant keeps its mcp block (harness+github); workers have none
--  F7  if a rendered config exists under the runtime root, it is FRESH: byte
-+  F7  if a rendered config under the runtime root is FRESH: byte
-       equality with a fresh render (a stale file silently defuses the fence)
-   F8  every generated subagent file carries its OWN permission block equal to
-       the rendered map: an agent file without one inherits the caller's map,
-       so the auditor invoked from a dev session would inherit edit:allow
-+  F9  consultant src/ is unwritable: the rendered edit map denies
-+      {repo}/src and {repo}/src/**, and both denies appear AFTER the
-+      {repo}/** allow (last rule wins)
- 
- Exit 0 clean, 2 on any failure (never 1: this is a configuration error).
- `--self-test` proves each check bites against deliberately broken renders.
-@@ -42,7 +46,11 @@ RUNTIME = os.environ.get(
-     "NEXIOS_HOME", os.path.join(os.path.expanduser("~"), ".local", "state", "nexios"))
- RENDERED = os.path.join(RUNTIME, "rendered")
- ROLES = ("dev", "qe", "auditor", "consultant")
--CONSULT_REPO_KEYS = ("{repo}/prompts/**", "{repo}/audits/**", "{repo}/scripts/**", "{repo}/tools/agents/**", "{repo}/logs/**")
-+CONSULT_REPO_KEYS = ("{repo}/**", "{repo}/src", "{repo}/src/**",
-+                       "{repo}/tools/agents/fence", "{repo}/tools/agents/fence/**",
-+                       "{repo}/tools/agents/render_fence.py",
-+                       "{repo}/tools/agents/verify_fence.py",
-+                       "{repo}/scripts/agent_up.sh")
- 
- FAILS = []
- 
-@@ -158,6 +166,30 @@ def check_mcp(role, cfg):
-         fail("F6", "%s: worker carries an mcp block" % role)
- 
- 
-+def check_src_readonly(role, cfg, repo):
-+    """F9: consultant src/ (and the fence self-cage) deny after the allow."""
-+    if role != "consultant":
+@@ -91,7 +93,17 @@ def check_polarity(role, cfg):
+     want = "allow" if role == "dev" else "deny"
+     if edit.get("*") != want:
+         fail("F2", "%s: edit '*' is %r, want %r" % (role, edit.get("*"), want))
+-    if cfg.get("permission", {}).get("bash") != "allow":
++    bash = cfg.get("permission", {}).get("bash")
++    if isinstance(bash, dict):
++        try:
++            with open(os.path.join(FENCE, "roles", role + ".json"), encoding="utf-8") as handle:
++                agent_bash = (json.load(handle).get("agent") or {}).get("bash")
++        except (OSError, ValueError):
++            agent_bash = None
++        if bash != agent_bash:
++            fail("F2", "%s: session bash is not the role agent.bash map" % role)
 +        return
-+    _, edit = maps(cfg)
-+    for key in (repo + "/src", repo + "/src/**",
-+                repo + "/tools/agents/fence", repo + "/tools/agents/fence/**",
-+                repo + "/tools/agents/render_fence.py",
-+                repo + "/tools/agents/verify_fence.py",
-+                repo + "/scripts/agent_up.sh"):
-+        if edit.get(key) != "deny":
-+            fail("F9", "%s: rendered edit %r is not deny" % (role, key))
-+    try:
-+        allow_at = list(edit).index(repo + "/**")
-+        deny_at = max(list(edit).index(repo + "/src/**"),
-+                      list(edit).index(repo + "/tools/agents/fence/**"),
-+                      list(edit).index(repo + "/scripts/agent_up.sh"))
-+    except ValueError:
-+        fail("F9", "%s: allow/deny keys missing from ordered map" % role)
-+        return
-+    if not allow_at < deny_at:
-+        fail("F9", "%s: src/fence denies do not sort after the repo allow" % role)
-+
-+
- def load(text, role):
-     try:
-         cfg = json.loads(text)
-@@ -260,6 +292,7 @@ def audit(renders):
-         check_paths(role, cfg, repo)
-         check_wildcards(role, cfg, repo)
-         check_mcp(role, cfg)
-+        check_src_readonly(role, cfg, repo)
-         check_agents(role, cfg)
-         freshness(role, text)
++    if bash != "allow":
+         fail("F2", "%s: bash is not allowed (launcher needs it)" % role)
  
-@@ -310,7 +343,10 @@ def self_test():
-                                   lambda c: c["permission"]["external_directory"].__setitem__(
+ 
+@@ -344,6 +356,8 @@ def self_test():
                                        "*", "allow"), repo)),
          ("F6 mcp", rejects(check_mcp, "dev",
--                           lambda c: c.__setitem__("mcp", {"x": {}}))),
-+                            lambda c: c.__setitem__("mcp", {"x": {}}))),
-+        ("F9 src deny", rejects(check_src_readonly, "consultant",
-+                                lambda c: c["permission"]["edit"].__setitem__(
-+                                    repo + "/src/**", "allow"), repo)),
-     ]
-     with tempfile.TemporaryDirectory(prefix="verify-fence-st-") as tmp:
-         agents = os.path.join(tmp, "agents")
+                             lambda c: c.__setitem__("mcp", {"x": {}}))),
++        ("F2 session bash", rejects(check_polarity, "auditor",
++                                    lambda c: c["permission"].__setitem__("bash", {"*": "allow"}))),
+         ("F9 src deny", rejects(check_src_readonly, "consultant",
+                                 lambda c: c["permission"]["edit"].__setitem__(
+                                     repo + "/src/**", "allow"), repo)),

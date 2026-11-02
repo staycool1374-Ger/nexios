@@ -479,6 +479,9 @@ def slow_probe(ctx, sess):
 def modal_guard(ctx, sessions):
     """Deny-default: send Escape to any session showing a permission modal.
 
+    The auditor runs headless with --auto (asks auto-approved, denies hold),
+    so an auditor modal means a stale pre-auto session: Escape still
+    applies, but the lane needs a relaunch, not another tick.
     Returns [(sess, acted_bool, detail)]. Dry-run only reports.
     """
     res = []
@@ -552,8 +555,9 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
     """Request-driven audit cycle with an invisible auditor session.
 
     Dev/qe post NEED-audit (request); the engine generates the tip-pinned
-    brief, starts the auditor via `agent_up.sh audit` (headless tmux session,
-    never windowed, so its permission modals can only ever meet deny-default),
+    brief, starts the auditor via `agent_up.sh audit` (headless tmux session
+    with --auto: asks auto-approved, denies hold; never windowed, and a modal
+    there means a stale pre-auto session that must be relaunched),
     awaits the verdict, and hands findings back to the requester (NOTE + ring).
     Legacy pending/phase heuristic stays as fallback. Returns
     (acted, need_verdict, ap_store) with ap_store None (leave), {} (clear),
@@ -1055,6 +1059,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
     for sess, acted, detail in guard:
         if acted or "WOULD" in detail:
             actions.append("modal-guard %s: %s" % (sess, detail))
+            if sess == SESS["audit"] and acted:
+                actions.append("NEED auditor modal under --auto: stale pre-auto session; kill nexios-audit + relaunch audit")
     ctxp = {}
     deaf = set()
     for role in ("dev", "qe"):

@@ -32,7 +32,9 @@ $NEXIOS_HOME/rendered/<role>/opencode.resolved.json     config for a launched se
    and the `sil3_auditor.md` alias into `<cwd>/.opencode/agents/` (gitignored,
    launcher-owned).
 3. `tmux` starts `opencode` with `OPENCODE_CONFIG=<rendered>`,
-   `NEXIOS_AGENT_ROLE=<role>` and `TMPDIR=/tmp/agentup-tmp-<session>`.
+   `NEXIOS_AGENT_ROLE=<role>` and `TMPDIR=/tmp/agentup-tmp-<session>`, plus
+   role-delta launch flags (auditor only: `--agent nexios-audit --auto`;
+   every other role launches bare and interactive).
 4. `check_fenced` walks the pane's own process tree and requires all four values
    in the process environment; a mismatch kills the session.
 
@@ -46,6 +48,11 @@ auditor invoked from a dev session would otherwise inherit `edit: allow`.
 
 - `edit`: `"*"` → base namespaces → role allows → base denies → role denies
 - `external_directory`: `"*"` → base namespaces → role allows
+- `bash` (roles with `launch.agent` only, today just the auditor): the role's
+  `agent.bash` map verbatim. Deny entries must be the tail — the renderer
+  rejects any allow/ask after the first deny, and the F2 pin test
+  (`verify_fence.py` self-test) proves it bites. (F9 covers consultant
+  *edit*-map ordering, not bash.)
 
 `/tmp/<name>` mirrors are **derived**, never typed: macOS canonicalizes `/tmp`
 to `/private/tmp` before matching, so every rule is emitted twice with the same
@@ -61,13 +68,16 @@ rendered artifact, a twin, or an agent file under `.opencode/`.
 - role delta keys are confined: an absolute `edit_allow`/`edit_deny`/
   `external_allow` entry must sit under a declared namespace root (a
   hand-typed `/private/tmp` entry is an error, and `/etc/...` cannot be
-  introduced by a delta at all).
+  introduced by a delta at all). `{repo}` entries are exempt (expanded per
+  launch, validated by exact-set matching instead).
 - role delta: `edit_default`, `edit_allow`, `edit_deny`, `external_allow`,
-  `launch` (`cwd`, `prompt`), `agent` (`name`, `twin`, `description`, `mode`,
-  optional `model`, `temperature`, `bash`, `alias`), `config_extra` (only the
-  coordinator uses it, for `mcp`).
-- `{repo}` is allowed only in the coordinator delta and expands to the checkout
-  being launched; keys are restricted to `prompts/**` and `audits/**`.
+  `launch` (`cwd`, `prompt`, optional `agent`, optional `auto`),
+  `agent` (`name`, `twin`, `description`, `mode`, optional `model`,
+  `temperature`, `bash`, `alias`), `config_extra` (only the consultant uses
+  it, for `mcp`). `launch.agent` must equal the role's own `agent.name`
+  and requires `agent.mode` `primary`|`all`.
+- `{repo}` is allowed in any role delta and expands to the checkout being
+  launched (consultant: whole repo r+w except `src/` + fence self-cage).
 
 Dev keeps bash as the documented maintenance path and has no edit-tool access to
 this directory (`tools/agents/fence/**`, `.opencode/agents/**` are denied). The
@@ -86,12 +96,19 @@ filter, so a `/tmp/*` rule appearing in a worker's map is still a failure.
 ## The auditor's shell is the boundary, not its edit map
 
 The auditor keeps `edit_default: deny` (it writes only `audits/rejected_patch.diff`
-and `audits/report-*.md`) and needs no MCP. Its bash map is intentionally broad —
-`bash *`, `python3 *`, `git apply *`, `sed *`, `cp *`, `mkdir *` — because
-reviewing a patch means reproducing builds, diffs and scratch harnesses. That
-means the `edit` map no longer bounds what the auditor can touch: the shell can
-reach the repo. The controls that remain are the ones that actually apply:
+and `audits/report-*.md`) and needs no MCP. It launches headless with
+`--agent nexios-audit --auto`: `ask` rules auto-approve, explicit `deny` rules
+still hold. The bash map is reads plus a deny tail (destructive, mutating-VCS,
+network-exfil, wrapper and session-driving verbs) instead of an allowlist with
+a bare `*`: under `--auto` an allowlist-with-`*` would auto-approve everything,
+so the tail is the control. Residual holes are documented, not closed:
+`cp`/`mv`/glob-writes reach the repo through bash (same class as the historic
+`edit`-vs-shell gap); `python3 <script>` runs arbitrary files; `git apply`
+reproduces patches (intended). The controls that remain are the ones that
+actually apply:
 
+- `--auto` never overrides `deny`; a denial ends that command (recorded as a
+  limitation, never retried or wrapped).
 - `audits/rejected_patch.diff` is the only sanctioned output; the developer
   applies it, never the auditor (`PROMPT-audit.md`).
 - `tools/check_no_cross_edits.sh` reviews a change set, so an auditor that
@@ -110,6 +127,7 @@ python3 tools/agents/verify_fence.py --self-test
 ```
 
 The gate checks properties rather than a golden file (a golden would be one more
-copy): per-role polarity, mirror completeness, no host-dependent path, no
-wildcard leak, coordinator `mcp`, self-contained agent cages, and freshness of
+copy): per-role polarity (plus the auditor session-bash pin), mirror
+completeness, no host-dependent path, no wildcard leak, consultant `mcp`,
+self-contained agent cages, consultant src-deny ordering (F9), and freshness of
 any config already on disk under `$NEXIOS_HOME/rendered/`.

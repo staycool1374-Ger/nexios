@@ -8,7 +8,9 @@ against (a golden would be the 14th copy) - this gate instead asserts the
 PROPERTIES of what the renderer emits, per role:
 
   F1  the renderer succeeds for every role (fail-closed path is intact)
-  F2  polarity is per-role: only dev has edit "*" allow; every role keeps bash
+  F2  polarity is per-role: only dev has edit "*" allow; bash is a plain
+      "allow" except the auditor, whose session bash must equal its agent.bash
+      map (launch.agent roles run the agent cage in-session)
   F3  every /tmp rule has its /private/tmp mirror and vice versa, same decision
       (macOS canonicalizes before matching: an unmirrored rule is dead)
   F4  no host-dependent path leaks: no /var/folders, no $HOME, no "{repo}"
@@ -91,7 +93,17 @@ def check_polarity(role, cfg):
     want = "allow" if role == "dev" else "deny"
     if edit.get("*") != want:
         fail("F2", "%s: edit '*' is %r, want %r" % (role, edit.get("*"), want))
-    if cfg.get("permission", {}).get("bash") != "allow":
+    bash = cfg.get("permission", {}).get("bash")
+    if isinstance(bash, dict):
+        try:
+            with open(os.path.join(FENCE, "roles", role + ".json"), encoding="utf-8") as handle:
+                agent_bash = (json.load(handle).get("agent") or {}).get("bash")
+        except (OSError, ValueError):
+            agent_bash = None
+        if bash != agent_bash:
+            fail("F2", "%s: session bash is not the role agent.bash map" % role)
+        return
+    if bash != "allow":
         fail("F2", "%s: bash is not allowed (launcher needs it)" % role)
 
 
@@ -344,6 +356,8 @@ def self_test():
                                       "*", "allow"), repo)),
         ("F6 mcp", rejects(check_mcp, "dev",
                             lambda c: c.__setitem__("mcp", {"x": {}}))),
+        ("F2 session bash", rejects(check_polarity, "auditor",
+                                    lambda c: c["permission"].__setitem__("bash", {"*": "allow"}))),
         ("F9 src deny", rejects(check_src_readonly, "consultant",
                                 lambda c: c["permission"]["edit"].__setitem__(
                                     repo + "/src/**", "allow"), repo)),
