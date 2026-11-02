@@ -238,6 +238,17 @@ def compose(base, delta, repo, role):
         put(edit, expand(key, repo, role), "deny", "delta edit_deny")
     permission["edit"] = edit
 
+    # In-process subagents: denied by default so lanes cannot fork execution
+    # invisible to the engine (no pane activity, no ledger, no doorbell).
+    # A role delta may override with "deny", "allow", or a scoped map.
+    if "task" in delta:
+        expect(delta["task"] in ("deny", "allow") or isinstance(delta["task"], dict),
+               "delta task must be deny|allow or a scoped map")
+        permission["task"] = delta["task"]
+    else:
+        expect("task" in base, "base fence must declare the task default")
+        permission["task"] = base["task"]
+
     out["permission"] = permission
     for key, value in delta.get("config_extra", {}).items():
         expect(key in ("mcp", "model"),
