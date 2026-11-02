@@ -45,3 +45,11 @@ epoch+gen-validated replies; tombstone drain for dead owners.
   are mutually exclusive (hard build error); kernel probing is gated
   off only by exactly one of them; #47 owns this table's block row
   (S4/S5/S6 wire the fb/block/net PDs here).
+
+## Term/log PDs (issue #51, share this table)
+
+TERM_SRV (term-srv.c.elf) + LOG_SRV (log-srv.c.elf) are policy-only
+rows: `sdf_policy_only()` is true, `sdf_compose` rejects any non-empty
+variant, and `pd_owns_device` is unconditionally false for both. The
+#48 SDF boundary test asserts this: no device cap may name a term/log
+role. See `docs/specs/term-srv.md` for the wire/lifecycle contract.

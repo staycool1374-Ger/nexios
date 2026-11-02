@@ -229,3 +229,9 @@ requires its server knob; `CONFIG_BLOCK_SRV` and `CONFIG_DRIVER_PD_BLOCK`
 are mutually exclusive (single block owner); fb/block/net PD knobs fail
 closed until the S4/S5/S6 SDF rows land. See `docs/specs/driver-pds.md`,
 `docs/specs/timer-srv.md`, `docs/specs/vfs-srv.md`, `docs/specs/block-srv.md`.
+
+### 1.13 Server PD externalization — term/log (issue #51, step a)
+`CONFIG_TERM_SRV` (0) · `CONFIG_LOG_SRV` (0) ·
+`CONFIG_TERM_SRV_FAULT_INJECT` (0) · `CONFIG_LOG_SRV_FAULT_INJECT` (0).
+Same discipline as §1.12 (OFF = bit-identical in-kernel behavior;
+fault-inject requires its server knob).

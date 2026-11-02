@@ -14,13 +14,15 @@ Never:  kernel code, test files, worker checkouts, fence sources.
 
 Usage:
   state_machine.py tick [--issues 51,52 | --all] [--interval S] [--once]
-                        [--dry-run] [--log-dir DIR] [--repo DIR]
+                         [--dry-run] [--log-dir DIR] [--repo DIR]
   state_machine.py status [--issues ...]   # read-only serial table, no mutation
+  state_machine.py brief --issues 52,53 [--dev-branch main]  # RECON briefs only
 """
 import argparse
 import collections
 import datetime
 import signal
+import tempfile
 import fcntl
 import glob
 import hashlib
@@ -37,6 +39,8 @@ ROOMS_GLOB = "/tmp/nexios-*"
 BOXES = ("dev", "qe", "auditor")
 SESS = {"dev": "nexios-dev", "qe": "nexios-qe", "audit": "nexios-audit",
         "consultant": "nexios-consultant"}
+LANES = ("dev", "qe")
+PEER = {"dev": "qe", "qe": "dev"}
 
 # Modal signature copied from scripts/nexios-bin/worker-state.sh v3 MODAL_RE.
 MODAL_RE = (r"allow once|allow always|permission required|needs approval|"
@@ -656,8 +660,20 @@ def write_brief(ctx, room_dir, name, content):
     if ctx.dry:
         return "WOULD write brief %s (%dB)" % (p, len(content))
     try:
-        with open(p, "w") as f:
-            f.write(content)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix=".brief.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, p)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
         return "wrote brief %s" % p
     except OSError as e:
         return "BRIEF-FAILED %s: %s" % (p, e)
@@ -685,6 +701,128 @@ def parse_verdict(line):
         streak = int(ms.group(1))
     return {"kind": kind, "issue": issue, "rest": rest.strip(),
             "streak": streak, "escalate": "ESCALATE" in rest}
+
+
+def need_idle_missing(role, has_unacked, probe, fresh_posts, declared_next, rang):
+    """True when a NEED-idle note is warranted for one lane.
+
+    A fresh wire-light NOTE suppresses the false NEED for exactly the
+    tick that consumes it (wire-gap NEED-back at tick time remains the
+    format signal; next tick with no fresh post and no NEXT still NEEDs).
+    """
+    if role in has_unacked:
+        return False
+    if not str(probe).startswith("IDLE"):
+        return False
+    if fresh_posts:
+        return False
+    if rang:
+        return False
+    return not declared_next or declared_next.startswith("idle")
+
+
+def peer_mention(text, peer):
+    """Whole-word, case-insensitive peer mention in a post body. Pure."""
+    return bool(re.search(r"\b%s\b" % re.escape(peer), text or "", re.I))
+
+
+def peer_ready_offers(boxes, peer):
+    """Unanswered READY offers from PEER[peer] addressed to peer, newest first.
+
+    Each offer: {"sender", "ts", "oid", "post"} with ts=post[:19] and
+    oid="peer:<peer>:<ts>". A post qualifies iff POST_RE matches,
+    group(2) is the opposite lane, group(3) is READY, group(4) mentions
+    the peer, and its ts is newer than the peer's latest post ts.
+    Scans committed boxes (not the one-tick fresh window). Pure.
+    """
+    sender = PEER[peer]
+    peer_posts = (boxes.get(peer) or {}).get("all", [])
+    peer_ts = peer_posts[-1][:19] if peer_posts else ""
+    offers = []
+    for post in (boxes.get(sender) or {}).get("all", []):
+        m = POST_RE.match(post)
+        if not m or m.group(2) != sender or m.group(3) != "READY":
+            continue
+        if not peer_mention(m.group(4), peer):
+            continue
+        ts = post[:19]
+        if peer_ts and ts <= peer_ts:
+            continue
+        offers.append({"sender": sender, "ts": ts,
+                       "oid": "peer:%s:%s" % (peer, ts), "post": post})
+    offers.sort(key=lambda o: o["ts"], reverse=True)
+    return offers
+
+
+def peer_handoff_pick(peer, offers, rings, peer_ts):
+    """One outstanding handoff for peer, or None. Pure.
+
+    An unresponded rung oid (value 1, peer_ts older than its ts) wins over
+    newer offers; otherwise the newest offer. rung=True when the ledger
+    already holds 1 for the picked oid.
+    """
+    for oid in sorted(rings):
+        if not oid.startswith("peer:%s:" % peer) or rings.get(oid) != 1:
+            continue
+        ots = oid[len("peer:%s:" % peer):]
+        if not peer_ts or peer_ts < ots:
+            for o in offers:
+                if o["oid"] == oid:
+                    return dict(o, rung=True)
+            return {"sender": PEER[peer], "ts": ots, "oid": oid,
+                    "post": "", "rung": True}
+    if not offers:
+        return None
+    pick = dict(offers[0])
+    pick["rung"] = rings.get(pick["oid"]) == 1
+    return pick
+
+
+def peer_handoff_done_oids(boxes, peer, rings):
+    """Ledger oids to flip to -1: peer:<peer>:<ts> with value 1 answered by
+    a peer post at/after ts. Pure; other namespaces untouched."""
+    peer_posts = (boxes.get(peer) or {}).get("all", [])
+    if not peer_posts:
+        return []
+    peer_ts = peer_posts[-1][:19]
+    prefix = "peer:%s:" % peer
+    return [oid for oid in rings
+            if oid.startswith(prefix)
+            and rings.get(oid) == 1 and oid[len(prefix):] <= peer_ts]
+
+
+def peer_handoff_action(pick, probe, deaf, already_rang, recreating):
+    """Pure gate: 'none' (no pick), 'skip' (rung/deaf/rang/recreating),
+    'hold' (peer not IDLE), else 'ring'."""
+    if pick is None:
+        return "none"
+    if pick.get("rung") or deaf or already_rang or recreating:
+        return "skip"
+    if not str(probe).startswith("IDLE"):
+        return "hold"
+    return "ring"
+
+
+def rang_session(actions, sess):
+    """True iff actions already ring sess (live or dry-run text). Pure."""
+    return any(a.startswith("rang " + sess) or
+               a.startswith("WOULD ring " + sess) for a in actions)
+
+
+def recreating_peers(actions):
+    """Lanes whose session is being relaunched this tick. Pure."""
+    out = set()
+    for role in LANES:
+        if any(a.startswith("WOULD kill " + SESS[role]) or
+               a.startswith("relaunch " + SESS[role]) for a in actions):
+            out.add(role)
+    return out
+
+
+def ring_peer_handoff(ctx, peer, sender, ts):
+    """Doorbell peer, pointing at the SENDER box holding the READY."""
+    return ring(ctx, SESS[peer], sender,
+                "peer handoff from %s READY %s" % (sender, ts))
 
 
 def tick_room(ctx, issue, room_dir, st, rooms_all):
@@ -868,6 +1006,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
             if oid not in resume_now.values() or fresh.get(_r):
                 del rings[oid]
             continue
+        if oid.startswith("peer:"):
+            continue  # retired only by peer_handoff_done_oids below
         orole, _, ots = oid.partition(":")
         posts = boxes.get(orole, {}).get("all", [])
         if posts and posts[-1][:19] > ots:
@@ -889,6 +1029,31 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
             actions.extend(r_acts)
             rings[oid] = -1 if _rel else n + 1
 
+    for peer in LANES:
+        for oid in peer_handoff_done_oids(boxes, peer, rings):
+            rings[oid] = -1
+            events.append("peer-handoff-done-%s" % peer)
+        offers = peer_ready_offers(boxes, peer)
+        peer_posts = boxes[peer]["all"]
+        peer_ts = peer_posts[-1][:19] if peer_posts else ""
+        pick = peer_handoff_pick(peer, offers, rings, peer_ts)
+        if pick is None:
+            continue
+        act = peer_handoff_action(pick, probes[peer], peer in deaf,
+                                  rang_session(actions, SESS[peer]),
+                                  peer in recreating_peers(actions))
+        if act == "ring":
+            res = ring_peer_handoff(ctx, peer, pick["sender"], pick["ts"])
+            actions.append(res)
+            if res.startswith(("rang ", "WOULD ring ")):
+                rings[pick["oid"]] = 1
+            events.append("peer-handoff-%s" % peer)
+        elif act == "hold":
+            actions.append("peer-handoff %s held: %s READY %s unanswered "
+                           "(probe %s; no ring)"
+                           % (peer, pick["sender"], pick["ts"], probes[peer]))
+            events.append("peer-handoff-hold-%s" % peer)
+
     if dev_blocked_on_qe(dev_next) and not probes["qe"].startswith("IDLE"):
         target = pick_backlog(rooms_all, issue)
         if target is None:
@@ -903,17 +1068,17 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                      % (target, issue, target, target, target))
             actions.append(write_brief(ctx, room_dir,
                                        "dev-%d-backlog.txt" % target, brief))
-            if "dev" not in deaf and probes["dev"].startswith("IDLE"):
+            if ("dev" not in deaf and probes["dev"].startswith("IDLE")
+                    and not rang_session(actions, SESS["dev"])):
                 actions.append(ring(ctx, SESS["dev"], "dev",
                                     "backlog #%d ready" % target))
             events.append("backlog-swap #%d" % target)
 
     for role in ("dev", "qe"):
-        if role not in has_unacked and probes[role].startswith("IDLE") and not any(
-                a.startswith("rang " + SESS[role]) or
-                a.startswith("WOULD ring " + SESS[role]) for a in actions):
-            if not boxes[role]["next"] or boxes[role]["next"].startswith("idle"):
-                actions.append("NEED %s idle with no briefed work (no invention)" % role)
+        rang = rang_session(actions, SESS[role])
+        if need_idle_missing(role, has_unacked, probes[role],
+                             fresh.get(role), boxes[role]["next"], rang):
+            actions.append("NEED %s idle with no briefed work (no invention)" % role)
 
     if verdict.get("escalate"):
         slow = {r: slow_probe(ctx, SESS[r]) for r in ("dev", "qe")}
@@ -1448,6 +1613,30 @@ def cycle_productive(all_actions):
     return any(a.startswith(PRODUCTIVE_PREFIXES) for a in all_actions)
 
 
+def cycle_progress(all_actions, room_nodes, dry=False):
+    """True if the cycle shows real work (engine acts OR worker activity).
+
+    Coordinator/coord.md lines are excluded by construction: BOXES covers
+    only dev/qe/auditor and the watchdog fingerprint counts only
+    FROM=(dev|qe|audit). ESCALATE/NEED alone are intentionally not progress.
+    Dry mode preserves legacy exit semantics (no watchdog run, no cursor
+    advance, so frozen signals must not pin quiet at 0).
+    """
+    if cycle_productive(all_actions):
+        return True
+    if dry:
+        return False
+    for node in room_nodes or []:
+        if (node.get("verdict") or {}).get("kind") == "CHANGED":
+            return True
+        try:
+            if int(node.get("acked") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def load_saved_seq(ctx):
     try:
         n = int(json.load(open(ctx.graph_path())).get("tick", 0))
@@ -1481,6 +1670,170 @@ def fmt_table(issue, verdict, rows):
     return "\n".join(out)
 
 
+def clip_text(value, width=48):
+    """Short one-line render; '-' for missing, ellipsis when truncated. Pure."""
+    if value is None or value == "":
+        return "-"
+    s = str(value).replace("\n", " ")
+    return (s[:width - 1] + "\u2026") if len(s) > width else s
+
+
+def summary_snapshot(issue, st, node):
+    """Per-issue end-of-run row as plain data. Pure, no I/O."""
+    st = st or {}
+    node = node or {}
+    verdict = node.get("verdict") or {}
+    handled = st.get("handled") or {}
+    try:
+        streak = int(verdict.get("streak") or 0)
+    except (TypeError, ValueError):
+        streak = 0
+    rings = sum(1 for v in (st.get("rings") or {}).values()
+                if isinstance(v, int) and v >= 1)
+    return collections.OrderedDict((
+        ("issue", issue),
+        ("phase", st.get("phase") or "-"),
+        ("pending", st.get("pending") or "-"),
+        ("verdict_kind", verdict.get("kind") or "-"),
+        ("verdict_streak", streak),
+        ("handled_dev", handled.get("dev") or "-"),
+        ("handled_qe", handled.get("qe") or "-"),
+        ("rings", rings),
+        ("merge_ready", node.get("merge_ready")),
+        ("halt", bool(st.get("halt"))),
+    ))
+
+
+class RunTracker:
+    """Which issues this run is responsible for, and which retired in-run.
+
+    done evidence is GitHub CLOSED only: an issue enters `retired` solely via
+    tick_room's node["retired"], which retire_room grants only on G2
+    github CLOSED. No branch/merge inspection anywhere; no I/O here.
+    """
+
+    def __init__(self, issues=None, rooms=None):
+        self.fixed = set(issues) if issues else None
+        self.initial_present = {iss for iss, _r, _s in (rooms or [])}
+        self.seen = set()
+        self.retired = set()
+        self.states = collections.OrderedDict()
+
+    def observe(self, issue, st, node):
+        self.seen.add(issue)
+        self.states[issue] = dict(st or {})
+        if (node or {}).get("retired"):
+            self.retired.add(issue)
+
+    def tracked_issues(self):
+        if self.fixed is not None:
+            return set(self.fixed)
+        return set(self.seen) | set(self.retired) | set(self.states)
+
+    def summary_states(self):
+        return self.states
+
+
+def all_done(tracker, rooms):
+    """(done_bool, detail_str): every tracked issue retired-and-gone (or
+    never present), and nothing present. Pure."""
+    present = {iss for iss, _rdir, _st in rooms}
+    if tracker.fixed is not None:
+        def ok(i):
+            return ((i in tracker.retired and i not in present) or
+                    (i not in tracker.initial_present))
+        pending = sorted(i for i in tracker.fixed if not ok(i))
+        detail = ("tracked=%d retired=%d absent-at-start=%d present=%d pending=%s"
+                  % (len(tracker.fixed), len(tracker.retired),
+                     len(tracker.fixed - tracker.initial_present),
+                     len(present), ",".join("#%d" % i for i in pending) or "-"))
+        return (not pending, detail)
+    if not tracker.seen:
+        return True, "no issues observed (empty tracked set)"
+    if present:
+        pending = sorted(tracker.seen - tracker.retired)
+        return (False, "rooms present=%d pending=%s"
+                % (len(present), ",".join("#%d" % i for i in pending) or "-"))
+    pending = sorted(tracker.seen - tracker.retired)
+    detail = ("rooms gone; seen=%d retired=%d pending=%s"
+              % (len(tracker.seen), len(tracker.retired),
+                 ",".join("#%d" % i for i in pending) or "-"))
+    return (not pending, detail)
+
+
+def build_summary(room_states, nodes, reason, tracked=None, retired=None, dry=False):
+    """End-of-run summary text. Pure: dicts in, string out."""
+    retired = set(retired or ())
+    norm_nodes = {}
+    for k, v in (nodes or {}).items():
+        try:
+            norm_nodes[int(k)] = v
+        except (TypeError, ValueError):
+            continue
+    if tracked is None:
+        issues = sorted(set(room_states) | set(norm_nodes) | retired)
+    else:
+        issues = sorted(tracked)
+    n_retired = 0
+    n_active = 0
+    lines = []
+    for issue in issues:
+        if issue in retired:
+            status = "retired"
+            n_retired += 1
+        elif issue in room_states:
+            row_state = room_states[issue] or {}
+            if row_state.get("halt"):
+                status = "halted"
+            else:
+                status = "active"
+                n_active += 1
+        else:
+            status = "absent"
+        if issue in room_states:
+            row = summary_snapshot(issue, room_states[issue],
+                                   norm_nodes.get(issue))
+            streak_n = row["verdict_streak"] or 0
+            streak = (" x%d" % streak_n) if streak_n > 0 else ""
+            line = ("#%d status=%s phase=%s pending=\"%s\" verdict=%s%s "
+                    "handled dev=%s qe=%s rings=%s merge_ready=%s"
+                    % (issue, status, row["phase"],
+                       clip_text(row["pending"]),
+                       row["verdict_kind"], streak,
+                       row["handled_dev"], row["handled_qe"],
+                       row["rings"] if status != "absent" else "-",
+                       row["merge_ready"] if row["merge_ready"] is not None else "-"))
+        else:
+            line = ("#%d status=%s phase=- pending=\"-\" verdict=- "
+                    "handled dev=- qe=- rings=- merge_ready=-"
+                    % (issue, status))
+        lines.append(line)
+    n_absent = sum(1 for issue in issues
+                   if issue not in retired and issue not in room_states)
+    head = ("summary%s: %d tracked, %d active, %d retired, %d absent"
+            % (" (DRY)" if dry else "", len(issues), n_active, n_retired, n_absent))
+    pend = sorted(issue for issue in issues
+                  if issue in room_states
+                  and not (room_states[issue] or {}).get("halt"))
+    foot = "stop: %s | pending=%s" % (
+        reason, ",".join("#%d" % i for i in pend) or "-")
+    return "\n".join([head] + lines + [foot])
+
+
+def emit_summary(ctx, tracker, nodes, reason):
+    """Print + log the end-of-run summary (dual pattern, no mutation)."""
+    if tracker.fixed is not None:
+        tracked = tracker.tracked_issues()
+    else:
+        tracked = None
+    text = build_summary(tracker.summary_states(), nodes, reason,
+                         tracked=tracked, retired=tracker.retired,
+                         dry=ctx.dry)
+    print(text, flush=True)
+    for line in text.splitlines():
+        ctx.log(line)
+
+
 def write_graph(ctx):
     if ctx.dry:
         return "DRY: graph not written"
@@ -1501,8 +1854,10 @@ def write_graph(ctx):
 
 def cmd_tick(ctx, issues, interval):
     rooms = discover_rooms(issues, skip_debris=True)
+    tracker = RunTracker(issues, rooms)
     if not rooms:
-        print("no rooms%s" % (" for issues %s" % sorted(issues) if issues else ""))
+        emit_summary(ctx, tracker, {},
+                     "no rooms%s" % (" for issues %s" % sorted(issues) if issues else ""))
         return 2
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         try:
@@ -1520,6 +1875,7 @@ def cmd_tick(ctx, issues, interval):
             msg = "signal %s: stashing + exiting cleanly" % _STOP["flag"]
             print(msg, flush=True)
             ctx.log(msg)
+            emit_summary(ctx, tracker, ctx.graph, msg)
             break
         if os.path.exists(stop_path):
             msg = "STOP sentinel present: stashing + exiting cleanly"
@@ -1529,12 +1885,15 @@ def cmd_tick(ctx, issues, interval):
                 os.unlink(stop_path)
             except OSError:
                 pass
+            emit_summary(ctx, tracker, ctx.graph, msg)
             break
         ctx.tick_seq += 1
         ctx.log("tick #%d rooms=%s" % (ctx.tick_seq, [i for i, _, _ in rooms]))
         cycle_actions = []
+        cycle_nodes = []
         for issue, rdir, st in rooms:
             node, rows = tick_room(ctx, issue, rdir, st, rooms)
+            tracker.observe(issue, load_state_locked(rdir) or st, node)
             table = fmt_table(issue, node.get("verdict", {}), rows)
             print(table, flush=True)
             ctx.log("issue #%d verdict=%s acked=%d merge_ready=%s" % (
@@ -1543,20 +1902,30 @@ def cmd_tick(ctx, issues, interval):
             for a in node.get("actions", []):
                 ctx.log("#%d :: %s" % (issue, a))
                 cycle_actions.append(a)
+            cycle_nodes.append(node)
         ctx.log(write_graph(ctx))
         if not interval:
+            emit_summary(ctx, tracker, ctx.graph, "once (single cycle, interval 0)")
             break
-        if cycle_productive(cycle_actions):
+        if cycle_progress(cycle_actions, cycle_nodes, dry=ctx.dry):
+            if quiet > 0:
+                ctx.log("quiet reset after %d quiet cycle(s)" % quiet)
             quiet = 0
         else:
             quiet += 1
+            ctx.log("quiet %d/3 (no progress)" % quiet)
             if quiet >= 3:
                 msg = "all quiet for 3 cycles: no work pending, ending cleanly"
                 print(msg, flush=True)
                 ctx.log(msg)
+                emit_summary(ctx, tracker, ctx.graph, msg)
                 break
         time.sleep(interval)
         rooms = discover_rooms(issues, skip_debris=True)
+        done, detail = all_done(tracker, rooms)
+        if done:
+            emit_summary(ctx, tracker, ctx.graph, "all-done (%s)" % detail)
+            break
     return rc
 
 
@@ -1619,6 +1988,29 @@ def github_issue_text(ctx, issue):
         return None, None
 
 
+def issue_briefs_text(issue, dev_branch, title, body):
+    """RECON brief pair for one issue. Pure: no I/O, {repo} stays literal."""
+    seed = "%s\n\n%s" % (title, (body or "").strip())
+    dev_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-dev.md\n"
+                 "Branch: %s (recon first; feature branch at impl)\n"
+                 "Task: RECON phase (read-only, no branch, no code): read the issue "
+                 "text above + relevant code/tests; draft the implementation plan; "
+                 "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+                 "No branches, no code, "
+                 "no QEMU until the plan is audit-approved.\n"
+                 "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
+                 % (seed, issue, dev_branch, issue))
+    qe_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-testdev.md\n"
+                "Branch: none (read-only; testbed stays clean)\n"
+                "Task: parallel RECON (read-only, no branch, no code): draft the "
+                "verification approach for this issue; post NOTE to inbox/qe.md + "
+                "RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+                "RING. No test runs until dev posts IMPL READY.\n"
+                "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
+                % (seed, issue, issue))
+    return dev_brief, qe_brief
+
+
 def cmd_provision(ctx, issues, a):
     """Cold start per issue: setup + issue-text briefs + sessions + state.
 
@@ -1647,24 +2039,7 @@ def cmd_provision(ctx, issues, a):
             ctx.log("%s NEED issue text unavailable (no invention); stop" % tag)
             rc_all = 1
             continue
-        seed = "%s\n\n%s" % (title, (body or "").strip())
-        dev_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-dev.md\n"
-                     "Branch: %s (recon first; feature branch at impl)\n"
-                     "Task: RECON phase (read-only, no branch, no code): read the issue "
-                     "text above + relevant code/tests; draft the implementation plan; "
-                     "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
-"No branches, no code, "
-                     "no QEMU until the plan is audit-approved.\n"
-                     "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
-                     % (seed, issue, a.dev_branch, issue))
-        qe_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-testdev.md\n"
-                    "Branch: none (read-only; testbed stays clean)\n"
-                    "Task: parallel RECON (read-only, no branch, no code): draft the "
-                    "verification approach for this issue; post NOTE to inbox/qe.md + "
-"RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
-                    "RING. No test runs until dev posts IMPL READY.\n"
-                    "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
-                    % (seed, issue, issue))
+        dev_brief, qe_brief = issue_briefs_text(issue, a.dev_branch, title, body)
         if ctx.dry:
             ctx.log("%s WOULD write prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
                     % (tag, len(dev_brief), len(qe_brief)))
@@ -1700,6 +2075,254 @@ def cmd_provision(ctx, issues, a):
     return rc_all
 
 
+def cmd_brief(ctx, issues, a):
+    """Write per-room RECON briefs from GitHub issue text. All-or-nothing:
+    every text fetched before any write; any miss aborts with rc 1."""
+    if ctx.dry:
+        for issue in issues:
+            title, _body = github_issue_text(ctx, issue)
+            if title is None:
+                print("#%d NEED issue text unavailable (no invention); stop" % issue)
+                return 1
+            dev_brief, qe_brief = issue_briefs_text(
+                issue, a.dev_branch, title, _body)
+            print("WOULD write #%d prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
+                  % (issue, len(dev_brief), len(qe_brief)))
+        return 0
+    for issue in issues:
+        if not os.path.isdir("/tmp/nexios-%d/prompts" % issue):
+            sys.stderr.write("#%d NEED room runtime missing (run setup first); stop\n" % issue)
+            return 1
+    texts = {}
+    for issue in issues:
+        title, body = github_issue_text(ctx, issue)
+        if title is None:
+            sys.stderr.write("#%d NEED issue text unavailable (no invention); stop\n" % issue)
+            return 1
+        texts[issue] = issue_briefs_text(issue, a.dev_branch, title, body)
+    rc = 0
+    for issue in issues:
+        dev_brief, qe_brief = texts[issue]
+        rdir = "/tmp/nexios-%d" % issue
+        for name, content in (("dev.txt", dev_brief), ("qe.txt", qe_brief)):
+            res = write_brief(ctx, rdir, name, content)
+            print("#%d %s" % (issue, res))
+            if res.startswith("BRIEF-FAILED"):
+                sys.stderr.write("#%d NEED brief write failed: %s\n" % (issue, res))
+                rc = 1
+    return rc
+
+
+def mode_self_test():
+    """Deterministic regression: #442 quiet-progress + NEED-idle, #443 peer handoff."""
+    passed = 0
+    total = 0
+
+    def check(name, got, want=True):
+        nonlocal passed, total
+        total += 1
+        ok = bool(got) is bool(want)
+        print("%s %s" % ("PASS" if ok else "FAIL", name), flush=True)
+        if ok:
+            passed += 1
+        return ok
+
+    mk = lambda kind, acked: {"verdict": {"kind": kind}, "acked": acked}
+    check("progress-empty-false", cycle_progress([], [], dry=False), False)
+    check("progress-unchanged-0-false",
+          cycle_progress(["NOTE idle"], [mk("UNCHANGED", 0)], dry=False), False)
+    check("progress-rang-true",
+          cycle_progress(["rang nexios-dev"], [mk("UNCHANGED", 0)], dry=False), True)
+    check("progress-changed-true",
+          cycle_progress(["NOTE idle"], [mk("CHANGED", 0)], dry=False), True)
+    check("progress-acked-true",
+          cycle_progress(["NEED qe idle with no briefed work (no invention)"],
+                         [mk("UNCHANGED", 2)], dry=False), True)
+    check("progress-dry-signals-false",
+          cycle_progress([], [mk("CHANGED", 1)], dry=True), False)
+    check("progress-dry-rang-true",
+          cycle_progress(["WOULD ring nexios-dev"], [mk("UNCHANGED", 0)], dry=True), True)
+    check("need-idle-true",
+          need_idle_missing("dev", set(), "IDLE-static", [], None, False), True)
+    check("need-idle-fresh-false",
+          need_idle_missing("dev", set(), "IDLE-static", ["2026-11-02T07:44:32Z FROM=qe NOTE :: x"],
+                            None, False), False)
+    check("need-idle-working-false",
+          need_idle_missing("dev", set(), "WORKING-markers", [], None, False), False)
+    check("need-idle-next-false",
+          need_idle_missing("dev", set(), "IDLE-static", [], "working :: parked", False), False)
+    check("need-idle-unacked-false",
+          need_idle_missing("dev", {"dev"}, "IDLE-static", [], None, False), False)
+    check("need-idle-rang-false",
+          need_idle_missing("dev", set(), "IDLE-static", [], None, True), False)
+    check("parse-changed", parse_verdict("CHANGED 51 (8 lines differ)")["kind"] == "CHANGED", True)
+    check("wire-gaps-state",
+          wire_gaps(["2026-11-02T07:44:32Z FROM=qe NOTE :: x", "body"], "2026-11-02T07:44:32Z FROM=qe NOTE :: x") == ["STATE", "NEXT"], True)
+    fresh_first = new_posts({"dev": {"all": ["2026-11-02T07:44:32Z FROM=dev NOTE :: x"]}}, {})
+    check("new-posts-first-sight-empty", fresh_first["dev"] == [], True)
+    dev_ready = "2026-11-02T08:03:09Z FROM=dev READY :: step-b IMPL READY QE: execute this"
+    qe_note = "2026-11-02T07:44:32Z FROM=qe NOTE :: parked on dev IMPL READY"
+    from types import SimpleNamespace
+    check("peer-mention-true", peer_mention("QE: execute verification", "qe"), True)
+    check("peer-mention-case-insensitive", peer_mention("Qe: x", "qe"), True)
+    check("peer-mention-substring-false", peer_mention("sequencer", "qe"), False)
+    check("peer-mention-dev-substring-false", peer_mention("device driver", "dev"), False)
+    b_empty_qe = {"dev": {"all": [dev_ready]}, "qe": {"all": []}}
+    off = peer_ready_offers(b_empty_qe, "qe")
+    check("peer-offer-ready-detected", len(off) == 1, True)
+    check("peer-offer-oid", off and off[0]["oid"] == "peer:qe:2026-11-02T08:03:09", True)
+    for kind in ("NOTE", "NEED", "DECISION"):
+        b_kind = {"dev": {"all": [dev_ready.replace("READY", kind)]}, "qe": {"all": []}}
+        check("peer-offer-%s-ignored" % kind.lower(), peer_ready_offers(b_kind, "qe") == [], True)
+    b_self = {"dev": {"all": [dev_ready.replace("QE:", "dev:")]}, "qe": {"all": []}}
+    check("peer-offer-self-sender-ignored", peer_ready_offers(b_self, "qe") == [], True)
+    b_answered = {"dev": {"all": [dev_ready]},
+                  "qe": {"all": ["2026-11-02T08:39:31Z FROM=qe NEED :: looking"]}}
+    check("peer-offer-answered-empty", peer_ready_offers(b_answered, "qe") == [], True)
+    b_unanswered = {"dev": {"all": [dev_ready]}, "qe": {"all": [qe_note]}}
+    check("peer-offer-unanswered-kept", len(peer_ready_offers(b_unanswered, "qe")) == 1, True)
+    dev_ready2 = "2026-11-02T08:20:00Z FROM=dev READY :: update QE: recheck"
+    b_two = {"dev": {"all": [dev_ready, dev_ready2]}, "qe": {"all": []}}
+    off2 = peer_ready_offers(b_two, "qe")
+    check("peer-offer-newest-first", off2 and off2[0]["ts"] == "2026-11-02T08:20:00", True)
+    check("peer-pick-none", peer_handoff_pick("qe", [], {}, "") is None, True)
+    pk = peer_handoff_pick("qe", off, {}, "")
+    check("peer-pick-new", pk and pk["oid"] == off[0]["oid"] and pk["rung"] is False, True)
+    rings_pend = {"peer:qe:2026-11-02T08:03:09": 1}
+    pk2 = peer_handoff_pick("qe", off2, rings_pend, "")
+    check("peer-pick-pending-wins",
+          pk2 and pk2["oid"] == "peer:qe:2026-11-02T08:03:09" and pk2["rung"] is True, True)
+    pk3 = peer_handoff_pick("qe", off2, rings_pend, "2026-11-02T08:10:00")
+    check("peer-pick-answered-pending-skipped",
+          pk3 and pk3["oid"] == "peer:qe:2026-11-02T08:20:00" and pk3["rung"] is False, True)
+    check("peer-pick-superseded-sender-resolved", pk2 and pk2["sender"] == "dev", True)
+    rings_done = {"peer:qe:2026-11-02T08:03:09": 1}
+    b_resp = {"dev": {"all": [dev_ready]},
+              "qe": {"all": ["2026-11-02T08:39:31Z FROM=qe NEED :: looking"]}}
+    check("peer-done-oid",
+          peer_handoff_done_oids(b_resp, "qe", rings_done) == ["peer:qe:2026-11-02T08:03:09"], True)
+    b_old = {"dev": {"all": [dev_ready]}, "qe": {"all": [qe_note]}}
+    check("peer-done-not-when-peer-older", peer_handoff_done_oids(b_old, "qe", rings_done) == [], True)
+    check("peer-done-namespace-isolated",
+          peer_handoff_done_oids(b_resp, "qe", {"qe:x": 1, "next:qe:abc": 1}) == [], True)
+    check("peer-gate-ring-idle",
+          peer_handoff_action(pk, "IDLE-static", False, False, False) == "ring", True)
+    check("peer-gate-hold-working",
+          peer_handoff_action(pk, "WORKING-markers", False, False, False) == "hold", True)
+    check("peer-gate-hold-nonidle",
+          peer_handoff_action(pk, "BLOCKED-modal", False, False, False) == "hold", True)
+    check("peer-gate-skip-deaf",
+          peer_handoff_action(pk, "IDLE-static", True, False, False) == "skip", True)
+    pk_rung = {"sender": "dev", "ts": "2026-11-02T08:03:09",
+               "oid": "peer:qe:2026-11-02T08:03:09", "post": dev_ready, "rung": True}
+    check("peer-gate-skip-rung",
+          peer_handoff_action(pk_rung, "IDLE-static", False, False, False) == "skip", True)
+    check("peer-gate-skip-already-rang",
+          peer_handoff_action(pk, "IDLE-static", False, True, False) == "skip", True)
+    check("peer-gate-skip-recreating",
+          peer_handoff_action(pk, "IDLE-static", False, False, True) == "skip", True)
+    check("peer-gate-none", peer_handoff_action(None, "IDLE-static", False, False, False) == "none", True)
+    check("rang-session-live", rang_session(["rang nexios-qe"], "nexios-qe"), True)
+    check("rang-session-dry", rang_session(["WOULD ring nexios-qe: x"], "nexios-qe"), True)
+    check("rang-session-false", rang_session(["NOTE idle"], "nexios-qe"), False)
+    dry_ctx = SimpleNamespace(dry=True)
+    rp = ring_peer_handoff(dry_ctx, "qe", "dev", "2026-11-02T08:03:09")
+    check("peer-ring-points-at-sender-box",
+          "WOULD ring nexios-qe" in rp and rp.rstrip().endswith("read inbox/dev.md"), True)
+    check("recreating-peers",
+          recreating_peers(["WOULD kill nexios-qe x"]) == {"qe"}, True)
+    check("recreating-peers-negative",
+          recreating_peers(["NEED recreate nexios-qe x"]) == set(), True)
+    st51 = {"phase": "IN_PROGRESS", "pending": "dev step-b",
+            "handled": {"dev": "2026-11-02T08:03:09Z", "qe": "2026-11-02T08:39:31Z"},
+            "rings": {"peer:dev:2026-11-02T08:39:31": 1, "qe:x": 0, "z": 2}}
+    nd51 = {"verdict": {"kind": "UNCHANGED", "streak": 2}, "merge_ready": False}
+    snap = summary_snapshot(51, st51, nd51)
+    check("summary-row-active",
+          snap["phase"] == "IN_PROGRESS" and snap["verdict_kind"] == "UNCHANGED"
+          and snap["verdict_streak"] == 2 and snap["handled_dev"] == "2026-11-02T08:03:09Z"
+          and snap["handled_qe"] == "2026-11-02T08:39:31Z" and snap["rings"] == 2
+          and snap["merge_ready"] is False, True)
+    check("summary-rings-outstanding",
+          summary_snapshot(1, {"rings": {"a": -1, "b": 0, "c": 2}}, {})["rings"] == 1, True)
+    check("summary-rings-none",
+          summary_snapshot(1, {"rings": {"a": -1, "b": 0}}, {})["rings"] == 0, True)
+    check("summary-clip", clip_text("x" * 80) == "x" * 47 + "\u2026", True)
+    check("summary-clip-short", clip_text("abc") == "abc", True)
+    check("summary-clip-missing", clip_text(None) == "-" and clip_text("") == "-", True)
+    txt = build_summary({51: st51}, {"51": nd51}, "quiet exit",
+                        tracked={51}, retired=set(), dry=False)
+    check("summary-row-format",
+          '#51 status=active phase=IN_PROGRESS pending="dev step-b" verdict=UNCHANGED x2' in txt
+          and "handled dev=2026-11-02T08:03:09Z qe=2026-11-02T08:39:31Z rings=2" in txt
+          and "merge_ready=False" in txt, True)
+    check("summary-header", txt.splitlines()[0].startswith("summary: 1 tracked"), True)
+    check("summary-stop-pending", txt.splitlines()[-1] == "stop: quiet exit | pending=#51", True)
+    txt0 = build_summary({51: st51}, {"51": {"verdict": {"kind": "UNCHANGED"}}}, "x",
+                         tracked={51}, retired=set(), dry=False)
+    check("summary-verdict-streak-zero", "verdict=UNCHANGED " in txt0 and " x0" not in txt0, True)
+    txt1 = build_summary({51: st51}, {}, "x", tracked={51}, retired=set(), dry=False)
+    check("summary-verdict-unknown", "verdict=- " in txt1, True)
+    txt2 = build_summary({51: dict(st51, pending="y" * 80)}, {"51": nd51}, "x",
+                         tracked={51}, retired=set(), dry=False)
+    check("summary-pending-truncated", "\u2026" in txt2, True)
+    txt3 = build_summary({51: st51}, {"51": nd51}, "x", tracked={51}, retired={51}, dry=False)
+    check("summary-retired-row", "#51 status=retired" in txt3, True)
+    txt4 = build_summary({51: st51}, {"51": nd51}, "x", tracked={51, 52}, retired=set(), dry=False)
+    check("summary-absent-row",
+          '#52 status=absent phase=- pending="-" verdict=- handled dev=- qe=- rings=- merge_ready=-' in txt4,
+          True)
+    txt5 = build_summary({51: dict(st51, halt=True)}, {"51": nd51}, "x",
+                         tracked={51}, retired=set(), dry=False)
+    check("summary-halted-row", "#51 status=halted" in txt5
+          and txt5.splitlines()[-1] == "stop: x | pending=-", True)
+    txt6 = build_summary({51: st51}, {"51": {}}, "x", tracked={51}, retired=set(), dry=False)
+    check("summary-merge-unknown", "merge_ready=-" in txt6, True)
+    check("summary-line-count", len(txt.splitlines()) == 3, True)
+    txtd = build_summary({51: st51}, {"51": nd51}, "x", tracked={51}, retired=set(), dry=True)
+    check("summary-dry-marked",
+          txtd.splitlines()[0].startswith("summary (DRY):")
+          and txtd.splitlines()[1:] == txt.splitlines()[1:][:-1] + [txtd.splitlines()[-1]], True)
+    txte = build_summary({}, {}, "x", tracked=set(), retired=set(), dry=False)
+    check("summary-empty", txte.splitlines()[0] == "summary: 0 tracked, 0 active, 0 retired, 0 absent", True)
+    tr = RunTracker({51, 52}, [(51, "/r51", {}), (52, "/r52", {})])
+    tr.observe(51, {"phase": "CLOSED"}, {"retired": True})
+    tr.observe(52, {"phase": "CLOSED"}, {"retired": True})
+    check("done-fixed-all-retired", all_done(tr, [])[0] is True, True)
+    tr2 = RunTracker({51, 52}, [(51, "/r51", {})])
+    tr2.observe(51, {"phase": "CLOSED"}, {"retired": True})
+    check("done-fixed-absent-at-start", all_done(tr2, [])[0] is True, True)
+    tr3 = RunTracker({51}, [(51, "/r51", {})])
+    tr3.observe(51, {"phase": "IN_PROGRESS"}, {})
+    check("done-fixed-vanished-unretired", all_done(tr3, [])[0] is False, True)
+    tr4 = RunTracker({51}, [(51, "/r51", {})])
+    tr4.observe(51, {"phase": "IN_PROGRESS"}, {})
+    check("done-fixed-present-blocks", all_done(tr4, [(51, "/r51", {})])[0] is False, True)
+    tr5 = RunTracker({51}, [(51, "/r51", {})])
+    tr5.observe(51, {"phase": "CLOSED"}, {"retired": True})
+    check("done-fixed-retired-but-present", all_done(tr5, [(51, "/r51", {})])[0] is False, True)
+    tr6 = RunTracker(None, [])
+    check("done-all-empty", all_done(tr6, [])[0] is True, True)
+    tr7 = RunTracker(None, [])
+    tr7.observe(51, {"phase": "CLOSED"}, {"retired": True})
+    tr7.observe(52, {"phase": "CLOSED"}, {"retired": True})
+    check("done-all-all-retired", all_done(tr7, [])[0] is True, True)
+    tr8 = RunTracker(None, [])
+    tr8.observe(51, {"phase": "CLOSED"}, {"retired": True})
+    check("done-all-new-room-midrun", all_done(tr8, [(52, "/r52", {})])[0] is False, True)
+    tr9 = RunTracker(None, [])
+    tr9.observe(51, {"phase": "CLOSED"}, {"retired": True})
+    tr9.observe(52, {"phase": "IN_PROGRESS"}, {})
+    check("done-all-unretired-gone", all_done(tr9, [])[0] is False, True)
+    trA = RunTracker({51}, [(51, "/r51", {})])
+    trA.observe(51, {"phase": "CLOSED"}, {"retired": True})
+    check("tracker-observe-retired",
+          51 in trA.retired and trA.states[51] == {"phase": "CLOSED"}, True)
+    check("tracker-tracked-fixed", RunTracker({51}, []).tracked_issues() == {51}, True)
+    print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
+    return 0 if passed == total else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="NexIOS deterministic state machine")
     ap.add_argument("--repo", default=None)
@@ -1723,16 +2346,22 @@ def main(argv=None):
     pv.add_argument("--dev-branch", default="main")
     pv.add_argument("--qe-branch", default="testbed")
     pv.add_argument("--no-launch", action="store_true")
-    for _p in (t, s, pv):
+    b = sub.add_parser("brief")
+    b.add_argument("--issues", default="")
+    b.add_argument("--dev-branch", default="main")
+    sub.add_parser("selftest")
+    for _p in (t, s, pv, b):
         _p.add_argument("--repo", default=None)
         _p.add_argument("--agent-up", default=None)
         _p.add_argument("--log-dir", default=None)
         _p.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
+    if a.cmd == "selftest":
+        return mode_self_test()
     issues = None
-    if a.cmd != "provision" and not a.all:
+    if a.cmd in ("tick", "status") and not getattr(a, "all", False):
         issues = set(int(x) for x in a.issues.split(",") if x.strip()) or None
-        if issues is None and not a.all:
+        if issues is None and not getattr(a, "all", False):
             ap.error("pass --issues 51,52 or --all")
     ctx = Ctx(a)
     ctx.open_log()
@@ -1749,6 +2378,17 @@ def main(argv=None):
             if not canon:
                 ap.error("provision needs --issues (cold start from the issue list)")
             return cmd_provision(ctx, canon, a)
+        if a.cmd == "brief":
+            ordered = []
+            for x in (a.issues.split(",") if a.issues else []):
+                n = canon_issue(x)
+                if n is None:
+                    ap.error("bad issue number: %r" % x)
+                if n not in ordered:
+                    ordered.append(n)
+            if not ordered:
+                ap.error("brief needs --issues")
+            return cmd_brief(ctx, ordered, a)
         return cmd_status(ctx, issues)
     finally:
         ctx.close_log()

@@ -1329,6 +1329,53 @@ extern "C" void panic(const char *msg);
 #if CONFIG_BLOCK_SRV != 0 && CONFIG_BLOCK_SRV != 1
 #error "CONFIG_BLOCK_SRV must be 0 or 1 (default 0)"
 #endif
+#if CONFIG_TERM_SRV != 0 && CONFIG_TERM_SRV != 1
+#error "CONFIG_TERM_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_LOG_SRV != 0 && CONFIG_LOG_SRV != 1
+#error "CONFIG_LOG_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
+#error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_LOG_SRV_FAULT_INJECT != 0 && CONFIG_LOG_SRV_FAULT_INJECT != 1
+#error "CONFIG_LOG_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TERM_SRV_FAULT_INJECT && !CONFIG_TERM_SRV
+#error "CONFIG_TERM_SRV_FAULT_INJECT requires CONFIG_TERM_SRV=1"
+#endif
+#if CONFIG_LOG_SRV_FAULT_INJECT && !CONFIG_LOG_SRV
+#error "CONFIG_LOG_SRV_FAULT_INJECT requires CONFIG_LOG_SRV=1"
+#endif
+
+/// term-srv externalization master switch (issue #51, strangler step a).
+/// 0 = in-kernel terminal emulation (shipped default, bit-identical).
+/// 1 = term-srv PD serves emulation policy; kernel keeps panic raw_write
+/// + serial mechanism. All term-srv code is `#if CONFIG_TERM_SRV`-guarded
+/// (empty TU when 0); no runtime `if` on this knob. Default: 0.
+#ifndef CONFIG_TERM_SRV
+#define CONFIG_TERM_SRV 0
+#endif
+
+/// log-srv externalization master switch (issue #51, strangler step a).
+/// 0 = in-kernel Klog/Dmesg sink (shipped default, bit-identical).
+/// 1 = log-srv PD sinks logs; kernel keeps panic path. Guarded like above.
+/// Default: 0.
+#ifndef CONFIG_LOG_SRV
+#define CONFIG_LOG_SRV 0
+#endif
+
+/// term-srv fault-injection surface (issue #51, strangler step c).
+/// 1 = compile the diagnostic `termfault` shell command. Debug-only.
+#ifndef CONFIG_TERM_SRV_FAULT_INJECT
+#define CONFIG_TERM_SRV_FAULT_INJECT 0
+#endif
+
+/// log-srv fault-injection surface (issue #51, strangler step c).
+/// 1 = compile the diagnostic `logfault` shell command. Debug-only.
+#ifndef CONFIG_LOG_SRV_FAULT_INJECT
+#define CONFIG_LOG_SRV_FAULT_INJECT 0
+#endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif
