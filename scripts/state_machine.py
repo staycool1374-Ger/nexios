@@ -971,9 +971,83 @@ def dev_busy(rings, declared_next):
 
 def session_rung(actions, sess, cycle_rung):
     """True iff sess already rang this tick: this room's actions, or an
-    earlier room's in the shared cycle (dev/qe sessions are shared, G2).
-    Pure."""
+    earlier room's in the shared cycle (dev/qe sessions ring once per
+    cycle, G2). Pure."""
     return rang_session(actions, sess) or sess in (cycle_rung or set())
+
+
+# Lane STATE vocabulary (#457): IDLE (pane idle, waits for new work),
+# WORKING (#n) (pane active with a task — #n is the issue the lane is
+# ACTUALLY engaged in across rooms, which may differ from the row's
+# room), BLOCKED (#n) (pane active, nothing outstanding anywhere, and
+# this room's NEXT waits on input). Auditor: WORKING/- (no session when
+# its work is done).
+LANE_WAITS_RE = re.compile(r"waiting|parked|blocked|hold|await|resume", re.I)
+LANE_PEER_RE = re.compile(
+    r"\b(auditor|audit|qe|dev|verdict|review|approv|order|ring|ready|input|feedback)\b", re.I)
+
+
+def room_lane_facts(room_dir, rst, role):
+    """(order, post, active, waits) engagement facts for one lane. Pure
+    apart from box reads: order = unacked coord order here; post = posts
+    newer than the handled cursor (first sight reports no fresh, mirroring
+    new_posts); active = non-idle NEXT that is not an input-wait; waits =
+    NEXT names an input-wait (audit/qe/dev verdicts, orders, rings)."""
+    boxes = load_boxes(room_dir)
+    box = boxes.get(role) or {}
+    st = rst or {}
+    handled = st.get("handled") or {}
+    coord_last = box.get("coord_last")
+    order = bool(coord_last and order_outstanding(
+        role, coord_last, box.get("all", []),
+        st.get("rings") or {}, st.get("ack_since")))
+    since = handled.get(role)
+    post = bool(since is not None and any(
+        p[:20] > since[:20] for p in box.get("all", [])))
+    nxt = box.get("next") or ""
+    waits = bool(LANE_WAITS_RE.search(nxt) and LANE_PEER_RE.search(nxt))
+    active = bool(nxt) and not nxt.startswith("idle") and not waits
+    return {"order": order, "post": post, "active": active, "waits": waits}
+
+
+def lane_facts_all(rooms_all, role):
+    """{issue: fact-dict} for one lane across rooms. Read-only."""
+    out = {}
+    for iss, rdir, rst in (rooms_all or []):
+        out[iss] = room_lane_facts(rdir, rst, role)
+    return out
+
+
+def lane_state(probe, here, facts, issue):
+    """Display STATE for a worker lane cell. Pure.
+
+    here: this room's fact-dict; facts: {issue: fact-dict} across rooms;
+    issue: this row's room. The (#n) suffix is the issue the lane is
+    ACTUALLY engaged in: unacked order here first, then the lowest
+    engaged issue across rooms (order > fresh post > active NEXT), then
+    this room's input-wait as BLOCKED. ABSENT/BLOCKED-modal pass through
+    (session-level truth); IDLE never carries a suffix."""
+    probe = probe or ""
+    if probe == "ABSENT" or probe.startswith("BLOCKED-modal"):
+        return probe
+    if probe.startswith("IDLE"):
+        return "IDLE"
+    if (here or {}).get("order"):
+        return "WORKING (#%d)" % issue
+    for kind in ("order", "post", "active"):
+        cands = [iss for iss, f in (facts or {}).items()
+                 if (f or {}).get(kind)]
+        if cands:
+            return "WORKING (#%d)" % min(cands)
+    if (here or {}).get("waits"):
+        return "BLOCKED (#%d)" % issue
+    return "WORKING"
+
+
+def audit_state(live):
+    """Auditor lane cell: WORKING while the session exists, else '-'.
+    Pure. The auditor has no session when its work is done."""
+    return "WORKING" if live else "-"
 
 
 def peer_mention(text, peer):
@@ -1682,6 +1756,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     ctx.graph[str(issue)] = node
 
     rows = []
+    # Lane engagement across rooms (#457): the (#n) suffix is the issue
+    # the lane is ACTUALLY working, which may differ from this row.
+    # Recomputed per room tick (small files; always current, no cache).
+    lane_facts = {"dev": lane_facts_all(rooms_all, "dev"),
+                  "qe": lane_facts_all(rooms_all, "qe")}
     for role, sess in (("dev", SESS["dev"]), ("qe", SESS["qe"]),
                        ("audit", SESS["audit"])):
         if role == "audit":
@@ -1689,12 +1768,15 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             activity = ("report %s" % os.path.basename(rep)) if rep else (
                 auditor_decision(boxes["auditor"]["all"]) or "no verdict")
             planned = "collect verdict" if need_verdict else "-"
-            state = "LIVE" if audit_session_live(ctx) else "ABSENT"
+            state = audit_state(audit_session_live(ctx))
         else:
             activity = boxes[role]["state"] or boxes[role]["next"] or "-"
             planned = next((a for a in actions
                             if role in a or SESS[role] in a), "-")
-            state = probes[role] + (" %d%%" % ctxp[role] if ctxp.get(role) is not None else "")
+            base = lane_state(probes[role],
+                              lane_facts[role].get(issue, {}),
+                              lane_facts[role], issue)
+            state = base + (" %d%%" % ctxp[role] if ctxp.get(role) is not None else "")
         rows.append((role, state, activity, planned))
     return node, rows
 
@@ -2491,6 +2573,8 @@ def cmd_status(ctx, issues):
     if not rooms:
         print("no rooms")
         return 2
+    facts = {"dev": lane_facts_all(rooms, "dev"),
+             "qe": lane_facts_all(rooms, "qe")}
     for issue, rdir, st in rooms:
         boxes = load_boxes(rdir)
         rows = []
@@ -2500,13 +2584,14 @@ def cmd_status(ctx, issues):
                 rep = latest_audit_report(ctx, issue)
                 activity = ("report %s" % os.path.basename(rep)) if rep else (
                     auditor_decision(boxes["auditor"]["all"]) or "no verdict")
-                state = "LIVE" if audit_session_live(ctx) else "ABSENT"
+                state = audit_state(audit_session_live(ctx))
                 rows.append((role, state, activity,
                              status_planned_audit(ctx, issue, boxes)))
             else:
                 probe = fast_probe(ctx, sess)
                 activity = boxes[role]["state"] or boxes[role]["next"] or "-"
-                rows.append((role, probe, activity,
+                rows.append((role, lane_state(probe, facts[role].get(issue, {}),
+                                             facts[role], issue), activity,
                              status_planned_lane(role, boxes[role], st, probe)))
         print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
                         rows), flush=True)
@@ -2676,7 +2761,8 @@ def cmd_brief(ctx, issues, a):
 
 def mode_self_test():
     """Deterministic regression: #442 quiet-progress + NEED-idle, #443 peer handoff,
-    #456 room-scoped rings, WAKE ingestion, acked backlog/qe orders."""
+    #456 room-scoped rings, WAKE ingestion, acked backlog/qe orders,
+    #457 lane STATE with actual issue + auditor WORKING/-."""
     passed = 0
     total = 0
 
@@ -3022,6 +3108,31 @@ def mode_self_test():
           pick_backlog(_rooms, 51, exclude={52}) is None, True)
     check("pick-backlog-no-exclude",
           pick_backlog(_rooms, 51) == 52, True)
+    _none = {"order": False, "post": False, "active": False, "waits": False}
+    _wait = dict(_none, waits=True)
+    _ord = dict(_none, order=True)
+    _act = dict(_none, active=True)
+    check("lane-absent", lane_state("ABSENT", _none, {240: _none}, 240) == "ABSENT", True)
+    check("lane-modal", lane_state("BLOCKED-modal", _none, {240: _none}, 240) == "BLOCKED-modal", True)
+    check("lane-idle", lane_state("IDLE-static", _wait, {240: _wait}, 240) == "IDLE", True)
+    check("lane-working-order-here",
+          lane_state("WORKING-markers", _ord, {240: _ord}, 240) == "WORKING (#240)", True)
+    check("lane-working-actual-elsewhere",
+          lane_state("WORKING-markers", _wait, {240: _wait, 54: _ord}, 240) == "WORKING (#54)", True)
+    check("lane-working-active-here",
+          lane_state("WORKING-markers", _act, {240: _act}, 240) == "WORKING (#240)", True)
+    check("lane-blocked-waits",
+          lane_state("WORKING-markers", _wait, {240: _wait, 54: _none}, 240) == "BLOCKED (#240)", True)
+    check("lane-working-bare",
+          lane_state("WORKING-markers", _none, {240: _none}, 240) == "WORKING", True)
+    check("lane-waits-order-word",
+          bool(LANE_WAITS_RE.search("waiting IMPL order (plan-approved)")), True)
+    check("lane-peer-auditor-word",
+          bool(LANE_PEER_RE.search("waiting auditor plan-review")), True)
+    check("lane-peer-no-false-positive",
+          not LANE_PEER_RE.search("device driver working"), True)
+    check("audit-state-live", audit_state(True) == "WORKING", True)
+    check("audit-state-absent", audit_state(False) == "-", True)
     check("ack-regex-order",
           ACK_OID_RE.fullmatch("dev:2026-11-02T08:00:00") is not None
           and ref_lane("dev:2026-11-02T08:00:00") == "dev", True)
