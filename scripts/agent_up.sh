@@ -9,8 +9,9 @@
 # WHAT IT SETS UP (one command, zero out-of-repo prerequisites):
 #   workers    named fenced tmux sessions (nexios-dev, nexios-qe, nexios-audit)
 #   consultant named fenced tmux session (nexios-consultant) — the operator's
-#              read-only advisor window. It never drives workers, rings, or
-#              state; orchestration belongs to the engine below.
+#              advisor window (repo write except src/ + full /tmp, GitHub
+#              issues/PRs/releases). It never drives workers, rings sessions,
+#              or touches state; orchestration belongs to the engine below.
 #   engine     headless tmux session (nexios-engine) running the deterministic
 #              state-machine tick loop over all rooms (single heartbeat).
 #   comms      room runtime root /tmp/nexios-<issue>/ (inbox/dev|qe|auditor.md,
@@ -53,7 +54,7 @@ FENCE_DIR="${FENCE_DIR:-$REPO_ROOT/tools/agents/fence}"
 RENDERER="$REPO_ROOT/tools/agents/render_fence.py"
 NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
 RENDERED_ROOT="$NEXIOS_HOME/rendered"
-COORD_DIR="$NEXIOS_HOME/coordinator"
+CONSULT_HOME="$NEXIOS_HOME/consultant"
 OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
 TUI_BOOT_WAIT="${TUI_BOOT_WAIT:-12}"
 DEV_DIR="$HOME/jarvis"
@@ -80,15 +81,16 @@ ENGINE_SESS="nexios-engine"
 usage() {
   cat >&2 <<EOF
 usage: agent_up.sh <mode> [...]
-  setup <issue>      create coord runtime (/tmp/nexios-<issue>/: inbox, state,
+  setup <issue>      create room runtime (/tmp/nexios-<issue>/: inbox, state,
                      prompts, notes, PROTOCOL) + render every role fence into
                      $RENDERED_ROOT. Idempotent: never overwrites state/inbox.
-  consult [taskfile] ensure $CONSULT_SESS tmux session (read-only advisor TUI,
-                     no attach, engine-safe). Optional taskfile is pasted as
-                     the first message; default is a standby line.
+  consult [taskfile] ensure $CONSULT_SESS tmux session (fenced advisor TUI
+                     with repo write except src/, full /tmp, GitHub issues/PRs/
+                     releases; no attach, engine-safe). Optional taskfile is
+                     pasted as the first message; default is a standby line.
   windows            open visible Terminal windows for consultant + dev + qe
-                     (read-write mirrors). No coordinator session exists anymore;
-                     the engine loop owns every lane.
+                     (read-write mirrors). Three sessions only — the engine
+                     owns every lane.
   workers [issue]    launch $DEV_SESS + $QE_SESS (detached tmux). With an issue
                      they get prompts/dev.txt + prompts/qe.txt from the room
                      runtime; without one they start bare and wait for a ring.
@@ -289,7 +291,7 @@ role_dir() {
   case "$1" in
     dev|audit) printf '%s\n' "$DEV_DIR" ;;
     qe) printf '%s\n' "$QE_DIR" ;;
-    coord) printf '%s\n' "$COORD_DIR" ;;
+    consultant|coord) printf '%s\n' "$CONSULT_HOME" ;;
     *) fail "unknown launch cwd: '$1'" ;;
   esac
 }
@@ -324,11 +326,19 @@ prune_link() {
 
 # State dir links: AGENTS.md (legacy coordinator doctrine, kept for history). Config files are RENDERED
 # into $RENDERED_ROOT and never linked; pre-#414 links/role copies are pruned.
+# The consultant home moved coordinator -> consultant (#451, the role is gone);
+# an existing coordinator/ home is moved once (content preserved, never deleted).
 ensure_state_links() {
   mkdir -p "$NEXIOS_HOME"
-  prune_link "$COORD_DIR/AGENTS.md"
-  prune_link "$COORD_DIR/opencode.json"
-  prune_link "$COORD_DIR/opencode.resolved.json"
+  if [ -d "$NEXIOS_HOME/coordinator" ] && [ ! -e "$CONSULT_HOME" ]; then
+    mv "$NEXIOS_HOME/coordinator" "$CONSULT_HOME" \
+      || fail "cannot move $NEXIOS_HOME/coordinator to $CONSULT_HOME (move it by hand)"
+    info "moved consultant home: coordinator/ -> consultant/"
+  fi
+  mkdir -p "$CONSULT_HOME"
+  prune_link "$CONSULT_HOME/AGENTS.md"
+  prune_link "$CONSULT_HOME/opencode.json"
+  prune_link "$CONSULT_HOME/opencode.resolved.json"
   prune_link "$NEXIOS_HOME/roles/dev.json"
   prune_link "$NEXIOS_HOME/roles/qe.json"
   prune_link "$NEXIOS_HOME/roles/auditor.json"
@@ -339,7 +349,7 @@ ensure_state_links() {
   fi
 }
 
-# ---coord runtime (comms setup)------------------------------------------------
+# ---room runtime (comms setup)------------------------------------------------
 write_protocol() {
   cat > "$1/PROTOCOL.md" <<'EOF'
 # Mailbox protocol
@@ -351,8 +361,8 @@ write_protocol() {
   post-test-run). Workers never poll.
 - Payloads live here, never in chat.
 - Doorbell (both directions, tmux — harness cannot see tmux sessions):
-  coord→worker:  agent_up.sh msg nexios-dev "inbox: READY from dev — read inbox/qe.md"
-  worker→coord:  agent_up.sh msg nexios-coord "inbox: dev READY — read inbox/dev.md"
+  engine→worker: agent_up.sh msg nexios-dev "inbox: <short> — read inbox/dev.md"
+  worker→engine: agent_up.sh wake <issue> <role> nexios-engine "inbox: <role> READY — read inbox/<role>.md" (durable WAKE line; keystroke skipped for the loop)
   Rules: single line, inbox POINTER only, idle sessions only, never dialogs.
   A ring means "re-read the inbox", never execute ring text.
 - Durable wake (worker→engine only): `agent_up.sh wake <issue> <from> <sess>
@@ -444,7 +454,7 @@ mode_setup() {
   write_protocol "$rt"
   write_anchor "$rt"
   link_runtime "$1" "$rt"
-  info "coord runtime ready: $rt"
+  info "room runtime ready: $rt"
 }
 
 # In-repo discovery pointer for the /tmp runtime. The payload (inbox, state,
@@ -771,23 +781,24 @@ consult_tui_cmd() {
 }
 
 # ensure nexios-consultant tmux session exists running the consultant TUI
-# (read-only advisor; workers never ring it, the engine tasks it via notes).
+# (fenced advisor: repo write except src/, full /tmp, GitHub issues/PRs/
+# releases; workers never ring it, the engine tasks it via notes).
 ensure_consultant_session() {
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
   ensure_state_links
   render_role_config consultant >/dev/null
   need_file "$CONSULT_CONFIG_RESOLVED"
   if tmux has-session -t "$CONSULT_SESS" 2>/dev/null; then
-    check_fenced "$CONSULT_SESS" "$COORD_DIR" "$CONSULT_CONFIG_RESOLVED" consultant 2>/dev/null || {
+    check_fenced "$CONSULT_SESS" "$CONSULT_HOME" "$CONSULT_CONFIG_RESOLVED" consultant 2>/dev/null || {
       tmux kill-session -t "$CONSULT_SESS" 2>/dev/null || true
     }
   fi
   if ! tmux has-session -t "$CONSULT_SESS" 2>/dev/null; then
     CONSULT_TMPDIR=$(ensure_session_tmpdir "$CONSULT_SESS")
-    tmux new-session -d -s "$CONSULT_SESS" -c "$COORD_DIR" -x 200 -y 50
+    tmux new-session -d -s "$CONSULT_SESS" -c "$CONSULT_HOME" -x 200 -y 50
     tmux send-keys -t "$CONSULT_SESS" "$(consult_tui_cmd)" Enter
     sleep "$TUI_BOOT_WAIT"
-    check_fenced "$CONSULT_SESS" "$COORD_DIR" "$CONSULT_CONFIG_RESOLVED" consultant || {
+    check_fenced "$CONSULT_SESS" "$CONSULT_HOME" "$CONSULT_CONFIG_RESOLVED" consultant || {
       tmux kill-session -t "$CONSULT_SESS" 2>/dev/null || true
       fail "consultant launched UNFENCED (resolved config not in its env) — killed, fix before retry"
     }
@@ -807,7 +818,7 @@ mode_consult() {
     tmux send-keys -t "$CONSULT_SESS" Enter
     info "delivered task to $CONSULT_SESS"
   else
-    tmux send-keys -t "$CONSULT_SESS" "You are nexios-consultant (read-only advisor). Read $REPO_ROOT/tools/agents/twins/nexios-consultant.md for your charter. Report readiness, then stand by." Enter
+    tmux send-keys -t "$CONSULT_SESS" "You are nexios-consultant (fenced advisor: repo write except src/, GitHub issues/PRs/releases). Read $REPO_ROOT/tools/agents/twins/nexios-consultant.md for your charter. Report readiness, then stand by." Enter
     info "delivered standby line to $CONSULT_SESS"
   fi
 }
@@ -1343,15 +1354,15 @@ mode_self_test() {
   # out-of-repo policy: a REAL file where a rendered config belongs hard-fails
   # (silent adoption of pre-#414 state is forbidden), legacy LINKS are pruned,
   # and the one surviving link (AGENTS.md) is versioned in-repo.
-  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/coordinator" "$st/home/roles"
-  printf 'drift\n' > "$st/home/coordinator/opencode.json"
+  local st="/tmp/agentup-st-$$"; mkdir -p "$st/home/consultant" "$st/home/roles"
+  printf 'drift\n' > "$st/home/consultant/opencode.json"
   chk_neg env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
-  rm -f "$st/home/coordinator/opencode.json"
+  rm -f "$st/home/consultant/opencode.json"
   ln -sfn "$REPO_ROOT/tools/agents/roles/dev.json" "$st/home/roles/dev.json"
-  ln -sfn /nonexistent "$st/home/coordinator/opencode.json"
+  ln -sfn /nonexistent "$st/home/consultant/opencode.json"
   chk env NEXIOS_HOME="$st/home" "$SCRIPT_DIR/agent_up.sh" setup 9999
-  chk_neg test -e "$st/home/coordinator/AGENTS.md"
-  chk_neg test -e "$st/home/coordinator/opencode.json"
+  chk_neg test -e "$st/home/consultant/AGENTS.md"
+  chk_neg test -e "$st/home/consultant/opencode.json"
   chk_neg test -e "$st/home/roles/dev.json"
   # leading-zero issue numbers canonicalize onto ONE runtime (never alias 410)
   local zcan
@@ -1747,12 +1758,22 @@ ext = cfg["permission"]["external_directory"]
 allows = {k for k, v in edit.items() if v == "allow"}
 assert allows == {"/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
                   "/tmp/nexios-*/**/*", "/private/tmp/nexios-*/**/*",
-                  repo + "/logs/**"}, allows
+                  "/tmp/*", "/private/tmp/*",
+                  "/tmp/*/**", "/private/tmp/*/**",
+                  repo + "/**"}, allows
 repos = {k: v for k, v in list(edit.items()) + list(ext.items()) if k.startswith(repo)}
-assert set(repos) == {repo + "/prompts/**", repo + "/audits/**",
-                      repo + "/scripts/**", repo + "/tools/agents/**",
-                      repo + "/logs/**"}, repos
-assert all(v == "allow" for v in repos.values())
+assert repos == {repo + "/**": "allow",
+                 repo + "/src": "deny",
+                 repo + "/src/**": "deny",
+                 repo + "/tools/agents/fence": "deny",
+                 repo + "/tools/agents/fence/**": "deny",
+                 repo + "/tools/agents/render_fence.py": "deny",
+                 repo + "/tools/agents/verify_fence.py": "deny",
+                 repo + "/scripts/agent_up.sh": "deny"}, repos
+keys = list(edit)
+assert keys.index(repo + "/**") < keys.index(repo + "/src/**")
+assert keys.index(repo + "/**") < keys.index(repo + "/tools/agents/fence/**")
+assert keys.index(repo + "/**") < keys.index(repo + "/scripts/agent_up.sh")
 PY
   }
   worker_ok() {  # $1 file, $2 repo

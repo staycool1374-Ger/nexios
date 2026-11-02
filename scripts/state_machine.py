@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Deterministic multi-issue state machine & concurrency engine for NexIOS.
 
-Replaces the coordinator role (now a read-only Consultant): all orchestration,
-worker execution orders, workflow transitions, auditor lifecycle, and modal
-mitigation run here, driven by watchdog ticks. Deterministic: identical room
+Replaces the former coordinator role outright (the engine is the code-driven
+coordinator; the consultant is a publishing advisor, never an orchestrator):
+all orchestration, worker execution orders, workflow transitions, auditor
+lifecycle, and modal mitigation run here, driven by watchdog ticks.
+Deterministic: identical room
 inputs always produce identical decisions; every decision is logged and every
 incoming worker post is ACKed with a recorded transition. Worker posts may
 carry an optional `ACK: <oid>` 4th trailer line; the engine clears exactly
@@ -1590,14 +1592,14 @@ def recreate_worker(ctx, issue, room_dir, role, reason, state, nxt):
     return acts, True
 
 
-RELEASE_OWNERS = {1: "consultant", 2: "consultant", 3: "operator",
-                  4: "consultant", 5: "operator", 6: "consultant", 7: "engine"}
+RELEASE_OWNERS = {1: "consultant", 2: "consultant", 3: "consultant",
+                  4: "consultant", 5: "consultant", 6: "consultant", 7: "engine"}
 RELEASE_TEXTS = {
     1: "Verify merge: lane branch merged into main; main==origin/main; tree clean.",
     2: "Confirm release version with operator (repo convention + milestone); record as STEP 2 DONE :: vX.Y.Z.",
-    3: "OPERATOR: create annotated tag + push (consultant prepares exact commands).",
+    3: "Create annotated tag + push for vX.Y.Z.",
     4: "Draft release notes (README highlights + milestone + lane evidence) to logs/release-<issue>-notes.md.",
-    5: "OPERATOR: create GitHub Release from draft + mirror to Nextcloud target.",
+    5: "Create GitHub Release from draft; the Nextcloud mirror remains OPERATOR (coordinate in chat).",
     6: "Verify release exists + mirror present; record evidence.",
     7: "ENGINE: API-verify + close case.",
 }

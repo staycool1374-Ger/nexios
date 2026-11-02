@@ -12,9 +12,9 @@ Role: own workflow transitions. Motivation (operator order, mandatory): drive an
 - Role prompts live read-only in the repo: `{repo}/prompts/PROMPT-{dev,testdev,audit}.md` (the
   launched config resolves `{repo}` to the absolute repo root; the shipped files never carry a
   machine path). Reference, don't copy. LEARNINGS closeout writes `{repo}/prompts/LEARNINGS.md`.
-- Your own fence is versioned in repo: `tools/agents/fence/base.json` + `tools/agents/fence/roles/coordinator.json`
-  (this directory's `AGENTS.md` is a SYMLINK to `tools/agents/coordinator/AGENTS.md`; your config is rendered
-  to `~/.local/state/nexios/rendered/coordinator/opencode.resolved.json` at launch — never hand-edit a rendered file).
+- Your own fence is versioned in repo: `tools/agents/fence/base.json` + `tools/agents/fence/roles/consultant.json`
+  (this file is versioned in-repo at `tools/agents/consultant/AGENTS.md`, kept for history: coordinator doctrine; your config is rendered
+  to `~/.local/state/nexios/rendered/consultant/opencode.resolved.json` at launch — never hand-edit a rendered file).
 
 ## Wake routine (machine-executed, operator order)
 
