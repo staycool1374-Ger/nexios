@@ -76,7 +76,7 @@ def ref_lane(ref):
     return m.group(m.lastindex)
 
 VALID_ROOM_STATES = ("IN_PROGRESS", "AUDITED", "VERIFIED", "PLANNED",
-                     "QUEUED", "CLOSED", "HOLD")
+                     "QUEUED", "CLOSED", "HOLD", "CLOSING")
 
 
 RING_LIMIT = 3  # doctrine: ring an order max 3x; then NEED-recreate, never a 4th ring
@@ -516,6 +516,17 @@ def pane_capture(ctx, sess):
 
 def modal_present(pane_text):
     return bool(pane_text) and bool(re.search(MODAL_RE, pane_text, re.I))
+
+
+def engine_loop_live():
+    """True when a state-machine tick loop process exists. Read-only."""
+    try:
+        pr = subprocess.run(["pgrep", "-f", "state_machine.py tick"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            timeout=15)
+        return pr.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def fast_probe(ctx, sess):
@@ -2144,6 +2155,22 @@ def starvation_gaps(nodes):
     return sorted(n.get("issue") for n in (nodes or []) if n.get("starved"))
 
 
+def starvation_sweep(boxes, st, probes, has_unacked, halt_now):
+    """Sorted starved roles for both lanes. Pure apart from inputs.
+
+    Runs on final same-tick state (all filings reflected in has_unacked);
+    a halting room never starves (its NEEDs are moot, its quiet moot)."""
+    if halt_now:
+        return []
+    out = []
+    for role in ("dev", "qe"):
+        if starvation_gap(role, (probes or {}).get(role),
+                          lane_facts_from_boxes(boxes, st, role),
+                          st, has_unacked):
+            out.append(role)
+    return out
+
+
 def derive_room_phase(issue_closed, dev_done, audit_approved, qe_verified,
                       impl_ready):
     """RECON | IMPL | VERIFY | CLOSE-OUT | CLOSED from lane evidence. Pure.
@@ -2854,10 +2881,12 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if ctx.dry:
             actions.append("WOULD post backlog order #%d (oid %s)" % (target, boid))
             file_order_deadline(ad_store, boid)
+            has_unacked.add("dev")
         else:
             if append_box_note(room_dir, "dev", note):
                 rings[boid] = 0
                 file_order_deadline(ad_store, boid)
+                has_unacked.add("dev")
                 actions.append("order filed dev backlog #%d (oid %s)" % (target, boid))
                 if ("dev" not in deaf and probes["dev"].startswith("IDLE")
                         and not session_rung(actions, SESS["dev"], cycle["rung"])):
@@ -2978,10 +3007,12 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if ctx.dry:
             actions.append("WOULD post qe order IMPL READY (oid %s)" % qoid)
             file_order_deadline(ad_store, qoid)
+            has_unacked.add("qe")
         else:
             if append_box_note(room_dir, "qe", note):
                 rings[qoid] = 0
                 file_order_deadline(ad_store, qoid)
+                has_unacked.add("qe")
                 actions.append("order filed qe IMPL READY (oid %s)" % qoid)
                 qo_store = {"for": impl_ts}
                 if ("qe" not in deaf and probes["qe"].startswith("IDLE")
@@ -3026,21 +3057,6 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if impl_ts:
             actions.append("WOULD stage testbed via qe-merge on fresh IMPL READY")
 
-    # Item C (#461): starvation invariant. After every gate had its chance,
-    # an IDLE lane still waiting on input with no order behind it gets a
-    # log-only NEED (the gate that should have fired owns the actual order
-    # — no filing, no ring, no double-drive). node["starved"] keeps the
-    # cycle from counting this as quiet.
-    _starved_roles = []
-    for _role in ("dev", "qe"):
-        _facts = lane_facts_from_boxes(boxes, st, _role)
-        if starvation_gap(_role, probes[_role], _facts, st, has_unacked):
-            _starved_roles.append(_role)
-            actions.append("NEED starvation #%d %s: %s, NEXT '%s', no order"
-                           % (issue, _role, probes[_role],
-                              (boxes[_role]["next"] or "")[:80]))
-    node["starved"] = _starved_roles
-
     failed = any(a.startswith(("RING-FAILED", "STATE-FAILED", "BRIEF-FAILED",
                                "POINTER-FAILED", "STATE-WRITE-FAILED"))
                  for a in actions)
@@ -3055,6 +3071,17 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     if halt_now:
         actions.append("HALT #%d: retry budget exhausted (%d/%d) -> MANUAL_INTERVENTION"
                        % (issue, retries, budget))
+    # Item C (#461): starvation invariant on final same-tick state. A lane
+    # still waiting on input with no order behind it gets a log-only NEED
+    # (the gate that should have fired owns the actual order — no filing,
+    # no ring, no double-drive). Halting rooms never starve; node["starved"]
+    # keeps the cycle from counting this as quiet.
+    _starved_roles = starvation_sweep(boxes, st, probes, has_unacked, halt_now)
+    for _role in _starved_roles:
+        actions.append("NEED starvation #%d %s: %s, NEXT '%s', no order"
+                       % (issue, _role, probes[_role],
+                          (boxes[_role]["next"] or "")[:80]))
+    node["starved"] = _starved_roles
     g_acts, gh_posted = gh_transitions(ctx, issue, st, node, actions, halt_now, fresh)
     actions.extend(g_acts)
     def mutate(s):
@@ -3119,20 +3146,23 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         # only on an outstanding verdict need — an unconditional audit line
         # would make audit_state_demand fire on every tick (S1: auditor
         # churn). Halt/manual rooms keep operator text, always.
-        _dev_done = dev_done_ts(boxes["dev"]["all"])
-        _qe_verified = qe_verified_ts(boxes["qe"]["all"])
-        _phase = derive_room_phase(st.get("phase") == "CLOSED", _dev_done,
-                                   _approved, _qe_verified, impl_ts)
-        s["phase"] = _phase
-        if _phase == "CLOSE-OUT" and s.get("state") == "IN_PROGRESS":
-            s["state"] = "CLOSING"
-        _cur_pending = s.get("pending") or ""
-        _new_pending = room_pending_text(
-            _phase, boxes["dev"]["next"], boxes["qe"]["next"],
-            audit_note if need_verdict else None)
-        if _new_pending != _cur_pending:
-            s["pending"] = pending_refresh(_cur_pending, _new_pending,
-                                           s.get("halt"), halt_now)
+        # Halted rooms freeze everything below (phase/state/pending), not
+        # just the pending text: a halting room takes no new derivation.
+        if not s.get("halt") and not halt_now:
+            _dev_done = dev_done_ts(boxes["dev"]["all"])
+            _qe_verified = qe_verified_ts(boxes["qe"]["all"])
+            _phase = derive_room_phase(st.get("phase") == "CLOSED", _dev_done,
+                                       _approved, _qe_verified, impl_ts)
+            s["phase"] = _phase
+            if _phase == "CLOSE-OUT" and s.get("state") == "IN_PROGRESS":
+                s["state"] = "CLOSING"
+            _cur_pending = s.get("pending") or ""
+            _new_pending = room_pending_text(
+                _phase, boxes["dev"]["next"], boxes["qe"]["next"],
+                audit_note if need_verdict else None)
+            if _new_pending != _cur_pending:
+                s["pending"] = pending_refresh(_cur_pending, _new_pending,
+                                               s.get("halt"), halt_now)
         if wake_newest:
             s["wake_seen"] = wake_newest
         if halt_now:
@@ -3989,8 +4019,12 @@ def cmd_status(ctx, issues):
         return 2
     facts = {"dev": lane_facts_all(rooms, "dev"),
              "qe": lane_facts_all(rooms, "qe")}
+    starved_all = []
     for issue, rdir, st in rooms:
         boxes = load_boxes(rdir)
+        hu = {r for r in ("dev", "qe") if any(
+            o.startswith(r + ":") and v not in (-1, RING_ESCALATED)
+            for o, v in (st.get("rings") or {}).items())}
         rows = []
         for role, sess in (("dev", SESS["dev"]), ("qe", SESS["qe"]),
                            ("audit", SESS["audit"])):
@@ -4007,8 +4041,12 @@ def cmd_status(ctx, issues):
                 rows.append((role, lane_state(probe, facts[role].get(issue, {}),
                                              facts[role], issue), activity,
                              status_planned_lane(role, boxes[role], st, probe)))
+                if starvation_gap(role, probe, facts[role].get(issue, {}), st, hu):
+                    starved_all.append(issue)
         print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
                         rows), flush=True)
+    for _v in watchdog_invariant(sorted(set(starved_all)), engine_loop_live()):
+        print(_v, flush=True)
     return 0
 
 
@@ -4779,6 +4817,11 @@ def mode_self_test():
     check("starvation-gaps-sorted",
           starvation_gaps([{"issue": 54}, {"issue": 240, "starved": ["qe"]},
                            {"issue": 390, "starved": ["dev"]}]) == [240, 390], True)
+    check("starvation-sweep-finds",
+          starvation_sweep(_cboxes, _cst, {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == ["dev"], True)
+    check("starvation-sweep-halt-suppresses",
+          starvation_sweep(_cboxes, dict(_cst, halt=True), {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == []
+          and starvation_sweep(_cboxes, _cst, {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), True) == [], True)
     check("phase-recon", derive_room_phase(False, None, False, None, None) == "RECON", True)
     check("phase-impl", derive_room_phase(False, None, True, None, None) == "IMPL", True)
     check("phase-verify-ready",
