@@ -852,15 +852,17 @@ def audit_retask_gate(demand, fresh_need, probe, live, brief_present, brief_tip,
 
 def audit_sla_action(age_s, live, probe, oid, n, rerings,
                      re_ring_after_s=AUDIT_SLA_RERING_S,
-                     escalate_after_s=AUDIT_SLA_ESCALATE_S):
+                     escalate_after_s=AUDIT_SLA_ESCALATE_S,
+                     handled=False):
     """ok | re-ring | escalate-absent | escalate-stale | escalate-missing. Pure.
 
     Age-based SLA over an outstanding audit demand, orthogonal to the
     ring-count doctrine: the one re-ring never mints an oid and never
     touches rings[oid] (3-ring escalation untouched). Absent/stale/missing
     escalate to NEEDs. There is no kill path (teardown stays verdict-gated,
-    so a stale-live session is re-tasked, never destroyed)."""
-    if age_s is None:
+    so a stale-live session is re-tasked, never destroyed). An answered
+    demand (handled) is always ok: the log must never overstate the flag."""
+    if handled or age_s is None:
         return "ok"
     idle = str(probe).startswith("IDLE")
     if not live:
@@ -1135,19 +1137,20 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     # kill — teardown stays verdict-gated).
     _sla_action = "ok"
     _sage = None
+    _now19 = utcnow()
+    _sla0 = (asess or {}).get("sla") or {}
     if demand_key:
-        _now19 = utcnow()
-        _sla0 = (asess or {}).get("sla") or {}
         _sage = audit_sla_age_s(stored, _sla0, demand_key, _now19)
         _sla_action = audit_sla_action(
             _sage, live, aprobe, oid, rings.get(oid, 0) if oid else 0,
-            _sla0.get("rerings", 0) if _sla0.get("key") == demand_key else 0)
+            _sla0.get("rerings", 0) if _sla0.get("key") == demand_key else 0,
+            handled=(asess.get("handled_demand") == demand_key))
         if (_sla_action == "re-ring" and verdict_ts
                 and _sla0.get("key") == demand_key and _sla0.get("first")
                 and verdict_ts >= _sla0["first"][:19]):
             _sla_action = "ok"  # verdict already covers this demand era
-        if demand_key or _sla0:
-            asess["sla"] = audit_sla_next(asess, demand_key, _sla_action, _now19)
+    if demand_key or _sla0:
+        asess["sla"] = audit_sla_next(asess, demand_key, _sla_action, _now19)
     if _sla_action == "re-ring":
         if qhead is not None and qhead != issue:
             acted.append("AUDIT-SLA re-ring deferred #%d: queued behind #%d (FIFO)" % (issue, qhead))
@@ -4739,6 +4742,8 @@ def mode_self_test():
     check("audit-sla-legacy-no-store",
           audit_sla_next({}, None, "ok", "2026-11-02T08:00:00Z") == {}
           and audit_sla_age_s({}, {}, "k", "2026-11-02T08:00:00Z") is None, True)
+    check("audit-sla-handled-ok",
+          audit_sla_action(9999, False, "ABSENT", None, 0, 0, handled=True) == "ok", True)
     _sla1 = audit_sla_next({}, "dev:ab12cd34", "ok", "2026-11-02T08:00:00Z")
     check("audit-sla-next-key-reset",
           _sla1 == {"key": "dev:ab12cd34", "first": "2026-11-02T08:00:00Z", "rerings": 0}, True)
