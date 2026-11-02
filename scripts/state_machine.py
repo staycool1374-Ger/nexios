@@ -1635,6 +1635,7 @@ READY_FIELD_RE = re.compile(
     r"^\s*(branch|patch|tip|stat|symbols|sha256)\s*:\s*(.+?)\s*$", re.I)
 QE_DIFF_RE = re.compile(r"diff\s+present\s*:\s*(y|n|yes|no)\b", re.I)
 DONE_WORD_RE = re.compile(r"\bDONE\b")
+VERIFIED_WORD_RE = re.compile(r"\bVERIFIED\b")
 # Worktree fallback reads at most this many bytes per tick (S3: a large
 # in-repo patch path must not impose unbounded per-tick I/O/CPU).
 READY_WORKTREE_MAX_BYTES = 1 << 20
@@ -1868,6 +1869,21 @@ def dev_done_ts(posts):
     return found
 
 
+def qe_verified_ts(posts):
+    """Newest qe VERIFIED declaration ts (post[:20]), or None. Pure.
+
+    Same all-caps convention as dev DONE: lowercase "verified" is prose.
+    Consumed by the phase derivation (item C) and the close-out gate."""
+    found = None
+    for post in posts or []:
+        m = POST_RE.match(post)
+        if not m or m.group(2) != "qe":
+            continue
+        if VERIFIED_WORD_RE.search(m.group(4)):
+            found = post[:20]
+    return found
+
+
 def parse_qe_evidence(lines):
     """tip: + diff present: y|n from a QE verdict block. Pure."""
     tip, diff = None, None
@@ -2073,15 +2089,15 @@ LANE_PEER_RE = re.compile(
     r"\b(auditor|audit|qe|dev|verdict|review|approv|order|ring|ready|input|feedback)\b", re.I)
 
 
-def room_lane_facts(room_dir, rst, role):
-    """(order, post, active, waits) engagement facts for one lane. Pure
-    apart from box reads: order = unacked coord order here; post = posts
-    newer than the handled cursor (first sight reports no fresh, mirroring
-    new_posts); active = non-idle NEXT that is not an input-wait; waits =
-    NEXT names an input-wait (audit/qe/dev verdicts, orders, rings)."""
-    boxes = load_boxes(room_dir)
-    box = boxes.get(role) or {}
-    st = rst or {}
+def lane_facts_from_boxes(boxes, st, role):
+    """(order, post, active, waits) engagement facts from loaded boxes. Pure.
+
+    order = unacked coord order here; post = posts newer than the handled
+    cursor (first sight reports no fresh, mirroring new_posts); active =
+    non-idle NEXT that is not an input-wait; waits = NEXT names an
+    input-wait (audit/qe/dev verdicts, orders, rings)."""
+    box = (boxes or {}).get(role) or {}
+    st = st or {}
     handled = st.get("handled") or {}
     coord_last = box.get("coord_last")
     order = bool(coord_last and order_outstanding(
@@ -2094,6 +2110,101 @@ def room_lane_facts(room_dir, rst, role):
     waits = bool(LANE_WAITS_RE.search(nxt) and LANE_PEER_RE.search(nxt))
     active = bool(nxt) and not nxt.startswith("idle") and not waits
     return {"order": order, "post": post, "active": active, "waits": waits}
+
+
+def room_lane_facts(room_dir, rst, role):
+    """(order, post, active, waits) engagement facts for one lane. Pure
+    apart from box reads (delegates to lane_facts_from_boxes)."""
+    return lane_facts_from_boxes(load_boxes(room_dir), rst, role)
+
+
+def starvation_gap(role, probe, facts, st, has_unacked):
+    """True when an IDLE lane's input-wait has no engine order behind it. Pure.
+
+    The gap that parked 240/390/54: the lane is IDLE, its NEXT waits on
+    input, but no unacked order names the lane and no fresh post is in
+    flight — every gate had its chance and none fired. Halt rooms never
+    starve; unknown probes (unreadable session) never qualify."""
+    if (st or {}).get("halt"):
+        return False
+    if (st or {}).get("state") not in ("IN_PROGRESS", "CLOSING"):
+        return False
+    facts = facts or {}
+    if not facts.get("waits"):
+        return False
+    if role in (has_unacked or set()):
+        return False
+    if facts.get("order") or facts.get("post") or facts.get("active"):
+        return False
+    return str(probe).startswith("IDLE") or str(probe) == "ABSENT"
+
+
+def starvation_gaps(nodes):
+    """Issues whose tick flagged a starved lane, sorted. Pure."""
+    return sorted(n.get("issue") for n in (nodes or []) if n.get("starved"))
+
+
+def derive_room_phase(issue_closed, dev_done, audit_approved, qe_verified,
+                      impl_ready):
+    """RECON | IMPL | VERIFY | CLOSE-OUT | CLOSED from lane evidence. Pure.
+
+    CLOSED only when the issue is closed (never originated here); CLOSE-OUT
+    when the work is demonstrably finished (dev DONE + audit APPROVED);
+    VERIFY while a gated READY stands (or qe VERIFIED proves the era);
+    IMPL once the plan is approved; RECON otherwise."""
+    if issue_closed:
+        return "CLOSED"
+    if dev_done and audit_approved:
+        return "CLOSE-OUT"
+    if impl_ready or qe_verified:
+        return "VERIFY"
+    if audit_approved:
+        return "IMPL"
+    return "RECON"
+
+
+def room_pending_text(phase, dev_next, qe_next, audit_planned):
+    """One-line pending derived from the latest NEXTs. Pure (cap 200).
+
+    Lane-tag prefixes keep downstream consumers honest (the backlog swap
+    guard matches \\bdev\\b). No NEXTs on a virgin RECON names both lanes
+    explicitly so the swap guard still holds; other phaseless silences
+    report no NEXT rather than inventing one."""
+    if phase == "CLOSED":
+        return "CLOSED"
+    bits = []
+    if dev_next:
+        bits.append("dev: %s" % dev_next)
+    if qe_next:
+        bits.append("qe: %s" % qe_next)
+    if audit_planned and audit_planned != "-":
+        bits.append("audit: %s" % audit_planned)
+    if bits:
+        return ("%s: %s" % (phase, " | ".join(bits)))[:200]
+    if phase == "RECON":
+        return "RECON: awaiting dev PLAN + qe approach (no worker posts yet)"
+    return "%s: no lane NEXT on file" % phase
+
+
+def pending_refresh(cur_pending, new_pending, halt, halt_now):
+    """Refreshed pending text or the preserved current one. Pure.
+
+    Halt/manual rooms keep operator text unconditionally; otherwise the
+    derived text wins (even when identical, returning it is harmless)."""
+    if halt or halt_now or (cur_pending or "").startswith("MANUAL_INTERVENTION"):
+        return cur_pending
+    return new_pending
+
+
+def watchdog_invariant(starved, engine_live):
+    """Violation strings for the engine-heartbeat invariant. Pure.
+
+    Per-room tickers stay disarmed by doctrine; what must never happen is
+    starved lanes while the engine heartbeat is gone. Empty means held."""
+    if starved and not engine_live:
+        return ["engine heartbeat absent with starved lanes: %s"
+                % ",".join("#%d" % i for i in sorted(starved))]
+    return []
 
 
 def lane_facts_all(rooms_all, role):
@@ -2915,6 +3026,21 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if impl_ts:
             actions.append("WOULD stage testbed via qe-merge on fresh IMPL READY")
 
+    # Item C (#461): starvation invariant. After every gate had its chance,
+    # an IDLE lane still waiting on input with no order behind it gets a
+    # log-only NEED (the gate that should have fired owns the actual order
+    # — no filing, no ring, no double-drive). node["starved"] keeps the
+    # cycle from counting this as quiet.
+    _starved_roles = []
+    for _role in ("dev", "qe"):
+        _facts = lane_facts_from_boxes(boxes, st, _role)
+        if starvation_gap(_role, probes[_role], _facts, st, has_unacked):
+            _starved_roles.append(_role)
+            actions.append("NEED starvation #%d %s: %s, NEXT '%s', no order"
+                           % (issue, _role, probes[_role],
+                              (boxes[_role]["next"] or "")[:80]))
+    node["starved"] = _starved_roles
+
     failed = any(a.startswith(("RING-FAILED", "STATE-FAILED", "BRIEF-FAILED",
                                "POINTER-FAILED", "STATE-WRITE-FAILED"))
                  for a in actions)
@@ -2989,6 +3115,24 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s["ack_deadline"] = kept
             else:
                 s.pop("ack_deadline", None)
+        # Item C (#461): derived phase/state/pending. The audit bit rides
+        # only on an outstanding verdict need — an unconditional audit line
+        # would make audit_state_demand fire on every tick (S1: auditor
+        # churn). Halt/manual rooms keep operator text, always.
+        _dev_done = dev_done_ts(boxes["dev"]["all"])
+        _qe_verified = qe_verified_ts(boxes["qe"]["all"])
+        _phase = derive_room_phase(st.get("phase") == "CLOSED", _dev_done,
+                                   _approved, _qe_verified, impl_ts)
+        s["phase"] = _phase
+        if _phase == "CLOSE-OUT" and s.get("state") == "IN_PROGRESS":
+            s["state"] = "CLOSING"
+        _cur_pending = s.get("pending") or ""
+        _new_pending = room_pending_text(
+            _phase, boxes["dev"]["next"], boxes["qe"]["next"],
+            audit_note if need_verdict else None)
+        if _new_pending != _cur_pending:
+            s["pending"] = pending_refresh(_cur_pending, _new_pending,
+                                           s.get("halt"), halt_now)
         if wake_newest:
             s["wake_seen"] = wake_newest
         if halt_now:
@@ -3442,11 +3586,17 @@ def cycle_progress(all_actions, room_nodes, dry=False):
     Coordinator/coord.md lines are excluded by construction: BOXES covers
     only dev/qe/auditor and the watchdog fingerprint counts only
     FROM=(dev|qe|audit). ESCALATE/NEED alone are intentionally not progress.
-    Dry mode preserves legacy exit semantics (no watchdog run, no cursor
-    advance, so frozen signals must not pin quiet at 0).
+    Starved lanes (item C, #461) are progress: the engine named work and
+    must stay alive for it. Dry mode preserves legacy exit semantics (no
+    watchdog run, no cursor advance, so frozen signals must not pin quiet
+    at 0).
     """
     if cycle_productive(all_actions):
         return True
+    if not dry:
+        for node in room_nodes or []:
+            if node.get("starved"):
+                return True
     if dry:
         return False
     for node in room_nodes or []:
@@ -3770,6 +3920,10 @@ def cmd_tick(ctx, issues, interval):
             emit_summary(ctx, tracker, ctx.graph, "once (single cycle, interval 0)")
             break
         if cycle_progress(cycle_actions, cycle_nodes, dry=ctx.dry):
+            _starved_here = starvation_gaps(cycle_nodes)
+            if _starved_here:
+                ctx.log("NEED cycle starvation: %s (quiet suppressed)"
+                        % ",".join("#%d" % i for i in _starved_here))
             if quiet > 0:
                 ctx.log("quiet reset after %d quiet cycle(s)" % quiet)
             quiet = 0
@@ -4595,6 +4749,76 @@ def mode_self_test():
           bool(LANE_PEER_RE.search("waiting auditor plan-review")), True)
     check("lane-peer-no-false-positive",
           not LANE_PEER_RE.search("device driver working"), True)
+    _cboxes = {"dev": {"all": [], "coord_last": None, "next": "waiting auditor IMPL audit"},
+               "qe": {"all": [], "coord_last": None, "next": "idle :: waiting"}}
+    _cst = {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS"}
+    check("lane-facts-delegates",
+          lane_facts_from_boxes(_cboxes, _cst, "dev") == {"order": False, "post": False, "active": False, "waits": True}
+          and lane_facts_from_boxes(_cboxes, _cst, "qe")["waits"] is False, True)
+    _cwait = {"order": False, "post": False, "active": False, "waits": True}
+    check("starvation-gap-idle-wait",
+          starvation_gap("dev", "IDLE-static", _cwait, _cst, set()), True)
+    check("starvation-gap-absent-wait",
+          starvation_gap("qe", "ABSENT", dict(_cwait, waits=True), _cst, set()), True)
+    check("starvation-gap-excludes-order",
+          starvation_gap("dev", "IDLE-static", dict(_cwait, order=True), _cst, set()) is False, True)
+    check("starvation-gap-excludes-post",
+          starvation_gap("dev", "IDLE-static", dict(_cwait, post=True), _cst, set()) is False, True)
+    check("starvation-gap-excludes-active",
+          starvation_gap("dev", "IDLE-static", dict(_cwait, active=True), _cst, set()) is False, True)
+    check("starvation-gap-excludes-unacked",
+          starvation_gap("dev", "IDLE-static", _cwait, _cst, {"dev"}) is False, True)
+    check("starvation-gap-excludes-working",
+          starvation_gap("dev", "WORKING-markers", _cwait, _cst, set()) is False, True)
+    check("starvation-gap-excludes-halt",
+          starvation_gap("dev", "IDLE-static", _cwait, dict(_cst, halt=True), set()) is False, True)
+    check("starvation-gap-excludes-no-wait",
+          starvation_gap("dev", "IDLE-static", dict(_cwait, waits=False), _cst, set()) is False, True)
+    check("starvation-gap-excludes-other-state",
+          starvation_gap("dev", "IDLE-static", _cwait, dict(_cst, state="HOLD"), set()) is False, True)
+    check("starvation-gaps-sorted",
+          starvation_gaps([{"issue": 54}, {"issue": 240, "starved": ["qe"]},
+                           {"issue": 390, "starved": ["dev"]}]) == [240, 390], True)
+    check("phase-recon", derive_room_phase(False, None, False, None, None) == "RECON", True)
+    check("phase-impl", derive_room_phase(False, None, True, None, None) == "IMPL", True)
+    check("phase-verify-ready",
+          derive_room_phase(False, None, True, None, "2026-11-02T08:03:09Z") == "VERIFY", True)
+    check("phase-verify-qe",
+          derive_room_phase(False, None, False, "2026-11-02T08:03:09Z", None) == "VERIFY", True)
+    check("phase-close-out",
+          derive_room_phase(False, "2026-11-02T08:03:09Z", True, None, None) == "CLOSE-OUT", True)
+    check("phase-closed",
+          derive_room_phase(True, "2026-11-02T08:03:09Z", True, "2026-11-02T08:03:09Z", "2026-11-02T08:03:09Z") == "CLOSED", True)
+    check("pending-from-next",
+          room_pending_text("IMPL", "waiting IMPL order", "idle :: waiting", "ring audit lane") == "IMPL: dev: waiting IMPL order | qe: idle :: waiting | audit: ring audit lane", True)
+    check("pending-no-audit-bit",
+          room_pending_text("IMPL", "waiting IMPL order", None, None) == "IMPL: dev: waiting IMPL order", True)
+    check("pending-virgin-names-lanes",
+          room_pending_text("RECON", None, None, None) == "RECON: awaiting dev PLAN + qe approach (no worker posts yet)", True)
+    check("pending-closed", room_pending_text("CLOSED", "x", "y", "z") == "CLOSED", True)
+    check("pending-cap-200",
+          len(room_pending_text("IMPL", "x" * 300, None, None)) == 200, True)
+    check("pending-preserves-manual",
+          pending_refresh("MANUAL_INTERVENTION: x", "IMPL: y", False, False) == "MANUAL_INTERVENTION: x"
+          and pending_refresh("old", "new", True, False) == "old"
+          and pending_refresh("old", "new", False, True) == "old"
+          and pending_refresh("old", "new", False, False) == "new", True)
+    check("watchdog-invariant-engine-absent",
+          watchdog_invariant([240], False) == ["engine heartbeat absent with starved lanes: #240"], True)
+    check("watchdog-invariant-held-live",
+          watchdog_invariant([240], True) == [], True)
+    check("watchdog-invariant-held-clean",
+          watchdog_invariant([], False) == [], True)
+    check("cmd-tick-quiet-suppressed",
+          cycle_progress(["NOTE idle"], [{"verdict": {"kind": "UNCHANGED"}, "acked": 0, "starved": ["dev"]}], dry=False) is True
+          and cycle_progress(["NOTE idle"], [{"verdict": {"kind": "UNCHANGED"}, "acked": 0, "starved": ["dev"]}], dry=True) is False
+          and cycle_progress(["NOTE idle"], [{"verdict": {"kind": "UNCHANGED"}, "acked": 0}], dry=False) is False, True)
+    check("qe-verified-detected",
+          qe_verified_ts(["2026-11-02T08:03:09Z FROM=qe READY :: step-a VERIFIED"]) == "2026-11-02T08:03:09Z", True)
+    check("qe-verified-lowercase-ignored",
+          qe_verified_ts(["2026-11-02T08:03:09Z FROM=qe NOTE :: verified-ish"]) is None, True)
+    check("qe-verified-wrong-sender",
+          qe_verified_ts(["2026-11-02T08:03:09Z FROM=dev READY :: VERIFIED"]) is None, True)
     check("audit-state-live", audit_state(True) == "WORKING", True)
     check("audit-state-absent", audit_state(False) == "-", True)
     _appr = "2026-11-02T08:00:00Z FROM=audit DECISION :: APPROVED — step-a may proceed"

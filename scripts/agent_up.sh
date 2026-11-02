@@ -591,7 +591,7 @@ path, pairs = sys.argv[1], sys.argv[2:]
 ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
            "retry_budget", "state", "updated", "release_armed", "gh_notes"}
 STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
-          "CLOSED", "FEEDBACK"}
+          "CLOSED", "FEEDBACK", "CLOSING"}
 lock_path = os.path.join(os.path.dirname(path), "state.lock")
 with open(lock_path, "a+") as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
