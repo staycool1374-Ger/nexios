@@ -1780,6 +1780,46 @@ def session_rung(actions, sess, cycle_rung):
     return rang_session(actions, sess) or sess in (cycle_rung or set())
 
 
+def order_dedupe_action(stored_oid, rings, ready_ts):
+    """file | noop | reuse for a proposed repeat order. Pure.
+
+    noop when a standing READY covers the stored order (READY ts at/after
+    the stored order ts, or a READY stands with no stored order at all):
+    refiling would mint a duplicate oid + ACK cycle for work already done
+    (#461 room 240: 21:50 re-ring after the 21:44 READY stood). A stale
+    READY (older than the stored order) does not block: the order
+    supersedes it. reuse when the stored order is still live (re-ring it,
+    never mint a second oid). Keyed on the exact READY ts, not truthiness.
+    """
+    if ready_ts:
+        if not stored_oid:
+            return "noop"
+        stored_ts = stored_oid.split(":", 1)[1][:19] if ":" in stored_oid else ""
+        if not stored_ts or ready_ts[:19] >= stored_ts:
+            return "noop"
+        return "file"
+    if stored_oid:
+        val = (rings or {}).get(stored_oid)
+        if val is not None and val not in (-1, RING_ESCALATED):
+            return "reuse"
+    return "file"
+
+
+def impl_dedupe_note(stored_oid, rings, ready_ts, prev_dedup):
+    """(line, store) for a standing READY, or (None, None). Pure.
+
+    Transition-only: the order-dedup line emits once per READY ts while
+    the store keys the exact READY, so a newer READY re-opens evaluation.
+    The line carries no oid and the caller files no NOTE (log only)."""
+    if not ready_ts or order_dedupe_action(stored_oid, rings, ready_ts) != "noop":
+        return None, None
+    store = {"for": ready_ts}
+    if (prev_dedup or {}).get("for") == ready_ts:
+        return None, store
+    return ("order-dedup dev IMPL: READY @%s stands (no new oid)" % ready_ts,
+            store)
+
+
 def impl_promotion_due(dev_next, contacted, fresh_dev, approved, rings,
                        has_unacked, stored):
     """Post-RECON IMPL promotion gate (Gap A). Pure.
@@ -2507,13 +2547,25 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     # instead of waiting forever while pending names dev.
     stored_impl = st.get("dev_impl") or {}
     di_store = None
-    if stored_impl and stored_impl.get("next") != (boxes["dev"]["next"] or ""):
-        di_store = {}
+    dd_store = None
+    # Item E (#461): a standing (gated) READY covers any promotion — the
+    # NEXT-change reset below must not re-ring work already done (room 240:
+    # 21:50 re-ring after the 21:44 READY stood). Log once per READY ts,
+    # file nothing, ring nothing.
+    _dd_line, dd_store = impl_dedupe_note(stored_impl.get("oid"), rings,
+                                          impl_ts, st.get("impl_dedup"))
+    if _dd_line or dd_store:
+        if _dd_line:
+            actions.append(_dd_line)
+            events.append("dev-impl-deduped")
+    else:
+        if stored_impl and stored_impl.get("next") != (boxes["dev"]["next"] or ""):
+            di_store = {}
     _dev_next = boxes["dev"]["next"] or ""
     _approved = auditor_approved(boxes["auditor"]["all"], boxes["auditor"].get("full"))
-    if impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
-                          fresh.get("dev"), _approved, rings, has_unacked,
-                          stored_impl):
+    if not dd_store and impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
+                                          fresh.get("dev"), _approved, rings, has_unacked,
+                                          stored_impl):
         note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue)
         if di_oid in rings:
             actions.append("order deferred dev IMPL (oid collision)")
@@ -2540,8 +2592,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         else:
             actions.append("NOTE-FAILED dev IMPL #%d" % issue)
         events.append("dev-impl-order-filed")
-    elif impl_stalled(_dev_next, bool(boxes["dev"]["all"]), fresh.get("dev"),
-                      _approved, rings, has_unacked, stored_impl):
+    elif not dd_store and impl_stalled(_dev_next, bool(boxes["dev"]["all"]), fresh.get("dev"),
+                                      _approved, rings, has_unacked, stored_impl):
         actions.append("NEED dev #%d: IMPL order %s filed+resolved but NEXT unchanged (stale NEXT; no new order)"
                        % (issue, stored_impl.get("oid")))
 
@@ -2692,6 +2744,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s["dev_impl"] = di_store
             else:
                 s.pop("dev_impl", None)
+        if dd_store:
+            s["impl_dedup"] = dd_store
+        else:
+            s.pop("impl_dedup", None)
         if rn_store:
             s["ready_need"] = rn_store
         else:
@@ -4323,6 +4379,31 @@ def mode_self_test():
           impl_promotion_due(_iw, True, [], True, {}, set(), {"next": _iw, "oid": "dev:2026-11-02T08:00:00"}) is False, True)
     check("impl-due-stored-old-next",
           impl_promotion_due(_iw, True, [], True, {}, set(), {"next": "waiting IMPL order old", "oid": "dev:2026-11-02T07:00:00"}), True)
+    _r240 = "2026-11-02T21:44:17Z"
+    _o240 = "dev:2026-11-02T21:28:52"
+    check("dedupe-ready-stands",
+          order_dedupe_action(_o240, {}, _r240) == "noop", True)
+    check("dedupe-new-ready",
+          order_dedupe_action("dev:2026-11-02T21:50:02", {}, _r240) == "file", True)
+    check("dedupe-live-ring-reuse",
+          order_dedupe_action(_o240, {_o240: 1}, None) == "reuse", True)
+    check("dedupe-resolved-ring-files",
+          order_dedupe_action(_o240, {_o240: -1}, None) == "file", True)
+    _ddl, _dds = impl_dedupe_note(_o240, {}, _r240, {})
+    check("dedupe-noop-emits-no-oid",
+          _ddl is not None and "[oid" not in _ddl
+          and "no new oid" in _ddl and _dds == {"for": _r240}, True)
+    _ddl2, _dds2 = impl_dedupe_note(_o240, {}, _r240, {"for": _r240})
+    check("dedupe-transition-only",
+          _ddl2 is None and _dds2 == {"for": _r240}, True)
+    _ddl3, _dds3 = impl_dedupe_note(_o240, {}, "2026-11-02T22:36:21Z", {"for": _r240})
+    check("dedupe-newer-ready-reopens",
+          _ddl3 is not None and _dds3 == {"for": "2026-11-02T22:36:21Z"}, True)
+    check("dedupe-no-ready-no-note",
+          impl_dedupe_note(_o240, {}, None, {}) == (None, None), True)
+    check("impl-due-ready-ts-suppressed",
+          impl_promotion_due(_iw, True, [], True, {}, set(), {}) is True
+          and order_dedupe_action(None, {}, "2026-11-02T08:03:09Z") == "noop", True)
     _st = {"next": _iw, "oid": "dev:2026-11-02T08:00:00"}
     check("impl-stalled-acked-same-next",
           impl_stalled(_iw, True, [], True, {"dev:2026-11-02T08:00:00": -1}, set(), _st), True)
