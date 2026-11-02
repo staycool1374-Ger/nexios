@@ -172,7 +172,27 @@
       "tmux kill*": "deny",
       "tmux send-keys*": "deny",
       "tmux new-session*": "deny",
-      "scripts/agent_up.sh *": "deny"
+      "scripts/agent_up.sh": "deny",
+      "scripts/agent_up.sh setup*": "deny",
+      "scripts/agent_up.sh workers*": "deny",
+      "scripts/agent_up.sh up*": "deny",
+      "scripts/agent_up.sh run*": "deny",
+      "scripts/agent_up.sh audit*": "deny",
+      "scripts/agent_up.sh qe-merge*": "deny",
+      "scripts/agent_up.sh msg*": "deny",
+      "scripts/agent_up.sh consult*": "deny",
+      "scripts/agent_up.sh windows*": "deny",
+      "scripts/agent_up.sh state*": "deny",
+      "scripts/agent_up.sh comms-test*": "deny",
+      "scripts/agent_up.sh status*": "deny",
+      "scripts/agent_up.sh self-test*": "deny",
+      "scripts/agent_up.sh render-self-test*": "deny",
+      "scripts/agent_up.sh fence*": "deny",
+      "scripts/agent_up.sh approve*": "deny",
+      "scripts/agent_up.sh close*": "deny",
+      "scripts/agent_up.sh watch*": "deny",
+      "scripts/agent_up.sh clean*": "deny",
+      "scripts/agent_up.sh __*": "deny"
     },
     "alias": [
       "sil3_auditor.md"
