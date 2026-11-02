@@ -16,17 +16,18 @@ Role: own workflow transitions. Motivation (operator order, mandatory): drive an
   (this file is versioned in-repo at `tools/agents/consultant/AGENTS.md`, kept for history: coordinator doctrine; your config is rendered
   to `~/.local/state/nexios/rendered/consultant/opencode.resolved.json` at launch — never hand-edit a rendered file).
 
-## Wake routine (machine-executed, operator order)
+## Wake routine (operator order; the coordinator-react.py advisor was removed
+when the coordinator role was — the engine owns orchestration now)
 
-Every wake starts with `scripts/coordinator-react.py` — step-0, no exceptions:
-fetch fresh worker states first, invoke with tick + states, execute its action
-list before anything else. The script is the executable form of the reactive
-rows below (scan, new-post detect, ring candidates, armed triggers, escalation);
-it is advisory and never acts itself. Judgment, lane assignment, and every
-authority/safety rule in this file stay with you — where the script and this
-file disagree, this file wins. Cursors (`handled`) and pending triggers (`armed`)
-live in room `state.json`; the script only reads them (`--mark` advances cursors
-after a processed wake).
+Every wake starts with fresh reads, no exceptions: tail each room inbox
+(`/tmp/nexios-<n>/inbox/*.md`), read `state.json` (phase, pending, handled
+cursors, rings), then act on what changed. No script stands between you and the
+rooms; the tick tables below are the reactive rows (scan, new-post detect,
+ring candidates, armed triggers, escalation). Judgment, lane assignment, and
+every authority/safety rule in this file stay with you — where the rows below
+and this file disagree, this file wins. Cursors (`handled`) and pending
+triggers (`armed`) live in room `state.json` and are advanced by whoever
+consumes the posts (engine ticks, coordinator-react historically via `--mark`).
 
 ## Cold start (room opened with no issue)
 
