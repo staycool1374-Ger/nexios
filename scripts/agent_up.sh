@@ -1406,6 +1406,10 @@ mode_self_test() {
   chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$dc"
   chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$qc"
   chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--agent"' _ "$dc"
+  # in-process subagents are denied in every lane (no invisible forks)
+  for rr in dev qe auditor consultant; do
+    chk bash -c '"$0" fence show "$1" | grep -q "\"task\": \"deny\""' "$SCRIPT_DIR/agent_up.sh" "$rr"
+  done
   # __has-arg: session pane-tree argv probe (self-test seam only)
   tmux new-session -d -s "agentup-arg-$$" "sleep 30" >/dev/null
   chk "$SCRIPT_DIR/agent_up.sh" __has-arg "agentup-arg-$$" sleep

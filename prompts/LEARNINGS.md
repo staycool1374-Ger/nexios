@@ -8,6 +8,7 @@
 
 ## Active cautions (curated digest — read at session start; cap ~12 lines)
 
+- Lanes must not fork invisibly: deny in-process subagents at the session-map layer and pin it in the verifier — a spawned child with no pane, no ledger entry, and no doorbell is ungovernable (#453).
 - Status views must compute the next step, not print `-`: share the tick's predicates read-only; the first live run paid for itself by surfacing two HALTed rooms (#448).
 - Never escalate a lane you never contacted: virgin rooms get one tracked first-contact ring, and UNCHANGED only burns budget after a worker post exists (#449).
 - Orders carry ids on every surface (ring, NOTE, brief) and ACKs are matched explicitly; chatter never clears an armed order, and first-sight posts are actionable (#450).
@@ -1664,3 +1665,8 @@
 - **Learned:** the consultant's cage still described a read-only advisor two cutovers after the role changed — and the verifier's F4 exact-set plus a doc-grep were the only things that could catch the drift, since rendered maps are never hand-read. A permission delta that widens a role must rewrite the charter, the description, and the verifier constant in the same motion, or the prose lies while the cage opens.
 - **Adapted:** `{repo}/**` allow with deny-after-allow for `src{,/**}`, fence self-cage, render/verify/agent_up; `/tmp/*` role-scope extended; scoped gh (`issue/pr/release/api repos/*`) + git verbs; twin rewritten (WRITE/GITHUB sections, NEVER list, release duty without the operator's hands for tag/push/release); F9 (deny + ordering) with bite-proven self-test; runtime `coordinator/` home renamed to `consultant/` with move-if-absent migration; all live coordinator strings repointed, wire format (`FROM=coord`) and history untouched.
 - **Style re-face:** the fence is data with a renderer, a verifier, and a charter — change all three or change nothing; and a home-directory rename needs a migration path, not just a new variable.
+
+### #453 — deny in-process subagents in every lane (task: deny)
+- **Learned:** the fence had no opinion on subagent spawning, so any lane could fork invisible subprocesses outside the engine's view (no pane activity, no ledger, no doorbell) — the same stall class as #452's modals, one level removed. The fix belongs in the composed session map, not in twin files (twins define subagent cages; they don't govern spawning).
+- **Adapted:** base.json declares `"task": "deny"`; renderer composes it per role with DELTA_KEYS admission + fail-closed validation; F2 pins deny for all four roles with a bite-proven self-test; agent_up self-test asserts the rendered value per role. Orchestrator Task use stays explicitly out of scope (native API, AGENTS.md pipeline).
+- **Style re-face:** close the layer you're standing on — session maps govern spawning, twin files govern being spawned; never confuse the two, and never advertise a capability (scoped dicts) the gate would refuse.
