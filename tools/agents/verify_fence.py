@@ -10,7 +10,8 @@ PROPERTIES of what the renderer emits, per role:
   F1  the renderer succeeds for every role (fail-closed path is intact)
   F2  polarity is per-role: only dev has edit "*" allow; bash is a plain
       "allow" except the auditor, whose session bash must equal its agent.bash
-      map (launch.agent roles run the agent cage in-session)
+      map (launch.agent roles run the agent cage in-session); task is "deny"
+      for every role (no in-process subagents — lanes never fork invisibly)
   F3  every /tmp rule has its /private/tmp mirror and vice versa, same decision
       (macOS canonicalizes before matching: an unmirrored rule is dead)
   F4  no host-dependent path leaks: no /var/folders, no $HOME, no "{repo}"
@@ -93,6 +94,9 @@ def check_polarity(role, cfg):
     want = "allow" if role == "dev" else "deny"
     if edit.get("*") != want:
         fail("F2", "%s: edit '*' is %r, want %r" % (role, edit.get("*"), want))
+    task = cfg.get("permission", {}).get("task")
+    if task != "deny":
+        fail("F2", "%s: in-process subagents must stay denied (task is %r, want 'deny')" % (role, task))
     bash = cfg.get("permission", {}).get("bash")
     if isinstance(bash, dict):
         try:
@@ -358,6 +362,8 @@ def self_test():
                             lambda c: c.__setitem__("mcp", {"x": {}}))),
         ("F2 session bash", rejects(check_polarity, "auditor",
                                     lambda c: c["permission"].__setitem__("bash", {"*": "allow"}))),
+        ("F2 task deny", rejects(check_polarity, "dev",
+                                 lambda c: c["permission"].__setitem__("task", "allow"))),
         ("F9 src deny", rejects(check_src_readonly, "consultant",
                                 lambda c: c["permission"]["edit"].__setitem__(
                                     repo + "/src/**", "allow"), repo)),

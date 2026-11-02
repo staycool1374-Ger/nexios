@@ -27,10 +27,10 @@ import sys
 from typing import Any, NoReturn
 
 ROLES = ("dev", "qe", "auditor", "consultant")
-BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
+BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny", "task"}
 NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
 DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
-              "external_allow", "launch", "agent", "config_extra"}
+              "external_allow", "launch", "agent", "config_extra", "task"}
 LAUNCH_KEYS = {"cwd", "prompt", "agent", "auto"}
 AGENT_KEYS = {"name", "twin", "description", "mode", "model", "temperature",
               "bash", "alias"}
@@ -101,6 +101,8 @@ def validate_base(base):
     expect(isinstance(base.get("$schema"), str), "base $schema missing")
     expect(base.get("bash") in ("allow", "ask", "deny"), "base bash invalid")
     expect(base.get("external_default") in POLARITY, "base external_default invalid")
+    expect(base.get("task", "deny") in ("deny", "allow"),
+           "base task must be deny|allow")
     namespaces = base.get("namespaces")
     expect(isinstance(namespaces, list) and namespaces, "base namespaces missing")
     for ns in namespaces:
@@ -171,6 +173,9 @@ def validate_delta(delta, role):
         if "auto" in launch:
             expect(isinstance(launch["auto"], bool),
                    "launch.auto must be a boolean (got %r)" % (launch["auto"],))
+    if "task" in delta:
+        expect(delta["task"] in ("deny", "allow"),
+               "delta task must be deny|allow")
     if "agent" in delta:
         agent = delta["agent"]
         closed(agent, AGENT_KEYS, "delta agent")
@@ -268,6 +273,15 @@ def compose(base, delta, repo, role):
     for key in sorted(delta.get("edit_deny", [])):
         put(edit, expand(key, repo, role), "deny", "delta edit_deny")
     permission["edit"] = edit
+
+    # In-process subagents: denied by default so lanes cannot fork execution
+    # invisible to the engine (no pane activity, no ledger, no doorbell).
+    # A role delta may override with "deny" or "allow".
+    if "task" in delta:
+        permission["task"] = delta["task"]  # validated by validate_delta
+    else:
+        expect("task" in base, "base fence must declare the task default")
+        permission["task"] = base["task"]
 
     out["permission"] = permission
     for key, value in delta.get("config_extra", {}).items():
