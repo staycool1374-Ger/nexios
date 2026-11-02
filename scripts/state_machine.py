@@ -87,6 +87,7 @@ AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
 AUDIT_SLA_RERING_S = 900  # outstanding audit demand this old -> one extra ring (#461 B)
 AUDIT_SLA_ESCALATE_S = 1800  # outstanding audit demand this old -> NEED escalation (#461 B)
 ACK_SLA_S = 900  # worker orders carry ack-by <filed+900s>; overdue -> one nudge (#461 F)
+GH_CLOSE_POLL_TICKS = 5  # poll GitHub closure at most every N ticks in merge-close (#461 D)
 AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
 AUDIT_RETASK_S = 300  # re-ring a lost/idle auditor order after ~2 ticks
 AUDIT_TEARDOWN_TICKS = 2  # idle ticks after verdict handoff before teardown
@@ -813,7 +814,7 @@ def audit_queue_head(issue, demand, rooms_all):
         if iss == issue:
             continue
         ost = ost or {}
-        if ost.get("audit_pending") and not (ost.get("halt") or (ost.get("state") or "") in ("CLOSED", "HOLD")):
+        if ost.get("audit_pending") and not (ost.get("halt") or (ost.get("state") or "") in ("CLOSED", "HOLD", "CLOSING")):
             since = (ost["audit_pending"].get("since") or "9" * 20)
             if (since, iss) < best:
                 best = (since, iss)
@@ -1893,6 +1894,87 @@ def qe_verified_ts(posts):
         if VERIFIED_WORD_RE.search(m.group(4)):
             found = post[:20]
     return found
+
+
+def closeout_stage(issue_closed, dev_done, approved, qe_verified):
+    """impl | verify | merge-close | done for a room. Pure.
+
+    done only when GitHub is closed; merge-close once qe VERIFIED joins
+    dev DONE + audit APPROVED; verify once the work is terminal; impl
+    otherwise (close-out does not own it)."""
+    if issue_closed:
+        return "done"
+    if dev_done and approved:
+        return "merge-close" if qe_verified else "verify"
+    return "impl"
+
+
+def closeout_due(stage, trigger, stored, rings, lane_busy):
+    """Whether a close-out order must be filed now. Pure.
+
+    Keyed on the exact DONE trigger (a newer DONE re-opens); a stored
+    order for the same trigger+stage, a live stored oid, or a busy target
+    lane all suppress (no duplicate oids — item E doctrine)."""
+    if stage not in ("verify", "merge-close"):
+        return False
+    stored = stored or {}
+    if stored.get("for") == trigger and stored.get("stage") == stage:
+        return False
+    live_oid = stored.get("oid")
+    if live_oid and (rings or {}).get(live_oid) not in (None, -1, RING_ESCALATED):
+        return False
+    lane = "qe" if stage == "verify" else "dev"
+    for oid, val in (rings or {}).items():
+        if oid.startswith(lane + ":") and val not in (-1, RING_ESCALATED):
+            return False
+    return not lane_busy
+
+
+def closeout_branch(posts_all, full_lines, fields):
+    """Branch name for close-out orders, or None. Pure.
+
+    The gated READY artifacts first, then branch: in the DONE post body
+    (shape-checked: single token, no whitespace)."""
+    br = (fields or {}).get("branch") or ""
+    if br and not re.search(r"\s", br):
+        return br
+    best = None
+    for post in posts_all or []:
+        m = POST_RE.match(post)
+        if m and m.group(2) == "dev" and DONE_WORD_RE.search(m.group(4)):
+            best = post
+    if best is None:
+        return None
+    for line in post_body_lines(full_lines, best):
+        m = re.match(r"^\s*branch\s*:\s*(\S+)\s*$", line, re.I)
+        if m:
+            return m.group(1)
+    return None
+
+
+def closeout_order_text(issue, stage, branch, tip):
+    """Filed NOTE body for a close-out order (no oid; coord_note adds it). Pure."""
+    if stage == "verify":
+        return ("VERIFY #%d branch %s tip %s -- verify per prompts/qe.txt + room pending; "
+                "post VERIFIED with tip: + diff present: y|n; ACK it with post_update ref=<id> before starting"
+                % (issue, branch, tip))
+    return ("MERGE-CLOSE #%d: merge %s into main --no-ff, push, close the issue with closes #%d in the message, "
+            "post DONE merged <sha>; ACK it with post_update ref=<id> before starting"
+            % (issue, branch, issue))
+
+
+def merge_ready_ok(decision, qe_verified, qe_all, has_closeout, qe_evidence):
+    """Strict VERIFIED gate with legacy fallback. Pure.
+
+    Rooms already in close-out (or carrying qe tip/diff evidence) need an
+    explicit VERIFIED post; older rooms keep the READY-in-last-3 signal so
+    54-era progress never regresses before D fires."""
+    approved = bool(decision and "APPROVED" in decision)
+    if not approved:
+        return False
+    if has_closeout or (qe_evidence and (qe_evidence.get("tip") or qe_evidence.get("diff"))):
+        return bool(qe_verified)
+    return any("READY" in l for l in (qe_all or [])[-3:])
 
 
 def parse_qe_evidence(lines):
@@ -3027,8 +3109,73 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         events.append("qe-order-filed")
 
     dec = auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full"))
-    qe_ready = any("READY" in l for l in boxes["qe"]["all"][-3:])
-    node["merge_ready"] = bool(dec and "APPROVED" in dec and qe_ready)
+    _c_done = dev_done_ts(boxes["dev"]["all"])
+    _c_qv = qe_verified_ts(boxes["qe"]["all"])
+    _c_ev = qe_verify_evidence(boxes["qe"]["all"], boxes["qe"]["full"])
+    node["merge_ready"] = merge_ready_ok(dec, _c_qv, boxes["qe"]["all"],
+                                         bool(st.get("closeout")), _c_ev)
+
+    # Item D (#461): terminal close-out. dev DONE + audit APPROVED orders
+    # qe VERIFY, then dev MERGE-CLOSE; the engine never merges or closes
+    # anything itself. GitHub closure is polled sparingly and cached; the
+    # next tick derives CLOSED and retire_room runs its gates.
+    _c_approved = bool(dec and "APPROVED" in dec)
+    _c_stage = closeout_stage(bool(st.get("gh_closed")), _c_done, _c_approved, _c_qv)
+    co_store = None
+    ghc_store = False
+    if _c_stage in ("verify", "merge-close"):
+        _c_lane = "qe" if _c_stage == "verify" else "dev"
+        if closeout_due(_c_stage, _c_done, st.get("closeout"), rings, _c_lane in has_unacked):
+            _c_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"]["full"],
+                                        (gated or {}).get("fields"))
+            _c_tip = ((gated or {}).get("fields") or {}).get("tip")
+            _c_brok = False
+            if _c_branch:
+                _brc, _bro = ctx.run(["git", "rev-parse", "--verify", "--short", _c_branch],
+                                     timeout=30, cwd=ctx.dev_dir)
+                _c_brok = (_brc == 0)
+                if _c_brok and not _c_tip:
+                    _c_tip = (_bro.strip().splitlines() or [""])[0]
+            if not _c_branch or not _c_brok or not _c_tip:
+                actions.append("NEED closeout #%d: branch unverifiable (%s); name branch: in DONE or READY artifacts"
+                               % (issue, _c_branch or "none"))
+                events.append("closeout-branch-missing")
+            else:
+                _c_text = closeout_order_text(issue, _c_stage, _c_branch, _c_tip)
+                _c_note, _c_oid = coord_note(_c_lane, _c_text, ack_by=True)
+                if _c_oid in rings:
+                    actions.append("order deferred %s %s (oid collision)" % (_c_lane, _c_stage))
+                elif ctx.dry:
+                    actions.append("WOULD post %s order %s (oid %s)" % (_c_lane, _c_stage, _c_oid))
+                    rings[_c_oid] = 0
+                    has_unacked.add(_c_lane)
+                    file_order_deadline(ad_store, _c_oid)
+                    co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                elif append_box_note(room_dir, _c_lane, _c_note):
+                    rings[_c_oid] = 0
+                    has_unacked.add(_c_lane)
+                    file_order_deadline(ad_store, _c_oid)
+                    actions.append("order filed %s %s (oid %s)" % (_c_lane, _c_stage, _c_oid))
+                    co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                    if (_c_lane not in deaf and probes[_c_lane].startswith("IDLE")
+                            and not session_rung(actions, SESS[_c_lane], cycle["rung"])):
+                        _c_res = ring(ctx, SESS[_c_lane], _c_lane, "%s order" % _c_stage,
+                                      oid=_c_oid, issue=issue)
+                        actions.append(_c_res)
+                        if _c_res.startswith(("rang ", "WOULD ring ")):
+                            rings[_c_oid] = 1
+                else:
+                    actions.append("NOTE-FAILED %s %s #%d" % (_c_lane, _c_stage, issue))
+                events.append("closeout-order-filed")
+        if _c_stage == "merge-close" and not st.get("gh_closed") and not ctx.dry:
+            _c_base = co_store if co_store is not None else (st.get("closeout") or {})
+            if _c_base.get("for"):
+                _c_poll = int(_c_base.get("poll", 0) or 0) + 1
+                if _c_poll >= GH_CLOSE_POLL_TICKS:
+                    _c_poll = 0
+                    if github_issue_state(ctx, issue) == "CLOSED":
+                        ghc_store = True
+                co_store = dict(_c_base, poll=_c_poll)
     qm_store = None
     if not ctx.dry:
         if impl_ts:
@@ -3142,6 +3289,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s["ack_deadline"] = kept
             else:
                 s.pop("ack_deadline", None)
+        if isinstance(co_store, dict) and co_store:
+            s["closeout"] = co_store
+        if ghc_store:
+            s["gh_closed"] = True
         # Item C (#461): derived phase/state/pending. The audit bit rides
         # only on an outstanding verdict need — an unconditional audit line
         # would make audit_state_demand fire on every tick (S1: auditor
@@ -3151,8 +3302,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if not s.get("halt") and not halt_now:
             _dev_done = dev_done_ts(boxes["dev"]["all"])
             _qe_verified = qe_verified_ts(boxes["qe"]["all"])
-            _phase = derive_room_phase(st.get("phase") == "CLOSED", _dev_done,
-                                       _approved, _qe_verified, impl_ts)
+            _phase = derive_room_phase(bool(st.get("gh_closed") or st.get("phase") == "CLOSED"),
+                                       _dev_done, _approved, _qe_verified, impl_ts)
             s["phase"] = _phase
             if _phase == "CLOSE-OUT" and s.get("state") == "IN_PROGRESS":
                 s["state"] = "CLOSING"
@@ -4862,6 +5013,57 @@ def mode_self_test():
           qe_verified_ts(["2026-11-02T08:03:09Z FROM=qe NOTE :: verified-ish"]) is None, True)
     check("qe-verified-wrong-sender",
           qe_verified_ts(["2026-11-02T08:03:09Z FROM=dev READY :: VERIFIED"]) is None, True)
+    check("closeout-stage-verify",
+          closeout_stage(False, "2026-11-02T08:03:09Z", True, None) == "verify", True)
+    check("closeout-stage-merge-close",
+          closeout_stage(False, "2026-11-02T08:03:09Z", True, "2026-11-02T09:00:00Z") == "merge-close", True)
+    check("closeout-stage-done",
+          closeout_stage(True, "2026-11-02T08:03:09Z", True, "2026-11-02T09:00:00Z") == "done", True)
+    check("closeout-stage-impl",
+          closeout_stage(False, None, False, None) == "impl"
+          and closeout_stage(False, "2026-11-02T08:03:09Z", False, None) == "impl", True)
+    _co = {"for": "2026-11-02T08:03:09Z", "stage": "verify", "oid": "qe:2026-11-02T08:10:00"}
+    check("closeout-due-dedupe",
+          closeout_due("verify", "2026-11-02T08:03:09Z", _co, {"qe:2026-11-02T08:10:00": 1}, False) is False, True)
+    check("closeout-due-new-trigger",
+          closeout_due("verify", "2026-11-02T09:00:00Z", _co, {"qe:2026-11-02T08:10:00": -1}, False) is True, True)
+    check("closeout-due-live-ring",
+          closeout_due("verify", "2026-11-02T07:00:00Z", _co, {"qe:2026-11-02T08:10:00": 1}, False) is False, True)
+    check("closeout-due-lane-busy",
+          closeout_due("merge-close", "2026-11-02T08:03:09Z", {}, {}, True) is False, True)
+    check("closeout-due-impl-never",
+          closeout_due("impl", "2026-11-02T08:03:09Z", {}, {}, False) is False, True)
+    check("closeout-branch-fields",
+          closeout_branch([], [], {"branch": "fix/x"}) == "fix/x", True)
+    check("closeout-branch-done-body",
+          closeout_branch(["2026-11-02T08:03:09Z FROM=dev READY :: step DONE",
+                           "branch: fix/y"],
+                          ["2026-11-02T08:03:09Z FROM=dev READY :: step DONE",
+                           "branch: fix/y"], {}) == "fix/y", True)
+    check("closeout-branch-none",
+          closeout_branch(["2026-11-02T08:03:09Z FROM=dev NOTE :: x"],
+                          ["2026-11-02T08:03:09Z FROM=dev NOTE :: x"], {}) is None, True)
+    check("closeout-order-text-verify",
+          "VERIFY #99 branch fix/x tip abc1234" in closeout_order_text(99, "verify", "fix/x", "abc1234")
+          and "diff present" in closeout_order_text(99, "verify", "fix/x", "abc1234"), True)
+    check("closeout-order-text-merge-close",
+          "MERGE-CLOSE #99" in closeout_order_text(99, "merge-close", "fix/x", "abc1234")
+          and "closes #99" in closeout_order_text(99, "merge-close", "fix/x", "abc1234"), True)
+    check("merge-ready-strict-verified",
+          merge_ready_ok("2026-11-02T08:00:00Z DECISION: APPROVED", "2026-11-02T09:00:00Z", [], True, None) is True, True)
+    check("merge-ready-strict-unverified",
+          merge_ready_ok("x APPROVED y", None, ["2026-11-02T08:03:09Z FROM=qe READY :: v"], True, None) is False, True)
+    check("merge-ready-legacy-ready",
+          merge_ready_ok("x APPROVED y", None, ["2026-11-02T08:03:09Z FROM=qe READY :: v"], False, None) is True, True)
+    check("merge-ready-legacy-no-ready",
+          merge_ready_ok("x APPROVED y", None, ["2026-11-02T08:03:09Z FROM=qe NOTE :: v"], False, None) is False, True)
+    check("merge-ready-evidence-strict",
+          merge_ready_ok("x APPROVED y", None, ["2026-11-02T08:03:09Z FROM=qe READY :: v"], False, {"tip": "abc1234", "diff": None}) is False, True)
+    check("merge-ready-unapproved",
+          merge_ready_ok("x NEED y", "2026-11-02T09:00:00Z", [], True, None) is False, True)
+    check("closeout-state-closing",
+          derive_room_phase(False, "2026-11-02T08:03:09Z", True, None, None) == "CLOSE-OUT"
+          and derive_room_phase(True, "2026-11-02T08:03:09Z", True, "2026-11-02T09:00:00Z", None) == "CLOSED", True)
     check("audit-state-live", audit_state(True) == "WORKING", True)
     check("audit-state-absent", audit_state(False) == "-", True)
     _appr = "2026-11-02T08:00:00Z FROM=audit DECISION :: APPROVED — step-a may proceed"
