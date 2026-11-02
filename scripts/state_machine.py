@@ -1431,6 +1431,266 @@ def dev_impl_ready_ts(posts):
     return found
 
 
+READY_TIP_RE = re.compile(r"^[0-9a-f]{7,40}$", re.I)
+READY_SHA_RE = re.compile(r"^[0-9a-f]{64}$", re.I)
+READY_STAT_RE = re.compile(
+    r"(\d+)\s+files?(?:\s+changed)?,?\s*(\d+)\s+insertions?|(\d+)\s*/\s*(\d+)", re.I)
+READY_FIELD_RE = re.compile(
+    r"^\s*(branch|patch|tip|stat|symbols|sha256)\s*:\s*(.+?)\s*$", re.I)
+QE_DIFF_RE = re.compile(r"diff\s+present\s*:\s*(y|n|yes|no)\b", re.I)
+DONE_WORD_RE = re.compile(r"\bDONE\b")
+
+
+def post_body_lines(full_lines, post, max_lines=40):
+    """Body lines of one post: lines after its header until the next POST header. Pure.
+
+    Worker posts are multi-line (header + STATE:/NEXT:/free-text body);
+    boxes[box]["all"] holds headers only, ["full"] holds every line."""
+    try:
+        idx = list(full_lines or []).index(post)
+    except ValueError:
+        return []
+    out = []
+    for line in list(full_lines)[idx + 1:idx + 1 + max_lines]:
+        if POST_RE.match(line):
+            break
+        out.append(line)
+    return out
+
+
+def newest_impl_ready_post(posts):
+    """Newest dev POST header that is READY and names IMPL, or None. Pure."""
+    best = None
+    for post in posts or []:
+        m = POST_RE.match(post)
+        if not m or m.group(2) != "dev" or m.group(3) != "READY":
+            continue
+        if "IMPL" not in post.upper():
+            continue
+        best = post
+    return best
+
+
+def parse_ready_artifacts(lines):
+    """Artifact fields claimed by an IMPL READY post block. Pure.
+
+    Grammar (case-insensitive keys, one field per line, first wins):
+      branch: <no-space>  patch: <repo-relative>  tip: <7-40 hex>
+      stat: <n> files?, <n> insertions? | <n>/<n>
+      symbols: <up to 8 space/comma separated>  sha256: <64 hex, optional>
+    Returns None when the block carries no artifact field at all (pure
+    free-text claim); otherwise raw values (validation is gaps' job)."""
+    fields = {}
+    for line in lines or []:
+        m = READY_FIELD_RE.match(line)
+        if not m:
+            continue
+        key = m.group(1).lower()
+        if key not in fields:
+            fields[key] = m.group(2)
+    return fields or None
+
+
+def ready_artifact_gaps(fields, probes):
+    """Unverifiable-claim tokens for an IMPL READY field set. Pure.
+
+    probes is None (shape-only) or the ready_probe dict. Tokens feed the
+    re-post NEED verbatim; an empty list means the claim verifies."""
+    if not fields:
+        return ["no-artifacts"]
+    gaps = []
+    branch = fields.get("branch") or ""
+    if not branch:
+        gaps.append("missing-branch")
+    elif re.search(r"\s", branch) or len(branch) > 120:
+        gaps.append("bad-branch")
+    patch = fields.get("patch") or ""
+    if not patch:
+        gaps.append("missing-patch")
+    elif (patch.startswith("/") or patch.startswith("\\")
+          or ".." in patch.split("/") or "\\" in patch
+          or re.search(r"\s", patch) or len(patch) > 120):
+        gaps.append("bad-patch")
+    tip = fields.get("tip") or ""
+    if not tip:
+        gaps.append("missing-tip")
+    elif not READY_TIP_RE.match(tip):
+        gaps.append("bad-tip")
+    stat = fields.get("stat") or ""
+    if not stat:
+        gaps.append("missing-stat")
+    elif not READY_STAT_RE.search(stat):
+        gaps.append("bad-stat")
+    syms = re.findall(r"[^\s,]+", fields.get("symbols") or "")
+    if not (fields.get("symbols") or "").strip():
+        gaps.append("missing-symbols")
+    elif len(syms) > 8 or any(len(s) > 120 for s in syms):
+        gaps.append("bad-symbols")
+    if "sha256" in fields and not READY_SHA_RE.match(fields["sha256"] or ""):
+        gaps.append("bad-sha256")
+    if probes is None:
+        return gaps
+    tip_shape_ok = "missing-tip" not in gaps and "bad-tip" not in gaps
+    patch_shape_ok = "missing-patch" not in gaps and "bad-patch" not in gaps
+    # Scratch fallback (#410): a worktree file matching the claimed digest
+    # substitutes for tip resolution (uncommitted work is verifiable).
+    worktree_ok = bool(patch_shape_ok and probes.get("patch_worktree_sha_ok"))
+    if tip_shape_ok and not probes.get("tip_resolves") and not worktree_ok:
+        gaps.append("tip-unresolvable")
+    if (tip_shape_ok and patch_shape_ok and probes.get("tip_resolves")
+            and not probes.get("patch_at_tip") and not worktree_ok):
+        if fields.get("sha256"):
+            gaps.append("patch-sha-mismatch")
+        else:
+            gaps.append("patch-absent-at-tip")
+    found = probes.get("symbols_found") or {}
+    for sym in syms[:8]:
+        if not found.get(sym):
+            gaps.append("symbols-missing:%s" % sym[:60])
+    return gaps
+
+
+def ready_gate_verdict(fields, probes, terminal_closeout):
+    """ok | grandfathered | reject for an IMPL READY claim. Pure.
+
+    Grandfather covers only the terminal case (dev DONE + audit APPROVED):
+    an old artifact-less READY stands because the work is demonstrably
+    finished, not because the claim verified."""
+    if not ready_artifact_gaps(fields, probes):
+        return "ok"
+    if terminal_closeout:
+        return "grandfathered"
+    return "reject"
+
+
+def ready_probe(ctx, fields):
+    """Read-only git verification of a READY claim in the dev checkout. I/O.
+
+    Only rev-parse / cat-file -e / grep run (never status/checkout/fetch);
+    worktree reads stay inside the checkout (relative patch, no ..);
+    every failure degrades to False (caller NEEDs, never crashes)."""
+    probes = {"tip_resolves": False, "patch_at_tip": False,
+              "patch_worktree_sha_ok": False, "symbols_found": {}}
+    if not fields:
+        return probes
+    tip = fields.get("tip") or ""
+    patch = fields.get("patch") or ""
+    safe_patch = bool(patch) and not patch.startswith(("/", "\\")) \
+        and ".." not in patch.split("/") and "\\" not in patch
+    syms = re.findall(r"[^\s,]+", fields.get("symbols") or "")[:8]
+    if tip and READY_TIP_RE.match(tip):
+        rc, _ = ctx.run(["git", "rev-parse", "--verify", "%s^{commit}" % tip],
+                        timeout=30, cwd=ctx.dev_dir)
+        probes["tip_resolves"] = (rc == 0)
+    if probes["tip_resolves"] and safe_patch:
+        rc, _ = ctx.run(["git", "cat-file", "-e", "%s:%s" % (tip, patch)],
+                        timeout=30, cwd=ctx.dev_dir)
+        probes["patch_at_tip"] = (rc == 0)
+    if not probes["patch_at_tip"] and safe_patch and fields.get("sha256"):
+        try:
+            with open(os.path.join(ctx.dev_dir, patch), "rb") as f:
+                digest = hashlib.sha256(f.read()).hexdigest()
+            probes["patch_worktree_sha_ok"] = (digest == fields["sha256"].lower())
+        except OSError:
+            probes["patch_worktree_sha_ok"] = False
+    if syms:
+        if probes["tip_resolves"]:
+            for sym in syms:
+                rc, _ = ctx.run(["git", "grep", "-w", "-F", "-e", sym, tip, "--"],
+                                timeout=30, cwd=ctx.dev_dir)
+                probes["symbols_found"][sym] = (rc == 0)
+        elif safe_patch:
+            try:
+                with open(os.path.join(ctx.dev_dir, patch), "rb") as f:
+                    text = f.read().decode("utf-8", "replace")
+                for sym in syms:
+                    probes["symbols_found"][sym] = bool(
+                        re.search(r"\b%s\b" % re.escape(sym), text))
+            except OSError:
+                pass
+    return probes
+
+
+def latest_gated_ready(all_posts, full_lines, probes, terminal_closeout=False):
+    """Newest dev IMPL READY post with its artifact gate applied. Pure.
+
+    probes is the ready_probe dict for the newest claim (test seam: pass
+    canned probes; the tick passes live probes). None when no dev IMPL
+    READY post exists; else {"ts","post","fields","gaps","verdict"} with
+    ts shaped like dev_impl_ready_ts (post[:20])."""
+    best = newest_impl_ready_post(all_posts)
+    if best is None:
+        return None
+    fields = parse_ready_artifacts([best] + post_body_lines(full_lines, best))
+    gaps = ready_artifact_gaps(fields, probes)
+    return {"ts": best[:20], "post": best, "fields": fields, "gaps": gaps,
+            "verdict": ready_gate_verdict(fields, probes, terminal_closeout)}
+
+
+def gate_impl_ready(ctx, all_posts, full_lines, terminal_closeout):
+    """Newest dev IMPL READY with live git probes. I/O (read-only git)."""
+    best = newest_impl_ready_post(all_posts)
+    if best is None:
+        return None
+    fields = parse_ready_artifacts([best] + post_body_lines(full_lines, best))
+    probes = ready_probe(ctx, fields)
+    gaps = ready_artifact_gaps(fields, probes)
+    return {"ts": best[:20], "post": best, "fields": fields, "gaps": gaps,
+            "verdict": ready_gate_verdict(fields, probes, terminal_closeout)}
+
+
+def dev_done_ts(posts):
+    """Newest dev DONE declaration ts (post[:20]), or None. Pure.
+
+    Terminal DONE is an all-caps word on the POST header (case-sensitive):
+    lowercase "done" (as in "IMPL done") is progress prose, not a terminal
+    declaration. Reused by the close-out gate (item D)."""
+    found = None
+    for post in posts or []:
+        m = POST_RE.match(post)
+        if not m or m.group(2) != "dev":
+            continue
+        if DONE_WORD_RE.search(m.group(4)):
+            found = post[:20]
+    return found
+
+
+def parse_qe_evidence(lines):
+    """tip: + diff present: y|n from a QE verdict block. Pure."""
+    tip, diff = None, None
+    for line in lines or []:
+        if tip is None:
+            m = re.search(r"\btip\s*:\s*([0-9a-f]{7,40})\b", line, re.I)
+            if m:
+                tip = m.group(1)
+        if diff is None:
+            m = QE_DIFF_RE.search(line)
+            if m:
+                diff = m.group(1).lower()
+    if tip is None and diff is None:
+        return None
+    return {"tip": tip, "diff": diff}
+
+
+def qe_verify_evidence(all_posts, full_lines):
+    """Newest qe READY post with its evidence completeness. Pure.
+
+    None when no qe READY post exists; else {"ts","tip","diff",
+    "complete"} with complete iff tip: and diff present: both filed."""
+    best = None
+    for post in all_posts or []:
+        m = POST_RE.match(post)
+        if not m or m.group(2) != "qe" or m.group(3) != "READY":
+            continue
+        best = post
+    if best is None:
+        return None
+    ev = parse_qe_evidence([best] + post_body_lines(full_lines, best))
+    return {"ts": best[:20], "tip": (ev or {}).get("tip"),
+            "diff": (ev or {}).get("diff"),
+            "complete": bool(ev and ev.get("tip") and ev.get("diff"))}
+
+
 def qe_baseline_posted(posts):
     """Whether any qe post carries a baseline tally. Pure.
 
@@ -2052,11 +2312,32 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     if ack_failures == 3:
         actions.append("NEED ack-discipline: 3 orders reached RING_LIMIT without ACK; refresh briefs/wake lanes")
 
-    # Uncapped IMPL READY detector (G4): the capped fresh window can drop
-    # a READY, and the qe own-box order must fire on the newest one.
+    # Artifact-gated IMPL READY (item A, #461): a free-text READY claims
+    # nothing until branch:/patch:/tip:/stat:/symbols: verify at the tip.
+    #Terminal DONE + audit APPROVED grandfathers old artifact-less READYs.
     # The peer-pointer skip below covers exactly the filed-or-due set (S3):
     # a NOTE-FAILED retry stays due (qo_store persists only on success).
-    impl_ts = dev_impl_ready_ts(fresh_all.get("dev", []))
+    term_closeout = bool(dev_done_ts(boxes["dev"]["all"])
+                         and auditor_approved(boxes["auditor"]["all"],
+                                              boxes["auditor"].get("full")))
+    gated = gate_impl_ready(ctx, boxes["dev"]["all"], boxes["dev"]["full"],
+                            term_closeout)
+    impl_ts = gated["ts"] if gated and gated["verdict"] in ("ok", "grandfathered") else None
+    rn_store = None
+    if gated and gated["verdict"] == "reject":
+        prev_rn = st.get("ready_need") or {}
+        if prev_rn.get("for") != gated["ts"] or prev_rn.get("gaps") != gated["gaps"]:
+            actions.append("NEED dev #%d: IMPL READY @%s unverifiable (%s); re-post with branch:/patch:/tip:/stat:/symbols: lines + optional sha256:" % (issue, gated["ts"], ", ".join(gated["gaps"]) or "unknown"))
+            events.append("ready-ungated")
+        rn_store = {"for": gated["ts"], "gaps": gated["gaps"]}
+    qe_ev = qe_verify_evidence(boxes["qe"]["all"], boxes["qe"]["full"])
+    qee_store = None
+    if impl_ts and qe_ev and not qe_ev["complete"]:
+        prev_qee = st.get("qe_evidence_need") or {}
+        if prev_qee.get("for") != qe_ev["ts"]:
+            actions.append("NEED qe #%d: verdict @%s missing tip:/diff-present: evidence (advisory; verification continues)" % (issue, qe_ev["ts"]))
+            events.append("qe-evidence-missing")
+        qee_store = {"for": qe_ev["ts"]}
     qe_order_for = (st.get("qe_order") or {}).get("for")
     qe_will_file = bool(impl_ts and qe_order_due(qe_order_for, impl_ts))
     if qe_baseline_due(boxes["qe"]["all"], impl_ts):
@@ -2394,6 +2675,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s["dev_impl"] = di_store
             else:
                 s.pop("dev_impl", None)
+        if rn_store:
+            s["ready_need"] = rn_store
+        else:
+            s.pop("ready_need", None)
+        if qee_store:
+            s["qe_evidence_need"] = qee_store
+        else:
+            s.pop("qe_evidence_need", None)
         if wake_newest:
             s["wake_seen"] = wake_newest
         if halt_now:
@@ -3728,6 +4017,149 @@ def mode_self_test():
           dev_impl_ready_ts([_rdy, "2026-11-02T08:20:00Z FROM=dev READY :: IMPL done"]) == "2026-11-02T08:20:00Z", True)
     check("impl-ready-wrong-sender-ignored",
           dev_impl_ready_ts(["2026-11-02T08:03:09Z FROM=qe READY :: IMPL done"]) is None, True)
+    _full = ["2026-11-02T08:03:09Z FROM=dev READY :: IMPL step-a READY",
+             "STATE: working :: step-a done",
+             "branch: fix/461-a",
+             "patch: scripts/state_machine.py",
+             "tip: a4d6fdf26",
+             "stat: 3 files, 120 insertions",
+             "symbols: tick_room, ready_probe",
+             "NEXT: waiting auditor IMPL audit",
+             "2026-11-02T09:00:00Z FROM=dev NOTE :: later"]
+    _rdy_post = _full[0]
+    check("ready-parse-body-window",
+          post_body_lines(_full, _rdy_post) == _full[1:8], True)
+    check("ready-parse-body-stops-at-next-post",
+          "2026-11-02T09:00:00Z FROM=dev NOTE :: later" not in post_body_lines(_full, _rdy_post), True)
+    check("ready-parse-body-missing-post",
+          post_body_lines(_full, "2026-11-02T00:00:00Z FROM=dev NOTE :: nope") == [], True)
+    _fields = parse_ready_artifacts([_rdy_post] + post_body_lines(_full, _rdy_post))
+    check("ready-parse-all",
+          _fields == {"branch": "fix/461-a", "patch": "scripts/state_machine.py",
+                      "tip": "a4d6fdf26", "stat": "3 files, 120 insertions",
+                      "symbols": "tick_room, ready_probe"}, True)
+    check("ready-parse-no-artifacts",
+          parse_ready_artifacts(["STATE: x", "NEXT: waiting auditor"]) is None, True)
+    _part = parse_ready_artifacts(["branch: b", "patch: p.py", "tip: abc1234", "stat: 1/2"])
+    check("ready-parse-missing-symbols",
+          "missing-symbols" in ready_artifact_gaps(_part, None), True)
+    check("ready-parse-absolute-patch",
+          "bad-patch" in ready_artifact_gaps(parse_ready_artifacts(
+              ["branch: b", "patch: /abs/p.py", "tip: abc1234", "stat: 1/2",
+               "symbols: s"]), None), True)
+    check("ready-parse-bad-tip",
+          "bad-tip" in ready_artifact_gaps(parse_ready_artifacts(
+              ["branch: b", "patch: p.py", "tip: xyz", "stat: 1/2",
+               "symbols: s"]), None), True)
+    check("ready-parse-stat-slash",
+          ready_artifact_gaps(parse_ready_artifacts(
+              ["branch: b", "patch: p.py", "tip: abc1234", "stat: 10/25",
+               "symbols: s"]), None) == [], True)
+    _ok_probes = {"tip_resolves": True, "patch_at_tip": True,
+                  "patch_worktree_sha_ok": False,
+                  "symbols_found": {"tick_room": True, "ready_probe": True}}
+    check("ready-gate-ok",
+          ready_gate_verdict(_fields, _ok_probes, False) == "ok", True)
+    check("ready-gate-missing-field",
+          ready_gate_verdict(_part, None, False) == "reject"
+          and ready_artifact_gaps(_part, None) == ["missing-symbols"], True)
+    _vf = {"branch": "b", "patch": "p.py", "tip": "abc1234", "stat": "1/2",
+           "symbols": "s"}
+    _mm = {"tip_resolves": True, "patch_at_tip": False,
+           "patch_worktree_sha_ok": False, "symbols_found": {"s": True}}
+    check("ready-gate-patch-absent",
+          "patch-absent-at-tip" in ready_artifact_gaps(_vf, _mm)
+          and ready_gate_verdict(_vf, _mm, False) == "reject", True)
+    check("ready-gate-untracked-no-sha",
+          ready_artifact_gaps(_vf, _mm) == ["patch-absent-at-tip"], True)
+    _sm = {"tip_resolves": True, "patch_at_tip": True,
+           "patch_worktree_sha_ok": False,
+           "symbols_found": {"tick_room": True, "ready_probe": False}}
+    check("ready-gate-symbol-missing",
+          "symbols-missing:ready_probe" in ready_artifact_gaps(_fields, _sm)
+          and ready_gate_verdict(_fields, _sm, False) == "reject", True)
+    check("ready-gate-terminal-grandfather",
+          ready_gate_verdict(None, None, True) == "grandfathered", True)
+    check("ready-gate-terminal-reject",
+          ready_gate_verdict(None, None, False) == "reject", True)
+    _lg = latest_gated_ready([_rdy_post], _full, _ok_probes, False) or {}
+    check("ready-latest-ok",
+          _lg.get("ts") == "2026-11-02T08:03:09Z" and _lg.get("verdict") == "ok", True)
+    check("ready-latest-none",
+          latest_gated_ready(["2026-11-02T08:03:09Z FROM=dev NOTE :: x"],
+                             _full, None, False) is None, True)
+    _two = ["2026-11-02T08:03:09Z FROM=dev READY :: IMPL first",
+            "2026-11-02T08:20:00Z FROM=dev READY :: IMPL second"]
+    _lg2 = latest_gated_ready(_two, _two, None, False) or {}
+    check("ready-latest-newest",
+          _lg2.get("ts") == "2026-11-02T08:20:00Z" and _lg2.get("verdict") == "reject"
+          and _lg2.get("gaps") == ["no-artifacts"], True)
+    check("dev-done-detected",
+          dev_done_ts(["2026-11-02T08:03:09Z FROM=dev READY :: step-a DONE + APPROVED"]) == "2026-11-02T08:03:09Z", True)
+    check("dev-done-lowercase-ignored",
+          dev_done_ts(["2026-11-02T08:20:00Z FROM=dev READY :: IMPL done"]) is None, True)
+    check("dev-done-wrong-sender",
+          dev_done_ts(["2026-11-02T08:03:09Z FROM=qe READY :: DONE"]) is None, True)
+    _qfull = ["2026-11-02T08:03:09Z FROM=qe READY :: VERIFY done",
+              "tip: a4d6fdf26", "diff present: y"]
+    _qev = qe_verify_evidence(["2026-11-02T08:03:09Z FROM=qe READY :: VERIFY done"], _qfull) or {}
+    check("qe-evidence-ok",
+          _qev.get("complete") and _qev.get("tip") == "a4d6fdf26" and _qev.get("diff") == "y", True)
+    _qpart = qe_verify_evidence(["2026-11-02T08:03:09Z FROM=qe READY :: VERIFY done"],
+                                ["2026-11-02T08:03:09Z FROM=qe READY :: VERIFY done",
+                                 "diff present: n"]) or {}
+    check("qe-evidence-partial-no-tip",
+          _qpart.get("complete") is False and _qpart.get("tip") is None
+          and _qpart.get("diff") == "n", True)
+    check("qe-evidence-none",
+          qe_verify_evidence(["2026-11-02T08:03:09Z FROM=qe NOTE :: x"], []) is None, True)
+
+    def _git_run(argv, timeout=120, cwd=None):
+        try:
+            pr = subprocess.run(argv, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL,
+                                timeout=timeout, text=True, cwd=cwd)
+            return pr.returncode, pr.stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return 1, ""
+    _repo = default_repo()
+    _pctx = SimpleNamespace(dev_dir=_repo, run=_git_run)
+    _prc, _phead = _git_run(["git", "rev-parse", "HEAD"], timeout=30, cwd=_repo)
+    _phead = (_phead or "").strip()
+    _pfull = {"tip": _phead, "patch": "scripts/state_machine.py",
+              "symbols": "tick_room"}
+    _pprobes = ready_probe(_pctx, _pfull)
+    check("ready-probe-tip-resolves",
+          bool(_phead) and _pprobes["tip_resolves"], True)
+    check("ready-probe-patch-at-tip", _pprobes["patch_at_tip"], True)
+    check("ready-probe-symbol-found",
+          _pprobes["symbols_found"].get("tick_room"), True)
+    _bad = ready_probe(_pctx, {"tip": "deadbee", "patch": "scripts/state_machine.py",
+                               "symbols": "zzz_no_such_symbol_xyz"})
+    check("ready-probe-bad-tip", _bad["tip_resolves"] is False, True)
+    _miss = ready_probe(_pctx, {"tip": _phead, "patch": "no/such/file.xyz",
+                                "symbols": "zzz_no_such_symbol_xyz"})
+    check("ready-probe-patch-missing", _miss["patch_at_tip"] is False, True)
+    check("ready-probe-symbol-missing",
+          _miss["symbols_found"].get("zzz_no_such_symbol_xyz") is False, True)
+    _td = tempfile.mkdtemp(prefix="rdy-")
+    with open(os.path.join(_td, "note.txt"), "w") as _f:
+        _f.write("alpha tick_room beta\n")
+    with open(os.path.join(_td, "note.txt"), "rb") as _f:
+        _dg = hashlib.sha256(_f.read()).hexdigest()
+    _tctx = SimpleNamespace(dev_dir=_td, run=_git_run)
+    _wfields = {"branch": "fix/461-a", "tip": "deadbee", "patch": "note.txt",
+                "stat": "1/1", "sha256": _dg, "symbols": "tick_room"}
+    _wprobes = ready_probe(_tctx, _wfields)
+    check("ready-probe-worktree-sha-ok", _wprobes["patch_worktree_sha_ok"], True)
+    check("ready-probe-worktree-symbol",
+          _wprobes["symbols_found"].get("tick_room"), True)
+    check("ready-probe-sha-mismatch",
+          ready_probe(_tctx, dict(_wfields, sha256="0" * 64))["patch_worktree_sha_ok"] is False, True)
+    check("ready-gate-worktree-ok",
+          ready_artifact_gaps(_wfields, _wprobes) == [], True)
+    os.unlink(os.path.join(_td, "note.txt"))
+    os.rmdir(_td)
     _idle = dict(role="dev", probe="IDLE-static", deaf_lanes=set(), unacked_lanes=set(),
                  fresh_posts=[], declared_next=None, rang=False, recreating=False,
                  pending="provisioned from issue text")
