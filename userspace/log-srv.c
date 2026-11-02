@@ -76,7 +76,13 @@ int main(void) {
             break;
         }
         (void)g_dropped;
-        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
+        // Reply to the requester (owner_id carried in the RPC body):
+        // send_sync_bounded waits on the REQUESTER's own queue with a
+        // sender match, so a reply addressed to PID 1 (init) is a dead
+        // letter and every RPC times out (issue #51 step-b evidence:
+        // live PD + logprobe BIND -ENOSYS). Mirrors the iocd args[0]
+        // requester convention.
+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
     }
     return 0;
 }
