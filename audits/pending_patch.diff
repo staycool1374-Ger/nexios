@@ -1,701 +1,190 @@
 diff --git a/scripts/state_machine.py b/scripts/state_machine.py
-index 114d5924f..9999f2e0e 100644
+index 9999f2e0e..8d6c1431c 100644
 --- a/scripts/state_machine.py
 +++ b/scripts/state_machine.py
-@@ -37,7 +37,7 @@ import subprocess
- import sys
- import time
+@@ -971,11 +971,85 @@ def dev_busy(rings, declared_next):
  
--VERSION = "state-machine v1 2026-10-31 (consultant cutover engine)"
-+VERSION = "state-machine v2 2026-11-02 (engine fast-path orders)"
- 
- ROOMS_GLOB = "/tmp/nexios-*"
- BOXES = ("dev", "qe", "auditor")
-@@ -62,6 +62,9 @@ ACK_RE = re.compile(r"^ACK:\s*(\S+)\s*$")
- # Order-id grammar — keep byte-identical with _OID_RE in scripts/nexios-bin/mcp-worker-state.py.
- _TS19 = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
- ACK_OID_RE = re.compile(r"^(?:(dev|qe):" + _TS19 + r"|next:(dev|qe):[0-9a-f]{8}|peer:(dev|qe):" + _TS19 + r"|first:(dev|qe))$")
-+# WAKE lines live in inbox/coord.md (worker->engine doorbell record). The tick
-+# sweep never read them (G1): load_wakes() surfaces them as wake-<role> events.
-+WAKE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z FROM=(dev|qe|auditor|audit|coord) WAKE :: (.*)$")
+ def session_rung(actions, sess, cycle_rung):
+     """True iff sess already rang this tick: this room's actions, or an
+-    earlier room's in the shared cycle (dev/qe sessions are shared, G2).
+-    Pure."""
++    earlier room's in the shared cycle (dev/qe sessions ring once per
++    cycle, G2). Pure."""
+     return rang_session(actions, sess) or sess in (cycle_rung or set())
  
  
- def ref_lane(ref):
-@@ -419,7 +422,9 @@ def load_boxes(room_dir):
-         posts = worker_posts(all_lines)
-         tail12 = all_lines[-12:]
-         st, nx, cx = last_state_next(tail12)
--        coord = [l for l in tail12 if " FROM=coord NOTE" in l]
-+        # Full-box scan: a filed order must not fall out of the tail window
-+        # before the next tick's unacked loop sees it (G1 follow-through).
-+        coord = [l for l in all_lines if " FROM=coord NOTE" in l]
-         boxes[box] = {"all": posts, "full": all_lines, "tail": tail12, "state": st, "ctx": cx,
-                       "next": nx, "coord_last": coord[-1][:160] if coord else None}
-     return boxes
-@@ -438,6 +443,44 @@ def new_posts(boxes, handled, limit=5):
-     return fresh
- 
- 
-+def parse_wakes(lines, since=None):
-+    """WAKE lines from inbox/coord.md. Pure (G1).
-+
-+    Returns (wakes, newest): wakes are entries strictly newer than since,
-+    newest is the max ts over ALL parsed lines (so the wake_seen cursor
-+    advances past already-consumed lines too). ts is post[:19] shaped."""
-+    parsed = []
-+    for line in lines or []:
-+        m = WAKE_RE.match(line)
-+        if not m:
-+            continue
-+        parsed.append({"ts": m.group(1), "role": m.group(2),
-+                       "text": m.group(3)})
-+    parsed.sort(key=lambda w: w["ts"])
-+    newest = parsed[-1]["ts"] if parsed else None
-+    if since is None:
-+        return parsed, newest
-+    return [w for w in parsed if w["ts"] > since], newest
++# Lane STATE vocabulary (#457): IDLE (pane idle, waits for new work),
++# WORKING (#n) (pane active with a task — #n is the issue the lane is
++# ACTUALLY engaged in across rooms, which may differ from the row's
++# room), BLOCKED (#n) (pane active, nothing outstanding anywhere, and
++# this room's NEXT waits on input). Auditor: WORKING/- (no session when
++# its work is done).
++LANE_WAITS_RE = re.compile(r"waiting|parked|blocked|hold|await|resume", re.I)
++LANE_PEER_RE = re.compile(
++    r"\b(auditor|audit|qe|dev|verdict|review|approv|order|ring|ready|input|feedback)\b", re.I)
 +
 +
-+def load_wakes(room_dir, since=None):
-+    """(wakes, newest) from a room's inbox/coord.md. Read-only (G1)."""
-+    return parse_wakes(read_lines(os.path.join(room_dir, "inbox", "coord.md")),
-+                       since)
++def room_lane_facts(room_dir, rst, role):
++    """(order, post, active, waits) engagement facts for one lane. Pure
++    apart from box reads: order = unacked coord order here; post = posts
++    newer than the handled cursor (first sight reports no fresh, mirroring
++    new_posts); active = non-idle NEXT that is not an input-wait; waits =
++    NEXT names an input-wait (audit/qe/dev verdicts, orders, rings)."""
++    boxes = load_boxes(room_dir)
++    box = boxes.get(role) or {}
++    st = rst or {}
++    handled = st.get("handled") or {}
++    coord_last = box.get("coord_last")
++    order = bool(coord_last and order_outstanding(
++        role, coord_last, box.get("all", []),
++        st.get("rings") or {}, st.get("ack_since")))
++    since = handled.get(role)
++    post = bool(since is not None and any(
++        p[:20] > since[:20] for p in box.get("all", [])))
++    nxt = box.get("next") or ""
++    waits = bool(LANE_WAITS_RE.search(nxt) and LANE_PEER_RE.search(nxt))
++    active = bool(nxt) and not nxt.startswith("idle") and not waits
++    return {"order": order, "post": post, "active": active, "waits": waits}
 +
 +
-+def resurface_posts(posts, wake_ts):
-+    """Last post at-or-before a WAKE, bounded to 1 (G1 one-shot re-drive).
-+
-+    A WAKE whose post is already at/below the handled cursor would
-+    otherwise be logged and dropped; resurfacing re-evaluates it exactly
-+    once, keyed by the additive wake_seen cursor."""
-+    if not wake_ts:
-+        return []
-+    prior = [p for p in (posts or []) if p[:19] <= wake_ts]
-+    return prior[-1:] if prior else []
++def lane_facts_all(rooms_all, role):
++    """{issue: fact-dict} for one lane across rooms. Read-only."""
++    out = {}
++    for iss, rdir, rst in (rooms_all or []):
++        out[iss] = room_lane_facts(rdir, rst, role)
++    return out
 +
 +
- def pane_capture(ctx, sess):
-     rc, out = tmux(ctx, "capture-pane", "-p", "-t", sess)
-     if rc != 0:
-@@ -582,7 +625,8 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
-             if append_box_note(room_dir, target, note):
-                 acted.append("audit verdict handed to %s" % target)
-                 if target in SESS and fast_probe(ctx, SESS[target]).startswith("IDLE"):
--                    acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid))
-+                    acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid,
-+                                      issue=issue))
-             else:
-                 acted.append("HAND-BACK-FAILED %s" % target)
-     if any("audit verdict handed to" in a or "WOULD hand audit verdict" in a for a in acted):
-@@ -645,10 +689,15 @@ def dev_blocked_on_qe(dev_next):
-         re.search(r"waiting\b.*\bqe\b|waiting on.*qe|blocked.*qe", dev_next, re.I))
- 
- 
--def pick_backlog(rooms_here, current_issue):
--    """Lowest other non-halted, non-closed issue as backlog target."""
-+def pick_backlog(rooms_here, current_issue, exclude=None):
-+    """Lowest other non-halted, non-closed issue as backlog target.
++def lane_state(probe, here, facts, issue):
++    """Display STATE for a worker lane cell. Pure.
 +
-+    exclude holds issues already assigned or busy this cycle: never hand
-+    out two targets in one cycle, and never target a room whose dev lane
-+    is busy (G5)."""
-+    excl = exclude or set()
-     for iss, _rdir, st in rooms_here:
--        if iss == current_issue:
-+        if iss == current_issue or iss in excl:
-             continue
-         if st.get("halt"):
-             continue
-@@ -759,15 +808,26 @@ def retire_room(ctx, issue, room_dir, st, boxes=None):
-     return acts, True
- 
- 
--def ring(ctx, sess, box, text, channel="inbox", oid=None):
-+def ring_line(box, text, oid=None, issue=None):
-+    """Doorbell pointer text. Pure.
-+
-+    issue=None keeps the legacy bare-box format byte-identical; with an
-+    issue the pointer is room-scoped so shared dev/qe sessions cannot
-+    misdeliver it (G2)."""
-+    suffix = (" [oid %s]" % oid) if oid else ""
-+    if issue is None:
-+        return "inbox: %s%s -- read inbox/%s.md" % (text, suffix, box)
-+    return "inbox [#%s/%s]: %s%s -- read inbox/%s.md" % (issue, box, text, suffix, box)
++    here: this room's fact-dict; facts: {issue: fact-dict} across rooms;
++    issue: this row's room. The (#n) suffix is the issue the lane is
++    ACTUALLY engaged in: unacked order here first, then the lowest
++    engaged issue across rooms (order > fresh post > active NEXT), then
++    this room's input-wait as BLOCKED. ABSENT/BLOCKED-modal pass through
++    (session-level truth); IDLE never carries a suffix."""
++    probe = probe or ""
++    if probe == "ABSENT" or probe.startswith("BLOCKED-modal"):
++        return probe
++    if probe.startswith("IDLE"):
++        return "IDLE"
++    if (here or {}).get("order"):
++        return "WORKING (#%d)" % issue
++    for kind in ("order", "post", "active"):
++        cands = [iss for iss, f in (facts or {}).items()
++                 if (f or {}).get(kind)]
++        if cands:
++            return "WORKING (#%d)" % min(cands)
++    if (here or {}).get("waits"):
++        return "BLOCKED (#%d)" % issue
++    return "WORKING"
 +
 +
-+def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None):
-     """Doorbell. Idle sessions only (caller checks). inbox = box pointer,
-     notes = consultant channel (logs/consultant-notes.md). oid, when given,
-     is the ledger order id the worker must ACK (post_update ref=<oid>)."""
-     if channel == "notes":
-         line = "notes: %s -- read logs/consultant-notes.md" % text
-     else:
--        line = "inbox: %s%s -- read inbox/%s.md" % (
--            text, (" [oid %s]" % oid) if oid else "", box)
-+        line = ring_line(box, text, oid=oid, issue=issue)
-     if ctx.dry:
-         return "WOULD ring %s: %s" % (sess, line)
-     rc, out = ctx.run([ctx.agent_up, "msg", sess, line], timeout=60)
-@@ -853,6 +913,69 @@ def need_idle_missing(role, has_unacked, probe, fresh_posts, declared_next, rang
-     return not declared_next or declared_next.startswith("idle")
- 
- 
-+def dev_impl_ready_ts(posts):
-+    """Newest dev IMPL READY post ts (post[:20]), or None. Pure.
-+
-+    Mirrors the qe-merge detector (READY + IMPL in body) with the sender
-+    check the inline lambda lacks: only a dev post counts. Uncapped input
-+    expected (fresh_all): the capped fresh window can drop a READY."""
-+    found = None
-+    for post in posts or []:
-+        m = POST_RE.match(post)
-+        if not m or m.group(2) != "dev" or m.group(3) != "READY":
-+            continue
-+        if "IMPL" not in post.upper():
-+            continue
-+        found = post[:20]
-+    return found
-+
-+
-+def backlog_idle_due(role, probe, deaf_lanes, unacked_lanes, fresh_posts,
-+                     declared_next, rang, recreating, pending):
-+    """Generic WORKING->WAITING queue check for an idle lane (G5).
-+
-+    True only when the lane is idle, contactable, order-free, fresh-post
-+    free, unrung, not being recreated — and the current room's pending
-+    does not still name dev (never swap away from a room that still owes
-+    dev work)."""
-+    if role in deaf_lanes or role in unacked_lanes:
-+        return False
-+    if not str(probe).startswith("IDLE"):
-+        return False
-+    if fresh_posts:
-+        return False
-+    if rang or recreating:
-+        return False
-+    if declared_next and not declared_next.startswith("idle"):
-+        return False
-+    if re.search(r"\bdev\b", pending or "", re.I):
-+        return False
-+    return True
-+
-+
-+def qe_order_due(qe_order_for, impl_ts):
-+    """Whether the explicit qe own-box order (G4) must be filed now."""
-+    return bool(impl_ts) and qe_order_for != impl_ts
-+
-+
-+def dev_busy(rings, declared_next):
-+    """Whether a room's dev lane is busy: non-idle NEXT, or a live dev
-+    order (filed or rung; acked and escalated do not count). Pure."""
-+    if declared_next and not str(declared_next).startswith("idle"):
-+        return True
-+    for oid, val in (rings or {}).items():
-+        if oid.startswith("dev:") and val not in (-1, RING_ESCALATED):
-+            return True
-+    return False
-+
-+
-+def session_rung(actions, sess, cycle_rung):
-+    """True iff sess already rang this tick: this room's actions, or an
-+    earlier room's in the shared cycle (dev/qe sessions are shared, G2).
-+    Pure."""
-+    return rang_session(actions, sess) or sess in (cycle_rung or set())
++def audit_state(live):
++    """Auditor lane cell: WORKING while the session exists, else '-'.
++    Pure. The auditor has no session when its work is done."""
++    return "WORKING" if live else "-"
 +
 +
  def peer_mention(text, peer):
      """Whole-word, case-insensitive peer mention in a post body. Pure."""
      return bool(re.search(r"\b%s\b" % re.escape(peer), text or "", re.I))
-@@ -970,20 +1093,28 @@ def first_contact_due(role, has_posts, brief_present, probe, deaf, rings):
-     return True, oid
+@@ -1682,6 +1756,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     ctx.graph[str(issue)] = node
  
- 
--def ring_peer_handoff(ctx, peer, sender, ts, oid):
-+def ring_peer_handoff(ctx, peer, sender, ts, oid, issue=None):
-     """Doorbell peer, pointing at the SENDER box holding the READY."""
-     return ring(ctx, SESS[peer], sender,
--                "peer handoff from %s READY %s" % (sender, ts), oid=oid)
-+                "peer handoff from %s READY %s" % (sender, ts), oid=oid,
-+                issue=issue)
-+
- 
-+def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
-+    """One deterministic tick for one room. Returns graph node + table rows.
- 
--def tick_room(ctx, issue, room_dir, st, rooms_all):
--    """One deterministic tick for one room. Returns graph node + table rows."""
-+    cycle is the shared per-sweep dict {"rung": set(), "busy": set()}:
-+    rung holds sessions already doorbelled by earlier rooms (shared
-+    dev/qe sessions ring once per cycle), busy holds issues already
-+    assigned as backlog targets this cycle."""
-     node = collections.OrderedDict()
-     node["issue"] = issue
-     node["tick"] = ctx.tick_seq
-     actions = []
-     events = []
-     acked = []
-+    if cycle is None:
-+        cycle = {"rung": set(), "busy": set()}
- 
-     if st.get("halt"):
-         node["halted"] = True
-@@ -1009,6 +1140,26 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-     boxes = load_boxes(room_dir)
-     handled = st.get("handled") or {}
-     fresh = new_posts(boxes, handled)
-+    # G1: WAKE lines are durable demand, not tick-exhaust. Surface each as
-+    # an event, and resurface the post it answers so a WAKE whose post is
-+    # already at/below the handled cursor is re-evaluated exactly once.
-+    _ROLE_BOX = {"dev": "dev", "qe": "qe", "auditor": "auditor",
-+                 "audit": "auditor"}
-+    wakes, wake_newest = load_wakes(room_dir, st.get("wake_seen"))
-+    for wake in wakes:
-+        events.append("wake-%s" % wake["role"])
-+        actions.append("WAKE %s %s %s" % (wake["role"], wake["ts"],
-+                                          wake["text"][:100]))
-+    if wakes:
-+        _latest_wake = {}
-+        for wake in wakes:
-+            _wbox = _ROLE_BOX.get(wake["role"])
-+            if _wbox:
-+                _latest_wake[_wbox] = wake["ts"]
-+        for _wbox, _wts in _latest_wake.items():
-+            for _post in resurface_posts(boxes[_wbox]["all"], _wts):
-+                if _post not in fresh[_wbox]:
-+                    fresh[_wbox].append(_post)
-     for box in BOXES:
-         for post in fresh[box]:
-             m = POST_RE.match(post)
-@@ -1131,6 +1282,16 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-         if re.search(RESUME_RE, nx, re.I):
-             resume_now[role] = "next:%s:%s" % (role, hashlib.md5(nx.encode()).hexdigest()[:8])
-     fresh_all = new_posts(boxes, handled, limit=0)  # 0 = no cap: no ACK lost
-+    if wakes:
-+        _latest_wake_all = {}
-+        for wake in wakes:
-+            _wbox = _ROLE_BOX.get(wake["role"])
-+            if _wbox:
-+                _latest_wake_all[_wbox] = wake["ts"]
-+        for _wbox, _wts in _latest_wake_all.items():
-+            for _post in resurface_posts(boxes[_wbox]["all"], _wts):
-+                if _post not in fresh_all[_wbox]:
-+                    fresh_all[_wbox].append(_post)
-     for role in LANES:
-         for post in ack_scan_posts(role, boxes, handled, fresh_all.get(role, [])):
-             ack_verdict, ack_ref = match_ack(post_ack(boxes[role]["full"], post),
-@@ -1240,11 +1401,22 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-     if ack_failures == 3:
-         actions.append("NEED ack-discipline: 3 orders reached RING_LIMIT without ACK; refresh briefs/wake lanes")
- 
-+    # Uncapped IMPL READY detector (G4): the capped fresh window can drop
-+    # a READY, and the qe own-box order must fire on the newest one.
-+    # The peer-pointer skip below covers exactly the filed-or-due set (S3):
-+    # a NOTE-FAILED retry stays due (qo_store persists only on success).
-+    impl_ts = dev_impl_ready_ts(fresh_all.get("dev", []))
-+    qe_order_for = (st.get("qe_order") or {}).get("for")
-+    qe_will_file = bool(impl_ts and qe_order_due(qe_order_for, impl_ts))
-     for peer in LANES:
-         if not ack_since:
-             for oid in peer_handoff_done_oids(boxes, peer, rings):
-                 rings[oid] = -1
-                 events.append("peer-handoff-done-%s" % peer)
-+        if peer == "qe" and impl_ts and (qe_will_file or qe_order_for == impl_ts):
-+            # The explicit qe own-box order (below) supersedes the peer
-+            # pointer this tick: one doorbell to nexios-qe, room-scoped.
-+            continue
-         offers = peer_ready_offers(boxes, peer)
-         peer_posts = boxes[peer]["all"]
-         peer_ts = peer_posts[-1][:19] if peer_posts else ""
-@@ -1252,10 +1424,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-         if pick is None:
-             continue
-         act = peer_handoff_action(pick, probes[peer], peer in deaf,
--                                  rang_session(actions, SESS[peer]),
-+                                  session_rung(actions, SESS[peer], cycle["rung"]),
-                                   peer in recreating_peers(actions))
-         if act == "ring":
--            res = ring_peer_handoff(ctx, peer, pick["sender"], pick["ts"], pick["oid"])
-+            res = ring_peer_handoff(ctx, peer, pick["sender"], pick["ts"],
-+                                    pick["oid"], issue=issue)
-             actions.append(res)
-             if res.startswith(("rang ", "WOULD ring ")):
-                 rings[pick["oid"]] = 1
-@@ -1275,36 +1448,82 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-         due, oid = first_contact_due(role, bool(boxes[role]["all"]),
-                                      brief_present, probes[role],
-                                      role in deaf, rings)
--        if due and not rang_session(actions, SESS[role]):
-+        if due and not session_rung(actions, SESS[role], cycle["rung"]):
-             res = ring(ctx, SESS[role], role,
--                       "first brief -- read prompts/%s.txt" % role, oid=oid)
-+                       "first brief -- read prompts/%s.txt" % role, oid=oid,
-+                       issue=issue)
-             actions.append(res)
-             if res.startswith(("rang ", "WOULD ring ")):
-                 rings[oid] = 1
-             events.append("first-contact-%s" % role)
- 
-+    # G3 + G5: backlog with ack. Both the blocked-on-qe swap and the
-+    # generic WORKING->IDLE queue check file an acked order (coord NOTE in
-+    # dev.md + room-scoped ring with oid); the backlog brief carries the
-+    # order id from here on.
-+    def _busy_rooms():
-+        # Cached per cycle: other rooms' dev-busy state is static for the
-+        # sweep; recomputing per room is O(n^2) box re-reads (S3).
-+        if "busy_rooms" not in cycle:
-+            out = set()
-+            for _iss, _rdir, _rst in (rooms_all or []):
-+                if _iss == issue:
-+                    continue
-+                if dev_busy((_rst or {}).get("rings"),
-+                            load_boxes(_rdir)["dev"].get("next")):
-+                    out.add(_iss)
-+            cycle["busy_rooms"] = out
-+        return cycle["busy_rooms"]
-+
-+    backlog_target = None
-     if dev_blocked_on_qe(dev_next) and not probes["qe"].startswith("IDLE"):
--        target = pick_backlog(rooms_all, issue)
--        if target is None:
-+        backlog_target = pick_backlog(rooms_all, issue,
-+                                      exclude=cycle["busy"] | _busy_rooms())
-+        if backlog_target is None:
-             actions.append("NEED backlog empty: dev waits on qe, nothing to swap to")
-+    elif backlog_idle_due("dev", probes["dev"], deaf, has_unacked,
-+                          fresh.get("dev"),
-+                          boxes["dev"]["next"],
-+                          session_rung(actions, SESS["dev"], cycle["rung"]),
-+                          "dev" in recreating_peers(actions),
-+                          st.get("pending")):
-+        backlog_target = pick_backlog(rooms_all, issue,
-+                                      exclude=cycle["busy"] | _busy_rooms())
-+        if backlog_target is None:
-+            actions.append("NEED backlog empty: dev idle, no other room to brief")
-+    if backlog_target is not None:
-+        target = backlog_target
-+        brief = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
-+                 "issue: %d\nbranch: none yet (read-only until recalled)\n"
-+                 "Task: read-only recon of #%d per its room pending/next; "
-+                 "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
-+"Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment carries [oid <id>] — ACK it the same way.\n"
-+                 "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY — read inbox/dev.md\"\n"
-+                 % (target, issue, target, target, target))
-+        actions.append(write_brief(ctx, room_dir,
-+                                   "dev-%d-backlog.txt" % target, brief))
-+        note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target))
-+        if ctx.dry:
-+            actions.append("WOULD post backlog order #%d (oid %s)" % (target, boid))
+     rows = []
++    # Lane engagement across rooms (#457): the (#n) suffix is the issue
++    # the lane is ACTUALLY working, which may differ from this row.
++    # Recomputed per room tick (small files; always current, no cache).
++    lane_facts = {"dev": lane_facts_all(rooms_all, "dev"),
++                  "qe": lane_facts_all(rooms_all, "qe")}
+     for role, sess in (("dev", SESS["dev"]), ("qe", SESS["qe"]),
+                        ("audit", SESS["audit"])):
+         if role == "audit":
+@@ -1689,12 +1768,15 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             activity = ("report %s" % os.path.basename(rep)) if rep else (
+                 auditor_decision(boxes["auditor"]["all"]) or "no verdict")
+             planned = "collect verdict" if need_verdict else "-"
+-            state = "LIVE" if audit_session_live(ctx) else "ABSENT"
++            state = audit_state(audit_session_live(ctx))
          else:
--            brief = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
--                     "issue: %d\nbranch: none yet (read-only until recalled)\n"
--                     "Task: read-only recon of #%d per its room pending/next; "
--                     "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
--"Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment itself has no id.\n"
--                     "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
--                     % (target, issue, target, target, target))
--            actions.append(write_brief(ctx, room_dir,
--                                       "dev-%d-backlog.txt" % target, brief))
--            if ("dev" not in deaf and probes["dev"].startswith("IDLE")
--                    and not rang_session(actions, SESS["dev"])):
--                actions.append(ring(ctx, SESS["dev"], "dev",
--                                    "backlog #%d ready" % target))
--            events.append("backlog-swap #%d" % target)
-+            if append_box_note(room_dir, "dev", note):
-+                rings[boid] = 0
-+                actions.append("order filed dev backlog #%d (oid %s)" % (target, boid))
-+                if ("dev" not in deaf and probes["dev"].startswith("IDLE")
-+                        and not session_rung(actions, SESS["dev"], cycle["rung"])):
-+                    res = ring(ctx, SESS["dev"], "dev",
-+                               "backlog #%d ready" % target, oid=boid,
-+                               issue=issue)
-+                    actions.append(res)
-+                    if res.startswith(("rang ", "WOULD ring ")):
-+                        rings[boid] = 1
-+            else:
-+                actions.append("NOTE-FAILED dev backlog order #%d" % target)
-+        cycle["busy"].update((issue, target))
-+        events.append("backlog-swap #%d" % target)
+             activity = boxes[role]["state"] or boxes[role]["next"] or "-"
+             planned = next((a for a in actions
+                             if role in a or SESS[role] in a), "-")
+-            state = probes[role] + (" %d%%" % ctxp[role] if ctxp.get(role) is not None else "")
++            base = lane_state(probes[role],
++                              lane_facts[role].get(issue, {}),
++                              lane_facts[role], issue)
++            state = base + (" %d%%" % ctxp[role] if ctxp.get(role) is not None else "")
+         rows.append((role, state, activity, planned))
+     return node, rows
  
-     for role in ("dev", "qe"):
--        rang = rang_session(actions, SESS[role])
-+        rang = session_rung(actions, SESS[role], cycle["rung"])
-         if need_idle_missing(role, has_unacked, probes[role],
-                              fresh.get(role), boxes[role]["next"], rang):
-             actions.append("NEED %s idle with no briefed work (no invention)" % role)
-@@ -1332,22 +1551,48 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-             parts = do.split()
-             if len(parts) >= 3:
-                 actions.append(ring(ctx, parts[1], parts[2],
--                                    "armed trigger [%s]" % arm.get("on", "")))
-+                                    "armed trigger [%s]" % arm.get("on", ""),
-+                                    issue=issue))
+@@ -2491,6 +2573,8 @@ def cmd_status(ctx, issues):
+     if not rooms:
+         print("no rooms")
+         return 2
++    facts = {"dev": lane_facts_all(rooms, "dev"),
++             "qe": lane_facts_all(rooms, "qe")}
+     for issue, rdir, st in rooms:
+         boxes = load_boxes(rdir)
+         rows = []
+@@ -2500,13 +2584,14 @@ def cmd_status(ctx, issues):
+                 rep = latest_audit_report(ctx, issue)
+                 activity = ("report %s" % os.path.basename(rep)) if rep else (
+                     auditor_decision(boxes["auditor"]["all"]) or "no verdict")
+-                state = "LIVE" if audit_session_live(ctx) else "ABSENT"
++                state = audit_state(audit_session_live(ctx))
+                 rows.append((role, state, activity,
+                              status_planned_audit(ctx, issue, boxes)))
              else:
-                 actions.append("NEED malformed armed do: %s" % do)
-         else:
-             actions.append("ARMED [%s] fired: %s" % (arm.get("on", ""), do[:120]))
-         events.append("armed-fired")
- 
-+    # G4: dev IMPL READY -> explicit qe own-box order (coord NOTE in qe.md
-+    # + room-scoped ring with oid), not just the peer pointer. The qe-merge
-+    # staging below keeps its own dedupe; both share impl_ts.
-+    # qo_store persists ONLY on a filed note: a NOTE-FAILED retry needs
-+    # qe_order_due true next tick, and the peer-pointer skip below stays
-+    # exactly the filed-or-due set (S3).
-+    qo_store = None
-+    if qe_will_file:
-+        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts))
-+        if ctx.dry:
-+            actions.append("WOULD post qe order IMPL READY (oid %s)" % qoid)
-+        else:
-+            if append_box_note(room_dir, "qe", note):
-+                rings[qoid] = 0
-+                actions.append("order filed qe IMPL READY (oid %s)" % qoid)
-+                qo_store = {"for": impl_ts}
-+                if ("qe" not in deaf and probes["qe"].startswith("IDLE")
-+                        and not session_rung(actions, SESS["qe"], cycle["rung"])):
-+                    res = ring(ctx, SESS["qe"], "qe", "IMPL READY verification",
-+                               oid=qoid, issue=issue)
-+                    actions.append(res)
-+                    if res.startswith(("rang ", "WOULD ring ")):
-+                        rings[qoid] = 1
-+            else:
-+                actions.append("NOTE-FAILED qe IMPL READY #%d" % issue)
-+        events.append("qe-order-filed")
-+
-     dec = auditor_decision(boxes["auditor"]["all"])
-     qe_ready = any("READY" in l for l in boxes["qe"]["all"][-3:])
-     node["merge_ready"] = bool(dec and "APPROVED" in dec and qe_ready)
-     qm_store = None
-     if not ctx.dry:
--        impls = [q for q in fresh.get("dev", [])
--                 if (lambda m: m and m.group(3) == "READY" and "IMPL" in q.upper())(POST_RE.match(q))]
--        if impls:
--            ts = impls[-1][:20]
-+        if impl_ts:
-+            ts = impl_ts
-             if (st.get("qe_merge") or {}).get("for") != ts:
-                 qd = ctx.qe_dir
-                 if not qd or not os.path.isdir(qd):
-@@ -1369,8 +1614,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-                         else:
-                             actions.append("NEED qe-merge #%d failed: %s" % (issue, last_q))
-     else:
--        if any((lambda m: m and m.group(3) == "READY" and "IMPL" in q.upper())(POST_RE.match(q))
--               for q in fresh.get("dev", [])):
-+        if impl_ts:
-             actions.append("WOULD stage testbed via qe-merge on fresh IMPL READY")
- 
-     failed = any(a.startswith(("RING-FAILED", "STATE-FAILED", "BRIEF-FAILED",
-@@ -1416,6 +1660,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
-             s["gh_posted"] = posted
-         if isinstance(qm_store, dict) and qm_store:
-             s["qe_merge"] = qm_store
-+        if isinstance(qo_store, dict) and qo_store:
-+            s["qe_order"] = qo_store
-+        if wake_newest:
-+            s["wake_seen"] = wake_newest
-         if halt_now:
-             s["halt"] = True
-             s["pending"] = ("MANUAL_INTERVENTION: retry budget exhausted "
-@@ -1839,7 +2087,8 @@ def learnings_draft_text(issue, st, boxes):
- PRODUCTIVE_PREFIXES = ("rang ", "wrote ", "auditor launched", "relaunch",
-     "testbed staged", "state ", "clean #", "pointer ", "consultant note",
-     "audit verdict handed", "checkpoint NOTE filed", "gh note posted",
--    "release #", "HALT ", "learnings draft", "verdict on file", "WOULD ")
-+    "release #", "HALT ", "learnings draft", "verdict on file", "WOULD ",
-+    "order filed", "WAKE ")
- 
- 
- def cycle_productive(all_actions):
-@@ -2123,21 +2372,60 @@ def cmd_tick(ctx, issues, interval):
-             break
-         ctx.tick_seq += 1
-         ctx.log("tick #%d rooms=%s" % (ctx.tick_seq, [i for i, _, _ in rooms]))
--        cycle_actions = []
--        cycle_nodes = []
--        for issue, rdir, st in rooms:
--            node, rows = tick_room(ctx, issue, rdir, st, rooms)
--            tracker.observe(issue, load_state_locked(rdir) or st, node)
--            table = fmt_table(issue, node.get("verdict", {}), rows)
--            print(table, flush=True)
--            ctx.log("issue #%d verdict=%s acked=%d merge_ready=%s" % (
--                issue, node.get("verdict", {}).get("kind"),
--                node.get("acked", 0), node.get("merge_ready")))
--            for a in node.get("actions", []):
--                ctx.log("#%d :: %s" % (issue, a))
--                cycle_actions.append(a)
--            cycle_nodes.append(node)
--        ctx.log(write_graph(ctx))
-+        # G6 + S1: one sweep-wide cycle (shared rung/busy sets) and a
-+        # per-cycle engine lock, so a fast-path `tick --issues N --once`
-+        # is safe while the 180 s loop sleeps and a no-op mid-cycle.
-+        # The lock is never held across sleep(interval) below.
-+        cycle = {"rung": set(), "busy": set()}
-+        _lf = None
-+        if not ctx.dry:
-+            # Live sweep only: dry runs never write state, so they take no
-+            # lock (S3); the lock is never held across sleep(interval).
-+            try:
-+                _lf = open(os.path.join(ctx.log_dir, "engine.lock"), "a+")
-+                fcntl.flock(_lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-+            except OSError:
-+                _lf = None
-+            if _lf is None:
-+                _msg = "cycle skipped: another engine tick holds the lock"
-+                print(_msg, flush=True)
-+                ctx.log(_msg)
-+                if not interval:
-+                    return 0
-+                time.sleep(interval)
-+                rooms = discover_rooms(issues, skip_debris=True)
-+                continue
-+        try:
-+            cycle_actions = []
-+            cycle_nodes = []
-+            for issue, rdir, st in rooms:
-+                node, rows = tick_room(ctx, issue, rdir, st, rooms, cycle)
-+                tracker.observe(issue, load_state_locked(rdir) or st, node)
-+                table = fmt_table(issue, node.get("verdict", {}), rows)
-+                print(table, flush=True)
-+                ctx.log("issue #%d verdict=%s acked=%d merge_ready=%s" % (
-+                    issue, node.get("verdict", {}).get("kind"),
-+                    node.get("acked", 0), node.get("merge_ready")))
-+                for a in node.get("actions", []):
-+                    ctx.log("#%d :: %s" % (issue, a))
-+                    cycle_actions.append(a)
-+                cycle_nodes.append(node)
-+                # Shared sessions ring once per cycle: collect this room's
-+                # doorbells NOW so the next room's session_rung sees them
-+                # intra-sweep (S3), not just post-sweep.
-+                for _a in node.get("actions", []):
-+                    for _sess in (SESS["dev"], SESS["qe"]):
-+                        if _a.startswith("rang " + _sess) or \
-+                                _a.startswith("WOULD ring " + _sess):
-+                            cycle["rung"].add(_sess)
-+            ctx.log(write_graph(ctx))
-+        finally:
-+            if _lf is not None:
-+                try:
-+                    fcntl.flock(_lf, fcntl.LOCK_UN)
-+                    _lf.close()
-+                except OSError:
-+                    pass
-         if not interval:
-             emit_summary(ctx, tracker, ctx.graph, "once (single cycle, interval 0)")
-             break
-@@ -2387,7 +2675,8 @@ def cmd_brief(ctx, issues, a):
- 
+                 probe = fast_probe(ctx, sess)
+                 activity = boxes[role]["state"] or boxes[role]["next"] or "-"
+-                rows.append((role, probe, activity,
++                rows.append((role, lane_state(probe, facts[role].get(issue, {}),
++                                             facts[role], issue), activity,
+                              status_planned_lane(role, boxes[role], st, probe)))
+         print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
+                         rows), flush=True)
+@@ -2676,7 +2761,8 @@ def cmd_brief(ctx, issues, a):
  
  def mode_self_test():
--    """Deterministic regression: #442 quiet-progress + NEED-idle, #443 peer handoff."""
-+    """Deterministic regression: #442 quiet-progress + NEED-idle, #443 peer handoff,
-+    #456 room-scoped rings, WAKE ingestion, acked backlog/qe orders."""
+     """Deterministic regression: #442 quiet-progress + NEED-idle, #443 peer handoff,
+-    #456 room-scoped rings, WAKE ingestion, acked backlog/qe orders."""
++    #456 room-scoped rings, WAKE ingestion, acked backlog/qe orders,
++    #457 lane STATE with actual issue + auditor WORKING/-."""
      passed = 0
      total = 0
  
-@@ -2415,6 +2704,12 @@ def mode_self_test():
-           cycle_progress([], [mk("CHANGED", 1)], dry=True), False)
-     check("progress-dry-rang-true",
-           cycle_progress(["WOULD ring nexios-dev"], [mk("UNCHANGED", 0)], dry=True), True)
-+    check("progress-order-filed-productive",
-+          cycle_progress(["order filed qe IMPL READY (oid qe:2026-11-02T08:00:00)"],
-+                         [mk("UNCHANGED", 0)], dry=False), True)
-+    check("progress-wake-productive",
-+          cycle_progress(["WAKE dev 2026-11-02T19:21:27 inbox: dev READY"],
-+                         [mk("UNCHANGED", 0)], dry=False), True)
-     check("need-idle-true",
-           need_idle_missing("dev", set(), "IDLE-static", [], None, False), True)
-     check("need-idle-fresh-false",
-@@ -2641,6 +2936,92 @@ def mode_self_test():
-     check("first-due-namespace-isolated",
-           first_contact_due("qe", False, True, "IDLE-static", False,
-                             {"first:dev": 1}) == (True, "first:qe"), True)
-+    check("ring-line-legacy",
-+          ring_line("dev", "first brief") == "inbox: first brief -- read inbox/dev.md", True)
-+    check("ring-line-oid",
-+          ring_line("dev", "x", oid="dev:2026-11-02T08:00:00") == "inbox: x [oid dev:2026-11-02T08:00:00] -- read inbox/dev.md", True)
-+    check("ring-line-scoped",
-+          ring_line("dev", "x", issue=240) == "inbox [#240/dev]: x -- read inbox/dev.md", True)
-+    check("ring-line-scoped-oid",
-+          ring_line("qe", "y", oid="qe:2026-11-02T08:00:00", issue=54) == "inbox [#54/qe]: y [oid qe:2026-11-02T08:00:00] -- read inbox/qe.md", True)
-+    check("ring-line-notes-unchanged",
-+          ring(SimpleNamespace(dry=True), "s", "", "t", channel="notes") == "WOULD ring s: notes: t -- read logs/consultant-notes.md", True)
-+    _w1 = "2026-11-02T18:46:59Z FROM=dev WAKE :: inbox: dev READY"
-+    _w2 = "2026-11-02T19:21:27Z FROM=qe WAKE :: inbox: qe READY"
-+    check("parse-wakes-header-ignored",
-+          parse_wakes(["# inbox/coord.md append-only"]) == ([], None), True)
-+    _pw, _pn = parse_wakes([_w1])
-+    check("parse-wakes-fields",
-+          len(_pw) == 1 and _pw[0]["ts"] == "2026-11-02T18:46:59"
-+          and _pw[0]["role"] == "dev" and _pn == "2026-11-02T18:46:59", True)
-+    check("parse-wakes-since-strict",
-+          parse_wakes([_w1], "2026-11-02T18:46:59") == ([], "2026-11-02T18:46:59"), True)
-+    _pw2, _pn2 = parse_wakes([_w1, _w2], "2026-11-02T18:46:59")
-+    check("parse-wakes-newest-advances",
-+          len(_pw2) == 1 and _pw2[0]["role"] == "qe" and _pn2 == "2026-11-02T19:21:27", True)
-+    check("parse-wakes-malformed-ignored",
-+          parse_wakes(["FROM=dev WAKE :: x", "2026-11-02 GARBLE"]) == ([], None), True)
-+    _pa = "2026-11-02T08:00:00Z FROM=dev NOTE :: a"
-+    _pb = "2026-11-02T09:00:00Z FROM=dev NOTE :: b"
-+    check("resurface-last-at-or-before",
-+          resurface_posts([_pa, _pb], "2026-11-02T08:30:00") == [_pa], True)
-+    check("resurface-none-without-wake",
-+          resurface_posts([_pa, _pb], None) == [], True)
-+    check("resurface-picks-last-only",
-+          resurface_posts([_pa, _pb], "2026-11-02T09:00:00") == [_pb], True)
-+    _rdy = "2026-11-02T08:03:09Z FROM=dev READY :: step-b IMPL READY QE: x"
-+    check("impl-ready-detected",
-+          dev_impl_ready_ts([_rdy]) == "2026-11-02T08:03:09Z", True)
-+    check("impl-ready-case-insensitive",
-+          dev_impl_ready_ts(["2026-11-02T08:03:09Z FROM=dev READY :: impl ready"]) == "2026-11-02T08:03:09Z", True)
-+    check("impl-ready-note-ignored",
-+          dev_impl_ready_ts(["2026-11-02T08:03:09Z FROM=dev NOTE :: IMPL plan"]) is None, True)
-+    check("impl-ready-without-impl",
-+          dev_impl_ready_ts(["2026-11-02T08:03:09Z FROM=dev READY :: parked"]) is None, True)
-+    check("impl-ready-newest",
-+          dev_impl_ready_ts([_rdy, "2026-11-02T08:20:00Z FROM=dev READY :: IMPL done"]) == "2026-11-02T08:20:00Z", True)
-+    check("impl-ready-wrong-sender-ignored",
-+          dev_impl_ready_ts(["2026-11-02T08:03:09Z FROM=qe READY :: IMPL done"]) is None, True)
-+    _idle = dict(role="dev", probe="IDLE-static", deaf_lanes=set(), unacked_lanes=set(),
-+                 fresh_posts=[], declared_next=None, rang=False, recreating=False,
-+                 pending="provisioned from issue text")
-+    check("backlog-idle-due-true", backlog_idle_due(**_idle), True)
-+    check("backlog-idle-due-working",
-+          backlog_idle_due(**dict(_idle, probe="WORKING-markers")) is False, True)
-+    check("backlog-idle-due-deaf",
-+          backlog_idle_due(**dict(_idle, deaf_lanes={"dev"})) is False, True)
-+    check("backlog-idle-due-unacked",
-+          backlog_idle_due(**dict(_idle, unacked_lanes={"dev"})) is False, True)
-+    check("backlog-idle-due-fresh",
-+          backlog_idle_due(**dict(_idle, fresh_posts=["x"])) is False, True)
-+    check("backlog-idle-due-next",
-+          backlog_idle_due(**dict(_idle, declared_next="working :: parked")) is False, True)
-+    check("backlog-idle-due-rang",
-+          backlog_idle_due(**dict(_idle, rang=True)) is False, True)
-+    check("backlog-idle-due-recreating",
-+          backlog_idle_due(**dict(_idle, recreating=True)) is False, True)
-+    check("backlog-idle-due-pending-names-dev",
-+          backlog_idle_due(**dict(_idle, pending="await dev PLAN")) is False, True)
-+    check("qe-order-due-true", qe_order_due(None, "2026-11-02T08:03:09Z"), True)
-+    check("qe-order-due-false",
-+          qe_order_due("2026-11-02T08:03:09Z", "2026-11-02T08:03:09Z") is False, True)
-+    check("qe-order-due-superseded",
-+          qe_order_due("2026-11-02T08:00:00Z", "2026-11-02T08:03:09Z"), True)
-+    check("qe-order-due-none",
-+          qe_order_due("2026-11-02T08:00:00Z", None) is False, True)
-+    check("dev-busy-next",
-+          dev_busy({}, "working :: blocked on qe"), True)
-+    check("dev-busy-live-ring",
-+          dev_busy({"dev:2026-11-02T08:00:00": 1}, None), True)
-+    check("dev-busy-acked-ring-false",
-+          dev_busy({"dev:2026-11-02T08:00:00": -1}, "idle :: waiting") is False, True)
-+    check("dev-busy-empty-false", dev_busy({}, None) is False, True)
-+    _open = {"halt": False, "state": "IN_PROGRESS"}
-+    _rooms = [(51, "/r51", dict(_open)), (52, "/r52", dict(_open))]
-+    check("pick-backlog-exclude",
-+          pick_backlog(_rooms, 51, exclude={52}) is None, True)
-+    check("pick-backlog-no-exclude",
-+          pick_backlog(_rooms, 51) == 52, True)
+@@ -3022,6 +3108,31 @@ def mode_self_test():
+           pick_backlog(_rooms, 51, exclude={52}) is None, True)
+     check("pick-backlog-no-exclude",
+           pick_backlog(_rooms, 51) == 52, True)
++    _none = {"order": False, "post": False, "active": False, "waits": False}
++    _wait = dict(_none, waits=True)
++    _ord = dict(_none, order=True)
++    _act = dict(_none, active=True)
++    check("lane-absent", lane_state("ABSENT", _none, {240: _none}, 240) == "ABSENT", True)
++    check("lane-modal", lane_state("BLOCKED-modal", _none, {240: _none}, 240) == "BLOCKED-modal", True)
++    check("lane-idle", lane_state("IDLE-static", _wait, {240: _wait}, 240) == "IDLE", True)
++    check("lane-working-order-here",
++          lane_state("WORKING-markers", _ord, {240: _ord}, 240) == "WORKING (#240)", True)
++    check("lane-working-actual-elsewhere",
++          lane_state("WORKING-markers", _wait, {240: _wait, 54: _ord}, 240) == "WORKING (#54)", True)
++    check("lane-working-active-here",
++          lane_state("WORKING-markers", _act, {240: _act}, 240) == "WORKING (#240)", True)
++    check("lane-blocked-waits",
++          lane_state("WORKING-markers", _wait, {240: _wait, 54: _none}, 240) == "BLOCKED (#240)", True)
++    check("lane-working-bare",
++          lane_state("WORKING-markers", _none, {240: _none}, 240) == "WORKING", True)
++    check("lane-waits-order-word",
++          bool(LANE_WAITS_RE.search("waiting IMPL order (plan-approved)")), True)
++    check("lane-peer-auditor-word",
++          bool(LANE_PEER_RE.search("waiting auditor plan-review")), True)
++    check("lane-peer-no-false-positive",
++          not LANE_PEER_RE.search("device driver working"), True)
++    check("audit-state-live", audit_state(True) == "WORKING", True)
++    check("audit-state-absent", audit_state(False) == "-", True)
      check("ack-regex-order",
            ACK_OID_RE.fullmatch("dev:2026-11-02T08:00:00") is not None
            and ref_lane("dev:2026-11-02T08:00:00") == "dev", True)
