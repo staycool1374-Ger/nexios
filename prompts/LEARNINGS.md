@@ -8,6 +8,9 @@
 
 ## Active cautions (curated digest — read at session start; cap ~12 lines)
 
+- Status views must compute the next step, not print `-`: share the tick's predicates read-only; the first live run paid for itself by surfacing two HALTed rooms (#448).
+- Never escalate a lane you never contacted: virgin rooms get one tracked first-contact ring, and UNCHANGED only burns budget after a worker post exists (#449).
+- Orders carry ids on every surface (ring, NOTE, brief) and ACKs are matched explicitly; chatter never clears an armed order, and first-sight posts are actionable (#450).
 - Engine liveness is worker-activity, not engine-action: quiet counters must reset on CHANGED verdicts + fresh acked posts, never on engine acts alone — and a loop that can die idle needs a wake path that resurrects it, or the first idle window kills the heartbeat forever (#442).
 - Worker→worker handoffs don't forward themselves: a READY naming the peer must ring the peer once (tracked ledger, no escalation) or the handoff sits unread until a human doorbells — READY-only, whole-word mention, one outstanding max, and never parse ts with split(":") (#443).
 - Every loop exit prints a summary or the run is unreconstructable: done = GitHub CLOSED only (no branch heuristics), pure helpers so dry runs prove byte-identical state, and the quiet exit names what it stops on (#445).
@@ -1641,3 +1644,18 @@
 - **Learned:** `up` capped at one issue while the batch need was real — and the batch path (`provision`) lived in a different entry point, so the operator had two half-overlapping cold-starts. The shared-session constraint decides the design: one workers launch with the first room's brief (re-pasting per room would queue conflicting RECONs into one context), remaining rooms staged on disk for the engine. Staged-not-pasted is provision parity, not a regression — but it must be stated, not discovered.
 - **Adapted:** `parse_issue_list` (validate-all-first via `runtime_dir`, dedupe, one error names the item, no IFS mutation), `mode_up` rewrite (setup loop → missing-briefs-only `brief` → one workers → skeleton-only pending → single engine/disarm/windows), `brief` subcommand (preflight, fetch-all-first, atomic temp+fsync+replace writes), `room_plan` plan seam with step lines for the self-test. 33 new self-test rows; scratch-room smoke proved end-to-end.
 - **Style re-face:** validate the whole list before the first side effect, and make the plan seam print steps — a batch that can't say what it will do shouldn't be allowed to do it. Atomic writes for anything a live loop can read mid-tick.
+
+### #448 — status PLANNED column always "-" (no next-step read)
+- **Learned:** the read-only status table hardcoded `"-"` for PLANNED while the tick table computed a real one per lane — the view the operator actually checks was the least informative. A status view that can't say what happens next forces pane-diving for what the engine already knows.
+- **Adapted:** pure `status_planned_lane` (+audit variant) reusing the tick's own predicates (unacked coord, resume regex as a shared constant, NEXT, pending, NEED-idle) + selftest matrix; no new I/O (probes/readers already present in `cmd_status`). First live run immediately surfaced two HALTED rooms the old `-` had hidden.
+- **Style re-face:** read paths and write paths may share predicates but never effects — extract the predicate, keep the side effects where they were.
+
+### #449 — virgin rooms halt without ever being contacted (no first-contact path)
+- **Learned:** the engine's entire ring repertoire is reactive (unacked orders need coord NOTEs, resume needs NEXT, peer needs READY, audit needs a cycle) — with no coordinator, nothing initiates first contact, so virgin rooms ran UNCHANGED x3→HALT without a single doorbell. The halt policy couldn't distinguish "never started" from "genuinely stuck".
+- **Adapted:** one-shot `first:lane` ring when a virgin room has a staged brief and the lane probes IDLE (tracked ledger, no re-ring, no escalation), plus an escalate gate requiring at least one worker post ever — uncontacted rooms now idle toward the clean quiet-exit with summary instead of burning the retry budget.
+- **Style re-face:** never punish a lane you never spoke to — contact precedes escalation, and the ledger distinguishes "rung once" from "acknowledged".
+
+### #450 — engine orders need explicit ACKs (post_update ref + ledger matching)
+- **Learned:** `post_update` enforced post *format* but carried no order reference, so the engine cleared ring ledger entries on any chatter (`posts[-1] > ots`) — an FYI NOTE counted as an answer. Format discipline without a handshake is unroutable mail with perfect postage.
+- **Adapted:** optional `ref` on the bridge (closed-shape oid grammar, fullmatch, lane-matched, auditor-box rejected) appending an `ACK:` 4th trailer; engine emits `[oid …]` in every ring and coord NOTE and clears exactly the matching ledger oid (first-sight posts included via `ack_scan_posts`, which closed a live #447-class hole found during verification); unmatched orders escalate as `ACK-MISSING` with a dedicated counter (never the halt budget); legacy rooms stay on timestamp clears until their first matched ACK arms the discipline.
+- **Style re-face:** every order carries its id on every surface that conveys it (ring text, coord NOTE, brief mandate), and every ACK is matched, logged, and ledgered — or explicitly ignored with a reason, never silently dropped.

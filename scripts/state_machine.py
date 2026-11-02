@@ -5,7 +5,9 @@ Replaces the coordinator role (now a read-only Consultant): all orchestration,
 worker execution orders, workflow transitions, auditor lifecycle, and modal
 mitigation run here, driven by watchdog ticks. Deterministic: identical room
 inputs always produce identical decisions; every decision is logged and every
-incoming worker post is ACKed with a recorded transition.
+incoming worker post is ACKed with a recorded transition. Worker posts may
+carry an optional `ACK: <oid>` 4th trailer line; the engine clears exactly
+that ledger oid (explicit acknowledgment of an engine order).
 
 Reads:  room runtimes (/tmp/nexios-<issue>/), tmux panes (probes), audits/.
 Writes: repo-bound logs only (<repo>/logs/state-machine/), /tmp room briefs,
@@ -51,14 +53,28 @@ MODAL_RE = (r"allow once|allow always|permission required|needs approval|"
 POST_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}T\S*) FROM=(dev|qe|audit|auditor) "
     r"(READY|NEED|NOTE|DECISION) :: (.*)$")
+RESUME_RE = (r"(hold|waiting|awaiting|parked)[^.]*re-?ring|on re-?ring")
 STATE_RE = re.compile(r"^STATE:\s*(.*)$")
 NEXT_RE = re.compile(r"^NEXT:\s*(.*)$")
+ACK_RE = re.compile(r"^ACK:\s*(\S+)\s*$")
+# Order-id grammar — keep byte-identical with _OID_RE in scripts/nexios-bin/mcp-worker-state.py.
+_TS19 = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+ACK_OID_RE = re.compile(r"^(?:(dev|qe):" + _TS19 + r"|next:(dev|qe):[0-9a-f]{8}|peer:(dev|qe):" + _TS19 + r"|first:(dev|qe))$")
+
+
+def ref_lane(ref):
+    """Lane addressed by an order id, or None. fullmatch is mandatory."""
+    m = ACK_OID_RE.fullmatch(ref or "")
+    if not m or m.lastindex is None:
+        return None
+    return m.group(m.lastindex)
 
 VALID_ROOM_STATES = ("IN_PROGRESS", "AUDITED", "VERIFIED", "PLANNED",
                      "QUEUED", "CLOSED", "HOLD")
 
 
 RING_LIMIT = 3  # doctrine: ring an order max 3x; then NEED-recreate, never a 4th ring
+RING_ESCALATED = RING_LIMIT + 1  # ledger sentinel: order escalated as ACK-MISSING, ring no more
 CTX_WARN = 70  # log watch-only
 CTX_CRIT = 85  # checkpoint NOTE first, then /compact; never die at 100%% with unposted work
 AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
@@ -176,7 +192,11 @@ def last_state_next(tail_lines):
 
 
 def wire_gaps(full_lines, post):
-    """Missing STATE:/NEXT: trailer lines after a fresh post (wire format)."""
+    """Missing STATE:/NEXT: trailer lines after a fresh post (wire format).
+
+    The i+1:i+4 window intentionally also covers the optional ACK: 4th
+    trailer line, so an ACK never trips a gap.
+    """
     try:
         i = full_lines.index(post)
     except ValueError:
@@ -188,6 +208,96 @@ def wire_gaps(full_lines, post):
     if not any(l.startswith("NEXT:") for l in nxt):
         gaps.append("NEXT")
     return gaps
+
+
+def post_ack(full_lines, post):
+    """Order id ACKed by a post, or None. Pure.
+
+    Accepts the ACK only on the fixed 3rd trailer line (header/STATE/NEXT/ACK),
+    so a body line starting with ACK: can never clear a ledger oid.
+    """
+    try:
+        i = full_lines.index(post)
+    except ValueError:
+        return None
+    if len(full_lines) < i + 4:
+        return None
+    if not full_lines[i + 1].strip().startswith("STATE:"):
+        return None
+    if not full_lines[i + 2].strip().startswith("NEXT:"):
+        return None
+    m = ACK_RE.match(full_lines[i + 3].strip())
+    return m.group(1) if m else None
+
+
+def order_outstanding(role, coord_last, posts, rings, ack_since):
+    """Whether a coord order still awaits its ACK. Pure.
+
+    Grandfathered (pre-arm or older-than-arm) orders keep the legacy
+    timestamp rule; armed orders stay outstanding until an explicit ACK.
+    """
+    if not coord_last:
+        return False
+    oid = "%s:%s" % (role, coord_last[:19])
+    if rings.get(oid) == -1:
+        return False
+    if not ack_since or coord_last[:19] < ack_since[:19]:
+        return bool(not posts or coord_last[:19] > posts[-1][:19])
+    return True
+
+
+def order_ring_action(n, ack_gated):
+    """Ring/escalate/await decision for an outstanding order count. Pure."""
+    if n < RING_LIMIT:
+        return "ring"
+    if n == RING_LIMIT:
+        return "escalate" if ack_gated else "recreate"
+    return "awaiting"
+
+
+def reset_resume_rings(rings):
+    """Delete every next: ledger entry. Pure. Returns the deleted count."""
+    doomed = [oid for oid in rings if oid.startswith("next:")]
+    for oid in doomed:
+        del rings[oid]
+    return len(doomed)
+
+
+def ack_scan_posts(role, boxes, handled, fresh):
+    """Posts to scan for ACK trailers. Pure.
+
+    Fresh posts normally; but on first sight of a lane (no handled cursor
+    yet) the full history is scanned, so a virgin lane's first post —
+    which may carry the order's ACK — is actionable instead of being
+    consumed silently while the cursor jumps past it.
+    """
+    if fresh:
+        return list(fresh)
+    if (handled or {}).get(role) is None:
+        return list((boxes.get(role) or {}).get("all", []))
+    return []
+
+
+def match_ack(ref, role, boxes, rings, resume_now):
+    """Classify a fresh ACK trailer. Pure. Returns (verdict, oid).
+
+    verdict is "ack" (clear exactly this oid), "ignore-malformed" (bad
+    shape or wrong lane), "ignore-stale" (not outstanding), or (None, None)
+    when there is no ref to classify.
+    """
+    if not ref:
+        return None, None
+    if not ACK_OID_RE.fullmatch(ref) or ref_lane(ref) != role:
+        return "ignore-malformed", ref
+    boxes = boxes or {}
+    rings = rings or {}
+    resume_now = resume_now or {}
+    cur = None
+    if (boxes.get(role) or {}).get("coord_last"):
+        cur = "%s:%s" % (role, boxes[role]["coord_last"][:19])
+    if ref == cur or ref in rings or ref in resume_now.values():
+        return "ack", ref
+    return "ignore-stale", ref
 
 
 CTX_RE = re.compile(r"(\d+(?:\.\d+)?K)\s*\((\d+)%\)")
@@ -225,6 +335,7 @@ def checkpoint_brief(issue, role, pct):
             "Steps: 1. post CHECKPOINT NOTE to inbox/%s.md (branch + tip + files touched + next step) + RING. "
             "2. run /compact in this session. 3. after compact, post COMPACT-DONE NOTE + RING. "
 "Every post carries STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
+            "If the order that triggered this carries [oid <id>], pass ref=<id> on the CHECKPOINT NOTE and the COMPACT-DONE NOTE; ref-less posts never clear the order. "
             "If compaction delivery fails, hold for recreate (never work past 100%% with unposted work).\n"
             "scripts/agent_up.sh wake %d %s nexios-engine \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
             % (issue, role, pct, issue, role, issue, role, role, role))
@@ -312,7 +423,7 @@ def load_boxes(room_dir):
     return boxes
 
 
-def new_posts(boxes, handled):
+def new_posts(boxes, handled, limit=5):
     """Posts newer than handled cursors (ts compare; clocks skew, so max-ts)."""
     fresh = {}
     for box in BOXES:
@@ -320,7 +431,8 @@ def new_posts(boxes, handled):
         if since is None:
             fresh[box] = []  # first sight: init cursor, report nothing
         else:
-            fresh[box] = [l for l in boxes[box]["all"] if l[:20] > since[:20]][-5:]
+            posts = [l for l in boxes[box]["all"] if l[:20] > since[:20]]
+            fresh[box] = posts[-limit:] if limit else posts
     return fresh
 
 
@@ -429,6 +541,7 @@ def auditor_brief_text(issue, tip, scope):
             "scope: %s\n"
             "rules: read-only (no branches, no code, no test runs, no launches); retrieval first (graphify+vault); "
             "post DECISION (APPROVED | NEED with S1/S2/S3 findings) to inbox/auditor.md + wake.\n"
+            "Auditor verdicts use the DECISION schema and never carry ref/ACK (the bridge rejects ref on box=auditor).\n"
             "scripts/agent_up.sh wake %d auditor nexios-engine \"inbox: auditor READY \u2014 read inbox/auditor.md\"\n"
             % (issue, issue, tip, scope, issue))
 
@@ -452,8 +565,8 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
         if "DECISION" not in post:
             continue
         target = stored.get("requester", "dev")
-        note = ("%s FROM=coord NOTE :: AUDIT %s (#%d): detail inbox/auditor.md"
-                % (utcnow(), "APPROVED" if "APPROVED" in post else "NEED", issue))
+        note, oid = coord_note(target, "AUDIT %s (#%d): detail inbox/auditor.md"
+                               % ("APPROVED" if "APPROVED" in post else "NEED", issue))
         rep = latest_audit_report(ctx, issue)
         if rep:
             note += "; report %s" % os.path.basename(rep)
@@ -463,7 +576,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh):
             if append_box_note(room_dir, target, note):
                 acted.append("audit verdict handed to %s" % target)
                 if target in SESS and fast_probe(ctx, SESS[target]).startswith("IDLE"):
-                    acted.append(ring(ctx, SESS[target], target, "audit verdict ready"))
+                    acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid))
             else:
                 acted.append("HAND-BACK-FAILED %s" % target)
     if any("audit verdict handed to" in a or "WOULD hand audit verdict" in a for a in acted):
@@ -640,19 +753,32 @@ def retire_room(ctx, issue, room_dir, st, boxes=None):
     return acts, True
 
 
-def ring(ctx, sess, box, text, channel="inbox"):
+def ring(ctx, sess, box, text, channel="inbox", oid=None):
     """Doorbell. Idle sessions only (caller checks). inbox = box pointer,
-    notes = consultant channel (logs/consultant-notes.md)."""
+    notes = consultant channel (logs/consultant-notes.md). oid, when given,
+    is the ledger order id the worker must ACK (post_update ref=<oid>)."""
     if channel == "notes":
         line = "notes: %s -- read logs/consultant-notes.md" % text
     else:
-        line = "inbox: %s -- read inbox/%s.md" % (text, box)
+        line = "inbox: %s%s -- read inbox/%s.md" % (
+            text, (" [oid %s]" % oid) if oid else "", box)
     if ctx.dry:
         return "WOULD ring %s: %s" % (sess, line)
     rc, out = ctx.run([ctx.agent_up, "msg", sess, line], timeout=60)
     if rc == 0:
         return "rang %s" % sess
     return "RING-FAILED %s: %s" % (sess, out.strip()[:120])
+
+
+def coord_note(role, text):
+    """Engine order line for a lane box + its ledger oid. Pure.
+
+    The oid embeds the post timestamp exactly as has_unacked derives it,
+    so the written id and the ledger key always agree.
+    """
+    ts = utcnow()
+    oid = "%s:%s" % (role, ts[:19])
+    return ("%s FROM=coord NOTE :: %s [oid %s]" % (ts, text, oid)), oid
 
 
 def write_brief(ctx, room_dir, name, content):
@@ -762,7 +888,9 @@ def peer_handoff_pick(peer, offers, rings, peer_ts):
     already holds 1 for the picked oid.
     """
     for oid in sorted(rings):
-        if not oid.startswith("peer:%s:" % peer) or rings.get(oid) != 1:
+        if not oid.startswith("peer:%s:" % peer) or not rings.get(oid):
+            continue
+        if rings.get(oid) == -1:
             continue
         ots = oid[len("peer:%s:" % peer):]
         if not peer_ts or peer_ts < ots:
@@ -771,9 +899,10 @@ def peer_handoff_pick(peer, offers, rings, peer_ts):
                     return dict(o, rung=True)
             return {"sender": PEER[peer], "ts": ots, "oid": oid,
                     "post": "", "rung": True}
-    if not offers:
+    live = [o for o in offers if rings.get(o["oid"]) != -1]
+    if not live:
         return None
-    pick = dict(offers[0])
+    pick = dict(live[0])
     pick["rung"] = rings.get(pick["oid"]) == 1
     return pick
 
@@ -819,10 +948,26 @@ def recreating_peers(actions):
     return out
 
 
-def ring_peer_handoff(ctx, peer, sender, ts):
+def first_contact_due(role, has_posts, brief_present, probe, deaf, rings):
+    """One-shot first ring for a virgin lane. Pure.
+
+    Fires only when the lane never posted, a staged brief exists, the lane
+    probes IDLE and reachable, and no prior first-contact ring is ledgered.
+    """
+    if has_posts or not brief_present:
+        return False, None
+    oid = "first:%s" % role
+    if rings.get(oid):
+        return False, None
+    if deaf or not str(probe).startswith("IDLE"):
+        return False, None
+    return True, oid
+
+
+def ring_peer_handoff(ctx, peer, sender, ts, oid):
     """Doorbell peer, pointing at the SENDER box holding the READY."""
     return ring(ctx, SESS[peer], sender,
-                "peer handoff from %s READY %s" % (sender, ts))
+                "peer handoff from %s READY %s" % (sender, ts), oid=oid)
 
 
 def tick_room(ctx, issue, room_dir, st, rooms_all):
@@ -927,13 +1072,13 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                 actions.append("WOULD post checkpoint NOTE + ring-if-idle (%s @%d%%)"
                                % (role, pct))
             else:
-                note = ("%s FROM=coord NOTE :: CHECKPOINT pre-compaction (@%d%% ctx): "
-                        "post CHECKPOINT NOTE, run /compact, RING" % (utcnow(), pct))
+                note, oid = coord_note(role, "CHECKPOINT pre-compaction (@%d%% ctx): "
+                                             "post CHECKPOINT NOTE, run /compact, RING" % pct)
                 if append_box_note(room_dir, role, note):
                     actions.append("checkpoint NOTE filed for %s @%d%%" % (role, pct))
                     if role not in deaf and probes[role].startswith("IDLE"):
                         actions.append(ring(ctx, SESS[role], role,
-                                            "checkpoint brief @%d%%" % pct))
+                                            "checkpoint brief @%d%%" % pct, oid=oid))
                     else:
                         actions.append("%s WORKING: checkpoint NOTE filed, ring deferred to boundary"
                                        % role)
@@ -970,69 +1115,128 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
     dev_next = boxes["dev"]["next"]
 
     rings = st.get("rings") or {}
-    has_unacked = set()
-    for role in ("dev", "qe"):
-        b = boxes[role]
-        if b["coord_last"] and (not b["all"] or
-                                b["coord_last"][:19] > b["all"][-1][:19]):
-            has_unacked.add(role)
-            order_id = "%s:%s" % (role, b["coord_last"][:19])
-            n = rings.get(order_id, 0)
-            if role not in deaf and probes[role].startswith("IDLE"):
-                if n < RING_LIMIT:
-                    actions.append(ring(ctx, SESS[role], role,
-                                        "unacked order -- %s" % b["coord_last"][:80]))
-                    rings[order_id] = n + 1
-                    events.append("ring-%s" % role)
-                elif n == RING_LIMIT:
-                    r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
-                        "order %s unacked after %d rings" % (b["coord_last"][:19], n),
-                        b["state"], b["next"])
-                    actions.extend(r_acts)
-                    rings[order_id] = -1 if _rel else n + 1
-                else:
-                    actions.append("recreate-awaiting %s: order %s (no repeat orders)"
-                                   % (SESS[role], b["coord_last"][:19]))
-            else:
-                actions.append("%s WORKING reads at boundary; no ring" % role)
+    ack_since = st.get("ack_since") or None
+    ack_failures = int(st.get("ack_failures", 0) or 0)
     resume_now = {}
     for role in ("dev", "qe"):
         nx = (boxes[role]["next"] or "")
-        if re.search(r"(hold|waiting|awaiting|parked)[^.]*re-?ring|on re-?ring", nx, re.I):
+        if re.search(RESUME_RE, nx, re.I):
             resume_now[role] = "next:%s:%s" % (role, hashlib.md5(nx.encode()).hexdigest()[:8])
+    fresh_all = new_posts(boxes, handled, limit=0)  # 0 = no cap: no ACK lost
+    for role in LANES:
+        for post in ack_scan_posts(role, boxes, handled, fresh_all.get(role, [])):
+            ack_verdict, ack_ref = match_ack(post_ack(boxes[role]["full"], post),
+                                            role, boxes, rings, resume_now)
+            if ack_verdict is None:
+                continue
+            if ack_verdict == "ignore-malformed":
+                actions.append("ack-ignored %s from %s (malformed or wrong lane)" % (ack_ref, role))
+            elif ack_verdict == "ignore-stale":
+                actions.append("ack-ignored %s from %s (not outstanding)" % (ack_ref, role))
+            else:
+                rings[ack_ref] = -1
+                actions.append("ack %s from %s" % (ack_ref, role))
+                events.append("%s ACK" % role)
+                if not ack_since:
+                    ack_since = utcnow()[:19]
+                    n = reset_resume_rings(rings)
+                    actions.append("ack-discipline armed at %s by %s (legacy resume counters reset: %d)"
+                                   % (ack_since, role, n))
+    has_unacked = set()
+    for role in ("dev", "qe"):
+        b = boxes[role]
+        if not b["coord_last"]:
+            continue
+        oid = "%s:%s" % (role, b["coord_last"][:19])
+        ack_gated = bool(ack_since) and b["coord_last"][:19] >= ack_since[:19]
+        if not order_outstanding(role, b["coord_last"], b["all"], rings, ack_since):
+            continue
+        has_unacked.add(role)
+        n = rings.get(oid, 0)
+        act = order_ring_action(n, ack_gated)
+        if role in deaf or not probes[role].startswith("IDLE"):
+            actions.append("%s WORKING reads at boundary; no ring" % role)
+        elif act == "ring":
+            disp = re.sub(r"\s*\[oid [^]]+\]\s*$", "", b["coord_last"])[:80]
+            actions.append(ring(ctx, SESS[role], role,
+                                "unacked order -- %s" % disp, oid=oid))
+            rings[oid] = n + 1
+            events.append("ring-%s" % role)
+        elif act == "recreate":
+            r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
+                "order %s unacked after %d rings" % (b["coord_last"][:19], n),
+                b["state"], b["next"])
+            actions.extend(r_acts)
+            rings[oid] = -1 if _rel else n + 1
+        elif act == "escalate":
+            actions.append("ACK-MISSING %s order %s after %d rings (no ACK post)"
+                           % (role, oid, n))
+            rings[oid] = RING_ESCALATED
+            ack_failures += 1
+            events.append("ack-missing-%s" % role)
+        else:
+            if ack_gated:
+                actions.append("ack-awaiting %s: order %s (no repeat rings; awaiting ACK)"
+                               % (SESS[role], oid))
+            else:
+                actions.append("recreate-awaiting %s: order %s (no repeat orders)"
+                               % (SESS[role], b["coord_last"][:19]))
     for oid in list(rings):
         if oid.startswith("next:"):
             _p, _r, _h = oid.split(":")
-            if oid not in resume_now.values() or fresh.get(_r):
+            if oid not in resume_now.values():
+                del rings[oid]
+                continue
+            if not ack_since and fresh.get(_r):
                 del rings[oid]
             continue
         if oid.startswith("peer:"):
             continue  # retired only by peer_handoff_done_oids below
+        if oid.startswith("first:"):
+            continue  # one-shot; virginity ends it
         orole, _, ots = oid.partition(":")
-        posts = boxes.get(orole, {}).get("all", [])
-        if posts and posts[-1][:19] > ots:
-            del rings[oid]
+        cur = (boxes.get(orole) or {}).get("coord_last")
+        if cur and ots < cur[:19]:
+            del rings[oid]  # superseded by a newer order
+            continue
+        if not ack_since or ots < ack_since[:19]:
+            posts = boxes.get(orole, {}).get("all", [])
+            if posts and posts[-1][:19] > ots:
+                del rings[oid]
     for role, oid in resume_now.items():
         if role in has_unacked or role in deaf:
             continue
         if not probes[role].startswith("IDLE"):
             continue
         n = rings.get(oid, 0)
-        if 0 <= n < RING_LIMIT:
-            actions.append(ring(ctx, SESS[role], role, "resume per declared NEXT"))
+        act = order_ring_action(n, bool(ack_since))
+        if act == "ring":
+            actions.append(ring(ctx, SESS[role], role, "resume per declared NEXT", oid=oid))
             rings[oid] = n + 1
             events.append("ring-%s-resume" % role)
-        elif n == RING_LIMIT:
+        elif act == "recreate":
             r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
                 "parked-awaiting ring unacked after %d rings" % n,
                 boxes[role]["state"], boxes[role]["next"])
             actions.extend(r_acts)
             rings[oid] = -1 if _rel else n + 1
+        elif act == "escalate":
+            actions.append("ACK-MISSING %s resume %s after %d rings (no ACK post)"
+                           % (role, oid, n))
+            rings[oid] = RING_ESCALATED
+            ack_failures += 1
+            events.append("ack-missing-%s" % role)
+        elif ack_since:
+            actions.append("ack-awaiting %s: resume %s (no repeat rings; awaiting ACK)"
+                           % (SESS[role], oid))
+    if ack_failures == 3:
+        actions.append("NEED ack-discipline: 3 orders reached RING_LIMIT without ACK; refresh briefs/wake lanes")
 
     for peer in LANES:
-        for oid in peer_handoff_done_oids(boxes, peer, rings):
-            rings[oid] = -1
-            events.append("peer-handoff-done-%s" % peer)
+        if not ack_since:
+            for oid in peer_handoff_done_oids(boxes, peer, rings):
+                rings[oid] = -1
+                events.append("peer-handoff-done-%s" % peer)
         offers = peer_ready_offers(boxes, peer)
         peer_posts = boxes[peer]["all"]
         peer_ts = peer_posts[-1][:19] if peer_posts else ""
@@ -1043,7 +1247,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                                   rang_session(actions, SESS[peer]),
                                   peer in recreating_peers(actions))
         if act == "ring":
-            res = ring_peer_handoff(ctx, peer, pick["sender"], pick["ts"])
+            res = ring_peer_handoff(ctx, peer, pick["sender"], pick["ts"], pick["oid"])
             actions.append(res)
             if res.startswith(("rang ", "WOULD ring ")):
                 rings[pick["oid"]] = 1
@@ -1054,6 +1258,23 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                            % (peer, pick["sender"], pick["ts"], probes[peer]))
             events.append("peer-handoff-hold-%s" % peer)
 
+    for role in ("dev", "qe"):
+        brief_p = os.path.join(room_dir, "prompts", "%s.txt" % role)
+        try:
+            brief_present = os.path.getsize(brief_p) > 0
+        except OSError:
+            brief_present = False
+        due, oid = first_contact_due(role, bool(boxes[role]["all"]),
+                                     brief_present, probes[role],
+                                     role in deaf, rings)
+        if due and not rang_session(actions, SESS[role]):
+            res = ring(ctx, SESS[role], role,
+                       "first brief -- read prompts/%s.txt" % role, oid=oid)
+            actions.append(res)
+            if res.startswith(("rang ", "WOULD ring ")):
+                rings[oid] = 1
+            events.append("first-contact-%s" % role)
+
     if dev_blocked_on_qe(dev_next) and not probes["qe"].startswith("IDLE"):
         target = pick_backlog(rooms_all, issue)
         if target is None:
@@ -1063,7 +1284,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                      "issue: %d\nbranch: none yet (read-only until recalled)\n"
                      "Task: read-only recon of #%d per its room pending/next; "
                      "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
-"Post NOTE to inbox/dev.md + RING.\n"
+"Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment itself has no id.\n"
                      "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
                      % (target, issue, target, target, target))
             actions.append(write_brief(ctx, room_dir,
@@ -1080,7 +1301,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                              fresh.get(role), boxes[role]["next"], rang):
             actions.append("NEED %s idle with no briefed work (no invention)" % role)
 
-    if verdict.get("escalate"):
+    contacted = bool(boxes["dev"]["all"] or boxes["qe"]["all"])
+    if verdict.get("escalate") and contacted:
         slow = {r: slow_probe(ctx, SESS[r]) for r in ("dev", "qe")}
         node["slow_probes"] = slow
         actions.append("ESCALATE #%d UNCHANGED x%d: slow=%s" %
@@ -1146,7 +1368,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
     failed = any(a.startswith(("RING-FAILED", "STATE-FAILED", "BRIEF-FAILED",
                                "POINTER-FAILED", "STATE-WRITE-FAILED"))
                  for a in actions)
-    escalated = bool(verdict.get("escalate"))
+    escalated = bool(verdict.get("escalate")) and contacted
     retries = int(st.get("retries", 0) or 0)
     budget = int(st.get("retry_budget", 3) or 0)
     if escalated or failed:
@@ -1166,6 +1388,9 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                 h[box] = max(x[:20] for x in boxes[box]["all"])
         s["handled"] = h
         s["rings"] = rings
+        if ack_since:
+            s["ack_since"] = ack_since
+        s["ack_failures"] = ack_failures
         s["retries"] = retries
         if isinstance(ap_store, dict):
             if ap_store:
@@ -1245,7 +1470,8 @@ def resume_brief_text(issue, role, branch, tip, dirty, state, nxt):
             "last STATE: %s\nlast NEXT: %s\n"
             "Steps: 1. verify inventory (branch/tip/files above match your tree). "
             "2. post CHECKPOINT NOTE to inbox/%s.md (branch + tip + files touched + next step) + RING. "
-            "3. continue the next step above; normal wire discipline (STATE/NEXT + CTX %% line, doorbell every post).\n"
+            "3. continue the next step above; normal wire discipline (STATE/NEXT + CTX %% line, doorbell every post); "
+            "engine orders carry [oid <id>] and must be ACKed via post_update ref=<id>.\n"
             "scripts/agent_up.sh wake %d %s nexios-engine \"inbox: %s READY \u2014 read inbox/%s.md\"\n"
             % (issue, role, issue, branch, tip, dirty_lines,
                state or "-", nxt or "-", role,
@@ -1929,6 +2155,41 @@ def cmd_tick(ctx, issues, interval):
     return rc
 
 
+def status_planned_lane(role, box, st, probe):
+    """Next-step read for one worker lane. Pure, read-only (no rings)."""
+    if (st or {}).get("halt"):
+        return "HALTED: no actions"
+    box = box or {}
+    posts = box.get("all", [])
+    coord_last = box.get("coord_last")
+    if coord_last and order_outstanding(
+            role, coord_last, posts, (st or {}).get("rings") or {},
+            (st or {}).get("ack_since")):
+        return "ring: unacked order"
+    nxt = box.get("next") or ""
+    if re.search(RESUME_RE, nxt, re.I):
+        return "ring: resume per NEXT"
+    if nxt:
+        return "awaits: %s" % clip_text(nxt, 42)
+    pending = (st or {}).get("pending") or ""
+    if pending:
+        return "pending: %s" % clip_text(pending, 42)
+    if str(probe).startswith("IDLE"):
+        return "NEED idle: no briefed work"
+    return "-"
+
+
+def status_planned_audit(ctx, issue, boxes):
+    """Next-step read for the audit lane. Read-only (existing readers)."""
+    if auditor_decision((boxes.get("auditor") or {}).get("all", [])):
+        return "verdict on file"
+    if audit_session_live(ctx):
+        return "awaiting verdict"
+    if latest_audit_report(ctx, issue):
+        return "report on file"
+    return "collect verdict"
+
+
 def cmd_status(ctx, issues):
     rooms = discover_rooms(issues)
     if not rooms:
@@ -1944,11 +2205,13 @@ def cmd_status(ctx, issues):
                 activity = ("report %s" % os.path.basename(rep)) if rep else (
                     auditor_decision(boxes["auditor"]["all"]) or "no verdict")
                 state = "LIVE" if audit_session_live(ctx) else "ABSENT"
-                rows.append((role, state, activity, "-"))
+                rows.append((role, state, activity,
+                             status_planned_audit(ctx, issue, boxes)))
             else:
                 probe = fast_probe(ctx, sess)
                 activity = boxes[role]["state"] or boxes[role]["next"] or "-"
-                rows.append((role, probe, activity, "-"))
+                rows.append((role, probe, activity,
+                             status_planned_lane(role, boxes[role], st, probe)))
         print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
                         rows), flush=True)
     return 0
@@ -1996,6 +2259,7 @@ def issue_briefs_text(issue, dev_branch, title, body):
                  "Task: RECON phase (read-only, no branch, no code): read the issue "
                  "text above + relevant code/tests; draft the implementation plan; "
                  "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+                 "Every engine order carries its id ([oid <id>] in the ring or coord NOTE); ACK it in your next post via post_update ref=<id> (a post without ref is FYI only and never clears an order). "
                  "No branches, no code, "
                  "no QEMU until the plan is audit-approved.\n"
                  "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
@@ -2005,6 +2269,7 @@ def issue_briefs_text(issue, dev_branch, title, body):
                 "Task: parallel RECON (read-only, no branch, no code): draft the "
                 "verification approach for this issue; post NOTE to inbox/qe.md + "
                 "RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+                "Every engine order carries its id ([oid <id>] in the ring or coord NOTE); ACK it in your next post via post_update ref=<id> (a post without ref is FYI only and never clears an order). "
                 "RING. No test runs until dev posts IMPL READY.\n"
                 "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
                 % (seed, issue, issue))
@@ -2226,7 +2491,8 @@ def mode_self_test():
     check("rang-session-dry", rang_session(["WOULD ring nexios-qe: x"], "nexios-qe"), True)
     check("rang-session-false", rang_session(["NOTE idle"], "nexios-qe"), False)
     dry_ctx = SimpleNamespace(dry=True)
-    rp = ring_peer_handoff(dry_ctx, "qe", "dev", "2026-11-02T08:03:09")
+    rp = ring_peer_handoff(dry_ctx, "qe", "dev", "2026-11-02T08:03:09",
+                            "peer:qe:2026-11-02T08:03:09")
     check("peer-ring-points-at-sender-box",
           "WOULD ring nexios-qe" in rp and rp.rstrip().endswith("read inbox/dev.md"), True)
     check("recreating-peers",
@@ -2319,6 +2585,150 @@ def mode_self_test():
     check("tracker-observe-retired",
           51 in trA.retired and trA.states[51] == {"phase": "CLOSED"}, True)
     check("tracker-tracked-fixed", RunTracker({51}, []).tracked_issues() == {51}, True)
+    b_idle = {"all": [], "coord_last": None, "state": None,
+              "next": None, "ctx": None}
+    check("status-plan-unacked",
+          status_planned_lane("qe", {"all": ["2026-11-02T07:44:32Z FROM=qe NOTE :: x"],
+                                     "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: order",
+                                     "state": None, "next": None, "ctx": None},
+                              {"pending": "p"}, "IDLE-static") == "ring: unacked order", True)
+    check("status-plan-acked-order",
+          status_planned_lane("qe", {"all": ["2026-11-02T08:05:00Z FROM=qe NOTE :: x"],
+                                     "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: order",
+                                     "state": None, "next": None, "ctx": None},
+                              {"pending": "p"}, "IDLE-static") == "pending: p", True)
+    check("status-plan-resume",
+          status_planned_lane("dev", dict(b_idle, next="parked; on re-ring continue"),
+                              {"pending": "p"}, "IDLE-static") == "ring: resume per NEXT", True)
+    check("status-plan-resume-shared-regex",
+          status_planned_lane("dev", dict(b_idle, next="hold for re-ring"),
+                              {}, "IDLE-static") == "ring: resume per NEXT"
+          and re.search(RESUME_RE, "awaiting parked, re-ring now", re.I) is not None, True)
+    check("status-plan-awaits-next",
+          status_planned_lane("dev", dict(b_idle, next="working :: parked"),
+                              {"pending": "p"}, "IDLE-static") == "awaits: working :: parked", True)
+    check("status-plan-pending",
+          status_planned_lane("dev", b_idle, {"pending": "provisioned from issue text"},
+                              "WORKING-markers") == "pending: provisioned from issue text", True)
+    check("status-plan-need-idle",
+          status_planned_lane("dev", b_idle, {}, "IDLE-static") == "NEED idle: no briefed work", True)
+    check("status-plan-working-bare",
+          status_planned_lane("dev", b_idle, {}, "WORKING-markers") == "-", True)
+    check("status-plan-halted",
+          status_planned_lane("dev", dict(b_idle, next="x"), {"halt": True},
+                              "IDLE-static") == "HALTED: no actions", True)
+    check("first-due-virgin-idle",
+          first_contact_due("dev", False, True, "IDLE-static", False, {}) == (True, "first:dev"), True)
+    check("first-due-contacted",
+          first_contact_due("dev", True, True, "IDLE-static", False, {}) == (False, None), True)
+    check("first-due-no-brief",
+          first_contact_due("dev", False, False, "IDLE-static", False, {}) == (False, None), True)
+    check("first-due-working",
+          first_contact_due("dev", False, True, "WORKING-markers", False, {}) == (False, None), True)
+    check("first-due-deaf",
+          first_contact_due("dev", False, True, "IDLE-static", True, {}) == (False, None), True)
+    check("first-due-rung-once",
+          first_contact_due("dev", False, True, "IDLE-static", False,
+                            {"first:dev": 1}) == (False, None), True)
+    check("first-due-namespace-isolated",
+          first_contact_due("qe", False, True, "IDLE-static", False,
+                            {"first:dev": 1}) == (True, "first:qe"), True)
+    check("ack-regex-order",
+          ACK_OID_RE.fullmatch("dev:2026-11-02T08:00:00") is not None
+          and ref_lane("dev:2026-11-02T08:00:00") == "dev", True)
+    check("ack-regex-next",
+          ACK_OID_RE.fullmatch("next:qe:abcdef01") is not None
+          and ref_lane("next:qe:abcdef01") == "qe", True)
+    check("ack-regex-peer",
+          ACK_OID_RE.fullmatch("peer:qe:2026-11-02T08:00:00") is not None
+          and ref_lane("peer:qe:2026-11-02T08:00:00") == "qe", True)
+    check("ack-regex-first",
+          ACK_OID_RE.fullmatch("first:dev") is not None
+          and ref_lane("first:dev") == "dev", True)
+    check("ack-regex-reject-garbage", ACK_OID_RE.fullmatch("banana") is None, True)
+    check("ack-regex-reject-short-ts", ACK_OID_RE.fullmatch("dev:2026-11-02") is None, True)
+    check("ack-regex-reject-ts20", ACK_OID_RE.fullmatch("dev:2026-11-02T08:00:00Z") is None, True)
+    check("ack-regex-reject-upper-hash", ACK_OID_RE.fullmatch("next:qe:ABCDEF01") is None, True)
+    check("ack-regex-wrong-lane", ref_lane("nope") is None, True)
+    hp = ["2026-11-02T08:00:00Z FROM=dev READY :: s", "STATE: idle :: d",
+          "NEXT: waiting x", "ACK: dev:2026-11-02T07:59:00", "body"]
+    check("post-ack-fourth-line", post_ack(hp, hp[0]) == "dev:2026-11-02T07:59:00", True)
+    check("post-ack-none", post_ack(hp[:3], hp[0]) is None, True)
+    hp2 = ["2026-11-02T08:00:00Z FROM=dev NOTE :: s", "ACK: dev:2026-11-02T07:59:00"]
+    check("post-ack-body-collision-guard", post_ack(hp2, hp2[0]) is None, True)
+    check("post-ack-no-state", post_ack(["2026-11-02T08:00:00Z FROM=dev NOTE :: s", "x",
+                                         "NEXT: idle", "ACK: dev:2026-11-02T07:59:00"],
+                                        "2026-11-02T08:00:00Z FROM=dev NOTE :: s") is None, True)
+    check("wire-gaps-tolerates-ack",
+          wire_gaps(hp + ["tail"], hp[0]) == [], True)
+    check("order-outstanding-armed-chatter",
+          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T07:00:00Z FROM=qe NOTE :: y"],
+                            {}, "2026-11-02T07:30:00") is True, True)
+    check("order-outstanding-acked",
+          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"],
+                            {"qe:2026-11-02T08:00:00": -1}, "2026-11-02T07:30:00") is False, True)
+    check("order-outstanding-grandfathered",
+          order_outstanding("qe", "2026-11-02T06:00:00Z FROM=x", ["2026-11-02T07:00:00Z FROM=qe NOTE :: y"],
+                            {}, "2026-11-02T07:30:00") is False, True)
+    check("order-outstanding-legacy-current",
+          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T07:00:00Z FROM=qe NOTE :: y"],
+                            {}, None) is True, True)
+    check("order-outstanding-legacy-answered",
+          order_outstanding("qe", "2026-11-02T08:00:00Z FROM=x", ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"],
+                            {}, None) is False, True)
+    check("order-outstanding-no-coord",
+          order_outstanding("qe", None, ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"], {}, None) is False, True)
+    check("order-ring-action",
+          [order_ring_action(n, True) for n in (0, 2, 3, 4)] == ["ring", "ring", "escalate", "awaiting"]
+          and [order_ring_action(n, False) for n in (0, 2, 3, 4)] == ["ring", "ring", "recreate", "awaiting"],
+          True)
+    check("reset-resume-rings",
+          reset_resume_rings({"next:qe:a": 1, "dev:x": 2, "next:dev:b": 3}) == 2, True)
+    mb = {"dev": {"all": ["2026-11-02T08:00:00Z FROM=dev READY :: s"],
+                   "coord_last": "2026-11-02T07:59:00Z FROM=coord NOTE :: o"},
+          "qe": {"all": []}}
+    check("match-ack-current-order",
+          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}) == ("ack", "dev:2026-11-02T07:59:00"), True)
+    check("match-ack-in-rings",
+          match_ack("first:dev", "dev", {"dev": {"all": []}},
+                    {"first:dev": 1}, {}) == ("ack", "first:dev"), True)
+    check("match-ack-in-resume",
+          match_ack("next:dev:abcdef01", "dev", {"dev": {"all": []}}, {},
+                    {"dev": "next:dev:abcdef01"}) == ("ack", "next:dev:abcdef01"), True)
+    check("match-ack-unmatched",
+          match_ack("dev:2026-11-02T07:59:00", "dev",
+                    {"dev": {"all": [], "coord_last": None}}, {}, {}) == ("ignore-stale", "dev:2026-11-02T07:59:00"),
+          True)
+    check("match-ack-wrong-lane",
+          match_ack("qe:2026-11-02T07:59:00", "dev", mb, {}, {})[0] == "ignore-malformed", True)
+    check("match-ack-garbage",
+          match_ack("banana", "dev", mb, {}, {})[0] == "ignore-malformed", True)
+    check("match-ack-none", match_ack(None, "dev", mb, {}, {}) == (None, None), True)
+    check("match-ack-auditor-excluded",
+          match_ack("dev:2026-11-02T07:59:00", "auditor", {"auditor": {"all": []}}, {}, {})[0] == "ignore-malformed",
+          True)
+    check("match-ack-clears-peer",
+          match_ack("peer:qe:2026-11-02T07:59:00", "qe", {"qe": {"all": []}},
+                    {"peer:qe:2026-11-02T07:59:00": 1}, {}) == ("ack", "peer:qe:2026-11-02T07:59:00"), True)
+    stt = {"pending": "provisioned from issue text"}
+    check("status-plan-armed-unacked",
+          status_planned_lane("qe", {"all": [], "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
+                                     "state": None, "next": None, "ctx": None},
+                              dict(stt, rings={"qe:2026-11-02T08:00:00": 1}, ack_since="2026-11-02T07:30:00"),
+                              "IDLE-static") == "ring: unacked order", True)
+    check("ack-scan-fresh-wins",
+          ack_scan_posts("dev", {"dev": {"all": ["a", "b"]}}, {"dev": "t"},
+                         ["b"]) == ["b"], True)
+    check("ack-scan-first-sight-full",
+          ack_scan_posts("dev", {"dev": {"all": ["a", "b"]}}, {}, []) == ["a", "b"], True)
+    check("ack-scan-handled-empty",
+          ack_scan_posts("dev", {"dev": {"all": ["a"]}}, {"dev": "t"}, []) == [], True)
+    check("status-plan-armed-acked",
+          status_planned_lane("qe", {"all": ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"],
+                                     "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
+                                     "state": None, "next": None, "ctx": None},
+                              dict(stt, rings={"qe:2026-11-02T08:00:00": -1}, ack_since="2026-11-02T07:30:00"),
+                              "IDLE-static") == "pending: provisioned from issue text", True)
     print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
     return 0 if passed == total else 1
 
