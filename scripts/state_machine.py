@@ -86,6 +86,7 @@ CTX_CRIT = 85  # checkpoint NOTE first, then /compact; never die at 100%% with u
 AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
 AUDIT_SLA_RERING_S = 900  # outstanding audit demand this old -> one extra ring (#461 B)
 AUDIT_SLA_ESCALATE_S = 1800  # outstanding audit demand this old -> NEED escalation (#461 B)
+ACK_SLA_S = 900  # worker orders carry ack-by <filed+900s>; overdue -> one nudge (#461 F)
 AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
 AUDIT_RETASK_S = 300  # re-ring a lost/idle auditor order after ~2 ticks
 AUDIT_TEARDOWN_TICKS = 2  # idle ticks after verdict handoff before teardown
@@ -1412,34 +1413,35 @@ def retire_room(ctx, issue, room_dir, st, boxes=None):
     return acts, True
 
 
-def ring_line(box, text, oid=None, issue=None):
+def ring_line(box, text, oid=None, issue=None, ack_by=None):
     """Doorbell pointer text. Pure.
 
     issue=None keeps the legacy bare-box format byte-identical; with an
     issue the pointer is room-scoped so shared dev/qe sessions cannot
-    misdeliver it (G2)."""
-    suffix = (" [oid %s]" % oid) if oid else ""
+    misdeliver it (G2). ack_by (a deadline stamp) slots BEFORE the oid so
+    [oid ...] stays the trailing token (#461 F)."""
+    suffix = (" ack-by %s" % ack_by if ack_by else "") + ((" [oid %s]" % oid) if oid else "")
     if issue is None:
         return "inbox: %s%s -- read inbox/%s.md" % (text, suffix, box)
     return "inbox [#%s/%s]: %s%s -- read inbox/%s.md" % (issue, box, text, suffix, box)
 
 
-def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None, pointer=None, tag_oid=True):
+def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None, pointer=None, tag_oid=True,
+         ack_by=None):
     """Doorbell. Idle sessions only (caller checks). inbox = box pointer,
     notes = consultant channel (logs/consultant-notes.md). oid, when given,
     is the ledger order id the worker must ACK (post_update ref=<oid>).
     pointer overrides the box path hint (for cross-room pointers);
     tag_oid=False suppresses the [oid ...] suffix (auditor lanes are never
-    asked to ACK)."""
+    asked to ACK). ack_by slots before the oid suffix (#461 F)."""
     if channel == "notes":
         line = "notes: %s -- read logs/consultant-notes.md" % text
     else:
+        segs = (" ack-by %s" % ack_by if ack_by else "") + ((" [oid %s]" % oid) if (oid and tag_oid) else "")
         if pointer:
-            line = "inbox: %s%s -- read %s" % (
-                text, (" [oid %s]" % oid) if (oid and tag_oid) else "",
-                pointer)
+            line = "inbox: %s%s -- read %s" % (text, segs, pointer)
         else:
-            line = ring_line(box, text, oid=(oid if tag_oid else None), issue=issue)
+            line = ring_line(box, text, oid=(oid if tag_oid else None), issue=issue, ack_by=ack_by)
     if ctx.dry:
         return "WOULD ring %s: %s" % (sess, line)
     rc, out = ctx.run([ctx.agent_up, "msg", sess, line], timeout=60)
@@ -1448,15 +1450,98 @@ def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None, pointer=No
     return "RING-FAILED %s: %s" % (sess, out.strip()[:120])
 
 
-def coord_note(role, text):
+def coord_note(role, text, ack_by=None):
     """Engine order line for a lane box + its ledger oid. Pure.
 
     The oid embeds the post timestamp exactly as has_unacked derives it,
-    so the written id and the ledger key always agree.
+    so the written id and the ledger key always agree. ack_by=True stamps
+    ack-by <filed+ACK_SLA_S> before the oid so [oid ...] stays trailing;
+    the caller records the deadline via file_order_deadline (#461 F).
     """
     ts = utcnow()
     oid = "%s:%s" % (role, ts[:19])
-    return ("%s FROM=coord NOTE :: %s [oid %s]" % (ts, text, oid)), oid
+    body = text + (" ack-by %s" % ack_by_ts(ts[:19]) if ack_by else "")
+    return ("%s FROM=coord NOTE :: %s [oid %s]" % (ts, body, oid)), oid
+
+
+def ack_by_ts(order_ts19, sla_s=ACK_SLA_S):
+    """ack-by deadline stamp for an order ts, or None. Pure."""
+    try:
+        base = datetime.datetime.strptime((order_ts19 or "")[:19], "%Y-%m-%dT%H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+    return (base + datetime.timedelta(seconds=sla_s)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def ack_overdue(by_ts, now_ts):
+    """True when now is past the ack-by deadline. Pure.
+
+    No deadline (legacy/grandfathered orders) never nudges."""
+    try:
+        now = datetime.datetime.strptime((now_ts or "")[:19], "%Y-%m-%dT%H:%M:%S")
+        by = datetime.datetime.strptime((by_ts or "")[:19], "%Y-%m-%dT%H:%M:%S")
+    except (ValueError, TypeError):
+        return False
+    return now > by
+
+
+def ack_nudge_due(overdue, nudged):
+    """True on the first overdue sighting only. Pure."""
+    return bool(overdue) and not nudged
+
+
+def ack_overdue_ids(deadlines, rings, now_ts):
+    """Outstanding oids past their ack-by deadline, oldest first. Pure.
+
+    deadlines is st["ack_deadline"] ({oid: {"by": ts, "nudged": 0/1}});
+    only live ledger oids qualify (acked/escalated/removed never nudge).
+    Ledger oids embed ts19, so oid sort is chronological."""
+    out = []
+    for oid, info in (deadlines or {}).items():
+        val = (rings or {}).get(oid)
+        if val is None or val in (-1, RING_ESCALATED):
+            continue
+        if ack_overdue((info or {}).get("by"), now_ts):
+            out.append(oid)
+    return sorted(out)
+
+
+def file_order_deadline(ad_store, oid):
+    """Record the ack-by deadline for a freshly filed order. Pure.
+
+    Mutates and returns the passed store ({oid: {"by": ts, "nudged": 0}});
+    orders without a parseable ts are not tracked (never nudge)."""
+    ts = oid.split(":", 1)[1][:19] if ":" in (oid or "") else ""
+    by = ack_by_ts(ts)
+    if by:
+        ad_store[oid] = {"by": by, "nudged": 0}
+    return ad_store
+
+
+def prune_deadlines(deadlines, rings):
+    """Drop acked/escalated/removed orders from the deadline store. Pure."""
+    return {o: i for o, i in (deadlines or {}).items()
+            if (rings or {}).get(o) not in (None, -1, RING_ESCALATED)}
+
+
+def write_ack_overdue(room_dir, pairs):
+    """Live-only ack.overdue visibility file (one 'oid by' per line). I/O.
+
+    Absent/empty list removes the file; returns a short status for logs."""
+    p = os.path.join(room_dir, "ack.overdue")
+    try:
+        if not pairs:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+            return "ack-overdue-clear"
+        with open(p, "w") as f:
+            for oid, by in pairs:
+                f.write("%s %s\n" % (oid, by))
+        return "ack-overdue-%d" % len(pairs)
+    except OSError:
+        return "ack-overdue-FAILED"
 
 
 def write_brief(ctx, room_dir, name, content):
@@ -2353,6 +2438,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     rings = room_rings(st)
     ack_since = st.get("ack_since") or None
     ack_failures = int(st.get("ack_failures", 0) or 0)
+    ad_store = {}  # item F (#461): ack-by deadlines filed this tick
     resume_now = {}
     for role in ("dev", "qe"):
         nx = (boxes[role]["next"] or "")
@@ -2451,6 +2537,24 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             posts = boxes.get(orole, {}).get("all", [])
             if posts and posts[-1][:19] > ots:
                 del rings[oid]
+    # Item F (#461): ACK deadline nudge. Overdue live orders get one lane
+    # ring with NO new oid and NO ring-count increment; the lane's ACK
+    # clears it via the normal ring pruning (deadline pruned alongside).
+    for _oid in ack_overdue_ids(st.get("ack_deadline"), rings, utcnow()):
+        _lane = ref_lane(_oid)
+        if _lane not in ("dev", "qe"):
+            continue
+        _info = (st.get("ack_deadline") or {}).get(_oid) or {}
+        if not ack_nudge_due(True, _info.get("nudged")):
+            continue
+        actions.append("ACK-OVERDUE %s (ack-by %s)" % (_oid, _info.get("by")))
+        events.append("ack-overdue-%s" % _lane)
+        if _lane not in deaf and probes[_lane].startswith("IDLE") \
+                and not session_rung(actions, SESS[_lane], cycle["rung"]):
+            actions.append(ring(ctx, SESS[_lane], _lane,
+                                "ACK overdue -- reply with ACK:%s" % _oid,
+                                oid=_oid, issue=issue))
+        ad_store[_oid] = {"by": _info.get("by"), "nudged": 1}
     for role, oid in resume_now.items():
         if role in has_unacked or role in deaf:
             continue
@@ -2557,7 +2661,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         # ring with the standard dev:<ts>/qe:<ts> oid), not a ring-only
         # pointer. first:<role> stays only the one-shot guard flag: set
         # -1 when filed (never rung, never ACKed; never write 0 — falsy).
-        note, ioid = coord_note(role, "INTAKE #%d %s first brief -- read prompts/%s.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, role, role))
+        note, ioid = coord_note(role, "INTAKE #%d %s first brief -- read prompts/%s.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, role, role), ack_by=True)
         if ioid in rings:
             actions.append("order deferred %s intake (oid collision)" % role)
             continue
@@ -2566,6 +2670,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             rings[ioid] = 0
             rings[first_oid] = -1
             has_unacked.add(role)
+            file_order_deadline(ad_store, ioid)
             if role == "dev":
                 cycle["dev_order"] = issue
         else:
@@ -2573,6 +2678,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 rings[ioid] = 0
                 rings[first_oid] = -1
                 has_unacked.add(role)
+                file_order_deadline(ad_store, ioid)
                 actions.append("order filed %s intake (oid %s)" % (role, ioid))
                 if role == "dev":
                     cycle["dev_order"] = issue
@@ -2633,12 +2739,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                  % (target, issue, target, target, target))
         actions.append(write_brief(ctx, room_dir,
                                    "dev-%d-backlog.txt" % target, brief))
-        note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target))
+        note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target), ack_by=True)
         if ctx.dry:
             actions.append("WOULD post backlog order #%d (oid %s)" % (target, boid))
+            file_order_deadline(ad_store, boid)
         else:
             if append_box_note(room_dir, "dev", note):
                 rings[boid] = 0
+                file_order_deadline(ad_store, boid)
                 actions.append("order filed dev backlog #%d (oid %s)" % (target, boid))
                 if ("dev" not in deaf and probes["dev"].startswith("IDLE")
                         and not session_rung(actions, SESS["dev"], cycle["rung"])):
@@ -2677,18 +2785,20 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     if not dd_store and impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
                                           fresh.get("dev"), _approved, rings, has_unacked,
                                           stored_impl):
-        note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue)
+        note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue, ack_by=True)
         if di_oid in rings:
             actions.append("order deferred dev IMPL (oid collision)")
         elif ctx.dry:
             actions.append("WOULD post dev IMPL order (oid %s)" % di_oid)
             rings[di_oid] = 0
             has_unacked.add("dev")
+            file_order_deadline(ad_store, di_oid)
             di_store = {"next": _dev_next, "oid": di_oid}
             cycle["dev_order"] = issue
         elif append_box_note(room_dir, "dev", note):
             rings[di_oid] = 0
             has_unacked.add("dev")
+            file_order_deadline(ad_store, di_oid)
             actions.append("order filed dev IMPL (oid %s)" % di_oid)
             di_store = {"next": _dev_next, "oid": di_oid}
             cycle["dev_order"] = issue
@@ -2753,12 +2863,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     # exactly the filed-or-due set (S3).
     qo_store = None
     if qe_will_file:
-        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts))
+        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts), ack_by=True)
         if ctx.dry:
             actions.append("WOULD post qe order IMPL READY (oid %s)" % qoid)
+            file_order_deadline(ad_store, qoid)
         else:
             if append_box_note(room_dir, "qe", note):
                 rings[qoid] = 0
+                file_order_deadline(ad_store, qoid)
                 actions.append("order filed qe IMPL READY (oid %s)" % qoid)
                 qo_store = {"for": impl_ts}
                 if ("qe" not in deaf and probes["qe"].startswith("IDLE")
@@ -2867,6 +2979,16 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["qe_evidence_need"] = qee_store
         else:
             s.pop("qe_evidence_need", None)
+        if ad_store:
+            merged_ad = dict(s.get("ack_deadline") or {})
+            merged_ad.update(ad_store)
+            s["ack_deadline"] = merged_ad
+        if isinstance(s.get("ack_deadline"), dict):
+            kept = prune_deadlines(s["ack_deadline"], rings)
+            if kept:
+                s["ack_deadline"] = kept
+            else:
+                s.pop("ack_deadline", None)
         if wake_newest:
             s["wake_seen"] = wake_newest
         if halt_now:
@@ -2881,6 +3003,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     else:
         if not write_state_locked(room_dir, mutate):
             actions.append("STATE-WRITE-FAILED #%d" % issue)
+        else:
+            _odd = st.get("ack_deadline") or {}
+            _opairs = [(o, (_odd.get(o) or {}).get("by"))
+                       for o in ack_overdue_ids(_odd, rings, utcnow())]
+            write_ack_overdue(room_dir, _opairs)
 
     node["actions"] = actions
     node["acked"] = len(acked)
@@ -4163,6 +4290,45 @@ def mode_self_test():
           ring_line("dev", "x", issue=240) == "inbox [#240/dev]: x -- read inbox/dev.md", True)
     check("ring-line-scoped-oid",
           ring_line("qe", "y", oid="qe:2026-11-02T08:00:00", issue=54) == "inbox [#54/qe]: y [oid qe:2026-11-02T08:00:00] -- read inbox/qe.md", True)
+    check("ack-by-adds-sla",
+          ack_by_ts("2026-11-02T21:28:52") == "2026-11-02T21:43:52Z", True)
+    check("ack-by-bad-ts-none",
+          ack_by_ts("garbage") is None and ack_by_ts("") is None
+          and ack_by_ts(None) is None, True)
+    check("ack-overdue-true",
+          ack_overdue("2026-11-02T21:43:52Z", "2026-11-02T21:43:53Z"), True)
+    check("ack-overdue-false",
+          ack_overdue("2026-11-02T21:43:52Z", "2026-11-02T21:43:52Z") is False
+          and ack_overdue("2026-11-02T21:43:52Z", "2026-11-02T21:00:00Z") is False
+          and ack_overdue(None, "2026-11-02T21:43:53Z") is False, True)
+    check("ack-nudge-once",
+          ack_nudge_due(True, 0) is True and ack_nudge_due(True, 1) is False
+          and ack_nudge_due(False, 0) is False, True)
+    check("ack-deadline-pruned-on-ack",
+          prune_deadlines({"a": {"by": "x"}, "b": {"by": "y"}},
+                          {"a": -1, "b": 1}) == {"b": {"by": "y"}}, True)
+    _odl = {"o1": {"by": "2026-11-02T21:00:00Z", "nudged": 0},
+            "o2": {"by": "2026-11-02T23:00:00Z", "nudged": 0},
+            "o3": {"nudged": 0},
+            "o4": {"by": "2026-11-02T21:00:00Z", "nudged": 0}}
+    check("ack-overdue-ids",
+          ack_overdue_ids(_odl, {"o1": 1, "o2": 1, "o3": 1, "o4": -1},
+                          "2026-11-02T22:00:00Z") == ["o1"], True)
+    _rl = ring_line("dev", "x", oid="dev:2026-11-02T08:00:00", issue=99,
+                    ack_by="2026-11-02T08:15:00Z")
+    check("ring-line-ack-by-keeps-oid-last",
+          "[oid dev:2026-11-02T08:00:00] -- read inbox/dev.md" in _rl
+          and _rl.index(" ack-by 2026-11-02T08:15:00Z ") < _rl.index(" [oid "), True)
+    _cn, _coid = coord_note("dev", "x", ack_by=True)
+    check("coord-note-ack-by-keeps-oid-last",
+          _cn.endswith("[oid %s]" % _coid) and " ack-by " in _cn, True)
+    _cn0, _coid0 = coord_note("dev", "x")
+    check("coord-note-legacy-no-ack-by", "ack-by" not in _cn0, True)
+    _ad = {}
+    check("file-order-deadline",
+          file_order_deadline(_ad, "dev:2026-11-02T21:28:52") == {"dev:2026-11-02T21:28:52": {"by": "2026-11-02T21:43:52Z", "nudged": 0}}, True)
+    check("file-order-deadline-bad-oid",
+          file_order_deadline({}, "bogus") == {}, True)
     check("ring-line-notes-unchanged",
           ring(SimpleNamespace(dry=True), "s", "", "t", channel="notes") == "WOULD ring s: notes: t -- read logs/consultant-notes.md", True)
     _w1 = "2026-11-02T18:46:59Z FROM=dev WAKE :: inbox: dev READY"
