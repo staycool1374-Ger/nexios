@@ -114,6 +114,9 @@ usage: agent_up.sh <mode> [...]
                      <role> is dev|qe|auditor|consultant — the fence for it is
                      rendered from tools/agents/fence/ at launch (never a path).
   audit <issue>      launch $AUDIT_SESS from <runtime>/prompts/auditor.txt
+                     (headless: --agent nexios-audit --auto from the role delta;
+                     ask auto-approved, deny enforced; other roles stay
+                     interactive).
   audit-diff [branch] [--base <rev>]
                      write the audit diff to audits/pending_patch.diff
                      (base defaults to merge-base main <branch>; must be
@@ -255,6 +258,27 @@ role_field() {
   need_file "$RENDERER"
   python3 "$RENDERER" --meta --role "$1" --field "$2" --repo-root "$REPO_ROOT" \
     --fence-root "$FENCE_DIR"
+}
+
+# $1 role — extra opencode CLI flags from the role delta (auditor only:
+# --agent <name> selects its cage as the session primary, --auto approves
+# asks while keeping deny enforced). Empty for every other role.
+role_launch_flags() {
+  [ $# -eq 1 ] || fail "role_launch_flags needs a role"
+  local out="" ag au
+  ag=$(role_field "$1" agent)
+  case "$ag" in ''|*[[:space:]]*) ;; *) out="$out --agent $ag";; esac
+  au=$(role_field "$1" auto)
+  case "$au" in True|true) out="$out --auto";; esac
+  printf '%s' "$out"
+}
+
+# $1 role, $2 rendered config, $3 tmpdir — the exact opencode command line
+# run_session launches (single builder; self-test inspects this, never a copy).
+session_launch_cmd() {
+  [ $# -eq 3 ] || fail "session_launch_cmd needs: <role> <config> <tmpdir>"
+  printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=%s OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s%s' \
+    "$3" "$2" "$1" "$OPENCODE_BIN" "$(role_launch_flags "$1")"
 }
 
 render_all() {
@@ -654,9 +678,9 @@ mode_run() {
 mode_audit() {
   [ $# -eq 1 ] || fail "audit needs an issue number"
   local rt; rt=$(runtime_dir "$1")
-  # Launch metadata (cwd + prompt file) comes from the role delta, not a
-  # hardcoded path: the auditor reads the dev checkout (diff + files) and never
-  # writes, and the delta is the single statement of that.
+  # Launch metadata (cwd + prompt file + --agent/--auto flags) comes from the
+  # role delta, not a hardcoded path: the auditor reads the dev checkout (diff
+  # + files) and never writes, and the delta is the single statement of that.
   local dir prompt
   dir=$(role_dir "$(role_field auditor cwd)")
   prompt="$rt/prompts/$(role_field auditor prompt)"
@@ -707,9 +731,23 @@ run_session() {
       *[[:space:]]*) fail "launch path contains whitespace, which the fenced env line cannot express: '$v'" ;;
     esac
   done
+  # Headless roles (auditor) must never be reused across a launch-flag change:
+  # a live session predating --auto would keep stalling on modals while the
+  # fence on disk already promises auto-approval. Detect and recycle.
+  if [ "$reused" = 1 ]; then
+    case "$(role_launch_flags "$role")" in
+      *"--auto"*)
+        if ! pane_tree_has_arg "$name" "--auto"; then
+          info "recycling '$name': live session predates --auto (kill + relaunch)"
+          tmux kill-session -t "$name" 2>/dev/null || true
+          reused=0
+        fi
+        ;;
+    esac
+  fi
   if [ "$reused" = 0 ]; then
     tmux new-session -d -s "$name" -c "$dir" -x 200 -y 50
-    tmux send-keys -t "$name" "env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=$tdir OPENCODE_CONFIG=$cfg NEXIOS_AGENT_ROLE=$role $OPENCODE_BIN" Enter
+    tmux send-keys -t "$name" "$(session_launch_cmd "$role" "$cfg" "$tdir")" Enter
     sleep "$TUI_BOOT_WAIT"
     check_fenced "$name" "$dir" "$cfg" "$role" || {
       tmux kill-session -t "$name" 2>/dev/null || true
@@ -767,6 +805,28 @@ check_fenced() {
   done
   [ "$found" = 1 ] && return 0
   echo "pane tree of '$name' has no opencode with PWD=$want_pwd + OPENCODE_CONFIG=$want_cfg + NEXIOS_AGENT_ROLE=$want_role + TMPDIR=$want_tmp (saw: ${seen:-<none>})" >&2
+  return 1
+}
+
+# $1 tmux session, $2 literal argv token — true iff any process in the
+# session pane's tree carries the token as an exact argv word (self-test seam
+# for the --auto recycle guard; never launches anything itself).
+pane_tree_has_arg() {
+  local name="$1" want="$2"
+  local pane pid i
+  pane=$(tmux list-panes -t "$name" -F '#{pane_pid}' 2>/dev/null | head -1)
+  [ -n "$pane" ] || return 1
+  local pids=("$pane")
+  i=0
+  while [ "$i" -lt "${#pids[@]}" ]; do
+    for pid in $(pgrep -P "${pids[$i]}" 2>/dev/null); do pids[${#pids[@]}]="$pid"; done
+    i=$((i + 1))
+  done
+  for pid in "${pids[@]}"; do
+    if ps -ww -o args= -p "$pid" 2>/dev/null | tr ' ' '\n' | grep -qx -- "$want"; then
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -1337,6 +1397,21 @@ mode_self_test() {
   chk bash -c 'printf "%s" "$1" | grep -q "OPENCODE_CONFIG=.*/rendered/qe/opencode.resolved.json"' _ "$qc"
   chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=dev"' _ "$dc"
   chk bash -c 'printf "%s" "$1" | grep -q "NEXIOS_AGENT_ROLE=qe"' _ "$qc"
+  # auditor launches headless with --agent + --auto (deny still enforced);
+  # every other role stays interactive (no flags).
+  local ac; ac=$("$SCRIPT_DIR/agent_up.sh" __run-cmd auditor)
+  chk bash -c 'printf "%s" "$1" | grep -q -- "--agent nexios-audit"' _ "$ac"
+  chk bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$ac"
+  chk bash -c 'test $(printf "%s" "$1" | grep -o -- "--auto" | wc -l) = 1' _ "$ac"
+  chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$dc"
+  chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--auto"' _ "$qc"
+  chk_neg bash -c 'printf "%s" "$1" | grep -q -- "--agent"' _ "$dc"
+  # __has-arg: session pane-tree argv probe (self-test seam only)
+  tmux new-session -d -s "agentup-arg-$$" "sleep 30" >/dev/null
+  chk "$SCRIPT_DIR/agent_up.sh" __has-arg "agentup-arg-$$" sleep
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __has-arg "agentup-arg-$$" --auto
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __has-arg "agentup-nosuch-$$" sleep
+  tmux kill-session -t "agentup-arg-$$" >/dev/null 2>&1 || true
   # L3 traversal / unknown roles are refused before launching
   chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd ../../../tmp/evil
   chk_neg "$SCRIPT_DIR/agent_up.sh" __run-cmd consultant/../dev
@@ -1715,8 +1790,8 @@ mode_launch_cmd() {
   case "$1" in dev|qe|auditor|consultant) ;; *) fail "__run-cmd needs a role (dev|qe|auditor|consultant), got '$1'" ;; esac
   local cfg
   cfg=$(render_role_config "$1")
-  printf 'env -u OPENCODE_CONFIG -u OPENCODE_CONFIG_CONTENT TMPDIR=/tmp/agentup-tmp-agentup-probe OPENCODE_CONFIG=%s NEXIOS_AGENT_ROLE=%s %s\n' \
-    "$cfg" "$1" "$OPENCODE_BIN"
+  session_launch_cmd "$1" "$cfg" /tmp/agentup-tmp-agentup-probe
+  printf '\n'
 }
 
 # Renderer/verifier matrix. No tmux, no opencode, no $NEXIOS_HOME: everything
@@ -2177,6 +2252,7 @@ case "$mode" in
   fence) mode_fence_show "$@" ;;
   __check-clean-tree) mode_check_clean_tree "$@" ;;
   __run-cmd) mode_launch_cmd "$@" ;;
+  __has-arg) pane_tree_has_arg "$@" ;;
   __room-plan) mode_room_plan "$@" ;;
   __consult-cmd) CONSULT_TMPDIR=/tmp/agentup-tmp-probe; consult_tui_cmd ;;
   approve) mode_approve "$@" ;;
