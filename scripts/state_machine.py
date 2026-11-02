@@ -1648,6 +1648,9 @@ READY_FIELD_RE = re.compile(
 QE_DIFF_RE = re.compile(r"diff\s+present\s*:\s*(y|n|yes|no)\b", re.I)
 DONE_WORD_RE = re.compile(r"\bDONE\b")
 VERIFIED_WORD_RE = re.compile(r"\bVERIFIED\b")
+# Branch vocabulary for close-out orders (S3: no leading dash, no ..
+# traversal, no revision syntax — anything exotic fails closed to NEED).
+READY_BRANCH_RE = re.compile(r"^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]{1,120}$")
 # Worktree fallback reads at most this many bytes per tick (S3: a large
 # in-repo patch path must not impose unbounded per-tick I/O/CPU).
 READY_WORKTREE_MAX_BYTES = 1 << 20
@@ -1933,10 +1936,11 @@ def closeout_due(stage, trigger, stored, rings, lane_busy):
 def closeout_branch(posts_all, full_lines, fields):
     """Branch name for close-out orders, or None. Pure.
 
-    The gated READY artifacts first, then branch: in the DONE post body
-    (shape-checked: single token, no whitespace)."""
+    The gated READY artifacts first, then branch: in the DONE post body.
+    Shape-gated to the branch vocabulary (no leading dash, no .., no
+    revision syntax — anything exotic fails closed to NEED)."""
     br = (fields or {}).get("branch") or ""
-    if br and not re.search(r"\s", br):
+    if br and READY_BRANCH_RE.match(br):
         return br
     best = None
     for post in posts_all or []:
@@ -1947,7 +1951,7 @@ def closeout_branch(posts_all, full_lines, fields):
         return None
     for line in post_body_lines(full_lines, best):
         m = re.match(r"^\s*branch\s*:\s*(\S+)\s*$", line, re.I)
-        if m:
+        if m and READY_BRANCH_RE.match(m.group(1)):
             return m.group(1)
     return None
 
@@ -3151,12 +3155,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                     has_unacked.add(_c_lane)
                     file_order_deadline(ad_store, _c_oid)
                     co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                    events.append("closeout-order-filed")
                 elif append_box_note(room_dir, _c_lane, _c_note):
                     rings[_c_oid] = 0
                     has_unacked.add(_c_lane)
                     file_order_deadline(ad_store, _c_oid)
                     actions.append("order filed %s %s (oid %s)" % (_c_lane, _c_stage, _c_oid))
                     co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                    events.append("closeout-order-filed")
                     if (_c_lane not in deaf and probes[_c_lane].startswith("IDLE")
                             and not session_rung(actions, SESS[_c_lane], cycle["rung"])):
                         _c_res = ring(ctx, SESS[_c_lane], _c_lane, "%s order" % _c_stage,
@@ -3166,7 +3172,6 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                             rings[_c_oid] = 1
                 else:
                     actions.append("NOTE-FAILED %s %s #%d" % (_c_lane, _c_stage, issue))
-                events.append("closeout-order-filed")
         if _c_stage == "merge-close" and not st.get("gh_closed") and not ctx.dry:
             _c_base = co_store if co_store is not None else (st.get("closeout") or {})
             if _c_base.get("for"):
@@ -5035,6 +5040,10 @@ def mode_self_test():
           closeout_due("impl", "2026-11-02T08:03:09Z", {}, {}, False) is False, True)
     check("closeout-branch-fields",
           closeout_branch([], [], {"branch": "fix/x"}) == "fix/x", True)
+    check("closeout-branch-rejects-dash-dotdot",
+          closeout_branch([], [], {"branch": "-x"}) is None
+          and closeout_branch([], [], {"branch": "a..b"}) is None
+          and closeout_branch([], [], {"branch": "a b"}) is None, True)
     check("closeout-branch-done-body",
           closeout_branch(["2026-11-02T08:03:09Z FROM=dev READY :: step DONE",
                            "branch: fix/y"],
