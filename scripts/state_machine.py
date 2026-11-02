@@ -687,6 +687,24 @@ def parse_verdict(line):
             "streak": streak, "escalate": "ESCALATE" in rest}
 
 
+def need_idle_missing(role, has_unacked, probe, fresh_posts, declared_next, rang):
+    """True when a NEED-idle note is warranted for one lane.
+
+    A fresh wire-light NOTE suppresses the false NEED for exactly the
+    tick that consumes it (wire-gap NEED-back at tick time remains the
+    format signal; next tick with no fresh post and no NEXT still NEEDs).
+    """
+    if role in has_unacked:
+        return False
+    if not str(probe).startswith("IDLE"):
+        return False
+    if fresh_posts:
+        return False
+    if rang:
+        return False
+    return not declared_next or declared_next.startswith("idle")
+
+
 def tick_room(ctx, issue, room_dir, st, rooms_all):
     """One deterministic tick for one room. Returns graph node + table rows."""
     node = collections.OrderedDict()
@@ -909,11 +927,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
             events.append("backlog-swap #%d" % target)
 
     for role in ("dev", "qe"):
-        if role not in has_unacked and probes[role].startswith("IDLE") and not any(
-                a.startswith("rang " + SESS[role]) or
-                a.startswith("WOULD ring " + SESS[role]) for a in actions):
-            if not boxes[role]["next"] or boxes[role]["next"].startswith("idle"):
-                actions.append("NEED %s idle with no briefed work (no invention)" % role)
+        rang = any(a.startswith("rang " + SESS[role]) or
+                   a.startswith("WOULD ring " + SESS[role]) for a in actions)
+        if need_idle_missing(role, has_unacked, probes[role],
+                             fresh.get(role), boxes[role]["next"], rang):
+            actions.append("NEED %s idle with no briefed work (no invention)" % role)
 
     if verdict.get("escalate"):
         slow = {r: slow_probe(ctx, SESS[r]) for r in ("dev", "qe")}
@@ -1448,6 +1466,30 @@ def cycle_productive(all_actions):
     return any(a.startswith(PRODUCTIVE_PREFIXES) for a in all_actions)
 
 
+def cycle_progress(all_actions, room_nodes, dry=False):
+    """True if the cycle shows real work (engine acts OR worker activity).
+
+    Coordinator/coord.md lines are excluded by construction: BOXES covers
+    only dev/qe/auditor and the watchdog fingerprint counts only
+    FROM=(dev|qe|audit). ESCALATE/NEED alone are intentionally not progress.
+    Dry mode preserves legacy exit semantics (no watchdog run, no cursor
+    advance, so frozen signals must not pin quiet at 0).
+    """
+    if cycle_productive(all_actions):
+        return True
+    if dry:
+        return False
+    for node in room_nodes or []:
+        if (node.get("verdict") or {}).get("kind") == "CHANGED":
+            return True
+        try:
+            if int(node.get("acked") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def load_saved_seq(ctx):
     try:
         n = int(json.load(open(ctx.graph_path())).get("tick", 0))
@@ -1533,6 +1575,7 @@ def cmd_tick(ctx, issues, interval):
         ctx.tick_seq += 1
         ctx.log("tick #%d rooms=%s" % (ctx.tick_seq, [i for i, _, _ in rooms]))
         cycle_actions = []
+        cycle_nodes = []
         for issue, rdir, st in rooms:
             node, rows = tick_room(ctx, issue, rdir, st, rooms)
             table = fmt_table(issue, node.get("verdict", {}), rows)
@@ -1543,13 +1586,17 @@ def cmd_tick(ctx, issues, interval):
             for a in node.get("actions", []):
                 ctx.log("#%d :: %s" % (issue, a))
                 cycle_actions.append(a)
+            cycle_nodes.append(node)
         ctx.log(write_graph(ctx))
         if not interval:
             break
-        if cycle_productive(cycle_actions):
+        if cycle_progress(cycle_actions, cycle_nodes, dry=ctx.dry):
+            if quiet > 0:
+                ctx.log("quiet reset after %d quiet cycle(s)" % quiet)
             quiet = 0
         else:
             quiet += 1
+            ctx.log("quiet %d/3 (no progress)" % quiet)
             if quiet >= 3:
                 msg = "all quiet for 3 cycles: no work pending, ending cleanly"
                 print(msg, flush=True)
@@ -1700,6 +1747,57 @@ def cmd_provision(ctx, issues, a):
     return rc_all
 
 
+def mode_self_test():
+    """Deterministic regression for #442 quiet-progress + NEED-idle matrix."""
+    passed = 0
+    total = 0
+
+    def check(name, got, want=True):
+        nonlocal passed, total
+        total += 1
+        ok = bool(got) is bool(want)
+        print("%s %s" % ("PASS" if ok else "FAIL", name), flush=True)
+        if ok:
+            passed += 1
+        return ok
+
+    mk = lambda kind, acked: {"verdict": {"kind": kind}, "acked": acked}
+    check("progress-empty-false", cycle_progress([], [], dry=False), False)
+    check("progress-unchanged-0-false",
+          cycle_progress(["NOTE idle"], [mk("UNCHANGED", 0)], dry=False), False)
+    check("progress-rang-true",
+          cycle_progress(["rang nexios-dev"], [mk("UNCHANGED", 0)], dry=False), True)
+    check("progress-changed-true",
+          cycle_progress(["NOTE idle"], [mk("CHANGED", 0)], dry=False), True)
+    check("progress-acked-true",
+          cycle_progress(["NEED qe idle with no briefed work (no invention)"],
+                         [mk("UNCHANGED", 2)], dry=False), True)
+    check("progress-dry-signals-false",
+          cycle_progress([], [mk("CHANGED", 1)], dry=True), False)
+    check("progress-dry-rang-true",
+          cycle_progress(["WOULD ring nexios-dev"], [mk("UNCHANGED", 0)], dry=True), True)
+    check("need-idle-true",
+          need_idle_missing("dev", set(), "IDLE-static", [], None, False), True)
+    check("need-idle-fresh-false",
+          need_idle_missing("dev", set(), "IDLE-static", ["2026-11-02T07:44:32Z FROM=qe NOTE :: x"],
+                            None, False), False)
+    check("need-idle-working-false",
+          need_idle_missing("dev", set(), "WORKING-markers", [], None, False), False)
+    check("need-idle-next-false",
+          need_idle_missing("dev", set(), "IDLE-static", [], "working :: parked", False), False)
+    check("need-idle-unacked-false",
+          need_idle_missing("dev", {"dev"}, "IDLE-static", [], None, False), False)
+    check("need-idle-rang-false",
+          need_idle_missing("dev", set(), "IDLE-static", [], None, True), False)
+    check("parse-changed", parse_verdict("CHANGED 51 (8 lines differ)")["kind"] == "CHANGED", True)
+    check("wire-gaps-state",
+          wire_gaps(["2026-11-02T07:44:32Z FROM=qe NOTE :: x", "body"], "2026-11-02T07:44:32Z FROM=qe NOTE :: x") == ["STATE", "NEXT"], True)
+    fresh_first = new_posts({"dev": {"all": ["2026-11-02T07:44:32Z FROM=dev NOTE :: x"]}}, {})
+    check("new-posts-first-sight-empty", fresh_first["dev"] == [], True)
+    print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
+    return 0 if passed == total else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="NexIOS deterministic state machine")
     ap.add_argument("--repo", default=None)
@@ -1723,16 +1821,19 @@ def main(argv=None):
     pv.add_argument("--dev-branch", default="main")
     pv.add_argument("--qe-branch", default="testbed")
     pv.add_argument("--no-launch", action="store_true")
+    sub.add_parser("selftest")
     for _p in (t, s, pv):
         _p.add_argument("--repo", default=None)
         _p.add_argument("--agent-up", default=None)
         _p.add_argument("--log-dir", default=None)
         _p.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
+    if a.cmd == "selftest":
+        return mode_self_test()
     issues = None
-    if a.cmd != "provision" and not a.all:
+    if a.cmd in ("tick", "status") and not getattr(a, "all", False):
         issues = set(int(x) for x in a.issues.split(",") if x.strip()) or None
-        if issues is None and not a.all:
+        if issues is None and not getattr(a, "all", False):
             ap.error("pass --issues 51,52 or --all")
     ctx = Ctx(a)
     ctx.open_log()

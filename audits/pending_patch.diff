@@ -1,1549 +1,257 @@
-diff --git a/docs/specs/configuration.md b/docs/specs/configuration.md
-index dde664209..d8522795d 100644
---- a/docs/specs/configuration.md
-+++ b/docs/specs/configuration.md
-@@ -229,3 +229,9 @@ requires its server knob; `CONFIG_BLOCK_SRV` and `CONFIG_DRIVER_PD_BLOCK`
- are mutually exclusive (single block owner); fb/block/net PD knobs fail
- closed until the S4/S5/S6 SDF rows land. See `docs/specs/driver-pds.md`,
- `docs/specs/timer-srv.md`, `docs/specs/vfs-srv.md`, `docs/specs/block-srv.md`.
-+
-+### 1.13 Server PD externalization — term/log (issue #51, step a)
-+`CONFIG_TERM_SRV` (0) · `CONFIG_LOG_SRV` (0) ·
-+`CONFIG_TERM_SRV_FAULT_INJECT` (0) · `CONFIG_LOG_SRV_FAULT_INJECT` (0).
-+Same discipline as §1.12 (OFF = bit-identical in-kernel behavior;
-+fault-inject requires its server knob).
-diff --git a/docs/specs/driver-pds.md b/docs/specs/driver-pds.md
-index 7d13f12d5..f24a8d2be 100644
---- a/docs/specs/driver-pds.md
-+++ b/docs/specs/driver-pds.md
-@@ -45,3 +45,11 @@ epoch+gen-validated replies; tombstone drain for dead owners.
-   are mutually exclusive (hard build error); kernel probing is gated
-   off only by exactly one of them; #47 owns this table's block row
-   (S4/S5/S6 wire the fb/block/net PDs here).
-+
-+## Term/log PDs (issue #51, share this table)
-+
-+TERM_SRV (term-srv.c.elf) + LOG_SRV (log-srv.c.elf) are policy-only
-+rows: `sdf_policy_only()` is true, `sdf_compose` rejects any non-empty
-+variant, and `pd_owns_device` is unconditionally false for both. The
-+#48 SDF boundary test asserts this: no device cap may name a term/log
-+role. See `docs/specs/term-srv.md` for the wire/lifecycle contract.
-diff --git a/docs/specs/term-srv.md b/docs/specs/term-srv.md
-new file mode 100644
-index 000000000..b1d8ed3b0
---- /dev/null
-+++ b/docs/specs/term-srv.md
-@@ -0,0 +1,47 @@
-+# term-srv + log-srv — Policy PD Contracts (issue #51, strangler step a)
-+
-+Userspace terminal-emulation and log-sink PDs behind `CONFIG_TERM_SRV` /
-+`CONFIG_LOG_SRV` (default 0). Step-a delivers PD skeletons + SDF rows +
-+Kconfig OFF shim + loopback/parity + fault demo. No flip: emulation
-+policy and log sinking stay in-kernel.
-+
-+## Wire
-+
-+48 B `TermRpc` / `LogRpc` (mirrors `TimerRpc`; fits
-+`CONFIG_IPC_FAST_PAYLOAD_BYTES`). Ops: BIND (+ policy ops unimplemented
-+pre-flip), INJECT_POISON / INJECT_DROP (one-shot fault drills).
-+Control via `send_sync` (+FAST ≤48B). Bounded wait
-+(`send_sync_bounded`, `kRpcGuardTicks`); epoch + owner id/gen +
-+op-echo validated replies; tombstone drain for dead owners.
-+
-+## SDF rows (empty by structural rule)
-+
-+TERM_SRV and LOG_SRV rows carry zero caps (`sdf_policy_only` enforces
-+emptiness; `sdf_compose` rejects any non-empty policy row). Borrowed
-+mechanics only: serial TX/RX + framebuffer present for term-srv, Klog/
-+Dmesg *read* for log-srv probes. No MMIO, no IRQ, no DMA, no frames —
-+device ownership stays with #48 (fb) and the kernel (serial/console).
-+`sdf_rebind` re-derives nothing (empty row) but bumps the epoch so a
-+restarted PD can never consume pre-restart replies.
-+
-+## Bounded ops
-+
-+Scroll/clear/redraw/status-bar ops carry row budgets; UC MMIO writes
-+stay out of the PD (no device access at all). Drain paths are bounded
-+(16-entry tombstone ring, drop-oldest with counter). No spinlock across
-+`reschedule`; no allocation on any path; OOM-as-error everywhere.
-+
-+## Pre-flip status
-+
-+Emulation (Terminal/draw/scroll/prompt) and log sinking stay in-kernel.
-+The PDs answer BIND and typed `-ENOSYS` for everything else (verified
-+byte-identical OFF vs ON: the kernel never calls them). The flip
-+(policy migration, Klog/Dmesg consumer handoff) is a later step with
-+the §7 gate (audit + test-full debug AND release + delta-0).
-+
-+## Gates
-+
-+ON build boots both PDs (daemon PIDs live); parity
-+`tools/term-srv-parity.sh` OFF == ON S TM sets; fault demo
-+`tools/term-srv-fault-mon.sh` kill → restart → rebind → re-run with
-+no admission wedge (serial artifacts under the tool's outdir).
-diff --git a/src/kernel/log/log_srv.cpp b/src/kernel/log/log_srv.cpp
-new file mode 100644
-index 000000000..4643a4339
---- /dev/null
-+++ b/src/kernel/log/log_srv.cpp
-@@ -0,0 +1,160 @@
-+#include <kernel/log/log_srv.hpp>
-+
-+#if CONFIG_LOG_SRV
-+
-+/*
-+ * NexIOS RTOS — Log-sink PD proxy (issue #51).
-+ * Whole TU is `#if CONFIG_LOG_SRV`-guarded: the OFF build (`0`,
-+ * shipped default) yields an empty TU (no symbols), so the link is
-+ * byte-identical to the pre-#51 tree. The sink path never touches
-+ * Dmesg/Klog — step-a proxy only, no log-source changes.
-+ */
-+
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+
-+namespace kernel {
-+namespace log_srv {
-+namespace {
-+
-+uint64_t g_log_srv_pid = 0;
-+uint32_t g_log_srv_epoch = 1;
-+
-+struct Tombstone {
-+    uint32_t owner_id;
-+    uint32_t owner_gen;
-+};
-+
-+Tombstone g_tombstones[16] = {};
-+uint64_t g_tombstone_count = 0;
-+
-+/// @brief Bounded wait for one server RPC (coarse ticks).
-+/// Fail-closed `-EAGAIN` past this; never parks a kernel task forever.
-+constexpr uint64_t kRpcGuardTicks = 5000;
-+
-+} // namespace
-+
-+void set_log_srv_pid(uint64_t pid) {
-+    g_log_srv_pid = pid;
-+}
-+
-+uint64_t get_log_srv_pid() {
-+    return __atomic_load_n(&g_log_srv_pid, __ATOMIC_RELAXED);
-+}
-+
-+bool log_srv_alive() {
-+    const uint64_t pid = get_log_srv_pid();
-+    if (pid == 0) {
-+        return false;
-+    }
-+    auto *srv = Scheduler::find_task(pid);
-+    if (srv == nullptr) {
-+        return false;
-+    }
-+    return srv->state != TaskState::TERMINATED &&
-+           srv->state != TaskState::REAPED;
-+}
-+
-+uint32_t log_srv_epoch() {
-+    return __atomic_load_n(&g_log_srv_epoch, __ATOMIC_RELAXED);
-+}
-+
-+void log_srv_bump_epoch() {
-+    __atomic_fetch_add(&g_log_srv_epoch, 1U, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_tombstone_count, 0, __ATOMIC_RELAXED);
-+}
-+
-+void log_srv_on_restart(uint64_t pid) {
-+    set_log_srv_pid(pid);
-+    log_srv_bump_epoch();
-+}
-+
-+void log_srv_note_dead_owner(uint32_t owner_id, uint32_t owner_gen) {
-+    // Lock-free ring write (teardown context: no locks, no IPC).
-+    uint64_t count =
-+        __atomic_load_n(&g_tombstone_count, __ATOMIC_RELAXED);
-+    if (count >= 16) {
-+        return; // bounded residual drop (documented, ≤ table size)
-+    }
-+    g_tombstones[count].owner_id = owner_id;
-+    g_tombstones[count].owner_gen = owner_gen;
-+    __atomic_store_n(&g_tombstone_count, count + 1, __ATOMIC_RELAXED);
-+}
-+
-+bool log_srv_rpc(const LogRpc &req, LogRpc &reply) {
-+    const uint64_t pid = get_log_srv_pid();
-+    if (pid == 0 || !log_srv_alive()) {
-+        return false;
-+    }
-+    auto *cur = Scheduler::current_task();
-+    if (cur == nullptr) {
-+        return false;
-+    }
-+    Message msg{};
-+    msg.type = static_cast<uint64_t>(req.op);
-+    msg.priority = cur->priority;
-+    __builtin_memcpy(msg.data, &req, sizeof(req));
-+    msg.data_size = sizeof(req);
-+    Message raw{};
-+    if (!IPC::send_sync_bounded(pid, msg, raw, kRpcGuardTicks)) {
-+        return false;
-+    }
-+    if (raw.data_size != sizeof(reply)) {
-+        return false;
-+    }
-+    __builtin_memcpy(&reply, raw.data, sizeof(reply));
-+    // Reply identity: server, epoch, owner (id+gen). A mismatch is
-+    // dropped by the caller (bounded re-wait), never consumed.
-+    if (raw.sender_id != pid || reply.epoch != log_srv_epoch() ||
-+        reply.owner_id != req.owner_id ||
-+        reply.owner_gen != req.owner_gen) {
-+        return false;
-+    }
-+    return true;
-+}
-+
-+namespace {
-+
-+bool log_srv_bind_op(LogSrvOp op, int64_t *out_status) {
-+    LogRpc req{};
-+    req.op = static_cast<uint8_t>(op);
-+    auto *cur = Scheduler::current_task();
-+    if (cur == nullptr) {
-+        return false;
-+    }
-+    req.owner_id = static_cast<uint32_t>(cur->id);
-+    req.owner_gen = cur->generation;
-+    req.epoch = log_srv_epoch();
-+    LogRpc reply{};
-+    if (!log_srv_rpc(req, reply)) {
-+        return false;
-+    }
-+    if (out_status != nullptr) {
-+        *out_status = reply.status;
-+    }
-+    return true;
-+}
-+
-+} // namespace
-+
-+int64_t log_srv_probe_bind() {
-+    int64_t status = -38;
-+    if (!log_srv_bind_op(LogSrvOp::BIND, &status)) {
-+        return -38; // -ENOSYS: server unavailable pre-flip
-+    }
-+    return status;
-+}
-+
-+int64_t log_srv_fault_drop() {
-+    int64_t status = -38;
-+    if (!log_srv_bind_op(LogSrvOp::INJECT_DROP, &status)) {
-+        return -38; // -ENOSYS: server unavailable pre-flip
-+    }
-+    return status;
-+}
-+
-+} // namespace log_srv
-+} // namespace kernel
-+
-+#endif // CONFIG_LOG_SRV
-diff --git a/src/kernel/log/log_srv.hpp b/src/kernel/log/log_srv.hpp
-new file mode 100644
-index 000000000..7365688fa
---- /dev/null
-+++ b/src/kernel/log/log_srv.hpp
-@@ -0,0 +1,92 @@
-+#pragma once
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file log_srv.hpp
-+/// @brief Log-sink PD contract (issue #51, strangler step a).
-+///        Kernel-side contract for the userspace log-srv PD: 48 B wire
-+///        RPC, PID cell, epoch/liveness, tombstone drain, and probe
-+///        entry points. Everything here is declaration-only; definitions
-+///        live in log_srv.cpp inside `#if CONFIG_LOG_SRV`, so the OFF
-+///        build (`CONFIG_LOG_SRV=0`, shipped default) is byte-identical
-+///        to the pre-#51 tree. The kernel panic path never leaves the
-+///        kernel.
-+
-+#include <types.hpp>
-+#include <kernel/nexios_config.h>
-+
-+namespace kernel::log_srv {
-+
-+#if CONFIG_LOG_SRV
-+
-+/// @brief Wire ops carried in LogRpc::op (server dispatch switch).
-+enum class LogSrvOp : uint8_t {
-+    BIND = 0,          ///< server announce / capability handshake
-+    SINK_PUSH = 1,     ///< sink one record probe
-+    SINK_DRAIN = 2,    ///< drain the sink probe
-+    METER = 3,         ///< drop/meter counters probe
-+    INJECT_DROP = 4,   ///< one-shot drop drill (diagnostic)
-+};
-+
-+/// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
-+struct LogRpc {
-+    uint8_t op;         ///< LogSrvOp
-+    uint8_t flags;      ///< bit0: DEGRADED
-+    uint16_t rsvd;      ///< reserved (zero)
-+    uint32_t epoch;     ///< proxy epoch (server purges on increase)
-+    uint32_t owner_id;  ///< requesting task id
-+    uint32_t owner_gen; ///< requesting task generation
-+    uint64_t arg0;      ///< op argument (probe selector)
-+    uint64_t arg1;      ///< op argument (probe bound)
-+    uint16_t status_op; ///< echoed op for mismatch detection
-+    uint16_t status;    ///< reply: negated errno (0 = ok)
-+    uint32_t rsvd2;     ///< reserved (zero)
-+};
-+
-+static_assert(sizeof(LogRpc) <= 48,
-+              "LogRpc must fit the 48 B fast IPC payload");
-+
-+/// @brief Record the PID of the log-srv daemon task.
-+void set_log_srv_pid(uint64_t pid);
-+/// @brief Get the recorded log-srv PID (0 when unset).
-+uint64_t get_log_srv_pid();
-+/// @brief True when the server task is live (present, not TERMINATED/REAPED).
-+bool log_srv_alive();
-+/// @brief Proxy epoch (bumped on restart / snapshot reset / boot table).
-+uint32_t log_srv_epoch();
-+/// @brief Bump the epoch and purge tombstones (server restart path).
-+void log_srv_bump_epoch();
-+/// @brief Supervisor hook: record a restart (store pid, bump epoch).
-+void log_srv_on_restart(uint64_t pid);
-+/// @brief Teardown hook: latch a dead owner's id+generation (lock-free).
-+void log_srv_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
-+/// @brief Generic RPC: validate server, bounded wait, validated reply.
-+/// @return true with *reply filled on a validated reply, false fail-closed
-+///         (server down, timeout, or reply mismatch) with no block held.
-+[[nodiscard]] bool log_srv_rpc(const LogRpc &req, LogRpc &reply);
-+/// @brief BIND probe: attach to a live PD, expect ok.
-+/// @return 0 on bound, -ENOSYS when the server is unavailable.
-+int64_t log_srv_probe_bind();
-+/// @brief Drop drill: one-shot INJECT_DROP.
-+/// @return 0 posted, -ENOSYS when the server is unavailable.
-+int64_t log_srv_fault_drop();
-+
-+#endif // CONFIG_LOG_SRV
-+
-+} // namespace kernel::log_srv
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index c2c4146dc..8714efab3 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -1329,6 +1329,53 @@ extern "C" void panic(const char *msg);
- #if CONFIG_BLOCK_SRV != 0 && CONFIG_BLOCK_SRV != 1
- #error "CONFIG_BLOCK_SRV must be 0 or 1 (default 0)"
- #endif
-+#if CONFIG_TERM_SRV != 0 && CONFIG_TERM_SRV != 1
-+#error "CONFIG_TERM_SRV must be 0 or 1 (default 0)"
-+#endif
-+#if CONFIG_LOG_SRV != 0 && CONFIG_LOG_SRV != 1
-+#error "CONFIG_LOG_SRV must be 0 or 1 (default 0)"
-+#endif
-+#if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
-+#error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
-+#endif
-+#if CONFIG_LOG_SRV_FAULT_INJECT != 0 && CONFIG_LOG_SRV_FAULT_INJECT != 1
-+#error "CONFIG_LOG_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
-+#endif
-+#if CONFIG_TERM_SRV_FAULT_INJECT && !CONFIG_TERM_SRV
-+#error "CONFIG_TERM_SRV_FAULT_INJECT requires CONFIG_TERM_SRV=1"
-+#endif
-+#if CONFIG_LOG_SRV_FAULT_INJECT && !CONFIG_LOG_SRV
-+#error "CONFIG_LOG_SRV_FAULT_INJECT requires CONFIG_LOG_SRV=1"
-+#endif
-+
-+/// term-srv externalization master switch (issue #51, strangler step a).
-+/// 0 = in-kernel terminal emulation (shipped default, bit-identical).
-+/// 1 = term-srv PD serves emulation policy; kernel keeps panic raw_write
-+/// + serial mechanism. All term-srv code is `#if CONFIG_TERM_SRV`-guarded
-+/// (empty TU when 0); no runtime `if` on this knob. Default: 0.
-+#ifndef CONFIG_TERM_SRV
-+#define CONFIG_TERM_SRV 0
-+#endif
-+
-+/// log-srv externalization master switch (issue #51, strangler step a).
-+/// 0 = in-kernel Klog/Dmesg sink (shipped default, bit-identical).
-+/// 1 = log-srv PD sinks logs; kernel keeps panic path. Guarded like above.
-+/// Default: 0.
-+#ifndef CONFIG_LOG_SRV
-+#define CONFIG_LOG_SRV 0
-+#endif
-+
-+/// term-srv fault-injection surface (issue #51, strangler step c).
-+/// 1 = compile the diagnostic `termfault` shell command. Debug-only.
-+#ifndef CONFIG_TERM_SRV_FAULT_INJECT
-+#define CONFIG_TERM_SRV_FAULT_INJECT 0
-+#endif
-+
-+/// log-srv fault-injection surface (issue #51, strangler step c).
-+/// 1 = compile the diagnostic `logfault` shell command. Debug-only.
-+#ifndef CONFIG_LOG_SRV_FAULT_INJECT
-+#define CONFIG_LOG_SRV_FAULT_INJECT 0
-+#endif
- #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
- #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
- #endif
-diff --git a/src/kernel/task/boot_sdf.cpp b/src/kernel/task/boot_sdf.cpp
-index 12f0088f2..c5a4fa152 100644
---- a/src/kernel/task/boot_sdf.cpp
-+++ b/src/kernel/task/boot_sdf.cpp
-@@ -3,7 +3,8 @@
- #if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
-     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
-     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
--    CONFIG_VFS_SRV || CONFIG_BLOCK_SRV
-+    CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
-+    CONFIG_LOG_SRV
- 
- #include <kernel/task/task.hpp>
- #include <kernel/arch/hal/device_regions.hpp>
-@@ -192,15 +193,33 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
-         }
-         return n;
-     }
-+    case PdRole::TERM_SRV:
-+        // Emulation policy only (issue #51): serial TX/RX + fb present are
-+        // borrowed kernel mechanisms, never owned caps. The row is the
-+        // empty set by structural rule (see sdf_policy_only).
-+        return 0;
-+    case PdRole::LOG_SRV:
-+        // Log sink policy only (issue #51): Klog/Dmesg sink + drop/meter.
-+        // No device caps ever; same structural rule as TERM_SRV.
-+        return 0;
-     }
-     return 0;
+diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
+index 0ff8c16aa..c5ae1670a 100755
+--- a/scripts/agent_up.sh
++++ b/scripts/agent_up.sh
+@@ -804,15 +804,35 @@ disarm_all_tickers() {
  }
  
- bool sdf_zero_caps_allowed(PdRole role) {
--    // Explicit allowlist (planner S2): only VFS_SRV (empty set by design)
--    // and degraded BLOCK_SRV (no controller/IOMMU captured) may start
--    // capless. Every other zero-cap row is a compose failure.
--    return role == PdRole::VFS_SRV || role == PdRole::BLOCK_SRV;
-+    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV (empty sets by
-+    // design) and degraded BLOCK_SRV (no controller/IOMMU captured) may
-+    // start capless. Every other zero-cap row is a compose failure.
-+    return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
-+           role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV;
-+}
-+
-+bool sdf_policy_only(PdRole role) {
-+    // Structural no-double-ownership rule (issues #47/#51): policy-only
-+    // roles must never hold device caps. The #48 SDF boundary test
-+    // consumes this predicate directly.
-+    return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
-+           role == PdRole::LOG_SRV;
+ # The orchestration heartbeat: one headless session running the engine tick
+-# loop over all rooms. An existing loop is left alone (close it to restart).
++# loop over all rooms. Single start path (up + wake-resurrection share it):
++# an existing loop is left alone (close it to restart).
+ ensure_engine_loop() {
++  local quiet=0
++  if [ "${1:-}" = "--quiet" ]; then quiet=1; fi
++  if [ -n "${NEXIOS_ENGINE_DRY:-}" ]; then
++    info "WOULD start engine loop"
++    return 0
++  fi
+   if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+-    info "engine loop already up ($ENGINE_SESS)"
++    [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
++    return 0
++  fi
++  local pid=""
++  pid=$(pgrep -f '[s]tate_machine\.py tick --all' 2>/dev/null | head -n 1 || true)
++  if [ -n "${pid:-}" ]; then
++    [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
+     return 0
+   fi
+   mkdir -p "$REPO_ROOT/logs/state-machine"
+-  tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 >>logs/state-machine/engine-console.log 2>&1"
+-  info "engine loop started ($ENGINE_SESS, logs/state-machine/)"
++  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 >>logs/state-machine/engine-console.log 2>&1"; then
++    if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
++      [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
++      return 0
++    fi
++    fail "cannot start engine loop ($ENGINE_SESS)"
++  fi
++  printf '%s engine loop started\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$REPO_ROOT/logs/state-machine/engine-restart.log" 2>/dev/null || true
++  [ "$quiet" = 1 ] || info "engine loop started ($ENGINE_SESS, logs/state-machine/)"
  }
  
- bool capture_block_topology() {
-@@ -258,6 +277,11 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
-     if (count > kMaxCapsPerRole) {
-         return false;
-     }
-+    if (sdf_policy_only(role) && count != 0) {
-+        // Structural no-double-ownership (issues #47/#51): a policy-only
-+        // row must never carry device caps. Fail closed, never compose.
-+        return false;
-+    }
-     if (count == 0) {
-         // Zero-cap rows compose empty only on the explicit allowlist
-         // (planner S2); anything else is a fail-closed compose failure.
-@@ -299,6 +323,10 @@ bool pd_owns_device(PdRole role) {
-         return CONFIG_VFS_SRV != 0;
-     case PdRole::BLOCK_SRV:
-         return CONFIG_BLOCK_SRV != 0;
-+    case PdRole::TERM_SRV:
-+    case PdRole::LOG_SRV:
-+        // Policy-only PDs never own devices (structural rule).
-+        return false;
-     }
-     return false;
+ # visible mirrors for the three live roles (consultant = your window).
+@@ -871,8 +891,8 @@ mode_up() {
+   fi
+   mode_workers ${issue:+"$issue"}
+   ensure_consultant_session
+-  disarm_all_tickers
+   ensure_engine_loop
++  disarm_all_tickers
+   open_watch_window "$CONSULT_SESS"
+   open_watch_window "$DEV_SESS"
+   open_watch_window "$QE_SESS"
+@@ -1009,6 +1029,9 @@ mode_wake() {
+   printf '%s FROM=%s WAKE :: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$4" >> "$rt/inbox/coord.md" \
+     || fail "wake not durable for '$3' (inbox append failed)"
+   info "wake recorded in '$rt/inbox/coord.md'"
++  if [ "$3" = "$ENGINE_SESS" ]; then
++    ensure_engine_loop --quiet
++  fi
  }
-@@ -306,4 +334,4 @@ bool pd_owns_device(PdRole role) {
- } // namespace sdf
- } // namespace kernel
  
--#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV
-+#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV
-diff --git a/src/kernel/task/boot_sdf.hpp b/src/kernel/task/boot_sdf.hpp
-index e53e2a942..63d1b06e2 100644
---- a/src/kernel/task/boot_sdf.hpp
-+++ b/src/kernel/task/boot_sdf.hpp
-@@ -57,7 +57,8 @@ struct CapSpec {
- };
- 
- /// @brief Driver PD roles (one SDF row each; VFS_SRV/BLOCK_SRV are
--/// issue #47 and share this table + compose path).
-+/// issue #47 and TERM_SRV/LOG_SRV are issue #51; all share this
-+/// table + compose path).
- enum class PdRole : uint8_t {
-     SERIAL = 0,
-     KBD = 1,
-@@ -67,6 +68,8 @@ enum class PdRole : uint8_t {
-     NET = 5,
-     VFS_SRV = 6,
-     BLOCK_SRV = 7,
-+    TERM_SRV = 8,
-+    LOG_SRV = 9,
- };
- 
- /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
-@@ -95,6 +98,14 @@ bool sdf_rebind(TaskControlBlock &task, PdRole role);
- /// the kernel bring-up), false when the kernel keeps it.
- bool pd_owns_device(PdRole role);
- 
-+/// @brief Structural policy-only predicate (issues #47/#51): true only
-+/// for roles whose SDF row MUST stay empty (no device caps ever —
-+/// VFS_SRV by design, TERM_SRV/LOG_SRV policy PDs). Used by compose to
-+/// reject any non-empty row for these roles, and by #48's SDF boundary
-+/// test to prove the emulation side holds no device caps.
-+/// @return True for VFS_SRV, TERM_SRV, LOG_SRV; false otherwise.
-+bool sdf_policy_only(PdRole role);
-+
- /// @brief Capture block topology for the BLOCK_SRV row (issue #47 S2):
- /// AHCI ABAR (PCI-discovered, x86) or virtio-blk transport ranges.
- /// Idempotent; keeps at most kMaxCapsPerRole page-aligned MMIO specs.
-diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
-index 173905ec6..6233612f7 100644
---- a/src/kernel/task/taskdefs.cpp
-+++ b/src/kernel/task/taskdefs.cpp
-@@ -29,9 +29,10 @@
- #include <kernel/ramdisk/ramdiskd.hpp>
- #include <kernel/watchdog/watchdogd.hpp>
- #include <kernel/time/timer_srv.hpp>
--#include <kernel/task/boot_sdf.hpp>
- #include <kernel/vfs/vfs_srv.hpp>
- #include <kernel/driver/block_srv.hpp>
-+#include <kernel/term/term_srv.hpp>
-+#include <kernel/log/log_srv.hpp>
- #include <kernel/driver/driver_pds.hpp>
- #include <kernel/task/dmesg_task.hpp>
- #include <initrd/initrd.hpp>
-@@ -191,6 +192,42 @@ void pd_set_block_srv(uint64_t pid) {
-     kernel::block_srv::set_block_srv_pid(pid);
- }
- #endif
-+#if CONFIG_TERM_SRV
-+void pd_restart_term_srv(uint64_t pid) {
-+    auto *t = kernel::Scheduler::find_task(pid);
-+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
-+        return;
-+    }
-+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::TERM_SRV)) {
-+        return;
-+    }
-+    kernel::term_srv::term_srv_on_restart(pid);
-+}
-+uint64_t pd_pid_term_srv() {
-+    return kernel::term_srv::get_term_srv_pid();
-+}
-+void pd_set_term_srv(uint64_t pid) {
-+    kernel::term_srv::set_term_srv_pid(pid);
-+}
-+#endif
-+#if CONFIG_LOG_SRV
-+void pd_restart_log_srv(uint64_t pid) {
-+    auto *t = kernel::Scheduler::find_task(pid);
-+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
-+        return;
-+    }
-+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::LOG_SRV)) {
-+        return;
-+    }
-+    kernel::log_srv::log_srv_on_restart(pid);
-+}
-+uint64_t pd_pid_log_srv() {
-+    return kernel::log_srv::get_log_srv_pid();
-+}
-+void pd_set_log_srv(uint64_t pid) {
-+    kernel::log_srv::set_log_srv_pid(pid);
-+}
-+#endif
- 
- // ── Task definition table ────────────────────────────────────────────────
- 
-@@ -292,6 +329,24 @@ constexpr TaskDef g_task_defs[] = {
-      "bin/block-srv.c.elf", 20, 10, 0, 1, 10, 0, "block-srv",
-      pd_set_block_srv, pd_pid_block_srv, 1, 0, false,
-      ServerMode::SPORADIC, pd_restart_block_srv, 7},
-+#endif
-+#if CONFIG_TERM_SRV
-+    // term-srv: terminal/emulation policy PD (issue #51, strangler step a).
-+    // Sporadic server SS(1,10,0); policy only, no device caps (SDF row is
-+    // the empty set by structural rule). Kernel keeps panic raw_write.
-+    {"term-srv", TaskType::SPORADIC_SERVER, true, nullptr,
-+     "bin/term-srv.c.elf", 20, 10, 0, 1, 10, 0, "term-srv",
-+     pd_set_term_srv, pd_pid_term_srv, 1, 0, false,
-+     ServerMode::SPORADIC, pd_restart_term_srv, 8},
-+#endif
-+#if CONFIG_LOG_SRV
-+    // log-srv: Klog/Dmesg sink PD (issue #51, strangler step a).
-+    // Sporadic server SS(1,10,0); sink + drop/meter only, no log-source
-+    // changes. Panic path never leaves the kernel.
-+    {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
-+     "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
-+     pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
-+     ServerMode::SPORADIC, pd_restart_log_srv, 9},
- #endif
-     // shell: interactive kernel debug shell.  Disabled in the table — the
-     // real shell is created aperiodic by init_task_main at prio 2; values
-@@ -350,13 +405,13 @@ constexpr bool server_params_valid(const TaskDef &d) {
-         return false;
-     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
-         return false;
--    // Issue #48: an SDF row needs its supervisor hook (re-derive on
-+    // Issue #48/#51: an SDF row needs its supervisor hook (re-derive on
-     // restart, never inherit) and a valid role index.
-     if (d.sdf_role != 0xFF) {
-         if (d.on_restart_fn == nullptr)
-             return false;
-         if (d.sdf_role >
--            static_cast<uint64_t>(sdf::PdRole::BLOCK_SRV))
-+            static_cast<uint64_t>(sdf::PdRole::LOG_SRV))
-             return false;
-     }
-     return true;
-@@ -661,15 +716,18 @@ void reboot_from_table() {
-                 daemon::register_daemon(def.daemon_name, def.elf_path,
-                                         def.set_pid_fn, def.get_pid_fn);
-             }
--#if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                      \
-+#if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
-     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
--    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET
-+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
-+    CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
-+    CONFIG_LOG_SRV
-             if (def.sdf_role != 0xFF) {
--                // SDF compose (issue #48): mint the role caps into the
--                // fresh task. Fail-closed: compose failure destroys the
--                // task and skips the row (invalid-ELF precedent below).
--                // Compile-guarded: boot_sdf.cpp is an empty TU when all
--                // PD knobs are 0, so the call must not be emitted at OFF.
-+                // SDF compose (issues #47/#48/#51): mint the role caps
-+                // into the fresh task. Fail-closed: compose failure
-+                // destroys the task and skips the row (invalid-ELF
-+                // precedent below). Compile-guarded: boot_sdf.cpp is an
-+                // empty TU when all PD knobs are 0, so the call must not
-+                // be emitted at OFF.
-                 const auto role = static_cast<sdf::PdRole>(def.sdf_role);
-                 if (!sdf::sdf_compose(*task, role)) {
-                     Logger::warn(
-@@ -683,7 +741,7 @@ void reboot_from_table() {
-                     task = nullptr;
-                 }
-             }
--#endif // any CONFIG_DRIVER_PD_* (sdf_compose lives in boot_sdf.cpp)
-+#endif // any PD knob (sdf_compose lives in boot_sdf.cpp)
-         }
-     }
- 
-diff --git a/src/kernel/term/term_srv.cpp b/src/kernel/term/term_srv.cpp
-new file mode 100644
-index 000000000..e66d764d6
---- /dev/null
-+++ b/src/kernel/term/term_srv.cpp
-@@ -0,0 +1,160 @@
-+#include <kernel/term/term_srv.hpp>
-+
-+#if CONFIG_TERM_SRV
-+
-+/*
-+ * NexIOS RTOS — Terminal/emulation policy proxy (issue #51).
-+ * Whole TU is `#if CONFIG_TERM_SRV`-guarded: the OFF build (`0`,
-+ * shipped default) yields an empty TU (no symbols), so the link is
-+ * byte-identical to the pre-#51 tree. Emulation policy only — the
-+ * kernel keeps panic raw_write + serial mechanism.
-+ */
-+
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+
-+namespace kernel {
-+namespace term_srv {
-+namespace {
-+
-+uint64_t g_term_srv_pid = 0;
-+uint32_t g_term_srv_epoch = 1;
-+
-+struct Tombstone {
-+    uint32_t owner_id;
-+    uint32_t owner_gen;
-+};
-+
-+Tombstone g_tombstones[16] = {};
-+uint64_t g_tombstone_count = 0;
-+
-+/// @brief Bounded wait for one server RPC (coarse ticks).
-+/// Fail-closed `-EAGAIN` past this; never parks a kernel task forever.
-+constexpr uint64_t kRpcGuardTicks = 5000;
-+
-+} // namespace
-+
-+void set_term_srv_pid(uint64_t pid) {
-+    g_term_srv_pid = pid;
-+}
-+
-+uint64_t get_term_srv_pid() {
-+    return __atomic_load_n(&g_term_srv_pid, __ATOMIC_RELAXED);
-+}
-+
-+bool term_srv_alive() {
-+    const uint64_t pid = get_term_srv_pid();
-+    if (pid == 0) {
-+        return false;
-+    }
-+    auto *srv = Scheduler::find_task(pid);
-+    if (srv == nullptr) {
-+        return false;
-+    }
-+    return srv->state != TaskState::TERMINATED &&
-+           srv->state != TaskState::REAPED;
-+}
-+
-+uint32_t term_srv_epoch() {
-+    return __atomic_load_n(&g_term_srv_epoch, __ATOMIC_RELAXED);
-+}
-+
-+void term_srv_bump_epoch() {
-+    __atomic_fetch_add(&g_term_srv_epoch, 1U, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_tombstone_count, 0, __ATOMIC_RELAXED);
-+}
-+
-+void term_srv_on_restart(uint64_t pid) {
-+    set_term_srv_pid(pid);
-+    term_srv_bump_epoch();
-+}
-+
-+void term_srv_note_dead_owner(uint32_t owner_id, uint32_t owner_gen) {
-+    // Lock-free ring write (teardown context: no locks, no IPC).
-+    uint64_t count =
-+        __atomic_load_n(&g_tombstone_count, __ATOMIC_RELAXED);
-+    if (count >= 16) {
-+        return; // bounded residual drop (documented, ≤ table size)
-+    }
-+    g_tombstones[count].owner_id = owner_id;
-+    g_tombstones[count].owner_gen = owner_gen;
-+    __atomic_store_n(&g_tombstone_count, count + 1, __ATOMIC_RELAXED);
-+}
-+
-+bool term_srv_rpc(const TermRpc &req, TermRpc &reply) {
-+    const uint64_t pid = get_term_srv_pid();
-+    if (pid == 0 || !term_srv_alive()) {
-+        return false;
-+    }
-+    auto *cur = Scheduler::current_task();
-+    if (cur == nullptr) {
-+        return false;
-+    }
-+    Message msg{};
-+    msg.type = static_cast<uint64_t>(req.op);
-+    msg.priority = cur->priority;
-+    __builtin_memcpy(msg.data, &req, sizeof(req));
-+    msg.data_size = sizeof(req);
-+    Message raw{};
-+    if (!IPC::send_sync_bounded(pid, msg, raw, kRpcGuardTicks)) {
-+        return false;
-+    }
-+    if (raw.data_size != sizeof(reply)) {
-+        return false;
-+    }
-+    __builtin_memcpy(&reply, raw.data, sizeof(reply));
-+    // Reply identity: server, epoch, owner (id+gen). A mismatch is
-+    // dropped by the caller (bounded re-wait), never consumed.
-+    if (raw.sender_id != pid || reply.epoch != term_srv_epoch() ||
-+        reply.owner_id != req.owner_id ||
-+        reply.owner_gen != req.owner_gen) {
-+        return false;
-+    }
-+    return true;
-+}
-+
-+namespace {
-+
-+bool term_srv_bind_op(TermSrvOp op, int64_t *out_status) {
-+    TermRpc req{};
-+    req.op = static_cast<uint8_t>(op);
-+    auto *cur = Scheduler::current_task();
-+    if (cur == nullptr) {
-+        return false;
-+    }
-+    req.owner_id = static_cast<uint32_t>(cur->id);
-+    req.owner_gen = cur->generation;
-+    req.epoch = term_srv_epoch();
-+    TermRpc reply{};
-+    if (!term_srv_rpc(req, reply)) {
-+        return false;
-+    }
-+    if (out_status != nullptr) {
-+        *out_status = reply.status;
-+    }
-+    return true;
-+}
-+
-+} // namespace
-+
-+int64_t term_srv_probe_bind() {
-+    int64_t status = -38;
-+    if (!term_srv_bind_op(TermSrvOp::BIND, &status)) {
-+        return -38; // -ENOSYS: server unavailable pre-flip
-+    }
-+    return status;
-+}
-+
-+int64_t term_srv_fault_poison() {
-+    int64_t status = -38;
-+    if (!term_srv_bind_op(TermSrvOp::INJECT_POISON, &status)) {
-+        return -38; // -ENOSYS: server unavailable pre-flip
-+    }
-+    return status;
-+}
-+
-+} // namespace term_srv
-+} // namespace kernel
-+
-+#endif // CONFIG_TERM_SRV
-diff --git a/src/kernel/term/term_srv.hpp b/src/kernel/term/term_srv.hpp
-new file mode 100644
-index 000000000..6fa67cccd
---- /dev/null
-+++ b/src/kernel/term/term_srv.hpp
-@@ -0,0 +1,97 @@
-+#pragma once
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file term_srv.hpp
-+/// @brief Terminal/emulation policy proxy (issue #51, strangler step a).
-+///        Kernel-side contract for the userspace term-srv PD: 48 B wire
-+///        RPC, PID cell, epoch/liveness, tombstone drain, and probe
-+///        entry points. Everything here is declaration-only; definitions
-+///        live in term_srv.cpp inside `#if CONFIG_TERM_SRV`, so the OFF
-+///        build (`CONFIG_TERM_SRV=0`, shipped default) is byte-identical
-+///        to the pre-#51 tree. Emulation policy only — the kernel keeps
-+///        panic raw_write + serial mechanism.
-+
-+#include <types.hpp>
-+#include <kernel/nexios_config.h>
-+
-+namespace kernel::term_srv {
-+
-+#if CONFIG_TERM_SRV
-+
-+/// @brief Wire ops carried in TermRpc::op (server dispatch switch).
-+enum class TermSrvOp : uint8_t {
-+    BIND = 0,          ///< server announce / capability handshake
-+    PROMPT = 1,        ///< prompt render probe
-+    READLINE = 2,      ///< readline probe
-+    HISTORY = 3,       ///< history probe
-+    SCROLL = 4,        ///< bounded scroll probe
-+    CLEAR = 5,         ///< clear-screen probe
-+    REDRAW = 6,        ///< redraw probe
-+    ECHO = 7,          ///< echo probe
-+    CANCEL_OWNERS = 8, ///< piggybacked tombstone drain (no reply expected)
-+    INJECT_POISON = 9, ///< one-shot poison probe (diagnostic)
-+};
-+
-+/// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
-+struct TermRpc {
-+    uint8_t op;         ///< TermSrvOp
-+    uint8_t flags;      ///< bit0: DEGRADED
-+    uint16_t rsvd;      ///< reserved (zero)
-+    uint32_t epoch;     ///< proxy epoch (server purges on increase)
-+    uint32_t owner_id;  ///< requesting task id
-+    uint32_t owner_gen; ///< requesting task generation
-+    uint64_t arg0;      ///< op argument (probe selector)
-+    uint64_t arg1;      ///< op argument (probe bound)
-+    uint16_t status_op; ///< echoed op for mismatch detection
-+    uint16_t status;    ///< reply: negated errno (0 = ok)
-+    uint32_t rsvd2;     ///< reserved (zero)
-+};
-+
-+static_assert(sizeof(TermRpc) <= 48,
-+              "TermRpc must fit the 48 B fast IPC payload");
-+
-+/// @brief Record the PID of the term-srv daemon task.
-+void set_term_srv_pid(uint64_t pid);
-+/// @brief Get the recorded term-srv PID (0 when unset).
-+uint64_t get_term_srv_pid();
-+/// @brief True when the server task is live (present, not TERMINATED/REAPED).
-+bool term_srv_alive();
-+/// @brief Proxy epoch (bumped on restart / snapshot reset / boot table).
-+uint32_t term_srv_epoch();
-+/// @brief Bump the epoch and purge tombstones (server restart path).
-+void term_srv_bump_epoch();
-+/// @brief Supervisor hook: record a restart (store pid, bump epoch).
-+void term_srv_on_restart(uint64_t pid);
-+/// @brief Teardown hook: latch a dead owner's id+generation (lock-free).
-+void term_srv_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
-+/// @brief Generic RPC: validate server, bounded wait, validated reply.
-+/// @return true with *reply filled on a validated reply, false fail-closed
-+///         (server down, timeout, or reply mismatch) with no block held.
-+[[nodiscard]] bool term_srv_rpc(const TermRpc &req, TermRpc &reply);
-+/// @brief BIND probe: attach to a live PD, expect ok.
-+/// @return 0 on bound, -ENOSYS when the server is unavailable.
-+int64_t term_srv_probe_bind();
-+/// @brief Poison probe: one-shot INJECT_POISON drill.
-+/// @return 0 posted, -ENOSYS when the server is unavailable.
-+int64_t term_srv_fault_poison();
-+
-+#endif // CONFIG_TERM_SRV
-+
-+} // namespace kernel::term_srv
-diff --git a/src/services/shell.cpp b/src/services/shell.cpp
-index 93fd9b0d4..766ba0545 100644
---- a/src/services/shell.cpp
-+++ b/src/services/shell.cpp
-@@ -67,6 +67,8 @@
- #include <kernel/time/timer_srv.hpp>
- #include <kernel/vfs/vfs_srv.hpp>
- #include <kernel/driver/block_srv.hpp>
-+#include <kernel/term/term_srv.hpp>
-+#include <kernel/log/log_srv.hpp>
- #include <kernel/daemon/daemon_mgr.hpp>
- #if defined(CONFIG_ARCH_X86_64)
- #include <kernel/arch/x86_64/hal/percpu.hpp>
-@@ -367,6 +369,18 @@ void Shell::init() {
- #endif
- #if CONFIG_BLOCK_SRV_FAULT_INJECT && CONFIG_BLOCK_SRV
-     register_command("blockfault", "Terminate block-srv PD (fault drill)", cmd_blockfault);
-+#endif
-+#if CONFIG_TERM_SRV
-+    register_command("termprobe", "Probe term-srv PD (BIND, expect ok)", cmd_termprobe);
-+#endif
-+#if CONFIG_LOG_SRV
-+    register_command("logprobe", "Probe log-srv PD (BIND, expect ok)", cmd_logprobe);
-+#endif
-+#if CONFIG_TERM_SRV_FAULT_INJECT && CONFIG_TERM_SRV
-+    register_command("termfault", "Terminate term-srv PD (fault drill)", cmd_termfault);
-+#endif
-+#if CONFIG_LOG_SRV_FAULT_INJECT && CONFIG_LOG_SRV
-+    register_command("logfault", "Terminate log-srv PD (fault drill)", cmd_logfault);
- #endif
-     register_command("lspci",   "List PCI devices",                  cmd_lspci);
- 
-@@ -2618,6 +2632,58 @@ void Shell::cmd_blockfault(int, const char**) {
- }
- #endif
- 
-+#if CONFIG_TERM_SRV
-+/// @brief Probe the term-srv PD (issue #51, parity harness).
-+/// BINDs and reports ok/-ENOSYS (no numeric formatting needed).
-+void Shell::cmd_termprobe(int, const char**) {
-+    const int64_t rc = kernel::term_srv::term_srv_probe_bind();
-+    if (rc == 0) {
-+        Terminal::write("S TM op=bind rc=0\n");
-+    } else {
-+        Terminal::write("S TM op=bind rc=-ENOSYS\n");
-+    }
-+}
-+#endif
-+
-+#if CONFIG_LOG_SRV
-+/// @brief Probe the log-srv PD (issue #51, parity harness).
-+/// BINDs and reports ok/-ENOSYS (no numeric formatting needed).
-+void Shell::cmd_logprobe(int, const char**) {
-+    const int64_t rc = kernel::log_srv::log_srv_probe_bind();
-+    if (rc == 0) {
-+        Terminal::write("S LOG op=bind rc=0\n");
-+    } else {
-+        Terminal::write("S LOG op=bind rc=-ENOSYS\n");
-+    }
-+}
-+#endif
-+
-+#if CONFIG_TERM_SRV_FAULT_INJECT && CONFIG_TERM_SRV
-+/// @brief Diagnostic fault drill (issue #51, strangler step c).
-+void Shell::cmd_termfault(int, const char**) {
-+    const uint64_t pid = kernel::term_srv::get_term_srv_pid();
-+    if (pid == 0) {
-+        Terminal::write("termfault: term-srv not running\n");
-+        return;
-+    }
-+    kernel::daemon::terminate("term-srv");
-+    Terminal::write("S TM fault kill issued\n");
-+}
-+#endif
-+
-+#if CONFIG_LOG_SRV_FAULT_INJECT && CONFIG_LOG_SRV
-+/// @brief Diagnostic fault drill (issue #51, strangler step c).
-+void Shell::cmd_logfault(int, const char**) {
-+    const uint64_t pid = kernel::log_srv::get_log_srv_pid();
-+    if (pid == 0) {
-+        Terminal::write("logfault: log-srv not running\n");
-+        return;
-+    }
-+    kernel::daemon::terminate("log-srv");
-+    Terminal::write("S LOG fault kill issued\n");
-+}
-+#endif
-+
- void Shell::cmd_reboot(int, const char**) {
-     Terminal::write("Reboot...\n");
-     uint8_t good;
-diff --git a/src/services/shell.hpp b/src/services/shell.hpp
-index a113a29ca..e0c4cae42 100644
---- a/src/services/shell.hpp
-+++ b/src/services/shell.hpp
-@@ -127,6 +127,22 @@ private:
-     /// @brief Diagnostic: terminate timer-srv PD (issue #241 fault drill).
-     static void cmd_timerfault(int argc, const char** argv);
- #endif
-+#if CONFIG_TERM_SRV
-+    /// @brief Probe term-srv PD liveness (issue #51 parity harness).
-+    static void cmd_termprobe(int argc, const char** argv);
-+#endif
-+#if CONFIG_LOG_SRV
-+    /// @brief Probe log-srv PD liveness (issue #51 parity harness).
-+    static void cmd_logprobe(int argc, const char** argv);
-+#endif
-+#if CONFIG_TERM_SRV_FAULT_INJECT && CONFIG_TERM_SRV
-+    /// @brief Diagnostic: terminate term-srv PD (issue #51 fault drill).
-+    static void cmd_termfault(int argc, const char** argv);
-+#endif
-+#if CONFIG_LOG_SRV_FAULT_INJECT && CONFIG_LOG_SRV
-+    /// @brief Diagnostic: terminate log-srv PD (issue #51 fault drill).
-+    static void cmd_logfault(int argc, const char** argv);
-+#endif
- #if CONFIG_DRIVER_PD_FAULT_INJECT &&                                          \
-     (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                       \
-      CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                          \
-diff --git a/test-history.txt b/test-history.txt
-index 4d9ff234b..8b1e2e148 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -5326,3 +5326,11 @@ SUMMARY: total=24 ok=24 fail=0 ARCH=x86_64
- 2026-10-30 10:59:30 servers PASSED: 66 FAILED: 0 TIME: 4427ms
- 2026-10-30 11:08:38 drivers PASSED: 107 FAILED: 0 TIME: 7318ms
- 2026-10-30 11:15:28 drivers PASSED: 107 FAILED: 0 TIME: 7181ms
-+2026-10-30 18:22:28 shell_interaction PASSED: 29 FAILED: 0 TIME: 3964ms
-+2026-10-30 18:22:40 hal_serial_logic PASSED: 14 FAILED: 0 TIME: 1075ms
-+2026-10-30 18:23:04 ui PASSED: 87 FAILED: 0 TIME: 7829ms
-+2026-10-30 18:23:18 logging_debug PASSED: 36 FAILED: 0 TIME: 2247ms
-+2026-10-30 18:26:41 shell_interaction PASSED: 29 FAILED: 0 TIME: 3982ms
-+2026-10-30 18:26:58 hal_serial_logic PASSED: 14 FAILED: 0 TIME: 299ms
-+2026-10-30 18:27:16 ui PASSED: 87 FAILED: 0 TIME: 7857ms
-+2026-10-30 18:27:30 logging_debug PASSED: 36 FAILED: 0 TIME: 2238ms
-diff --git a/tools/log-srv-fault-mon.sh b/tools/log-srv-fault-mon.sh
-new file mode 100755
-index 000000000..1ec63fad7
---- /dev/null
-+++ b/tools/log-srv-fault-mon.sh
-@@ -0,0 +1,13 @@
-+#!/bin/bash
-+# log-srv fault demo (issue #51, strangler step c): kill the log-srv PD,
-+# watch the supervisor restart + rebind it, re-probe via `logprobe`.
-+# Usage: tools/log-srv-fault-mon.sh <on+fault-inject-iso> <fat32.img> <outdir>
-+# Artifacts: outdir/{com1.log,debugcon.log,verdict.txt} (raw serial logs).
-+set -u
-+ISO="${1:?usage: log-srv-fault-mon.sh <iso> <fat32> <outdir>}"
-+FAT="${2:?usage: log-srv-fault-mon.sh <iso> <fat32> <outdir>}"
-+OUT="${3:?usage: log-srv-fault-mon.sh <iso> <fat32> <outdir>}"
-+mkdir -p "$OUT"
-+exec tools/srv-pd-fault-mon.py --iso "$ISO" --probe-cmd logprobe \
-+    --tag "S LOG " --role log-srv --kill-cmd logfault --outdir "$OUT" \
-+    --fat32 "$FAT" --port 4492
-diff --git a/tools/srv-pd-fault-mon.py b/tools/srv-pd-fault-mon.py
-index fdfdbf58b..5d61826cd 100755
---- a/tools/srv-pd-fault-mon.py
-+++ b/tools/srv-pd-fault-mon.py
-@@ -6,33 +6,46 @@ diagnostic drill command, waits for supervisor restart + rebind, runs a
- second probe pass, and asserts no "admission denied" wedge.
- 
- Usage:
--    tools/srv-pd-fault-mon.py --iso ISO --probe PROBE.elf --tag b"S VFS "
--        --role ROLE --kill-cmd CMDTYPE --outdir DIR
-+    tools/srv-pd-fault-mon.py --iso ISO [--probe PROBE.elf | --probe-cmd CMD]
-+        --tag b"S VFS " --role ROLE --kill-cmd CMDTYPE --outdir DIR
-         [--ovmf PATH] [--fat32 PATH] [--port N]
- 
--CMDTYPE is one of: vfsfault | blockfault | driverfault:<role>.
-+CMDTYPE is one of: vfsfault | blockfault | termfault | logfault |
-+driverfault:<role>. --probe-cmd sends a shell command emitting tag
-+lines (e.g. logprobe) instead of the loadelf/runelf probe flow.
- Artifact: outdir/{com1.log,debugcon.log,verdict.txt} (raw serial logs).
- """
- import argparse
-+import importlib.util
- import os
- import sys
- 
--sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
--from srv_pd_parity import find_ovmf, sendkey, wait_for  # noqa: E402
-+_parity_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-+                            "srv-pd-parity.py")
-+_spec = importlib.util.spec_from_file_location("srv_pd_parity", _parity_path)
-+if _spec is None or _spec.loader is None:
-+    raise SystemExit("ERROR: cannot load %s" % _parity_path)
-+_mod = importlib.util.module_from_spec(_spec)
-+_spec.loader.exec_module(_mod)
-+find_ovmf, sendkey, wait_for = (_mod.find_ovmf, _mod.sendkey, _mod.wait_for)
+ # End-to-end transport self-test: proves msg delivers text+Enter INTO a live
+@@ -1494,6 +1517,8 @@ mode_self_test() {
+   chk_neg test -e "$r93/watch.pid"
+   chk bash -c '"$0" watch 9993 status | grep -q "^disarmed streak=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
+   chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm
++  chk env NEXIOS_ENGINE_DRY=1 "$SCRIPT_DIR/agent_up.sh" wake 9999 dev "$ENGINE_SESS" "wake-selftest-$$"
++  chk grep -q "FROM=dev WAKE :: wake-selftest-$$" /tmp/nexios-9999/inbox/coord.md
+   rm -rf "$r93"
+   rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
+          "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
+diff --git a/scripts/state_machine.py b/scripts/state_machine.py
+index 1585205f1..afcc095b6 100644
+--- a/scripts/state_machine.py
++++ b/scripts/state_machine.py
+@@ -687,6 +687,24 @@ def parse_verdict(line):
+             "streak": streak, "escalate": "ESCALATE" in rest}
  
  
- def parse_args(argv=None):
-     import argparse as ap
-     p = ap.ArgumentParser(description=__doc__)
-     p.add_argument("--iso", required=True)
--    p.add_argument("--probe", required=True,
-+    p.add_argument("--probe", default=None,
-                    help="initrd probe path, e.g. /bin/vfs-srv-parity.c.elf")
-+    p.add_argument("--probe-cmd", default=None,
-+                   help="shell command emitting tag lines, e.g. logprobe "
-+                        "(alternative to --probe loadelf/runelf flow)")
-     p.add_argument("--tag", required=True,
-                    help="S-line tag prefix, e.g. 'S VFS '")
-     p.add_argument("--role", required=True,
-                    help="SDF role name for the kill command")
-     p.add_argument("--kill-cmd", required=True,
--                   help="vfsfault | blockfault | driverfault:<role>")
-+                   help="vfsfault | blockfault | termfault | logfault | "
-+                        "driverfault:<role>")
-     p.add_argument("--outdir", required=True)
-     p.add_argument("--ovmf", default=None)
-     p.add_argument("--fat32", default=None)
-@@ -46,7 +59,11 @@ def count_tag(path, tag):
-             data = f.read()
-     except OSError:
-         return -1, b""
--    lines = [ln for ln in data.split(b"\n") if ln.startswith(tag)]
-+    # NOTE: the first probe line shares its serial line with the echoed
-+    # shell prompt, so match anywhere and cut at the tag (mirrors
-+    # srv-pd-parity.py); startswith would drop the first line per pass.
-+    lines = [ln[ln.find(tag):].rstrip(b"\r")
-+             for ln in data.split(b"\n") if tag in ln]
-     return len(lines), data
- 
- 
-@@ -55,11 +72,15 @@ def main(argv=None):
-     import subprocess
-     import time
-     args = parse_args(argv)
-+    if (args.probe is None) == (args.probe_cmd is None):
-+        print("FAULT: need exactly one of --probe / --probe-cmd")
-+        return 2
-     os.makedirs(args.outdir, exist_ok=True)
-     com1 = os.path.join(args.outdir, "com1.log")
-     dbg = os.path.join(args.outdir, "debugcon.log")
-     ovmf = find_ovmf(args.ovmf)
--    Dialect = {"vfsfault": "vfsfault", "blockfault": "blockfault"}
-+    Dialect = {"vfsfault": "vfsfault", "blockfault": "blockfault",
-+               "termfault": "termfault", "logfault": "logfault"}
-     if args.kill_cmd in Dialect:
-         kill_line = Dialect[args.kill_cmd]
-     elif args.kill_cmd.startswith("driverfault:"):
-@@ -83,6 +104,7 @@ def main(argv=None):
-            "-device", "virtio-rng-pci,disable-legacy=on",
-            "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04"],
-         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-+    msock = None
-     try:
-         time.sleep(5)
-         msock = socket.create_connection(("127.0.0.1", args.port),
-@@ -93,24 +115,37 @@ def main(argv=None):
-             print("FAULT: FAIL no shell prompt; see %s" % com1)
-             return 1
-         print("FAULT: prompt seen", flush=True)
--        sendkey(mf, "loadelf %s" % args.probe)
--        if not wait_for(com1, b"$ ", 60):
--            print("FAULT: FAIL no prompt after loadelf", flush=True)
++def need_idle_missing(role, has_unacked, probe, fresh_posts, declared_next, rang):
++    """True when a NEED-idle note is warranted for one lane.
 +
-+        def probe_pass():
-+            if args.probe_cmd is not None:
-+                sendkey(mf, args.probe_cmd)
-+                # wait_for matches the STALE (pre-command) prompt already
-+                # in the file, so sleep first: the shell runs the command
-+                # in ms; 8 s is TCG headroom (mirrors runelf's 15 s).
-+                time.sleep(8)
-+                if not wait_for(com1, b"$ ", 60):
-+                    print("FAULT: FAIL no prompt after probe-cmd",
-+                          flush=True)
-+                    return False
-+                return True
-+            sendkey(mf, "loadelf %s" % args.probe)
-+            if not wait_for(com1, b"$ ", 60):
-+                print("FAULT: FAIL no prompt after loadelf", flush=True)
-+                return False
-+            sendkey(mf, "runelf")
-+            time.sleep(15)
++    A fresh wire-light NOTE suppresses the false NEED for exactly the
++    tick that consumes it (wire-gap NEED-back at tick time remains the
++    format signal; next tick with no fresh post and no NEXT still NEEDs).
++    """
++    if role in has_unacked:
++        return False
++    if not str(probe).startswith("IDLE"):
++        return False
++    if fresh_posts:
++        return False
++    if rang:
++        return False
++    return not declared_next or declared_next.startswith("idle")
++
++
+ def tick_room(ctx, issue, room_dir, st, rooms_all):
+     """One deterministic tick for one room. Returns graph node + table rows."""
+     node = collections.OrderedDict()
+@@ -909,11 +927,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
+             events.append("backlog-swap #%d" % target)
+ 
+     for role in ("dev", "qe"):
+-        if role not in has_unacked and probes[role].startswith("IDLE") and not any(
+-                a.startswith("rang " + SESS[role]) or
+-                a.startswith("WOULD ring " + SESS[role]) for a in actions):
+-            if not boxes[role]["next"] or boxes[role]["next"].startswith("idle"):
+-                actions.append("NEED %s idle with no briefed work (no invention)" % role)
++        rang = any(a.startswith("rang " + SESS[role]) or
++                   a.startswith("WOULD ring " + SESS[role]) for a in actions)
++        if need_idle_missing(role, has_unacked, probes[role],
++                             fresh.get(role), boxes[role]["next"], rang):
++            actions.append("NEED %s idle with no briefed work (no invention)" % role)
+ 
+     if verdict.get("escalate"):
+         slow = {r: slow_probe(ctx, SESS[r]) for r in ("dev", "qe")}
+@@ -1448,6 +1466,30 @@ def cycle_productive(all_actions):
+     return any(a.startswith(PRODUCTIVE_PREFIXES) for a in all_actions)
+ 
+ 
++def cycle_progress(all_actions, room_nodes, dry=False):
++    """True if the cycle shows real work (engine acts OR worker activity).
++
++    Coordinator/coord.md lines are excluded by construction: BOXES covers
++    only dev/qe/auditor and the watchdog fingerprint counts only
++    FROM=(dev|qe|audit). ESCALATE/NEED alone are intentionally not progress.
++    Dry mode preserves legacy exit semantics (no watchdog run, no cursor
++    advance, so frozen signals must not pin quiet at 0).
++    """
++    if cycle_productive(all_actions):
++        return True
++    if dry:
++        return False
++    for node in room_nodes or []:
++        if (node.get("verdict") or {}).get("kind") == "CHANGED":
 +            return True
++        try:
++            if int(node.get("acked") or 0) > 0:
++                return True
++        except (TypeError, ValueError):
++            continue
++    return False
 +
-+        if not probe_pass():
-             return 1
--        sendkey(mf, "runelf")
--        time.sleep(15)
-         n1, data = count_tag(com1, args.tag.encode())
-         print("FAULT: first run %s lines=%d" % (args.tag.strip(), n1),
-               flush=True)
-         sendkey(mf, kill_line)
-         time.sleep(5)
-         n2, data = count_tag(com1, args.tag.encode())
--        sendkey(mf, "loadelf %s" % args.probe)
--        if not wait_for(com1, b"$ ", 60):
--            print("FAULT: FAIL no prompt after loadelf2", flush=True)
-+        if not probe_pass():
-             return 1
--        sendkey(mf, "runelf")
--        time.sleep(15)
-         n3, data = count_tag(com1, args.tag.encode())
-         denied = b"admission denied" in data
-         ok = (n3 > n2) and not denied
-@@ -127,10 +162,11 @@ def main(argv=None):
-               flush=True)
-         return 1
-     finally:
--        try:
--            msock.close()
--        except Exception:
--            pass
-+        if msock is not None:
-+            try:
-+                msock.close()
-+            except Exception:
-+                pass
-         qemu.kill()
-         qemu.wait()
++
+ def load_saved_seq(ctx):
+     try:
+         n = int(json.load(open(ctx.graph_path())).get("tick", 0))
+@@ -1533,6 +1575,7 @@ def cmd_tick(ctx, issues, interval):
+         ctx.tick_seq += 1
+         ctx.log("tick #%d rooms=%s" % (ctx.tick_seq, [i for i, _, _ in rooms]))
+         cycle_actions = []
++        cycle_nodes = []
+         for issue, rdir, st in rooms:
+             node, rows = tick_room(ctx, issue, rdir, st, rooms)
+             table = fmt_table(issue, node.get("verdict", {}), rows)
+@@ -1543,13 +1586,17 @@ def cmd_tick(ctx, issues, interval):
+             for a in node.get("actions", []):
+                 ctx.log("#%d :: %s" % (issue, a))
+                 cycle_actions.append(a)
++            cycle_nodes.append(node)
+         ctx.log(write_graph(ctx))
+         if not interval:
+             break
+-        if cycle_productive(cycle_actions):
++        if cycle_progress(cycle_actions, cycle_nodes, dry=ctx.dry):
++            if quiet > 0:
++                ctx.log("quiet reset after %d quiet cycle(s)" % quiet)
+             quiet = 0
+         else:
+             quiet += 1
++            ctx.log("quiet %d/3 (no progress)" % quiet)
+             if quiet >= 3:
+                 msg = "all quiet for 3 cycles: no work pending, ending cleanly"
+                 print(msg, flush=True)
+@@ -1700,6 +1747,57 @@ def cmd_provision(ctx, issues, a):
+     return rc_all
  
-diff --git a/tools/term-srv-fault-mon.sh b/tools/term-srv-fault-mon.sh
-new file mode 100755
-index 000000000..63ef1e85b
---- /dev/null
-+++ b/tools/term-srv-fault-mon.sh
-@@ -0,0 +1,13 @@
-+#!/bin/bash
-+# term-srv fault demo (issue #51, strangler step c): kill the term-srv PD,
-+# watch the supervisor restart + rebind it, re-run the parity probe.
-+# Usage: tools/term-srv-fault-mon.sh <on+fault-inject-iso> <fat32.img> <outdir>
-+# Artifacts: outdir/{com1.log,debugcon.log,verdict.txt} (raw serial logs).
-+set -u
-+ISO="${1:?usage: term-srv-fault-mon.sh <iso> <fat32> <outdir>}"
-+FAT="${2:?usage: term-srv-fault-mon.sh <iso> <fat32> <outdir>}"
-+OUT="${3:?usage: term-srv-fault-mon.sh <iso> <fat32> <outdir>}"
-+mkdir -p "$OUT"
-+exec tools/srv-pd-fault-mon.py --iso "$ISO" --probe /bin/term-srv-parity.c.elf \
-+    --tag "S TM " --role term-srv --kill-cmd termfault --outdir "$OUT" \
-+    --fat32 "$FAT" --port 4491
-diff --git a/tools/term-srv-parity.exp b/tools/term-srv-parity.exp
-new file mode 100755
-index 000000000..3539e845d
---- /dev/null
-+++ b/tools/term-srv-parity.exp
-@@ -0,0 +1,23 @@
-+#!/usr/bin/expect -f
-+# term-srv parity capture (issue #51, strangler step b): boot an ISO,
-+# run /bin/term-srv-parity.c.elf, capture `S TM ` lines to a file.
-+# Args: <iso> <serial_log> <out_filtered> [fat32.img]
-+# Delegates to tools/srv-pd-parity.py (QEMU monitor sendkey +
-+# file-backed COM1). Raw expect-on-spawn cannot work here: file-backed
-+# serial is invisible on the spawn channel, and the spawn pty is not
-+# guest input (the shell reads COM1/PS2). The ISO must bake
-+# test_class=none (interactive shell).
-+set iso [lindex $argv 0]
-+set serial_log [lindex $argv 1]
-+set out_filtered [lindex $argv 2]
-+set fat [lindex $argv 3]
-+if {$fat eq ""} { set fat "build/meson-x86_64/packaging/fat32.img" }
-+set tmp "build/term-srv-parity/exp-[pid]"
-+exec mkdir -p $tmp
-+if {[catch {exec python3 tools/srv-pd-parity.py $iso /bin/term-srv-parity.c.elf "S TM " $tmp --fat32 $fat --port 4490} res]} {
-+    puts "PARITY-CAPTURE-FAIL $res"
-+    exit 1
-+}
-+exec cp $tmp/com1.log $serial_log
-+exec cp $tmp/filtered.txt $out_filtered
-+puts "PARITY-CAPTURE-OK $out_filtered"
-diff --git a/tools/term-srv-parity.sh b/tools/term-srv-parity.sh
-new file mode 100755
-index 000000000..0b101b413
---- /dev/null
-+++ b/tools/term-srv-parity.sh
-@@ -0,0 +1,33 @@
-+#!/bin/bash
-+# term-srv loopback/parity harness (issue #51, strangler step b).
-+# Captures `S TM` lines on OFF (default) + ON ISOs via the proven
-+# tools/srv-pd-parity.py harness (QEMU monitor sendkey + file-backed
-+# COM1: raw expect-on-spawn observes neither file-backed serial nor
-+# guest input), diffs the filtered sets (must be byte-identical:
-+# emulation policy is unchanged pre-flip; only the PD exists).
-+# Usage: tools/term-srv-parity.sh <off-iso> <on-iso> [fat32.img]
-+# Artifacts: build/term-srv-parity/<UTC>/ (serial + filtered + diff).
-+# NOTE: both ISOs must bake test_class=none (interactive shell).
-+set -u
-+OFF_ISO="${1:?usage: term-srv-parity.sh <off-iso> <on-iso> [fat32.img]}"
-+ON_ISO="${2:?usage: term-srv-parity.sh <off-iso> <on-iso> [fat32.img]}"
-+FAT="${3:-build/meson-x86_64/packaging/fat32.img}"
-+UTC=$(date -u +%Y%m%dT%H%M%SZ)
-+OUT="build/term-srv-parity/$UTC"
-+mkdir -p "$OUT"
-+echo "term-srv PARITY $UTC (OFF default vs ON shim)"
-+PORT=4490
-+for variant in OFF ON; do
-+    ISO_VAR="${variant}_ISO"
-+    PORT=$((PORT + 1))
-+    python3 tools/srv-pd-parity.py "${!ISO_VAR}" /bin/term-srv-parity.c.elf "S TM " \
-+        "$OUT/$variant" --fat32 "$FAT" --port "$PORT" || exit 1
-+    cp "$OUT/$variant/filtered.txt" "$OUT/filtered-$variant.txt"
-+    cp "$OUT/$variant/com1.log" "$OUT/serial-$variant.log"
-+done
-+if diff -u "$OUT/filtered-OFF.txt" "$OUT/filtered-ON.txt" > "$OUT/diff.txt"; then
-+    echo "PARITY-OK: OFF == ON (see $OUT)"
-+else
-+    echo "PARITY-DIFF: see $OUT/diff.txt"
-+    exit 1
-+fi
-diff --git a/userspace/log-srv.c b/userspace/log-srv.c
-new file mode 100644
-index 000000000..f11c6a0fd
---- /dev/null
-+++ b/userspace/log-srv.c
-@@ -0,0 +1,88 @@
-+#include <stddef.h>
-+#include <stdint.h>
-+#include <stdio.h>
-+#include <unistd.h>
-+#include <string.h>
-+#include <syscall.h>
-+#include <ipc.h>
+ 
++def mode_self_test():
++    """Deterministic regression for #442 quiet-progress + NEED-idle matrix."""
++    passed = 0
++    total = 0
 +
-+#define MSG_DAEMON_READY 0xF0000001
-+#define MSG_TYPE_REPLY 0xF0000002
++    def check(name, got, want=True):
++        nonlocal passed, total
++        total += 1
++        ok = bool(got) is bool(want)
++        print("%s %s" % ("PASS" if ok else "FAIL", name), flush=True)
++        if ok:
++            passed += 1
++        return ok
 +
-+typedef enum {
-+    LOG_OP_BIND = 0,
-+    LOG_OP_SINK_PUSH = 1,
-+    LOG_OP_SINK_DRAIN = 2,
-+    LOG_OP_METER = 3,
-+    LOG_OP_INJECT_DROP = 4,
-+} log_srv_op_t;
++    mk = lambda kind, acked: {"verdict": {"kind": kind}, "acked": acked}
++    check("progress-empty-false", cycle_progress([], [], dry=False), False)
++    check("progress-unchanged-0-false",
++          cycle_progress(["NOTE idle"], [mk("UNCHANGED", 0)], dry=False), False)
++    check("progress-rang-true",
++          cycle_progress(["rang nexios-dev"], [mk("UNCHANGED", 0)], dry=False), True)
++    check("progress-changed-true",
++          cycle_progress(["NOTE idle"], [mk("CHANGED", 0)], dry=False), True)
++    check("progress-acked-true",
++          cycle_progress(["NEED qe idle with no briefed work (no invention)"],
++                         [mk("UNCHANGED", 2)], dry=False), True)
++    check("progress-dry-signals-false",
++          cycle_progress([], [mk("CHANGED", 1)], dry=True), False)
++    check("progress-dry-rang-true",
++          cycle_progress(["WOULD ring nexios-dev"], [mk("UNCHANGED", 0)], dry=True), True)
++    check("need-idle-true",
++          need_idle_missing("dev", set(), "IDLE-static", [], None, False), True)
++    check("need-idle-fresh-false",
++          need_idle_missing("dev", set(), "IDLE-static", ["2026-11-02T07:44:32Z FROM=qe NOTE :: x"],
++                            None, False), False)
++    check("need-idle-working-false",
++          need_idle_missing("dev", set(), "WORKING-markers", [], None, False), False)
++    check("need-idle-next-false",
++          need_idle_missing("dev", set(), "IDLE-static", [], "working :: parked", False), False)
++    check("need-idle-unacked-false",
++          need_idle_missing("dev", {"dev"}, "IDLE-static", [], None, False), False)
++    check("need-idle-rang-false",
++          need_idle_missing("dev", set(), "IDLE-static", [], None, True), False)
++    check("parse-changed", parse_verdict("CHANGED 51 (8 lines differ)")["kind"] == "CHANGED", True)
++    check("wire-gaps-state",
++          wire_gaps(["2026-11-02T07:44:32Z FROM=qe NOTE :: x", "body"], "2026-11-02T07:44:32Z FROM=qe NOTE :: x") == ["STATE", "NEXT"], True)
++    fresh_first = new_posts({"dev": {"all": ["2026-11-02T07:44:32Z FROM=dev NOTE :: x"]}}, {})
++    check("new-posts-first-sight-empty", fresh_first["dev"] == [], True)
++    print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
++    return 0 if passed == total else 1
 +
-+struct LogRpc {
-+    uint8_t op;
-+    uint8_t flags;
-+    uint16_t rsvd;
-+    uint32_t epoch;
-+    uint32_t owner_id;
-+    uint32_t owner_gen;
-+    uint64_t arg0;
-+    uint64_t arg1;
-+    uint16_t status_op;
-+    uint16_t status;
-+    uint32_t rsvd2;
-+};
 +
-+static void log_assert_shape(void) {
-+    char check[sizeof(struct LogRpc) <= 48 ? 1 : -1];
-+    (void)check;
-+}
-+
-+static unsigned long g_dropped = 0;
-+
-+int main(void) {
-+    log_assert_shape();
-+    (void)getpid();
-+    ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
-+
-+    static unsigned char rbuf[64];
-+    for (;;) {
-+        int rc = ipc_recv(rbuf, sizeof(rbuf));
-+        if (rc < 0)
-+            continue;
-+        struct LogRpc req;
-+        memset(&req, 0, sizeof(req));
-+        unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
-+        memcpy(&req, rbuf, copy);
-+        if ((unsigned long)rc != req.op)
-+            continue; // torn/stale payload: kernel type must match body op
-+
-+        struct LogRpc rep;
-+        memset(&rep, 0, sizeof(rep));
-+        rep.op = req.op;
-+        rep.epoch = req.epoch;
-+        rep.owner_id = req.owner_id;
-+        rep.owner_gen = req.owner_gen;
-+        rep.status_op = (uint16_t)req.op;
-+        switch (req.op) {
-+        case LOG_OP_BIND:
-+            rep.status = 0;
-+            break;
-+        case LOG_OP_INJECT_DROP:
-+            ++g_dropped;
-+            rep.status = 0;
-+            break;
-+        default:
-+            /* Step-a diagnostic shape: sink stays in-kernel. */
-+            rep.status = (uint16_t)(uint16_t)-38;
-+            break;
-+        }
-+        (void)g_dropped;
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue with a
-+        // sender match, so a reply addressed to PID 1 (init) is a dead
-+        // letter and every RPC times out (issue #51 step-b evidence:
-+        // live PD + logprobe BIND -ENOSYS). Mirrors the iocd args[0]
-+        // requester convention.
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+    }
-+    return 0;
-+}
-diff --git a/userspace/term-srv-parity.c b/userspace/term-srv-parity.c
-new file mode 100644
-index 000000000..d23a9e218
---- /dev/null
-+++ b/userspace/term-srv-parity.c
-@@ -0,0 +1,22 @@
-+#include <stdint.h>
-+#include <stdio.h>
-+#include <time.h>
-+
-+int main(void) {
-+    struct timespec t1;
-+    struct timespec t2;
-+    int rc1 = clock_gettime(CLOCK_MONOTONIC, &t1);
-+    int rc2 = clock_gettime(CLOCK_MONOTONIC, &t2);
-+    printf("S TM seq=%d op=gettime rc=%d\n", 0, rc1);
-+    printf("S TM seq=%d op=gettime rc=%d\n", 1, rc2);
-+    int ordered = (rc1 == 0 && rc2 == 0 &&
-+                   (t2.tv_sec > t1.tv_sec ||
-+                    (t2.tv_sec == t1.tv_sec && t2.tv_nsec >= t1.tv_nsec)));
-+    printf("S TM seq=%d op=ordered rc=%d\n", 2, ordered ? 0 : -1);
-+    struct timespec zero;
-+    zero.tv_sec = 0;
-+    zero.tv_nsec = 0;
-+    printf("S TM seq=%d op=nanosleep0 rc=%d\n", 3, nanosleep(&zero, 0));
-+    printf("S TM seq=%d op=done rc=%d\n", 4, 0);
-+    return 0;
-+}
-diff --git a/userspace/term-srv.c b/userspace/term-srv.c
-new file mode 100644
-index 000000000..c9b74ae04
---- /dev/null
-+++ b/userspace/term-srv.c
-@@ -0,0 +1,93 @@
-+#include <stddef.h>
-+#include <stdint.h>
-+#include <stdio.h>
-+#include <unistd.h>
-+#include <string.h>
-+#include <syscall.h>
-+#include <ipc.h>
-+
-+#define MSG_DAEMON_READY 0xF0000001
-+#define MSG_TYPE_REPLY 0xF0000002
-+
-+typedef enum {
-+    TERM_OP_BIND = 0,
-+    TERM_OP_PROMPT = 1,
-+    TERM_OP_READLINE = 2,
-+    TERM_OP_HISTORY = 3,
-+    TERM_OP_SCROLL = 4,
-+    TERM_OP_CLEAR = 5,
-+    TERM_OP_REDRAW = 6,
-+    TERM_OP_ECHO = 7,
-+    TERM_OP_CANCEL_OWNERS = 8,
-+    TERM_OP_INJECT_POISON = 9,
-+} term_srv_op_t;
-+
-+struct TermRpc {
-+    uint8_t op;
-+    uint8_t flags;
-+    uint16_t rsvd;
-+    uint32_t epoch;
-+    uint32_t owner_id;
-+    uint32_t owner_gen;
-+    uint64_t arg0;
-+    uint64_t arg1;
-+    uint16_t status_op;
-+    uint16_t status;
-+    uint32_t rsvd2;
-+};
-+
-+static void term_assert_shape(void) {
-+    char check[sizeof(struct TermRpc) <= 48 ? 1 : -1];
-+    (void)check;
-+}
-+
-+static int g_poisoned = 0;
-+
-+int main(void) {
-+    term_assert_shape();
-+    (void)getpid();
-+    ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
-+
-+    static unsigned char rbuf[64];
-+    for (;;) {
-+        int rc = ipc_recv(rbuf, sizeof(rbuf));
-+        if (rc < 0)
-+            continue;
-+        struct TermRpc req;
-+        memset(&req, 0, sizeof(req));
-+        unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
-+        memcpy(&req, rbuf, copy);
-+        if ((unsigned long)rc != req.op)
-+            continue; // torn/stale payload: kernel type must match body op
-+
-+        struct TermRpc rep;
-+        memset(&rep, 0, sizeof(rep));
-+        rep.op = req.op;
-+        rep.epoch = req.epoch;
-+        rep.owner_id = req.owner_id;
-+        rep.owner_gen = req.owner_gen;
-+        rep.status_op = (uint16_t)req.op;
-+        switch (req.op) {
-+        case TERM_OP_BIND:
-+            rep.status = 0;
-+            break;
-+        case TERM_OP_INJECT_POISON:
-+            g_poisoned = 1;
-+            rep.status = 0;
-+            break;
-+        default:
-+            /* Step-a diagnostic shape: emulation stays in-kernel. */
-+            rep.status = (uint16_t)(uint16_t)-38;
-+            break;
-+        }
-+        (void)g_poisoned;
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue with a
-+        // sender match, so a reply addressed to PID 1 (init) is a dead
-+        // letter and every RPC times out (issue #51 step-b evidence:
-+        // live PD + logprobe BIND -ENOSYS). Mirrors the iocd args[0]
-+        // requester convention.
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+    }
-+    return 0;
-+}
+ def main(argv=None):
+     ap = argparse.ArgumentParser(description="NexIOS deterministic state machine")
+     ap.add_argument("--repo", default=None)
+@@ -1723,16 +1821,19 @@ def main(argv=None):
+     pv.add_argument("--dev-branch", default="main")
+     pv.add_argument("--qe-branch", default="testbed")
+     pv.add_argument("--no-launch", action="store_true")
++    sub.add_parser("selftest")
+     for _p in (t, s, pv):
+         _p.add_argument("--repo", default=None)
+         _p.add_argument("--agent-up", default=None)
+         _p.add_argument("--log-dir", default=None)
+         _p.add_argument("--dry-run", action="store_true")
+     a = ap.parse_args(argv)
++    if a.cmd == "selftest":
++        return mode_self_test()
+     issues = None
+-    if a.cmd != "provision" and not a.all:
++    if a.cmd in ("tick", "status") and not getattr(a, "all", False):
+         issues = set(int(x) for x in a.issues.split(",") if x.strip()) or None
+-        if issues is None and not a.all:
++        if issues is None and not getattr(a, "all", False):
+             ap.error("pass --issues 51,52 or --all")
+     ctx = Ctx(a)
+     ctx.open_log()

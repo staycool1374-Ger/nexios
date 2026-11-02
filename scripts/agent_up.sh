@@ -804,15 +804,35 @@ disarm_all_tickers() {
 }
 
 # The orchestration heartbeat: one headless session running the engine tick
-# loop over all rooms. An existing loop is left alone (close it to restart).
+# loop over all rooms. Single start path (up + wake-resurrection share it):
+# an existing loop is left alone (close it to restart).
 ensure_engine_loop() {
+  local quiet=0
+  if [ "${1:-}" = "--quiet" ]; then quiet=1; fi
+  if [ -n "${NEXIOS_ENGINE_DRY:-}" ]; then
+    info "WOULD start engine loop"
+    return 0
+  fi
   if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
-    info "engine loop already up ($ENGINE_SESS)"
+    [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
+    return 0
+  fi
+  local pid=""
+  pid=$(pgrep -f '[s]tate_machine\.py tick --all' 2>/dev/null | head -n 1 || true)
+  if [ -n "${pid:-}" ]; then
+    [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
     return 0
   fi
   mkdir -p "$REPO_ROOT/logs/state-machine"
-  tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 >>logs/state-machine/engine-console.log 2>&1"
-  info "engine loop started ($ENGINE_SESS, logs/state-machine/)"
+  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 >>logs/state-machine/engine-console.log 2>&1"; then
+    if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+      [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
+      return 0
+    fi
+    fail "cannot start engine loop ($ENGINE_SESS)"
+  fi
+  printf '%s engine loop started\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$REPO_ROOT/logs/state-machine/engine-restart.log" 2>/dev/null || true
+  [ "$quiet" = 1 ] || info "engine loop started ($ENGINE_SESS, logs/state-machine/)"
 }
 
 # visible mirrors for the three live roles (consultant = your window).
@@ -871,8 +891,8 @@ mode_up() {
   fi
   mode_workers ${issue:+"$issue"}
   ensure_consultant_session
-  disarm_all_tickers
   ensure_engine_loop
+  disarm_all_tickers
   open_watch_window "$CONSULT_SESS"
   open_watch_window "$DEV_SESS"
   open_watch_window "$QE_SESS"
@@ -1009,6 +1029,9 @@ mode_wake() {
   printf '%s FROM=%s WAKE :: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$4" >> "$rt/inbox/coord.md" \
     || fail "wake not durable for '$3' (inbox append failed)"
   info "wake recorded in '$rt/inbox/coord.md'"
+  if [ "$3" = "$ENGINE_SESS" ]; then
+    ensure_engine_loop --quiet
+  fi
 }
 
 # End-to-end transport self-test: proves msg delivers text+Enter INTO a live
@@ -1494,6 +1517,8 @@ mode_self_test() {
   chk_neg test -e "$r93/watch.pid"
   chk bash -c '"$0" watch 9993 status | grep -q "^disarmed streak=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
   chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm
+  chk env NEXIOS_ENGINE_DRY=1 "$SCRIPT_DIR/agent_up.sh" wake 9999 dev "$ENGINE_SESS" "wake-selftest-$$"
+  chk grep -q "FROM=dev WAKE :: wake-selftest-$$" /tmp/nexios-9999/inbox/coord.md
   rm -rf "$r93"
   rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
          "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
