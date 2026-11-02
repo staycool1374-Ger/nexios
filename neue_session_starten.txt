@@ -1,0 +1,8 @@
+tmux kill-session -t nexios-engine
+agent_up.sh close --all
+agent_up.sh up
+
+python3 scripts/state_machine.py provision --issues N
+python3 scripts/state_machine.py tick --issues N --interval 180
+
+
