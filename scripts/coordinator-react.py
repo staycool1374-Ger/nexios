@@ -17,7 +17,7 @@ import argparse, glob, json, os, re, sys
 
 ROOMS_GLOB = '/tmp/nexios-*'
 SESS = {'dev': 'nexios-dev', 'qe': 'nexios-qe'}
-RUNBOOK_VERSION = 'v3 2026-10-29 (rows 1-12; ts-based new-post)'
+RUNBOOK_VERSION = 'v4 2026-11-02 (rows 1-12; ts-based new-post; ACK-aware unacked advice with [oid])'
 
 def tail(path, n=6):
     try:
@@ -118,10 +118,19 @@ def main():
         for role, sess in SESS.items():
             b = r['boxes'][role]
             if b['coord_last'] and (not b['posts'] or b['coord_last'][:19] > b['posts'][-1][:19]):
+                oid = "%s:%s" % (role, b['coord_last'][:19])
+                rings = (r['state'].get('rings') or {})
+                ack_since = r['state'].get('ack_since')
+                if isinstance(rings.get(oid), int) and rings.get(oid, 0) < 0:
+                    continue  # ACKed/done: advisory stays silent, engine cleared it
+                if ack_since and isinstance(rings.get(oid), int) and rings.get(oid, 0) >= 1 and b['coord_last'][:19] >= (ack_since[:19] if ack_since else ""):
+                    adv = ' (already rung; awaiting ACK %s)' % oid
+                else:
+                    adv = ''
                 w = wstates[role]
                 if w == 'IDLE':
-                    actions.append((10, 'RING %s: unacked order in #%s %s box (%s) -- send: inbox: <short> - read inbox/%s.md'
-                        % (sess, r['issue'], role, b['coord_last'][:100], role)))
+                    actions.append((10, 'RING %s: unacked order in #%s %s box (%s) [oid %s]%s -- send: inbox: <short> [oid %s] -- read inbox/%s.md'
+                        % (sess, r['issue'], role, b['coord_last'][:100], oid, adv, oid, role)))
                 else:
                     pass  # WORKING reads at boundary; never ring, never nag
     # 5. idle + nothing -> backlog (row 8)
