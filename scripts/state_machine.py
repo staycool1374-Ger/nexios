@@ -37,7 +37,7 @@ import subprocess
 import sys
 import time
 
-VERSION = "state-machine v2 2026-11-02 (engine fast-path orders)"
+VERSION = "state-machine v3 2026-11-02 (IMPL promotion + intake NOTE)"
 
 ROOMS_GLOB = "/tmp/nexios-*"
 BOXES = ("dev", "qe", "auditor")
@@ -574,6 +574,22 @@ def auditor_decision(box_all):
     return None
 
 
+def auditor_approved(box_all):
+    """Strict APPROVED verdict: the newest auditor verdict line says
+    APPROVED. Pure. Only the auditor's own posts count (sender audit or
+    auditor) and only verdict-shaped ones (kind DECISION, or a DECISION:
+    marker in the body as the READY/NEED verdicts carry) — a dev NOTE
+    merely mentioning DECISION can neither spoof nor shadow (Gap A gate)."""
+    for line in reversed(box_all or []):
+        m = POST_RE.match(line)
+        if not m or m.group(2) not in ("audit", "auditor"):
+            continue
+        if m.group(3) != "DECISION" and "DECISION:" not in m.group(4):
+            continue
+        return bool(re.search(r"\bAPPROVED\b", m.group(4)))
+    return False
+
+
 def pending_age_s(stored):
     try:
         dt = datetime.datetime.strptime(stored.get("since", ""),
@@ -974,6 +990,52 @@ def session_rung(actions, sess, cycle_rung):
     earlier room's in the shared cycle (dev/qe sessions ring once per
     cycle, G2). Pure."""
     return rang_session(actions, sess) or sess in (cycle_rung or set())
+
+
+def impl_promotion_due(dev_next, contacted, fresh_dev, approved, rings,
+                       has_unacked, stored):
+    """Post-RECON IMPL promotion gate (Gap A). Pure.
+
+    True when dev explicitly waits for an IMPL order, the lane was
+    contacted before (virgin lanes go through intake), nothing is in
+    flight, audit APPROVED is on file, no live dev order exists, and no
+    order was already filed for this exact NEXT text. Takes the LIVE
+    rings dict — never the state.json snapshot (in-tick ACKs/filings)."""
+    if not (re.search(r"waiting|await|park", dev_next or "", re.I)
+            and "IMPL" in (dev_next or "").upper()):
+        return False
+    if not contacted or fresh_dev:
+        return False
+    if not approved or "dev" in (has_unacked or set()):
+        return False
+    for oid, val in (rings or {}).items():
+        if oid.startswith("dev:") and val not in (-1, RING_ESCALATED):
+            return False
+    if (stored or {}).get("next") == (dev_next or ""):
+        return False
+    return True
+
+
+def impl_stalled(dev_next, contacted, fresh_dev, approved, rings,
+                 has_unacked, stored):
+    """ACKed-but-stale-NEXT detector (Gap A follow-through). Pure.
+
+    True when promotion already fired for this exact NEXT text and its
+    order resolved (ACKed or vanished) while the NEXT never advanced:
+    refiling would spam, staying silent would stall — the caller must
+    emit a bounded NEED instead. Never true while the stored order is
+    live or escalated."""
+    if not (re.search(r"waiting|await|park", dev_next or "", re.I)
+            and "IMPL" in (dev_next or "").upper()):
+        return False
+    if not contacted or fresh_dev:
+        return False
+    if not approved or "dev" in (has_unacked or set()):
+        return False
+    stored = stored or {}
+    if stored.get("next") != (dev_next or "") or not stored.get("oid"):
+        return False
+    return stored["oid"] not in (rings or {}) or rings.get(stored["oid"]) == -1
 
 
 # Lane STATE vocabulary (#457): IDLE (pane idle, waits for new work),
@@ -1519,17 +1581,45 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             brief_present = os.path.getsize(brief_p) > 0
         except OSError:
             brief_present = False
-        due, oid = first_contact_due(role, bool(boxes[role]["all"]),
-                                     brief_present, probes[role],
-                                     role in deaf, rings)
-        if due and not session_rung(actions, SESS[role], cycle["rung"]):
-            res = ring(ctx, SESS[role], role,
-                       "first brief -- read prompts/%s.txt" % role, oid=oid,
-                       issue=issue)
-            actions.append(res)
-            if res.startswith(("rang ", "WOULD ring ")):
-                rings[oid] = 1
-            events.append("first-contact-%s" % role)
+        due, first_oid = first_contact_due(role, bool(boxes[role]["all"]),
+                                           brief_present, probes[role],
+                                           role in deaf, rings)
+        if not due:
+            continue
+        # Gap B: intake is a full acked order (coord NOTE + room-scoped
+        # ring with the standard dev:<ts>/qe:<ts> oid), not a ring-only
+        # pointer. first:<role> stays only the one-shot guard flag: set
+        # -1 when filed (never rung, never ACKed; never write 0 — falsy).
+        note, ioid = coord_note(role, "INTAKE #%d %s first brief -- read prompts/%s.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, role, role))
+        if ioid in rings:
+            actions.append("order deferred %s intake (oid collision)" % role)
+            continue
+        if ctx.dry:
+            actions.append("WOULD post %s intake order (oid %s)" % (role, ioid))
+            rings[ioid] = 0
+            rings[first_oid] = -1
+            has_unacked.add(role)
+            if role == "dev":
+                cycle["dev_order"] = issue
+        else:
+            if append_box_note(room_dir, role, note):
+                rings[ioid] = 0
+                rings[first_oid] = -1
+                has_unacked.add(role)
+                actions.append("order filed %s intake (oid %s)" % (role, ioid))
+                if role == "dev":
+                    cycle["dev_order"] = issue
+                if (role not in deaf and probes[role].startswith("IDLE")
+                        and not session_rung(actions, SESS[role], cycle["rung"])):
+                    res = ring(ctx, SESS[role], role,
+                               "first brief -- read prompts/%s.txt" % role,
+                               oid=ioid, issue=issue)
+                    actions.append(res)
+                    if res.startswith(("rang ", "WOULD ring ")):
+                        rings[ioid] = 1
+            else:
+                actions.append("NOTE-FAILED %s intake #%d" % (role, issue))
+        events.append("first-contact-%s" % role)
 
     # G3 + G5: backlog with ack. Both the blocked-on-qe swap and the
     # generic WORKING->IDLE queue check file an acked order (coord NOTE in
@@ -1555,7 +1645,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                       exclude=cycle["busy"] | _busy_rooms())
         if backlog_target is None:
             actions.append("NEED backlog empty: dev waits on qe, nothing to swap to")
-    elif backlog_idle_due("dev", probes["dev"], deaf, has_unacked,
+    elif not cycle.get("dev_order") and backlog_idle_due("dev", probes["dev"], deaf, has_unacked,
                           fresh.get("dev"),
                           boxes["dev"]["next"],
                           session_rung(actions, SESS["dev"], cycle["rung"]),
@@ -1595,6 +1685,49 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 actions.append("NOTE-FAILED dev backlog order #%d" % target)
         cycle["busy"].update((issue, target))
         events.append("backlog-swap #%d" % target)
+
+    # Gap A: post-RECON IMPL promotion. A plan-approved dev that explicitly
+    # waits for an IMPL order gets an acked order (NOTE + room-scoped ring),
+    # instead of waiting forever while pending names dev.
+    stored_impl = st.get("dev_impl") or {}
+    di_store = None
+    if stored_impl and stored_impl.get("next") != (boxes["dev"]["next"] or ""):
+        di_store = {}
+    _dev_next = boxes["dev"]["next"] or ""
+    _approved = auditor_approved(boxes["auditor"]["all"])
+    if impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
+                          fresh.get("dev"), _approved, rings, has_unacked,
+                          stored_impl):
+        note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue)
+        if di_oid in rings:
+            actions.append("order deferred dev IMPL (oid collision)")
+        elif ctx.dry:
+            actions.append("WOULD post dev IMPL order (oid %s)" % di_oid)
+            rings[di_oid] = 0
+            has_unacked.add("dev")
+            di_store = {"next": _dev_next, "oid": di_oid}
+            cycle["dev_order"] = issue
+        elif append_box_note(room_dir, "dev", note):
+            rings[di_oid] = 0
+            has_unacked.add("dev")
+            actions.append("order filed dev IMPL (oid %s)" % di_oid)
+            di_store = {"next": _dev_next, "oid": di_oid}
+            cycle["dev_order"] = issue
+            if ("dev" not in deaf and probes["dev"].startswith("IDLE")
+                    and not session_rung(actions, SESS["dev"], cycle["rung"])):
+                res = ring(ctx, SESS["dev"], "dev",
+                           "IMPL order -- proceed to step-a", oid=di_oid,
+                           issue=issue)
+                actions.append(res)
+                if res.startswith(("rang ", "WOULD ring ")):
+                    rings[di_oid] = 1
+        else:
+            actions.append("NOTE-FAILED dev IMPL #%d" % issue)
+        events.append("dev-impl-order-filed")
+    elif impl_stalled(_dev_next, bool(boxes["dev"]["all"]), fresh.get("dev"),
+                      _approved, rings, has_unacked, stored_impl):
+        actions.append("NEED dev #%d: IMPL order %s filed+resolved but NEXT unchanged (stale NEXT; no new order)"
+                       % (issue, stored_impl.get("oid")))
 
     for role in ("dev", "qe"):
         rang = session_rung(actions, SESS[role], cycle["rung"])
@@ -1736,6 +1869,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["qe_merge"] = qm_store
         if isinstance(qo_store, dict) and qo_store:
             s["qe_order"] = qo_store
+        if isinstance(di_store, dict):
+            if di_store:
+                s["dev_impl"] = di_store
+            else:
+                s.pop("dev_impl", None)
         if wake_newest:
             s["wake_seen"] = wake_newest
         if halt_now:
@@ -3133,6 +3271,65 @@ def mode_self_test():
           not LANE_PEER_RE.search("device driver working"), True)
     check("audit-state-live", audit_state(True) == "WORKING", True)
     check("audit-state-absent", audit_state(False) == "-", True)
+    _appr = "2026-11-02T08:00:00Z FROM=audit DECISION :: APPROVED — step-a may proceed"
+    _need = "2026-11-02T09:00:00Z FROM=audit DECISION :: NEED rework"
+    check("auditor-approved-decision", auditor_approved([_appr]), True)
+    check("auditor-approved-ready-kind",
+          auditor_approved(["2026-11-02T17:48:44Z FROM=audit READY :: DECISION: APPROVED — x"]), True)
+    check("auditor-approved-newest-need", auditor_approved([_appr, _need]) is False, True)
+    check("auditor-approved-note-spoof",
+          auditor_approved(["2026-11-02T08:00:00Z FROM=dev NOTE :: mentions DECISION APPROVED"]) is False, True)
+    check("auditor-approved-none", auditor_approved([]) is False, True)
+    _iw = "waiting IMPL order (plan-approved)"
+    check("impl-due-true",
+          impl_promotion_due(_iw, True, [], True, {}, set(), {}), True)
+    check("impl-due-idle-next",
+          impl_promotion_due("idle :: waiting", True, [], True, {}, set(), {}) is False, True)
+    check("impl-due-working-next",
+          impl_promotion_due("working :: step-a impl", True, [], True, {}, set(), {}) is False, True)
+    check("impl-due-virgin-no-posts",
+          impl_promotion_due(_iw, False, [], True, {}, set(), {}) is False, True)
+    check("impl-due-fresh-post",
+          impl_promotion_due(_iw, True, ["x"], True, {}, set(), {}) is False, True)
+    check("impl-due-no-approval",
+          impl_promotion_due(_iw, True, [], False, {}, set(), {}) is False, True)
+    check("impl-due-unacked-lane",
+          impl_promotion_due(_iw, True, [], True, {}, {"dev"}, {}) is False, True)
+    check("impl-due-case-insensitive",
+          impl_promotion_due("AWAITING IMPL ORDER", True, [], True, {}, set(), {})
+          and impl_promotion_due("parked until IMPL order", True, [], True, {}, set(), {}), True)
+    check("impl-due-live-ring-0",
+          impl_promotion_due(_iw, True, [], True, {"dev:2026-11-02T08:00:00": 0}, set(), {}) is False, True)
+    check("impl-due-live-ring-1",
+          impl_promotion_due(_iw, True, [], True, {"dev:2026-11-02T08:00:00": 1}, set(), {}) is False, True)
+    check("impl-due-ring-acked",
+          impl_promotion_due(_iw, True, [], True, {"dev:2026-11-02T08:00:00": -1}, set(), {}), True)
+    check("impl-due-ring-escalated",
+          impl_promotion_due(_iw, True, [], True, {"dev:2026-11-02T08:00:00": 4}, set(), {}), True)
+    check("impl-due-non-dev-ring-ignored",
+          impl_promotion_due(_iw, True, [], True, {"qe:x": 1, "first:dev": -1}, set(), {}), True)
+    check("impl-due-dedupe-same-next",
+          impl_promotion_due(_iw, True, [], True, {}, set(), {"next": _iw, "oid": "dev:2026-11-02T08:00:00"}) is False, True)
+    check("impl-due-stored-old-next",
+          impl_promotion_due(_iw, True, [], True, {}, set(), {"next": "waiting IMPL order old", "oid": "dev:2026-11-02T07:00:00"}), True)
+    _st = {"next": _iw, "oid": "dev:2026-11-02T08:00:00"}
+    check("impl-stalled-acked-same-next",
+          impl_stalled(_iw, True, [], True, {"dev:2026-11-02T08:00:00": -1}, set(), _st), True)
+    check("impl-stalled-escalated",
+          impl_stalled(_iw, True, [], True, {"dev:2026-11-02T08:00:00": 4}, set(), _st) is False, True)
+    check("impl-stalled-fresh-post",
+          impl_stalled(_iw, True, ["x"], True, {"dev:2026-11-02T08:00:00": -1}, set(), _st) is False, True)
+    check("first-due-guard-minus-one",
+          first_contact_due("dev", False, True, "IDLE-static", False, {"first:dev": -1}) == (False, None), True)
+    check("first-due-guard-zero-not-guard",
+          first_contact_due("dev", False, True, "IDLE-static", False, {"first:dev": 0}) == (True, "first:dev"), True)
+    _inote, _ioid = coord_note("dev", "INTAKE #99 dev first brief")
+    check("intake-oid-shape",
+          ACK_OID_RE.fullmatch(_ioid) is not None and ref_lane(_ioid) == "dev", True)
+    check("intake-order-outstanding",
+          order_outstanding("dev", _inote, [], {_ioid: 1}, "2026-11-02T07:00:00"), True)
+    check("intake-order-acked",
+          order_outstanding("dev", _inote, [], {_ioid: -1}, "2026-11-02T07:00:00") is False, True)
     check("ack-regex-order",
           ACK_OID_RE.fullmatch("dev:2026-11-02T08:00:00") is not None
           and ref_lane("dev:2026-11-02T08:00:00") == "dev", True)
