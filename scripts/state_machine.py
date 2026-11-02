@@ -84,6 +84,8 @@ RING_ESCALATED = RING_LIMIT + 1  # ledger sentinel: order escalated as ACK-MISSI
 CTX_WARN = 70  # log watch-only
 CTX_CRIT = 85  # checkpoint NOTE first, then /compact; never die at 100%% with unposted work
 AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
+AUDIT_SLA_RERING_S = 900  # outstanding audit demand this old -> one extra ring (#461 B)
+AUDIT_SLA_ESCALATE_S = 1800  # outstanding audit demand this old -> NEED escalation (#461 B)
 AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
 AUDIT_RETASK_S = 300  # re-ring a lost/idle auditor order after ~2 ticks
 AUDIT_TEARDOWN_TICKS = 2  # idle ticks after verdict handoff before teardown
@@ -848,6 +850,72 @@ def audit_retask_gate(demand, fresh_need, probe, live, brief_present, brief_tip,
     return "awaiting"
 
 
+def audit_sla_action(age_s, live, probe, oid, n, rerings,
+                     re_ring_after_s=AUDIT_SLA_RERING_S,
+                     escalate_after_s=AUDIT_SLA_ESCALATE_S):
+    """ok | re-ring | escalate-absent | escalate-stale | escalate-missing. Pure.
+
+    Age-based SLA over an outstanding audit demand, orthogonal to the
+    ring-count doctrine: the one re-ring never mints an oid and never
+    touches rings[oid] (3-ring escalation untouched). Absent/stale/missing
+    escalate to NEEDs. There is no kill path (teardown stays verdict-gated,
+    so a stale-live session is re-tasked, never destroyed)."""
+    if age_s is None:
+        return "ok"
+    idle = str(probe).startswith("IDLE")
+    if not live:
+        return "escalate-absent" if age_s >= escalate_after_s else "ok"
+    if not idle:
+        return "escalate-stale" if age_s >= escalate_after_s else "ok"
+    if oid and (n or 0) > 0:
+        if age_s >= re_ring_after_s and (rerings or 0) < 1:
+            return "re-ring"
+        return "ok" if age_s < escalate_after_s else "escalate-missing"
+    return "escalate-missing" if age_s >= escalate_after_s else "ok"
+
+
+def _ts_age_s(since_ts, now_ts):
+    """Seconds between two ts19/Z stamps, or None. Pure (clock-skew safe)."""
+    try:
+        base = datetime.datetime.strptime((since_ts or "")[:19],
+                                          "%Y-%m-%dT%H:%M:%S")
+        now = datetime.datetime.strptime((now_ts or "")[:19],
+                                         "%Y-%m-%dT%H:%M:%S")
+        return max(0.0, (now - base).total_seconds())
+    except (ValueError, TypeError):
+        return None
+
+
+def audit_sla_age_s(stored, sla, demand_key, now_ts):
+    """Oldest known age (seconds) of the current audit demand. Pure.
+
+    max() of the sticky audit_pending since and the SLA first-seen stamp,
+    so FIFO-queued demand (no store yet) still ages; None while neither
+    exists (demand just formed)."""
+    cands = []
+    if isinstance(stored, dict) and stored.get("since"):
+        cands.append(_ts_age_s(stored["since"], now_ts))
+    if isinstance(sla, dict) and sla.get("key") == demand_key and sla.get("first"):
+        cands.append(_ts_age_s(sla["first"], now_ts))
+    cands = [c for c in cands if c is not None]
+    return max(cands) if cands else None
+
+
+def audit_sla_next(asess, demand_key, action, now_ts):
+    """Updated sla store for the audit session record. Pure.
+
+    Keyed on demand_key: a new demand resets first-seen and the re-ring
+    budget, so each demand gets exactly one re-ring. No demand clears it."""
+    if not demand_key:
+        return {}
+    sla = dict((asess or {}).get("sla") or {})
+    if sla.get("key") != demand_key:
+        sla = {"key": demand_key, "first": now_ts, "rerings": 0}
+    if action == "re-ring":
+        sla["rerings"] = int(sla.get("rerings") or 0) + 1
+    return sla
+
+
 def audit_teardown_gate(live, probe, verdict_on_file, handled_past_verdict, demand, fresh_need,
                         other_demand, dup_audit, idle_ticks, n_ticks, teardown_enabled, dry):
     """(new_idle_ticks, action) for auditor teardown. Pure except dry flag use.
@@ -1060,6 +1128,46 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     act = audit_retask_gate(demand, fresh_need, aprobe, live, brief_present, brief_tip, cur_tip,
                             bool(verdict_ts), demand_key, asess.get("handled_demand"), oid, rings,
                             claimed, age_s)
+    # Item B (#461): age-based auditor SLA, orthogonal to the ring-count
+    # doctrine. Evaluated only while a demand is outstanding (orphaned
+    # stores age silently). The re-ring reuses the live oid and never
+    # touches rings[oid]; stale forces a re-brief + ring attempt (never a
+    # kill — teardown stays verdict-gated).
+    _sla_action = "ok"
+    _sage = None
+    if demand_key:
+        _now19 = utcnow()
+        _sla0 = (asess or {}).get("sla") or {}
+        _sage = audit_sla_age_s(stored, _sla0, demand_key, _now19)
+        _sla_action = audit_sla_action(
+            _sage, live, aprobe, oid, rings.get(oid, 0) if oid else 0,
+            _sla0.get("rerings", 0) if _sla0.get("key") == demand_key else 0)
+        if (_sla_action == "re-ring" and verdict_ts
+                and _sla0.get("key") == demand_key and _sla0.get("first")
+                and verdict_ts >= _sla0["first"][:19]):
+            _sla_action = "ok"  # verdict already covers this demand era
+        if demand_key or _sla0:
+            asess["sla"] = audit_sla_next(asess, demand_key, _sla_action, _now19)
+    if _sla_action == "re-ring":
+        if qhead is not None and qhead != issue:
+            acted.append("AUDIT-SLA re-ring deferred #%d: queued behind #%d (FIFO)" % (issue, qhead))
+        elif ctx.dry:
+            acted.append("WOULD re-ring audit lane (oid %s, no new oid)" % oid)
+        else:
+            acted.append(ring(ctx, ctx.audit_sess, "auditor", "AUDIT-SLA re-ring #%d" % issue,
+                              oid=oid, pointer=os.path.join(room_dir, "prompts", "auditor.txt"), tag_oid=False))
+            ctx.audit_claimed = (ctx.tick_seq, issue)
+    elif _sla_action == "escalate-absent":
+        acted.append("AUDIT-SLA absent #%d: demand aging %ds with no session; launch path owns it"
+                     % (issue, int(_sage or 0)))
+    elif _sla_action == "escalate-stale":
+        acted.append("NEED audit #%d: live session stale (demand aging %ds, probe %s); re-task or teardown needed"
+                     % (issue, int(_sage or 0), aprobe))
+        if act not in ("skip-no-demand", "skip-done"):
+            act = "brief-then-ring"
+    elif _sla_action == "escalate-missing":
+        acted.append("NEED audit #%d: demand aging %ds with no ring progress (oid %s); re-drive needed"
+                     % (issue, int(_sage or 0), oid))
     if act == "skip-no-demand":
         audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, bool(stored), None, qhead, issue)
         return acted, False, store, (asess or None), audit_note
@@ -4612,6 +4720,37 @@ def mode_self_test():
           audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", False, "k", None, "audit:ts", {"audit:ts": 1}, None, 9999) == "ring-again", True)
     check("audit-retask-hold-stale",
           audit_retask_gate({"requester": "dev", "text": "t"}, None, "ABSENT", False, False, None, None, False, "k", None, None, {}, None, None) == "launch", True)
+    check("audit-sla-ok",
+          audit_sla_action(None, True, "IDLE-static", "audit:x", 1, 0) == "ok"
+          and audit_sla_action(100, True, "IDLE-static", "audit:x", 1, 0) == "ok", True)
+    check("audit-sla-re-ring",
+          audit_sla_action(901, True, "IDLE-static", "audit:x", 1, 0) == "re-ring", True)
+    check("audit-sla-re-ring-once",
+          audit_sla_action(901, True, "IDLE-static", "audit:x", 1, 1) == "ok", True)
+    check("audit-sla-absent",
+          audit_sla_action(1801, False, "ABSENT", None, 0, 0) == "escalate-absent"
+          and audit_sla_action(901, False, "ABSENT", None, 0, 0) == "ok", True)
+    check("audit-sla-stale-no-kill",
+          audit_sla_action(1801, True, "WORKING-markers", "audit:x", 1, 0) == "escalate-stale", True)
+    check("audit-sla-stale-early-ok",
+          audit_sla_action(901, True, "WORKING-markers", "audit:x", 1, 0) == "ok", True)
+    check("audit-sla-missing",
+          audit_sla_action(1801, True, "IDLE-static", None, 0, 0) == "escalate-missing", True)
+    check("audit-sla-legacy-no-store",
+          audit_sla_next({}, None, "ok", "2026-11-02T08:00:00Z") == {}
+          and audit_sla_age_s({}, {}, "k", "2026-11-02T08:00:00Z") is None, True)
+    _sla1 = audit_sla_next({}, "dev:ab12cd34", "ok", "2026-11-02T08:00:00Z")
+    check("audit-sla-next-key-reset",
+          _sla1 == {"key": "dev:ab12cd34", "first": "2026-11-02T08:00:00Z", "rerings": 0}, True)
+    _sla2 = audit_sla_next({"sla": _sla1}, "dev:ab12cd34", "re-ring", "2026-11-02T08:30:00Z")
+    check("audit-sla-next-rering-bumps",
+          _sla2["rerings"] == 1 and _sla2["first"] == "2026-11-02T08:00:00Z", True)
+    check("audit-sla-next-new-demand-resets",
+          audit_sla_next({"sla": _sla2}, "dev:ff00ff00", "ok", "2026-11-02T09:00:00Z") == {"key": "dev:ff00ff00", "first": "2026-11-02T09:00:00Z", "rerings": 0}, True)
+    check("audit-sla-age-max",
+          audit_sla_age_s({"since": "2026-11-02T08:00:00Z"}, {"key": "k", "first": "2026-11-02T07:00:00Z"}, "k", "2026-11-02T09:00:00Z") == 7200.0, True)
+    check("audit-sla-age-store-only",
+          audit_sla_age_s({"since": "2026-11-02T08:30:00Z"}, {}, "k", "2026-11-02T09:00:00Z") == 1800.0, True)
     check("audit-teardown-absent", audit_teardown_gate(False, "ABSENT", False, False, None, None, False, False, 0, 2, True, False) == (0, "absent"), True)
     check("audit-teardown-disabled", audit_teardown_gate(True, "IDLE", True, True, None, None, False, False, 0, 2, False, False) == (0, "disabled"), True)
     check("audit-teardown-hold-dup", audit_teardown_gate(True, "IDLE", True, True, None, None, False, True, 0, 2, True, False) == (0, "hold-dup"), True)
