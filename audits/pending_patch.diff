@@ -1,8 +1,58 @@
 diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
-index 0ff8c16aa..c5ae1670a 100755
+index 0ff8c16aa..622b12dd7 100755
 --- a/scripts/agent_up.sh
 +++ b/scripts/agent_up.sh
-@@ -804,15 +804,35 @@ disarm_all_tickers() {
+@@ -92,11 +92,16 @@ usage: agent_up.sh <mode> [...]
+   workers [issue]    launch $DEV_SESS + $QE_SESS (detached tmux). With an issue
+                      they get prompts/dev.txt + prompts/qe.txt from the room
+                      runtime; without one they start bare and wait for a ring.
+-  up [issue] ["task"] FULL SYSTEM from one zsh command: setup (only if an
+-                     issue is given) + workers + consultant + headless engine
++  up [issue-or-list] ["task"] FULL SYSTEM from one zsh command: per-issue
++                     setup (only if given) + per-room RECON briefs from the
++                     GitHub issue text (missing briefs only) + one shared
++                     workers launch + consultant + headless engine
+                      loop + three visible Terminal windows for
+                      consultant/dev/qe (read-write mirrors; read-only mirrors
+-                     block ALL tmux input including doorbells). Bare 'up'
++                     block ALL tmux input including doorbells). One issue or a
++                     comma list (up 52,53,54); each item numeric/canonical, a
++                     bad item aborts before setup. The task is pasted once to
++                     the global consultant, never per room. Bare 'up'
+                      resumes every session in its last state (no runtime
+                      created, no briefs written — cold starts go through
+                      provision with an issue list).
+@@ -159,6 +164,29 @@ runtime_dir() {
+   printf '/tmp/nexios-%s\n' "$n"
+ }
+ 
++# Comma-separated issue list -> canonical CSV on stdout (deduped, order kept).
++# Validates EVERY item via runtime_dir before printing anything: one bad item
++# aborts with one message and zero side effects (callers act only on success).
++parse_issue_list() {
++  [ $# -eq 1 ] || fail "parse_issue_list needs one CSV argument"
++  local raw="$1" rest item canon n out="" seen=" "
++  case "$raw" in ''|,*|*,|*,,*) fail "up: empty issue in list: '$raw'";; esac
++  rest="$raw"
++  while [ -n "$rest" ]; do
++    item="${rest%%,*}"
++    if [ "$rest" = "$item" ]; then rest=""; else rest="${rest#*,}"; fi
++    canon=$(runtime_dir "$item" 2>&1) || fail "up: invalid issue in list: ${canon#agent_up: ERROR: }"
++    n="${canon##*/nexios-}"
++    case "$seen" in
++      *" $n "*) printf 'agent_up: duplicate issue %s in list (deduped)\n' "$n" >&2; continue;;
++    esac
++    seen="$seen$n "
++    out="${out:+$out,}$n"
++  done
++  [ -n "$out" ] || fail "up: empty issue list"
++  printf '%s\n' "$out"
++}
++
+ # Per-session TMPDIR, inside the allowed /tmp/agentup-* namespace (both the flat
+ # rule and the /** rule exist, so files created inside are fenced too).
+ ensure_session_tmpdir() {
+@@ -804,15 +832,35 @@ disarm_all_tickers() {
  }
  
  # The orchestration heartbeat: one headless session running the engine tick
@@ -42,9 +92,76 @@ index 0ff8c16aa..c5ae1670a 100755
  }
  
  # visible mirrors for the three live roles (consultant = your window).
-@@ -871,8 +891,8 @@ mode_up() {
+@@ -830,6 +878,8 @@ mode_windows() {
+ # workers [issue] — without an issue the sessions start bare (no brief): the
+ # engine writes the briefs after setup and rings each worker. Briefs are
+ # only required when an issue was named, so a no-issue room creates no runtime.
++# Brief files are written by up/provision; workers only consumes existing
++# prompts/dev.txt + prompts/qe.txt, never fetches issue text itself.
+ mode_workers() {
+   [ $# -le 1 ] || fail "workers takes at most one issue number (got $#)"
+   need_cmd tmux; need_cmd "$OPENCODE_BIN"
+@@ -856,23 +906,56 @@ open_watch_window() {
+ 
+ # Full system from one zsh command: setup + workers + consultant + engine loop
+ # + visible watch mirrors, with an optional task pasted to the consultant.
+-# up [issue] ["task"] — the issue is optional: bare `up` resumes every session
+-# in its last state (cold starts go through provision with an issue list).
++# up [issue-or-list] ["task"] — the issue is optional: bare `up` resumes every
++# session in its last state. A comma list (up 52,53,54) provisions every room,
++# then shares one workers launch, one engine loop, one window set. The task,
++# when given, is pasted once to the global consultant, never per room.
++UP_PROVISIONED_PENDING="provisioned from issue text; await dev PLAN + qe approach NOTEs"
+ mode_up() {
+-  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
+-  local issue="" task=""
++  [ $# -le 2 ] || fail "up takes at most: up [issue-or-list] [taskfile-or-task] (got $#)"
++  local list="" first="" task="" n
+   if [ $# -ge 1 ]; then
+-    # runtime_dir is the validator: a non-numeric first argument is an error,
+-    # never an "idea" (cold starts go through provision with an issue list).
+-    runtime_dir "$1" >/dev/null
+-    issue="$1"
++    # parse_issue_list is the validator: a non-numeric item is an error,
++    # never an "idea". The whole list validates before any side effect.
++    list=$(parse_issue_list "$1")
++    first=${list%%,*}
+     task="${2:-}"
+-    mode_setup "$issue"
++    for n in $(printf '%s' "$list" | tr ',' ' '); do mode_setup "$n"; done
++  fi
++  if [ -n "$list" ]; then
++    # Per-room RECON briefs from the GitHub issue text (missing briefs only);
++    # all-or-nothing: any unavailable text aborts before sessions launch.
++    local rt dev_prompt_name qe_prompt_name br_needed=""
++    dev_prompt_name=$(role_field dev prompt)
++    qe_prompt_name=$(role_field qe prompt)
++    for n in $(printf '%s' "$list" | tr ',' ' '); do
++      rt=$(runtime_dir "$n")
++      if [ ! -s "$rt/prompts/$dev_prompt_name" ] || [ ! -s "$rt/prompts/$qe_prompt_name" ]; then
++        br_needed="${br_needed:+$br_needed,}$n"
++      fi
++    done
++    if [ -n "$br_needed" ]; then
++      need_cmd python3
++      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" --issues "$br_needed" \
++        || fail "up: briefs unavailable (NEED); no sessions launched"
++    fi
++  fi
++  mode_workers ${first:+"$first"}
++  if [ -n "$list" ]; then
++    # Mark only skeleton rooms provisioned (pending == 'provision workers');
++    # resumed in-progress rooms keep their pending. Written after workers
++    # succeed so a failed launch stays retryable.
++    local cur
++    for n in $(printf '%s' "$list" | tr ',' ' '); do
++      cur=$(read_state "$(runtime_dir "$n")" "pending" 2>/dev/null || true)
++      if [ "$cur" = "provision workers" ]; then
++        mode_state_set "$n" "pending=$UP_PROVISIONED_PENDING"
++      fi
++    done
    fi
-   mode_workers ${issue:+"$issue"}
+-  mode_workers ${issue:+"$issue"}
    ensure_consultant_session
 -  disarm_all_tickers
    ensure_engine_loop
@@ -52,7 +169,19 @@ index 0ff8c16aa..c5ae1670a 100755
    open_watch_window "$CONSULT_SESS"
    open_watch_window "$DEV_SESS"
    open_watch_window "$QE_SESS"
-@@ -1009,6 +1029,9 @@ mode_wake() {
+@@ -891,7 +974,10 @@ EOF
+       mode_consult "$tf"
+       rm -f "$tf"
+     fi
+-  elif [ -n "$issue" ]; then
++  elif [ -n "$list" ]; then
++    local cnt=1
++    case "$list" in *,*) cnt=$(printf '%s' "$list" | tr -cd ',' | wc -c); cnt=$((cnt + 1));; esac
++    echo "(batch: $cnt room(s) provisioned; first-room dev brief pasted; remaining rooms staged for the engine.)"
+     echo "(no task given — the consultant window is yours; the engine drives the lanes.)"
+   else
+     echo "(no issue selected — no runtime created. Cold starts go through"
+@@ -1009,6 +1095,9 @@ mode_wake() {
    printf '%s FROM=%s WAKE :: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" "$4" >> "$rt/inbox/coord.md" \
      || fail "wake not durable for '$3' (inbox append failed)"
    info "wake recorded in '$rt/inbox/coord.md'"
@@ -62,7 +191,73 @@ index 0ff8c16aa..c5ae1670a 100755
  }
  
  # End-to-end transport self-test: proves msg delivers text+Enter INTO a live
-@@ -1494,6 +1517,8 @@ mode_self_test() {
+@@ -1191,6 +1280,33 @@ mode_self_test() {
+   chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 4199999 a b
+   # planning a room never materialises a runtime
+   chk_neg test -e /tmp/nexios-4199999
++  # batch: comma list plans per-issue setup/briefs, one shared launch set
++  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 052,53,54)
++  chk bash -c 'printf "%s" "$1" | grep -qx "issues=52,53,54"' _ "$rp"
++  chk bash -c 'printf "%s" "$1" | grep -qx "issue=52"' _ "$rp"
++  chk bash -c 'printf "%s" "$1" | grep -qx "count=3"' _ "$rp"
++  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=setup:")" = 3' _ "$rp"
++  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=brief:")" = 3' _ "$rp"
++  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=workers:")" = 1' _ "$rp"
++  chk bash -c 'printf "%s" "$1" | grep -qx "step=workers:52"' _ "$rp"
++  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=engine$")" = 1' _ "$rp"
++  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=disarm$")" = 1' _ "$rp"
++  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=window:")" = 3' _ "$rp"
++  # duplicates collapse, order kept
++  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 052,52,53)
++  chk bash -c 'printf "%s" "$1" | grep -qx "issues=52,53"' _ "$rp"
++  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=setup:")" = 2' _ "$rp"
++  # one bad item aborts the whole list, names it, creates nothing
++  local bout; bout=$("$SCRIPT_DIR/agent_up.sh" __room-plan 52,5x3 2>&1 || true)
++  chk bash -c 'printf "%s" "$1" | grep -q "invalid issue in list"' _ "$bout"
++  chk bash -c 'printf "%s" "$1" | grep -q "5x3"' _ "$bout"
++  chk_neg test -e /tmp/nexios-5x3
++  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 52,,53
++  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 52,
++  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan ,52
++  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 0,52
++  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 52,12345678
++  chk_neg test -e /tmp/nexios-52
+   # fence rendering: polarity, determinism, mirrors, {repo}, twins, fail-closed
+   chk "$SCRIPT_DIR/agent_up.sh" render-self-test
+   # ... and the verifier agrees with what the launcher renders (one source)
+@@ -1253,6 +1369,31 @@ mode_self_test() {
+   chk_neg grep -q '{repo}' "$st/home/rendered/consultant/opencode.resolved.json"
+   chk python3 -c "import json,sys; json.load(open(sys.argv[1]))" \
+       "$st/home/rendered/consultant/opencode.resolved.json"
++  # brief: RECON pair from seam-seeded issue text (all-or-nothing, no writes)
++  printf '{"title":"Batch brief","body":"Body text"}' > "$st/gh.json"
++  chk env STATE_MACHINE_GH_JSON="$st/gh.json" \
++      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" \
++      --log-dir "$st/smlogs" --issues 9999 --dev-branch main
++  chk grep -q "Batch brief" /tmp/nexios-9999/prompts/dev.txt
++  chk grep -q "Batch brief" /tmp/nexios-9999/prompts/qe.txt
++  chk grep -q "Task: RECON phase (read-only, no branch, no code)" /tmp/nexios-9999/prompts/dev.txt
++  chk grep -q "STATE/NEXT" /tmp/nexios-9999/prompts/dev.txt
++  chk grep -q "wake 9999 dev nexios-engine" /tmp/nexios-9999/prompts/dev.txt
++  chk grep -q "wake 9999 qe nexios-engine" /tmp/nexios-9999/prompts/qe.txt
++  chk grep -q "{repo}" /tmp/nexios-9999/prompts/dev.txt
++  # room preflight aborts before any write when a room is missing
++  rm -rf /tmp/nexios-9998
++  printf 'SENTINEL' > /tmp/nexios-9999/prompts/dev.txt
++  chk_neg env STATE_MACHINE_GH_JSON="$st/gh.json" \
++      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" \
++      --log-dir "$st/smlogs" --issues 9999,9998 --dev-branch main
++  chk grep -qx "SENTINEL" /tmp/nexios-9999/prompts/dev.txt
++  # missing issue text aborts with NEED and writes nothing
++  rm -f /tmp/nexios-9999/prompts/dev.txt /tmp/nexios-9999/prompts/qe.txt
++  chk_neg env STATE_MACHINE_GH_JSON=/nonexistent-seam-$$ \
++      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" \
++      --log-dir "$st/smlogs" --issues 9999 --dev-branch main
++  chk_neg test -e /tmp/nexios-9999/prompts/dev.txt
+   # state writer: validated keys/vocabulary, locked, atomic
+   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
+   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
+@@ -1494,6 +1635,8 @@ mode_self_test() {
    chk_neg test -e "$r93/watch.pid"
    chk bash -c '"$0" watch 9993 status | grep -q "^disarmed streak=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
    chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm
@@ -71,11 +266,68 @@ index 0ff8c16aa..c5ae1670a 100755
    rm -rf "$r93"
    rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
           "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
+@@ -1527,20 +1670,33 @@ mode_fence_show() {
+ # $1 role — print the exact command run_session sends (self-test + inspection).
+ # self-test only: resolve what `up` would do, without tmux/opencode/render.
+ mode_room_plan() {
+-  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
+-  local issue="" task="" dp="" qp=""
++  [ $# -le 2 ] || fail "up takes at most: up [issue-or-list] [taskfile-or-task] (got $#)"
++  local list="" issue="" task="" dp="" qp="" n
+   if [ $# -ge 1 ]; then
+-    local rt; rt=$(runtime_dir "$1")
+-    issue="${rt##*/nexios-}"
++    list=$(parse_issue_list "$1")
++    issue=${list%%,*}
+     if [ $# -eq 2 ]; then
+       if [ -f "$2" ]; then task=file; else task=text; fi
+     fi
++    local rt; rt=$(runtime_dir "$issue")
+     dp="$rt/prompts/$(role_field dev prompt)"
+     qp="$rt/prompts/$(role_field qe prompt)"
+   fi
+-  printf 'issue=%s\ntask=%s\ndev_prompt=%s\nqe_prompt=%s\nsessions=%s,%s,%s\n' \
+-    "${issue:-none}" "${task:-none}" "${dp:-none}" "${qp:-none}" \
++  local cnt=0
++  if [ -n "$list" ]; then
++    cnt=$(printf '%s' "$list" | tr -cd ',' | wc -c); cnt=$((cnt + 1))
++  fi
++  printf 'issues=%s\nissue=%s\ncount=%d\ntask=%s\ndev_prompt=%s\nqe_prompt=%s\nsessions=%s,%s,%s\n' \
++    "${list:-none}" "${issue:-none}" "$cnt" "${task:-none}" "${dp:-none}" "${qp:-none}" \
+     "$DEV_SESS" "$QE_SESS" "$CONSULT_SESS"
++  for n in $(printf '%s' "$list" | tr ',' ' '); do
++    printf 'step=setup:%s\nstep=brief:%s\n' "$n" "$n"
++  done
++  if [ -n "$list" ]; then
++    printf 'step=workers:%s\nstep=consult\nstep=engine\nstep=disarm\n' "$issue"
++    printf 'step=window:%s\nstep=window:%s\nstep=window:%s\n' \
++      "$CONSULT_SESS" "$DEV_SESS" "$QE_SESS"
++  fi
+ }
+ 
+ mode_launch_cmd() {
 diff --git a/scripts/state_machine.py b/scripts/state_machine.py
-index 1585205f1..273939929 100644
+index 1585205f1..421181206 100644
 --- a/scripts/state_machine.py
 +++ b/scripts/state_machine.py
-@@ -37,6 +37,8 @@ ROOMS_GLOB = "/tmp/nexios-*"
+@@ -14,13 +14,15 @@ Never:  kernel code, test files, worker checkouts, fence sources.
+ 
+ Usage:
+   state_machine.py tick [--issues 51,52 | --all] [--interval S] [--once]
+-                        [--dry-run] [--log-dir DIR] [--repo DIR]
++                         [--dry-run] [--log-dir DIR] [--repo DIR]
+   state_machine.py status [--issues ...]   # read-only serial table, no mutation
++  state_machine.py brief --issues 52,53 [--dev-branch main]  # RECON briefs only
+ """
+ import argparse
+ import collections
+ import datetime
+ import signal
++import tempfile
+ import fcntl
+ import glob
+ import hashlib
+@@ -37,6 +39,8 @@ ROOMS_GLOB = "/tmp/nexios-*"
  BOXES = ("dev", "qe", "auditor")
  SESS = {"dev": "nexios-dev", "qe": "nexios-qe", "audit": "nexios-audit",
          "consultant": "nexios-consultant"}
@@ -84,7 +336,30 @@ index 1585205f1..273939929 100644
  
  # Modal signature copied from scripts/nexios-bin/worker-state.sh v3 MODAL_RE.
  MODAL_RE = (r"allow once|allow always|permission required|needs approval|"
-@@ -687,6 +689,128 @@ def parse_verdict(line):
+@@ -656,8 +660,20 @@ def write_brief(ctx, room_dir, name, content):
+     if ctx.dry:
+         return "WOULD write brief %s (%dB)" % (p, len(content))
+     try:
+-        with open(p, "w") as f:
+-            f.write(content)
++        os.makedirs(os.path.dirname(p), exist_ok=True)
++        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix=".brief.")
++        try:
++            with os.fdopen(fd, "w") as f:
++                f.write(content)
++                f.flush()
++                os.fsync(f.fileno())
++            os.replace(tmp, p)
++        except BaseException:
++            try:
++                os.unlink(tmp)
++            except OSError:
++                pass
++            raise
+         return "wrote brief %s" % p
+     except OSError as e:
+         return "BRIEF-FAILED %s: %s" % (p, e)
+@@ -687,6 +703,128 @@ def parse_verdict(line):
              "streak": streak, "escalate": "ESCALATE" in rest}
  
  
@@ -213,7 +488,7 @@ index 1585205f1..273939929 100644
  def tick_room(ctx, issue, room_dir, st, rooms_all):
      """One deterministic tick for one room. Returns graph node + table rows."""
      node = collections.OrderedDict()
-@@ -868,6 +992,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
+@@ -868,6 +1006,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
              if oid not in resume_now.values() or fresh.get(_r):
                  del rings[oid]
              continue
@@ -222,7 +497,7 @@ index 1585205f1..273939929 100644
          orole, _, ots = oid.partition(":")
          posts = boxes.get(orole, {}).get("all", [])
          if posts and posts[-1][:19] > ots:
-@@ -889,6 +1015,31 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
+@@ -889,6 +1029,31 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
              actions.extend(r_acts)
              rings[oid] = -1 if _rel else n + 1
  
@@ -254,7 +529,7 @@ index 1585205f1..273939929 100644
      if dev_blocked_on_qe(dev_next) and not probes["qe"].startswith("IDLE"):
          target = pick_backlog(rooms_all, issue)
          if target is None:
-@@ -903,17 +1054,17 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
+@@ -903,17 +1068,17 @@ def tick_room(ctx, issue, room_dir, st, rooms_all):
                       % (target, issue, target, target, target))
              actions.append(write_brief(ctx, room_dir,
                                         "dev-%d-backlog.txt" % target, brief))
@@ -278,7 +553,7 @@ index 1585205f1..273939929 100644
  
      if verdict.get("escalate"):
          slow = {r: slow_probe(ctx, SESS[r]) for r in ("dev", "qe")}
-@@ -1448,6 +1599,30 @@ def cycle_productive(all_actions):
+@@ -1448,6 +1613,30 @@ def cycle_productive(all_actions):
      return any(a.startswith(PRODUCTIVE_PREFIXES) for a in all_actions)
  
  
@@ -309,7 +584,7 @@ index 1585205f1..273939929 100644
  def load_saved_seq(ctx):
      try:
          n = int(json.load(open(ctx.graph_path())).get("tick", 0))
-@@ -1481,6 +1656,170 @@ def fmt_table(issue, verdict, rows):
+@@ -1481,6 +1670,170 @@ def fmt_table(issue, verdict, rows):
      return "\n".join(out)
  
  
@@ -480,7 +755,7 @@ index 1585205f1..273939929 100644
  def write_graph(ctx):
      if ctx.dry:
          return "DRY: graph not written"
-@@ -1501,8 +1840,10 @@ def write_graph(ctx):
+@@ -1501,8 +1854,10 @@ def write_graph(ctx):
  
  def cmd_tick(ctx, issues, interval):
      rooms = discover_rooms(issues, skip_debris=True)
@@ -492,7 +767,7 @@ index 1585205f1..273939929 100644
          return 2
      for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
          try:
-@@ -1520,6 +1861,7 @@ def cmd_tick(ctx, issues, interval):
+@@ -1520,6 +1875,7 @@ def cmd_tick(ctx, issues, interval):
              msg = "signal %s: stashing + exiting cleanly" % _STOP["flag"]
              print(msg, flush=True)
              ctx.log(msg)
@@ -500,7 +775,7 @@ index 1585205f1..273939929 100644
              break
          if os.path.exists(stop_path):
              msg = "STOP sentinel present: stashing + exiting cleanly"
-@@ -1529,12 +1871,15 @@ def cmd_tick(ctx, issues, interval):
+@@ -1529,12 +1885,15 @@ def cmd_tick(ctx, issues, interval):
                  os.unlink(stop_path)
              except OSError:
                  pass
@@ -516,7 +791,7 @@ index 1585205f1..273939929 100644
              table = fmt_table(issue, node.get("verdict", {}), rows)
              print(table, flush=True)
              ctx.log("issue #%d verdict=%s acked=%d merge_ready=%s" % (
-@@ -1543,20 +1888,30 @@ def cmd_tick(ctx, issues, interval):
+@@ -1543,20 +1902,30 @@ def cmd_tick(ctx, issues, interval):
              for a in node.get("actions", []):
                  ctx.log("#%d :: %s" % (issue, a))
                  cycle_actions.append(a)
@@ -548,10 +823,104 @@ index 1585205f1..273939929 100644
      return rc
  
  
-@@ -1700,6 +2055,216 @@ def cmd_provision(ctx, issues, a):
+@@ -1619,6 +1988,29 @@ def github_issue_text(ctx, issue):
+         return None, None
+ 
+ 
++def issue_briefs_text(issue, dev_branch, title, body):
++    """RECON brief pair for one issue. Pure: no I/O, {repo} stays literal."""
++    seed = "%s\n\n%s" % (title, (body or "").strip())
++    dev_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-dev.md\n"
++                 "Branch: %s (recon first; feature branch at impl)\n"
++                 "Task: RECON phase (read-only, no branch, no code): read the issue "
++                 "text above + relevant code/tests; draft the implementation plan; "
++                 "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
++                 "No branches, no code, "
++                 "no QEMU until the plan is audit-approved.\n"
++                 "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
++                 % (seed, issue, dev_branch, issue))
++    qe_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-testdev.md\n"
++                "Branch: none (read-only; testbed stays clean)\n"
++                "Task: parallel RECON (read-only, no branch, no code): draft the "
++                "verification approach for this issue; post NOTE to inbox/qe.md + "
++                "RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
++                "RING. No test runs until dev posts IMPL READY.\n"
++                "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
++                % (seed, issue, issue))
++    return dev_brief, qe_brief
++
++
+ def cmd_provision(ctx, issues, a):
+     """Cold start per issue: setup + issue-text briefs + sessions + state.
+ 
+@@ -1647,24 +2039,7 @@ def cmd_provision(ctx, issues, a):
+             ctx.log("%s NEED issue text unavailable (no invention); stop" % tag)
+             rc_all = 1
+             continue
+-        seed = "%s\n\n%s" % (title, (body or "").strip())
+-        dev_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-dev.md\n"
+-                     "Branch: %s (recon first; feature branch at impl)\n"
+-                     "Task: RECON phase (read-only, no branch, no code): read the issue "
+-                     "text above + relevant code/tests; draft the implementation plan; "
+-                     "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+-"No branches, no code, "
+-                     "no QEMU until the plan is audit-approved.\n"
+-                     "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
+-                     % (seed, issue, a.dev_branch, issue))
+-        qe_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-testdev.md\n"
+-                    "Branch: none (read-only; testbed stays clean)\n"
+-                    "Task: parallel RECON (read-only, no branch, no code): draft the "
+-                    "verification approach for this issue; post NOTE to inbox/qe.md + "
+-"RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+-                    "RING. No test runs until dev posts IMPL READY.\n"
+-                    "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
+-                    % (seed, issue, issue))
++        dev_brief, qe_brief = issue_briefs_text(issue, a.dev_branch, title, body)
+         if ctx.dry:
+             ctx.log("%s WOULD write prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
+                     % (tag, len(dev_brief), len(qe_brief)))
+@@ -1700,6 +2075,254 @@ def cmd_provision(ctx, issues, a):
      return rc_all
  
  
++def cmd_brief(ctx, issues, a):
++    """Write per-room RECON briefs from GitHub issue text. All-or-nothing:
++    every text fetched before any write; any miss aborts with rc 1."""
++    if ctx.dry:
++        for issue in issues:
++            title, _body = github_issue_text(ctx, issue)
++            if title is None:
++                print("#%d NEED issue text unavailable (no invention); stop" % issue)
++                return 1
++            dev_brief, qe_brief = issue_briefs_text(
++                issue, a.dev_branch, title, _body)
++            print("WOULD write #%d prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
++                  % (issue, len(dev_brief), len(qe_brief)))
++        return 0
++    for issue in issues:
++        if not os.path.isdir("/tmp/nexios-%d/prompts" % issue):
++            sys.stderr.write("#%d NEED room runtime missing (run setup first); stop\n" % issue)
++            return 1
++    texts = {}
++    for issue in issues:
++        title, body = github_issue_text(ctx, issue)
++        if title is None:
++            sys.stderr.write("#%d NEED issue text unavailable (no invention); stop\n" % issue)
++            return 1
++        texts[issue] = issue_briefs_text(issue, a.dev_branch, title, body)
++    rc = 0
++    for issue in issues:
++        dev_brief, qe_brief = texts[issue]
++        rdir = "/tmp/nexios-%d" % issue
++        for name, content in (("dev.txt", dev_brief), ("qe.txt", qe_brief)):
++            res = write_brief(ctx, rdir, name, content)
++            print("#%d %s" % (issue, res))
++            if res.startswith("BRIEF-FAILED"):
++                sys.stderr.write("#%d NEED brief write failed: %s\n" % (issue, res))
++                rc = 1
++    return rc
++
++
 +def mode_self_test():
 +    """Deterministic regression: #442 quiet-progress + NEED-idle, #443 peer handoff."""
 +    passed = 0
@@ -765,12 +1134,16 @@ index 1585205f1..273939929 100644
  def main(argv=None):
      ap = argparse.ArgumentParser(description="NexIOS deterministic state machine")
      ap.add_argument("--repo", default=None)
-@@ -1723,16 +2288,19 @@ def main(argv=None):
+@@ -1723,16 +2346,22 @@ def main(argv=None):
      pv.add_argument("--dev-branch", default="main")
      pv.add_argument("--qe-branch", default="testbed")
      pv.add_argument("--no-launch", action="store_true")
+-    for _p in (t, s, pv):
++    b = sub.add_parser("brief")
++    b.add_argument("--issues", default="")
++    b.add_argument("--dev-branch", default="main")
 +    sub.add_parser("selftest")
-     for _p in (t, s, pv):
++    for _p in (t, s, pv, b):
          _p.add_argument("--repo", default=None)
          _p.add_argument("--agent-up", default=None)
          _p.add_argument("--log-dir", default=None)
@@ -787,3 +1160,21 @@ index 1585205f1..273939929 100644
              ap.error("pass --issues 51,52 or --all")
      ctx = Ctx(a)
      ctx.open_log()
+@@ -1749,6 +2378,17 @@ def main(argv=None):
+             if not canon:
+                 ap.error("provision needs --issues (cold start from the issue list)")
+             return cmd_provision(ctx, canon, a)
++        if a.cmd == "brief":
++            ordered = []
++            for x in (a.issues.split(",") if a.issues else []):
++                n = canon_issue(x)
++                if n is None:
++                    ap.error("bad issue number: %r" % x)
++                if n not in ordered:
++                    ordered.append(n)
++            if not ordered:
++                ap.error("brief needs --issues")
++            return cmd_brief(ctx, ordered, a)
+         return cmd_status(ctx, issues)
+     finally:
+         ctx.close_log()

@@ -14,13 +14,15 @@ Never:  kernel code, test files, worker checkouts, fence sources.
 
 Usage:
   state_machine.py tick [--issues 51,52 | --all] [--interval S] [--once]
-                        [--dry-run] [--log-dir DIR] [--repo DIR]
+                         [--dry-run] [--log-dir DIR] [--repo DIR]
   state_machine.py status [--issues ...]   # read-only serial table, no mutation
+  state_machine.py brief --issues 52,53 [--dev-branch main]  # RECON briefs only
 """
 import argparse
 import collections
 import datetime
 import signal
+import tempfile
 import fcntl
 import glob
 import hashlib
@@ -658,8 +660,20 @@ def write_brief(ctx, room_dir, name, content):
     if ctx.dry:
         return "WOULD write brief %s (%dB)" % (p, len(content))
     try:
-        with open(p, "w") as f:
-            f.write(content)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix=".brief.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, p)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
         return "wrote brief %s" % p
     except OSError as e:
         return "BRIEF-FAILED %s: %s" % (p, e)
@@ -1974,6 +1988,29 @@ def github_issue_text(ctx, issue):
         return None, None
 
 
+def issue_briefs_text(issue, dev_branch, title, body):
+    """RECON brief pair for one issue. Pure: no I/O, {repo} stays literal."""
+    seed = "%s\n\n%s" % (title, (body or "").strip())
+    dev_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-dev.md\n"
+                 "Branch: %s (recon first; feature branch at impl)\n"
+                 "Task: RECON phase (read-only, no branch, no code): read the issue "
+                 "text above + relevant code/tests; draft the implementation plan; "
+                 "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+                 "No branches, no code, "
+                 "no QEMU until the plan is audit-approved.\n"
+                 "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
+                 % (seed, issue, dev_branch, issue))
+    qe_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-testdev.md\n"
+                "Branch: none (read-only; testbed stays clean)\n"
+                "Task: parallel RECON (read-only, no branch, no code): draft the "
+                "verification approach for this issue; post NOTE to inbox/qe.md + "
+                "RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
+                "RING. No test runs until dev posts IMPL READY.\n"
+                "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
+                % (seed, issue, issue))
+    return dev_brief, qe_brief
+
+
 def cmd_provision(ctx, issues, a):
     """Cold start per issue: setup + issue-text briefs + sessions + state.
 
@@ -2002,24 +2039,7 @@ def cmd_provision(ctx, issues, a):
             ctx.log("%s NEED issue text unavailable (no invention); stop" % tag)
             rc_all = 1
             continue
-        seed = "%s\n\n%s" % (title, (body or "").strip())
-        dev_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-dev.md\n"
-                     "Branch: %s (recon first; feature branch at impl)\n"
-                     "Task: RECON phase (read-only, no branch, no code): read the issue "
-                     "text above + relevant code/tests; draft the implementation plan; "
-                     "post PLAN NOTE to inbox/dev.md + RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
-"No branches, no code, "
-                     "no QEMU until the plan is audit-approved.\n"
-                     "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY \u2014 read inbox/dev.md\"\n"
-                     % (seed, issue, a.dev_branch, issue))
-        qe_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-testdev.md\n"
-                    "Branch: none (read-only; testbed stays clean)\n"
-                    "Task: parallel RECON (read-only, no branch, no code): draft the "
-                    "verification approach for this issue; post NOTE to inbox/qe.md + "
-"RING (every post ends with STATE/NEXT plus a CTX: <n>%% line). "
-                    "RING. No test runs until dev posts IMPL READY.\n"
-                    "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
-                    % (seed, issue, issue))
+        dev_brief, qe_brief = issue_briefs_text(issue, a.dev_branch, title, body)
         if ctx.dry:
             ctx.log("%s WOULD write prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
                     % (tag, len(dev_brief), len(qe_brief)))
@@ -2053,6 +2073,44 @@ def cmd_provision(ctx, issues, a):
                 last2 = (out2.strip().splitlines() or ["?"])[-1][:100]
                 ctx.log("windows rc=%d %s" % (rc2, last2))
     return rc_all
+
+
+def cmd_brief(ctx, issues, a):
+    """Write per-room RECON briefs from GitHub issue text. All-or-nothing:
+    every text fetched before any write; any miss aborts with rc 1."""
+    if ctx.dry:
+        for issue in issues:
+            title, _body = github_issue_text(ctx, issue)
+            if title is None:
+                print("#%d NEED issue text unavailable (no invention); stop" % issue)
+                return 1
+            dev_brief, qe_brief = issue_briefs_text(
+                issue, a.dev_branch, title, _body)
+            print("WOULD write #%d prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
+                  % (issue, len(dev_brief), len(qe_brief)))
+        return 0
+    for issue in issues:
+        if not os.path.isdir("/tmp/nexios-%d/prompts" % issue):
+            sys.stderr.write("#%d NEED room runtime missing (run setup first); stop\n" % issue)
+            return 1
+    texts = {}
+    for issue in issues:
+        title, body = github_issue_text(ctx, issue)
+        if title is None:
+            sys.stderr.write("#%d NEED issue text unavailable (no invention); stop\n" % issue)
+            return 1
+        texts[issue] = issue_briefs_text(issue, a.dev_branch, title, body)
+    rc = 0
+    for issue in issues:
+        dev_brief, qe_brief = texts[issue]
+        rdir = "/tmp/nexios-%d" % issue
+        for name, content in (("dev.txt", dev_brief), ("qe.txt", qe_brief)):
+            res = write_brief(ctx, rdir, name, content)
+            print("#%d %s" % (issue, res))
+            if res.startswith("BRIEF-FAILED"):
+                sys.stderr.write("#%d NEED brief write failed: %s\n" % (issue, res))
+                rc = 1
+    return rc
 
 
 def mode_self_test():
@@ -2288,8 +2346,11 @@ def main(argv=None):
     pv.add_argument("--dev-branch", default="main")
     pv.add_argument("--qe-branch", default="testbed")
     pv.add_argument("--no-launch", action="store_true")
+    b = sub.add_parser("brief")
+    b.add_argument("--issues", default="")
+    b.add_argument("--dev-branch", default="main")
     sub.add_parser("selftest")
-    for _p in (t, s, pv):
+    for _p in (t, s, pv, b):
         _p.add_argument("--repo", default=None)
         _p.add_argument("--agent-up", default=None)
         _p.add_argument("--log-dir", default=None)
@@ -2317,6 +2378,17 @@ def main(argv=None):
             if not canon:
                 ap.error("provision needs --issues (cold start from the issue list)")
             return cmd_provision(ctx, canon, a)
+        if a.cmd == "brief":
+            ordered = []
+            for x in (a.issues.split(",") if a.issues else []):
+                n = canon_issue(x)
+                if n is None:
+                    ap.error("bad issue number: %r" % x)
+                if n not in ordered:
+                    ordered.append(n)
+            if not ordered:
+                ap.error("brief needs --issues")
+            return cmd_brief(ctx, ordered, a)
         return cmd_status(ctx, issues)
     finally:
         ctx.close_log()

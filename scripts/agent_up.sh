@@ -92,11 +92,16 @@ usage: agent_up.sh <mode> [...]
   workers [issue]    launch $DEV_SESS + $QE_SESS (detached tmux). With an issue
                      they get prompts/dev.txt + prompts/qe.txt from the room
                      runtime; without one they start bare and wait for a ring.
-  up [issue] ["task"] FULL SYSTEM from one zsh command: setup (only if an
-                     issue is given) + workers + consultant + headless engine
+  up [issue-or-list] ["task"] FULL SYSTEM from one zsh command: per-issue
+                     setup (only if given) + per-room RECON briefs from the
+                     GitHub issue text (missing briefs only) + one shared
+                     workers launch + consultant + headless engine
                      loop + three visible Terminal windows for
                      consultant/dev/qe (read-write mirrors; read-only mirrors
-                     block ALL tmux input including doorbells). Bare 'up'
+                     block ALL tmux input including doorbells). One issue or a
+                     comma list (up 52,53,54); each item numeric/canonical, a
+                     bad item aborts before setup. The task is pasted once to
+                     the global consultant, never per room. Bare 'up'
                      resumes every session in its last state (no runtime
                      created, no briefs written — cold starts go through
                      provision with an issue list).
@@ -157,6 +162,29 @@ runtime_dir() {
   [ -n "$n" ] || fail "issue must be non-zero: '$1'"
   [ ${#n} -le 7 ] || fail "issue number too long (max 7 digits): '$1'"
   printf '/tmp/nexios-%s\n' "$n"
+}
+
+# Comma-separated issue list -> canonical CSV on stdout (deduped, order kept).
+# Validates EVERY item via runtime_dir before printing anything: one bad item
+# aborts with one message and zero side effects (callers act only on success).
+parse_issue_list() {
+  [ $# -eq 1 ] || fail "parse_issue_list needs one CSV argument"
+  local raw="$1" rest item canon n out="" seen=" "
+  case "$raw" in ''|,*|*,|*,,*) fail "up: empty issue in list: '$raw'";; esac
+  rest="$raw"
+  while [ -n "$rest" ]; do
+    item="${rest%%,*}"
+    if [ "$rest" = "$item" ]; then rest=""; else rest="${rest#*,}"; fi
+    canon=$(runtime_dir "$item" 2>&1) || fail "up: invalid issue in list: ${canon#agent_up: ERROR: }"
+    n="${canon##*/nexios-}"
+    case "$seen" in
+      *" $n "*) printf 'agent_up: duplicate issue %s in list (deduped)\n' "$n" >&2; continue;;
+    esac
+    seen="$seen$n "
+    out="${out:+$out,}$n"
+  done
+  [ -n "$out" ] || fail "up: empty issue list"
+  printf '%s\n' "$out"
 }
 
 # Per-session TMPDIR, inside the allowed /tmp/agentup-* namespace (both the flat
@@ -850,6 +878,8 @@ mode_windows() {
 # workers [issue] — without an issue the sessions start bare (no brief): the
 # engine writes the briefs after setup and rings each worker. Briefs are
 # only required when an issue was named, so a no-issue room creates no runtime.
+# Brief files are written by up/provision; workers only consumes existing
+# prompts/dev.txt + prompts/qe.txt, never fetches issue text itself.
 mode_workers() {
   [ $# -le 1 ] || fail "workers takes at most one issue number (got $#)"
   need_cmd tmux; need_cmd "$OPENCODE_BIN"
@@ -876,20 +906,53 @@ open_watch_window() {
 
 # Full system from one zsh command: setup + workers + consultant + engine loop
 # + visible watch mirrors, with an optional task pasted to the consultant.
-# up [issue] ["task"] — the issue is optional: bare `up` resumes every session
-# in its last state (cold starts go through provision with an issue list).
+# up [issue-or-list] ["task"] — the issue is optional: bare `up` resumes every
+# session in its last state. A comma list (up 52,53,54) provisions every room,
+# then shares one workers launch, one engine loop, one window set. The task,
+# when given, is pasted once to the global consultant, never per room.
+UP_PROVISIONED_PENDING="provisioned from issue text; await dev PLAN + qe approach NOTEs"
 mode_up() {
-  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
-  local issue="" task=""
+  [ $# -le 2 ] || fail "up takes at most: up [issue-or-list] [taskfile-or-task] (got $#)"
+  local list="" first="" task="" n
   if [ $# -ge 1 ]; then
-    # runtime_dir is the validator: a non-numeric first argument is an error,
-    # never an "idea" (cold starts go through provision with an issue list).
-    runtime_dir "$1" >/dev/null
-    issue="$1"
+    # parse_issue_list is the validator: a non-numeric item is an error,
+    # never an "idea". The whole list validates before any side effect.
+    list=$(parse_issue_list "$1")
+    first=${list%%,*}
     task="${2:-}"
-    mode_setup "$issue"
+    for n in $(printf '%s' "$list" | tr ',' ' '); do mode_setup "$n"; done
   fi
-  mode_workers ${issue:+"$issue"}
+  if [ -n "$list" ]; then
+    # Per-room RECON briefs from the GitHub issue text (missing briefs only);
+    # all-or-nothing: any unavailable text aborts before sessions launch.
+    local rt dev_prompt_name qe_prompt_name br_needed=""
+    dev_prompt_name=$(role_field dev prompt)
+    qe_prompt_name=$(role_field qe prompt)
+    for n in $(printf '%s' "$list" | tr ',' ' '); do
+      rt=$(runtime_dir "$n")
+      if [ ! -s "$rt/prompts/$dev_prompt_name" ] || [ ! -s "$rt/prompts/$qe_prompt_name" ]; then
+        br_needed="${br_needed:+$br_needed,}$n"
+      fi
+    done
+    if [ -n "$br_needed" ]; then
+      need_cmd python3
+      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" --issues "$br_needed" \
+        || fail "up: briefs unavailable (NEED); no sessions launched"
+    fi
+  fi
+  mode_workers ${first:+"$first"}
+  if [ -n "$list" ]; then
+    # Mark only skeleton rooms provisioned (pending == 'provision workers');
+    # resumed in-progress rooms keep their pending. Written after workers
+    # succeed so a failed launch stays retryable.
+    local cur
+    for n in $(printf '%s' "$list" | tr ',' ' '); do
+      cur=$(read_state "$(runtime_dir "$n")" "pending" 2>/dev/null || true)
+      if [ "$cur" = "provision workers" ]; then
+        mode_state_set "$n" "pending=$UP_PROVISIONED_PENDING"
+      fi
+    done
+  fi
   ensure_consultant_session
   ensure_engine_loop
   disarm_all_tickers
@@ -911,7 +974,10 @@ EOF
       mode_consult "$tf"
       rm -f "$tf"
     fi
-  elif [ -n "$issue" ]; then
+  elif [ -n "$list" ]; then
+    local cnt=1
+    case "$list" in *,*) cnt=$(printf '%s' "$list" | tr -cd ',' | wc -c); cnt=$((cnt + 1));; esac
+    echo "(batch: $cnt room(s) provisioned; first-room dev brief pasted; remaining rooms staged for the engine.)"
     echo "(no task given — the consultant window is yours; the engine drives the lanes.)"
   else
     echo "(no issue selected — no runtime created. Cold starts go through"
@@ -1214,6 +1280,33 @@ mode_self_test() {
   chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 4199999 a b
   # planning a room never materialises a runtime
   chk_neg test -e /tmp/nexios-4199999
+  # batch: comma list plans per-issue setup/briefs, one shared launch set
+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 052,53,54)
+  chk bash -c 'printf "%s" "$1" | grep -qx "issues=52,53,54"' _ "$rp"
+  chk bash -c 'printf "%s" "$1" | grep -qx "issue=52"' _ "$rp"
+  chk bash -c 'printf "%s" "$1" | grep -qx "count=3"' _ "$rp"
+  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=setup:")" = 3' _ "$rp"
+  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=brief:")" = 3' _ "$rp"
+  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=workers:")" = 1' _ "$rp"
+  chk bash -c 'printf "%s" "$1" | grep -qx "step=workers:52"' _ "$rp"
+  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=engine$")" = 1' _ "$rp"
+  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=disarm$")" = 1' _ "$rp"
+  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=window:")" = 3' _ "$rp"
+  # duplicates collapse, order kept
+  rp=$("$SCRIPT_DIR/agent_up.sh" __room-plan 052,52,53)
+  chk bash -c 'printf "%s" "$1" | grep -qx "issues=52,53"' _ "$rp"
+  chk bash -c 'test "$(printf "%s" "$1" | grep -c "^step=setup:")" = 2' _ "$rp"
+  # one bad item aborts the whole list, names it, creates nothing
+  local bout; bout=$("$SCRIPT_DIR/agent_up.sh" __room-plan 52,5x3 2>&1 || true)
+  chk bash -c 'printf "%s" "$1" | grep -q "invalid issue in list"' _ "$bout"
+  chk bash -c 'printf "%s" "$1" | grep -q "5x3"' _ "$bout"
+  chk_neg test -e /tmp/nexios-5x3
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 52,,53
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 52,
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan ,52
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 0,52
+  chk_neg "$SCRIPT_DIR/agent_up.sh" __room-plan 52,12345678
+  chk_neg test -e /tmp/nexios-52
   # fence rendering: polarity, determinism, mirrors, {repo}, twins, fail-closed
   chk "$SCRIPT_DIR/agent_up.sh" render-self-test
   # ... and the verifier agrees with what the launcher renders (one source)
@@ -1276,6 +1369,31 @@ mode_self_test() {
   chk_neg grep -q '{repo}' "$st/home/rendered/consultant/opencode.resolved.json"
   chk python3 -c "import json,sys; json.load(open(sys.argv[1]))" \
       "$st/home/rendered/consultant/opencode.resolved.json"
+  # brief: RECON pair from seam-seeded issue text (all-or-nothing, no writes)
+  printf '{"title":"Batch brief","body":"Body text"}' > "$st/gh.json"
+  chk env STATE_MACHINE_GH_JSON="$st/gh.json" \
+      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" \
+      --log-dir "$st/smlogs" --issues 9999 --dev-branch main
+  chk grep -q "Batch brief" /tmp/nexios-9999/prompts/dev.txt
+  chk grep -q "Batch brief" /tmp/nexios-9999/prompts/qe.txt
+  chk grep -q "Task: RECON phase (read-only, no branch, no code)" /tmp/nexios-9999/prompts/dev.txt
+  chk grep -q "STATE/NEXT" /tmp/nexios-9999/prompts/dev.txt
+  chk grep -q "wake 9999 dev nexios-engine" /tmp/nexios-9999/prompts/dev.txt
+  chk grep -q "wake 9999 qe nexios-engine" /tmp/nexios-9999/prompts/qe.txt
+  chk grep -q "{repo}" /tmp/nexios-9999/prompts/dev.txt
+  # room preflight aborts before any write when a room is missing
+  rm -rf /tmp/nexios-9998
+  printf 'SENTINEL' > /tmp/nexios-9999/prompts/dev.txt
+  chk_neg env STATE_MACHINE_GH_JSON="$st/gh.json" \
+      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" \
+      --log-dir "$st/smlogs" --issues 9999,9998 --dev-branch main
+  chk grep -qx "SENTINEL" /tmp/nexios-9999/prompts/dev.txt
+  # missing issue text aborts with NEED and writes nothing
+  rm -f /tmp/nexios-9999/prompts/dev.txt /tmp/nexios-9999/prompts/qe.txt
+  chk_neg env STATE_MACHINE_GH_JSON=/nonexistent-seam-$$ \
+      python3 "$REPO_ROOT/scripts/state_machine.py" brief --repo "$REPO_ROOT" \
+      --log-dir "$st/smlogs" --issues 9999 --dev-branch main
+  chk_neg test -e /tmp/nexios-9999/prompts/dev.txt
   # state writer: validated keys/vocabulary, locked, atomic
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 bogus=1
   chk_neg "$SCRIPT_DIR/agent_up.sh" state 9999 state=NONSENSE
@@ -1552,20 +1670,33 @@ mode_fence_show() {
 # $1 role — print the exact command run_session sends (self-test + inspection).
 # self-test only: resolve what `up` would do, without tmux/opencode/render.
 mode_room_plan() {
-  [ $# -le 2 ] || fail "up takes at most: up [issue] [taskfile-or-task] (got $#)"
-  local issue="" task="" dp="" qp=""
+  [ $# -le 2 ] || fail "up takes at most: up [issue-or-list] [taskfile-or-task] (got $#)"
+  local list="" issue="" task="" dp="" qp="" n
   if [ $# -ge 1 ]; then
-    local rt; rt=$(runtime_dir "$1")
-    issue="${rt##*/nexios-}"
+    list=$(parse_issue_list "$1")
+    issue=${list%%,*}
     if [ $# -eq 2 ]; then
       if [ -f "$2" ]; then task=file; else task=text; fi
     fi
+    local rt; rt=$(runtime_dir "$issue")
     dp="$rt/prompts/$(role_field dev prompt)"
     qp="$rt/prompts/$(role_field qe prompt)"
   fi
-  printf 'issue=%s\ntask=%s\ndev_prompt=%s\nqe_prompt=%s\nsessions=%s,%s,%s\n' \
-    "${issue:-none}" "${task:-none}" "${dp:-none}" "${qp:-none}" \
+  local cnt=0
+  if [ -n "$list" ]; then
+    cnt=$(printf '%s' "$list" | tr -cd ',' | wc -c); cnt=$((cnt + 1))
+  fi
+  printf 'issues=%s\nissue=%s\ncount=%d\ntask=%s\ndev_prompt=%s\nqe_prompt=%s\nsessions=%s,%s,%s\n' \
+    "${list:-none}" "${issue:-none}" "$cnt" "${task:-none}" "${dp:-none}" "${qp:-none}" \
     "$DEV_SESS" "$QE_SESS" "$CONSULT_SESS"
+  for n in $(printf '%s' "$list" | tr ',' ' '); do
+    printf 'step=setup:%s\nstep=brief:%s\n' "$n" "$n"
+  done
+  if [ -n "$list" ]; then
+    printf 'step=workers:%s\nstep=consult\nstep=engine\nstep=disarm\n' "$issue"
+    printf 'step=window:%s\nstep=window:%s\nstep=window:%s\n' \
+      "$CONSULT_SESS" "$DEV_SESS" "$QE_SESS"
+  fi
 }
 
 mode_launch_cmd() {
