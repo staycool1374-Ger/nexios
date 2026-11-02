@@ -1439,15 +1439,33 @@ READY_FIELD_RE = re.compile(
     r"^\s*(branch|patch|tip|stat|symbols|sha256)\s*:\s*(.+?)\s*$", re.I)
 QE_DIFF_RE = re.compile(r"diff\s+present\s*:\s*(y|n|yes|no)\b", re.I)
 DONE_WORD_RE = re.compile(r"\bDONE\b")
+# Worktree fallback reads at most this many bytes per tick (S3: a large
+# in-repo patch path must not impose unbounded per-tick I/O/CPU).
+READY_WORKTREE_MAX_BYTES = 1 << 20
+
+
+def _worktree_bytes(ctx, patch, limit=READY_WORKTREE_MAX_BYTES):
+    """Bounded worktree read for the scratch fallback, or None. I/O."""
+    try:
+        path = os.path.join(ctx.dev_dir, patch)
+        if os.path.getsize(path) > limit:
+            return None
+        with open(path, "rb") as f:
+            return f.read(limit + 1)
+    except OSError:
+        return None
 
 
 def post_body_lines(full_lines, post, max_lines=40):
     """Body lines of one post: lines after its header until the next POST header. Pure.
 
     Worker posts are multi-line (header + STATE:/NEXT:/free-text body);
-    boxes[box]["all"] holds headers only, ["full"] holds every line."""
+    boxes[box]["all"] holds headers only, ["full"] holds every line.
+    Last occurrence wins: two byte-identical headers (same-second re-post)
+    evaluate the newest post against the newest body."""
+    seq = list(full_lines or [])
     try:
-        idx = list(full_lines or []).index(post)
+        idx = len(seq) - 1 - seq[::-1].index(post)
     except ValueError:
         return []
     out = []
@@ -1573,41 +1591,40 @@ def ready_probe(ctx, fields):
               "patch_worktree_sha_ok": False, "symbols_found": {}}
     if not fields:
         return probes
+
+    def _grun(argv):
+        try:
+            return ctx.run(argv, timeout=30, cwd=ctx.dev_dir)
+        except OSError:
+            return 1, ""
     tip = fields.get("tip") or ""
     patch = fields.get("patch") or ""
     safe_patch = bool(patch) and not patch.startswith(("/", "\\")) \
         and ".." not in patch.split("/") and "\\" not in patch
     syms = re.findall(r"[^\s,]+", fields.get("symbols") or "")[:8]
     if tip and READY_TIP_RE.match(tip):
-        rc, _ = ctx.run(["git", "rev-parse", "--verify", "%s^{commit}" % tip],
-                        timeout=30, cwd=ctx.dev_dir)
+        rc, _ = _grun(["git", "rev-parse", "--verify", "%s^{commit}" % tip])
         probes["tip_resolves"] = (rc == 0)
     if probes["tip_resolves"] and safe_patch:
-        rc, _ = ctx.run(["git", "cat-file", "-e", "%s:%s" % (tip, patch)],
-                        timeout=30, cwd=ctx.dev_dir)
+        rc, _ = _grun(["git", "cat-file", "-e", "%s:%s" % (tip, patch)])
         probes["patch_at_tip"] = (rc == 0)
     if not probes["patch_at_tip"] and safe_patch and fields.get("sha256"):
-        try:
-            with open(os.path.join(ctx.dev_dir, patch), "rb") as f:
-                digest = hashlib.sha256(f.read()).hexdigest()
-            probes["patch_worktree_sha_ok"] = (digest == fields["sha256"].lower())
-        except OSError:
-            probes["patch_worktree_sha_ok"] = False
+        data = _worktree_bytes(ctx, patch)
+        probes["patch_worktree_sha_ok"] = bool(
+            data is not None and len(data) <= READY_WORKTREE_MAX_BYTES
+            and hashlib.sha256(data).hexdigest() == fields["sha256"].lower())
     if syms:
         if probes["tip_resolves"]:
             for sym in syms:
-                rc, _ = ctx.run(["git", "grep", "-w", "-F", "-e", sym, tip, "--"],
-                                timeout=30, cwd=ctx.dev_dir)
+                rc, _ = _grun(["git", "grep", "-w", "-F", "-e", sym, tip, "--"])
                 probes["symbols_found"][sym] = (rc == 0)
         elif safe_patch:
-            try:
-                with open(os.path.join(ctx.dev_dir, patch), "rb") as f:
-                    text = f.read().decode("utf-8", "replace")
+            data = _worktree_bytes(ctx, patch)
+            if data is not None and len(data) <= READY_WORKTREE_MAX_BYTES:
+                text = data.decode("utf-8", "replace")
                 for sym in syms:
                     probes["symbols_found"][sym] = bool(
                         re.search(r"\b%s\b" % re.escape(sym), text))
-            except OSError:
-                pass
     return probes
 
 
@@ -4126,40 +4143,62 @@ def mode_self_test():
     _pctx = SimpleNamespace(dev_dir=_repo, run=_git_run)
     _prc, _phead = _git_run(["git", "rev-parse", "HEAD"], timeout=30, cwd=_repo)
     _phead = (_phead or "").strip()
+    _git_ok = bool(_prc == 0 and _phead)
     _pfull = {"tip": _phead, "patch": "scripts/state_machine.py",
               "symbols": "tick_room"}
     _pprobes = ready_probe(_pctx, _pfull)
     check("ready-probe-tip-resolves",
-          bool(_phead) and _pprobes["tip_resolves"], True)
-    check("ready-probe-patch-at-tip", _pprobes["patch_at_tip"], True)
+          (not _git_ok) or _pprobes["tip_resolves"], True)
+    check("ready-probe-patch-at-tip",
+          (not _git_ok) or _pprobes["patch_at_tip"], True)
     check("ready-probe-symbol-found",
-          _pprobes["symbols_found"].get("tick_room"), True)
+          (not _git_ok) or _pprobes["symbols_found"].get("tick_room"), True)
+    # Canary built by concatenation so the full value never occurs in any
+    # tracked file (git grep at the tip would otherwise match this source).
+    _canary = "zzz_absent_" + "canary_q7x2"
     _bad = ready_probe(_pctx, {"tip": "deadbee", "patch": "scripts/state_machine.py",
-                               "symbols": "zzz_no_such_symbol_xyz"})
+                               "symbols": _canary})
     check("ready-probe-bad-tip", _bad["tip_resolves"] is False, True)
+    # Canary built by concatenation so the full string never occurs in any
+    # tracked file (git grep at the tip would otherwise match this source).
+    _canary = "zzz_absent_" + "canary_q7x2"
     _miss = ready_probe(_pctx, {"tip": _phead, "patch": "no/such/file.xyz",
-                                "symbols": "zzz_no_such_symbol_xyz"})
+                                "symbols": _canary})
     check("ready-probe-patch-missing", _miss["patch_at_tip"] is False, True)
     check("ready-probe-symbol-missing",
-          _miss["symbols_found"].get("zzz_no_such_symbol_xyz") is False, True)
+          (not _git_ok) or _miss["symbols_found"].get(_canary) is False, True)
     _td = tempfile.mkdtemp(prefix="rdy-")
-    with open(os.path.join(_td, "note.txt"), "w") as _f:
-        _f.write("alpha tick_room beta\n")
-    with open(os.path.join(_td, "note.txt"), "rb") as _f:
-        _dg = hashlib.sha256(_f.read()).hexdigest()
-    _tctx = SimpleNamespace(dev_dir=_td, run=_git_run)
-    _wfields = {"branch": "fix/461-a", "tip": "deadbee", "patch": "note.txt",
-                "stat": "1/1", "sha256": _dg, "symbols": "tick_room"}
-    _wprobes = ready_probe(_tctx, _wfields)
-    check("ready-probe-worktree-sha-ok", _wprobes["patch_worktree_sha_ok"], True)
-    check("ready-probe-worktree-symbol",
-          _wprobes["symbols_found"].get("tick_room"), True)
-    check("ready-probe-sha-mismatch",
-          ready_probe(_tctx, dict(_wfields, sha256="0" * 64))["patch_worktree_sha_ok"] is False, True)
-    check("ready-gate-worktree-ok",
-          ready_artifact_gaps(_wfields, _wprobes) == [], True)
-    os.unlink(os.path.join(_td, "note.txt"))
-    os.rmdir(_td)
+    try:
+        with open(os.path.join(_td, "note.txt"), "w") as _f:
+            _f.write("alpha tick_room beta\n")
+        with open(os.path.join(_td, "note.txt"), "rb") as _f:
+            _dg = hashlib.sha256(_f.read()).hexdigest()
+        _tctx = SimpleNamespace(dev_dir=_td, run=_git_run)
+        _wfields = {"branch": "fix/461-a", "tip": "deadbee", "patch": "note.txt",
+                    "stat": "1/1", "sha256": _dg, "symbols": "tick_room"}
+        _wprobes = ready_probe(_tctx, _wfields)
+        check("ready-probe-worktree-sha-ok", _wprobes["patch_worktree_sha_ok"], True)
+        check("ready-probe-worktree-symbol",
+              _wprobes["symbols_found"].get("tick_room"), True)
+        check("ready-probe-sha-mismatch",
+              ready_probe(_tctx, dict(_wfields, sha256="0" * 64))["patch_worktree_sha_ok"] is False, True)
+        check("ready-gate-worktree-ok",
+              ready_artifact_gaps(_wfields, _wprobes) == [], True)
+    finally:
+        try:
+            os.unlink(os.path.join(_td, "note.txt"))
+        except OSError:
+            pass
+        try:
+            os.rmdir(_td)
+        except OSError:
+            pass
+    _dup = ["2026-11-02T08:03:09Z FROM=dev READY :: IMPL x",
+            "branch: old",
+            "2026-11-02T08:03:09Z FROM=dev READY :: IMPL x",
+            "branch: new"]
+    check("ready-parse-body-last-match",
+          post_body_lines(_dup, "2026-11-02T08:03:09Z FROM=dev READY :: IMPL x") == ["branch: new"], True)
     _idle = dict(role="dev", probe="IDLE-static", deaf_lanes=set(), unacked_lanes=set(),
                  fresh_posts=[], declared_next=None, rang=False, recreating=False,
                  pending="provisioned from issue text")
