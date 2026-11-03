@@ -53,6 +53,19 @@ MODAL_RE = (r"allow once|allow always|permission required|needs approval|"
             r"tell opencode what to do differently|needs your decision|"
             r"awaiting approval")
 
+# Item 1 (#462): truthful activity probe. Single snapshots lie (a live pane
+# mid-generation shows no marker at the sampled instant), so the probe
+# takes two samples PROBE_DELTA_S apart, compares normalized content plus
+# timer/token extracts, and folds in session CPU-time delta. Precedence:
+# modal > markers > content-change > cpu > static. IDLE-static only on a
+# proven-static window.
+PROBE_DELTA_S = 0.4  # seconds between the two fast_probe samples
+PROBE_CPU_WARN_PCT = 5  # session CPU delta above this reads WORKING
+TIMER_RE = re.compile(r"\u00b7\s*(?:\d+m\s*)?\d+(?:\.\d+)?s")
+TOKENS_RE = re.compile(r"\b\d+(?:\.\d+)?K \(\d+%\)")
+THOUGHT_RE = re.compile(r"^\s*Thought\b", re.M)
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
 POST_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}T\S*) FROM=(dev|qe|audit|auditor) "
     r"(READY|NEED|NOTE|DECISION) :: (.*)$")
@@ -531,18 +544,161 @@ def engine_loop_live():
 
 
 def fast_probe(ctx, sess):
-    """Single-snapshot verdict: MODAL? | markers? | static? (heuristic)."""
+    """Two-sample activity verdict with CPU-delta fold. Cached per sweep.
+
+    Sample pane twice PROBE_DELTA_S apart, fold session CPU-time delta,
+    classify via probe_activity. Result cached on ctx keyed
+    (tick_seq, sess) so one sweep pays the two-sample cost once per
+    session. Vocabulary unchanged: BLOCKED-modal | WORKING-* | IDLE-static
+    | ABSENT (every WORKING-* satisfies existing WORKING consumers).
+    STATE_MACHINE_PROBE_JSON (dry only) maps sess -> canned verdict for
+    fixture dry-runs; ignored on live paths."""
+    if ctx.dry:
+        try:
+            seam = json.loads(os.environ.get("STATE_MACHINE_PROBE_JSON") or "")
+        except (ValueError, TypeError):
+            seam = None
+        if isinstance(seam, dict) and sess in seam:
+            val = seam[sess]
+            # Fail-safe vocabulary: unknown fixture strings never read as
+            # IDLE (no spurious rings) — they hold the lane as UNKNOWN.
+            if isinstance(val, str) and val.startswith(
+                    ("ABSENT", "BLOCKED-modal", "WORKING", "IDLE", "STUCK", "UNKNOWN")):
+                return val
+            return "UNKNOWN-seam"
+    cache = getattr(ctx, "_probe_cache", None)
+    if not isinstance(cache, dict) or cache.get("seq") != ctx.tick_seq:
+        cache = {"seq": ctx.tick_seq, "vals": {}}
+        ctx._probe_cache = cache
+    if sess in cache["vals"]:
+        return cache["vals"][sess]
     rc, _ = tmux(ctx, "has-session", "-t", sess)
     if rc != 0:
+        cache["vals"][sess] = "ABSENT"
         return "ABSENT"
-    pane = pane_capture(ctx, sess)
-    if pane is None:
+    pane_a = pane_capture(ctx, sess)
+    if pane_a is None:
+        cache["vals"][sess] = "ABSENT"
         return "ABSENT"
-    if modal_present(pane):
-        return "BLOCKED-modal"
-    if "esc interrupt" in pane:
-        return "WORKING-markers"
+    cpu_a = session_cpu_seconds(ctx, sess)
+    time.sleep(PROBE_DELTA_S)
+    pane_b = pane_capture(ctx, sess)
+    if pane_b is None:
+        cache["vals"][sess] = "ABSENT"
+        return "ABSENT"
+    cpu_b = session_cpu_seconds(ctx, sess)
+    cpu_delta = None
+    if cpu_a is not None and cpu_b is not None and cpu_b >= cpu_a:
+        cpu_delta = (cpu_b - cpu_a) / PROBE_DELTA_S * 100.0
+    verdict = probe_activity(pane_a, pane_b, cpu_delta)
+    cache["vals"][sess] = verdict
+    return verdict
+
+
+def norm_pane(text):
+    """Pane text minus rendering noise only. Pure.
+
+    Strips ANSI escapes, trailing whitespace, blank lines. Keeps every
+    activity signal: spinner glyphs, timer text, token/cost text,
+    Thought lines. (The old shell norm deleted exactly these and fed
+    every downstream gate a lie.)"""
+    lines = []
+    for line in (text or "").splitlines():
+        line = ANSI_RE.sub("", line).rstrip()
+        if line.strip():
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def probe_activity(pane_a, pane_b, cpu_delta_pct=None):
+    """BLOCKED-modal | WORKING-markers | WORKING-changed | WORKING-cpu |
+    IDLE-static for two pane samples. Pure.
+
+    Precedence: modal in either sample beats everything (permission
+    prompts freeze output); esc-interrupt markers next; then any
+    normalized-content difference (spinner rotation, timer advance,
+    token/cost change, Thought lines — all survive norm_pane) or an
+    explicit timer/token-extract change; then session CPU delta above
+    PROBE_CPU_WARN_PCT; IDLE-static only on a proven-static window."""
+    for pane in (pane_a, pane_b):
+        if pane and re.search(MODAL_RE, pane, re.I):
+            return "BLOCKED-modal"
+    for pane in (pane_a, pane_b):
+        if pane and "esc interrupt" in pane:
+            return "WORKING-markers"
+    norm_a, norm_b = norm_pane(pane_a), norm_pane(pane_b)
+    if norm_a != norm_b:
+        return "WORKING-changed"
+    timer_a = TIMER_RE.search(norm_a or "")
+    timer_b = TIMER_RE.search(norm_b or "")
+    if (timer_a.group(0) if timer_a else None) != (timer_b.group(0) if timer_b else None):
+        return "WORKING-changed"
+    toks_a = TOKENS_RE.findall(norm_a or "")
+    toks_b = TOKENS_RE.findall(norm_b or "")
+    if toks_a != toks_b:
+        return "WORKING-changed"
+    if bool(THOUGHT_RE.search(norm_a or "")) != bool(THOUGHT_RE.search(norm_b or "")):
+        return "WORKING-changed"
+    if cpu_delta_pct is not None and cpu_delta_pct >= PROBE_CPU_WARN_PCT:
+        return "WORKING-cpu"
     return "IDLE-static"
+
+
+def parse_cputime(text):
+    """Seconds in one `ps -o cputime=` field ([[dd-]hh:]mm:ss[.frac]). Pure.
+
+    Portable across macOS/BSD + GNU (both emit the same grammar). None
+    on unparseable input (caller treats as unknown, never as zero);
+    non-finite floats (nan/inf) are rejected explicitly even though
+    downstream comparisons fail safe on them."""
+    try:
+        s = (text or "").strip()
+        days = 0
+        if "-" in s:
+            dpart, s = s.split("-", 1)
+            days = int(dpart)
+        parts = s.split(":")
+        if len(parts) == 3:
+            hrs, mins, secs = int(parts[0]), int(parts[1]), float(parts[2])
+        elif len(parts) == 2:
+            hrs, mins, secs = 0, int(parts[0]), float(parts[1])
+        elif len(parts) == 1 and parts[0] != "":
+            hrs, mins, secs = 0, 0, float(parts[0])
+        else:
+            return None
+        total = days * 86400 + hrs * 3600 + mins * 60 + secs
+        if total != total or total in (float("inf"), float("-inf")):
+            return None
+        return total
+    except (ValueError, TypeError):
+        return None
+
+
+def session_cpu_seconds(ctx, sess):
+    """Total CPU seconds of the tmux session's process group, or None. I/O.
+
+    Pane pid -> session id -> sum of cputime over the group. A delta of
+    this across PROBE_DELTA_S measures activity even when the visible
+    pane is momentarily static. None on any failure (unknown, not zero)."""
+    rc, out = tmux(ctx, "list-panes", "-t", sess, "-F", "#{pane_pid}")
+    pids = [l.strip() for l in (out or "").splitlines() if l.strip().isdigit()]
+    if rc != 0 or not pids:
+        return None
+    rc, out = ctx.run(["ps", "-o", "sid=", "-p", pids[0]], timeout=15)
+    sids = [l.strip() for l in (out or "").splitlines() if l.strip().isdigit()]
+    if rc != 0 or not sids:
+        return None
+    rc, out = ctx.run(["ps", "-o", "cputime=", "-g", sids[0]], timeout=15)
+    if rc != 0:
+        return None
+    total = 0.0
+    seen = False
+    for line in (out or "").splitlines():
+        val = parse_cputime(line)
+        if val is not None:
+            total += val
+            seen = True
+    return total if seen else None
 
 
 def slow_probe(ctx, sess):
@@ -5447,6 +5603,54 @@ def mode_self_test():
     check("room-rings-shared-virgin", room_rings(_rs) == {"audit:x": 1} and _rs.get("rings") == {"audit:x": 1}, True)
     check("room-rings-keeps-existing", room_rings({"rings": {"a:b": 2}}) == {"a:b": 2}, True)
     check("room-rings-replaces-nondict", room_rings({"rings": [1]}) == {}, True)
+    # Item 1 (#462): truthful activity probe. A single snapshot with only
+    # markers recognized reads every live pane IDLE; these rows pin the
+    # two-sample classifier. Bite: deleting the norm/timer/token compare
+    # (markers-only, the old fast_probe) flips every WORKING row to FAIL.
+    _pa_idle = "\u276f  "
+    check("probe-static-bare-idle",
+          probe_activity(_pa_idle, _pa_idle, 0.0) == "IDLE-static", True)
+    _pa_t1 = "opencode \u00b7 23.6s 47.0K (84%) \u276f thinking"
+    _pb_t1 = "opencode \u00b7 24.6s 47.0K (84%) \u276f thinking"
+    check("probe-active-timer-seconds",
+          probe_activity(_pa_t1, _pb_t1, 0.0) == "WORKING-changed", True)
+    check("probe-active-spinner-rotation",
+          probe_activity("\u2b1d working", "\u25a0 working", 0.0) == "WORKING-changed", True)
+    check("probe-active-marker-esc",
+          probe_activity("esc interrupt \u276f", "esc interrupt \u276f", 0.0) == "WORKING-markers", True)
+    check("probe-modal-beats-static",
+          probe_activity("needs your decision", _pa_idle, 0.0) == "BLOCKED-modal", True)
+    check("probe-static-cpu-working",
+          probe_activity(_pa_idle, _pa_idle, 47.0) == "WORKING-cpu", True)
+    check("probe-cpu-below-floor-idle",
+          probe_activity(_pa_idle, _pa_idle, 4.9) == "IDLE-static", True)
+    check("probe-norm-keeps-timer",
+          "\u00b7 23.6s" in norm_pane("opencode \u00b7 23.6s x  \n") , True)
+    check("probe-norm-keeps-spinner",
+          "\u2b1d" in norm_pane("\u2b1d working\n"), True)
+    check("probe-norm-keeps-thought",
+          "Thought" in norm_pane("Thought \u00b7 23.6s\n"), True)
+    check("probe-norm-strips-ansi",
+          norm_pane("\x1b[32mxy\x1b[0m  \n\n") == "xy", True)
+    check("probe-cputime-mm-ss", parse_cputime("2:03.45") == 123.45, True)
+    check("probe-cputime-hh-mm-ss", parse_cputime("1:02:03") == 3723.0, True)
+    check("probe-cputime-days", parse_cputime("2-01:02:03") == 176523.0, True)
+    check("probe-cputime-garbage", parse_cputime("n/a") is None, True)
+    check("probe-cputime-nan", parse_cputime("nan") is None, True)
+    check("probe-cputime-inf", parse_cputime("inf") is None, True)
+    def _seam_probe(val):
+        key = "STATE_MACHINE_PROBE_JSON"
+        old = os.environ.get(key)
+        os.environ[key] = '{"nexios-dev": "%s"}' % val
+        try:
+            return fast_probe(SimpleNamespace(dry=True, tick_seq=999), "nexios-dev")
+        finally:
+            if old is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old
+    check("probe-seam-canned", _seam_probe("IDLE-static") == "IDLE-static", True)
+    check("probe-seam-unknown-holds", _seam_probe("bogus") == "UNKNOWN-seam", True)
     print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
     return 0 if passed == total else 1
 
