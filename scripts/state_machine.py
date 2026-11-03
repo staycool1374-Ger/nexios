@@ -5035,16 +5035,23 @@ def cmd_status(ctx, issues):
         for role, sess in (("dev", SESS["dev"]), ("qe", SESS["qe"]),
                            ("audit", SESS["audit"])):
             if role == "audit":
+                live = audit_session_live(ctx)
                 rep = latest_audit_report(ctx, issue)
-                activity = ("report %s" % os.path.basename(rep)) if rep else (
+                extra = ("report %s" % os.path.basename(rep)) if rep else (
                     auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full")) or "no verdict")
-                state = audit_state(audit_session_live(ctx))
-                rows.append((role, state, activity,
-                             status_planned_audit(ctx, issue, boxes, st)))
+                activity = status_activity(live, False, "", "", extra)
+                planned = "-" if not live else status_planned_audit(
+                    ctx, issue, boxes, st)
+                state = audit_state(live)
+                rows.append((role, state, activity, planned))
             else:
                 probe = fast_probe(ctx, sess)
-                activity = boxes[role]["state"] or boxes[role]["next"] or "-"
-                planned = status_planned_lane(role, boxes[role], st, probe)
+                exists = probe != "ABSENT"
+                activity = status_activity(exists, probe.startswith("IDLE"),
+                                           boxes[role]["state"],
+                                           boxes[role]["next"], None)
+                planned = "-" if not exists else status_planned_lane(
+                    role, boxes[role], st, probe)
                 if planned == "NEED idle: no briefed work":
                     _hit = global_work_scan(role, _status_scans[role],
                                             issue, _status_busy)
@@ -5082,6 +5089,18 @@ def tick_eta(ctx):
         return "in ~%ds (sweep #%s, every %ds)" % (left, g.get("tick"), every)
     except (OSError, ValueError, TypeError):
         return "unknown (no heartbeat yet)"
+
+
+def status_activity(role_exists, idle, state, nxt, extra):
+    """Status-tab activity cell. Pure (#465 follow-up).
+    No session -> "-". IDLE lane -> "" (an IDLE worker has no activity at
+    all; stale STATE/NEXT text must never pair with IDLE). Otherwise the
+    lane's state/next text, a report/decision extra, defaulting to "-"."""
+    if not role_exists:
+        return "-"
+    if idle:
+        return ""
+    return state or nxt or extra or "-"
 
 
 def canon_issue(raw):
@@ -6253,6 +6272,10 @@ def mode_self_test():
           and verdict_already_handed({}, ("APPROVED", "0971e44", "dev:aa")) is False
           and newest_audit_done_post({"dev": {"full": ["2026-11-03T12:44:39Z FROM=dev NOTE :: DONE x, awaiting audit", "NEXT: waiting auditor plan-review", "body"]}, "qe": {"full": []}}) == "2026-11-03T12:44:39"
           and newest_audit_done_post({"dev": {"full": ["2026-11-03T12:44:52Z FROM=dev NOTE :: DONE recon delivered", "NEXT: idle"]}, "qe": {"full": []}}) is None
+          and status_activity(False, False, "working", "x", "r") == "-"
+          and status_activity(True, True, "working :: y", "waiting z", "r") == ""
+          and status_activity(True, False, "", "waiting z", None) == "waiting z"
+          and status_activity(True, False, "", "", None) == "-"
           and last_state_next(["2026-11-03T12:44:39Z FROM=dev NOTE :: DONE x",
                                "STATE: waiting :: delivered",
                                "NEXT: waiting auditor plan-review"] + ["body %d" % i for i in range(30)]) == ("waiting :: delivered", "waiting auditor plan-review", None),
