@@ -34,6 +34,7 @@
 #include <kernel/term/term_srv.hpp>
 #include <kernel/log/log_srv.hpp>
 #include <kernel/cap/cap_broker.hpp>
+#include <kernel/vfs/procfs_srv.hpp>
 #include <kernel/watchdog/wdog_mon.hpp>
 #include <kernel/driver/driver_pds.hpp>
 #include <kernel/task/dmesg_task.hpp>
@@ -266,6 +267,24 @@ void pd_set_wdog_mon(uint64_t pid) {
     kernel::wdog_mon::set_wdog_mon_pid(pid);
 }
 #endif
+#if CONFIG_PROCFS_SRV
+void pd_restart_procfs_srv(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::PROCFS_SRV)) {
+        return;
+    }
+    kernel::procfs_srv::procfs_srv_on_restart(pid);
+}
+uint64_t pd_pid_procfs_srv() {
+    return kernel::procfs_srv::get_procfs_srv_pid();
+}
+void pd_set_procfs_srv(uint64_t pid) {
+    kernel::procfs_srv::set_procfs_srv_pid(pid);
+}
+#endif
 
 // ── Task definition table ────────────────────────────────────────────────
 
@@ -405,6 +424,16 @@ constexpr TaskDef g_task_defs[] = {
      pd_set_wdog_mon, pd_pid_wdog_mon, 1, 0, false,
      ServerMode::SPORADIC, pd_restart_wdog_mon, 11},
 #endif
+#if CONFIG_PROCFS_SRV
+    // procfs-srv: procfs render policy PD (issue #54, strangler a).
+    // Sporadic server SS(1,10,0); policy only, no device caps (SDF row is
+    // the empty set by structural rule). Renders stay in-kernel pre-flip
+    // (vfsd PROCFS_RENDER=7 probe retains sole render ownership).
+    {"procfs-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/procfs-srv.c.elf", 20, 10, 0, 1, 10, 0, "procfs-srv",
+     pd_set_procfs_srv, pd_pid_procfs_srv, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_procfs_srv, 12},
+#endif
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values
     // kept here for documentation/validation parity.
@@ -462,13 +491,13 @@ constexpr bool server_params_valid(const TaskDef &d) {
         return false;
     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
         return false;
-    // Issue #48/#51/#240/#390: an SDF row needs its supervisor hook
+    // Issue #48/#51/#240/#390/#54: an SDF row needs its supervisor hook
     // (re-derive on restart, never inherit) and a valid role index.
     if (d.sdf_role != 0xFF) {
         if (d.on_restart_fn == nullptr)
             return false;
         if (d.sdf_role >
-            static_cast<uint64_t>(sdf::PdRole::WDOG_MON))
+            static_cast<uint64_t>(sdf::PdRole::PROCFS_SRV))
             return false;
     }
     return true;
@@ -777,9 +806,10 @@ void reboot_from_table() {
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
-    CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON
+    CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
+    CONFIG_PROCFS_SRV
             if (def.sdf_role != 0xFF) {
-                // SDF compose (issues #47/#48/#51/#240/#390): mint the
+                // SDF compose (issues #47/#48/#51/#240/#390/#54): mint the
                 // role caps into the fresh task. Fail-closed: compose failure
                 // destroys the task and skips the row (invalid-ELF
                 // precedent below). Compile-guarded: boot_sdf.cpp is an

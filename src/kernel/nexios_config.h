@@ -1341,6 +1341,9 @@ extern "C" void panic(const char *msg);
 #if CONFIG_WDOG_MON != 0 && CONFIG_WDOG_MON != 1
 #error "CONFIG_WDOG_MON must be 0 or 1 (default 0)"
 #endif
+#if CONFIG_PROCFS_SRV != 0 && CONFIG_PROCFS_SRV != 1
+#error "CONFIG_PROCFS_SRV must be 0 or 1 (default 0)"
+#endif
 #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
 #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif
@@ -1401,6 +1404,16 @@ extern "C" void panic(const char *msg);
 /// knob. Default: 0.
 #ifndef CONFIG_WDOG_MON
 #define CONFIG_WDOG_MON 0
+#endif
+
+/// procfs-srv externalization master switch (issue #54, strangler step a).
+/// 0 = in-kernel procfs renders (shipped default, bit-identical).
+/// 1 = procfs-srv PD serves node renders; kernel keeps fd-table +
+/// authorize + readdir_merged listing. All procfs-srv kernel code is `#if
+/// CONFIG_PROCFS_SRV`-guarded (empty TU when 0); no runtime `if` on this
+/// knob. Default: 0.
+#ifndef CONFIG_PROCFS_SRV
+#define CONFIG_PROCFS_SRV 0
 #endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
