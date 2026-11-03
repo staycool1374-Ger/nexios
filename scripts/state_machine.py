@@ -2666,6 +2666,110 @@ def lane_state(probe, here, facts, issue):
     return "WORKING"
 
 
+def scan_room_record(role, issue, st, facts, nxt, last_ts, now_ts,
+                     stale_s=DEV_STALE_S):
+    """Pure per-room scan record for the work-conserving IDLE gate (#463).
+
+    facts is a lane_facts dict; nxt/last_ts come from that lane's box.
+    stale is dev-only (no qe-stale machinery exists); busy mirrors the
+    G5 exclusion (non-idle NEXT or live dev order, dated samples prove
+    stale rooms non-busy); backlog_ok is the intrinsic half of backlog
+    eligibility (dev lane only, unhalted, not CLOSED/HOLD — current/busy
+    exclusion happens in global_work_scan)."""
+    facts = facts or {}
+    return {"issue": issue,
+            "halt": bool((st or {}).get("halt")),
+            "state": (st or {}).get("state") or "",
+            "order": bool(facts.get("order")),
+            "post": bool(facts.get("post")),
+            "active": bool(facts.get("active")),
+            "waits": bool(facts.get("waits")),
+            "next": nxt or "",
+            "age_s": _ts_age_s(last_ts, now_ts),
+            "stale": bool(role == "dev"
+                          and dev_stale(nxt, last_ts, now_ts, stale_s)),
+            "busy": bool(role == "dev"
+                         and dev_busy((st or {}).get("rings"), nxt,
+                                      last_ts, now_ts, stale_s)),
+            "backlog_ok": bool(role == "dev"
+                               and not (st or {}).get("halt")
+                               and (st or {}).get("state") not in ("CLOSED", "HOLD"))}
+
+
+def collect_scan_records(rooms_all, role, now_ts):
+    """Stored-state scan snapshot across rooms. Impure (box reads).
+
+    One snapshot per sweep per lane (the caller caches it in
+    cycle["scan"]); the current room's record is rebuilt live at the
+    gate, so same-sweep staleness only affects other rooms."""
+    out = []
+    for iss, rdir, rst in (rooms_all or []):
+        _boxes = load_boxes(rdir)
+        out.append(scan_room_record(role, iss, rst,
+                                    lane_facts_from_boxes(_boxes, rst, role),
+                                    (_boxes[role]["next"] or ""),
+                                    newest_post_ts(_boxes[role]["all"]),
+                                    now_ts))
+    return out
+
+
+def global_work_scan(role, records, current_issue, busy):
+    """Highest-priority actionable work across rooms, or None. Pure.
+
+    Only live rooms count (IN_PROGRESS/CLOSING, unhalted — halted and
+    retired rooms hold no actionable work). Priority: live order
+    (lowest issue) → fresh post (lowest) → active lane (lowest;
+    engagement only, the lane's own gates own any order) → oldest
+    stale → lowest backlog-eligible (intrinsic ok, not current, not
+    busy). The current room's record must already carry live
+    order/post facts (the caller rebuilds it at the gate)."""
+    busy = busy or set()
+    live = [r for r in (records or [])
+            if not r.get("halt") and r.get("state") in ("IN_PROGRESS", "CLOSING")]
+    if not live:
+        return None
+    for kind in ("order", "post", "active"):
+        cands = sorted(r["issue"] for r in live if r.get(kind))
+        if cands:
+            why = {"order": "unacked order outstanding",
+                   "post": "fresh post unhandled",
+                   "active": "lane engaged elsewhere"}[kind]
+            return {"kind": kind, "issue": cands[0], "why": why,
+                    "age_s": next(r.get("age_s") for r in live
+                                  if r["issue"] == cands[0])}
+    stales = [r for r in live if r.get("stale")]
+    if stales:
+        oldest = max(stales, key=lambda r: (r.get("age_s") is None,
+                                            r.get("age_s")))
+        return {"kind": "stale", "issue": oldest["issue"],
+                "why": "stale NEXT '%s'" % (oldest.get("next") or "")[:60],
+                "age_s": oldest.get("age_s")}
+    backs = sorted(r["issue"] for r in live
+                   if r.get("backlog_ok") and r["issue"] != current_issue
+                   and r["issue"] not in busy)
+    if backs:
+        return {"kind": "backlog", "issue": backs[0],
+                "why": "backlog-eligible room",
+                "age_s": next(r.get("age_s") for r in live
+                              if r["issue"] == backs[0])}
+    return None
+
+
+def idle_decision(role, probe, has_unacked, fresh_posts, declared_next,
+                  rang, scan):
+    """none | need-idle | denied:<kind>:#<issue> for a lane. Pure.
+
+    Applies the need_idle_missing predicate first; a non-empty scan
+    (global_work_scan hit) denies IDLE acceptance — the lane must take
+    the assignment instead of resting. `scan` None means empty."""
+    if not need_idle_missing(role, has_unacked, probe, fresh_posts,
+                             declared_next, rang):
+        return "none"
+    if scan is None:
+        return "need-idle"
+    return "denied:%s:#%d" % (scan.get("kind"), scan.get("issue"))
+
+
 def audit_state(live):
     """Auditor lane cell: WORKING while the session exists, else '-'.
     Pure. The auditor has no session when its work is done."""
@@ -3305,10 +3409,24 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 actions.append("NOTE-FAILED dev stale re-wake #%d" % issue)
             events.append("stale-dev-rewake")
 
+    # Item 5 (#463): work-conserving scan, dev half. Fresh read every
+    # tick (no sweep cache: rooms are few, box files tiny, and every
+    # gate then sees in-sweep filings — no snapshot staleness at all).
+    # Narrows backlog to live rooms; legacy pick_backlog stays as
+    # fallback.
+    _scan_dev = global_work_scan("dev",
+                                 collect_scan_records(rooms_all, "dev",
+                                                      _sweep_now),
+                                 issue, cycle["busy"] | _busy_rooms())
+    _scan_backlog = (_scan_dev["issue"] if _scan_dev
+                     and _scan_dev["kind"] == "backlog" else None)
+
     backlog_target = None
     if dev_blocked_on_qe(dev_next) and not probes["qe"].startswith("IDLE"):
-        backlog_target = pick_backlog(rooms_all, issue,
-                                      exclude=cycle["busy"] | _busy_rooms())
+        backlog_target = (_scan_backlog
+                          if _scan_backlog is not None
+                          else pick_backlog(rooms_all, issue,
+                                            exclude=cycle["busy"] | _busy_rooms()))
         if backlog_target is None:
             actions.append("NEED backlog empty: dev waits on qe, nothing to swap to")
     elif not cycle.get("dev_order") and backlog_idle_due("dev", probes["dev"], deaf, has_unacked,
@@ -3317,8 +3435,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                           session_rung(actions, SESS["dev"], cycle["rung"]),
                           "dev" in recreating_peers(actions),
                           st.get("pending")):
-        backlog_target = pick_backlog(rooms_all, issue,
-                                      exclude=cycle["busy"] | _busy_rooms())
+        backlog_target = (_scan_backlog
+                          if _scan_backlog is not None
+                          else pick_backlog(rooms_all, issue,
+                                            exclude=cycle["busy"] | _busy_rooms()))
         if backlog_target is None:
             actions.append("NEED backlog empty: dev idle, no other room to brief")
     if backlog_target is not None:
@@ -3420,11 +3540,40 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         actions.append("NEED dev #%d: IMPL order %s filed+resolved but NEXT unchanged (stale NEXT; no new order)"
                        % (issue, stored_impl.get("oid")))
 
+    # Item 5 (#463): work-conserving IDLE gate. IDLE is a global claim:
+    # a lane may rest only when no actionable work exists in ANY room.
+    # The scan denies the acceptance (log-only; the target room's own
+    # gate or its teeth own the order, same sweep or next tick) instead
+    # of emitting NEED idle while work waits.
     for role in ("dev", "qe"):
         rang = session_rung(actions, SESS[role], cycle["rung"])
-        if need_idle_missing(role, has_unacked, probes[role],
-                             fresh.get(role), boxes[role]["next"], rang):
+        if not need_idle_missing(role, has_unacked, probes[role],
+                                 fresh.get(role), boxes[role]["next"], rang):
+            continue
+        _lf = dict(lane_facts_from_boxes(boxes, st, role))
+        _lf["order"] = role in has_unacked
+        _lf["post"] = bool(fresh_all.get(role))
+        _recs = [r for r in collect_scan_records(rooms_all, role,
+                                                 _sweep_now)
+                 if r["issue"] != issue]
+        _recs.append(scan_room_record(role, issue, st, _lf,
+                                      (boxes[role]["next"] or ""),
+                                      newest_post_ts(boxes[role]["all"]),
+                                      _sweep_now))
+        _scan = global_work_scan(role, _recs, issue,
+                                 cycle["busy"] | _busy_rooms())
+        _dec = idle_decision(role, probes[role], has_unacked,
+                             fresh.get(role), boxes[role]["next"], rang,
+                             _scan)
+        if _dec == "need-idle":
             actions.append("NEED %s idle with no briefed work (no invention)" % role)
+            actions.append("IDLE-accepted %s (scan empty)" % role)
+        elif _dec != "none":
+            _kind = _dec.split(":")[1] if _dec.startswith("denied:") else "?"
+            _iss = _dec.rsplit("#", 1)[1] if "#" in _dec else "?"
+            actions.append("IDLE-denied %s -> assigned %s #%s (scan: %s)"
+                           % (role, _kind, _iss,
+                              _scan.get("why") if _scan else "?"))
 
     contacted = bool(boxes["dev"]["all"] or boxes["qe"]["all"])
     if verdict.get("escalate") and contacted:
@@ -4634,6 +4783,12 @@ def cmd_status(ctx, issues):
         return 2
     facts = {"dev": lane_facts_all(rooms, "dev"),
              "qe": lane_facts_all(rooms, "qe")}
+    # Item 5 (#463): the same work-conserving scan, read-only. Never
+    # files or rings; a lane reads IDLE only on an empty scan.
+    _status_now = utcnow()
+    _status_scans = {role: collect_scan_records(rooms, role, _status_now)
+                     for role in ("dev", "qe")}
+    _status_busy = {r["issue"] for r in _status_scans["dev"] if r.get("busy")}
     starved_all = []
     for issue, rdir, st in rooms:
         boxes = load_boxes(rdir)
@@ -4653,9 +4808,17 @@ def cmd_status(ctx, issues):
             else:
                 probe = fast_probe(ctx, sess)
                 activity = boxes[role]["state"] or boxes[role]["next"] or "-"
+                planned = status_planned_lane(role, boxes[role], st, probe)
+                if planned == "NEED idle: no briefed work":
+                    _hit = global_work_scan(role, _status_scans[role],
+                                            issue, _status_busy)
+                    if _hit is not None:
+                        planned = ("IDLE-denied (%s #%d; scan: %s)"
+                                   % (_hit["kind"], _hit["issue"],
+                                      _hit["why"]))
                 rows.append((role, lane_state(probe, facts[role].get(issue, {}),
                                              facts[role], issue), activity,
-                             status_planned_lane(role, boxes[role], st, probe)))
+                             planned))
                 if starvation_gap(role, probe, facts[role].get(issue, {}), st, hu):
                     starved_all.append(issue)
         print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
@@ -5455,6 +5618,65 @@ def mode_self_test():
           starvation_action(STARVE_TICKS - 1, False, False, {}, 3) == "observe", True)
     check("starve-ticks-wired-rewake",
           starvation_action(STARVE_TICKS, False, False, {"count": 1}, 3) == "rewake", True)
+    # Item 5 (#463): work-conserving scan + IDLE gate. Bite: forcing
+    # global_work_scan to None flips every denied row to FAIL.
+    _rmk = lambda iss, **kw: dict({"issue": iss, "halt": False,
+                                   "state": "IN_PROGRESS", "order": False,
+                                   "post": False, "active": False,
+                                   "waits": False, "next": "",
+                                   "age_s": 0.0, "stale": False,
+                                   "busy": False, "backlog_ok": False}, **kw)
+    check("scan-none-empty",
+          global_work_scan("dev", [], 1, set()) is None, True)
+    check("scan-none-halted",
+          global_work_scan("dev", [_rmk(1, order=True, halt=True)], 2, set()) is None, True)
+    check("scan-none-closed",
+          global_work_scan("dev", [_rmk(1, order=True, state="CLOSED")], 2, set()) is None, True)
+    _sob = global_work_scan("dev", [_rmk(5, backlog_ok=True),
+                                          _rmk(7, order=True)], 1, set())
+    check("scan-order-beats-backlog",
+          _sob is not None and _sob["issue"] == 7 and _sob["kind"] == "order", True)
+    _sps = global_work_scan("dev", [_rmk(5, stale=True, age_s=9999.0),
+                                    _rmk(7, post=True)], 1, set())
+    check("scan-post-beats-stale",
+          _sps is not None and _sps["kind"] == "post" and _sps["issue"] == 7, True)
+    check("scan-active-engaged",
+          global_work_scan("qe", [_rmk(7, active=True)], 1, set()) == {"kind": "active", "issue": 7, "why": "lane engaged elsewhere", "age_s": 0.0}, True)
+    _sso = global_work_scan("dev", [_rmk(5, stale=True, age_s=100.0),
+                                    _rmk(7, stale=True, age_s=9999.0)], 1, set())
+    check("scan-stale-oldest",
+          _sso is not None and _sso["issue"] == 7 and _sso["kind"] == "stale", True)
+    _sbl = global_work_scan("dev", [_rmk(5, backlog_ok=True),
+                                    _rmk(7, backlog_ok=True)], 1, {7})
+    check("scan-backlog-lowest",
+          global_work_scan("dev", [_rmk(5, backlog_ok=True),
+                                   _rmk(7, backlog_ok=True)], 5, {7}) is None
+          and _sbl is not None and _sbl["issue"] == 5, True)
+    check("scan-record-dev-stale",
+          scan_room_record("dev", 1, {"state": "IN_PROGRESS"},
+                           {"active": True}, "working x",
+                           "2026-11-02T00:00:00", "2026-11-03T00:00:01")["stale"] is True, True)
+    check("scan-record-qe-never-stale",
+          scan_room_record("qe", 1, {"state": "IN_PROGRESS"},
+                           {"active": True}, "working x",
+                           "2026-11-02T00:00:00", "2026-11-03T00:00:01")["stale"] is False, True)
+    check("scan-record-busy-live-order",
+          scan_room_record("dev", 1, {"state": "IN_PROGRESS", "rings": {"dev:2026-11-03T00:00:00": 1}},
+                           {}, None, None, "2026-11-03T00:00:01")["busy"] is True, True)
+    check("idle-decision-none-working",
+          idle_decision("dev", "WORKING-markers", set(), [], None, False,
+                        {"kind": "order", "issue": 7}) == "none", True)
+    check("idle-decision-none-unacked",
+          idle_decision("dev", "IDLE-static", {"dev"}, [], None, False,
+                        {"kind": "order", "issue": 7}) == "none", True)
+    check("idle-decision-need-empty",
+          idle_decision("dev", "IDLE-static", set(), [], None, False, None) == "need-idle", True)
+    check("idle-decision-denied-backlog",
+          idle_decision("dev", "IDLE-static", set(), [], None, False,
+                        {"kind": "backlog", "issue": 5}) == "denied:backlog:#5", True)
+    check("idle-decision-denied-stale",
+          idle_decision("dev", "IDLE-static", set(), [], None, False,
+                        {"kind": "stale", "issue": 7}) == "denied:stale:#7", True)
     _open = {"halt": False, "state": "IN_PROGRESS"}
     _rooms = [(51, "/r51", dict(_open)), (52, "/r52", dict(_open))]
     check("pick-backlog-exclude",
