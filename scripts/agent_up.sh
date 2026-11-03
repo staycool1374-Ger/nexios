@@ -1168,7 +1168,26 @@ mode_wake() {
   info "wake recorded in '$rt/inbox/coord.md'"
   if [ "$3" = "$ENGINE_SESS" ]; then
     ensure_engine_loop --quiet
+    # Event-driven fast path (#465): a demand-shaped worker post fires a
+    # targeted one-shot tick now instead of waiting for the 180 s sweep.
+    # The sweep lock serializes with the loop (skip-if-held), so overlap
+    # is safe. Non-demand posts (pure ACKs, status) stay sweep-driven.
+    case "$2" in dev|qe|auditor)
+      last_post=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.* FROM=(dev|qe|auditor|audit) (NEED|READY|DECISION|NOTE) ::' "$rt/inbox/$2.md" 2>/dev/null | tail -n 1)
+      case "$last_post" in
+        *' NEED :: '*|*' DECISION :: '*|*' DECISION: '*|*'DONE:'*|*'DONE '*)
+          fire_targeted_tick "$1" ;;
+      esac
+      ;;
+    esac
   fi
+}
+
+# Targeted one-shot tick for a single room, detached. Shares the sweep
+# lock with the interval loop: runs exclusively, or skips cleanly when
+# the loop is mid-sweep (the loop covers the room within one interval).
+fire_targeted_tick() {
+  ( cd "$REPO_ROOT" && nohup python3 scripts/state_machine.py tick --issues "$1" >>logs/state-machine/engine-console.log 2>&1 & )
 }
 
 # End-to-end transport self-test: proves msg delivers text+Enter INTO a live
