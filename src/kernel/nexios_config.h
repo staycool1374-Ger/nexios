@@ -1338,6 +1338,9 @@ extern "C" void panic(const char *msg);
 #if CONFIG_CAP_BROKER != 0 && CONFIG_CAP_BROKER != 1
 #error "CONFIG_CAP_BROKER must be 0 or 1 (default 0)"
 #endif
+#if CONFIG_WDOG_MON != 0 && CONFIG_WDOG_MON != 1
+#error "CONFIG_WDOG_MON must be 0 or 1 (default 0)"
+#endif
 #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
 #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif
@@ -1388,6 +1391,16 @@ extern "C" void panic(const char *msg);
 /// knob. Default: 0.
 #ifndef CONFIG_CAP_BROKER
 #define CONFIG_CAP_BROKER 0
+#endif
+
+/// wdog-mon externalization master switch (issue #390, strangler step a).
+/// 0 = in-kernel watchdog supervision (shipped default, bit-identical).
+/// 1 = wdog-mon PD serves supervision policy; kernel keeps tick-scan +
+/// death pulses + watchdogd mechanism. All wdog-mon kernel code is `#if
+/// CONFIG_WDOG_MON`-guarded (empty TU when 0); no runtime `if` on this
+/// knob. Default: 0.
+#ifndef CONFIG_WDOG_MON
+#define CONFIG_WDOG_MON 0
 #endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
