@@ -33,6 +33,7 @@
 #include <kernel/driver/block_srv.hpp>
 #include <kernel/term/term_srv.hpp>
 #include <kernel/log/log_srv.hpp>
+#include <kernel/cap/cap_broker.hpp>
 #include <kernel/driver/driver_pds.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
@@ -228,6 +229,24 @@ void pd_set_log_srv(uint64_t pid) {
     kernel::log_srv::set_log_srv_pid(pid);
 }
 #endif
+#if CONFIG_CAP_BROKER
+void pd_restart_cap_broker(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::CAP_BROKER)) {
+        return;
+    }
+    kernel::cap_broker::cap_broker_on_restart(pid);
+}
+uint64_t pd_pid_cap_broker() {
+    return kernel::cap_broker::get_cap_broker_pid();
+}
+void pd_set_cap_broker(uint64_t pid) {
+    kernel::cap_broker::set_cap_broker_pid(pid);
+}
+#endif
 
 // ── Task definition table ────────────────────────────────────────────────
 
@@ -343,10 +362,19 @@ constexpr TaskDef g_task_defs[] = {
     // log-srv: Klog/Dmesg sink PD (issue #51, strangler step a).
     // Sporadic server SS(1,10,0); sink + drop/meter only, no log-source
     // changes. Panic path never leaves the kernel.
-    {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
-     "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
-     pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
-     ServerMode::SPORADIC, pd_restart_log_srv, 9},
+     {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+      "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
+      pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
+      ServerMode::SPORADIC, pd_restart_log_srv, 9},
+#endif
+#if CONFIG_CAP_BROKER
+    // cap-broker: capability delegation policy PD (issue #240, strangler a).
+    // Sporadic server SS(1,10,0); policy only, no device caps (SDF row is
+    // the empty set by structural rule). Kernel enforces the cached word.
+    {"cap-broker", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/cap-broker.c.elf", 20, 10, 0, 1, 10, 0, "cap-broker",
+     pd_set_cap_broker, pd_pid_cap_broker, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_cap_broker, 10},
 #endif
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values
@@ -405,13 +433,13 @@ constexpr bool server_params_valid(const TaskDef &d) {
         return false;
     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
         return false;
-    // Issue #48/#51: an SDF row needs its supervisor hook (re-derive on
-    // restart, never inherit) and a valid role index.
+    // Issue #48/#51/#240: an SDF row needs its supervisor hook (re-derive
+    // on restart, never inherit) and a valid role index.
     if (d.sdf_role != 0xFF) {
         if (d.on_restart_fn == nullptr)
             return false;
         if (d.sdf_role >
-            static_cast<uint64_t>(sdf::PdRole::LOG_SRV))
+            static_cast<uint64_t>(sdf::PdRole::CAP_BROKER))
             return false;
     }
     return true;
@@ -720,9 +748,9 @@ void reboot_from_table() {
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
-    CONFIG_LOG_SRV
+    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
             if (def.sdf_role != 0xFF) {
-                // SDF compose (issues #47/#48/#51): mint the role caps
+                // SDF compose (issues #47/#48/#51/#240): mint the role caps
                 // into the fresh task. Fail-closed: compose failure
                 // destroys the task and skips the row (invalid-ELF
                 // precedent below). Compile-guarded: boot_sdf.cpp is an

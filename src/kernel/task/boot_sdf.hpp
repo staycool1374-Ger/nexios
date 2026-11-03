@@ -70,6 +70,7 @@ enum class PdRole : uint8_t {
     BLOCK_SRV = 7,
     TERM_SRV = 8,
     LOG_SRV = 9,
+    CAP_BROKER = 10,
 };
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).

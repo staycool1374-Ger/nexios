@@ -35,6 +35,17 @@ struct TaskControlBlock;
 
 namespace kernel::cap {
 
+/// @brief Per-CNode delegation policy bits (issue #240, cached policy word).
+///        The kernel enforces, the broker allows. OFF / default-allow value
+///        is kCapBrokerAllowAll (zero behavioral delta at step-a).
+constexpr uint32_t kCapBrokerAllowGrant = 1u << 0;
+constexpr uint32_t kCapBrokerAllowCopy = 1u << 1;
+constexpr uint32_t kCapBrokerAllowMint = 1u << 2;
+constexpr uint32_t kCapBrokerAllowRetype = 1u << 3;
+constexpr uint32_t kCapBrokerAllowAll =
+    kCapBrokerAllowGrant | kCapBrokerAllowCopy | kCapBrokerAllowMint |
+    kCapBrokerAllowRetype;
+
 /// @brief A capability node: a bounded table of slots.  Itself a KernelObject
 ///        (shared-heap class, PipeBuffer pattern).  A task's root CNode is its
 ///        CSpace and is attached to the TCB intrusive object list so teardown
@@ -51,6 +62,13 @@ class CNode : public KernelObject {
     CNode *parent_ = nullptr;
     uint32_t depth_ = 0;
     sync::SpinLock lock_;
+    // Issue #240 cached delegation policy (step-a: always all-allow).
+    // Placed after the lock (off the slots hot path). Read under the
+    // existing slot-table lock (one load, zero new locks/order); mutated
+    // only via set_policy_word (word store + gen bump atomic under the
+    // same lock). OFF shim: word all-allow + row absent => zero delta.
+    uint32_t policy_word_ = kCapBrokerAllowAll;
+    uint32_t policy_gen_ = 1;
 
     /// @brief Allocates a CNode from the MemPool and marks it pool-backed.
     ///        Returns nullptr on allocation failure.
@@ -96,6 +114,29 @@ class CNode : public KernelObject {
     /// @brief Clears the GRANT right on the slot at @p idx (mint-once after
     ///        a grant).  No-op on an unoccupied slot.
     void clear_grant(uint32_t idx) noexcept;
+
+    /// @brief Returns the cached delegation policy word (issue #240).
+    ///        Lock-free read is NOT safe under concurrent SET; callers on
+    ///        the authorize path read under the existing slot-table lock.
+    uint32_t policy_word() const noexcept {
+        return policy_word_;
+    }
+
+    /// @brief Returns the policy generation (bumped on every SET).
+    uint32_t policy_gen() const noexcept {
+        return policy_gen_;
+    }
+
+    /// @brief Stores @p word and bumps the generation atomically under the
+    ///        slot-table lock (issue #240 S3: atomic word+gen under same
+    ///        lock). Caller must hold no cap lock (takes lock_).
+    void set_policy_word(uint32_t word) noexcept;
+
+    /// @brief True when @p op_mask (kCapBrokerAllow*) is allowed by @p word.
+    static constexpr bool policy_allows(uint32_t word,
+                                        uint32_t op_mask) noexcept {
+        return (word & op_mask) == op_mask;
+    }
 };
 
 /// @brief Looks up @p handle in @p cspace and returns a PREFIX-reference

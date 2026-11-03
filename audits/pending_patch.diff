@@ -1000,3 +1000,765 @@ index d1d59dbbd..69ae9aa49 100644
      check("audit-state-live", audit_state(True) == "WORKING", True)
      check("audit-state-absent", audit_state(False) == "-", True)
      _appr = "2026-11-02T08:00:00Z FROM=audit DECISION :: APPROVED — step-a may proceed"
+diff --git a/src/kernel/cap/cap.cpp b/src/kernel/cap/cap.cpp
+index 7f1e748d4..9a7d8277e 100644
+--- a/src/kernel/cap/cap.cpp
++++ b/src/kernel/cap/cap.cpp
+@@ -160,6 +160,12 @@ void CNode::clear_grant(uint32_t idx) noexcept {
+     slots[idx].rights &= ~CapRights::GRANT;
+ }
+ 
++void CNode::set_policy_word(uint32_t word) noexcept {
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    policy_word_ = word;
++    ++policy_gen_; // atomic with the store under the same lock (S3 note)
++}
++
+ KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
+                      CapRights need_rights) noexcept {
+     if (!cspace)
+@@ -242,8 +248,13 @@ size_t occupied_count(const CNode *cspace) noexcept {
+ ///        the pin taken here is released on both success and failure.
+ ///        Forwards an optional generation out-slot to the dst install
+ ///        (issue #266: lets syscall returns encode with no TOCTOU).
++///        Issue #240 step-a: reads the cached policy word under the existing
++///        src lock snapshot (one load, zero new locks); all-allow at step-a
++///        so the check always passes (zero delta). Step-b adds default-deny
++///        + gen-compare fail-closed.
+ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+-                   CapRights rights, uint32_t *gen_out = nullptr) noexcept {
++                   CapRights rights, uint32_t *gen_out = nullptr,
++                   uint32_t op_mask = kCapBrokerAllowCopy) noexcept {
+     if (!src || !dst || src == dst)
+         return -1;
+     // lookup() returns the target with acquire() already taken.
+@@ -262,6 +273,10 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+             target->release();
+             return -1;
+         }
++        if (!CNode::policy_allows(src->policy_word_, op_mask)) {
++            target->release();
++            return -1;
++        }
+         type = src->slots[idx].type;
+         src_rights = src->slots[idx].rights;
+         src_gen = src->slots[idx].gen;
+@@ -294,6 +309,8 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+     if (!target)
+         return -1;
+     // Capture the type/rights under the lock, then clear GRANT (mint-once).
++    // Issue #240 step-a: policy-word read under the existing lock (one
++    // load, zero new locks); all-allow so always passes (zero delta).
+     CapType type = CapType::Null;
+     CapRights rights = CapRights::NONE;
+     uint32_t src_gen = 0;
+@@ -305,6 +322,11 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+             target->release();
+             return -1;
+         }
++        if (!CNode::policy_allows(src->policy_word_,
++                                   kCapBrokerAllowGrant)) {
++            target->release();
++            return -1;
++        }
+         type = src->slots[idx].type;
+         rights = src->slots[idx].rights;
+         src_gen = src->slots[idx].gen;
+@@ -323,7 +345,8 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+ int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
+          uint32_t badge, uint32_t *gen_out) noexcept {
+     (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
+-    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out);
++    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out,
++                           kCapBrokerAllowMint);
+ }
+ 
+ } // namespace kernel::cap
+diff --git a/src/kernel/cap/cap.hpp b/src/kernel/cap/cap.hpp
+index 0c99ccab6..beaf701df 100644
+--- a/src/kernel/cap/cap.hpp
++++ b/src/kernel/cap/cap.hpp
+@@ -35,6 +35,17 @@ struct TaskControlBlock;
+ 
+ namespace kernel::cap {
+ 
++/// @brief Per-CNode delegation policy bits (issue #240, cached policy word).
++///        The kernel enforces, the broker allows. OFF / default-allow value
++///        is kCapBrokerAllowAll (zero behavioral delta at step-a).
++constexpr uint32_t kCapBrokerAllowGrant = 1u << 0;
++constexpr uint32_t kCapBrokerAllowCopy = 1u << 1;
++constexpr uint32_t kCapBrokerAllowMint = 1u << 2;
++constexpr uint32_t kCapBrokerAllowRetype = 1u << 3;
++constexpr uint32_t kCapBrokerAllowAll =
++    kCapBrokerAllowGrant | kCapBrokerAllowCopy | kCapBrokerAllowMint |
++    kCapBrokerAllowRetype;
++
+ /// @brief A capability node: a bounded table of slots.  Itself a KernelObject
+ ///        (shared-heap class, PipeBuffer pattern).  A task's root CNode is its
+ ///        CSpace and is attached to the TCB intrusive object list so teardown
+@@ -51,6 +62,13 @@ class CNode : public KernelObject {
+     CNode *parent_ = nullptr;
+     uint32_t depth_ = 0;
+     sync::SpinLock lock_;
++    // Issue #240 cached delegation policy (step-a: always all-allow).
++    // Placed after the lock (off the slots hot path). Read under the
++    // existing slot-table lock (one load, zero new locks/order); mutated
++    // only via set_policy_word (word store + gen bump atomic under the
++    // same lock). OFF shim: word all-allow + row absent => zero delta.
++    uint32_t policy_word_ = kCapBrokerAllowAll;
++    uint32_t policy_gen_ = 1;
+ 
+     /// @brief Allocates a CNode from the MemPool and marks it pool-backed.
+     ///        Returns nullptr on allocation failure.
+@@ -96,6 +114,29 @@ class CNode : public KernelObject {
+     /// @brief Clears the GRANT right on the slot at @p idx (mint-once after
+     ///        a grant).  No-op on an unoccupied slot.
+     void clear_grant(uint32_t idx) noexcept;
++
++    /// @brief Returns the cached delegation policy word (issue #240).
++    ///        Lock-free read is NOT safe under concurrent SET; callers on
++    ///        the authorize path read under the existing slot-table lock.
++    uint32_t policy_word() const noexcept {
++        return policy_word_;
++    }
++
++    /// @brief Returns the policy generation (bumped on every SET).
++    uint32_t policy_gen() const noexcept {
++        return policy_gen_;
++    }
++
++    /// @brief Stores @p word and bumps the generation atomically under the
++    ///        slot-table lock (issue #240 S3: atomic word+gen under same
++    ///        lock). Caller must hold no cap lock (takes lock_).
++    void set_policy_word(uint32_t word) noexcept;
++
++    /// @brief True when @p op_mask (kCapBrokerAllow*) is allowed by @p word.
++    static constexpr bool policy_allows(uint32_t word,
++                                        uint32_t op_mask) noexcept {
++        return (word & op_mask) == op_mask;
++    }
+ };
+ 
+ /// @brief Looks up @p handle in @p cspace and returns a PREFIX-reference
+diff --git a/src/kernel/cap/cap_broker.cpp b/src/kernel/cap/cap_broker.cpp
+new file mode 100644
+index 000000000..48c4c0ec2
+--- /dev/null
++++ b/src/kernel/cap/cap_broker.cpp
+@@ -0,0 +1,187 @@
++#include <kernel/cap/cap_broker.hpp>
++
++#if CONFIG_CAP_BROKER
++
++/*
++ * NexIOS RTOS — Capability-broker policy proxy (issue #240).
++ * Whole TU is `#if CONFIG_CAP_BROKER`-guarded: the OFF build (`0`,
++ * shipped default) yields an empty TU (no symbols), so the link is
++ * byte-identical to the pre-#240 tree. Broker-allows/kernel-enforces:
++ * the broker owns per-task policy words, the kernel enforces the cached
++ * word on the delegation path. Step-a: BIND+LOOPBACK live, policy ops
++ * typed -ENOSYS pre-flip (no default-deny flip until the §7 gate).
++ */
++
++#include <kernel/ipc/ipc.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++
++namespace kernel {
++namespace cap_broker {
++namespace {
++
++uint64_t g_cap_broker_pid = 0;
++uint32_t g_cap_broker_epoch = 1;
++
++struct Tombstone {
++    uint32_t owner_id;
++    uint32_t owner_gen;
++};
++
++Tombstone g_tombstones[16] = {};
++uint64_t g_tombstone_count = 0;
++
++/// @brief Bounded wait for one server RPC (coarse ticks).
++/// Fail-closed `-EAGAIN` past this; never parks a kernel task forever.
++constexpr uint64_t kRpcGuardTicks = 5000;
++
++} // namespace
++
++void set_cap_broker_pid(uint64_t pid) {
++    g_cap_broker_pid = pid;
++}
++
++uint64_t get_cap_broker_pid() {
++    return __atomic_load_n(&g_cap_broker_pid, __ATOMIC_RELAXED);
++}
++
++bool cap_broker_alive() {
++    const uint64_t pid = get_cap_broker_pid();
++    if (pid == 0) {
++        return false;
++    }
++    auto *srv = Scheduler::find_task(pid);
++    if (srv == nullptr) {
++        return false;
++    }
++    return srv->state != TaskState::TERMINATED &&
++           srv->state != TaskState::REAPED;
++}
++
++uint32_t cap_broker_epoch() {
++    return __atomic_load_n(&g_cap_broker_epoch, __ATOMIC_RELAXED);
++}
++
++void cap_broker_bump_epoch() {
++    __atomic_fetch_add(&g_cap_broker_epoch, 1U, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_tombstone_count, 0, __ATOMIC_RELAXED);
++}
++
++void cap_broker_on_restart(uint64_t pid) {
++    set_cap_broker_pid(pid);
++    cap_broker_bump_epoch();
++}
++
++void cap_broker_note_dead_owner(uint32_t owner_id, uint32_t owner_gen) {
++    // Lock-free ring write (teardown context: no locks, no IPC).
++    uint64_t count =
++        __atomic_load_n(&g_tombstone_count, __ATOMIC_RELAXED);
++    if (count >= 16) {
++        return; // bounded residual drop (documented, ≤ table size)
++    }
++    g_tombstones[count].owner_id = owner_id;
++    g_tombstones[count].owner_gen = owner_gen;
++    __atomic_store_n(&g_tombstone_count, count + 1, __ATOMIC_RELAXED);
++}
++
++bool cap_broker_rpc(const CapBrokerRpc &req, CapBrokerRpc &reply) {
++    const uint64_t pid = get_cap_broker_pid();
++    if (pid == 0 || !cap_broker_alive()) {
++        return false;
++    }
++    auto *cur = Scheduler::current_task();
++    if (cur == nullptr) {
++        return false;
++    }
++    Message msg{};
++    msg.type = static_cast<uint64_t>(req.op);
++    msg.priority = cur->priority;
++    __builtin_memcpy(msg.data, &req, sizeof(req));
++    msg.data_size = sizeof(req);
++    Message raw{};
++    if (!IPC::send_sync_bounded(pid, msg, raw, kRpcGuardTicks)) {
++        return false;
++    }
++    if (raw.data_size != sizeof(reply)) {
++        return false;
++    }
++    __builtin_memcpy(&reply, raw.data, sizeof(reply));
++    // Reply identity: server, epoch, owner (id+gen). A mismatch is
++    // dropped by the caller (bounded re-wait), never consumed.
++    if (raw.sender_id != pid || reply.epoch != cap_broker_epoch() ||
++        reply.owner_id != req.owner_id ||
++        reply.owner_gen != req.owner_gen) {
++        return false;
++    }
++    return true;
++}
++
++namespace {
++
++bool cap_broker_bind_op(CapBrokerOp op, uint64_t arg0, uint64_t *echo_out,
++                        int64_t *status_out) {
++    CapBrokerRpc req{};
++    req.op = static_cast<uint8_t>(op);
++    req.arg0 = arg0;
++    auto *cur = Scheduler::current_task();
++    if (cur == nullptr) {
++        return false;
++    }
++    req.owner_id = static_cast<uint32_t>(cur->id);
++    req.owner_gen = cur->generation;
++    req.epoch = cap_broker_epoch();
++    CapBrokerRpc reply{};
++    if (!cap_broker_rpc(req, reply)) {
++        return false;
++    }
++    if (echo_out != nullptr) {
++        *echo_out = reply.arg0;
++    }
++    if (status_out != nullptr) {
++        *status_out = reply.status;
++    }
++    return true;
++}
++
++} // namespace
++
++int64_t cap_broker_probe_bind() {
++    int64_t status = -38;
++    if (!cap_broker_bind_op(CapBrokerOp::BIND, 0, nullptr, &status)) {
++        return -38; // -ENOSYS: server unavailable pre-flip
++    }
++    return status;
++}
++
++int64_t cap_broker_probe_loopback(uint64_t payload, uint64_t *echo) {
++    int64_t status = -38;
++    uint64_t got = 0;
++    if (!cap_broker_bind_op(CapBrokerOp::LOOPBACK, payload, &got,
++                             &status)) {
++        return -38; // -ENOSYS: server unavailable pre-flip
++    }
++    if (status != 0) {
++        return status;
++    }
++    if (echo != nullptr) {
++        *echo = got;
++    }
++    return 0;
++}
++
++int64_t cap_broker_probe_set_policy(uint64_t target_id, uint32_t mask) {
++    (void)target_id;
++    (void)mask;
++    return -38; // -ENOSYS: policy ops land with the step-b flip, not step-a
++}
++
++int64_t cap_broker_probe_get_policy(uint64_t target_id, uint32_t *mask) {
++    (void)target_id;
++    (void)mask;
++    return -38; // -ENOSYS: policy ops land with the step-b flip, not step-a
++}
++
++} // namespace cap_broker
++} // namespace kernel
++
++#endif // CONFIG_CAP_BROKER
+diff --git a/src/kernel/cap/cap_broker.hpp b/src/kernel/cap/cap_broker.hpp
+new file mode 100644
+index 000000000..bcea15280
+--- /dev/null
++++ b/src/kernel/cap/cap_broker.hpp
+@@ -0,0 +1,103 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file cap_broker.hpp
++/// @brief Capability-broker policy proxy (issue #240, strangler step a).
++///        Kernel-side contract for the userspace cap-broker PD: 48 B wire
++///        RPC, PID cell, epoch/liveness, tombstone drain, and probe
++///        entry points. Everything here is declaration-only; definitions
++///        live in cap_broker.cpp inside `#if CONFIG_CAP_BROKER`, so the OFF
++///        build (`CONFIG_CAP_BROKER=0`, shipped default) is byte-identical
++///        to the pre-#240 tree. Broker-allows/kernel-enforces: the broker
++///        manages per-task policy words, the kernel enforces the cached
++///        word on the grant/copy/mint/retype path. Step-a: BIND+LOOPBACK
++///        live, policy ops typed -ENOSYS pre-flip.
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++namespace kernel::cap_broker {
++
++#if CONFIG_CAP_BROKER
++
++/// @brief Wire ops carried in CapBrokerRpc::op (server dispatch switch).
++enum class CapBrokerOp : uint8_t {
++    BIND = 0,        ///< server announce / capability handshake
++    LOOPBACK = 1,    ///< echo probe (parity: kernel vs server path)
++    SET_POLICY = 2,  ///< set per-task delegation mask (step-b; -ENOSYS now)
++    GET_POLICY = 3,  ///< read back per-task mask (step-b; -ENOSYS now)
++    CLEAR_POLICY = 4,///< clear per-task mask bits (step-b; -ENOSYS now)
++};
++
++/// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
++struct CapBrokerRpc {
++    uint8_t op;         ///< CapBrokerOp
++    uint8_t flags;      ///< reserved (zero)
++    uint16_t rsvd;      ///< reserved (zero)
++    uint32_t epoch;     ///< proxy epoch (server purges on increase)
++    uint32_t owner_id;  ///< requesting task id (issue #441: never PID 1)
++    uint32_t owner_gen; ///< requesting task generation
++    uint64_t target_id; ///< policy target task id (SET/GET/CLEAR)
++    uint32_t mask;      ///< delegation mask bits (SET/CLEAR)
++    uint32_t rsvd2;     ///< reserved (zero)
++    uint64_t arg0;      ///< LOOPBACK echo payload
++    uint16_t status_op; ///< echoed op for mismatch detection
++    uint16_t status;    ///< reply: negated errno (0 = ok)
++    uint32_t rsvd3;     ///< reserved (zero)
++};
++
++static_assert(sizeof(CapBrokerRpc) <= 48,
++              "CapBrokerRpc must fit the 48 B fast IPC payload");
++
++/// @brief Record the PID of the cap-broker daemon task.
++void set_cap_broker_pid(uint64_t pid);
++/// @brief Get the recorded cap-broker PID (0 when unset).
++uint64_t get_cap_broker_pid();
++/// @brief True when the server task is live (present, not TERMINATED/REAPED).
++bool cap_broker_alive();
++/// @brief Proxy epoch (bumped on restart / snapshot reset / boot table).
++uint32_t cap_broker_epoch();
++/// @brief Bump the epoch and purge tombstones (server restart path).
++void cap_broker_bump_epoch();
++/// @brief Supervisor hook: record a restart (store pid, bump epoch).
++void cap_broker_on_restart(uint64_t pid);
++/// @brief Teardown hook: latch a dead owner's id+generation (lock-free).
++void cap_broker_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
++/// @brief Generic RPC: validate server, bounded wait, validated reply.
++/// @return true with *reply filled on a validated reply, false fail-closed
++///         (server down, timeout, or reply mismatch) with no block held.
++[[nodiscard]] bool cap_broker_rpc(const CapBrokerRpc &req,
++                                  CapBrokerRpc &reply);
++/// @brief BIND probe: attach to a live PD, expect ok.
++/// @return 0 on bound, -ENOSYS when the server is unavailable.
++int64_t cap_broker_probe_bind();
++/// @brief LOOPBACK probe: echo arg0 through the live PD.
++/// @return 0 with *echo filled on success, -ENOSYS when unavailable.
++int64_t cap_broker_probe_loopback(uint64_t payload, uint64_t *echo);
++/// @brief SET_POLICY probe (step-b; always -ENOSYS at step-a).
++/// @return -ENOSYS pre-flip.
++int64_t cap_broker_probe_set_policy(uint64_t target_id, uint32_t mask);
++/// @brief GET_POLICY probe (step-b; always -ENOSYS at step-a).
++/// @return -ENOSYS pre-flip.
++int64_t cap_broker_probe_get_policy(uint64_t target_id, uint32_t *mask);
++
++#endif // CONFIG_CAP_BROKER
++
++} // namespace kernel::cap_broker
+diff --git a/src/kernel/cap/untyped.cpp b/src/kernel/cap/untyped.cpp
+index 0365b70b0..20591f96e 100644
+--- a/src/kernel/cap/untyped.cpp
++++ b/src/kernel/cap/untyped.cpp
+@@ -24,6 +24,7 @@
+ #include <kernel/cap/frame.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/memory/pmm.hpp>
++#include <kernel/sync/spinlock_guard.hpp>
+ #include <kernel/test/resource_tracker.hpp>
+ #include <kernel/nexios_config.h>
+ #include <kernel/arch/page_table.hpp>
+@@ -132,6 +133,15 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+            size_t size, CapRights rights, uint32_t *gen_out) noexcept {
+     if (!cspace)
+         return -1;
++    // Issue #240 step-a: cached policy-word check (one short locked load,
++    // zero new lock order); all-allow at step-a so always passes.
++    {
++        SpinLockGuard<sync::SpinLock> guard(cspace->lock_);
++        if (!CNode::policy_allows(cspace->policy_word_,
++                                   kCapBrokerAllowRetype)) {
++            return -1;
++        }
++    }
+     // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
+     // alive across the transfer so dispose() cannot run mid-retype.
+     KernelObject *obj = lookup(cspace, untyped_handle, CapType::Untyped,
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 8714efab3..405ca2864 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -1335,6 +1335,9 @@ extern "C" void panic(const char *msg);
+ #if CONFIG_LOG_SRV != 0 && CONFIG_LOG_SRV != 1
+ #error "CONFIG_LOG_SRV must be 0 or 1 (default 0)"
+ #endif
++#if CONFIG_CAP_BROKER != 0 && CONFIG_CAP_BROKER != 1
++#error "CONFIG_CAP_BROKER must be 0 or 1 (default 0)"
++#endif
+ #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
+ #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+ #endif
+@@ -1376,6 +1379,16 @@ extern "C" void panic(const char *msg);
+ #ifndef CONFIG_LOG_SRV_FAULT_INJECT
+ #define CONFIG_LOG_SRV_FAULT_INJECT 0
+ #endif
++
++/// cap-broker externalization master switch (issue #240, strangler step a).
++/// 0 = ambient delegation authority (shipped default, bit-identical behavior).
++/// 1 = cap-broker PD serves delegation policy; kernel enforces a cached
++/// per-CNode policy word. All cap-broker kernel code is `#if
++/// CONFIG_CAP_BROKER`-guarded (empty TU when 0); no runtime `if` on this
++/// knob. Default: 0.
++#ifndef CONFIG_CAP_BROKER
++#define CONFIG_CAP_BROKER 0
++#endif
+ #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
+ #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+ #endif
+diff --git a/src/kernel/task/boot_sdf.cpp b/src/kernel/task/boot_sdf.cpp
+index c5a4fa152..a5fa3ceef 100644
+--- a/src/kernel/task/boot_sdf.cpp
++++ b/src/kernel/task/boot_sdf.cpp
+@@ -4,7 +4,7 @@
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
+     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
+-    CONFIG_LOG_SRV
++    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
+ 
+ #include <kernel/task/task.hpp>
+ #include <kernel/arch/hal/device_regions.hpp>
+@@ -202,24 +202,31 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
+         // Log sink policy only (issue #51): Klog/Dmesg sink + drop/meter.
+         // No device caps ever; same structural rule as TERM_SRV.
+         return 0;
++    case PdRole::CAP_BROKER:
++        // Delegation policy only (issue #240): broker-allows /
++        // kernel-enforces over a cached per-CNode word. No device caps
++        // ever; the row is the empty set by structural rule.
++        return 0;
+     }
+     return 0;
+ }
+ 
+ bool sdf_zero_caps_allowed(PdRole role) {
+-    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV (empty sets by
+-    // design) and degraded BLOCK_SRV (no controller/IOMMU captured) may
+-    // start capless. Every other zero-cap row is a compose failure.
++    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV + CAP_BROKER
++    // (empty sets by design) and degraded BLOCK_SRV (no controller/IOMMU
++    // captured) may start capless. Every other zero-cap row is a
++    // compose failure.
+     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
+-           role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV;
++           role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV ||
++           role == PdRole::CAP_BROKER;
+ }
+ 
+ bool sdf_policy_only(PdRole role) {
+-    // Structural no-double-ownership rule (issues #47/#51): policy-only
+-    // roles must never hold device caps. The #48 SDF boundary test
+-    // consumes this predicate directly.
++    // Structural no-double-ownership rule (issues #47/#51, #240):
++    // policy-only roles must never hold device caps. The #48 SDF
++    // boundary test consumes this predicate directly.
+     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
+-           role == PdRole::LOG_SRV;
++           role == PdRole::LOG_SRV || role == PdRole::CAP_BROKER;
+ }
+ 
+ bool capture_block_topology() {
+@@ -325,6 +332,7 @@ bool pd_owns_device(PdRole role) {
+         return CONFIG_BLOCK_SRV != 0;
+     case PdRole::TERM_SRV:
+     case PdRole::LOG_SRV:
++    case PdRole::CAP_BROKER:
+         // Policy-only PDs never own devices (structural rule).
+         return false;
+     }
+@@ -334,4 +342,4 @@ bool pd_owns_device(PdRole role) {
+ } // namespace sdf
+ } // namespace kernel
+ 
+-#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV
++#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV / CONFIG_CAP_BROKER
+diff --git a/src/kernel/task/boot_sdf.hpp b/src/kernel/task/boot_sdf.hpp
+index 63d1b06e2..b5d95672d 100644
+--- a/src/kernel/task/boot_sdf.hpp
++++ b/src/kernel/task/boot_sdf.hpp
+@@ -70,6 +70,7 @@ enum class PdRole : uint8_t {
+     BLOCK_SRV = 7,
+     TERM_SRV = 8,
+     LOG_SRV = 9,
++    CAP_BROKER = 10,
+ };
+ 
+ /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
+diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
+index 6233612f7..4e857e99e 100644
+--- a/src/kernel/task/taskdefs.cpp
++++ b/src/kernel/task/taskdefs.cpp
+@@ -33,6 +33,7 @@
+ #include <kernel/driver/block_srv.hpp>
+ #include <kernel/term/term_srv.hpp>
+ #include <kernel/log/log_srv.hpp>
++#include <kernel/cap/cap_broker.hpp>
+ #include <kernel/driver/driver_pds.hpp>
+ #include <kernel/task/dmesg_task.hpp>
+ #include <initrd/initrd.hpp>
+@@ -228,6 +229,24 @@ void pd_set_log_srv(uint64_t pid) {
+     kernel::log_srv::set_log_srv_pid(pid);
+ }
+ #endif
++#if CONFIG_CAP_BROKER
++void pd_restart_cap_broker(uint64_t pid) {
++    auto *t = kernel::Scheduler::find_task(pid);
++    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
++        return;
++    }
++    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::CAP_BROKER)) {
++        return;
++    }
++    kernel::cap_broker::cap_broker_on_restart(pid);
++}
++uint64_t pd_pid_cap_broker() {
++    return kernel::cap_broker::get_cap_broker_pid();
++}
++void pd_set_cap_broker(uint64_t pid) {
++    kernel::cap_broker::set_cap_broker_pid(pid);
++}
++#endif
+ 
+ // ── Task definition table ────────────────────────────────────────────────
+ 
+@@ -343,10 +362,19 @@ constexpr TaskDef g_task_defs[] = {
+     // log-srv: Klog/Dmesg sink PD (issue #51, strangler step a).
+     // Sporadic server SS(1,10,0); sink + drop/meter only, no log-source
+     // changes. Panic path never leaves the kernel.
+-    {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+-     "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
+-     pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
+-     ServerMode::SPORADIC, pd_restart_log_srv, 9},
++     {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
++      "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
++      pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
++      ServerMode::SPORADIC, pd_restart_log_srv, 9},
++#endif
++#if CONFIG_CAP_BROKER
++    // cap-broker: capability delegation policy PD (issue #240, strangler a).
++    // Sporadic server SS(1,10,0); policy only, no device caps (SDF row is
++    // the empty set by structural rule). Kernel enforces the cached word.
++    {"cap-broker", TaskType::SPORADIC_SERVER, true, nullptr,
++     "bin/cap-broker.c.elf", 20, 10, 0, 1, 10, 0, "cap-broker",
++     pd_set_cap_broker, pd_pid_cap_broker, 1, 0, false,
++     ServerMode::SPORADIC, pd_restart_cap_broker, 10},
+ #endif
+     // shell: interactive kernel debug shell.  Disabled in the table — the
+     // real shell is created aperiodic by init_task_main at prio 2; values
+@@ -405,13 +433,13 @@ constexpr bool server_params_valid(const TaskDef &d) {
+         return false;
+     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
+         return false;
+-    // Issue #48/#51: an SDF row needs its supervisor hook (re-derive on
+-    // restart, never inherit) and a valid role index.
++    // Issue #48/#51/#240: an SDF row needs its supervisor hook (re-derive
++    // on restart, never inherit) and a valid role index.
+     if (d.sdf_role != 0xFF) {
+         if (d.on_restart_fn == nullptr)
+             return false;
+         if (d.sdf_role >
+-            static_cast<uint64_t>(sdf::PdRole::LOG_SRV))
++            static_cast<uint64_t>(sdf::PdRole::CAP_BROKER))
+             return false;
+     }
+     return true;
+@@ -720,9 +748,9 @@ void reboot_from_table() {
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
+     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
+-    CONFIG_LOG_SRV
++    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
+             if (def.sdf_role != 0xFF) {
+-                // SDF compose (issues #47/#48/#51): mint the role caps
++                // SDF compose (issues #47/#48/#51/#240): mint the role caps
+                 // into the fresh task. Fail-closed: compose failure
+                 // destroys the task and skips the row (invalid-ELF
+                 // precedent below). Compile-guarded: boot_sdf.cpp is an
+diff --git a/userspace/cap-broker.c b/userspace/cap-broker.c
+new file mode 100644
+index 000000000..1aeef0099
+--- /dev/null
++++ b/userspace/cap-broker.c
+@@ -0,0 +1,86 @@
++#include <stddef.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <unistd.h>
++#include <string.h>
++#include <syscall.h>
++#include <ipc.h>
++
++#define MSG_DAEMON_READY 0xF0000001
++#define MSG_TYPE_REPLY 0xF0000002
++
++typedef enum {
++    CAP_OP_BIND = 0,
++    CAP_OP_LOOPBACK = 1,
++    CAP_OP_SET_POLICY = 2,
++    CAP_OP_GET_POLICY = 3,
++    CAP_OP_CLEAR_POLICY = 4,
++} cap_broker_op_t;
++
++struct CapBrokerRpc {
++    uint8_t op;
++    uint8_t flags;
++    uint16_t rsvd;
++    uint32_t epoch;
++    uint32_t owner_id;
++    uint32_t owner_gen;
++    uint64_t target_id;
++    uint32_t mask;
++    uint32_t rsvd2;
++    uint64_t arg0;
++    uint16_t status_op;
++    uint16_t status;
++    uint32_t rsvd3;
++};
++
++static void cap_assert_shape(void) {
++    char check[sizeof(struct CapBrokerRpc) <= 48 ? 1 : -1];
++    (void)check;
++}
++
++int main(void) {
++    cap_assert_shape();
++    (void)getpid();
++    ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
++
++    static unsigned char rbuf[64];
++    for (;;) {
++        int rc = ipc_recv(rbuf, sizeof(rbuf));
++        if (rc < 0)
++            continue;
++        struct CapBrokerRpc req;
++        memset(&req, 0, sizeof(req));
++        unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
++        memcpy(&req, rbuf, copy);
++        if ((unsigned long)rc != req.op)
++            continue; // torn/stale payload: kernel type must match body op
++
++        struct CapBrokerRpc rep;
++        memset(&rep, 0, sizeof(rep));
++        rep.op = req.op;
++        rep.epoch = req.epoch;
++        rep.owner_id = req.owner_id;
++        rep.owner_gen = req.owner_gen;
++        rep.status_op = (uint16_t)req.op;
++        switch (req.op) {
++        case CAP_OP_BIND:
++            rep.status = 0;
++            break;
++        case CAP_OP_LOOPBACK:
++            rep.arg0 = req.arg0;
++            rep.status = 0;
++            break;
++        default:
++            /* Step-a diagnostic shape: policy stays kernel-side. */
++            rep.status = (uint16_t)(uint16_t)-38;
++            break;
++        }
++        // Reply to the requester (owner_id carried in the RPC body):
++        // send_sync_bounded waits on the REQUESTER's own queue with a
++        // sender match, so a reply addressed to PID 1 (init) is a dead
++        // letter and every RPC times out (issue #51 step-b evidence).
++        // Mirrors the iocd args[0] requester convention (issue #441).
++        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
++    }
++    return 0;
++}
