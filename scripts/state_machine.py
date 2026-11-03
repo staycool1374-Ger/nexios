@@ -1146,16 +1146,45 @@ def report_mtime_ts(path):
         return None
 
 
-def audit_demand_answered(stored, demand_key, tip, verdict_ts, handled_demand):
+def newest_audit_done_post(boxes):
+    """Newest dev/qe DONE ts routed to audit, or None. Pure (#465 follow-up).
+    DONE is the WIRE deliverable, but only a DONE that asks for review
+    reopens an answered demand: its POST text mentions audit, or its block
+    NEXT matches waiting-audit/plan-review. A DONE that parks the lane
+    idle (e.g. a finished backlog recon) is not audit demand."""
+    best = None
+    for role in ("dev", "qe"):
+        full = (boxes.get(role) or {}).get("full", []) or []
+        idx = [i for i, l in enumerate(full) if POST_RE.match(l)]
+        for k, i in enumerate(idx):
+            post = full[i]
+            if not re.search(r"\bDONE\b", post):
+                continue
+            block = full[i:(idx[k + 1] if k + 1 < len(idx) else len(full))]
+            routed = ("audit" in post.lower() or any(
+                NEXT_RE.match((l or "").strip()) and re.search(
+                    r"waiting.*audit|plan-review", l, re.I) for l in block))
+            if routed and (best is None or post[:19] > best):
+                best = post[:19]
+    return best
+
+
+def audit_demand_answered(stored, demand_key, tip, verdict_ts, handled_demand,
+                          reopened_ts=None):
     """True when the current demand+tip already has its verdict. Pure.
 
     stored: the audit_pending dict (since/tip/demand_key); demand_key:
     current demand's key (None = no demand); tip: current checkout tip;
     verdict_ts: newest DECISION ts19; handled_demand: the key recorded
-    at hand-back. An answered pair never recreates audit_pending —
-    this suppression kills the answered-ping re-ring loop (#464). A new
-    tip is new work even under a repeated text (same key)."""
+    at hand-back; reopened_ts: newest audit-routed DONE ts (or None). An
+    answered pair never recreates audit_pending — this suppression kills
+    the answered-ping re-ring loop (#464). A new tip is new work even
+    under a repeated text (same key). A DONE deliverable newer than the
+    verdict reopens the demand: the verdict answered the old work, not
+    the delivery (room 390: DONE 12:44:39Z vs verdict 21:28:31Z)."""
     if not demand_key or not verdict_ts or not handled_demand:
+        return False
+    if (reopened_ts and reopened_ts > verdict_ts):
         return False
     if demand_key != handled_demand:
         return False
@@ -1453,7 +1482,8 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     # suppress it (no ring, no store) instead of re-ringing the ping
     # loop that kept a killed session warm.
     if audit_demand_answered(stored, demand_key, tip or cur_tip, verdict_ts,
-                             asess.get("handled_demand")):
+                             asess.get("handled_demand"),
+                             newest_audit_done_post(boxes)):
         acted.append("audit demand answered (demand %s, tip %s); suppressed, no re-ring"
                      % (demand_key, (tip or cur_tip or "?")[:7]))
         store = {}
@@ -6191,6 +6221,8 @@ def mode_self_test():
           [order_ring_action(n, True) for n in (0, 2, 3, 4)] == ["ring", "ring", "escalate", "awaiting"]
           and [order_ring_action(n, False) for n in (0, 2, 3, 4)] == ["ring", "ring", "recreate", "awaiting"]
           and escalate_ledger(True) == -1 and escalate_ledger(False) == RING_ESCALATED
+          and newest_audit_done_post({"dev": {"full": ["2026-11-03T12:44:39Z FROM=dev NOTE :: DONE x, awaiting audit", "NEXT: waiting auditor plan-review", "body"]}, "qe": {"full": []}}) == "2026-11-03T12:44:39"
+          and newest_audit_done_post({"dev": {"full": ["2026-11-03T12:44:52Z FROM=dev NOTE :: DONE recon delivered", "NEXT: idle"]}, "qe": {"full": []}}) is None
           and last_state_next(["2026-11-03T12:44:39Z FROM=dev NOTE :: DONE x",
                                "STATE: waiting :: delivered",
                                "NEXT: waiting auditor plan-review"] + ["body %d" % i for i in range(30)]) == ("waiting :: delivered", "waiting auditor plan-review", None),
