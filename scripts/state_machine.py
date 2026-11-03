@@ -100,6 +100,7 @@ AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
 AUDIT_SLA_RERING_S = 900  # outstanding audit demand this old -> one extra ring (#461 B)
 AUDIT_SLA_ESCALATE_S = 1800  # outstanding audit demand this old -> NEED escalation (#461 B)
 ACK_SLA_S = 900  # worker orders carry ack-by <filed+900s>; overdue -> one nudge (#461 F)
+DEV_STALE_S = 1800  # non-idle NEXT with no lane post this old reads stale, not busy (#462 item 2)
 GH_CLOSE_POLL_TICKS = 5  # poll GitHub closure at most every N ticks in merge-close (#461 D)
 AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
 AUDIT_RETASK_S = 300  # re-ring a lost/idle auditor order after ~2 ticks
@@ -2205,8 +2206,8 @@ def backlog_idle_due(role, probe, deaf_lanes, unacked_lanes, fresh_posts,
 
     True only when the lane is idle, contactable, order-free, fresh-post
     free, unrung, not being recreated — and the current room's pending
-    does not still name dev (never swap away from a room that still owes
-    dev work)."""
+    still owes this lane no work (item 2, #462: a room that only waits
+    on the auditor must not pin the lane while another room starves)."""
     if role in deaf_lanes or role in unacked_lanes:
         return False
     if not str(probe).startswith("IDLE"):
@@ -2217,7 +2218,7 @@ def backlog_idle_due(role, probe, deaf_lanes, unacked_lanes, fresh_posts,
         return False
     if declared_next and not declared_next.startswith("idle"):
         return False
-    if re.search(r"\bdev\b", pending or "", re.I):
+    if pending_owes_lane(pending, role):
         return False
     return True
 
@@ -2227,15 +2228,115 @@ def qe_order_due(qe_order_for, impl_ts):
     return bool(impl_ts) and qe_order_for != impl_ts
 
 
-def dev_busy(rings, declared_next):
-    """Whether a room's dev lane is busy: non-idle NEXT, or a live dev
-    order (filed or rung; acked and escalated do not count). Pure."""
-    if declared_next and not str(declared_next).startswith("idle"):
-        return True
+def newest_post_ts(posts):
+    """Newest worker-post ts19 in a box, or None. Pure.
+
+    The lane-activity clock for staleness: a NEXT that names work but
+    has no post behind it for DEV_STALE_S is a parked claim, not
+    engagement."""
+    best = None
+    for post in posts or []:
+        ts = (post or "")[:19]
+        if len(ts) == 19 and (best is None or ts > best):
+            best = ts
+    return best
+
+
+def rings_live_dev(rings):
+    """True when a live (filed or rung, never acked/escalated) dev order
+    sits in the ledger. Pure."""
     for oid, val in (rings or {}).items():
         if oid.startswith("dev:") and val not in (-1, RING_ESCALATED):
             return True
     return False
+
+
+def dev_stale(declared_next, last_post_ts, now_ts, stale_s=DEV_STALE_S,
+              live_order=False):
+    """True when a non-idle NEXT names work nobody posted about for a full
+    stale window. Pure. A live order always keeps the room busy (the lane
+    is being driven); no posts at all keeps it busy too (no evidence of
+    parking — fail safe against reassigning a mid-task lane)."""
+    if not declared_next or str(declared_next).startswith("idle"):
+        return False
+    if live_order:
+        return False
+    if not last_post_ts or not now_ts:
+        return False
+    age = _ts_age_s(last_post_ts, now_ts)
+    return age is not None and age >= stale_s
+
+
+def pending_lane_segment(pending, role):
+    """Text of this lane's segment in derived pending, or None. Pure.
+
+    Derived pending reads "PHASE: dev: <next> | qe: <next> | audit: ...":
+    the segment runs from "role:" to the next "|" (or end). None when no
+    lane-tagged segment exists (legacy free-text pending, e.g. "await
+    dev PLAN" where dev carries no colon)."""
+    m = re.search(r"\b%s\s*:\s*([^|]*)" % re.escape(role or ""),
+                  pending or "")
+    return m.group(1) if m else None
+
+
+# Waiting ON another lane/auditor names no work of our own: the swap
+# guard must not hold. Waiting FOR our lane (dev PLAN/IMPL) still owes.
+WAIT_ON_OTHER_RE = re.compile(r"waiting\s+(auditor|audit|qe)\b", re.I)
+
+
+def pending_owes_lane(pending, role):
+    """True when pending still names work for this lane. Pure.
+
+    A lane segment decides by itself: empty/idle or waiting-on-other
+    owes nothing; any other segment owes. No segment falls back to the
+    legacy blanket search (minus an explicit wait-on-other phrase)."""
+    seg = pending_lane_segment(pending, role)
+    if seg is not None:
+        seg = seg.strip()
+        if not seg or seg.startswith("idle"):
+            return False
+        if WAIT_ON_OTHER_RE.search(seg):
+            return False
+        return True
+    if WAIT_ON_OTHER_RE.search(pending or ""):
+        return False
+    return bool(re.search(r"\b%s\b" % re.escape(role or ""), pending or "", re.I))
+
+
+def stale_room_detail(rooms_all, target, now_ts):
+    """(next, last_ts) when target's dev NEXT is stale, else None.
+
+    Read once at backlog-file time (rare), not per room per tick, so the
+    extra box read never enters the O(n^2) sweep path. I/O (box read)."""
+    for _iss, _rdir, _rst in (rooms_all or []):
+        if _iss != target:
+            continue
+        _bb = load_boxes(_rdir)["dev"]
+        _bl = newest_post_ts(_bb.get("all"))
+        _bn = _bb.get("next") or ""
+        if dev_stale(_bn, _bl, now_ts,
+                     live_order=rings_live_dev((_rst or {}).get("rings"))):
+            return _bn, _bl or "never"
+        return None
+    return None
+
+
+def dev_busy(rings, declared_next, last_post_ts=None, now_ts=None,
+             stale_s=DEV_STALE_S):
+    """Whether a room's dev lane is busy. Pure.
+
+    Non-idle NEXT, or a live dev order (filed or rung; acked and
+    escalated do not count) — unless dated samples prove the NEXT stale
+    (item 2, #462: an 8h-silent `working revised RECON` must not pin the
+    lane forever). Omitted timestamps preserve the legacy verdict
+    exactly."""
+    if declared_next and not str(declared_next).startswith("idle"):
+        if last_post_ts is not None and now_ts is not None:
+            if dev_stale(declared_next, last_post_ts, now_ts, stale_s,
+                         live_order=rings_live_dev(rings)):
+                return False
+        return True
+    return rings_live_dev(rings)
 
 
 def session_rung(actions, sess, cycle_rung):
@@ -2436,7 +2537,7 @@ def room_pending_text(phase, dev_next, qe_next, audit_planned):
     """One-line pending derived from the latest NEXTs. Pure (cap 200).
 
     Lane-tag prefixes keep downstream consumers honest (the backlog swap
-    guard matches \\bdev\\b). No NEXTs on a virgin RECON names both lanes
+    guard reads lane segments via pending_owes_lane). No NEXTs on a virgin RECON names both lanes
     explicitly so the swap guard still holds; other phaseless silences
     report no NEXT rather than inventing one."""
     if phase == "CLOSED":
@@ -3078,19 +3179,76 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     # generic WORKING->IDLE queue check file an acked order (coord NOTE in
     # dev.md + room-scoped ring with oid); the backlog brief carries the
     # order id from here on.
+    # One sweep timestamp shared by the staleness reads below (busy scan
+    # + own-room re-wake + recovery brief): ages agree within the tick.
+    _sweep_now = utcnow()
+
     def _busy_rooms():
         # Cached per cycle: other rooms' dev-busy state is static for the
-        # sweep; recomputing per room is O(n^2) box re-reads (S3).
+        # sweep; recomputing per room is O(n^2) box re-reads (S3). Dated
+        # samples prove stale NEXTs non-busy (item 2, #462), so a room
+        # parked 8h on `working revised RECON` never excludes itself.
         if "busy_rooms" not in cycle:
             out = set()
             for _iss, _rdir, _rst in (rooms_all or []):
                 if _iss == issue:
                     continue
-                if dev_busy((_rst or {}).get("rings"),
-                            load_boxes(_rdir)["dev"].get("next")):
+                _bb = load_boxes(_rdir)["dev"]
+                if dev_busy((_rst or {}).get("rings"), _bb.get("next"),
+                            newest_post_ts(_bb.get("all")), _sweep_now):
                     out.add(_iss)
             cycle["busy_rooms"] = out
         return cycle["busy_rooms"]
+
+    # Item 2 (#462): stale-NEXT re-wake. A non-idle NEXT with no lane
+    # post for DEV_STALE_S is a parked claim, not engagement: file one
+    # acked re-wake (NOTE + room-scoped ring); later ticks with the same
+    # NEXT and no live order get a NEED persist line, never a new oid.
+    # A live dev order always wins (the lane is being driven).
+    _dev_last = newest_post_ts(boxes["dev"]["all"])
+    _dev_order_live = rings_live_dev(rings)
+    _dev_is_stale = dev_stale(dev_next, _dev_last, _sweep_now,
+                              live_order=_dev_order_live)
+    ds_store = None
+    _prev_ds = st.get("dev_stale") or {}
+    if _dev_is_stale and not _dev_order_live and "dev" not in has_unacked:
+        if (_prev_ds.get("next") == (dev_next or "") and _prev_ds.get("oid")):
+            actions.append("NEED dev #%d: stale NEXT persists (re-wake %s filed, NEXT '%s' unchanged since %s; post STATE/NEXT or continue, no new order)"
+                           % (issue, _prev_ds["oid"], (dev_next or "")[:80],
+                              _prev_ds.get("filed", "?")[:19]))
+            events.append("stale-dev-persists")
+            ds_store = dict(_prev_ds)
+        else:
+            _ds_note, _ds_oid = coord_note("dev", "STALE RECON #%d: NEXT '%s' has no lane post since %s; post STATE/NEXT now or continue; ACK it with post_update ref=<id> before starting" % (issue, (dev_next or "")[:80], _dev_last or "never"), ack_by=True)
+            if _ds_oid in rings:
+                actions.append("order deferred dev stale re-wake (oid collision)")
+            elif ctx.dry:
+                actions.append("WOULD post dev stale re-wake (oid %s)" % _ds_oid)
+                rings[_ds_oid] = 0
+                has_unacked.add("dev")
+                file_order_deadline(ad_store, _ds_oid)
+                ds_store = {"next": dev_next or "", "oid": _ds_oid,
+                            "filed": _ds_oid[4:23]}
+                cycle["dev_order"] = issue
+            elif append_box_note(room_dir, "dev", _ds_note):
+                rings[_ds_oid] = 0
+                has_unacked.add("dev")
+                file_order_deadline(ad_store, _ds_oid)
+                actions.append("order filed dev stale re-wake (oid %s)" % _ds_oid)
+                ds_store = {"next": dev_next or "", "oid": _ds_oid,
+                            "filed": _ds_oid[4:23]}
+                cycle["dev_order"] = issue
+                if ("dev" not in deaf and probes["dev"].startswith("IDLE")
+                        and not session_rung(actions, SESS["dev"], cycle["rung"])):
+                    _ds_res = ring(ctx, SESS["dev"], "dev",
+                                   "stale NEXT -- reply with STATE/NEXT",
+                                   oid=_ds_oid, issue=issue)
+                    actions.append(_ds_res)
+                    if _ds_res.startswith(("rang ", "WOULD ring ")):
+                        rings[_ds_oid] = 1
+            else:
+                actions.append("NOTE-FAILED dev stale re-wake #%d" % issue)
+            events.append("stale-dev-rewake")
 
     backlog_target = None
     if dev_blocked_on_qe(dev_next) and not probes["qe"].startswith("IDLE"):
@@ -3110,13 +3268,20 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             actions.append("NEED backlog empty: dev idle, no other room to brief")
     if backlog_target is not None:
         target = backlog_target
-        brief = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
+        _sdet = stale_room_detail(rooms_all, target, _sweep_now)
+        if _sdet is not None:
+            _head = ("BACKLOG/RECOVERY (#%d) -- dev NEXT in #%d stale ('%s', no lane post since %s); read-only recon unless it is your own in-flight work\n"
+                     % (target, target, _sdet[0][:80], _sdet[1][:19]))
+        else:
+            _head = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
+                     % (target, issue))
+        brief = (_head +
                  "issue: %d\nbranch: none yet (read-only until recalled)\n"
                  "Task: read-only recon of #%d per its room pending/next; "
                  "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
 "Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment carries [oid <id>] — ACK it the same way.\n"
                  "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY — read inbox/dev.md\"\n"
-                 % (target, issue, target, target, target))
+                 % (target, target, target))
         actions.append(write_brief(ctx, room_dir,
                                    "dev-%d-backlog.txt" % target, brief))
         note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target), ack_by=True)
@@ -3432,6 +3597,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["impl_dedup"] = dd_store
         else:
             s.pop("impl_dedup", None)
+        if isinstance(ds_store, dict) and ds_store:
+            s["dev_stale"] = ds_store
+        else:
+            s.pop("dev_stale", None)
         if rn_store:
             s["ready_need"] = rn_store
         else:
@@ -5070,6 +5239,50 @@ def mode_self_test():
     check("dev-busy-acked-ring-false",
           dev_busy({"dev:2026-11-02T08:00:00": -1}, "idle :: waiting") is False, True)
     check("dev-busy-empty-false", dev_busy({}, None) is False, True)
+    # Item 2 (#462): stale NEXTs stop counting as busy; the backlog
+    # guard reads lane segments, not blanket \bdev\b. Bite: dropping
+    # the age comparison flips stale-no-order to True; restoring the
+    # blanket search flips waiting-auditor/swap-allowed to False.
+    check("dev-busy-fresh-active",
+          dev_busy({}, "working revised RECON",
+                   last_post_ts="2026-11-03T10:00:00",
+                   now_ts="2026-11-03T10:05:00"), True)
+    check("dev-busy-stale-no-order",
+          dev_busy({}, "working revised RECON",
+                   last_post_ts="2026-11-02T22:38:29",
+                   now_ts="2026-11-03T06:50:29") is False, True)
+    check("dev-busy-stale-with-live-order",
+          dev_busy({"dev:2026-11-03T06:00:00": 1}, "working revised RECON",
+                   last_post_ts="2026-11-02T22:38:29",
+                   now_ts="2026-11-03T06:50:29"), True)
+    check("dev-busy-legacy-no-ts",
+          dev_busy({}, "working revised RECON"), True)
+    check("dev-stale-idle-false",
+          dev_stale("idle", "2026-11-02T22:38:29", "2026-11-03T06:50:29") is False, True)
+    check("dev-stale-no-posts-false",
+          dev_stale("working x", None, "2026-11-03T06:50:29") is False, True)
+    check("dev-stale-fresh-false",
+          dev_stale("working x", "2026-11-03T06:45:00", "2026-11-03T06:50:29") is False, True)
+    check("newest-post-ts-max",
+          newest_post_ts(["2026-11-02T22:38:29Z FROM=dev NOTE :: a",
+                          "2026-11-03T06:50:29Z FROM=dev NOTE :: b"]) == "2026-11-03T06:50:29", True)
+    check("newest-post-ts-empty", newest_post_ts([]) is None, True)
+    check("pending-owes-waiting-auditor",
+          pending_owes_lane("IMPL: dev: waiting auditor plan-review | qe: idle", "dev") is False, True)
+    check("pending-owes-idle",
+          pending_owes_lane("VERIFY: dev: idle | qe: working", "dev") is False, True)
+    check("pending-owes-await-dev-plan",
+          pending_owes_lane("await dev PLAN", "dev") is True, True)
+    check("pending-owes-impl-order",
+          pending_owes_lane("IMPL: dev: waiting IMPL order", "dev") is True, True)
+    check("pending-owes-wait-qe",
+          pending_owes_lane("X: dev: waiting qe output", "dev") is False, True)
+    check("pending-owes-qe-only",
+          pending_owes_lane("RECON: qe: working | audit: none", "dev") is False, True)
+    check("pending-owes-wait-verdict",
+          pending_owes_lane("X: dev: waiting verdict", "dev") is True, True)
+    check("backlog-idle-swap-when-waiting-auditor",
+          backlog_idle_due(**dict(_idle, pending="IMPL: dev: waiting auditor plan-review | qe: idle")), True)
     _open = {"halt": False, "state": "IN_PROGRESS"}
     _rooms = [(51, "/r51", dict(_open)), (52, "/r52", dict(_open))]
     check("pick-backlog-exclude",
