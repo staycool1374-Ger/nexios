@@ -4804,12 +4804,17 @@ def write_graph(ctx):
     if ctx.dry:
         return "DRY: graph not written"
     try:
+        try:
+            with open(ctx.graph_path()) as _gf:
+                _prev_interval = json.load(_gf).get("interval_s", 0) or 0
+        except (OSError, ValueError):
+            _prev_interval = 0
         os.makedirs(ctx.log_dir, exist_ok=True)
         tmp = ctx.graph_path() + ".tmp"
         with open(tmp, "w") as f:
             json.dump({"version": VERSION, "tick": ctx.tick_seq,
                        "tick_utc": utcnow(),
-                       "interval_s": getattr(ctx, "tick_interval", 0),
+                       "interval_s": getattr(ctx, "tick_interval", 0) or _prev_interval,
                        "rooms": ctx.graph}, f, indent=2)
             f.write("\n")
             f.flush()
