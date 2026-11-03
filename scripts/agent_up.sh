@@ -923,7 +923,7 @@ ensure_engine_loop() {
     return 0
   fi
   mkdir -p "$REPO_ROOT/logs/state-machine"
-  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 >>logs/state-machine/engine-console.log 2>&1"; then
+  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 --allow-recreate >>logs/state-machine/engine-console.log 2>&1"; then
     if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
       [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
       return 0
