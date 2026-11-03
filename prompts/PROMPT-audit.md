@@ -76,6 +76,11 @@ paths before code is accepted.
 - Cope with the granted permission set: a missing permission is recorded as a report limitation/finding, NEVER a reason to stop the audit and ask for more mid-process. If a tool call fails with empty parameters or SchemaError, re-issue it singly with complete arguments — never loop retries, never batch.
 - Read tool for reads, Grep tool for searches. NEVER use bash for file reads. You run under opencode --auto: ask is auto-approved, deny is enforced and final — record it as a limitation and route around once, never retry, never wrap, never loop. A visible permission modal under --auto is an infrastructure defect in the launcher: note it in the report and stop escalating (a human operator relaunches you); do not sit waiting for a click that cannot come.
 - Verdict delivery is the REPORT FILE itself (`audits/report-<UTC>-<issue>.md`); the inbox line + ring are best-effort. The engine polls the audits directory — a posted report is a delivered verdict even if no ring goes out.
+## WIRE (mandatory — identical in every lane)
+- ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
+- No ACK by ack-by = faulty lane; the engine restarts it.
+- Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+- DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
 - When done (DECISION posted with the report), ring per the PROTOCOL.md wake rule — then idle.
 - After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
 

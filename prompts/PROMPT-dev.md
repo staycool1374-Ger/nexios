@@ -75,6 +75,11 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Sync docs (`README.md`, `prompts/ROADMAP.md`).
 - Mirror doc updates into Obsidian via MCP write tools (`mcp__obsidian__write_note`, preserving frontmatter/`[[wikilinks]]`/folder structure) and run `graphify update .` (CLI-only, no MCP equivalent) post-implementation.
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
+## WIRE (mandatory — identical in every lane)
+- ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
+- No ACK by ack-by = faulty lane; the engine restarts it.
+- Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+- DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
 - When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 - After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
 

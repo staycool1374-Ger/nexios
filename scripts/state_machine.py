@@ -288,6 +288,13 @@ def order_ring_action(n, ack_gated):
     return "awaiting"
 
 
+def escalate_ledger(relaunched):
+    """Ledger mark after an ACK-MISSING escalation. Pure (#465).
+    A relaunched session answers fresh orders, so clear to -1; a failed
+    relaunch parks at RING_ESCALATED (ring no more, never a 4th ring)."""
+    return -1 if relaunched else RING_ESCALATED
+
+
 def reset_resume_rings(rings):
     """Delete every next: ledger entry. Pure. Returns the deleted count."""
     doomed = [oid for oid in rings if oid.startswith("next:")]
@@ -3297,7 +3304,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         elif act == "escalate":
             actions.append("ACK-MISSING %s order %s after %d rings (no ACK post)"
                            % (role, oid, n))
-            rings[oid] = RING_ESCALATED
+            r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
+                "order %s unacked after %d rings" % (b["coord_last"][:19], n),
+                b["state"], b["next"])
+            actions.extend(r_acts)
+            rings[oid] = escalate_ledger(_rel)
             ack_failures += 1
             events.append("ack-missing-%s" % role)
         else:
@@ -3369,7 +3380,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         elif act == "escalate":
             actions.append("ACK-MISSING %s resume %s after %d rings (no ACK post)"
                            % (role, oid, n))
-            rings[oid] = RING_ESCALATED
+            r_acts, _rel = recreate_worker(ctx, issue, room_dir, role,
+                "parked-awaiting ring unacked after %d rings" % n,
+                boxes[role]["state"], boxes[role]["next"])
+            actions.extend(r_acts)
+            rings[oid] = escalate_ledger(_rel)
             ack_failures += 1
             events.append("ack-missing-%s" % role)
         elif ack_since:
@@ -6143,7 +6158,8 @@ def mode_self_test():
           order_outstanding("qe", None, ["2026-11-02T09:00:00Z FROM=qe NOTE :: y"], {}, None) is False, True)
     check("order-ring-action",
           [order_ring_action(n, True) for n in (0, 2, 3, 4)] == ["ring", "ring", "escalate", "awaiting"]
-          and [order_ring_action(n, False) for n in (0, 2, 3, 4)] == ["ring", "ring", "recreate", "awaiting"],
+          and [order_ring_action(n, False) for n in (0, 2, 3, 4)] == ["ring", "ring", "recreate", "awaiting"]
+          and escalate_ledger(True) == -1 and escalate_ledger(False) == RING_ESCALATED,
           True)
     check("reset-resume-rings",
           reset_resume_rings({"next:qe:a": 1, "dev:x": 2, "next:dev:b": 3}) == 2, True)
