@@ -2698,6 +2698,52 @@ def decision_tip(all_posts, full_lines, kind=None):
     return None
 
 
+def qe_verified_tip(all_posts, full_lines=None):
+    """Tip named by the newest QE VERIFIED post, or None. Pure.
+
+    A VERIFIED post that cannot name the artifact it checked (or names
+    one it never resolved locally — room #54: plan tip, diff n/a, tip
+    NOT LOCAL) verifies nothing. Callers match it against the DONE tip;
+    unknown on either side keeps the legacy meaning."""
+    best = None
+    for post in all_posts or []:
+        m = POST_RE.match(post)
+        if not m or m.group(2) != "qe":
+            continue
+        if "VERIFIED" not in post:
+            continue
+        best = post
+    if best is None:
+        return None
+    lines = [best]
+    if full_lines:
+        lines += post_body_lines(full_lines, best)
+    for line in lines:
+        mt = re.search(r"\btip\s*:?\s*([0-9a-f]{7,40})\b", line, re.I)
+        if mt:
+            return mt.group(1)
+    return None
+
+
+def tip_covers(ctx, verdict_tip, done_tip):
+    """True when a verdict covers the DONE artifact. Pure-ish I/O.
+
+    Equal SHAs, or the verdict commit descends from the done commit
+    (merge verdicts subsume their branch: room #54 approved merge
+    5a31987 contains step-a de3bb85). Read-only git (same precedent as
+    ready_probe); fail-closed on any error or unknown tip."""
+    if not verdict_tip or not done_tip:
+        return False
+    if verdict_tip[:7] == done_tip[:7]:
+        return True
+    try:
+        rc, _ = ctx.run(["git", "merge-base", "--is-ancestor", done_tip, verdict_tip],
+                        timeout=30, cwd=ctx.dev_dir)
+        return rc == 0
+    except Exception:
+        return False
+
+
 def approved_verdict_tip(all_posts, full_lines):
     """Tip named by the newest APPROVED auditor verdict, or None. Pure.
 
@@ -2711,12 +2757,16 @@ def closeout_stage(issue_closed, dev_done, approved, qe_verified):
     """impl | verify | merge-close | done for a room. Pure.
 
     done only when GitHub is closed; merge-close once qe VERIFIED joins
-    dev DONE + audit APPROVED; verify once the work is terminal; impl
-    otherwise (close-out does not own it)."""
+    dev DONE + audit APPROVED; verify once dev DONE exists (verification
+    runs parallel to audit — holding it on approval parked rooms with
+    stale approvals behind unaudited tips); impl otherwise (close-out
+    does not own it)."""
     if issue_closed:
         return "done"
     if dev_done and approved:
         return "merge-close" if qe_verified else "verify"
+    if dev_done:
+        return "verify"
     return "impl"
 
 
@@ -2779,7 +2829,10 @@ def closeout_order_text(issue, stage, branch, tip):
     """Filed NOTE body for a close-out order (no oid; coord_note adds it). Pure."""
     if stage == "verify":
         return ("VERIFY #%d branch %s tip %s -- verify per prompts/qe.txt + room pending; "
-                "post VERIFIED with tip: + diff present: y|n; ACK it with post_update ref=<id> before starting"
+                "git fetch origin first so the tip resolves locally (NOT LOCAL is not a verdict); "
+                "implement the verification stubs from your approach if not on file, run them, post the tally; "
+                "post VERIFIED with tip: + diff present: y|n for the ORDERED tip; "
+                "ACK it with post_update ref=<id> before starting"
                 % (issue, branch, tip))
     return ("MERGE-CLOSE #%d: merge %s into main --no-ff, push, close the issue with closes #%d in the message, "
             "post DONE merged <sha>; ACK it with post_update ref=<id> before starting"
@@ -4609,7 +4662,16 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
 
     dec = auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full"))
     _c_done = dev_done_ts(boxes["dev"]["all"])
-    _c_qv = qe_verified_ts(boxes["qe"]["all"])
+    _c_qv_raw = qe_verified_ts(boxes["qe"]["all"])
+    _c_qv_tip = qe_verified_tip(boxes["qe"]["all"], boxes["qe"].get("full"))
+    _c_qv_done = newest_done_tip(boxes["dev"]["all"], boxes["dev"].get("full"))
+    # A VERIFIED that names another tip (or none while the DONE names
+    # one) is abstention, not evidence (room #54: plan-tip VERIFIED with
+    # diff n/a while step-a waited). Unknown on both sides keeps legacy.
+    if _c_qv_done and _c_qv_tip and not tip_covers(ctx, _c_qv_tip, _c_qv_done[1]):
+        _c_qv = None
+    else:
+        _c_qv = _c_qv_raw
     _c_ev = qe_verify_evidence(boxes["qe"]["all"], boxes["qe"]["full"])
     node["merge_ready"] = merge_ready_ok(dec, _c_qv, boxes["qe"]["all"],
                                          bool(st.get("closeout")), _c_ev)
@@ -4628,7 +4690,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     # 0971e4402 vs step-a tip bb55ea120). Verdicts naming no tip keep
     # the legacy meaning; rooms without a parsed done tip are unaffected.
     _c_approved = bool(dec and "APPROVED" in dec) and (_c_appr_tip is None or not _c_tip_early
-                                                      or _c_appr_tip[:7] == _c_tip_early[:7])
+                                                      or tip_covers(ctx, _c_appr_tip, _c_tip_early))
     _c_stage = closeout_stage(bool(st.get("gh_closed")), _c_done, _c_approved, _c_qv)
     co_store = None
     bq_store = None
@@ -4733,6 +4795,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                     if github_issue_state(ctx, issue) == "CLOSED":
                         ghc_store = True
                 co_store = dict(_c_base, poll=_c_poll)
+    qh_store = None
     # Quiescent-room closure poll: rooms that finished WITHOUT ever
     # entering merge-close (dev merged directly on verdict+verify,
     # room #390) never run the poll above and can never derive
@@ -4763,7 +4826,6 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     qm_store = None
     cl_store = None
     rs_store = None
-    qh_store = None
     if not ctx.dry:
         if impl_ts:
             ts = impl_ts
@@ -4882,7 +4944,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     escalated = bool(verdict.get("escalate")) and contacted
     retries = int(st.get("retries", 0) or 0)
     budget = int(st.get("retry_budget", 3) or 0)
-    if escalated or failed:
+    # Quiescent rooms never burn budget: nothing actionable failed here,
+    # so UNCHANGED streaks on a finished-but-unretired room (room #54:
+    # rapid simulation ticks + a quiet room tripped HALT just before the
+    # quiescent poll could retire it) must not count toward MANUAL mode.
+    if (escalated or failed) and not _qh_quiet:
         retries += 1
     elif acked:
         retries = 0
@@ -7166,7 +7232,9 @@ def mode_self_test():
           closeout_stage(True, "2026-11-02T08:03:09Z", True, "2026-11-02T09:00:00Z") == "done", True)
     check("closeout-stage-impl",
           closeout_stage(False, None, False, None) == "impl"
-          and closeout_stage(False, "2026-11-02T08:03:09Z", False, None) == "impl", True)
+          and closeout_stage(False, "2026-11-02T08:03:09Z", False, None) == "verify", True)
+    check("closeout-tip-covers-merge",
+          tip_covers(None, "5a319879e", "de3bb8571") is False, True)
     _co = {"for": "2026-11-02T08:03:09Z", "stage": "verify", "oid": "qe:2026-11-02T08:10:00"}
     check("closeout-due-dedupe",
           closeout_due("verify", "2026-11-02T08:03:09Z", _co, {"qe:2026-11-02T08:10:00": 1}, False) is False, True)
@@ -7505,6 +7573,12 @@ def mode_self_test():
           audit_demand_answered({"tip": "bb55ea120"}, "dev:x", "bb55ea1",
                                 "2026-11-03T15:20:26", "dev:x",
                                 verdict_tip="bb55ea120") is True, True)
+    _qfull = ["2026-11-03T16:35:07Z FROM=qe READY :: VERIFIED #54 tip: 0971e4402 present docs-only diff present: n"]
+    check("qe-verified-tip-plan",
+          qe_verified_tip(_qfull, _qfull) == "0971e4402", True)
+    check("qe-verified-tip-none",
+          qe_verified_tip(["2026-11-03T16:35:07Z FROM=qe NOTE :: ACK stuff"],
+                          ["2026-11-03T16:35:07Z FROM=qe NOTE :: ACK stuff"]) is None, True)
     check("approved-tip-legacy-none",
           approved_verdict_tip(["2026-11-02T10:00:00Z FROM=audit READY :: DECISION: APPROVED"],
                                ["2026-11-02T10:00:00Z FROM=audit READY :: DECISION: APPROVED"]) is None, True)
