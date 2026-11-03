@@ -4771,6 +4771,8 @@ def write_graph(ctx):
         tmp = ctx.graph_path() + ".tmp"
         with open(tmp, "w") as f:
             json.dump({"version": VERSION, "tick": ctx.tick_seq,
+                       "tick_utc": utcnow(),
+                       "interval_s": getattr(ctx, "tick_interval", 0),
                        "rooms": ctx.graph}, f, indent=2)
             f.write("\n")
             f.flush()
@@ -4794,6 +4796,7 @@ def cmd_tick(ctx, issues, interval):
         except (OSError, ValueError):
             pass
     ctx.tick_seq = load_saved_seq(ctx)
+    ctx.tick_interval = interval
     if ctx.tick_seq:
         ctx.log("resumed seq at #%d" % ctx.tick_seq)
     stop_path = os.path.join(ctx.log_dir, "STOP")
@@ -4950,6 +4953,7 @@ def cmd_status(ctx, issues):
     if not rooms:
         print("no rooms")
         return 2
+    print("next tick %s" % tick_eta(ctx), flush=True)
     facts = {"dev": lane_facts_all(rooms, "dev"),
              "qe": lane_facts_all(rooms, "qe")}
     # Item 5 (#463): the same work-conserving scan, read-only. Never
@@ -4995,6 +4999,26 @@ def cmd_status(ctx, issues):
     for _v in watchdog_invariant(sorted(set(starved_all)), engine_loop_live()):
         print(_v, flush=True)
     return 0
+
+
+def tick_eta(ctx):
+    """~seconds until the next sweep, from the graph heartbeat. Pure-ish."""
+    try:
+        g = json.load(open(ctx.graph_path()))
+        last = datetime.datetime.strptime(g.get("tick_utc", ""),
+                                          "%Y-%m-%dT%H:%M:%SZ").replace(
+                                              tzinfo=datetime.timezone.utc)
+        every = int(g.get("interval_s") or 0)
+        if every <= 0:
+            return "unknown (loop interval not recorded)"
+        left = int((last + datetime.timedelta(seconds=every)
+                    - datetime.datetime.now(datetime.timezone.utc)
+                    ).total_seconds())
+        if left < 0:
+            return "OVERDUE by %ds (sweep #%s, every %ds)" % (-left, g.get("tick"), every)
+        return "in ~%ds (sweep #%s, every %ds)" % (left, g.get("tick"), every)
+    except (OSError, ValueError, TypeError):
+        return "unknown (no heartbeat yet)"
 
 
 def canon_issue(raw):
