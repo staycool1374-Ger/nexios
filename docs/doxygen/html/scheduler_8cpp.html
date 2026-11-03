@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -218,11 +218,11 @@ Variables</h2></td></tr>
 <tr class="memitem:a6563155e2fea5b3d4feb0ca6027ce7d1" id="r_a6563155e2fea5b3d4feb0ca6027ce7d1"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#a6563155e2fea5b3d4feb0ca6027ce7d1">_stack_start</a> []</td></tr>
 <tr class="memitem:aa4c3a4a82848848b44540d9841a3dccc" id="r_aa4c3a4a82848848b44540d9841a3dccc"><td class="memItemLeft">char&#160;</td><td class="memItemRight"><a class="el" href="#aa4c3a4a82848848b44540d9841a3dccc">_stack_end</a> []</td></tr>
 <tr class="memitem:a1ef5e4f152e0a8f0e76f0db3d237f53f" id="r_a1ef5e4f152e0a8f0e76f0db3d237f53f"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a1ef5e4f152e0a8f0e76f0db3d237f53f">kernel::H2_EV_CLR_RMS</a></td></tr>
-<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6ddd4a725dcb1d1a5967b49b5c0fe09e">kernel::edf_ready_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a6ddd4a725dcb1d1a5967b49b5c0fe09e" id="r_a6ddd4a725dcb1d1a5967b49b5c0fe09e"><td class="memItemLeft">EdfReadyList&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a6ddd4a725dcb1d1a5967b49b5c0fe09e">kernel::edf_ready_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memitem:afb951a0a8f6e63af6dd190d0bd0b2a8b" id="r_afb951a0a8f6e63af6dd190d0bd0b2a8b"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#afb951a0a8f6e63af6dd190d0bd0b2a8b">kernel::LIU_LEYLAND_BOUNDS</a> [<a class="el" href="namespacekernel.html#a16fea4c5faf20db44d262d6ea0e8424c">LIU_LEYLAND_MAX_TASKS</a>+1]</td></tr>
 <tr class="memitem:a674447c3137d6dc175c76b3406a816ef" id="r_a674447c3137d6dc175c76b3406a816ef"><td class="memItemLeft">constexpr uint32_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a674447c3137d6dc175c76b3406a816ef">kernel::LIU_LEYLAND_LIMIT</a></td></tr>
 <tr class="memitem:a16fea4c5faf20db44d262d6ea0e8424c" id="r_a16fea4c5faf20db44d262d6ea0e8424c"><td class="memItemLeft">constexpr uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a16fea4c5faf20db44d262d6ea0e8424c">kernel::LIU_LEYLAND_MAX_TASKS</a></td></tr>
-<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a4ca3ef7028f1d907439e901e5b17094e">kernel::debug_tick_pc_</a> [<a class="el" href="aarch64_2serial_8cpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
+<tr class="memitem:a4ca3ef7028f1d907439e901e5b17094e" id="r_a4ca3ef7028f1d907439e901e5b17094e"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a4ca3ef7028f1d907439e901e5b17094e">kernel::debug_tick_pc_</a> [<a class="el" href="aarch64_2hal_2percpu_8hpp.html#ad199022145d96f66cc77e4b84255faf6">CONFIG_MAX_CPUS</a>]</td></tr>
 <tr class="memdesc:a4ca3ef7028f1d907439e901e5b17094e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Issue #225: per-CPU interrupted-PC slot for the debugger park check. Own CPU writes (timer ISR), own CPU tick reads; plain relaxed atomics.  <br /></td></tr>
 <tr class="memitem:a063f8b6b3d6489ea29f8bb8e42801ebf" id="r_a063f8b6b3d6489ea29f8bb8e42801ebf"><td class="memItemLeft">constinit uint64_t&#160;</td><td class="memItemRight"><a class="el" href="namespacekernel.html#a063f8b6b3d6489ea29f8bb8e42801ebf">kernel::s_deferred_kill_count</a></td></tr>
 </table>

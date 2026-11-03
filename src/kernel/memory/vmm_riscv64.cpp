@@ -48,6 +48,14 @@ uint64_t VMM::vmm_arch_table_child(uint64_t entry) {
     return VMM::sv39_pte_phys(entry);
 }
 
+uint64_t VMM::vmm_arch_root_phys(uint64_t live_root) {
+    // riscv read_cr3() pre-strips SATP (MODE/ASID) to phys, so the input
+    // contract here is already phys — same strip as the walk applies.
+    // A raw SATP value must go through read_cr3() first, never here.
+    // Idempotent on clean phys roots.
+    return live_root & PAGE_TABLE_ADDR_MASK;
+}
+
 bool VMM::vmm_arch_split_needed(uint64_t entry) {
     // Sv39 is the INVERSE of the aarch64/x86 test: a V-only entry is a
     // TABLE pointer (descend), while V+R|W|X is a block LEAF (split).

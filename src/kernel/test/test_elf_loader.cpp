@@ -199,6 +199,258 @@ JARVIS_TEST(loader_initrd_request_no_vnode_leak, "PRE: vfsd, iocd | POST: none")
 }
 
 // Runmode: kernel
+// Testidea: #171 P2 generated-stub round trip. The stub-roundtrip probe
+//        (userspace/stub-roundtrip.c) calls generated nexios_sys_* stubs
+//        end to end and exits 0 only if every check passes: ABI_VERSION
+//        exact value, TIMER_CREATE fail-closed NULL out-pointer (EFAULT
+//        through the generated stub), CREATE + GETTIME + DELETE with a
+//        live timer id (all four argument positions observed), invalid-op
+//        EINVAL with four distinct nonzero args (number + op routing
+//        proof), GETPID determinism. Nonzero exit names the failing
+//        check (see the probe source).
+// Input: request_load("/bin/stub-roundtrip.c.elf"), dispatch at prio 11,
+//        join to TERMINATED via wait_for_termination_safe.
+// Expect: TERMINATED with exit_code 0.
+// Depends: ElfLoader initrd-path load, P1 crt0 contract, timer_create.
+JARVIS_TEST(loader_stub_roundtrip_generated_stubs,
+            "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load("/bin/stub-roundtrip.c.elf") ==
+            elf::LoadResult::OK,
+        "stub-roundtrip request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 &&
+                          t->is_user_,
+                      "stub-roundtrip take_completed failed");
+    // Prio 11: the harness idles; lower-priority waitees starve
+    // (every driven test uses >= 11). Set before add_task.
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    bool exited = (t->state == TaskState::TERMINATED);
+    uint64_t code = t->exit_code;
+    if (TaskControlBlock::is_valid(t) &&
+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
+        Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(exited, "stub-roundtrip task did not terminate");
+    JARVIS_ASSERT_FMT(code == 0, "stub-roundtrip probe failed check %lu",
+                      (unsigned long)code);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #171 P3 Ring-3 cap smoke. The cap-smoke probe
+//        (userspace/cap-smoke.c) calls nexios_cap_* with handles that
+//        cannot resolve and exits 0 only if every call fails closed
+//        (-1): grant/copy/revoke/mint, frame_create(0),
+//        frame_map/mmio_map with a bogus handle, irq_register and
+//        iommu_map with bogus handles. Creates no residue: every probe
+//        call fails by design, so no cap is ever installed.
+// Input: request_load("/bin/cap-smoke.c.elf"), dispatch at prio 11,
+//        join to TERMINATED via wait_for_termination_safe.
+// Expect: TERMINATED with exit_code 0.
+// Depends: ElfLoader initrd-path load, P1 crt0 contract, cap syscalls.
+JARVIS_TEST(loader_cap_smoke_fail_closed,
+            "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load("/bin/cap-smoke.c.elf") ==
+            elf::LoadResult::OK,
+        "cap-smoke request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 &&
+                          t->is_user_,
+                      "cap-smoke take_completed failed");
+    // Prio 11: the harness idles; lower-priority waitees starve
+    // (every driven test uses >= 11). Set before add_task.
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    bool exited = (t->state == TaskState::TERMINATED);
+    uint64_t code = t->exit_code;
+    if (TaskControlBlock::is_valid(t) &&
+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
+        Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(exited, "cap-smoke task did not terminate");
+    JARVIS_ASSERT_FMT(code == 0, "cap-smoke probe failed check %lu",
+                      (unsigned long)code);
+    JARVIS_TEST_PASS();
+}
+// Runmode: kernel
+// Testidea: #431 forged-mismatch fail-closed standing gate. Forge the
+// entry ABI check (expect-major 1 -> 2) in a copy of the initrd hey
+// image, dispatch it, and prove the fail-closed contract end to end:
+// the task terminates (no hang/crash), exit code is 0xC0DE, the .Lfail
+// diagnostic lands on the task's stderr, and teardown reaps everything
+// (zero ResourceTracker delta — exercises the #431 always-reap path).
+// The forge target is located by byte signature, never by hardcoded
+// file offset: absent/duplicated signature fails the test instead of
+// testing the wrong bytes. Per-arch step-2 compare shapes (verified by
+// objdump on tip-built hey.c.elf): x86_64 shr+cmp imm8, aarch64 lsr+cmp
+// imm, riscv64 srli+li (patched li immediate).
+// Input: read /hey.c.elf via vfs, patch the compare, write
+// /tmp/hey-mismatch.elf, request_load, take, repoint fd 2 at a tmpfs
+// capture file, dispatch at prio 11, join via wait_for_termination_safe.
+// Expect: TERMINATED, exit_code == 0xC0DE, capture contains the
+// "crt0: ABI contract mismatch" diagnostic; zero resource delta.
+// Depends: ElfLoader initrd-path load, P1 crt0 contract, fd plumbing.
+JARVIS_TEST(loader_stub_mismatch_fail_closed, "PRE: vfsd, iocd | POST: none") {
+    // 1. Read pristine image bytes from initrd (bounded: reject > 128 KiB).
+    static uint8_t s_mm_img[128 * 1024];
+    vfs::Vnode *src = vfs::resolve("/hey.c.elf");
+    JARVIS_ASSERT_FMT(src != nullptr && src->ops != nullptr &&
+                          src->ops->read != nullptr,
+                      "mismatch: cannot resolve /hey.c.elf");
+    uint64_t img_sz = 0;
+    while (img_sz < sizeof(s_mm_img)) {
+        uint64_t chunk = sizeof(s_mm_img) - img_sz;
+        if (chunk > 4096)
+            chunk = 4096;
+        int64_t rd = src->ops->read(*src, s_mm_img + img_sz, chunk, img_sz);
+        if (rd <= 0)
+            break;
+        img_sz += static_cast<uint64_t>(rd);
+    }
+    JARVIS_ASSERT_FMT(img_sz > 64 && img_sz < sizeof(s_mm_img),
+                      "mismatch: bad image size %lu",
+                      (unsigned long)img_sz);
+    // 2. Locate the step-2 compare by byte signature (exactly one hit).
+    static const uint8_t kSigX86[] = {0x48, 0xc1, 0xe8, 0x10,
+                                      0x48, 0x83, 0xf8, 0x01};
+    static const uint8_t kSigAA64[] = {0x00, 0xfc, 0x50, 0xd3,
+                                       0x1f, 0x04, 0x00, 0xf1};
+    static const uint8_t kSigRV64[] = {0x41, 0x81, 0x85, 0x42};
+    const uint8_t *sig = nullptr;
+    uint64_t sig_len = 0, patch_off = 0;
+    uint8_t patch_to = 0;
+#if defined(CONFIG_ARCH_X86_64)
+    sig = kSigX86;
+    sig_len = sizeof(kSigX86);
+    patch_off = 7;
+    patch_to = 0x02;
+#elif defined(CONFIG_ARCH_AARCH64)
+    sig = kSigAA64;
+    sig_len = sizeof(kSigAA64);
+    patch_off = 5;
+    patch_to = 0x08;
+#elif defined(CONFIG_ARCH_RISCV64)
+    sig = kSigRV64;
+    sig_len = sizeof(kSigRV64);
+    patch_off = 2;
+    patch_to = 0x89;
+#else
+    JARVIS_ASSERT_FMT(false, "mismatch: no forge signature for this arch");
+#endif
+    (void)sizeof(kSigX86);
+    (void)sizeof(kSigAA64);
+    (void)sizeof(kSigRV64);
+    uint64_t hits = 0, hit_at = 0;
+    for (uint64_t i = 0; i + sig_len <= img_sz; ++i) {
+        uint64_t j = 0;
+        while (j < sig_len && s_mm_img[i + j] == sig[j])
+            ++j;
+        if (j == sig_len) {
+            ++hits;
+            hit_at = i;
+        }
+    }
+    JARVIS_ASSERT_FMT(hits == 1,
+                      "mismatch: signature hits=%lu, want exactly 1",
+                      (unsigned long)hits);
+    s_mm_img[hit_at + patch_off] = patch_to;
+    // 3. Stage the doctored image and load it.
+    constexpr const char *kMmPath = "/tmp/hey-mismatch.elf";
+    JARVIS_ASSERT(write_file(kMmPath, s_mm_img, img_sz) == img_sz);
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(elf::ElfLoader::request_load(kMmPath) ==
+                          elf::LoadResult::OK,
+                      "mismatch request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 &&
+                          t->is_user_,
+                      "mismatch take_completed failed");
+    // 4. Repoint fd 2 (stderr, unwired in harness) at a tmpfs capture
+    // file so the .Lfail diagnostic is observable in-guest (fd-1
+    // pattern from the libc_verify harness; same no-dec discipline:
+    // FdTable::free would dec a vnode ref never inc'd).
+    constexpr const char *kCapPath = "/tmp/mismatch-stderr.txt";
+    JARVIS_ASSERT(t->fd_table.fds[2].used);
+    kernel::test::mark_vfs_touched();
+    JARVIS_ASSERT(vfs::create(kCapPath, 0) == 0);
+    vfs::Vnode *capvn = vfs::resolve(kCapPath);
+    JARVIS_ASSERT(capvn != nullptr);
+    t->fd_table.fds[2].vnode = capvn;
+    t->fd_table.fds[2].offset = 0;
+    t->fd_table.fds[2].flags = 0;
+    // 5. Dispatch and join (prio 11: the harness idles below it).
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    bool exited = (t->state == TaskState::TERMINATED);
+    uint64_t code = t->exit_code;
+    // 6. Teardown first (mirrors the #431 always-reap harness path so a
+    // nonzero exit still reaps), then assert on the saved values.
+    if (TaskControlBlock::is_valid(t))
+        Scheduler::terminate(*t, code);
+    Scheduler::drain_zombie_list();
+    char diag[96]{};
+    uint64_t dpos = 0;
+    vfs::Vnode *cap = vfs::resolve(kCapPath);
+    if (cap != nullptr && cap->ops != nullptr && cap->ops->read != nullptr) {
+        while (dpos < sizeof(diag) - 1) {
+            int64_t rd = cap->ops->read(*cap,
+                                        reinterpret_cast<uint8_t *>(diag) +
+                                            dpos,
+                                        1, dpos);
+            if (rd <= 0)
+                break;
+            dpos += static_cast<uint64_t>(rd);
+        }
+    }
+    diag[dpos] = '\0';
+    cleanup_file(kMmPath);
+    kernel::test::mark_vfs_touched();
+    vfs::unlink(kCapPath);
+    JARVIS_ASSERT_FMT(exited, "mismatch task did not terminate");
+    JARVIS_ASSERT_FMT(code == 0xC0DE, "mismatch exit code 0x%lx, want 0xC0DE",
+                      (unsigned long)code);
+    const char *want = "crt0: ABI contract mismatch";
+    bool found = false;
+    for (uint64_t i = 0; dpos >= 28 && i + 28 <= dpos; ++i) {
+        uint64_t j = 0;
+        while (want[j] != '\0' && diag[i + j] == want[j])
+            ++j;
+        if (want[j] == '\0') {
+            found = true;
+            break;
+        }
+    }
+    JARVIS_ASSERT_FMT(found, "mismatch diagnostic absent from stderr");
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: cancel reclaims all partial state (zero delta) and the loader
 // returns to IDLE with no retained image.  The cancel is issued
 // pre-first-dispatch with the timer tick masked (issue #267): reschedule()
@@ -1082,6 +1334,9 @@ JARVIS_TEST(rerun_auth_decay_refused, "PRE: none | POST: none") {
 // stack and heap slots hold live derived magic after a rerun build,
 // TEXT-before is untouched since load (shared phys), and golden PTEs
 // are RW-clear with NX following PF_X.
+// Issue #429: the build_rw_elf fixture entry (0x400000) sits inside the
+// TEXT canary slot, so the installer skips it (never clobbers entry
+// bytes); TEXT-before assertions below verify the skip + intact entry.
 JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     elf::ElfLoader::reset();
     uint8_t img[8192];
@@ -1094,8 +1349,6 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     auto *t1 = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(t1 != nullptr);
     uint64_t id1 = t1->id;
-    uint64_t g0 = VMM::virt_to_phys_in_pml4(0x400000, t1->get_page_table());
-    JARVIS_ASSERT(g0 != 0);
     elf::ElfLoader::note_launched(id1);
     elf::ElfLoader::note_task_end(id1, true, 0);
     t1->cleanup();
@@ -1116,15 +1369,20 @@ JARVIS_TEST(rerun_canary_perm_pins, "PRE: none | POST: none") {
     const uint64_t text = TaskControlBlock::SEG_TEXT;
     const uint64_t heap = TaskControlBlock::SEG_HEAP;
     const uint64_t stk = TaskControlBlock::SEG_STACK;
-    JARVIS_ASSERT(t2->canary_installed & (1u << text));
+    JARVIS_ASSERT(!(t2->canary_installed & (1u << text)));
+    JARVIS_ASSERT(t2->canary_before[text] == 0);
     JARVIS_ASSERT(t2->canary_installed & (1u << heap));
     JARVIS_ASSERT(t2->canary_installed & (1u << stk));
-    // TEXT-before: shared phys since load (selective skip), live magic.
-    uint64_t tb = 0;
-    JARVIS_ASSERT(read8(t2->canary_before[text], t2->get_page_table(), tb));
-    JARVIS_ASSERT(tb == (TaskControlBlock::CANARY_MAGIC ^ (text + 1)));
-    JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(t2->canary_before[text],
-                                            t2->get_page_table()) == g0);
+    // Issue #429: TEXT-before skipped — the fixture entry (0x400000) is
+    // inside the canary slot, so the installer leaves it alone: no
+    // installed bit, canary_before[text] stays 0.
+    // Entry bytes intact: the first 8 bytes are the original NOP fill
+    // (build_rw_elf), not canary magic — the loader never clobbers
+    // the entry point.
+    uint64_t entry0 = 0;
+    JARVIS_ASSERT(read8(0x400000, t2->get_page_table(), entry0));
+    JARVIS_ASSERT_FMT(entry0 == 0x9090909090909090ULL,
+                      "entry clobbered: 0x%lx", entry0);
     // HEAP + STACK slots: fresh pages, live derived magic both ends.
     uint64_t live = 0;
     JARVIS_ASSERT(read8(t2->canary_before[heap], t2->get_page_table(), live));
@@ -1204,6 +1462,8 @@ JARVIS_TEST(rerun_bss_only_data_canary, "PRE: none | POST: none") {
 // run must NOT free golden phys (live mapper owns them through its own
 // teardown); the live task stays byte-correct; everything reclaims
 // after death + drop.
+// Issue #429: TEXT canary slot asserts entry-bytes-intact (NOP fill),
+// not magic — the installer skips entry-overlapping slots.
 JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
     elf::ElfLoader::reset();
     uint8_t imgA[8192];
@@ -1230,9 +1490,10 @@ JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
     auto *tB = elf::ElfLoader::take_completed();
     JARVIS_ASSERT(tB != nullptr);
     JARVIS_ASSERT(elf::ElfLoader::has_retained());
-    // Live task still byte-correct: TEXT canary slot holds derived
-    // magic (written at load into the shared golden page), the rest
-    // of the prefix is NOP fill.
+    // Live task still byte-correct: TEXT canary slot holds the original
+    // NOP fill (issue #429: installer skips the slot when the fixture
+    // entry 0x400000 sits inside it — entry bytes are never clobbered),
+    // the rest of the prefix is NOP fill.
     {
         uint64_t phys =
             VMM::virt_to_phys_in_pml4(0x400000, tA->get_page_table());
@@ -1242,8 +1503,8 @@ JARVIS_TEST(rerun_supersede_while_live, "PRE: none | POST: none") {
                                     arch::HHDM_OFFSET + phys),
                          8);
         JARVIS_ASSERT_FMT(
-            slot == (TaskControlBlock::CANARY_MAGIC ^ (0 + 1)),
-            "live canary slot 0x%lx != derived", slot);
+            slot == 0x9090909090909090ULL,
+            "live entry bytes clobbered: 0x%lx", slot);
     }
     for (size_t i = 8; i < 24; ++i) {
         uint64_t phys =
@@ -1340,4 +1601,7 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_supersede_while_live); // #271 P3 supersede
     JARVIS_REGISTER_TEST(rerun_fork_child_private_copy); // #271 P3 fork (C8)
     JARVIS_REGISTER_TEST(rerun_bss_only_data_canary); // #271 live-E2E BSS-only
+    JARVIS_REGISTER_TEST(loader_stub_roundtrip_generated_stubs); // #171 P2
+    JARVIS_REGISTER_TEST(loader_cap_smoke_fail_closed); // #171 P3
+    JARVIS_REGISTER_TEST(loader_stub_mismatch_fail_closed); // #431 forged-mismatch fail-closed
 }

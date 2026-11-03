@@ -46,6 +46,12 @@ uint64_t VMM::vmm_arch_table_child(uint64_t entry) {
     return entry & PAGE_TABLE_ADDR_MASK;
 }
 
+uint64_t VMM::vmm_arch_root_phys(uint64_t live_root) {
+    // x86 CR3 carries PCID in the low 12 — the same strip the walk
+    // applies. Idempotent on clean phys roots.
+    return live_root & PAGE_TABLE_ADDR_MASK;
+}
+
 bool VMM::vmm_arch_split_needed(uint64_t entry) {
     return (entry & PAGE_HUGE) != 0;
 }

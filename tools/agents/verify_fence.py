@@ -8,20 +8,27 @@ against (a golden would be the 14th copy) - this gate instead asserts the
 PROPERTIES of what the renderer emits, per role:
 
   F1  the renderer succeeds for every role (fail-closed path is intact)
-  F2  polarity is per-role: only dev has edit "*" allow; every role keeps bash
+  F2  polarity is per-role: only dev has edit "*" allow; bash is a plain
+      "allow" except the auditor, whose session bash must equal its agent.bash
+      map (launch.agent roles run the agent cage in-session); task is "deny"
+      for every role (no in-process subagents — lanes never fork invisibly)
   F3  every /tmp rule has its /private/tmp mirror and vice versa, same decision
       (macOS canonicalizes before matching: an unmirrored rule is dead)
   F4  no host-dependent path leaks: no /var/folders, no $HOME, no "{repo}"
-      residue; worker configs carry no repo-absolute path at all; coordinator
-      repo keys are exactly the documented prompt/audit reads
+      residue; worker configs carry no repo-absolute path at all; consultant
+      repo keys are exactly the documented write set ({repo}/** allow;
+      src/ and fence sources denied)
   F5  no wildcard leaks: "*" appears only as the role's edit_default (last rule
       wins, so a "*" allow anywhere else would undo the fence)
-  F6  coordinator keeps its mcp block (harness+github); workers have none
-  F7  if a rendered config exists under the runtime root, it is FRESH: byte
+  F6  consultant keeps its mcp block (harness+github); workers have none
+  F7  if a rendered config under the runtime root is FRESH: byte
       equality with a fresh render (a stale file silently defuses the fence)
   F8  every generated subagent file carries its OWN permission block equal to
       the rendered map: an agent file without one inherits the caller's map,
       so the auditor invoked from a dev session would inherit edit:allow
+  F9  consultant src/ is unwritable: the rendered edit map denies
+      {repo}/src and {repo}/src/**, and both denies appear AFTER the
+      {repo}/** allow (last rule wins)
 
 Exit 0 clean, 2 on any failure (never 1: this is a configuration error).
 `--self-test` proves each check bites against deliberately broken renders.
@@ -41,8 +48,12 @@ RENDERER = os.path.join(ROOT, "tools", "agents", "render_fence.py")
 RUNTIME = os.environ.get(
     "NEXIOS_HOME", os.path.join(os.path.expanduser("~"), ".local", "state", "nexios"))
 RENDERED = os.path.join(RUNTIME, "rendered")
-ROLES = ("dev", "qe", "auditor", "coordinator")
-COORD_REPO_KEYS = ("{repo}/prompts/LEARNINGS.md", "{repo}/prompts/**", "{repo}/audits/**")
+ROLES = ("dev", "qe", "auditor", "consultant")
+CONSULT_REPO_KEYS = ("{repo}/**", "{repo}/src", "{repo}/src/**",
+                       "{repo}/tools/agents/fence", "{repo}/tools/agents/fence/**",
+                       "{repo}/tools/agents/render_fence.py",
+                       "{repo}/tools/agents/verify_fence.py",
+                       "{repo}/scripts/agent_up.sh")
 
 FAILS = []
 
@@ -83,7 +94,20 @@ def check_polarity(role, cfg):
     want = "allow" if role == "dev" else "deny"
     if edit.get("*") != want:
         fail("F2", "%s: edit '*' is %r, want %r" % (role, edit.get("*"), want))
-    if cfg.get("permission", {}).get("bash") != "allow":
+    task = cfg.get("permission", {}).get("task")
+    if task != "deny":
+        fail("F2", "%s: in-process subagents must stay denied (task is %r, want 'deny')" % (role, task))
+    bash = cfg.get("permission", {}).get("bash")
+    if isinstance(bash, dict):
+        try:
+            with open(os.path.join(FENCE, "roles", role + ".json"), encoding="utf-8") as handle:
+                agent_bash = (json.load(handle).get("agent") or {}).get("bash")
+        except (OSError, ValueError):
+            agent_bash = None
+        if bash != agent_bash:
+            fail("F2", "%s: session bash is not the role agent.bash map" % role)
+        return
+    if bash != "allow":
         fail("F2", "%s: bash is not allowed (launcher needs it)" % role)
 
 
@@ -111,8 +135,8 @@ def check_paths(role, cfg, repo):
     if "$HOME" in text or "~/" in text:
         fail("F4", "%s: shell-dependent home path in a config" % role)
     repo_keys = {k for k in list(ext) + list(edit) if k.startswith(repo)}
-    if role == "coordinator":
-        want = {repo + k[len("{repo}"):] for k in COORD_REPO_KEYS}
+    if role == "consultant":
+        want = {repo + k[len("{repo}"):] for k in CONSULT_REPO_KEYS}
         if repo_keys != want:
             fail("F4", "%s: repo keys %s != %s"
                  % (role, sorted(repo_keys), sorted(want)))
@@ -150,12 +174,36 @@ def check_wildcards(role, cfg, repo=None):
 
 def check_mcp(role, cfg):
     has = isinstance(cfg.get("mcp"), dict)
-    if role == "coordinator":
+    if role == "consultant":
         if not has or "github" not in cfg.get("mcp", {}) \
                 or "harness" not in cfg.get("mcp", {}):
-            fail("F6", "coordinator: mcp block missing harness/github")
+            fail("F6", "consultant: mcp block missing harness/github")
     elif has:
         fail("F6", "%s: worker carries an mcp block" % role)
+
+
+def check_src_readonly(role, cfg, repo):
+    """F9: consultant src/ (and the fence self-cage) deny after the allow."""
+    if role != "consultant":
+        return
+    _, edit = maps(cfg)
+    for key in (repo + "/src", repo + "/src/**",
+                repo + "/tools/agents/fence", repo + "/tools/agents/fence/**",
+                repo + "/tools/agents/render_fence.py",
+                repo + "/tools/agents/verify_fence.py",
+                repo + "/scripts/agent_up.sh"):
+        if edit.get(key) != "deny":
+            fail("F9", "%s: rendered edit %r is not deny" % (role, key))
+    try:
+        allow_at = list(edit).index(repo + "/**")
+        deny_at = max(list(edit).index(repo + "/src/**"),
+                      list(edit).index(repo + "/tools/agents/fence/**"),
+                      list(edit).index(repo + "/scripts/agent_up.sh"))
+    except ValueError:
+        fail("F9", "%s: allow/deny keys missing from ordered map" % role)
+        return
+    if not allow_at < deny_at:
+        fail("F9", "%s: src/fence denies do not sort after the repo allow" % role)
 
 
 def load(text, role):
@@ -260,6 +308,7 @@ def audit(renders):
         check_paths(role, cfg, repo)
         check_wildcards(role, cfg, repo)
         check_mcp(role, cfg)
+        check_src_readonly(role, cfg, repo)
         check_agents(role, cfg)
         freshness(role, text)
 
@@ -310,7 +359,14 @@ def self_test():
                                   lambda c: c["permission"]["external_directory"].__setitem__(
                                       "*", "allow"), repo)),
         ("F6 mcp", rejects(check_mcp, "dev",
-                           lambda c: c.__setitem__("mcp", {"x": {}}))),
+                            lambda c: c.__setitem__("mcp", {"x": {}}))),
+        ("F2 session bash", rejects(check_polarity, "auditor",
+                                    lambda c: c["permission"].__setitem__("bash", {"*": "allow"}))),
+        ("F2 task deny", rejects(check_polarity, "dev",
+                                 lambda c: c["permission"].__setitem__("task", "allow"))),
+        ("F9 src deny", rejects(check_src_readonly, "consultant",
+                                lambda c: c["permission"]["edit"].__setitem__(
+                                    repo + "/src/**", "allow"), repo)),
     ]
     with tempfile.TemporaryDirectory(prefix="verify-fence-st-") as tmp:
         agents = os.path.join(tmp, "agents")

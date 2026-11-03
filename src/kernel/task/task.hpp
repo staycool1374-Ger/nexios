@@ -694,6 +694,15 @@ struct TaskControlBlock {
     ///        debug/release parity: plain bool, never CONFIG_DEBUG-gated.
     bool teardown_completed_ = false;
 
+    /// @brief Teardown ownership claim (issue #409). Set once, under
+    ///        interrupts-off, by the single party that will run this
+    ///        occupancy's teardown to completion; every other party that
+    ///        reaches a freeing path must skip the ENTIRE teardown
+    ///        including the free. The winner is obliged to complete the
+    ///        full tail (never abandoned, never doubled). False after
+    ///        every memset site / init_task_common (per-occupancy state).
+    bool teardown_claimed_ = false;
+
     /// @brief Watchdog period in ticks (from SYS_WATCHDOG_CREATE arg0).
     uint64_t wdog_period_ticks = 0;
 
@@ -985,7 +994,21 @@ struct TaskControlBlock {
     /// @param[out] out_tcb Pointer to the created TCB on success.
     /// @return TaskError code.
     static errors::TaskError clone_err(uint64_t *regs,
-                                       TaskControlBlock *&out_tcb);
+                                        TaskControlBlock *&out_tcb);
+
+    /// @brief Provision a TCB's kernel stack through the kslot window
+    ///        (#434 P2): slot attempt via the shared pool, backend map
+    ///        per page, slot fields/stack VAs set; on exhaustion-0 the
+    ///        HHDM fallback with zeroed slot fields (same funnel as
+    ///        create_user — ELF birth sites use this, no arch ifdefs).
+    ///        Restricted to ELF birth use (C3); the task.cpp birth
+    ///        sites keep their open-coded form. Not a test seam.
+    /// @param tcb Target TCB (stack_phys_ already allocated by caller).
+    /// @param kstack_phys Contiguous physical pages for the stack.
+    /// @param stack_size Kernel stack size in bytes (STACK_SIZE).
+    static void provision_kstack(TaskControlBlock *tcb,
+                                 uint64_t kstack_phys,
+                                 size_t stack_size) noexcept;
 
     /// @brief Destroys a TCB and returns its MemPool block (H-5: single
     ///        pool-aware teardown path replacing raw `delete` on RT error
@@ -996,7 +1019,25 @@ struct TaskControlBlock {
     ///        deferred teardown without re-running table removal; a
     ///        REAPED-after-full-teardown TCB is only freed (safe no-op).
     ///        No-op on nullptr. Mirrors operator delete() semantics exactly.
+    ///        Issue #409: claims teardown ownership at entry
+    ///        (try_claim_teardown); a rival-owned or already-torn-down TCB
+    ///        is a no-op — the owner completes the full tail exactly once.
     static void destroy(TaskControlBlock *tcb) noexcept;
+
+    /// @brief Tries to claim this occupancy's teardown (issue #409).
+    ///        One atomic check-and-set under interrupts-off: succeeds once
+    ///        per occupancy. False on nullptr, poisoned/freed blocks, and
+    ///        when another party already claimed the teardown. A completed-
+    ///        but-unclaimed tail still claims successfully (the claim gates
+    ///        the free, not the tail); completed_/REAPED/unregistered decline
+    ///        a NEW teardown only via the ISR-side predicate.
+    static bool try_claim_teardown(TaskControlBlock *tcb) noexcept;
+
+    /// @brief Releases a claim taken without completing the tail (issue
+    ///        #409): used only by destroy()'s pinned early-return (pinned
+    ///        blocks are never freed, so no race exists while pinned; the
+    ///        #373 second destroy re-claims fresh once unpinned).
+    static void release_teardown_claim(TaskControlBlock *tcb) noexcept;
 
     /// @brief Save the current register context into this TCB.
     /// @param rsp Reference to current stack pointer (updated on save).
@@ -1109,6 +1150,16 @@ static_assert(sizeof(((TaskControlBlock *)nullptr)->fpu_state) ==
 #endif
 // Note: 64-byte alignment of fpu_state is enforced by its alignas(64)
 // member specifier (offsetof is unavailable: TCB is non-standard-layout).
+
+/// @brief Guard-fault predicate shared by all arch fault entries (#434 P3):
+///        true iff @p t owns a kslot window (slot VA != 0, i.e. non-HHDM)
+///        and @p fault_va lies in the unmapped guard page
+///        [kstack_slot_va_, kstack_slot_va_ + PAGE_SIZE).
+///        Arch-neutral (no CONFIG_ARCH/ifdefs at call sites): the x86 #PF
+///        block calls this behavior-identically, the aa64 EL1 fault entry
+///        uses it to arm the guard-abort path.
+bool is_stack_guard_fault(const TaskControlBlock &t,
+                          uint64_t fault_va) noexcept;
 
 /// @brief Total snapshot bytes for the kernel-stack window state
 ///        (v0.4.0 MP-6.3): 8 PT page contents + slot bookkeeping.

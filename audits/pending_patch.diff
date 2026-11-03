@@ -1,259 +1,1764 @@
+diff --git a/docs/engine-wake-watch.md b/docs/engine-wake-watch.md
+new file mode 100644
+index 000000000..9aebf8a1e
+--- /dev/null
++++ b/docs/engine-wake-watch.md
+@@ -0,0 +1,63 @@
++# Engine wake fast-path watch (#466 R4)
++
++One quiet week of fast-path ticks with zero duplicate filings closes R4;
++any duplicate filing opens a follow-up issue with the log excerpts —
++never an inline patch (the window must stay observation-only).
++
++## Window
++
++- Start: the merge sha + engine restart time that first deploys #466 R1/R2.
++  Record both here when the window opens (R1/R2 must be deployed first
++  so the sample is not contaminated by pre-delivery code).
++- Freeze for the window: `scripts/agent_up.sh` wake path and the
++  demand-shaped predicate — no engine code changes until the tally.
++
++## Why this watch exists
++
++`fire_targeted_tick` (agent_up.sh) fires a detached one-shot
++`tick --issues N` on every demand-shaped worker post
++(`NEED ::`, `DECISION ::`, inline `DECISION:`, `DONE:`/`DONE `).
++The sweep lock serializes it with the 180 s loop (skip-if-held), so
++overlap is safe by construction. The known pressure point is the
++shared-second edge: `coord_note` oids embed `role:ts19`, so two filers
++in the same second share an oid ("order deferred ... (oid collision)"
++is the visible symptom, seen 12:43:04Z). A same-second collision is
++NOT a duplicate order — a duplicate is the same oid filed twice, or
++two same-lane filings within 5 s for one demand.
++
++## Metrics (per day)
++
++1. Fast-path tick count: `fire_targeted_tick` invocations.
++2. Lock skips: `cycle skipped: another engine tick holds the lock` lines
++   (state_machine.py) — skips are the safety valve working, not loss.
++3. `order filed` lines per (room, lane, oid) from engine-console.log.
++4. `oid collision` lines (shared-second edge — expected rare, not a defect).
++5. Duplicate candidates: same oid filed twice, or two same-lane filings
++   within 5 s for one demand. Zero is the pass criterion.
++
++## Log queries
++
++Against `logs/state-machine/engine-console.log` and
++`logs/state-machine/state-machine.log` (window lines only —
++exclude everything before the recorded start time):
++
++- Ticks fired: lines matching `fire_targeted_tick` / `tick --issues`
++- Skips: `cycle skipped: another engine tick holds the lock`
++- Filings: `order filed` (group by oid, lane, room)
++- Collisions: `oid collision`
++- Escalations (R1 cross-check): `DLR-OVERDUE`, `delivery ... ESCALATED`
++
++## Evidence template (post as a #466 comment)
++
++- Window: <start ts> → <end ts> (7+ days), merge sha <sha>.
++- Fast-path ticks: <n>, lock skips: <n>, oid collisions: <n>.
++- Duplicate filings: <0 | excerpts>.
++- Verdict: close R4 (zero) / follow-up issue (nonzero, with excerpts
++  and the deterministic-oid proposal — never patch inline).
++
++## Decision rule
++
++- Zero duplicate filings for 7 consecutive days → close R4 with the
++  evidence comment above.
++- Any duplicate → open a follow-up issue with the log excerpts and the
++  deterministic-oid proposal; the window restarts after that fix.
+diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
+index dd09c07ee..182b0f3b4 100644
+--- a/prompts/LEARNINGS.md
++++ b/prompts/LEARNINGS.md
+@@ -90,6 +90,7 @@
+ - Any activity reads WORKING, never IDLE: two-sample probe (content + timer/token + CPU-delta over a window, norm keeps every signal), IDLE only on proven-static windows (#462).
+ - Stale NEXTs stop counting as busy (age-timeout + lane-segment backlog guard, live order always wins); starved lanes get teeth (observe → re-wake order → await → cap-escalate, heartbeat held); rotate the sweep so one room can't win every doorbell (#462).
+ - IDLE is a global claim: gate every IDLE acceptance on a cross-room work scan and deny with an assignment when work waits; auditor sessions are one-shot (kill after handed verdict, restart when >3 ticks silent with no progress, answered demand+tip never re-rings, same-text new-tip is new work) (#463/#464).
++- ACK is receipt, done-by is delivery: every engine order carries a done-by stamp plus evidence kind, overdue re-rings once without a new oid and then escalates NEED-only (never auto-recreate — the lane is alive), and ACK (-1) or ledger cleanup never clears the delivery record; backlog briefs carry the same finish line so DONE is defined before the work starts (#466).
+ 
+ ## Entry format
+ 
+@@ -102,6 +103,18 @@
+ 
+ ## Entries
+ 
++### #464 — one-shot auditor: kill after handed verdict, restart when long-running
++
++- **Learned:** `hold-demand` is invalid for auditor/planner lanes: a demand veto on teardown plus an answered-demand re-ring is a close-can-never-fire loop (each manufactures the other's precondition). One-shot is the invariant — verdict posted + handed + handled-past-verdict tears the session down the same tick, no demand veto; a genuinely new demand launches fresh (the brief is fully tip-pinned, no state worth preserving). Long-running is bounded by a watchdog, not by hope: no verdict/post/report progress for 3 tick intervals kills + relaunches the identical brief with reruns+1, capped at the ring limit, then escalates. An answered demand+tip never recreates pending: kill-after-done without that suppression just thrashes launch/kill every tick.
++- **Adapted:** `audit_teardown_gate` (no demand veto; verdict+handled counts every tick), `AUDIT_RESTART_S`/`AUDIT_RERUN_MAX` + `audit_restart_gate`, answered-demand+tip suppression in `auditor_lifecycle`, `verdict_identity`/`verdict_already_handed` dedup on hand-back in `scripts/state_machine.py`.
++- **Style re-surface:** one mechanism per policy (teardown owns liveness, the SLA owns aging, the identity owns dedup — no shared preconditions); fail closed on caps (restart budget, rerun cap, then NEED, never a 4th launch).
++
++### #465 — ACK doctrine: receipt-only, missing-ACK means faulty worker
++
++- **Learned:** An ACK closes receipt and nothing else — "ACK, starting" is a valid ACK-with-content where the content is new routable information, never a second receipt. Promising ("starting") versus delivering (a future result post) are different deadlines owned by different mechanisms: ack-by drives restart discipline, done-by drives evidence delivery, and conflating them recreates the ACK-without-delivery hole. Display must never conflate the two: a fresh ACK proves receipt, never work. Wire parsers must accept every live verdict shape (inline `DECISION:` on READY/NEED posts, not just kind-DECISION) and read the post block from the last POST line, not a tail window — both blind spots silently null out real verdicts. Demand keys must be era-qualified (a DONE routed to audit reopens an answered demand) and hand-backs identity-qualified (kind+tip+demand-key, kind-flips always deliver) or duplicate posts ping-pong forever. A wake fast path is safe only when the sweep lock makes overlap a skip by construction.
++- **Adapted:** ACK-MISSING escalate-to-recreate + `ack_by_ts`/`file_order_deadline`/`ack_overdue_ids` in `scripts/state_machine.py`; `audit_verdict_ts` inline-DECISION match + post-block `load_boxes` scan + DONE-reopens-demand + `verdict_identity` dedup; targeted one-shot `tick --issues N` on demand-shaped wakes in `scripts/agent_up.sh` (skip-if-locked); the four WIRE rules in `prompts/PROMPT-dev.md`/`PROMPT-testdev.md`/`PROMPT-audit.md`; delivery follow-up tracked as #466 R1.
++- **Style re-surface:** strict parsers accept every live wire shape (prove with the exact observed line, not the schema); uncapped history for detectors (tails drop the evidence that matters); one re-ring per oid per cycle across overlapping filers.
++
+ ### #170 — Meson cutover lane, developer track (DRAFT — issue open, coordinator closes)
+ 
+ - **Learned:** (1) One builddir per arch is NOT one builddir per arch×build: the runner mapped release onto the debug dir and wiped it via the LTO marker, so the entire release gate silently tested debug/lto-off binaries — a config nothing gates (stack-marker panics, 1-fail bench, STALLs all confined to it). Separate builddirs per build are load-bearing; prove with marker introspection (`lto=X buildtype=Y`), never assume. (2) Fresh-`setup` paths must be exercised per buildtype: `meson.build cc` was undefined yet debug configured green for months because only the release branch referenced it — dead-until-release code rots. (3) Manual `timeout(1)` wrappers are not policy: per-class budgets come from MEASURED per-arch pass walls + margin via arch-qualified class selectors (`arch:class` beats bare `class` in the resolver); document provenance (date/load/upper-bound) in-table, and a TCG margin trip is a filed flake, never a silent inflate. (4) Zero kernel diff ⇒ zero lane regressions possible: with no `src/` changes every failure is environmental (host load/TCG) or pre-existing-on-main — classify first (code-read the runner/marker trail), file only kernel-side findings (#417 holder ENSUREs, #418 aarch64 PMM drift). (5) Off-x86 gates use the DESIGNED per-arch lists (`list_tests.py` AARCH64/RISCV64_CLASSES, which document their known-red exclusions) — never the x86-derived 22/26; running the wrong list manufactures "failures" that are excluded by design.
+diff --git a/prompts/PROMPT-audit.md b/prompts/PROMPT-audit.md
+index 866db16dc..c9c9fd836 100644
+--- a/prompts/PROMPT-audit.md
++++ b/prompts/PROMPT-audit.md
+@@ -78,6 +78,7 @@ paths before code is accepted.
+ - Verdict delivery is the REPORT FILE itself (`audits/report-<UTC>-<issue>.md`); the inbox line + ring are best-effort. The engine polls the audits directory — a posted report is a delivered verdict even if no ring goes out.
+ ## WIRE (mandatory — identical in every lane)
+ - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
++- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+ - No ACK by ack-by = faulty lane; the engine restarts it.
+ - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+ - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
+diff --git a/prompts/PROMPT-dev.md b/prompts/PROMPT-dev.md
+index a8ecd8887..5bad7e334 100644
+--- a/prompts/PROMPT-dev.md
++++ b/prompts/PROMPT-dev.md
+@@ -77,6 +77,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
+ - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
+ ## WIRE (mandatory — identical in every lane)
+ - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
++- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+ - No ACK by ack-by = faulty lane; the engine restarts it.
+ - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+ - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
+diff --git a/prompts/PROMPT-testdev.md b/prompts/PROMPT-testdev.md
+index bf59786cb..58f1719d5 100644
+--- a/prompts/PROMPT-testdev.md
++++ b/prompts/PROMPT-testdev.md
+@@ -32,6 +32,7 @@ system in the appropiate manner in a real driven scenario. Simulating the system
+  * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
+ ## WIRE (mandatory — identical in every lane)
+ - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
++- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+ - No ACK by ack-by = faulty lane; the engine restarts it.
+ - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+ - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
 diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
-index 28f9adad5..e15091ec3 100755
+index 53f11d414..99e22589a 100755
 --- a/scripts/agent_up.sh
 +++ b/scripts/agent_up.sh
-@@ -1369,6 +1369,18 @@ PY
-   chk_neg python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$d"
-   d=$(fixture n15); mutate "$d/roles/qe.json" 'd["external_allow"].append("/private/tmp/agentup-*")'
-   chk_neg python3 "$RENDERER" --role qe --print --repo-root "$REPO_ROOT" --fence-root "$d"
-+  # role-scoped namespaces: the auditor's /tmp scratch must not leak to workers
-+  d=$(fixture n16); mutate "$d/base.json" 'd["namespaces"].append({"root": "/tmp/*", "decision": "allow", "roles": ["nobody"], "external_variants": [""]})'
-+  chk_neg python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$d"
-+  d=$(fixture n17); mutate "$d/base.json" 'd["namespaces"].append({"root": "/tmp/*", "decision": "allow", "roles": []})'
-+  chk_neg python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$d"
-+
-+  # auditor-only /tmp scratch: present for the auditor, absent for every worker
-+  local au dv
-+  au=$(python3 "$RENDERER" --role auditor --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR")
-+  dv=$(python3 "$RENDERER" --role dev --print --repo-root "$REPO_ROOT" --fence-root "$FENCE_DIR")
-+  chk bash -c 'printf "%s" "$1" | grep -q "\"/tmp/\*\": \"allow\""' _ "$au"
-+  chk_neg bash -c 'printf "%s" "$1" | grep -q "\"/tmp/\*\": \"allow\""' _ "$dv"
+@@ -1173,7 +1173,7 @@ mode_wake() {
+     # The sweep lock serializes with the loop (skip-if-held), so overlap
+     # is safe. Non-demand posts (pure ACKs, status) stay sweep-driven.
+     case "$2" in dev|qe|auditor)
+-      last_post=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.* FROM=(dev|qe|auditor|audit) (NEED|READY|DECISION|NOTE) ::' "$rt/inbox/$2.md" 2>/dev/null | tail -n 1)
++      last_post=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.* FROM=(dev|qe|auditor|audit) (NEED|READY|DECISION|NOTE) ::' "$rt/inbox/$2.md" 2>/dev/null | tail -n 1 || true)
+       case "$last_post" in
+         *' NEED :: '*|*' DECISION :: '*|*' DECISION: '*|*'DONE:'*|*'DONE '*)
+           fire_targeted_tick "$1" ;;
+diff --git a/scripts/state_machine.py b/scripts/state_machine.py
+index d1d59dbbd..69ae9aa49 100644
+--- a/scripts/state_machine.py
++++ b/scripts/state_machine.py
+@@ -100,6 +100,8 @@ AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
+ AUDIT_SLA_RERING_S = 900  # outstanding audit demand this old -> one extra ring (#461 B)
+ AUDIT_SLA_ESCALATE_S = 1800  # outstanding audit demand this old -> NEED escalation (#461 B)
+ ACK_SLA_S = 900  # worker orders carry ack-by <filed+900s>; overdue -> one nudge (#461 F)
++DONE_SLA_S = 1800  # work orders carry done-by <filed+1800s>; overdue -> one re-ring, then escalate (#466 R1)
++DONE_ESCALATE_GRACE_S = 900  # second window after the overdue re-ring before NEED escalation (#466 R1)
+ DEV_STALE_S = 1800  # non-idle NEXT with no lane post this old reads stale, not busy (#462 item 2)
+ GH_CLOSE_POLL_TICKS = 5  # poll GitHub closure at most every N ticks in merge-close (#461 D)
+ AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
+@@ -490,14 +492,19 @@ def load_boxes(room_dir):
+         # DONE post parsed as next=None, hiding "waiting auditor" and
+         # starving the audit demand). Scan from the last POST line instead.
+         _post_idx = max((i for i, l in enumerate(all_lines)
+-                         if POST_RE.match(l)), default=None)
++                          if POST_RE.match(l)), default=None)
+         st, nx, cx = last_state_next(
+             all_lines[_post_idx:] if _post_idx is not None else tail12)
++        # Status-ts (#466 R2): the ts of the post owning the parsed
++        # STATE/NEXT — lets pending derivation tell a stale trailer
++        # ("waiting auditor plan-review") from a live one.
++        _status_ts = all_lines[_post_idx][:19] if _post_idx is not None else None
+         # Full-box scan: a filed order must not fall out of the tail window
+         # before the next tick's unacked loop sees it (G1 follow-through).
+         coord = [l for l in all_lines if " FROM=coord NOTE" in l]
+         boxes[box] = {"all": posts, "full": all_lines, "tail": tail12, "state": st, "ctx": cx,
+-                      "next": nx, "coord_last": coord[-1][:160] if coord else None}
++                      "next": nx, "coord_last": coord[-1][:160] if coord else None,
++                      "status_ts": _status_ts}
+     return boxes
  
-   rm -rf "$st"
-   echo "render-self-test: $pass/$t PASS"
-diff --git a/tools/agents/fence/README.md b/tools/agents/fence/README.md
-index 95a2433ee..2fc2b1f50 100644
---- a/tools/agents/fence/README.md
-+++ b/tools/agents/fence/README.md
-@@ -75,11 +75,35 @@ cross-edit gate therefore does NOT forbid fence edits by a dev change set: the
- sanctioned way to change a fence is a deliberate, reviewable edit, and the gate
- would otherwise block the maintenance path the owner kept open.
  
-+## Role-scoped namespaces
-+
-+A base namespace may carry `"roles": [...]`; it is then composed into those
-+roles only (no `roles` key = every role). This is how the auditor's `/tmp/*`
-+scratch exists without granting a blanket `/tmp` to the workers:
-+`compose()` skips non-matching entries and `verify_fence` F5 applies the same
-+filter, so a `/tmp/*` rule appearing in a worker's map is still a failure.
-+
-+## The auditor's shell is the boundary, not its edit map
-+
-+The auditor keeps `edit_default: deny` (it writes only `audits/rejected_patch.diff`
-+and `audits/report-*.md`) and needs no MCP. Its bash map is intentionally broad —
-+`bash *`, `python3 *`, `git apply *`, `sed *`, `cp *`, `mkdir *` — because
-+reviewing a patch means reproducing builds, diffs and scratch harnesses. That
-+means the `edit` map no longer bounds what the auditor can touch: the shell can
-+reach the repo. The controls that remain are the ones that actually apply:
-+
-+- `audits/rejected_patch.diff` is the only sanctioned output; the developer
-+  applies it, never the auditor (`PROMPT-audit.md`).
-+- `tools/check_no_cross_edits.sh` reviews a change set, so an auditor that
-+  modified a source file is visible in `git diff` and in the audit report the
-+  developer reads before applying anything.
-+- `tmux ls*` is allowed for room inspection; no session-attach rights.
-+
- ## Verification
+@@ -844,6 +851,31 @@ def auditor_approved(box_all, full=None):
+     return False
  
- ```
--scripts/agent_up.sh render-self-test    # 46 checks: polarity, mirrors, determinism,
--                                        # {repo}, twins, and 15 fail-closed probes
-+scripts/agent_up.sh render-self-test    # 50 checks: polarity, mirrors, determinism,
-+                                        # {repo}, twins, and 17 fail-closed probes
- scripts/agent_up.sh fence show <role>   # the composed map, without launching
- python3 tools/agents/verify_fence.py    # rendered-output properties (F1-F8)
- python3 tools/agents/verify_fence.py --self-test
-diff --git a/tools/agents/fence/base.json b/tools/agents/fence/base.json
-index 6e28e8848..eef97a73a 100644
---- a/tools/agents/fence/base.json
-+++ b/tools/agents/fence/base.json
-@@ -6,38 +6,73 @@
-     {
-       "root": "/tmp/nexios-*",
-       "decision": "allow",
--      "external_variants": ["", "/**"],
--      "edit_variants": ["/*", "/**/*"]
-+      "external_variants": [
-+        "",
-+        "/**"
-+      ],
-+      "edit_variants": [
-+        "/*",
-+        "/**/*"
-+      ]
-     },
-     {
-       "root": "/tmp/jarvis-*",
-       "decision": "allow",
--      "external_variants": ["", "/**"]
-+      "external_variants": [
-+        "",
-+        "/**"
-+      ]
-     },
-     {
-       "root": "/tmp/jarvis_*",
-       "decision": "allow",
--      "external_variants": [""]
-+      "external_variants": [
-+        ""
-+      ]
-     },
-     {
-       "root": "/tmp/matrix-*",
-       "decision": "allow",
--      "external_variants": [""]
-+      "external_variants": [
-+        ""
-+      ]
-     },
-     {
-       "root": "/tmp/qemu-serial.*",
-       "decision": "allow",
--      "external_variants": [""]
-+      "external_variants": [
-+        ""
-+      ]
-     },
-     {
-       "root": "/tmp/agentup-*",
-       "decision": "allow",
--      "external_variants": ["", "/**"]
-+      "external_variants": [
-+        "",
-+        "/**"
-+      ]
-     },
-     {
-       "root": "/tmp/lldb-*",
-       "decision": "allow",
--      "external_variants": [""]
-+      "external_variants": [
-+        ""
-+      ]
-+    },
+ 
++def auditor_approved_ts(box_all, full=None):
++    """Newest APPROVED verdict ts19, or None. Pure (#466 R2).
++
++    Same strict selection as auditor_approved (newest verdict-shaped
++    auditor post wins; a newer DECISION: trailer overrides it), but
++    returns the winning verdict's ts only when it says APPROVED — a
++    newest NEED yields None so the era logic re-opens instead of
++    closing out."""
++    for line in reversed(box_all or []):
++        m = POST_RE.match(line)
++        if not m or m.group(2) not in ("audit", "auditor"):
++            continue
++        if m.group(3) != "DECISION" and "DECISION:" not in m.group(4):
++            continue
++        post_ts = line[:19]
++        tts, ttext = audit_trailer_verdict(full or [])
++        if tts and tts > post_ts:
++            return tts if re.search(r"\bAPPROVED\b", ttext or "") else None
++        return post_ts if re.search(r"\bAPPROVED\b", m.group(4)) else None
++    tts, ttext = audit_trailer_verdict(full or [])
++    if tts:
++        return tts if re.search(r"\bAPPROVED\b", ttext or "") else None
++    return None
++
++
+ def pending_age_s(stored):
+     try:
+         dt = datetime.datetime.strptime(stored.get("since", ""),
+@@ -1316,6 +1348,22 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+     aprobe = fast_probe(ctx, ctx.audit_sess) if live else "ABSENT"
+     rep = latest_audit_report(ctx, issue)
+     seen_verdict = False
++    # #466 R2 (crash fix): the C4 hand-back identity read tip/cur_tip/
++    # demand_key bound 60+/170+ lines below -> UnboundLocalError on every
++    # tick reaching this function. Hoist the pure demand derivation plus
++    # the tip resolution here; the git lookup runs only when a verdict
++    # is on file, was handed, or sits in fresh posts (quiet ticks pay
++    # nothing). Later blocks reuse these locals (no re-derivation).
++    demand = audit_demand(boxes, st, fresh)
++    demand_key = audit_demand_key(demand["requester"], demand["text"]) if demand else None
++    tip = stored.get("tip")
++    cur_tip = None
++    if verdict_ts or asess.get("verdict_handed") or any(
++            "DECISION" in p for p in (fresh.get("auditor") or [])):
++        _early_info = git_info(ctx.dev_dir)
++        if _early_info:
++            cur_tip = _early_info[1]
++            tip = cur_tip or tip
+     _vkind = "APPROVED" if "APPROVED" in (auditor_decision(
+         boxes["auditor"]["all"], boxes["auditor"].get("full")) or "") else "NEED"
+     _vident = verdict_identity(_vkind, tip or cur_tip, demand_key)
+@@ -1341,6 +1389,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+             if append_box_note(room_dir, target, note):
+                 acted.append("audit verdict handed to %s" % target)
+                 asess["verdict_handed"] = list(_vident)
++                asess["verdict_handed_ts"] = post[:19]
+                 asess["handled_demand"] = asess.get("demand_key")
+                 asess["reruns"] = 0
+                 asess.pop("restart_capped", None)
+@@ -1366,6 +1415,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+                 if append_box_note(room_dir, target, note):
+                     acted.append("audit verdict handed to %s (unhandled scan)" % target)
+                     asess["verdict_handed"] = list(_vident)
++                    asess["verdict_handed_ts"] = uhts
+                     asess["handled_demand"] = asess.get("demand_key")
+                     asess["reruns"] = 0
+                     asess.pop("restart_capped", None)
+@@ -1376,8 +1426,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+                     acted.append("HAND-BACK-FAILED %s" % target)
+     if any("audit verdict handed to" in a or "WOULD hand audit verdict" in a for a in acted):
+         store = {}
+-    demand = audit_demand(boxes, st, fresh)
+-    demand_key = audit_demand_key(demand["requester"], demand["text"]) if demand else None
++    # demand/demand_key hoisted beside the C4 identity check above.
+     qhead = audit_queue_head(issue, demand, rooms_all)
+     other_demand = False
+     for iss, _rdir, ost in rooms_all or []:
+@@ -1852,17 +1901,25 @@ def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None, pointer=No
+     return "RING-FAILED %s: %s" % (sess, out.strip()[:120])
+ 
+ 
+-def coord_note(role, text, ack_by=None):
++def coord_note(role, text, ack_by=None, done_by=False, evidence=None,
++               done_sla_s=DONE_SLA_S):
+     """Engine order line for a lane box + its ledger oid. Pure.
+ 
+     The oid embeds the post timestamp exactly as has_unacked derives it,
+     so the written id and the ledger key always agree. ack_by=True stamps
+     ack-by <filed+ACK_SLA_S> before the oid so [oid ...] stays trailing;
+     the caller records the deadline via file_order_deadline (#461 F).
++    done_by=True (with evidence=) stamps done-by <filed+DONE_SLA_S> plus
++    `done = <evidence>` ahead of the ack-by so [oid ...] stays trailing;
++    the caller records it via file_order_delivery (#466 R1). ACK is
++    receipt only — only the evidence post closes a done-by deadline.
+     """
+     ts = utcnow()
+     oid = "%s:%s" % (role, ts[:19])
+-    body = text + (" ack-by %s" % ack_by_ts(ts[:19]) if ack_by else "")
++    body = text + (" done = %s" % evidence if evidence else "")
++    if done_by:
++        body += " done-by %s" % done_by_ts(ts[:19], done_sla_s)
++    body += (" ack-by %s" % ack_by_ts(ts[:19]) if ack_by else "")
+     return ("%s FROM=coord NOTE :: %s [oid %s]" % (ts, body, oid)), oid
+ 
+ 
+@@ -1926,6 +1983,141 @@ def prune_deadlines(deadlines, rings):
+             if (rings or {}).get(o) not in (None, -1, RING_ESCALATED)}
+ 
+ 
++def done_by_ts(order_ts19, sla_s=DONE_SLA_S):
++    """done-by delivery stamp for an order ts, or None. Pure (#466 R1).
++
++    Same arithmetic as ack_by_ts with the delivery SLA: the stamp answers
++    "when is the evidence post due", not "when is the ACK due"."""
++    try:
++        base = datetime.datetime.strptime((order_ts19 or "")[:19], "%Y-%m-%dT%H:%M:%S")
++    except (ValueError, TypeError):
++        return None
++    return (base + datetime.timedelta(seconds=sla_s)).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def file_order_delivery(dl_store, oid, evidence, done_sla_s=DONE_SLA_S):
++    """Record the done-by delivery deadline for a freshly filed order. Pure (#466 R1).
++
++    Mutates and returns the passed store
++    ({oid: {"filed": ts19, "done_by": ts, "evidence": kind, "nudged": 0,
++    "escalated": 0}}); orders without a parseable ts are not tracked.
++    ACKs never clear this store (ACK is receipt, not delivery)."""
++    ts = oid.split(":", 1)[1][:19] if ":" in (oid or "") else ""
++    by = done_by_ts(ts, done_sla_s)
++    if by:
++        dl_store[oid] = {"filed": ts, "done_by": by, "evidence": evidence,
++                         "nudged": 0, "escalated": 0}
++    return dl_store
++
++
++def _newest_word_ts(posts, role, word_re):
++    """Newest sender-role post header matching word_re (ts19), or None. Pure."""
++    best = None
++    for post in posts or []:
++        m = POST_RE.match(post or "")
++        if not m or m.group(2) != role:
++            continue
++        if word_re.search(m.group(4)) and (best is None or post[:19] > best):
++            best = post[:19]
++    return best
++
++
++def _newest_kind_ts(posts, role, kind):
++    """Newest sender-role post of one wire kind (ts19), or None. Pure."""
++    best = None
++    for post in posts or []:
++        m = POST_RE.match(post or "")
++        if not m or m.group(2) != role or m.group(3) != kind:
++            continue
++        if best is None or post[:19] > best:
++            best = post[:19]
++    return best
++
++
++def delivery_ts(filed19, role, evidence, posts):
++    """Newest evidence artifact ts19 newer than the order filing, or None. Pure (#466 R1).
++
++    Evidence kinds: DONE (dev DONE declaration / generic DONE word),
++    VERIFIED (qe VERIFIED declaration), IMPL-READY (gated dev IMPL READY),
++    READY (any READY post), NOTE (any post — liveness, not content).
++    The filed cutoff is load-bearing: an older deliverable from a
++    previous cycle must never satisfy a newer order."""
++    filed = (filed19 or "")[:19]
++    if not filed or role not in ("dev", "qe"):
++        return None
++    if evidence == "DONE":
++        found = dev_done_ts(posts) if role == "dev" else _newest_word_ts(posts, role, DONE_WORD_RE)
++    elif evidence == "VERIFIED":
++        found = qe_verified_ts(posts) if role == "qe" else _newest_word_ts(posts, role, VERIFIED_WORD_RE)
++    elif evidence == "IMPL-READY":
++        found = dev_impl_ready_ts(posts)
++    elif evidence == "READY":
++        found = _newest_kind_ts(posts, role, "READY")
++    elif evidence == "NOTE":
++        found = None
++        for post in posts or []:
++            m = POST_RE.match(post or "")
++            if not m or m.group(2) != role:
++                continue
++            if found is None or post[:19] > found:
++                found = post[:19]
++    else:
++        return None
++    if not found:
++        return None
++    return found[:19] if found[:19] > filed else None
++
++
++def delivery_live(oid, info, rings, boxes):
++    """Whether a delivery record still needs enforcement. Pure (#466 R1).
++
++    Terminal only on: escalation recorded (RING_ESCALATED ledger mark),
++    lane supersession (a newer coord order for the lane), or delivered
++    evidence newer than the filing. ACK (-1) and ledger cleanup (None)
++    explicitly keep the record: receipt is not delivery."""
++    if (rings or {}).get(oid) == RING_ESCALATED:
++        return False
++    if (info or {}).get("escalated"):
++        return False
++    role, _, ots = (oid or "").partition(":")
++    if role not in ("dev", "qe"):
++        return False
++    cur = ((boxes or {}).get(role) or {}).get("coord_last")
++    if cur and ots < cur[:19]:
++        return False
++    if delivery_ts((info or {}).get("filed"), role, (info or {}).get("evidence"),
++                   ((boxes or {}).get(role) or {}).get("all", [])):
++        return False
++    return True
++
++
++def delivery_overdue_ids(store, rings, boxes, now_ts):
++    """Live delivery oids past their done-by deadline, oldest first. Pure (#466 R1)."""
++    out = []
++    for oid, info in (store or {}).items():
++        if not delivery_live(oid, info, rings, boxes):
++            continue
++        if ack_overdue((info or {}).get("done_by"), now_ts):
++            out.append(oid)
++    return sorted(out)
++
++
++def delivery_escalate_due(info, now_ts):
++    """True on/after done-by + grace (second sighting escalates). Pure (#466 R1)."""
++    try:
++        now = datetime.datetime.strptime((now_ts or "")[:19], "%Y-%m-%dT%H:%M:%S")
++        by = datetime.datetime.strptime((info or {}).get("done_by", "")[:19], "%Y-%m-%dT%H:%M:%S")
++    except (ValueError, TypeError):
++        return False
++    return now >= by + datetime.timedelta(seconds=DONE_ESCALATE_GRACE_S)
++
++
++def prune_delivery(store, rings, boxes):
++    """Drop delivered/superseded/escalated delivery records. Pure (#466 R1)."""
++    return {o: i for o, i in (store or {}).items()
++            if delivery_live(o, i, rings, boxes)}
++
++
+ def write_ack_overdue(room_dir, pairs):
+     """Live-only ack.overdue visibility file (one 'oid by' per line). I/O.
+ 
+@@ -1946,6 +2138,29 @@ def write_ack_overdue(room_dir, pairs):
+         return "ack-overdue-FAILED"
+ 
+ 
++def backlog_brief_text(target, current_issue, stale_detail, done_by):
++    """Pure BACKLOG SWAP / BACKLOG/RECOVERY brief body (#466 R1).
++
++    Both heads carry the same finish line: a backlog assignment is done
++    only when the findings NOTE lands (DONE in the header + evidence),
++    never when the order is merely ACKed. done_by is the order's
++    delivery stamp (None when unknown — line still present)."""
++    if stale_detail is not None:
++        head = ("BACKLOG/RECOVERY (#%d) -- dev NEXT in #%d stale ('%s', no lane post since %s); read-only recon unless it is your own in-flight work\n"
++                % (target, target, stale_detail[0][:80], stale_detail[1][:19]))
++    else:
++        head = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
++                % (target, current_issue))
++    return (head +
++            "issue: %d\nbranch: none yet (read-only until recalled)\n"
++            "Task: read-only recon of #%d per its room pending/next; "
++            "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
++            "Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment carries [oid <id>] — ACK it the same way.\n"
++            "Finish line: DONE = findings NOTE posted to inbox/dev.md with DONE in the header + evidence, else NOT done. done-by %s. A pure ACK never satisfies done-by.\n"
++            "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY — read inbox/dev.md\"\n"
++            % (target, target, done_by or "none", target))
++
++
+ def write_brief(ctx, room_dir, name, content):
+     p = os.path.join(room_dir, "prompts", name)
+     if ctx.dry:
+@@ -2788,39 +3003,91 @@ def starvation_sweep(boxes, st, probes, has_unacked, halt_now):
+     return out
+ 
+ 
+-def derive_room_phase(issue_closed, dev_done, audit_approved, qe_verified,
+-                      impl_ready):
+-    """RECON | IMPL | VERIFY | CLOSE-OUT | CLOSED from lane evidence. Pure.
++def derive_room_phase(issue_closed, dev_done_ts, approved_ts, qe_verified_ts,
++                      impl_ready_ts):
++    """RECON | IMPL | VERIFY | CLOSE-OUT | CLOSED from lane evidence ts19s. Pure (#466 R2).
+ 
+-    CLOSED only when the issue is closed (never originated here); CLOSE-OUT
+-    when the work is demonstrably finished (dev DONE + audit APPROVED);
+-    VERIFY while a gated READY stands (or qe VERIFIED proves the era);
+-    IMPL once the plan is approved; RECON otherwise."""
++    Era-guarded: CLOSE-OUT only when the work is demonstrably finished AND
++    nothing newer re-opened the era — the approval must not postdate the
++    DONE, and no gated IMPL READY may postdate the DONE either. A newer
++    plan approval or a newer IMPL READY re-opens the era (VERIFY while a
++    gated READY stands, IMPL once the plan is approved) instead of forcing
++    CLOSE-OUT on stale text. CLOSED only when the issue is closed (never
++    originated here); qe VERIFIED proves the era but never blocks CLOSE-OUT
++    (closeout_stage owns merge-close). All ts args are ts19-or-None."""
+     if issue_closed:
+         return "CLOSED"
+-    if dev_done and audit_approved:
++    if dev_done_ts and approved_ts and approved_ts <= dev_done_ts and (
++            not impl_ready_ts or dev_done_ts >= impl_ready_ts):
+         return "CLOSE-OUT"
+-    if impl_ready or qe_verified:
++    if impl_ready_ts or qe_verified_ts:
+         return "VERIFY"
+-    if audit_approved:
++    if approved_ts:
+         return "IMPL"
+     return "RECON"
+ 
+ 
+-def room_pending_text(phase, dev_next, qe_next, audit_planned):
++def next_room_state(phase, prev_state, gh_closed):
++    """Derived room state transition from the derived phase. Pure (#466 R2).
++
++    CLOSE-OUT + IN_PROGRESS advances to CLOSING; any other phase with
++    CLOSING regresses to IN_PROGRESS (a newer IMPL READY or plan approval
++    re-opened the era) unless GitHub already closed; CLOSED is terminal
++    and never regresses. All other states pass through untouched."""
++    prev = prev_state or ""
++    if gh_closed or prev == "CLOSED":
++        return prev
++    if phase == "CLOSE-OUT":
++        return "CLOSING" if prev == "IN_PROGRESS" else prev
++    if prev == "CLOSING":
++        return "IN_PROGRESS"
++    return prev
++
++
++_WAITING_AUDIT_RE = re.compile(r"waiting.*audit|plan-review", re.I)
++
++
++def pending_lane_text(role, phase, nxt, status_ts, anchor_ts, closeout):
++    """One lane's pending segment, cursor-true. Pure (#466 R2).
++
++    A waiting-audit/plan-review NEXT older than the lane's anchor artifact
++    (verdict handoff, approval, or IMPL READY — whatever the lane already
++    acted on) is stale text, not a wait: it is replaced by the phase
++    obligation. In CLOSE-OUT every waiting-audit NEXT is definitionally
++    stale. Non-waiting NEXTs and NEXTs newer than the anchor pass through
++    unchanged; fail-closed (missing anchor keeps the stale text rather
++    than hiding a genuine wait)."""
++    if nxt and _WAITING_AUDIT_RE.search(nxt) and (
++            (status_ts or "") < (anchor_ts or "") or closeout):
++        if phase == "CLOSE-OUT":
++            return "%s: awaiting merge-close" % role
++        if phase == "VERIFY":
++            return "%s: verifying" % role
++        return "%s: addressing audit verdict" % role
++    return ("%s: %s" % (role, nxt)) if nxt else None
++
++
++def room_pending_text(phase, dev_next, qe_next, audit_planned,
++                      dev_status_ts=None, dev_anchor_ts=None,
++                      qe_status_ts=None, qe_anchor_ts=None):
+     """One-line pending derived from the latest NEXTs. Pure (cap 200).
+ 
+     Lane-tag prefixes keep downstream consumers honest (the backlog swap
+     guard reads lane segments via pending_owes_lane). No NEXTs on a virgin RECON names both lanes
+     explicitly so the swap guard still holds; other phaseless silences
+-    report no NEXT rather than inventing one."""
++    report no NEXT rather than inventing one. The optional status/anchor
++    ts pair per lane suppresses stale waiting-audit trailers (#466 R2);
++    omitted (None) preserves the legacy verbatim text."""
+     if phase == "CLOSED":
+         return "CLOSED"
+     bits = []
+-    if dev_next:
+-        bits.append("dev: %s" % dev_next)
+-    if qe_next:
+-        bits.append("qe: %s" % qe_next)
++    closeout = (phase == "CLOSE-OUT")
++    for _role, _nxt, _sts, _anc in (
++            ("dev", dev_next, dev_status_ts, dev_anchor_ts),
++            ("qe", qe_next, qe_status_ts, qe_anchor_ts)):
++        _seg = pending_lane_text(_role, phase, _nxt, _sts, _anc, closeout)
++        if _seg:
++            bits.append(_seg)
+     if audit_planned and audit_planned != "-":
+         bits.append("audit: %s" % audit_planned)
+     if bits:
+@@ -3298,6 +3565,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     ack_since = st.get("ack_since") or None
+     ack_failures = int(st.get("ack_failures", 0) or 0)
+     ad_store = {}  # item F (#461): ack-by deadlines filed this tick
++    dl_store = {}  # #466 R1: done-by delivery deadlines filed this tick
+     resume_now = {}
+     for role in ("dev", "qe"):
+         nx = (boxes[role]["next"] or "")
+@@ -3418,6 +3686,39 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                                 "ACK overdue -- reply with ACK:%s" % _oid,
+                                 oid=_oid, issue=issue))
+         ad_store[_oid] = {"by": _info.get("by"), "nudged": 1}
++    # #466 R1: delivery enforcement. An overdue done-by re-rings once with
++    # NO new oid and NO ring-count increment (same shape as the ACK nudge);
++    # the second sighting escalates to the operator as NEED (no auto
++    # recreate — the lane is alive, ACK-MISSING already owns dead
++    # sessions). ACKs never satisfy this: only the evidence post recorded
++    # in the delivery store closes the deadline.
++    _dl_now = utcnow()
++    _dl_known = dict(st.get("delivery") or {})
++    _dl_known.update(dl_store)
++    for _doid in delivery_overdue_ids(_dl_known, rings, boxes, _dl_now):
++        _dlane = ref_lane(_doid)
++        if _dlane not in ("dev", "qe"):
++            continue
++        _dinfo = _dl_known.get(_doid) or {}
++        if not _dinfo.get("nudged"):
++            actions.append("DLR-OVERDUE %s (done-by %s, evidence %s)"
++                           % (_doid, _dinfo.get("done_by"), _dinfo.get("evidence")))
++            events.append("delivery-overdue-%s" % _dlane)
++            if _dlane not in deaf and probes[_dlane].startswith("IDLE") \
++                    and not session_rung(actions, SESS[_dlane], cycle["rung"]):
++                actions.append(ring(ctx, SESS[_dlane], _dlane,
++                                    "delivery overdue -- post %s (order %s)"
++                                    % (_dinfo.get("evidence"), _doid),
++                                    oid=_doid, issue=issue))
++            _dinfo = dict(_dinfo, nudged=1)
++            dl_store[_doid] = _dinfo
++        elif delivery_escalate_due(_dinfo, _dl_now):
++            actions.append("NEED delivery #%d %s %s ESCALATED (no %s post since %s; done-by %s)"
++                           % (issue, _dlane, _doid, _dinfo.get("evidence"),
++                              (_dinfo.get("filed") or "?")[:19], _dinfo.get("done_by")))
++            events.append("delivery-escalated-%s" % _dlane)
++            _dinfo = dict(_dinfo, escalated=1)
++            dl_store[_doid] = _dinfo
+     for role, oid in resume_now.items():
+         if role in has_unacked or role in deaf:
+             continue
+@@ -3528,7 +3829,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+         # ring with the standard dev:<ts>/qe:<ts> oid), not a ring-only
+         # pointer. first:<role> stays only the one-shot guard flag: set
+         # -1 when filed (never rung, never ACKed; never write 0 — falsy).
+-        note, ioid = coord_note(role, "INTAKE #%d %s first brief -- read prompts/%s.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, role, role), ack_by=True)
++        note, ioid = coord_note(role, "INTAKE #%d %s first brief -- read prompts/%s.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, role, role), ack_by=True, done_by=True, evidence="NOTE")
+         if ioid in rings:
+             actions.append("order deferred %s intake (oid collision)" % role)
+             continue
+@@ -3538,6 +3839,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             rings[first_oid] = -1
+             has_unacked.add(role)
+             file_order_deadline(ad_store, ioid)
++            file_order_delivery(dl_store, ioid, "NOTE")
+             if role == "dev":
+                 cycle["dev_order"] = issue
+         else:
+@@ -3546,6 +3848,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[first_oid] = -1
+                 has_unacked.add(role)
+                 file_order_deadline(ad_store, ioid)
++                file_order_delivery(dl_store, ioid, "NOTE")
+                 actions.append("order filed %s intake (oid %s)" % (role, ioid))
+                 if role == "dev":
+                     cycle["dev_order"] = issue
+@@ -3605,7 +3908,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             events.append("stale-dev-persists")
+             ds_store = dict(_prev_ds)
+         else:
+-            _ds_note, _ds_oid = coord_note("dev", "STALE RECON #%d: NEXT '%s' has no lane post since %s; post STATE/NEXT now or continue; ACK it with post_update ref=<id> before starting" % (issue, (dev_next or "")[:80], _dev_last or "never"), ack_by=True)
++            _ds_note, _ds_oid = coord_note("dev", "STALE RECON #%d: NEXT '%s' has no lane post since %s; post STATE/NEXT now or continue; ACK it with post_update ref=<id> before starting" % (issue, (dev_next or "")[:80], _dev_last or "never"), ack_by=True, done_by=True, evidence="NOTE")
+             if _ds_oid in rings:
+                 actions.append("order deferred dev stale re-wake (oid collision)")
+             elif ctx.dry:
+@@ -3613,6 +3916,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_ds_oid] = 0
+                 has_unacked.add("dev")
+                 file_order_deadline(ad_store, _ds_oid)
++                file_order_delivery(dl_store, _ds_oid, "NOTE")
+                 ds_store = {"next": dev_next or "", "oid": _ds_oid,
+                             "filed": _ds_oid[4:23]}
+                 cycle["dev_order"] = issue
+@@ -3620,6 +3924,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_ds_oid] = 0
+                 has_unacked.add("dev")
+                 file_order_deadline(ad_store, _ds_oid)
++                file_order_delivery(dl_store, _ds_oid, "NOTE")
+                 actions.append("order filed dev stale re-wake (oid %s)" % _ds_oid)
+                 ds_store = {"next": dev_next or "", "oid": _ds_oid,
+                             "filed": _ds_oid[4:23]}
+@@ -3671,30 +3976,20 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     if backlog_target is not None:
+         target = backlog_target
+         _sdet = stale_room_detail(rooms_all, target, _sweep_now)
+-        if _sdet is not None:
+-            _head = ("BACKLOG/RECOVERY (#%d) -- dev NEXT in #%d stale ('%s', no lane post since %s); read-only recon unless it is your own in-flight work\n"
+-                     % (target, target, _sdet[0][:80], _sdet[1][:19]))
+-        else:
+-            _head = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
+-                     % (target, issue))
+-        brief = (_head +
+-                 "issue: %d\nbranch: none yet (read-only until recalled)\n"
+-                 "Task: read-only recon of #%d per its room pending/next; "
+-                 "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
+-"Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment carries [oid <id>] — ACK it the same way.\n"
+-                 "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY — read inbox/dev.md\"\n"
+-                 % (target, target, target))
++        note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target), ack_by=True, done_by=True, evidence="DONE")
++        brief = backlog_brief_text(target, issue, _sdet, done_by_ts(boid[4:23]))
+         actions.append(write_brief(ctx, room_dir,
+                                    "dev-%d-backlog.txt" % target, brief))
+-        note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target), ack_by=True)
+         if ctx.dry:
+             actions.append("WOULD post backlog order #%d (oid %s)" % (target, boid))
+             file_order_deadline(ad_store, boid)
++            file_order_delivery(dl_store, boid, "DONE")
+             has_unacked.add("dev")
+         else:
+             if append_box_note(room_dir, "dev", note):
+                 rings[boid] = 0
+                 file_order_deadline(ad_store, boid)
++                file_order_delivery(dl_store, boid, "DONE")
+                 has_unacked.add("dev")
+                 actions.append("order filed dev backlog #%d (oid %s)" % (target, boid))
+                 if ("dev" not in deaf and probes["dev"].startswith("IDLE")
+@@ -3734,7 +4029,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     if not dd_store and impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
+                                           fresh.get("dev"), _approved, rings, has_unacked,
+                                           stored_impl):
+-        note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue, ack_by=True)
++        note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue, ack_by=True, done_by=True, evidence="IMPL-READY")
+         if di_oid in rings:
+             actions.append("order deferred dev IMPL (oid collision)")
+         elif ctx.dry:
+@@ -3742,12 +4037,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             rings[di_oid] = 0
+             has_unacked.add("dev")
+             file_order_deadline(ad_store, di_oid)
++            file_order_delivery(dl_store, di_oid, "IMPL-READY")
+             di_store = {"next": _dev_next, "oid": di_oid}
+             cycle["dev_order"] = issue
+         elif append_box_note(room_dir, "dev", note):
+             rings[di_oid] = 0
+             has_unacked.add("dev")
+             file_order_deadline(ad_store, di_oid)
++            file_order_delivery(dl_store, di_oid, "IMPL-READY")
+             actions.append("order filed dev IMPL (oid %s)" % di_oid)
+             di_store = {"next": _dev_next, "oid": di_oid}
+             cycle["dev_order"] = issue
+@@ -3841,15 +4138,17 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     # exactly the filed-or-due set (S3).
+     qo_store = None
+     if qe_will_file:
+-        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts), ack_by=True)
++        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts), ack_by=True, done_by=True, evidence="VERIFIED")
+         if ctx.dry:
+             actions.append("WOULD post qe order IMPL READY (oid %s)" % qoid)
+             file_order_deadline(ad_store, qoid)
++            file_order_delivery(dl_store, qoid, "VERIFIED")
+             has_unacked.add("qe")
+         else:
+             if append_box_note(room_dir, "qe", note):
+                 rings[qoid] = 0
+                 file_order_deadline(ad_store, qoid)
++                file_order_delivery(dl_store, qoid, "VERIFIED")
+                 has_unacked.add("qe")
+                 actions.append("order filed qe IMPL READY (oid %s)" % qoid)
+                 qo_store = {"for": impl_ts}
+@@ -3898,7 +4197,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 events.append("closeout-branch-missing")
+             else:
+                 _c_text = closeout_order_text(issue, _c_stage, _c_branch, _c_tip)
+-                _c_note, _c_oid = coord_note(_c_lane, _c_text, ack_by=True)
++                _c_evidence = "VERIFIED" if _c_stage == "verify" else "DONE"
++                _c_note, _c_oid = coord_note(_c_lane, _c_text, ack_by=True, done_by=True, evidence=_c_evidence)
+                 if _c_oid in rings:
+                     actions.append("order deferred %s %s (oid collision)" % (_c_lane, _c_stage))
+                 elif ctx.dry:
+@@ -3906,12 +4206,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                     rings[_c_oid] = 0
+                     has_unacked.add(_c_lane)
+                     file_order_deadline(ad_store, _c_oid)
++                    file_order_delivery(dl_store, _c_oid, _c_evidence)
+                     co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                     events.append("closeout-order-filed")
+                 elif append_box_note(room_dir, _c_lane, _c_note):
+                     rings[_c_oid] = 0
+                     has_unacked.add(_c_lane)
+                     file_order_deadline(ad_store, _c_oid)
++                    file_order_delivery(dl_store, _c_oid, _c_evidence)
+                     actions.append("order filed %s %s (oid %s)" % (_c_lane, _c_stage, _c_oid))
+                     co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                     events.append("closeout-order-filed")
+@@ -4002,7 +4304,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+                               "escalated": bool(_sv_prev.get("escalated"))}
+         elif _sv_act == "rewake":
+-            _sw_note, _sw_oid = coord_note(_role, "STARVATION RE-WAKE #%d %s: NEXT '%s' waits on input with no order; post STATE/NEXT or act; ACK it with post_update ref=<id> before starting" % (issue, _role, (boxes[_role]["next"] or "")[:80]), ack_by=True)
++            _sw_note, _sw_oid = coord_note(_role, "STARVATION RE-WAKE #%d %s: NEXT '%s' waits on input with no order; post STATE/NEXT or act; ACK it with post_update ref=<id> before starting" % (issue, _role, (boxes[_role]["next"] or "")[:80]), ack_by=True, done_by=True, evidence="NOTE", done_sla_s=3600)
+             if _sw_oid in rings:
+                 actions.append("order deferred %s starvation re-wake (oid collision)" % _role)
+                 _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+@@ -4012,6 +4314,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_sw_oid] = 0
+                 has_unacked.add(_role)
+                 file_order_deadline(ad_store, _sw_oid)
++                file_order_delivery(dl_store, _sw_oid, "NOTE", 3600)
+                 if _role == "dev":
+                     cycle["dev_order"] = issue
+                 _sv_new[_role] = {"count": _sv_count, "oid": _sw_oid,
+@@ -4020,6 +4323,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_sw_oid] = 0
+                 has_unacked.add(_role)
+                 file_order_deadline(ad_store, _sw_oid)
++                file_order_delivery(dl_store, _sw_oid, "NOTE", 3600)
+                 actions.append("order filed %s starvation re-wake (oid %s)" % (_role, _sw_oid))
+                 _sv_new[_role] = {"count": _sv_count, "oid": _sw_oid,
+                                   "escalated": False}
+@@ -4122,6 +4426,16 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 s["ack_deadline"] = kept
+             else:
+                 s.pop("ack_deadline", None)
++        if dl_store:
++            merged_dl = dict(s.get("delivery") or {})
++            merged_dl.update(dl_store)
++            s["delivery"] = merged_dl
++        if isinstance(s.get("delivery"), dict):
++            kept_dl = prune_delivery(s["delivery"], rings, boxes)
++            if kept_dl:
++                s["delivery"] = kept_dl
++            else:
++                s.pop("delivery", None)
+         if isinstance(co_store, dict) and co_store:
+             s["closeout"] = co_store
+         if ghc_store:
+@@ -4135,15 +4449,26 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+         if not s.get("halt") and not halt_now:
+             _dev_done = dev_done_ts(boxes["dev"]["all"])
+             _qe_verified = qe_verified_ts(boxes["qe"]["all"])
++            _approved_ts = auditor_approved_ts(boxes["auditor"]["all"],
++                                               boxes["auditor"].get("full"))
++            # #466 R2: cursor-true anchors. A waiting-audit trailer is
++            # stale once the lane acted past it (verdict handoff,
++            # approval, or IMPL READY); qe anchors on the IMPL READY.
++            _asess_now = as_store if isinstance(as_store, dict) else (st.get("audit_session") or {})
++            _dev_anchor = max(_approved_ts or "", _asess_now.get("verdict_handed_ts") or "",
++                              impl_ts or "") or None
+             _phase = derive_room_phase(bool(st.get("gh_closed") or st.get("phase") == "CLOSED"),
+-                                       _dev_done, _approved, _qe_verified, impl_ts)
++                                       _dev_done, _approved_ts, _qe_verified, impl_ts)
+             s["phase"] = _phase
+-            if _phase == "CLOSE-OUT" and s.get("state") == "IN_PROGRESS":
+-                s["state"] = "CLOSING"
++            _nst = next_room_state(_phase, s.get("state"), bool(st.get("gh_closed")))
++            if _nst != (s.get("state") or ""):
++                s["state"] = _nst
+             _cur_pending = s.get("pending") or ""
+             _new_pending = room_pending_text(
+                 _phase, boxes["dev"]["next"], boxes["qe"]["next"],
+-                audit_note if need_verdict else None)
++                audit_note if need_verdict else None,
++                boxes["dev"].get("status_ts"), _dev_anchor,
++                boxes["qe"].get("status_ts"), impl_ts or None)
+             if _new_pending != _cur_pending:
+                 s["pending"] = pending_refresh(_cur_pending, _new_pending,
+                                                s.get("halt"), halt_now)
+@@ -5574,6 +5899,63 @@ def mode_self_test():
+           file_order_deadline(_ad, "dev:2026-11-02T21:28:52") == {"dev:2026-11-02T21:28:52": {"by": "2026-11-02T21:43:52Z", "nudged": 0}}, True)
+     check("file-order-deadline-bad-oid",
+           file_order_deadline({}, "bogus") == {}, True)
++    # #466 R1: delivery enforcement (ACK is receipt, done-by is delivery).
++    _dl = {}
++    check("delivery-meta-done-by",
++          file_order_delivery(_dl, "dev:2026-11-02T21:28:52", "DONE") == {"dev:2026-11-02T21:28:52": {"filed": "2026-11-02T21:28:52", "done_by": "2026-11-02T21:58:52Z", "evidence": "DONE", "nudged": 0, "escalated": 0}}, True)
++    check("delivery-done-by-stamp",
++          done_by_ts("2026-11-02T21:28:52") == "2026-11-02T21:58:52Z"
++          and done_by_ts("garbage") is None, True)
++    check("delivery-ts-done-after-filed",
++          delivery_ts("2026-11-02T21:28:52", "dev", "DONE",
++                      ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"]) == "2026-11-02T22:10:00", True)
++    check("delivery-ts-older-done-ignored",
++          delivery_ts("2026-11-02T23:00:00", "dev", "DONE",
++                      ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"]) is None, True)
++    check("delivery-ts-note-any-post",
++          delivery_ts("2026-11-02T21:28:52", "qe", "NOTE",
++                      ["2026-11-02T22:00:00Z FROM=qe NOTE :: working"]) == "2026-11-02T22:00:00", True)
++    check("delivery-ts-wrong-role-ignored",
++          delivery_ts("2026-11-02T21:28:52", "qe", "NOTE",
++                      ["2026-11-02T22:00:00Z FROM=dev NOTE :: working"]) is None, True)
++    _dstore = {"dev:2026-11-02T21:28:52": {"filed": "2026-11-02T21:28:52", "done_by": "2026-11-02T21:58:52Z", "evidence": "DONE", "nudged": 0, "escalated": 0}}
++    _dboxes = {"dev": {"all": [], "coord_last": None}, "qe": {"all": [], "coord_last": None}}
++    check("delivery-overdue-idle",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": 1}, _dboxes, "2026-11-02T22:00:00Z") == ["dev:2026-11-02T21:28:52"], True)
++    check("delivery-not-overdue-before-done-by",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": 1}, _dboxes, "2026-11-02T21:30:00Z") == [], True)
++    check("delivery-not-overdue-done",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": 1},
++                               {"dev": {"all": ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"], "coord_last": None}, "qe": {"all": [], "coord_last": None}},
++                               "2026-11-02T23:00:00Z") == [], True)
++    check("delivery-ack-does-not-clear",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": -1}, _dboxes, "2026-11-02T22:00:00Z") == ["dev:2026-11-02T21:28:52"], True)
++    check("delivery-escalated-terminal",
++          delivery_overdue_ids({"dev:2026-11-02T21:28:52": dict(_dstore["dev:2026-11-02T21:28:52"], escalated=1)},
++                               {"dev:2026-11-02T21:28:52": 3}, _dboxes, "2026-11-02T23:30:00Z") == [], True)
++    check("delivery-nudge-once",
++          delivery_escalate_due({"done_by": "2026-11-02T21:58:52Z"}, "2026-11-02T21:59:00Z") is False
++          and delivery_escalate_due({"done_by": "2026-11-02T21:58:52Z"}, "2026-11-02T22:13:52Z") is True, True)
++    _supboxes = {"dev": {"all": [], "coord_last": "2026-11-02T22:30:00Z FROM=coord NOTE :: BACKLOG assignment [oid dev:2026-11-02T22:30:00]"}, "qe": {"all": [], "coord_last": None}}
++    check("delivery-prune-superseded",
++          prune_delivery(_dstore, {"dev:2026-11-02T21:28:52": 1}, _supboxes) == {}, True)
++    check("delivery-prune-keeps-live",
++          prune_delivery(_dstore, {"dev:2026-11-02T21:28:52": 1}, _dboxes) == _dstore, True)
++    check("delivery-prune-drops-delivered",
++          prune_delivery(_dstore, {"dev:2026-11-02T21:28:52": -1},
++                         {"dev": {"all": ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"], "coord_last": None}, "qe": {"all": [], "coord_last": None}}) == {}, True)
++    _bb1 = backlog_brief_text(240, 390, None, "2026-11-02T21:58:52Z")
++    _bb2 = backlog_brief_text(240, 390, ("stale next", "2026-11-02T18:00:00Z"), "2026-11-02T21:58:52Z")
++    check("backlog-brief-finish-line",
++          "BACKLOG SWAP (#240)" in _bb1 and "BACKLOG/RECOVERY (#240)" in _bb2
++          and _bb1.count("Finish line:") == 1 and _bb2.count("Finish line:") == 1
++          and "done-by 2026-11-02T21:58:52Z" in _bb1 and "done-by 2026-11-02T21:58:52Z" in _bb2
++          and "ACK it with post_update ref=<id>" in _bb1 and "pure ACK never satisfies done-by" in _bb2, True)
++    _cn2, _coid2 = coord_note("dev", "x", ack_by=True, done_by=True, evidence="DONE")
++    check("coord-note-done-by-keeps-oid-last",
++          _cn2.endswith("[oid %s]" % _coid2) and " done = DONE " in _cn2
++          and " done-by " in _cn2 and " ack-by " in _cn2
++          and _cn2.index(" done-by ") < _cn2.index(" ack-by ") < _cn2.index(" [oid "), True)
+     check("ring-line-notes-unchanged",
+           ring(SimpleNamespace(dry=True), "s", "", "t", channel="notes") == "WOULD ring s: notes: t -- read logs/consultant-notes.md", True)
+     _w1 = "2026-11-02T18:46:59Z FROM=dev WAKE :: inbox: dev READY"
+@@ -6016,16 +6398,36 @@ def mode_self_test():
+     check("starvation-sweep-halt-suppresses",
+           starvation_sweep(_cboxes, dict(_cst, halt=True), {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == []
+           and starvation_sweep(_cboxes, _cst, {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), True) == [], True)
+-    check("phase-recon", derive_room_phase(False, None, False, None, None) == "RECON", True)
+-    check("phase-impl", derive_room_phase(False, None, True, None, None) == "IMPL", True)
++    check("phase-recon", derive_room_phase(False, None, None, None, None) == "RECON", True)
++    check("phase-impl", derive_room_phase(False, None, "2026-11-02T08:00:00Z", None, None) == "IMPL", True)
+     check("phase-verify-ready",
+-          derive_room_phase(False, None, True, None, "2026-11-02T08:03:09Z") == "VERIFY", True)
++          derive_room_phase(False, None, "2026-11-02T08:00:00Z", None, "2026-11-02T08:03:09Z") == "VERIFY", True)
+     check("phase-verify-qe",
+-          derive_room_phase(False, None, False, "2026-11-02T08:03:09Z", None) == "VERIFY", True)
++          derive_room_phase(False, None, None, "2026-11-02T08:03:09Z", None) == "VERIFY", True)
+     check("phase-close-out",
+-          derive_room_phase(False, "2026-11-02T08:03:09Z", True, None, None) == "CLOSE-OUT", True)
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", None, None) == "CLOSE-OUT", True)
+     check("phase-closed",
+-          derive_room_phase(True, "2026-11-02T08:03:09Z", True, "2026-11-02T08:03:09Z", "2026-11-02T08:03:09Z") == "CLOSED", True)
++          derive_room_phase(True, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z", "2026-11-02T08:03:09Z") == "CLOSED", True)
++    # #466 R2: era guards — a newer approval or IMPL READY re-opens.
++    check("phase-new-impl-reopens",
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", None, "2026-11-02T09:00:00Z") == "VERIFY", True)
++    check("phase-new-approval-after-done",
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T09:00:00Z", None, None) == "IMPL", True)
++    check("phase-closeout-normal",
++          derive_room_phase(False, "2026-11-02T09:00:00Z", "2026-11-02T08:00:00Z", "2026-11-02T09:30:00Z", "2026-11-02T08:30:00Z") == "CLOSE-OUT", True)
++    check("phase-closed-terminal",
++          derive_room_phase(True, None, None, None, "2026-11-02T09:00:00Z") == "CLOSED", True)
++    check("state-closeout-closing",
++          next_room_state("CLOSE-OUT", "IN_PROGRESS", False) == "CLOSING", True)
++    check("state-regress-to-inprogress",
++          next_room_state("IMPL", "CLOSING", False) == "IN_PROGRESS"
++          and next_room_state("VERIFY", "CLOSING", False) == "IN_PROGRESS", True)
++    check("state-closed-terminal",
++          next_room_state("IMPL", "CLOSED", False) == "CLOSED"
++          and next_room_state("IMPL", "IN_PROGRESS", True) == "IN_PROGRESS", True)
++    check("state-passthrough",
++          next_room_state("IMPL", "IN_PROGRESS", False) == "IN_PROGRESS"
++          and next_room_state("CLOSE-OUT", "HOLD", False) == "HOLD", True)
+     check("pending-from-next",
+           room_pending_text("IMPL", "waiting IMPL order", "idle :: waiting", "ring audit lane") == "IMPL: dev: waiting IMPL order | qe: idle :: waiting | audit: ring audit lane", True)
+     check("pending-no-audit-bit",
+@@ -6035,6 +6437,36 @@ def mode_self_test():
+     check("pending-closed", room_pending_text("CLOSED", "x", "y", "z") == "CLOSED", True)
+     check("pending-cap-200",
+           len(room_pending_text("IMPL", "x" * 300, None, None)) == 200, True)
++    # #466 R2: stale waiting-audit trailers follow the handled cursor.
++    check("pending-suppresses-stale-handoff",
++          room_pending_text("IMPL", "waiting auditor plan-review", None, None,
++                            "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z") == "IMPL: dev: addressing audit verdict", True)
++    check("pending-keeps-live-next",
++          room_pending_text("IMPL", "waiting auditor plan-review", None, None,
++                            "2026-11-02T09:00:00Z", "2026-11-02T08:00:00Z") == "IMPL: dev: waiting auditor plan-review", True)
++    check("pending-keeps-nonwaiting",
++          room_pending_text("IMPL", "working revised code", None, None,
++                            "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z") == "IMPL: dev: working revised code", True)
++    check("pending-no-anchor-keeps-text",
++          room_pending_text("IMPL", "waiting auditor plan-review", None, None,
++                            "2026-11-02T08:00:00Z", None) == "IMPL: dev: waiting auditor plan-review", True)
++    check("pending-closeout-no-stale-audit",
++          room_pending_text("CLOSE-OUT", "waiting auditor plan-review", "idle", None,
++                            "2026-11-02T08:00:00Z", None) == "CLOSE-OUT: dev: awaiting merge-close | qe: idle", True)
++    check("pending-verify-era",
++          room_pending_text("VERIFY", "waiting auditor plan-review", None, None,
++                            "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z") == "VERIFY: dev: verifying", True)
++    # #466 R2: approved-ts helper mirrors auditor_approved selection.
++    check("approved-ts-post",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=audit DECISION :: DECISION: APPROVED ok"], []) == "2026-11-02T08:00:00", True)
++    check("approved-ts-need-none",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=audit DECISION :: DECISION: NEED S1 x"], []) is None, True)
++    check("approved-ts-trailer-newer",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=audit READY :: review posted"],
++                              ["2026-11-02T08:00:00Z FROM=audit READY :: review posted",
++                               "DECISION: APPROVED fine"]) == "2026-11-02T08:00:00", True)
++    check("approved-ts-spoof-ignored",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=dev NOTE :: DECISION: APPROVED"], []) is None, True)
+     check("pending-preserves-manual",
+           pending_refresh("MANUAL_INTERVENTION: x", "IMPL: y", False, False) == "MANUAL_INTERVENTION: x"
+           and pending_refresh("old", "new", True, False) == "old"
+@@ -6109,8 +6541,8 @@ def mode_self_test():
+     check("merge-ready-unapproved",
+           merge_ready_ok("x NEED y", "2026-11-02T09:00:00Z", [], True, None) is False, True)
+     check("closeout-state-closing",
+-          derive_room_phase(False, "2026-11-02T08:03:09Z", True, None, None) == "CLOSE-OUT"
+-          and derive_room_phase(True, "2026-11-02T08:03:09Z", True, "2026-11-02T09:00:00Z", None) == "CLOSED", True)
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", None, None) == "CLOSE-OUT"
++          and derive_room_phase(True, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z", None) == "CLOSED", True)
+     check("audit-state-live", audit_state(True) == "WORKING", True)
+     check("audit-state-absent", audit_state(False) == "-", True)
+     _appr = "2026-11-02T08:00:00Z FROM=audit DECISION :: APPROVED — step-a may proceed"
+diff --git a/src/kernel/cap/cap.cpp b/src/kernel/cap/cap.cpp
+index 7f1e748d4..9a7d8277e 100644
+--- a/src/kernel/cap/cap.cpp
++++ b/src/kernel/cap/cap.cpp
+@@ -160,6 +160,12 @@ void CNode::clear_grant(uint32_t idx) noexcept {
+     slots[idx].rights &= ~CapRights::GRANT;
+ }
+ 
++void CNode::set_policy_word(uint32_t word) noexcept {
++    SpinLockGuard<sync::SpinLock> guard(lock_);
++    policy_word_ = word;
++    ++policy_gen_; // atomic with the store under the same lock (S3 note)
++}
++
+ KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
+                      CapRights need_rights) noexcept {
+     if (!cspace)
+@@ -242,8 +248,13 @@ size_t occupied_count(const CNode *cspace) noexcept {
+ ///        the pin taken here is released on both success and failure.
+ ///        Forwards an optional generation out-slot to the dst install
+ ///        (issue #266: lets syscall returns encode with no TOCTOU).
++///        Issue #240 step-a: reads the cached policy word under the existing
++///        src lock snapshot (one load, zero new locks); all-allow at step-a
++///        so the check always passes (zero delta). Step-b adds default-deny
++///        + gen-compare fail-closed.
+ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+-                   CapRights rights, uint32_t *gen_out = nullptr) noexcept {
++                   CapRights rights, uint32_t *gen_out = nullptr,
++                   uint32_t op_mask = kCapBrokerAllowCopy) noexcept {
+     if (!src || !dst || src == dst)
+         return -1;
+     // lookup() returns the target with acquire() already taken.
+@@ -262,6 +273,10 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
+             target->release();
+             return -1;
+         }
++        if (!CNode::policy_allows(src->policy_word_, op_mask)) {
++            target->release();
++            return -1;
++        }
+         type = src->slots[idx].type;
+         src_rights = src->slots[idx].rights;
+         src_gen = src->slots[idx].gen;
+@@ -294,6 +309,8 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+     if (!target)
+         return -1;
+     // Capture the type/rights under the lock, then clear GRANT (mint-once).
++    // Issue #240 step-a: policy-word read under the existing lock (one
++    // load, zero new locks); all-allow so always passes (zero delta).
+     CapType type = CapType::Null;
+     CapRights rights = CapRights::NONE;
+     uint32_t src_gen = 0;
+@@ -305,6 +322,11 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+             target->release();
+             return -1;
+         }
++        if (!CNode::policy_allows(src->policy_word_,
++                                   kCapBrokerAllowGrant)) {
++            target->release();
++            return -1;
++        }
+         type = src->slots[idx].type;
+         rights = src->slots[idx].rights;
+         src_gen = src->slots[idx].gen;
+@@ -323,7 +345,8 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
+ int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
+          uint32_t badge, uint32_t *gen_out) noexcept {
+     (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
+-    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out);
++    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out,
++                           kCapBrokerAllowMint);
+ }
+ 
+ } // namespace kernel::cap
+diff --git a/src/kernel/cap/cap.hpp b/src/kernel/cap/cap.hpp
+index 0c99ccab6..beaf701df 100644
+--- a/src/kernel/cap/cap.hpp
++++ b/src/kernel/cap/cap.hpp
+@@ -35,6 +35,17 @@ struct TaskControlBlock;
+ 
+ namespace kernel::cap {
+ 
++/// @brief Per-CNode delegation policy bits (issue #240, cached policy word).
++///        The kernel enforces, the broker allows. OFF / default-allow value
++///        is kCapBrokerAllowAll (zero behavioral delta at step-a).
++constexpr uint32_t kCapBrokerAllowGrant = 1u << 0;
++constexpr uint32_t kCapBrokerAllowCopy = 1u << 1;
++constexpr uint32_t kCapBrokerAllowMint = 1u << 2;
++constexpr uint32_t kCapBrokerAllowRetype = 1u << 3;
++constexpr uint32_t kCapBrokerAllowAll =
++    kCapBrokerAllowGrant | kCapBrokerAllowCopy | kCapBrokerAllowMint |
++    kCapBrokerAllowRetype;
++
+ /// @brief A capability node: a bounded table of slots.  Itself a KernelObject
+ ///        (shared-heap class, PipeBuffer pattern).  A task's root CNode is its
+ ///        CSpace and is attached to the TCB intrusive object list so teardown
+@@ -51,6 +62,13 @@ class CNode : public KernelObject {
+     CNode *parent_ = nullptr;
+     uint32_t depth_ = 0;
+     sync::SpinLock lock_;
++    // Issue #240 cached delegation policy (step-a: always all-allow).
++    // Placed after the lock (off the slots hot path). Read under the
++    // existing slot-table lock (one load, zero new locks/order); mutated
++    // only via set_policy_word (word store + gen bump atomic under the
++    // same lock). OFF shim: word all-allow + row absent => zero delta.
++    uint32_t policy_word_ = kCapBrokerAllowAll;
++    uint32_t policy_gen_ = 1;
+ 
+     /// @brief Allocates a CNode from the MemPool and marks it pool-backed.
+     ///        Returns nullptr on allocation failure.
+@@ -96,6 +114,29 @@ class CNode : public KernelObject {
+     /// @brief Clears the GRANT right on the slot at @p idx (mint-once after
+     ///        a grant).  No-op on an unoccupied slot.
+     void clear_grant(uint32_t idx) noexcept;
++
++    /// @brief Returns the cached delegation policy word (issue #240).
++    ///        Lock-free read is NOT safe under concurrent SET; callers on
++    ///        the authorize path read under the existing slot-table lock.
++    uint32_t policy_word() const noexcept {
++        return policy_word_;
++    }
++
++    /// @brief Returns the policy generation (bumped on every SET).
++    uint32_t policy_gen() const noexcept {
++        return policy_gen_;
++    }
++
++    /// @brief Stores @p word and bumps the generation atomically under the
++    ///        slot-table lock (issue #240 S3: atomic word+gen under same
++    ///        lock). Caller must hold no cap lock (takes lock_).
++    void set_policy_word(uint32_t word) noexcept;
++
++    /// @brief True when @p op_mask (kCapBrokerAllow*) is allowed by @p word.
++    static constexpr bool policy_allows(uint32_t word,
++                                        uint32_t op_mask) noexcept {
++        return (word & op_mask) == op_mask;
++    }
+ };
+ 
+ /// @brief Looks up @p handle in @p cspace and returns a PREFIX-reference
+diff --git a/src/kernel/cap/cap_broker.cpp b/src/kernel/cap/cap_broker.cpp
+new file mode 100644
+index 000000000..48c4c0ec2
+--- /dev/null
++++ b/src/kernel/cap/cap_broker.cpp
+@@ -0,0 +1,187 @@
++#include <kernel/cap/cap_broker.hpp>
++
++#if CONFIG_CAP_BROKER
++
++/*
++ * NexIOS RTOS — Capability-broker policy proxy (issue #240).
++ * Whole TU is `#if CONFIG_CAP_BROKER`-guarded: the OFF build (`0`,
++ * shipped default) yields an empty TU (no symbols), so the link is
++ * byte-identical to the pre-#240 tree. Broker-allows/kernel-enforces:
++ * the broker owns per-task policy words, the kernel enforces the cached
++ * word on the delegation path. Step-a: BIND+LOOPBACK live, policy ops
++ * typed -ENOSYS pre-flip (no default-deny flip until the §7 gate).
++ */
++
++#include <kernel/ipc/ipc.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++
++namespace kernel {
++namespace cap_broker {
++namespace {
++
++uint64_t g_cap_broker_pid = 0;
++uint32_t g_cap_broker_epoch = 1;
++
++struct Tombstone {
++    uint32_t owner_id;
++    uint32_t owner_gen;
++};
++
++Tombstone g_tombstones[16] = {};
++uint64_t g_tombstone_count = 0;
++
++/// @brief Bounded wait for one server RPC (coarse ticks).
++/// Fail-closed `-EAGAIN` past this; never parks a kernel task forever.
++constexpr uint64_t kRpcGuardTicks = 5000;
++
++} // namespace
++
++void set_cap_broker_pid(uint64_t pid) {
++    g_cap_broker_pid = pid;
++}
++
++uint64_t get_cap_broker_pid() {
++    return __atomic_load_n(&g_cap_broker_pid, __ATOMIC_RELAXED);
++}
++
++bool cap_broker_alive() {
++    const uint64_t pid = get_cap_broker_pid();
++    if (pid == 0) {
++        return false;
++    }
++    auto *srv = Scheduler::find_task(pid);
++    if (srv == nullptr) {
++        return false;
++    }
++    return srv->state != TaskState::TERMINATED &&
++           srv->state != TaskState::REAPED;
++}
++
++uint32_t cap_broker_epoch() {
++    return __atomic_load_n(&g_cap_broker_epoch, __ATOMIC_RELAXED);
++}
++
++void cap_broker_bump_epoch() {
++    __atomic_fetch_add(&g_cap_broker_epoch, 1U, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_tombstone_count, 0, __ATOMIC_RELAXED);
++}
++
++void cap_broker_on_restart(uint64_t pid) {
++    set_cap_broker_pid(pid);
++    cap_broker_bump_epoch();
++}
++
++void cap_broker_note_dead_owner(uint32_t owner_id, uint32_t owner_gen) {
++    // Lock-free ring write (teardown context: no locks, no IPC).
++    uint64_t count =
++        __atomic_load_n(&g_tombstone_count, __ATOMIC_RELAXED);
++    if (count >= 16) {
++        return; // bounded residual drop (documented, ≤ table size)
++    }
++    g_tombstones[count].owner_id = owner_id;
++    g_tombstones[count].owner_gen = owner_gen;
++    __atomic_store_n(&g_tombstone_count, count + 1, __ATOMIC_RELAXED);
++}
++
++bool cap_broker_rpc(const CapBrokerRpc &req, CapBrokerRpc &reply) {
++    const uint64_t pid = get_cap_broker_pid();
++    if (pid == 0 || !cap_broker_alive()) {
++        return false;
++    }
++    auto *cur = Scheduler::current_task();
++    if (cur == nullptr) {
++        return false;
++    }
++    Message msg{};
++    msg.type = static_cast<uint64_t>(req.op);
++    msg.priority = cur->priority;
++    __builtin_memcpy(msg.data, &req, sizeof(req));
++    msg.data_size = sizeof(req);
++    Message raw{};
++    if (!IPC::send_sync_bounded(pid, msg, raw, kRpcGuardTicks)) {
++        return false;
++    }
++    if (raw.data_size != sizeof(reply)) {
++        return false;
++    }
++    __builtin_memcpy(&reply, raw.data, sizeof(reply));
++    // Reply identity: server, epoch, owner (id+gen). A mismatch is
++    // dropped by the caller (bounded re-wait), never consumed.
++    if (raw.sender_id != pid || reply.epoch != cap_broker_epoch() ||
++        reply.owner_id != req.owner_id ||
++        reply.owner_gen != req.owner_gen) {
++        return false;
++    }
++    return true;
++}
++
++namespace {
++
++bool cap_broker_bind_op(CapBrokerOp op, uint64_t arg0, uint64_t *echo_out,
++                        int64_t *status_out) {
++    CapBrokerRpc req{};
++    req.op = static_cast<uint8_t>(op);
++    req.arg0 = arg0;
++    auto *cur = Scheduler::current_task();
++    if (cur == nullptr) {
++        return false;
++    }
++    req.owner_id = static_cast<uint32_t>(cur->id);
++    req.owner_gen = cur->generation;
++    req.epoch = cap_broker_epoch();
++    CapBrokerRpc reply{};
++    if (!cap_broker_rpc(req, reply)) {
++        return false;
++    }
++    if (echo_out != nullptr) {
++        *echo_out = reply.arg0;
++    }
++    if (status_out != nullptr) {
++        *status_out = reply.status;
++    }
++    return true;
++}
++
++} // namespace
++
++int64_t cap_broker_probe_bind() {
++    int64_t status = -38;
++    if (!cap_broker_bind_op(CapBrokerOp::BIND, 0, nullptr, &status)) {
++        return -38; // -ENOSYS: server unavailable pre-flip
++    }
++    return status;
++}
++
++int64_t cap_broker_probe_loopback(uint64_t payload, uint64_t *echo) {
++    int64_t status = -38;
++    uint64_t got = 0;
++    if (!cap_broker_bind_op(CapBrokerOp::LOOPBACK, payload, &got,
++                             &status)) {
++        return -38; // -ENOSYS: server unavailable pre-flip
++    }
++    if (status != 0) {
++        return status;
++    }
++    if (echo != nullptr) {
++        *echo = got;
++    }
++    return 0;
++}
++
++int64_t cap_broker_probe_set_policy(uint64_t target_id, uint32_t mask) {
++    (void)target_id;
++    (void)mask;
++    return -38; // -ENOSYS: policy ops land with the step-b flip, not step-a
++}
++
++int64_t cap_broker_probe_get_policy(uint64_t target_id, uint32_t *mask) {
++    (void)target_id;
++    (void)mask;
++    return -38; // -ENOSYS: policy ops land with the step-b flip, not step-a
++}
++
++} // namespace cap_broker
++} // namespace kernel
++
++#endif // CONFIG_CAP_BROKER
+diff --git a/src/kernel/cap/cap_broker.hpp b/src/kernel/cap/cap_broker.hpp
+new file mode 100644
+index 000000000..bcea15280
+--- /dev/null
++++ b/src/kernel/cap/cap_broker.hpp
+@@ -0,0 +1,103 @@
++#pragma once
++
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file cap_broker.hpp
++/// @brief Capability-broker policy proxy (issue #240, strangler step a).
++///        Kernel-side contract for the userspace cap-broker PD: 48 B wire
++///        RPC, PID cell, epoch/liveness, tombstone drain, and probe
++///        entry points. Everything here is declaration-only; definitions
++///        live in cap_broker.cpp inside `#if CONFIG_CAP_BROKER`, so the OFF
++///        build (`CONFIG_CAP_BROKER=0`, shipped default) is byte-identical
++///        to the pre-#240 tree. Broker-allows/kernel-enforces: the broker
++///        manages per-task policy words, the kernel enforces the cached
++///        word on the grant/copy/mint/retype path. Step-a: BIND+LOOPBACK
++///        live, policy ops typed -ENOSYS pre-flip.
++
++#include <types.hpp>
++#include <kernel/nexios_config.h>
++
++namespace kernel::cap_broker {
++
++#if CONFIG_CAP_BROKER
++
++/// @brief Wire ops carried in CapBrokerRpc::op (server dispatch switch).
++enum class CapBrokerOp : uint8_t {
++    BIND = 0,        ///< server announce / capability handshake
++    LOOPBACK = 1,    ///< echo probe (parity: kernel vs server path)
++    SET_POLICY = 2,  ///< set per-task delegation mask (step-b; -ENOSYS now)
++    GET_POLICY = 3,  ///< read back per-task mask (step-b; -ENOSYS now)
++    CLEAR_POLICY = 4,///< clear per-task mask bits (step-b; -ENOSYS now)
++};
++
++/// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
++struct CapBrokerRpc {
++    uint8_t op;         ///< CapBrokerOp
++    uint8_t flags;      ///< reserved (zero)
++    uint16_t rsvd;      ///< reserved (zero)
++    uint32_t epoch;     ///< proxy epoch (server purges on increase)
++    uint32_t owner_id;  ///< requesting task id (issue #441: never PID 1)
++    uint32_t owner_gen; ///< requesting task generation
++    uint64_t target_id; ///< policy target task id (SET/GET/CLEAR)
++    uint32_t mask;      ///< delegation mask bits (SET/CLEAR)
++    uint32_t rsvd2;     ///< reserved (zero)
++    uint64_t arg0;      ///< LOOPBACK echo payload
++    uint16_t status_op; ///< echoed op for mismatch detection
++    uint16_t status;    ///< reply: negated errno (0 = ok)
++    uint32_t rsvd3;     ///< reserved (zero)
++};
++
++static_assert(sizeof(CapBrokerRpc) <= 48,
++              "CapBrokerRpc must fit the 48 B fast IPC payload");
++
++/// @brief Record the PID of the cap-broker daemon task.
++void set_cap_broker_pid(uint64_t pid);
++/// @brief Get the recorded cap-broker PID (0 when unset).
++uint64_t get_cap_broker_pid();
++/// @brief True when the server task is live (present, not TERMINATED/REAPED).
++bool cap_broker_alive();
++/// @brief Proxy epoch (bumped on restart / snapshot reset / boot table).
++uint32_t cap_broker_epoch();
++/// @brief Bump the epoch and purge tombstones (server restart path).
++void cap_broker_bump_epoch();
++/// @brief Supervisor hook: record a restart (store pid, bump epoch).
++void cap_broker_on_restart(uint64_t pid);
++/// @brief Teardown hook: latch a dead owner's id+generation (lock-free).
++void cap_broker_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
++/// @brief Generic RPC: validate server, bounded wait, validated reply.
++/// @return true with *reply filled on a validated reply, false fail-closed
++///         (server down, timeout, or reply mismatch) with no block held.
++[[nodiscard]] bool cap_broker_rpc(const CapBrokerRpc &req,
++                                  CapBrokerRpc &reply);
++/// @brief BIND probe: attach to a live PD, expect ok.
++/// @return 0 on bound, -ENOSYS when the server is unavailable.
++int64_t cap_broker_probe_bind();
++/// @brief LOOPBACK probe: echo arg0 through the live PD.
++/// @return 0 with *echo filled on success, -ENOSYS when unavailable.
++int64_t cap_broker_probe_loopback(uint64_t payload, uint64_t *echo);
++/// @brief SET_POLICY probe (step-b; always -ENOSYS at step-a).
++/// @return -ENOSYS pre-flip.
++int64_t cap_broker_probe_set_policy(uint64_t target_id, uint32_t mask);
++/// @brief GET_POLICY probe (step-b; always -ENOSYS at step-a).
++/// @return -ENOSYS pre-flip.
++int64_t cap_broker_probe_get_policy(uint64_t target_id, uint32_t *mask);
++
++#endif // CONFIG_CAP_BROKER
++
++} // namespace kernel::cap_broker
+diff --git a/src/kernel/cap/untyped.cpp b/src/kernel/cap/untyped.cpp
+index 0365b70b0..20591f96e 100644
+--- a/src/kernel/cap/untyped.cpp
++++ b/src/kernel/cap/untyped.cpp
+@@ -24,6 +24,7 @@
+ #include <kernel/cap/frame.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/memory/pmm.hpp>
++#include <kernel/sync/spinlock_guard.hpp>
+ #include <kernel/test/resource_tracker.hpp>
+ #include <kernel/nexios_config.h>
+ #include <kernel/arch/page_table.hpp>
+@@ -132,6 +133,15 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
+            size_t size, CapRights rights, uint32_t *gen_out) noexcept {
+     if (!cspace)
+         return -1;
++    // Issue #240 step-a: cached policy-word check (one short locked load,
++    // zero new lock order); all-allow at step-a so always passes.
 +    {
-+      "root": "/tmp/*",
-+      "decision": "allow",
-+      "roles": [
-+        "auditor"
-+      ],
-+      "external_variants": [
-+        "",
-+        "/**"
-+      ],
-+      "edit_variants": [
-+        "",
-+        "/**"
-+      ]
++        SpinLockGuard<sync::SpinLock> guard(cspace->lock_);
++        if (!CNode::policy_allows(cspace->policy_word_,
++                                   kCapBrokerAllowRetype)) {
++            return -1;
++        }
++    }
+     // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
+     // alive across the transfer so dispose() cannot run mid-retype.
+     KernelObject *obj = lookup(cspace, untyped_handle, CapType::Untyped,
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 8714efab3..405ca2864 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -1335,6 +1335,9 @@ extern "C" void panic(const char *msg);
+ #if CONFIG_LOG_SRV != 0 && CONFIG_LOG_SRV != 1
+ #error "CONFIG_LOG_SRV must be 0 or 1 (default 0)"
+ #endif
++#if CONFIG_CAP_BROKER != 0 && CONFIG_CAP_BROKER != 1
++#error "CONFIG_CAP_BROKER must be 0 or 1 (default 0)"
++#endif
+ #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
+ #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+ #endif
+@@ -1376,6 +1379,16 @@ extern "C" void panic(const char *msg);
+ #ifndef CONFIG_LOG_SRV_FAULT_INJECT
+ #define CONFIG_LOG_SRV_FAULT_INJECT 0
+ #endif
++
++/// cap-broker externalization master switch (issue #240, strangler step a).
++/// 0 = ambient delegation authority (shipped default, bit-identical behavior).
++/// 1 = cap-broker PD serves delegation policy; kernel enforces a cached
++/// per-CNode policy word. All cap-broker kernel code is `#if
++/// CONFIG_CAP_BROKER`-guarded (empty TU when 0); no runtime `if` on this
++/// knob. Default: 0.
++#ifndef CONFIG_CAP_BROKER
++#define CONFIG_CAP_BROKER 0
++#endif
+ #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
+ #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+ #endif
+diff --git a/src/kernel/task/boot_sdf.cpp b/src/kernel/task/boot_sdf.cpp
+index c5a4fa152..a5fa3ceef 100644
+--- a/src/kernel/task/boot_sdf.cpp
++++ b/src/kernel/task/boot_sdf.cpp
+@@ -4,7 +4,7 @@
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
+     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
+-    CONFIG_LOG_SRV
++    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
+ 
+ #include <kernel/task/task.hpp>
+ #include <kernel/arch/hal/device_regions.hpp>
+@@ -202,24 +202,31 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
+         // Log sink policy only (issue #51): Klog/Dmesg sink + drop/meter.
+         // No device caps ever; same structural rule as TERM_SRV.
+         return 0;
++    case PdRole::CAP_BROKER:
++        // Delegation policy only (issue #240): broker-allows /
++        // kernel-enforces over a cached per-CNode word. No device caps
++        // ever; the row is the empty set by structural rule.
++        return 0;
      }
-   ],
-   "edit_deny": [
-diff --git a/tools/agents/fence/roles/auditor.json b/tools/agents/fence/roles/auditor.json
-index 8925be9f2..91d008d1b 100644
---- a/tools/agents/fence/roles/auditor.json
-+++ b/tools/agents/fence/roles/auditor.json
-@@ -28,7 +28,31 @@
-       "diff *": "allow",
-       "grep *": "allow",
-       "tail *": "allow",
--      "wc *": "allow"
-+      "wc *": "allow",
-+      "ls *": "allow",
-+      "head *": "allow",
-+      "echo *": "allow",
-+      "mkdir *": "allow",
-+      "cp *": "allow",
-+      "bash *": "allow",
-+      "command *": "allow",
-+      "test *": "allow",
-+      "printf *": "allow",
-+      "cat *": "allow",
-+      "find *": "allow",
-+      "rg *": "allow",
-+      "sed *": "allow",
-+      "date *": "allow",
-+      "python3 *": "allow",
-+      "git check-ignore *": "allow",
-+      "git diff *": "allow",
-+      "git branch *": "allow",
-+      "git show *": "allow",
-+      "git apply *": "allow",
-+      "git status *": "allow",
-+      "gh issue view *": "allow",
-+      "tmux ls*": "allow",
-+      "scripts/agent_up.sh*": "allow"
-     },
-     "alias": [
-       "sil3_auditor.md"
-diff --git a/tools/agents/render_fence.py b/tools/agents/render_fence.py
-index 6520c6813..975d2e24d 100644
---- a/tools/agents/render_fence.py
-+++ b/tools/agents/render_fence.py
-@@ -26,7 +26,7 @@ from typing import Any, NoReturn
+     return 0;
+ }
  
- ROLES = ("dev", "qe", "auditor", "coordinator")
- BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
--NS_KEYS = {"root", "decision", "external_variants", "edit_variants"}
-+NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
- DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
-               "external_allow", "launch", "agent", "config_extra"}
- LAUNCH_KEYS = {"cwd", "prompt"}
-@@ -108,6 +108,13 @@ def validate_base(base):
-         expect(not root.startswith("/private"), "namespace %r is already mirrored" % root)
-         expect("**" not in root, "namespace root may not contain '**': %r" % root)
-         expect(ns.get("decision") in POLARITY, "namespace %r decision invalid" % root)
-+        roles = ns.get("roles")
-+        if roles is not None:
-+            expect(isinstance(roles, list) and roles,
-+                   "namespace %r roles must be a non-empty list" % root)
-+            for name in roles:
-+                expect(name in ROLES,
-+                       "namespace %r scopes unknown role %r" % (root, name))
-         for field in ("external_variants", "edit_variants"):
-             if field in ns:
-                 variants = ns[field]
-@@ -192,12 +199,20 @@ def validate_delta(delta, role):
-         expect(isinstance(delta["config_extra"], dict), "config_extra must be an object")
+ bool sdf_zero_caps_allowed(PdRole role) {
+-    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV (empty sets by
+-    // design) and degraded BLOCK_SRV (no controller/IOMMU captured) may
+-    // start capless. Every other zero-cap row is a compose failure.
++    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV + CAP_BROKER
++    // (empty sets by design) and degraded BLOCK_SRV (no controller/IOMMU
++    // captured) may start capless. Every other zero-cap row is a
++    // compose failure.
+     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
+-           role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV;
++           role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV ||
++           role == PdRole::CAP_BROKER;
+ }
  
+ bool sdf_policy_only(PdRole role) {
+-    // Structural no-double-ownership rule (issues #47/#51): policy-only
+-    // roles must never hold device caps. The #48 SDF boundary test
+-    // consumes this predicate directly.
++    // Structural no-double-ownership rule (issues #47/#51, #240):
++    // policy-only roles must never hold device caps. The #48 SDF
++    // boundary test consumes this predicate directly.
+     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
+-           role == PdRole::LOG_SRV;
++           role == PdRole::LOG_SRV || role == PdRole::CAP_BROKER;
+ }
  
-+def ns_applies(ns, role):
-+    """A namespace may be scoped to specific roles (default: every role)."""
-+    roles = ns.get("roles")
-+    return roles is None or role in roles
+ bool capture_block_topology() {
+@@ -325,6 +332,7 @@ bool pd_owns_device(PdRole role) {
+         return CONFIG_BLOCK_SRV != 0;
+     case PdRole::TERM_SRV:
+     case PdRole::LOG_SRV:
++    case PdRole::CAP_BROKER:
+         // Policy-only PDs never own devices (structural rule).
+         return false;
+     }
+@@ -334,4 +342,4 @@ bool pd_owns_device(PdRole role) {
+ } // namespace sdf
+ } // namespace kernel
+ 
+-#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV
++#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV / CONFIG_CAP_BROKER
+diff --git a/src/kernel/task/boot_sdf.hpp b/src/kernel/task/boot_sdf.hpp
+index 63d1b06e2..b5d95672d 100644
+--- a/src/kernel/task/boot_sdf.hpp
++++ b/src/kernel/task/boot_sdf.hpp
+@@ -70,6 +70,7 @@ enum class PdRole : uint8_t {
+     BLOCK_SRV = 7,
+     TERM_SRV = 8,
+     LOG_SRV = 9,
++    CAP_BROKER = 10,
+ };
+ 
+ /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
+diff --git a/src/kernel/task/taskdefs.cpp b/src/kernel/task/taskdefs.cpp
+index 6233612f7..4e857e99e 100644
+--- a/src/kernel/task/taskdefs.cpp
++++ b/src/kernel/task/taskdefs.cpp
+@@ -33,6 +33,7 @@
+ #include <kernel/driver/block_srv.hpp>
+ #include <kernel/term/term_srv.hpp>
+ #include <kernel/log/log_srv.hpp>
++#include <kernel/cap/cap_broker.hpp>
+ #include <kernel/driver/driver_pds.hpp>
+ #include <kernel/task/dmesg_task.hpp>
+ #include <initrd/initrd.hpp>
+@@ -228,6 +229,24 @@ void pd_set_log_srv(uint64_t pid) {
+     kernel::log_srv::set_log_srv_pid(pid);
+ }
+ #endif
++#if CONFIG_CAP_BROKER
++void pd_restart_cap_broker(uint64_t pid) {
++    auto *t = kernel::Scheduler::find_task(pid);
++    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
++        return;
++    }
++    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::CAP_BROKER)) {
++        return;
++    }
++    kernel::cap_broker::cap_broker_on_restart(pid);
++}
++uint64_t pd_pid_cap_broker() {
++    return kernel::cap_broker::get_cap_broker_pid();
++}
++void pd_set_cap_broker(uint64_t pid) {
++    kernel::cap_broker::set_cap_broker_pid(pid);
++}
++#endif
+ 
+ // ── Task definition table ────────────────────────────────────────────────
+ 
+@@ -343,10 +362,19 @@ constexpr TaskDef g_task_defs[] = {
+     // log-srv: Klog/Dmesg sink PD (issue #51, strangler step a).
+     // Sporadic server SS(1,10,0); sink + drop/meter only, no log-source
+     // changes. Panic path never leaves the kernel.
+-    {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+-     "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
+-     pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
+-     ServerMode::SPORADIC, pd_restart_log_srv, 9},
++     {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
++      "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
++      pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
++      ServerMode::SPORADIC, pd_restart_log_srv, 9},
++#endif
++#if CONFIG_CAP_BROKER
++    // cap-broker: capability delegation policy PD (issue #240, strangler a).
++    // Sporadic server SS(1,10,0); policy only, no device caps (SDF row is
++    // the empty set by structural rule). Kernel enforces the cached word.
++    {"cap-broker", TaskType::SPORADIC_SERVER, true, nullptr,
++     "bin/cap-broker.c.elf", 20, 10, 0, 1, 10, 0, "cap-broker",
++     pd_set_cap_broker, pd_pid_cap_broker, 1, 0, false,
++     ServerMode::SPORADIC, pd_restart_cap_broker, 10},
+ #endif
+     // shell: interactive kernel debug shell.  Disabled in the table — the
+     // real shell is created aperiodic by init_task_main at prio 2; values
+@@ -405,13 +433,13 @@ constexpr bool server_params_valid(const TaskDef &d) {
+         return false;
+     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
+         return false;
+-    // Issue #48/#51: an SDF row needs its supervisor hook (re-derive on
+-    // restart, never inherit) and a valid role index.
++    // Issue #48/#51/#240: an SDF row needs its supervisor hook (re-derive
++    // on restart, never inherit) and a valid role index.
+     if (d.sdf_role != 0xFF) {
+         if (d.on_restart_fn == nullptr)
+             return false;
+         if (d.sdf_role >
+-            static_cast<uint64_t>(sdf::PdRole::LOG_SRV))
++            static_cast<uint64_t>(sdf::PdRole::CAP_BROKER))
+             return false;
+     }
+     return true;
+@@ -720,9 +748,9 @@ void reboot_from_table() {
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
+     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
+-    CONFIG_LOG_SRV
++    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
+             if (def.sdf_role != 0xFF) {
+-                // SDF compose (issues #47/#48/#51): mint the role caps
++                // SDF compose (issues #47/#48/#51/#240): mint the role caps
+                 // into the fresh task. Fail-closed: compose failure
+                 // destroys the task and skips the row (invalid-ELF
+                 // precedent below). Compile-guarded: boot_sdf.cpp is an
+diff --git a/userspace/cap-broker.c b/userspace/cap-broker.c
+new file mode 100644
+index 000000000..1aeef0099
+--- /dev/null
++++ b/userspace/cap-broker.c
+@@ -0,0 +1,86 @@
++#include <stddef.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <unistd.h>
++#include <string.h>
++#include <syscall.h>
++#include <ipc.h>
 +
++#define MSG_DAEMON_READY 0xF0000001
++#define MSG_TYPE_REPLY 0xF0000002
 +
- def compose(base, delta, repo, role):
-     out = {"$schema": base["$schema"]}
-     permission = {"bash": base["bash"]}
- 
-     ext = {"*": base["external_default"]}
-     for ns in base["namespaces"]:
-+        if not ns_applies(ns, role):
-+            continue
-         for variant in ns.get("external_variants", [""]):
-             pattern = ns["root"] + variant
-             put(ext, pattern, ns["decision"], "base namespace")
-@@ -208,6 +223,8 @@ def compose(base, delta, repo, role):
- 
-     edit = {"*": delta["edit_default"]}
-     for ns in base["namespaces"]:
-+        if not ns_applies(ns, role):
-+            continue
-         for variant in ns.get("edit_variants", []):
-             pattern = ns["root"] + variant
-             put(edit, pattern, ns["decision"], "base edit namespace")
-diff --git a/tools/agents/verify_fence.py b/tools/agents/verify_fence.py
-index f03f44145..a1d58dda2 100644
---- a/tools/agents/verify_fence.py
-+++ b/tools/agents/verify_fence.py
-@@ -130,7 +130,8 @@ def check_wildcards(role, cfg, repo=None):
-              % (role, ext.get("*"), base["external_default"]))
-     if edit.get("*") not in ("allow", "deny"):
-         fail("F5", "%s: edit '*' carries no decision" % role)
--    allowed = [ns["root"] for ns in base["namespaces"]]
-+    allowed = [ns["root"] for ns in base["namespaces"]
-+               if ns.get("roles") is None or role in ns["roles"]]
-     for sect, table in (("external_directory", ext), ("edit", edit)):
-         for key in table:
-             if key == "*":
++typedef enum {
++    CAP_OP_BIND = 0,
++    CAP_OP_LOOPBACK = 1,
++    CAP_OP_SET_POLICY = 2,
++    CAP_OP_GET_POLICY = 3,
++    CAP_OP_CLEAR_POLICY = 4,
++} cap_broker_op_t;
++
++struct CapBrokerRpc {
++    uint8_t op;
++    uint8_t flags;
++    uint16_t rsvd;
++    uint32_t epoch;
++    uint32_t owner_id;
++    uint32_t owner_gen;
++    uint64_t target_id;
++    uint32_t mask;
++    uint32_t rsvd2;
++    uint64_t arg0;
++    uint16_t status_op;
++    uint16_t status;
++    uint32_t rsvd3;
++};
++
++static void cap_assert_shape(void) {
++    char check[sizeof(struct CapBrokerRpc) <= 48 ? 1 : -1];
++    (void)check;
++}
++
++int main(void) {
++    cap_assert_shape();
++    (void)getpid();
++    ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
++
++    static unsigned char rbuf[64];
++    for (;;) {
++        int rc = ipc_recv(rbuf, sizeof(rbuf));
++        if (rc < 0)
++            continue;
++        struct CapBrokerRpc req;
++        memset(&req, 0, sizeof(req));
++        unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
++        memcpy(&req, rbuf, copy);
++        if ((unsigned long)rc != req.op)
++            continue; // torn/stale payload: kernel type must match body op
++
++        struct CapBrokerRpc rep;
++        memset(&rep, 0, sizeof(rep));
++        rep.op = req.op;
++        rep.epoch = req.epoch;
++        rep.owner_id = req.owner_id;
++        rep.owner_gen = req.owner_gen;
++        rep.status_op = (uint16_t)req.op;
++        switch (req.op) {
++        case CAP_OP_BIND:
++            rep.status = 0;
++            break;
++        case CAP_OP_LOOPBACK:
++            rep.arg0 = req.arg0;
++            rep.status = 0;
++            break;
++        default:
++            /* Step-a diagnostic shape: policy stays kernel-side. */
++            rep.status = (uint16_t)(uint16_t)-38;
++            break;
++        }
++        // Reply to the requester (owner_id carried in the RPC body):
++        // send_sync_bounded waits on the REQUESTER's own queue with a
++        // sender match, so a reply addressed to PID 1 (init) is a dead
++        // letter and every RPC times out (issue #51 step-b evidence).
++        // Mirrors the iocd args[0] requester convention (issue #441).
++        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
++    }
++    return 0;
++}

@@ -10,6 +10,8 @@ necessarily concrete - it is rendered per launch, never committed.
 Order is significant (opencode: the LAST matching rule wins):
   edit:                "*" -> base namespaces -> role allows -> base denies -> role denies
   external_directory:  "*" -> base namespaces -> role allows
+  bash (roles with `launch.agent`): the role's `agent.bash` map verbatim;
+  deny entries must be the tail (the renderer rejects allow/ask after deny).
 
 Mirrors are DERIVED: every "/tmp/X" also emits "/private/tmp/X" with the same
 decision, because macOS canonicalizes /tmp before matching (#410). A hand-typed
@@ -24,12 +26,12 @@ import os
 import sys
 from typing import Any, NoReturn
 
-ROLES = ("dev", "qe", "auditor", "coordinator")
-BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny"}
+ROLES = ("dev", "qe", "auditor", "consultant")
+BASE_KEYS = {"$schema", "bash", "external_default", "namespaces", "edit_deny", "task"}
 NS_KEYS = {"root", "decision", "external_variants", "edit_variants", "roles"}
 DELTA_KEYS = {"role", "edit_default", "edit_allow", "edit_deny",
-              "external_allow", "launch", "agent", "config_extra"}
-LAUNCH_KEYS = {"cwd", "prompt"}
+              "external_allow", "launch", "agent", "config_extra", "task"}
+LAUNCH_KEYS = {"cwd", "prompt", "agent", "auto"}
 AGENT_KEYS = {"name", "twin", "description", "mode", "model", "temperature",
               "bash", "alias"}
 POLARITY = ("allow", "deny")
@@ -80,10 +82,11 @@ def mirror(path):
 
 def expand(key, repo, role):
     if "{repo}" in key:
-        expect(role == "coordinator", "{repo} is coordinator-only (role %s)" % role)
+        expect(role == "consultant",
+               "{repo} is consultant-only (role %s)" % role)
         key = key.replace("{repo}", repo)
-    elif role == "coordinator" and not key.startswith("/"):
-        fail("relative repo path in coordinator role: %r" % key)
+    elif role == "consultant" and not key.startswith("/"):
+        fail("relative repo path in consultant role: %r" % key)
     return key
 
 
@@ -98,6 +101,8 @@ def validate_base(base):
     expect(isinstance(base.get("$schema"), str), "base $schema missing")
     expect(base.get("bash") in ("allow", "ask", "deny"), "base bash invalid")
     expect(base.get("external_default") in POLARITY, "base external_default invalid")
+    expect(base.get("task", "deny") in ("deny", "allow"),
+           "base task must be deny|allow")
     namespaces = base.get("namespaces")
     expect(isinstance(namespaces, list) and namespaces, "base namespaces missing")
     for ns in namespaces:
@@ -159,8 +164,18 @@ def validate_delta(delta, role):
     if "launch" in delta:
         launch = delta["launch"]
         closed(launch, LAUNCH_KEYS, "delta launch")
-        expect(launch.get("cwd") in ("dev", "qe", "audit", "coord"),
-               "launch.cwd must be dev|qe|audit|coord")
+        expect(launch.get("cwd") in ("dev", "qe", "audit", "coord", "consultant"),
+               "launch.cwd must be dev|qe|audit|coord|consultant")
+        if "agent" in launch:
+            expect(isinstance(launch["agent"], str) and launch["agent"]
+                   and not any(c.isspace() for c in launch["agent"]),
+                   "launch.agent must be a whitespace-free agent name")
+        if "auto" in launch:
+            expect(isinstance(launch["auto"], bool),
+                   "launch.auto must be a boolean (got %r)" % (launch["auto"],))
+    if "task" in delta:
+        expect(delta["task"] in ("deny", "allow"),
+               "delta task must be deny|allow")
     if "agent" in delta:
         agent = delta["agent"]
         closed(agent, AGENT_KEYS, "delta agent")
@@ -195,6 +210,13 @@ def validate_delta(delta, role):
                 expect(isinstance(name, str) and name.endswith(".md")
                        and "/" not in name and name not in (".", ".."),
                        "agent.alias must be a bare .md filename: %r" % (name,))
+        if "bash" in agent and isinstance(agent["bash"], dict):
+            validate_bash_order(agent["bash"], "delta agent.bash")
+    if "launch" in delta and "agent" in delta.get("launch", {}):
+        expect(delta["launch"]["agent"] == delta.get("agent", {}).get("name"),
+               "launch.agent must select the role's own agent (got %r)" % (delta["launch"]["agent"],))
+        expect(delta.get("agent", {}).get("mode") in ("primary", "all"),
+               "launch.agent requires agent.mode primary|all (subagents cannot be the CLI-selected primary)")
     if "config_extra" in delta:
         expect(isinstance(delta["config_extra"], dict), "config_extra must be an object")
 
@@ -205,9 +227,24 @@ def ns_applies(ns, role):
     return roles is None or role in roles
 
 
+def validate_bash_order(bash, what):
+    """Denies must be the tail: once a deny appears, no allow/ask may follow
+    (last-match-wins makes a later allow undo the deny)."""
+    seen_deny = False
+    for pattern, decision in bash.items():
+        if decision == "deny":
+            seen_deny = True
+        elif seen_deny:
+            fail("%s: allow/ask after deny (denies must be the tail): %r" % (what, pattern))
+
+
 def compose(base, delta, repo, role):
     out = {"$schema": base["$schema"]}
-    permission = {"bash": base["bash"]}
+    if delta.get("launch", {}).get("agent"):
+        agent_bash = (delta.get("agent") or {}).get("bash", {})
+        permission = {"bash": agent_bash}
+    else:
+        permission = {"bash": base["bash"]}
 
     ext = {"*": base["external_default"]}
     for ns in base["namespaces"]:
@@ -237,9 +274,22 @@ def compose(base, delta, repo, role):
         put(edit, expand(key, repo, role), "deny", "delta edit_deny")
     permission["edit"] = edit
 
+    # In-process subagents: denied by default so lanes cannot fork execution
+    # invisible to the engine (no pane activity, no ledger, no doorbell).
+    # A role delta may override with "deny" or "allow".
+    if "task" in delta:
+        permission["task"] = delta["task"]  # validated by validate_delta
+    else:
+        expect("task" in base, "base fence must declare the task default")
+        permission["task"] = base["task"]
+
     out["permission"] = permission
     for key, value in delta.get("config_extra", {}).items():
-        expect(key == "mcp", "config_extra may only carry 'mcp' (got %r)" % key)
+        expect(key in ("mcp", "model"),
+               "config_extra may only carry 'mcp'/'model' (got %r)" % key)
+        if key == "model":
+            expect(isinstance(value, str) and "/" in value,
+                   "config_extra model must be a provider/model id")
         expect(key not in out, "config_extra collision on %r" % key)
         out[key] = value
     return out

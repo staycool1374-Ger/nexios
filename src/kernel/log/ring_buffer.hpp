@@ -33,13 +33,27 @@ class RingBuffer {
     static constexpr size_t BUFFER_SIZE = 32768; ///< Total capacity in bytes.
 
     /// @brief Write a single character (discards if full).
+    /// Issue #386 item 1: the slot claim is a CAS loop, not a plain
+    /// read + store. Two producers (BSP + AP, or an IRQ-preempted task
+    /// plus its preempter) racing the old sequence claimed the SAME slot
+    /// and the second store clobbered the first byte (torn dmesg
+    /// entries). The CAS publishes exactly one winner per slot; the
+    /// loser re-reads the fresh index and retries, so every byte lands
+    /// exactly once. Uncontended (SPSC) cost is one CAS — no locks, no
+    /// added branches on the fast path beyond the pre-existing
+    /// full-check.
     void putchar(char c) {
-        size_t w = write_pos_;
-        size_t next = (w + 1) % BUFFER_SIZE;
-        if (next == atomic_load(&read_pos_, __ATOMIC_ACQUIRE))
-            return;
+        size_t w = atomic_load(&write_pos_, __ATOMIC_RELAXED);
+        for (;;) {
+            size_t next = (w + 1) % BUFFER_SIZE;
+            if (next == atomic_load(&read_pos_, __ATOMIC_ACQUIRE))
+                return;
+            if (__atomic_compare_exchange_n(&write_pos_, &w, next, false,
+                                            __ATOMIC_ACQ_REL,
+                                            __ATOMIC_RELAXED))
+                break;
+        }
         buf_[w] = c;
-        atomic_store(&write_pos_, next, __ATOMIC_RELEASE);
     }
 
     /// @brief Write a null-terminated string.

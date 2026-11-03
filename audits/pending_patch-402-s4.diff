@@ -1,0 +1,128 @@
+diff --git a/src/kernel/sync/mutex.cpp b/src/kernel/sync/mutex.cpp
+index dbb92c37a..5a7daccbe 100644
+--- a/src/kernel/sync/mutex.cpp
++++ b/src/kernel/sync/mutex.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/sync/mutex.hpp>
+ #include <kernel/sync/waiter_tag.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
+ #include <assert.hpp>
+ 
+ // PCP (Priority Ceiling Protocol) requires PI (Priority Inheritance) support.
+@@ -154,9 +155,21 @@ void Mutex::inherit_priority(TaskControlBlock &waiter) {
+     }
+ 
+     if (max_prio > owner_->priority) {
++        // S4 re-bucket (issue #402): the O(1) ready queue does not
++        // re-derive position from tcb.priority — a boosted owner sitting
++        // in the ready queue (preempted while holding) must move buckets
++        // or the inversion is not fixed (mirrors Queue::boost_receiver).
++        // IrqGuard excludes the timer ISR so the effective_priority
++        // snapshots stay consistent.
++        arch::IrqGuard irq_guard{};
++        TaskControlBlock &owner_ref = *owner_;
++        const uint64_t old_eff = Scheduler::effective_priority(&owner_ref);
+         if (holder_priority_ == 0)
+             holder_priority_ = owner_->priority;
+         owner_->priority = max_prio;
++        const uint64_t new_eff = Scheduler::effective_priority(&owner_ref);
++        if (old_eff != new_eff && owner_ref.in_ready_queue_)
++            Scheduler::move_priority(owner_ref, old_eff, new_eff);
+ 
+         if (owner_->waiting_on_mutex)
+             owner_->waiting_on_mutex->reevaluate();
+@@ -179,12 +192,20 @@ void Mutex::restore_priority() {
+             max_remaining = waiters_[i]->priority;
+     }
+ 
++    // S4 re-bucket (issue #402): symmetric with inherit_priority — a
++    // restored owner sitting in the ready queue must move buckets.
++    arch::IrqGuard irq_guard{};
++    TaskControlBlock &owner_ref = *owner_;
++    const uint64_t old_eff = Scheduler::effective_priority(&owner_ref);
+     if (max_remaining > holder_priority_) {
+         owner_->priority = max_remaining;
+     } else {
+         owner_->priority = holder_priority_;
+         holder_priority_ = 0;
+     }
++    const uint64_t new_eff = Scheduler::effective_priority(&owner_ref);
++    if (old_eff != new_eff && owner_ref.in_ready_queue_)
++        Scheduler::move_priority(owner_ref, old_eff, new_eff);
+ #endif
+ }
+ 
+@@ -203,9 +224,17 @@ void Mutex::reevaluate() {
+     }
+ 
+     if (max_prio > owner_->priority) {
++        // S4 re-bucket (issue #402): transitive boost — same queued-owner
++        // rule as inherit_priority.
++        arch::IrqGuard irq_guard{};
++        TaskControlBlock &owner_ref = *owner_;
++        const uint64_t old_eff = Scheduler::effective_priority(&owner_ref);
+         if (holder_priority_ == 0)
+             holder_priority_ = owner_->priority;
+         owner_->priority = max_prio;
++        const uint64_t new_eff = Scheduler::effective_priority(&owner_ref);
++        if (old_eff != new_eff && owner_ref.in_ready_queue_)
++            Scheduler::move_priority(owner_ref, old_eff, new_eff);
+ 
+         if (owner_->waiting_on_mutex)
+             owner_->waiting_on_mutex->reevaluate();
+diff --git a/src/kernel/sync/semaphore.cpp b/src/kernel/sync/semaphore.cpp
+index d5fb549b0..f99b70dd8 100644
+--- a/src/kernel/sync/semaphore.cpp
++++ b/src/kernel/sync/semaphore.cpp
+@@ -22,6 +22,7 @@
+ #include <kernel/sync/semaphore.hpp>
+ #include <kernel/sync/waiter_tag.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
+ #include <kernel/sync/spinlock_guard.hpp>
+ #include <kernel/arch/io.hpp>
+ #include <assert.hpp>
+@@ -136,9 +137,21 @@ void Semaphore::inherit_priority(TaskControlBlock &waiter) {
+             max_prio = waiters_[i]->priority;
+     }
+     if (max_prio > owner_->priority) {
++        // S4 re-bucket (issue #402): the O(1) ready queue does not
++        // re-derive position from tcb.priority — a boosted owner sitting
++        // in the ready queue (preempted while holding) must move buckets
++        // or the inversion is not fixed (mirrors Queue::boost_receiver).
++        // IrqGuard excludes the timer ISR so the effective_priority
++        // snapshots stay consistent.
++        arch::IrqGuard irq_guard{};
++        TaskControlBlock &owner_ref = *owner_;
++        const uint64_t old_eff = Scheduler::effective_priority(&owner_ref);
+         if (holder_priority_ == 0)
+             holder_priority_ = owner_->priority;
+         owner_->priority = max_prio;
++        const uint64_t new_eff = Scheduler::effective_priority(&owner_ref);
++        if (old_eff != new_eff && owner_ref.in_ready_queue_)
++            Scheduler::move_priority(owner_ref, old_eff, new_eff);
+     }
+ #else
+     (void)waiter;
+@@ -155,12 +168,20 @@ void Semaphore::restore_priority() {
+         if (waiters_[i]->priority > max_remaining)
+             max_remaining = waiters_[i]->priority;
+     }
++    // S4 re-bucket (issue #402): symmetric with inherit_priority — a
++    // restored owner sitting in the ready queue must move buckets.
++    arch::IrqGuard irq_guard{};
++    TaskControlBlock &owner_ref = *owner_;
++    const uint64_t old_eff = Scheduler::effective_priority(&owner_ref);
+     if (max_remaining > holder_priority_) {
+         owner_->priority = max_remaining;
+     } else {
+         owner_->priority = holder_priority_;
+         holder_priority_ = 0;
+     }
++    const uint64_t new_eff = Scheduler::effective_priority(&owner_ref);
++    if (old_eff != new_eff && owner_ref.in_ready_queue_)
++        Scheduler::move_priority(owner_ref, old_eff, new_eff);
+ #endif
+ }
+ 

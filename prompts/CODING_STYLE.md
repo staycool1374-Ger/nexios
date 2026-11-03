@@ -175,7 +175,7 @@ enum class VfsSentinel : int64_t    { INVALID_FD = -4 };
 ### 10.6 Descriptive Names — No Single Characters
 - Minimum 3 chars; use `<thing>_<instance>` pattern: `msr_low`, `page_idx`, `virt_addr`
 - **Blocklist**: `tmp`, `temp`, `ptr`, `p`, `t`, `v`, `val`
-- **Allowlist** (abbreviations): `id`, `fd`, `va`, `cs`, `tv`, `vn`, `st`, `en`, `it`, `ok`, `to`, `q`, `n`, `m`, `y`, `c`, `s`, `r`, `lo`, `hi`, `tm`, `h`, `L`, `T`, `O`, `C`
+- **Allowlist** (abbreviations): `id`, `fd`, `va`, `cs`, `tv`, `vn`, `st`, `en`, `it`, `ok`, `to`, `q`, `n`, `m`, `y`, `c`, `s`, `r`, `lo`, `hi`, `tm`, `h`, `L`, `T`, `O`, `C`, plus arch/hardware mnemonics that mirror datasheet registers (both cases): `PA`, `VA`, `SP`, `IP`, `IF`, and units `Hz`, `ns` — renaming these hurts readability, never rename them
 - Loop indices `i`/`j`/`k`/`idx` OK for tight loops (body ≤ 5 lines); not for params or members
 
 ### 10.7 const_cast Is Forbidden

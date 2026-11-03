@@ -35,6 +35,7 @@ var searchData=
   ['loadavg_5fdisplay_5fdiv_32',['LOADAVG_DISPLAY_DIV',['../classkernel_1_1_scheduler.html#aea490393d92cca79f525dda574e96983',1,'kernel::Scheduler']]],
   ['loadavg_5fscale_33',['LOADAVG_SCALE',['../classkernel_1_1_scheduler.html#adfb3b2f598049466e2b48a0aee96c3d9',1,'kernel::Scheduler']]],
   ['lock_5f_34',['lock_',['../classkernel_1_1cap_1_1_c_node.html#a7760d9783298fa791fa883280b127cca',1,'kernel::cap::CNode::lock_'],['../classkernel_1_1cap_1_1_endpoint.html#a40699f535c935245c038e8d33ae5189c',1,'kernel::cap::Endpoint::lock_'],['../structkernel_1_1net_1_1_virtio_net_device.html#af64ae38ea0e7f2c8d89efaa8c12ddbff',1,'kernel::net::VirtioNetDevice::lock_'],['../structkernel_1_1_irq_registration.html#ae2a8afb1e907f26a2ad720bb8cbbe47a',1,'kernel::IrqRegistration::lock_'],['../structkernel_1_1_message_queue.html#a39648f13a2c18bb6049b06a0ac5b1fab',1,'kernel::MessageQueue::lock_']]],
-  ['lookup_35',['lookup',['../structkernel_1_1vfs_1_1_vnode_ops.html#add952f09531db47accba4d61ddf1af91',1,'kernel::vfs::VnodeOps']]],
-  ['lseek_36',['lseek',['../structkernel_1_1vfs_1_1_vnode_ops.html#a0a174f80c08dfac3a680bca68201ad83',1,'kernel::vfs::VnodeOps']]]
+  ['logical_35',['logical',['../struct_ap_param.html#a8dfb9cd2144a73dd23482906103a7312',1,'ApParam']]],
+  ['lookup_36',['lookup',['../structkernel_1_1vfs_1_1_vnode_ops.html#add952f09531db47accba4d61ddf1af91',1,'kernel::vfs::VnodeOps']]],
+  ['lseek_37',['lseek',['../structkernel_1_1vfs_1_1_vnode_ops.html#a0a174f80c08dfac3a680bca68201ad83',1,'kernel::vfs::VnodeOps']]]
 ];

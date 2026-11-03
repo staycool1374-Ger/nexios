@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+# timer-srv parity capture (issue #241, strangler step b): boot an ISO,
+# run /bin/timer-srv-parity.c.elf, capture `S TMR` lines to a file.
+# Args: <iso> <serial_log> <out_filtered>
+set iso [lindex $argv 0]
+set serial_log [lindex $argv 1]
+set out_filtered [lindex $argv 2]
+set timeout 120
+spawn qemu-system-x86_64 -cdrom $iso -m 256M -serial file:$serial_log -display none -boot order=d -cpu max
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT waiting for prompt"; exit 1 }
+}
+send "loadelf /bin/timer-srv-parity.c.elf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after loadelf"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after runelf"; exit 1 }
+}
+exec grep -a "^S TMR " $serial_log > $out_filtered
+puts "PARITY-CAPTURE-OK $out_filtered"

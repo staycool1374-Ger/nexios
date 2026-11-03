@@ -24,6 +24,7 @@
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/hal/ipi.hpp> // issue #351 send_shootdown_ipi
 #include <kernel/arch/x86_64/hal/page_table_impl.hpp>
 
 namespace arch {
@@ -31,11 +32,19 @@ namespace arch {
 ShootdownBatch::CpuSlot ShootdownBatch::slots_[CONFIG_MAX_CPUS] = {};
 uint64_t ShootdownBatch::sends_ = 0;
 uint64_t ShootdownBatch::applied_ = 0;
+uint64_t ShootdownBatch::send_failures_ = 0;
+uint64_t ShootdownBatch::queue_drops_ = 0;
+uint64_t ShootdownBatch::drain_timeouts_ = 0;
 uint64_t ShootdownBatch::applied_log_[ShootdownBatch::APPLIED_LOG] = {};
 uint64_t ShootdownBatch::applied_log_count_ = 0;
 
 bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
-                                  uint16_t pcid) {
+                                   uint16_t pcid) {
+    return queue_remote(cpu, va, pcid, false);
+}
+
+bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid,
+                                   bool all) {
     if (cpu >= CONFIG_MAX_CPUS)
         return false;
     if ((va & (ArchPageTable::PAGE_SIZE - 1)) != 0)
@@ -58,6 +67,7 @@ bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
     }
     slot.entries[pos].va = va;
     slot.entries[pos].pcid = pcid;
+    slot.entries[pos].all = all;
     __atomic_store_n(&slot.count, count + 1, __ATOMIC_RELEASE);
     return true;
 }
@@ -65,8 +75,6 @@ bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
 uint64_t ShootdownBatch::flush_target(uint64_t cpu) {
     if (cpu >= CONFIG_MAX_CPUS)
         return 0;
-    uint32_t lapic = (cpu == cpu_index()) ? APIC::lapic_id()
-                                          : per_cpu[cpu].lapic_id;
     uint64_t sends = 0;
     CpuSlot &slot = slots_[cpu];
     // NOTE: callers must not hold IF=0 across this call for a self
@@ -74,17 +82,23 @@ uint64_t ShootdownBatch::flush_target(uint64_t cpu) {
     for (;;) {
         if (__atomic_load_n(&slot.count, __ATOMIC_ACQUIRE) == 0)
             break;
-        if (!APIC::send_ipi(lapic, APIC::SHOOTDOWN_BATCH_VECTOR,
-                            APIC::IpiMode::FIXED))
+        // Issue #351, slice-4: delivery via the arch IPI interface
+        // (x86 leg resolves to the same LAPIC FIXED send as before).
+        if (!arch::send_shootdown_ipi(cpu)) {
+            __atomic_fetch_add(&send_failures_, 1ULL, __ATOMIC_RELAXED);
             break; // entries stay queued
+        }
         __atomic_fetch_add(&sends_, 1ULL, __ATOMIC_RELAXED);
         ++sends;
         // Wait for the serving CPU to drain (bounded: a down target
         // never drains — keep the rest queued instead of spinning).
         uint64_t spins = 0;
         while (__atomic_load_n(&slot.count, __ATOMIC_ACQUIRE) != 0) {
-            if (++spins > 1000000ULL)
+            if (++spins > 1000000ULL) {
+                __atomic_fetch_add(&drain_timeouts_, 1ULL,
+                                   __ATOMIC_RELAXED);
                 return sends;
+            }
             arch::pause();
         }
     }
@@ -106,7 +120,15 @@ void ShootdownBatch::handle_cpu(uint64_t cpu) {
         if (count > BATCH_SLOTS)
             count = BATCH_SLOTS;
         for (uint64_t i = 0; i < count; ++i) {
-            ArchPageTable::tlb_flush(slot.entries[i].va);
+            // Issue #389: the stored PCID is honored (INVPCID
+            // single-address, purge fallback); the all-flag selects a
+            // full purge (teardown/ASID-recycle path).
+            if (slot.entries[i].all) {
+                tlb_purge_all();
+            } else {
+                ArchPageTable::tlb_flush_va_asid(slot.entries[i].va,
+                                                 slot.entries[i].pcid);
+            }
             if (applied_log_count_ < APPLIED_LOG) {
                 applied_log_[applied_log_count_] = slot.entries[i].va;
                 ++applied_log_count_;
@@ -133,6 +155,22 @@ uint64_t ShootdownBatch::applied_for_test() {
     return __atomic_load_n(&applied_, __ATOMIC_RELAXED);
 }
 
+void ShootdownBatch::note_queue_drop() {
+    __atomic_fetch_add(&queue_drops_, 1ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t ShootdownBatch::send_failures_for_test() {
+    return __atomic_load_n(&send_failures_, __ATOMIC_RELAXED);
+}
+
+uint64_t ShootdownBatch::queue_drops_for_test() {
+    return __atomic_load_n(&queue_drops_, __ATOMIC_RELAXED);
+}
+
+uint64_t ShootdownBatch::drain_timeouts_for_test() {
+    return __atomic_load_n(&drain_timeouts_, __ATOMIC_RELAXED);
+}
+
 uint64_t ShootdownBatch::applied_va_for_test(uint64_t idx) {
     if (idx >= APPLIED_LOG)
         return 0;
@@ -145,10 +183,14 @@ void ShootdownBatch::reset_for_test() {
         for (size_t i = 0; i < BATCH_SLOTS; ++i) {
             slots_[c].entries[i].va = 0;
             slots_[c].entries[i].pcid = 0;
+            slots_[c].entries[i].all = false;
         }
     }
     sends_ = 0;
     applied_ = 0;
+    send_failures_ = 0;
+    queue_drops_ = 0;
+    drain_timeouts_ = 0;
     applied_log_count_ = 0;
     for (size_t i = 0; i < APPLIED_LOG; ++i)
         applied_log_[i] = 0;

@@ -28,6 +28,13 @@
 #include <kernel/driver/iocd.hpp>
 #include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/watchdog/watchdogd.hpp>
+#include <kernel/time/timer_srv.hpp>
+#include <kernel/vfs/vfs_srv.hpp>
+#include <kernel/driver/block_srv.hpp>
+#include <kernel/term/term_srv.hpp>
+#include <kernel/log/log_srv.hpp>
+#include <kernel/cap/cap_broker.hpp>
+#include <kernel/driver/driver_pds.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
 #include <services/shell.hpp>
@@ -36,6 +43,12 @@
 #include <kernel/arch/hal/irq_guard.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/smp.hpp>
+#endif
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/smp.hpp>
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/smp.hpp>
 #endif
 #include <kernel/nexios_config.h>
 #include <logger.hpp>
@@ -55,6 +68,185 @@ namespace {
 // auto-starts, so a TU-local cell satisfies validate_all without
 // implying a live daemon.
 uint64_t g_debugd_pid_cell = 0;
+
+// Driver-PD restart trampolines (issue #48): the DaemonEntry hook carries
+// only a pid, so each role re-resolves its task and runs sdf_rebind
+// (re-derive, never inherit) + the role PID cell bump. Each role triple
+// is guarded by its own knob (a single-role ON build must not warn on
+// the other roles' TU-local helpers under -Werror=unused-function).
+namespace {
+#if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+    CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET
+void pd_rebind_role(kernel::sdf::PdRole role, uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, role)) {
+        return;
+    }
+    kernel::driver_pds::pd_on_restart(role, pid);
+}
+#endif
+} // namespace
+
+#if CONFIG_DRIVER_PD_SERIAL
+void pd_restart_serial(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::SERIAL, pid);
+}
+uint64_t pd_pid_serial() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::SERIAL);
+}
+void pd_set_serial(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::SERIAL, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_KBD
+void pd_restart_kbd(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::KBD, pid);
+}
+uint64_t pd_pid_kbd() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::KBD);
+}
+void pd_set_kbd(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::KBD, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_RTC
+void pd_restart_rtc(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::RTC, pid);
+}
+uint64_t pd_pid_rtc() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::RTC);
+}
+void pd_set_rtc(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::RTC, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_FB
+void pd_restart_fb(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::FB, pid);
+}
+uint64_t pd_pid_fb() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::FB);
+}
+void pd_set_fb(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::FB, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_BLOCK
+void pd_restart_block(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::BLOCK, pid);
+}
+uint64_t pd_pid_block() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::BLOCK);
+}
+void pd_set_block(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::BLOCK, pid);
+}
+#endif
+#if CONFIG_DRIVER_PD_NET
+void pd_restart_net(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::NET, pid);
+}
+uint64_t pd_pid_net() {
+    return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::NET);
+}
+void pd_set_net(uint64_t pid) {
+    kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::NET, pid);
+}
+#endif
+#if CONFIG_VFS_SRV
+void pd_restart_vfs_srv(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::VFS_SRV)) {
+        return;
+    }
+    kernel::vfs_srv::vfs_srv_on_restart(pid);
+}
+uint64_t pd_pid_vfs_srv() {
+    return kernel::vfs_srv::get_vfs_srv_pid();
+}
+void pd_set_vfs_srv(uint64_t pid) {
+    kernel::vfs_srv::set_vfs_srv_pid(pid);
+}
+#endif
+#if CONFIG_BLOCK_SRV
+void pd_restart_block_srv(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::BLOCK_SRV)) {
+        return;
+    }
+    kernel::block_srv::block_srv_on_restart(pid);
+}
+uint64_t pd_pid_block_srv() {
+    return kernel::block_srv::get_block_srv_pid();
+}
+void pd_set_block_srv(uint64_t pid) {
+    kernel::block_srv::set_block_srv_pid(pid);
+}
+#endif
+#if CONFIG_TERM_SRV
+void pd_restart_term_srv(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::TERM_SRV)) {
+        return;
+    }
+    kernel::term_srv::term_srv_on_restart(pid);
+}
+uint64_t pd_pid_term_srv() {
+    return kernel::term_srv::get_term_srv_pid();
+}
+void pd_set_term_srv(uint64_t pid) {
+    kernel::term_srv::set_term_srv_pid(pid);
+}
+#endif
+#if CONFIG_LOG_SRV
+void pd_restart_log_srv(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::LOG_SRV)) {
+        return;
+    }
+    kernel::log_srv::log_srv_on_restart(pid);
+}
+uint64_t pd_pid_log_srv() {
+    return kernel::log_srv::get_log_srv_pid();
+}
+void pd_set_log_srv(uint64_t pid) {
+    kernel::log_srv::set_log_srv_pid(pid);
+}
+#endif
+#if CONFIG_CAP_BROKER
+void pd_restart_cap_broker(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::CAP_BROKER)) {
+        return;
+    }
+    kernel::cap_broker::cap_broker_on_restart(pid);
+}
+uint64_t pd_pid_cap_broker() {
+    return kernel::cap_broker::get_cap_broker_pid();
+}
+void pd_set_cap_broker(uint64_t pid) {
+    kernel::cap_broker::set_cap_broker_pid(pid);
+}
+#endif
 
 // ── Task definition table ────────────────────────────────────────────────
 
@@ -88,6 +280,102 @@ constexpr TaskDef g_task_defs[] = {
     {"ramdiskd", TaskType::SPORADIC_SERVER, true, nullptr, "bin/ramdiskd.c.elf",
      20, 10, 0, 2, 10, 0, "ramdiskd", ramdiskd::set_ramdiskd_pid,
      ramdiskd::get_ramdiskd_pid, 1, 0, false},
+#if CONFIG_DRIVER_PD_SERIAL
+    // drv-serial: RX-only console PD (issue #48, strangler step a).
+    // Sporadic server SS(1,10,0); TX stays kernel (console + panic).
+    {"drv-serial", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/serial-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-serial",
+     pd_set_serial, pd_pid_serial, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_serial, 0},
+#endif
+#if CONFIG_DRIVER_PD_KBD
+    // drv-kbd: PS/2 keyboard PD (x86; arch stub elsewhere).
+    {"drv-kbd", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/kbd-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-kbd",
+     pd_set_kbd, pd_pid_kbd, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_kbd, 1},
+#endif
+#if CONFIG_DRIVER_PD_RTC
+    // drv-rtc: RTC PD (CMOS/PL031/Goldfish per arch).
+    {"drv-rtc", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/rtc-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-rtc",
+     pd_set_rtc, pd_pid_rtc, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_rtc, 2},
+#endif
+#if CONFIG_DRIVER_PD_FB
+    // drv-fb: framebuffer device PD (caps + PD isolation only;
+    // emulation stays #51 term-srv; zero IRQ by design).
+    {"drv-fb", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/fb-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-fb",
+     pd_set_fb, pd_pid_fb, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_fb, 3},
+#endif
+#if CONFIG_DRIVER_PD_BLOCK
+    // drv-block: block-storage PD (AHCI/virtio-blk, DMA domains).
+    {"drv-block", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/block-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-block",
+     pd_set_block, pd_pid_block, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_block, 4},
+#endif
+#if CONFIG_DRIVER_PD_NET
+    // drv-net: virtio-net PD (RX rings + TX + DMA domain).
+    {"drv-net", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/net-pd.c.elf", 20, 10, 0, 1, 10, 0, "drv-net",
+     pd_set_net, pd_pid_net, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_net, 5},
+#endif
+#if CONFIG_TIMER_SRV
+    // timer-srv: Timer/Event externalization PD (issue #241, strangler a).
+    // Sporadic server, cheapest share SS(1,10,0). Guarded row: absent at
+    // OFF (shipped default), so the boot table is unchanged when 0.
+    {"timer-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/timer-srv.c.elf", 20, 10, 0, 1, 10, 0, "timer-srv",
+     time::timer_srv::set_timer_srv_pid,
+     time::timer_srv::get_timer_srv_pid, 1, 0, false},
+#endif
+#if CONFIG_VFS_SRV
+    // vfs-srv: VFS backend server PD (issue #47, strangler step a).
+    // Sporadic server SS(1,10,0); authorize stays kernel-side.
+    {"vfs-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/vfs-srv.c.elf", 20, 10, 0, 1, 10, 0, "vfs-srv",
+     pd_set_vfs_srv, pd_pid_vfs_srv, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_vfs_srv, 6},
+#endif
+#if CONFIG_BLOCK_SRV
+    // block-srv: block-storage server PD (issue #47, strangler step a).
+    // Sporadic server SS(1,10,0); kernel skips AHCI/ATA+virtio-blk probe.
+    {"block-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/block-srv.c.elf", 20, 10, 0, 1, 10, 0, "block-srv",
+     pd_set_block_srv, pd_pid_block_srv, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_block_srv, 7},
+#endif
+#if CONFIG_TERM_SRV
+    // term-srv: terminal/emulation policy PD (issue #51, strangler step a).
+    // Sporadic server SS(1,10,0); policy only, no device caps (SDF row is
+    // the empty set by structural rule). Kernel keeps panic raw_write.
+    {"term-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/term-srv.c.elf", 20, 10, 0, 1, 10, 0, "term-srv",
+     pd_set_term_srv, pd_pid_term_srv, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_term_srv, 8},
+#endif
+#if CONFIG_LOG_SRV
+    // log-srv: Klog/Dmesg sink PD (issue #51, strangler step a).
+    // Sporadic server SS(1,10,0); sink + drop/meter only, no log-source
+    // changes. Panic path never leaves the kernel.
+     {"log-srv", TaskType::SPORADIC_SERVER, true, nullptr,
+      "bin/log-srv.c.elf", 20, 10, 0, 1, 10, 0, "log-srv",
+      pd_set_log_srv, pd_pid_log_srv, 1, 0, false,
+      ServerMode::SPORADIC, pd_restart_log_srv, 9},
+#endif
+#if CONFIG_CAP_BROKER
+    // cap-broker: capability delegation policy PD (issue #240, strangler a).
+    // Sporadic server SS(1,10,0); policy only, no device caps (SDF row is
+    // the empty set by structural rule). Kernel enforces the cached word.
+    {"cap-broker", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/cap-broker.c.elf", 20, 10, 0, 1, 10, 0, "cap-broker",
+     pd_set_cap_broker, pd_pid_cap_broker, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_cap_broker, 10},
+#endif
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values
     // kept here for documentation/validation parity.
@@ -145,6 +433,15 @@ constexpr bool server_params_valid(const TaskDef &d) {
         return false;
     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
         return false;
+    // Issue #48/#51/#240: an SDF row needs its supervisor hook (re-derive
+    // on restart, never inherit) and a valid role index.
+    if (d.sdf_role != 0xFF) {
+        if (d.on_restart_fn == nullptr)
+            return false;
+        if (d.sdf_role >
+            static_cast<uint64_t>(sdf::PdRole::CAP_BROKER))
+            return false;
+    }
     return true;
 }
 
@@ -259,6 +556,11 @@ bool taskdefs_valid() noexcept {
 void reboot_from_table() {
 #if defined(CONFIG_DEBUG)
     debug_write("[REBOOT] Rebuilding system from task-definition table\n");
+#endif
+#if CONFIG_BLOCK_SRV
+    // Issue #47 S2: capture block topology before interrupts go off —
+    // discovery must never run under IrqGuard (no IRQ-off allocation).
+    kernel::sdf::capture_block_topology();
 #endif
     arch::IrqGuard guard{};
 
@@ -434,8 +736,40 @@ void reboot_from_table() {
 
         if (def.type == TaskType::SPORADIC_SERVER) {
             def.set_pid_fn(task->id);
-            daemon::register_daemon(def.daemon_name, def.elf_path,
-                                    def.set_pid_fn, def.get_pid_fn);
+            if (def.on_restart_fn != nullptr) {
+                daemon::register_daemon_ex(
+                    def.daemon_name, def.elf_path, def.set_pid_fn,
+                    def.get_pid_fn, def.ss_budget, def.on_restart_fn);
+            } else {
+                daemon::register_daemon(def.daemon_name, def.elf_path,
+                                        def.set_pid_fn, def.get_pid_fn);
+            }
+#if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+    CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
+    CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
+    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
+            if (def.sdf_role != 0xFF) {
+                // SDF compose (issues #47/#48/#51/#240): mint the role caps
+                // into the fresh task. Fail-closed: compose failure
+                // destroys the task and skips the row (invalid-ELF
+                // precedent below). Compile-guarded: boot_sdf.cpp is an
+                // empty TU when all PD knobs are 0, so the call must not
+                // be emitted at OFF.
+                const auto role = static_cast<sdf::PdRole>(def.sdf_role);
+                if (!sdf::sdf_compose(*task, role)) {
+                    Logger::warn(
+                        "reboot: SDF compose failed for task '%s', skipping",
+                        def.name);
+                    kernel::log::dmesg_push_sev(
+                        kernel::log::ErrorSubsystem::INIT,
+                        kernel::log::kDmesgBase_INIT + 13,
+                        kernel::log::LogSeverity::ERROR, def.name, 0);
+                    TaskControlBlock::destroy(task);
+                    task = nullptr;
+                }
+            }
+#endif // any PD knob (sdf_compose lives in boot_sdf.cpp)
         }
     }
 
@@ -469,6 +803,16 @@ void reboot_from_table() {
     // Issue #25 C1: publish the AP scheduler start-gate AFTER spawning
     // (tables quiescent from here on) and before the idle loop.  APs spin
     // parked until this lands; post-gate they create their idles and tick.
+    kernel::smp::publish_scheduler_ready();
+#endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: same start-gate contract for aa64 APs (parked in
+    // ap_main until this lands; post-gate they adopt idle tasks and tick).
+    kernel::smp::publish_scheduler_ready();
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-3: same start-gate contract for rv64 APs (parked in
+    // ap_main until this lands; post-gate they adopt idle tasks and tick).
     kernel::smp::publish_scheduler_ready();
 #endif
 
@@ -520,6 +864,17 @@ void reboot_from_table() {
             }
         }
     }
+#endif
+#if defined(CONFIG_ARCH_AARCH64) || defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-2/slice-3: one-shot cross-CPU IPI verification,
+    // last reboot step before unmasking IRQs. Placement is deliberate: the
+    // BSP needs no IRQs of its own (MMIO/SBI send + shared-memory ack
+    // polling), while the APs are already IRQ-live in their idle loops
+    // (start-gate published above). Running it here — instead of after
+    // sti — keeps it deterministic: the first timer tick would otherwise
+    // preempt the idle entry and strand this one-shot behind the
+    // scheduler. Panic on failure (fail-closed).
+    kernel::smp::verify_booted_aps();
 #endif
     arch::sti();
     for (;;) {

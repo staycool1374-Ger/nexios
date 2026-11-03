@@ -28,7 +28,12 @@
 # the launcher's own statement and must not be overridden by a stale path.
 #
 # Fences:
-#   dev role: changes under src/kernel/test/** or src/test/** fail.
+#   dev role: changes under src/kernel/test/** or src/test/** fail,
+#             UNLESS every added line in each hunk blames to the QE
+#             author identity (DECISION D, issue #433): coordinator-merged
+#             QE test hunks are exempt; dev-authored test hunks still fail.
+#             NEXIOS_GATE_ATTRIBUTION=off disables the exemption
+#             (harness-only; it can only ever strict-en, never loosen).
 #   qe role:  changes under src/** EXCEPT src/kernel/test/** and
 #             src/test/** fail.
 #
@@ -41,9 +46,16 @@
 # path (it is neither a test tree nor a `src/` source, so it passes for both
 # roles) — the old blanket self-exemption hid gate edits from the gate.
 #
+# QE author identity (DECISION D): matched against commit AUTHOR (blame),
+# never the pusher/committer — a QE-committer/dev-author commit still fails.
+# Pinned to the identity carried by the cherry-picked QE commits (P0
+# mirror-test d0c46a454, #429 canary assert d0ba930e).
+#
 # Self-test: --self-test runs the fence classifier over built-in cases in
 # both directions (green on clean sets, red on deliberate violations) and
-# exits 0/2.
+# exits 0/2. The integration half also proves DECISION D (#433):
+# QE-authored merge/cherry-pick test hunks pass, dev-authored ones fail,
+# and the P0/#429 merge shapes go from FAIL (unattributed) to PASS.
 # CI: the meson workflow runs `--self-test` (classifier sanity) and the ROLE
 # check itself, with the role derived from the branch (`testbed` -> qe, every
 # other branch -> dev) and an EXPLICIT --base (a PR checkout has no local
@@ -101,6 +113,64 @@ classify() {
     esac
 }
 
+# QE author identity for DECISION D attribution (commit AUTHOR, not pusher).
+QE_AUTHOR_MAIL="<qe@nexios>"
+
+# qe_attributed <path>: exit 0 iff every ADDED line in every hunk of <path>
+# (vs $BASE; whole-file for untracked paths) blames to the QE author.
+# Anything else — dev authors, "Not Committed Yet", blame failures,
+# deletion-only hunks, empty files — fails closed (nonzero).
+qe_attributed() {
+    qf=$1
+    [ "${NEXIOS_GATE_ATTRIBUTION:-on}" = "off" ] && return 1
+    qranges=""
+    if git ls-files --error-unmatch -- "$qf" >/dev/null 2>&1; then
+        qdiff=$(git diff -U0 "$BASE" -- "$qf") || return 1
+        while IFS= read -r qline; do
+            case "$qline" in
+            "@@ "*)
+                qr=${qline#*+}
+                qstart=${qr%%[, ]*}
+                case "$qr" in
+                *,*) qc=${qr#*,}; qcount=${qc%% *} ;;
+                *) qcount=1 ;;
+                esac
+                case "$qcount" in
+                ''|*[!0-9]*) return 1 ;;
+                esac
+                if [ "$qcount" = "0" ]; then
+                    return 1  # deletion-only hunk: fail closed
+                fi
+                qranges="${qranges}${qstart},+${qcount}
+"
+                ;;
+            esac
+        done <<QDIFF_EOF
+$qdiff
+QDIFF_EOF
+    else
+        qtotal=$(grep -c '' -- "$qf" 2>/dev/null) || return 1
+        [ "$qtotal" -gt 0 ] 2>/dev/null || return 1
+        qranges="1,+$qtotal
+"
+    fi
+    [ -n "$qranges" ] || return 1
+    while IFS= read -r qrg; do
+        [ -z "$qrg" ] && continue
+        qmails=$(git blame --line-porcelain -L "$qrg" -- "$qf" 2>/dev/null \
+            | sed -n 's/^author-mail //p') || return 1
+        [ -n "$qmails" ] || return 1
+        while IFS= read -r qm; do
+            [ "$qm" = "$QE_AUTHOR_MAIL" ] || return 1
+        done <<QMAIL_EOF
+$qmails
+QMAIL_EOF
+    done <<QRANGE_EOF
+$qranges
+QRANGE_EOF
+    return 0
+}
+
 if [ "$SELFTEST" = "1" ]; then
     fail=0
     # format: role|path|expected
@@ -134,7 +204,7 @@ CASES
     # (S4-8), renames classify on the NEW path, and an explicit empty base is a
     # usage error rather than a merge-base fallback (S4-7).
     scratch=$(mktemp -d)
-    trap 'rm -rf "$scratch"' EXIT
+    trap 'rm -rf "$scratch" "${s2:-}"' EXIT
     mkdir -p "$scratch/tools" "$scratch/src/kernel/sched"
     cp "$0" "$scratch/tools/check_no_cross_edits.sh"
     git -C "$scratch" init -q -b main
@@ -231,6 +301,153 @@ CASES
     fi
     rm -f "$scratch/src/kernel/sched/role_probe.cpp"
 
+    # --- DECISION D (#433): author-attribution for test-tree hunks -------
+    s2=$(mktemp -d)
+    mkdir -p "$s2/tools" "$s2/src/kernel/test" "$s2/src/kernel/sched"
+    cp "$0" "$s2/tools/check_no_cross_edits.sh"
+    git -C "$s2" init -q -b main
+    git -C "$s2" config user.email t@t
+    git -C "$s2" config user.name t
+    printf 't0\n' > "$s2/src/kernel/test/t.cpp"
+    printf 'a0\n' > "$s2/src/kernel/sched/a.cpp"
+    git -C "$s2" add -A
+    git -C "$s2" commit -qm base
+    s2base=$(git -C "$s2" rev-parse HEAD)
+    # gate2 <on|off> <base>: 0 iff the gate passes (off = unattributed).
+    gate2() {
+        if [ "$1" = "off" ]; then
+            NEXIOS_GATE_ATTRIBUTION=off bash "$s2/tools/check_no_cross_edits.sh" \
+                --role=dev --base="$2" >/dev/null 2>&1
+        else
+            bash "$s2/tools/check_no_cross_edits.sh" \
+                --role=dev --base="$2" >/dev/null 2>&1
+        fi
+    }
+    # qe_commit <file> <content> <msg>: QE-authored, coordinator-committed
+    # (author and committer deliberately differ: attribution must follow
+    # the AUTHOR, never the pusher/committer).
+    qe_commit() {
+        printf '%s\n' "$2" > "$s2/$1"
+        git -C "$s2" add -A
+        git -C "$s2" -c user.name=coord -c user.email=coord@nexios \
+            commit -qm "$3" --author='NexIOS QE <qe@nexios>' -- "$1"
+    }
+    # D1: QE-authored merge commit passes; unattributed it fails (FAIL->PASS).
+    git -C "$s2" checkout -qb qe-lane
+    qe_commit src/kernel/test/t.cpp 't0-qe' 'qe test hunk'
+    git -C "$s2" checkout -q "$s2base"
+    git -C "$s2" -c user.name='NexIOS QE' -c user.email='qe@nexios' \
+        merge -q --no-ff qe-lane -m 'merge qe lane'
+    if gate2 on "$s2base"; then
+        printf 'PASS integration: QE-authored merge passes\n'
+    else
+        echo "FAIL integration: QE-authored merge rejected" >&2; fail=1
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: QE merge passed unattributed (want FAIL)" >&2
+        fail=1
+    else
+        printf 'PASS integration: QE merge fails unattributed (FAIL->PASS)\n'
+    fi
+    # D2: dev-authored test hunk fails, attributed or not.
+    git -C "$s2" checkout -q "$s2base"
+    printf 't0-dev\n' > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" commit -qam 'dev test hunk'
+    if gate2 on "$s2base"; then
+        echo "FAIL integration: dev-authored test hunk passed" >&2; fail=1
+    else
+        printf 'PASS integration: dev-authored test hunk fails\n'
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: dev hunk passed unattributed" >&2; fail=1
+    else
+        printf 'PASS integration: dev hunk fails unattributed too\n'
+    fi
+    # D3: QE committer + dev author still fails (AUTHOR, not pusher).
+    git -C "$s2" checkout -q "$s2base"
+    printf 't0-fake\n' > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" add -A
+    git -C "$s2" -c user.name='NexIOS QE' -c user.email='qe@nexios' \
+        commit -qm 'fake qe' --author='Dev Dan <dev@x>' -- src/kernel/test/t.cpp
+    if gate2 on "$s2base"; then
+        echo "FAIL integration: QE-committer dev-author hunk passed" >&2; fail=1
+    else
+        printf 'PASS integration: QE-committer dev-author hunk fails\n'
+    fi
+    # D4 (P0 replay): dev prod commit + cherry-picked QE test commit.
+    git -C "$s2" checkout -qb devline "$s2base"
+    printf 'a0-dev\n' > "$s2/src/kernel/sched/a.cpp"
+    git -C "$s2" commit -qam 'dev prod change'
+    git -C "$s2" checkout -qb qe2 "$s2base"
+    qe_commit src/kernel/test/t.cpp 't0-qe2' 'qe test hunk 2'
+    qe_sha=$(git -C "$s2" rev-parse HEAD)
+    git -C "$s2" checkout -q devline
+    git -C "$s2" cherry-pick "$qe_sha" >/dev/null 2>&1
+    if gate2 on "$s2base"; then
+        printf 'PASS integration: P0 cherry-pick replay passes\n'
+    else
+        echo "FAIL integration: P0 replay rejected" >&2; fail=1
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: P0 replay passed unattributed (want FAIL)" >&2
+        fail=1
+    else
+        printf 'PASS integration: P0 replay fails unattributed (FAIL->PASS)\n'
+    fi
+    # D5 (#429 replay): lane with dev prod + QE test hunks, merged.
+    git -C "$s2" checkout -qb lane429 "$s2base"
+    printf 'a0-lane\n' > "$s2/src/kernel/sched/a.cpp"
+    git -C "$s2" commit -qam 'lane dev prod change'
+    qe_commit src/kernel/test/t.cpp 't0-qe429' 'qe lane test hunk'
+    git -C "$s2" checkout -q "$s2base"
+    git -C "$s2" merge -q --no-ff lane429 -m 'merge lane'
+    if gate2 on "$s2base"; then
+        printf 'PASS integration: #429 merge replay passes\n'
+    else
+        echo "FAIL integration: #429 replay rejected" >&2; fail=1
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: #429 replay passed unattributed" >&2; fail=1
+    else
+        printf 'PASS integration: #429 merge replay fails unattributed (FAIL->PASS)\n'
+    fi
+    # C1-1 (issue #433 conditions): a deletion-only test change fails —
+    # no added lines exist to attribute, so there is nothing to exempt.
+    git -C "$s2" checkout -q "$s2base"
+    printf 'l1\nl2\nl3\n' > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" commit -qam 'C1 three-line base'
+    : > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" commit -qam 'C1 delete everything'
+    if gate2 on "$s2base"; then
+        echo "FAIL integration: deletion-only test hunk passed" >&2; fail=1
+    else
+        printf 'PASS integration: deletion-only test hunk fails\n'
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: deletion-only hunk passed unattributed" >&2
+        fail=1
+    else
+        printf 'PASS integration: deletion-only hunk fails unattributed too\n'
+    fi
+    # C1-2: a test file mixing QE-authored and dev-authored hunks fails —
+    # exemption requires EVERY added line to blame to the QE author.
+    git -C "$s2" checkout -q "$s2base"
+    qe_commit src/kernel/test/t.cpp 't0-qe-mix' 'qe part of mixed file'
+    printf 't0-qe-mix\ndev-part\n' > "$s2/src/kernel/test/t.cpp"
+    git -C "$s2" add -A
+    git -C "$s2" -c user.name=t -c user.email=t@t \
+        commit -qm 'dev part of mixed file' -- src/kernel/test/t.cpp
+    if gate2 on "$s2base"; then
+        echo "FAIL integration: mixed QE+dev test file passed" >&2; fail=1
+    else
+        printf 'PASS integration: mixed QE+dev test file fails\n'
+    fi
+    if gate2 off "$s2base"; then
+        echo "FAIL integration: mixed file passed unattributed" >&2; fail=1
+    else
+        printf 'PASS integration: mixed file fails unattributed too\n'
+    fi
+
     if [ "$fail" = "0" ]; then
         echo "check_no_cross_edits self-test: clean"
         exit 0
@@ -291,7 +508,17 @@ sort -u -o "$TMP_CHANGED" "$TMP_CHANGED"
 OUT=""
 while IFS= read -r file; do
     [ -z "$file" ] && continue
-    if [ "$(classify "$ROLE" "$file")" = "VIOLATION" ]; then
+    verdict=$(classify "$ROLE" "$file")
+    if [ "$verdict" = "VIOLATION" ] && [ "$ROLE" = "dev" ]; then
+        case "$file" in
+        src/kernel/test/*|src/test/*)
+            if qe_attributed "$file"; then
+                verdict="OK"
+            fi
+            ;;
+        esac
+    fi
+    if [ "$verdict" = "VIOLATION" ]; then
         OUT="${OUT}${ROLE}: ${file}
 "
     fi

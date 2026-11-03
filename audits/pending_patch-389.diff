@@ -1,0 +1,786 @@
+diff --git a/src/kernel/arch/aarch64/hal/smp.cpp b/src/kernel/arch/aarch64/hal/smp.cpp
+index 12aae8b0b..aba8c1776 100644
+--- a/src/kernel/arch/aarch64/hal/smp.cpp
++++ b/src/kernel/arch/aarch64/hal/smp.cpp
+@@ -79,6 +79,10 @@ uint8_t g_aps_up = 0;
+ // receiving CPU's handler — C=0 on both sides, so all accesses hit RAM).
+ volatile uint64_t s_sgi_ack[CONFIG_MAX_CPUS] = {};
+ 
++// Shootdown purges applied by the SGI-10 handler (issue #389 test
++// readback; mirrors the rv64 `shoot_applied_` counter).
++uint64_t s_shootdown_applied = 0;
++
+ // Conduit selected from the DTB psci node ("smc" or "hvc"; empty = none).
+ bool s_use_smc = true;
+ bool s_have_psci = false;
+@@ -172,6 +176,18 @@ uint8_t ap_count() {
+     return g_aps_up;
+ }
+ 
++bool scheduler_started() {
++    return __atomic_load_n(&scheduler_ready_, __ATOMIC_ACQUIRE);
++}
++
++uint64_t shootdown_applied() {
++    return __atomic_load_n(&s_shootdown_applied, __ATOMIC_ACQUIRE);
++}
++
++void note_shootdown_applied() {
++    __atomic_fetch_add(&s_shootdown_applied, 1ULL, __ATOMIC_RELAXED);
++}
++
+ uint64_t ap_aff0(uint8_t logical) {
+     // GIC targets are Aff0 (v2 interface / v3 TargetList bit), not the
+     // compressed logical index: refusal skips make them differ on gapped
+diff --git a/src/kernel/arch/aarch64/hal/smp.hpp b/src/kernel/arch/aarch64/hal/smp.hpp
+index 291372d4b..5125b6f5a 100644
+--- a/src/kernel/arch/aarch64/hal/smp.hpp
++++ b/src/kernel/arch/aarch64/hal/smp.hpp
+@@ -45,6 +45,22 @@ inline constexpr uint64_t PSCI_RET_SUCCESS = 0U;
+ /// @brief Number of APs woken AND parked (0 on single-CPU runs).
+ uint8_t ap_count();
+ 
++/// @brief True once the scheduler start-gate is published (issue #389).
++/// Fan-out targets park pre-gate (no drain yet), so the shootdown hook
++/// fans out only when true — matching the x86/rv64 contract.
++/// @return True after publish_scheduler_ready(), false before.
++bool scheduler_started();
++
++/// @brief Applied-shootdown counter for test readback (issue #389).
++/// Mirrors the rv64 `shootdown_applied()` observable; incremented once
++/// per SGI-10 purge by the shootdown handler. Lets QE observe AP-side
++/// apply end to end (`s_sgi_ack` slots stay file-static, GDB-only).
++/// @return Total shootdown purges applied by AP handlers since boot.
++uint64_t shootdown_applied();
++
++/// @brief Record one AP-side shootdown purge (SGI-10 handler path).
++void note_shootdown_applied();
++
+ /// @brief DTB reg (MPIDR Aff0) for a parked AP (issue #351 slice-2).
+ /// Maps the compressed logical index to the GIC target (Aff0); identity
+ /// only for contiguous topologies. 0xFF when unmapped (fail-closed).
+diff --git a/src/kernel/arch/aarch64/hal/smp_shootdown.cpp b/src/kernel/arch/aarch64/hal/smp_shootdown.cpp
+new file mode 100644
+index 000000000..4d35f2cf0
+--- /dev/null
++++ b/src/kernel/arch/aarch64/hal/smp_shootdown.cpp
+@@ -0,0 +1,69 @@
++/*
++ * NexIOS RTOS — Cross-CPU TLB Shootdown (SMP)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file smp_shootdown.cpp
++/// @brief AArch64 strong cross-CPU TLB-shootdown hook (issue #389).
++///        Overrides the weak `VMM::smp_tlb_shootdown_hook` no-op: sends
++///        one SGI SMP_SHOOTDOWN_SGI per up CPU (Aff0 via `ap_aff0`, S4
++///        interface `arch::send_shootdown_ipi`).  Purge-on-receipt: the
++///        SGI carries no payload, so the target applies a self-purge via
++///        the existing `tlb_flush_all` primitive (`tlbi vmalle1`) in the
++///        SGI-10 handler registered by kernel.cpp — no shared VA queue
++///        (a per-VA queue would be new cross-CPU shared state, i.e. #386
++///        surface).  IS form (`VMALLE1IS`) is explicitly NOT required:
++///        the handler runs on the target, so a self-purge suffices.
++/// @note Concurrency/caller contract: Lock: none.  Context: any-task.
++///       SMP: send-only fan-out to up CPUs; straight-line SGI sends,
++///       no wait, no retry (unmapped Aff0 skips fail-closed).
++
++#include <kernel/memory/vmm.hpp>
++#include <kernel/arch/hal/ipi.hpp>
++#include <kernel/arch/aarch64/hal/smp.hpp>
++#include <kernel/arch/aarch64/hal/percpu.hpp>
++
++namespace kernel {
++
++void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
++    (void)va;
++    (void)context_id;
++    (void)all;
++    // Pre-gate the parked APs cannot drain yet: local was already
++    // flushed by the choke — fan out only when live.
++    if (!kernel::smp::scheduler_started()) {
++        return;
++    }
++    const uint64_t self_cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++    const uint64_t up_count =
++        static_cast<uint64_t>(kernel::smp::ap_count());
++    for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
++        if (cpu >= CONFIG_MAX_CPUS) {
++            break;
++        }
++        if (cpu == self_cpu) {
++            continue;
++        }
++        const uint64_t aff0 =
++            kernel::smp::ap_aff0(static_cast<uint8_t>(cpu));
++        if (aff0 == 0xFFU) {
++            continue;
++        }
++        arch::send_shootdown_ipi(cpu);
++    }
++}
++
++} // namespace kernel
+diff --git a/src/kernel/arch/riscv64/hal/smp.cpp b/src/kernel/arch/riscv64/hal/smp.cpp
+index 48ad19028..904bf8444 100644
+--- a/src/kernel/arch/riscv64/hal/smp.cpp
++++ b/src/kernel/arch/riscv64/hal/smp.cpp
+@@ -197,6 +197,30 @@ uint8_t ap_count() {
+     return g_aps_up;
+ }
+ 
++bool scheduler_started() {
++    return __atomic_load_n(&scheduler_ready_, __ATOMIC_ACQUIRE);
++}
++
++uint64_t ap_hart(uint8_t logical) {
++    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
++        return ~0ULL;
++    }
++    return s_ap_hart[logical];
++}
++
++bool request_full_fence(uint64_t logical) {
++    if (logical == 0 || logical >= CONFIG_MAX_CPUS) {
++        return false;
++    }
++    const uint64_t hart = s_ap_hart[logical];
++    if (hart >= 64U) {
++        return false; // Legacy hart-mask is XLEN bits; no silent narrow.
++    }
++    __atomic_fetch_or(&ipi_mailbox_[logical], SMP_IPI_SHOOTDOWN,
++                      __ATOMIC_RELEASE);
++    return sbi_send_ipi_mask(1ULL << hart);
++}
++
+ void publish_scheduler_ready() {
+     __atomic_store_n(&scheduler_ready_, true, __ATOMIC_RELEASE);
+ }
+@@ -261,6 +285,13 @@ void apply_shootdowns() {
+     const uint64_t here = arch::cpu_index() % CONFIG_MAX_CPUS;
+     ShootSlot &slot = shoot_slots_[here];
+     uint64_t count = __atomic_load_n(&slot.count, __ATOMIC_ACQUIRE);
++    if (count == 0U) {
++        // Full-fence request (issue #389): SHOOTDOWN bit with an empty
++        // slot means the sender needs a whole-TLB fence (RFENCE-absent
++        // fallback for all=true). Bounded single fence, never a wait.
++        arch::sfence_vma();
++        return;
++    }
+     if (count > ShootSlot::SLOTS) {
+         // Corrupt count (never written by the bounded BSP path): full
+         // fence once, drop the batch — fail-closed and bounded.
+diff --git a/src/kernel/arch/riscv64/hal/smp.hpp b/src/kernel/arch/riscv64/hal/smp.hpp
+index cd27e2412..2cc0dfd3f 100644
+--- a/src/kernel/arch/riscv64/hal/smp.hpp
++++ b/src/kernel/arch/riscv64/hal/smp.hpp
+@@ -73,6 +73,28 @@ inline constexpr uint64_t SMP_IPI_LOOPBACK = 1ULL << 2U;
+ /// @brief Number of APs woken AND parked (0 on single-CPU runs).
+ uint8_t ap_count();
+ 
++/// @brief True once the scheduler start-gate is published (issue #389).
++/// RFENCE is synchronous-block and the S-soft target drains via its
++/// ISR — both need an interrupt-live AP — so the shootdown hook fans
++/// out only when true (pre-gate the target cannot drain).
++/// @return True after publish_scheduler_ready(), false before.
++bool scheduler_started();
++
++/// @brief Hart ID for a parked AP (issue #389: RFENCE fan-out mask).
++/// @param logical_id Target AP index (1..CONFIG_MAX_CPUS-1).
++/// @return DTB hart ID, or ~0ULL when unmapped (fail-closed: the RFENCE
++///         caller falls back to the mailbox path, never fences blind).
++uint64_t ap_hart(uint8_t logical_id);
++
++/// @brief Request a full-fence shootdown on an AP (issue #389).
++/// Sets the AP's mailbox SHOOTDOWN bit with an empty slot — the apply
++/// side treats empty-slot-with-bit as a whole-TLB fence — and sends the
++/// S-soft IPI. RFENCE-absent fallback for all=true (the batch slots
++/// carry per-VA entries only, never a full-fence encoding).
++/// @param logical_id Target AP index (1..CONFIG_MAX_CPUS-1).
++/// @return true when the SBI call was accepted, false otherwise.
++bool request_full_fence(uint64_t logical_id);
++
+ /// @brief Bring up application processors (called once at boot, after
+ ///        Timer::init, under interrupt guard).  Fail-closed: HSM absent,
+ ///        unusable DTB, unknown enable-method, or an AP start timeout
+@@ -132,6 +154,16 @@ void apply_shootdowns();
+ /// @return Total entries applied by AP ISR runs since boot.
+ uint64_t shootdown_applied();
+ 
++/// @brief Force the RFENCE presence answer for tests (issue #389).
++/// Nonzero pretends RFENCE present, zero forces the S-soft fallback
++/// path (mirrors `sbi_probe_extension`); cleared via
++/// `clear_sbi_rfence_for_test` (ScopeGuard on every use — the
++/// override is not ResourceTracker state).
++void set_sbi_rfence_for_test(bool present);
++
++/// @brief Clear the RFENCE test override (restore probed behavior).
++void clear_sbi_rfence_for_test();
++
+ /// @brief S-mode software-IRQ demux (issue #351 slice-3).
+ /// Called from handle_plic_trap AFTER it clears sip.SSIP (the line stays
+ /// asserted until cleared). Fans out the per-hart mailbox in fixed order:
+diff --git a/src/kernel/arch/riscv64/hal/smp_shootdown.cpp b/src/kernel/arch/riscv64/hal/smp_shootdown.cpp
+new file mode 100644
+index 000000000..b26ca883f
+--- /dev/null
++++ b/src/kernel/arch/riscv64/hal/smp_shootdown.cpp
+@@ -0,0 +1,187 @@
++/*
++ * NexIOS RTOS — Cross-CPU TLB Shootdown (SMP)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file smp_shootdown.cpp
++/// @brief RISC-V64 strong cross-CPU TLB-shootdown hook (issue #389).
++///        Overrides the weak `VMM::smp_tlb_shootdown_hook` no-op.
++///        PRIMARY: `sbi_remote_sfence_vma` RFENCE broadcast (SBI EID
++///        0x52464E43, FID 1 `remote_sfence_vma(hart_mask,
++///        hart_mask_base, start, size)`; FID 2 ASID variant explicitly
++///        NOT used — FID 1's VA form covers all ASIDs, safe superset).
++///        `all=true` uses the spec full-range encoding (start and size
++///        both zero = whole-TLB fence).  SYNCHRONOUS-BLOCK: the ecall
++///        returns only after remote harts fence, so exposure is bounded
++///        by discipline, not timeout — hart mask restricted to
++///        verified-up harts, SBI error falls back immediately (no retry
++///        loop).  FALLBACK (RFENCE absent or send refused): the existing
++///        `shoot_slots_` mailbox + S-soft `apply_shootdowns` path
++///        (per-VA entries; all=true via `request_full_fence`, whose
++///        empty-slot-with-bit the apply side fences whole).
++/// @note Concurrency/caller contract: Lock: none.  Context: any-task.
++///       SMP: single RFENCE ecall or straight-line mailbox sends; the
++///       sync-block ecall runs with the verified-up mask only, so a
++///       down hart can cost the bounded wait, never a hang.
++
++#include <kernel/memory/vmm.hpp>
++#include <kernel/arch/riscv64/hal/smp.hpp>
++#include <kernel/arch/riscv64/hal/percpu.hpp>
++#include <kernel/arch/page_table.hpp>
++
++namespace {
++
++// SBI RFENCE extension (SBI RFENCE §8.2 / v3.0 §8.1.2): EID 0x52464E43.
++constexpr uint64_t SBI_EID_RFENCE = 0x52464E43UL;
++// FID 1: remote_sfence_vma(hart_mask, hart_mask_base, start, size).
++constexpr uint64_t SBI_RFENCE_SFENCE_VMA = 1UL;
++// SBI base extension (probing), mirroring smp.cpp.
++constexpr uint64_t SBI_EID_BASE = 0x10UL;
++constexpr uint64_t SBI_BASE_PROBE_EXTENSION = 3UL;
++
++// RFENCE presence: -1 unknown (probe once), 0 absent, 1 present.
++int64_t s_rfence_present = -1;
++// Test override (issue #389 QE fallback-forcing): -1 none, else forced.
++int64_t s_rfence_override = -1;
++
++/// @brief SBI v0.2+ call result (sbiret: error in a0, value in a1).
++struct SbiRet {
++    uint64_t error;
++    uint64_t value;
++};
++
++/// @brief 3-arg SBI call (probe path only).
++SbiRet sbi_call3(uint64_t eid, uint64_t fid, uint64_t arg0) {
++    register uint64_t reg_a0 asm("a0") = arg0;
++    register uint64_t reg_a1 asm("a1") = 0;
++    register uint64_t reg_a6 asm("a6") = fid;
++    register uint64_t reg_a7 asm("a7") = eid;
++    asm volatile("ecall"
++                 : "+r"(reg_a0), "+r"(reg_a1)
++                 : "r"(reg_a6), "r"(reg_a7)
++                 : "memory");
++    SbiRet ret = {reg_a0, reg_a1};
++    return ret;
++}
++
++/// @brief 4-arg SBI call (RFENCE path: a0-a3 carry the request).
++SbiRet sbi_call4(uint64_t eid, uint64_t fid, uint64_t arg0, uint64_t arg1,
++                 uint64_t arg2, uint64_t arg3) {
++    register uint64_t reg_a0 asm("a0") = arg0;
++    register uint64_t reg_a1 asm("a1") = arg1;
++    register uint64_t reg_a2 asm("a2") = arg2;
++    register uint64_t reg_a3 asm("a3") = arg3;
++    register uint64_t reg_a6 asm("a6") = fid;
++    register uint64_t reg_a7 asm("a7") = eid;
++    asm volatile("ecall"
++                 : "+r"(reg_a0), "+r"(reg_a1), "+r"(reg_a2), "+r"(reg_a3)
++                 : "r"(reg_a6), "r"(reg_a7)
++                 : "memory");
++    SbiRet ret = {reg_a0, reg_a1};
++    return ret;
++}
++
++/// @brief Probe the RFENCE extension once (base EID 0x10, FID 3).
++bool rfence_usable() {
++    if (s_rfence_override >= 0) {
++        return s_rfence_override > 0;
++    }
++    if (s_rfence_present < 0) {
++        SbiRet probe = sbi_call3(SBI_EID_BASE, SBI_BASE_PROBE_EXTENSION,
++                                 SBI_EID_RFENCE);
++        s_rfence_present =
++            (probe.error == 0 && probe.value != 0U) ? 1 : 0;
++    }
++    return s_rfence_present > 0;
++}
++
++} // namespace
++
++namespace kernel::smp {
++
++/// @brief Force the RFENCE presence answer for tests (issue #389).
++/// @param present Nonzero pretends RFENCE present, zero forces the
++///        S-soft fallback path (mirrors `sbi_probe_extension`).
++void set_sbi_rfence_for_test(bool present) {
++    s_rfence_override = present ? 1 : 0;
++}
++
++/// @brief Clear the RFENCE test override (restore probed behavior).
++void clear_sbi_rfence_for_test() {
++    s_rfence_override = -1;
++}
++
++} // namespace kernel::smp
++
++namespace kernel {
++
++void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
++    (void)context_id;
++    // Pre-gate the parked harts cannot drain (RFENCE would block until
++    // they enable interrupts — after this hook's caller): local was
++    // already flushed by the choke — fan out only when live.
++    if (!kernel::smp::scheduler_started()) {
++        return;
++    }
++    const uint64_t up_count =
++        static_cast<uint64_t>(kernel::smp::ap_count());
++    if (up_count == 0U) {
++        return;
++    }
++    if (rfence_usable()) {
++        uint64_t mask = 0;
++        for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
++            if (cpu >= CONFIG_MAX_CPUS) {
++                break;
++            }
++            const uint64_t hart =
++                kernel::smp::ap_hart(static_cast<uint8_t>(cpu));
++            if (hart >= 64U) {
++                mask = ~0ULL;
++                break;
++            }
++            mask |= (1ULL << hart);
++        }
++        if (mask != ~0ULL) {
++            const uint64_t start = all ? 0U : va;
++            const uint64_t size = all ? 0U : arch::PAGE_SIZE;
++            SbiRet ret = sbi_call4(SBI_EID_RFENCE, SBI_RFENCE_SFENCE_VMA,
++                                   mask, 0U, start, size);
++            if (ret.error == 0U) {
++                return;
++            }
++        }
++        // Probed present but unusable mask/send: fall through to the
++        // mailbox path (report failure upstream by delivering anyway —
++        // never silently drop the shootdown).
++    }
++    for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
++        if (cpu >= CONFIG_MAX_CPUS) {
++            break;
++        }
++        if (all) {
++            kernel::smp::request_full_fence(cpu);
++        } else {
++            if (!kernel::smp::queue_shootdown(cpu, va)) {
++                kernel::smp::flush_shootdowns(cpu);
++                kernel::smp::queue_shootdown(cpu, va);
++            }
++            kernel::smp::flush_shootdowns(cpu);
++        }
++    }
++}
++
++} // namespace kernel
+diff --git a/src/kernel/arch/x86_64/hal/shootdown_ipi.cpp b/src/kernel/arch/x86_64/hal/shootdown_ipi.cpp
+index 86045ad4d..22056ec16 100644
+--- a/src/kernel/arch/x86_64/hal/shootdown_ipi.cpp
++++ b/src/kernel/arch/x86_64/hal/shootdown_ipi.cpp
+@@ -36,7 +36,12 @@ uint64_t ShootdownBatch::applied_log_[ShootdownBatch::APPLIED_LOG] = {};
+ uint64_t ShootdownBatch::applied_log_count_ = 0;
+ 
+ bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
+-                                  uint16_t pcid) {
++                                   uint16_t pcid) {
++    return queue_remote(cpu, va, pcid, false);
++}
++
++bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid,
++                                   bool all) {
+     if (cpu >= CONFIG_MAX_CPUS)
+         return false;
+     if ((va & (ArchPageTable::PAGE_SIZE - 1)) != 0)
+@@ -59,6 +64,7 @@ bool ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va,
+     }
+     slot.entries[pos].va = va;
+     slot.entries[pos].pcid = pcid;
++    slot.entries[pos].all = all;
+     __atomic_store_n(&slot.count, count + 1, __ATOMIC_RELEASE);
+     return true;
+ }
+@@ -106,7 +112,15 @@ void ShootdownBatch::handle_cpu(uint64_t cpu) {
+         if (count > BATCH_SLOTS)
+             count = BATCH_SLOTS;
+         for (uint64_t i = 0; i < count; ++i) {
+-            ArchPageTable::tlb_flush(slot.entries[i].va);
++            // Issue #389: the stored PCID is honored (INVPCID
++            // single-address, purge fallback); the all-flag selects a
++            // full purge (teardown/ASID-recycle path).
++            if (slot.entries[i].all) {
++                tlb_purge_all();
++            } else {
++                ArchPageTable::tlb_flush_va_asid(slot.entries[i].va,
++                                                 slot.entries[i].pcid);
++            }
+             if (applied_log_count_ < APPLIED_LOG) {
+                 applied_log_[applied_log_count_] = slot.entries[i].va;
+                 ++applied_log_count_;
+@@ -145,6 +159,7 @@ void ShootdownBatch::reset_for_test() {
+         for (size_t i = 0; i < BATCH_SLOTS; ++i) {
+             slots_[c].entries[i].va = 0;
+             slots_[c].entries[i].pcid = 0;
++            slots_[c].entries[i].all = false;
+         }
+     }
+     sends_ = 0;
+diff --git a/src/kernel/arch/x86_64/hal/shootdown_ipi.hpp b/src/kernel/arch/x86_64/hal/shootdown_ipi.hpp
+index 57f386f20..7409a6c3e 100644
+--- a/src/kernel/arch/x86_64/hal/shootdown_ipi.hpp
++++ b/src/kernel/arch/x86_64/hal/shootdown_ipi.hpp
+@@ -44,16 +44,28 @@ class ShootdownBatch {
+     /// @brief Max log entries kept for order checks.
+     static constexpr size_t APPLIED_LOG = 64;
+ 
+-    /// @brief One shootdown entry (VA + owning PCID).
++    /// @brief One shootdown entry (VA + owning PCID + full-flush flag).
++    ///        all selects a full purge on apply (issue #389 teardown/
++    ///        ASID-recycle path); otherwise the entry applies VA+PCID
++    ///        targeted (INVPCID single-address, purge fallback).
+     struct BatchEntry {
+         uint64_t va;
+         uint16_t pcid;
++        bool all;
+     };
+ 
+     /// @brief Queue one entry for @p cpu (no IPI yet).
+     /// @return true when queued; false when the slot is full (caller
+     ///         flushes first, then retries) or arguments invalid.
+     static bool queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid);
++    /// @brief Queue one entry with full-flush selection (issue #389).
++    ///        all=true marks the entry for full purge on apply; the
++    ///        VA is still recorded for the applied-VA log.  The 3-arg
++    ///        overload above forwards with all=false (existing callers
++    ///        and tests keep their shape).
++    /// @return true when queued; false on full slot/invalid arguments.
++    static bool queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid,
++                             bool all);
+     /// @brief Deliver @p cpu's queued entries in bounded batches.
+     ///        Polls each batch drained before refilling (never overwrites
+     ///        a live batch).  Entries stay queued on send failure.
+diff --git a/src/kernel/arch/x86_64/hal/smp.cpp b/src/kernel/arch/x86_64/hal/smp.cpp
+index 883907c75..24f803e8a 100644
+--- a/src/kernel/arch/x86_64/hal/smp.cpp
++++ b/src/kernel/arch/x86_64/hal/smp.cpp
+@@ -185,6 +185,10 @@ bool trampoline_block_usable() {
+ 
+ uint8_t ap_count() { return g_aps_up; }
+ 
++bool scheduler_started() {
++    return __atomic_load_n(&scheduler_ready_, __ATOMIC_ACQUIRE);
++}
++
+ /// @brief Publish the scheduler start-gate (called once by the BSP after
+ ///        reboot_from_table() finishes spawning, before its idle loop).
+ void publish_scheduler_ready() {
+diff --git a/src/kernel/arch/x86_64/hal/smp.hpp b/src/kernel/arch/x86_64/hal/smp.hpp
+index 0d896ae3e..82663da86 100644
+--- a/src/kernel/arch/x86_64/hal/smp.hpp
++++ b/src/kernel/arch/x86_64/hal/smp.hpp
+@@ -80,6 +80,13 @@ void reserve_block_early();
+ /// @brief Number of APs woken AND parked (0 on single-CPU runs).
+ uint8_t ap_count();
+ 
++/// @brief True once the scheduler start-gate is published (issue #389).
++/// Fan-out targets park with IF=0 until this lands (Phase-B behavior),
++/// so the shootdown hook fans out only when true — otherwise the
++/// target cannot drain and every flush burns its bounded spin.
++/// @return True after publish_scheduler_ready(), false before.
++bool scheduler_started();
++
+ /// @brief The MADT snapshot bring_up() consumed at boot (cached — firmware
+ ///        tables are static).  Tests read this instead of re-walking the
+ ///        tables (re-walks map kernel-half pages that test isolation
+diff --git a/src/kernel/arch/x86_64/hal/smp_shootdown.cpp b/src/kernel/arch/x86_64/hal/smp_shootdown.cpp
+new file mode 100644
+index 000000000..6926975dd
+--- /dev/null
++++ b/src/kernel/arch/x86_64/hal/smp_shootdown.cpp
+@@ -0,0 +1,67 @@
++/*
++ * NexIOS RTOS — Cross-CPU TLB Shootdown (SMP)
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file smp_shootdown.cpp
++/// @brief x86_64 strong cross-CPU TLB-shootdown hook (issue #389).
++///        Overrides the weak `VMM::smp_tlb_shootdown_hook` no-op: fans
++///        each shootdown out to every up CPU through the existing
++///        `ShootdownBatch` transport (queue collapse/order/overflow +
++///        bounded 1M-spin drain, issue #159 protocol untouched).  The
++///        choke point already flushed local first, so self is skipped
++///        (a self-IPI under IF=0 cannot land — the skip is load-bearing,
++///        not an optimization).  PCID travels in the slot and is honored
++///        on apply; the all-flag selects a full purge.  No new IDT vector
++///        (ABI frozen): delivery reuses SHOOTDOWN_BATCH_VECTOR, whose ISR
++///        is registered in kernel.cpp (shared IDT serves BSP and APs).
++/// @note Concurrency/caller contract: Lock: none.  Context: any-task.
++///       SMP: fan-out to up CPUs only; per-leg bounded (1M-spin drain;
++///       a down target never drains — entries stay queued for the next
++///       flush instead of spinning forever).
++
++#include <kernel/memory/vmm.hpp>
++#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
++#include <kernel/arch/x86_64/hal/smp.hpp>
++#include <kernel/arch/x86_64/hal/percpu.hpp>
++
++namespace kernel {
++
++void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
++    // Pre-gate the parked APs cannot drain (IF=0 until scheduler start):
++    // local was already flushed by the choke — fan out only when live.
++    if (!kernel::smp::scheduler_started()) {
++        return;
++    }
++    const uint64_t self_cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++    const uint64_t up_count =
++        static_cast<uint64_t>(kernel::smp::ap_count());
++    for (uint64_t cpu = 1; cpu <= up_count; ++cpu) {
++        if (cpu >= CONFIG_MAX_CPUS) {
++            break;
++        }
++        if (cpu == self_cpu) {
++            continue;
++        }
++        if (!arch::ShootdownBatch::queue_remote(cpu, va, context_id, all)) {
++            arch::ShootdownBatch::flush_target(cpu);
++            arch::ShootdownBatch::queue_remote(cpu, va, context_id, all);
++        }
++        arch::ShootdownBatch::flush_target(cpu);
++    }
++}
++
++} // namespace kernel
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index fee72430e..13a1b0be4 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -34,6 +34,7 @@
+ #include <kernel/arch/serial.hpp>
+ #include <kernel/profiling/sampler.hpp>
+ #include <kernel/memory/pmm.hpp>
++#include <kernel/arch/page_table.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/iommu/iommu.hpp>
+@@ -74,6 +75,7 @@
+ #include <kernel/arch/x86_64/hal/pcid.hpp>
+ #include <kernel/arch/x86_64/madt.hpp>
+ #include <kernel/arch/x86_64/hal/smp.hpp>
++#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
+ #endif
+ #include <kernel/vfs/devfs.hpp>
+ #include <kernel/vfs/procfs.hpp>
+@@ -1358,6 +1360,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+             kernel::Scheduler::sched_ipi_handler();
+             arch::APIC::eoi();
+         });
++    // Issue #389: cross-CPU TLB-shootdown batch vector (shared IDT
++    // serves BSP and APs — one registration covers every CPU).  The
++    // apply side is lock-free (per-entry INVPCID/purge, no allocation),
++    // so the hook's remote drain can never deadlock on a held lock.
++    arch::IDT::register_handler_raw(
++        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
++        [](uint64_t, uint64_t, uint64_t) {
++            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
++            arch::APIC::eoi();
++        });
+ #endif // CONFIG_ARCH_X86_64
+ #if defined(CONFIG_ARCH_AARCH64)
+     // Issue #351 slice-2: cross-CPU scheduler wake SGI (the shared vector
+@@ -1368,6 +1380,17 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+         arch::SMP_SCHED_SGI, [](uint64_t, uint64_t, uint64_t) {
+             kernel::Scheduler::sched_ipi_handler();
+         });
++    // Issue #389: cross-CPU TLB-shootdown SGI (purge-on-receipt — the
++    // SGI carries no payload, so the target self-purges via the
++    // existing `tlb_flush_all` primitive; IS form explicitly not
++    // required).  The shared vector table serves BSP and APs.  No EOI
++    // in-handler — handle_gic_irq closes the SGI at its tail (an early
++    // eoi() would trip the ownership guard as unmatched).
++    arch::IDT::register_handler_raw(
++        arch::SMP_SHOOTDOWN_SGI, [](uint64_t, uint64_t, uint64_t) {
++            arch::ArchPageTable::tlb_flush_all();
++            kernel::smp::note_shootdown_applied();
++        });
+ #endif
+     boot_mark(kernel::BootStage::ARCH_INIT);
+     if (kernel::gs::boot_info().cmdline[0]) {
+diff --git a/src/kernel/memory/vmm.cpp b/src/kernel/memory/vmm.cpp
+index 308b1d530..939864b20 100644
+--- a/src/kernel/memory/vmm.cpp
++++ b/src/kernel/memory/vmm.cpp
+@@ -193,7 +193,9 @@ void VMM::harden_kernel_half() {
+             *leaf = vmm_arch_encode_ro(*leaf, exec);
+         if (exec)
+             *leaf = vmm_arch_kernel_text_exec(*leaf);
+-        arch::ArchPageTable::tlb_flush(va);
++        // Issue #389: route through the shootdown choke (local-first,
++        // then cross-CPU fan-out; PCID default-(b) — kernel-half va).
++        tlb_shootdown(va, 0, false);
+     };
+ 
+     for (uint64_t va = text_start; va < text_end; va += arch::PAGE_SIZE)
+@@ -202,7 +204,9 @@ void VMM::harden_kernel_half() {
+         harden_page(va, false, true);
+     for (uint64_t va = data_start; va < bss_end; va += arch::PAGE_SIZE)
+         harden_page(va, false, false);
+-    arch::ArchPageTable::tlb_flush_all();
++    // Issue #389: post-harden full purge through the choke (remote CPUs
++    // may hold entries for the remapped image half).
++    tlb_shootdown(0, 0, true);
+ }
+ 
+ /// @brief Walk or create a page-table entry at the current level.
+@@ -434,7 +438,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
+     }
+ 
+     l2[l2_idx] = 0;
+-    arch::ArchPageTable::tlb_flush(virt_addr);
++    // Issue #389: rv64 unmap leg through the choke (PCID default-(b)).
++    tlb_shootdown(virt_addr, 0, false);
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+@@ -467,7 +472,8 @@ void VMM::unmap_page(uint64_t virt_addr) {
+     }
+ 
+     pt[pt_idx] = 0;
+-    arch::ArchPageTable::tlb_flush(virt_addr);
++    // Issue #389: x86 unmap leg through the choke (PCID default-(b)).
++    tlb_shootdown(virt_addr, 0, false);
+ #endif
+ }
+ 
+diff --git a/src/kernel/memory/vmm_map.cpp b/src/kernel/memory/vmm_map.cpp
+index fe9608617..6a827b51a 100644
+--- a/src/kernel/memory/vmm_map.cpp
++++ b/src/kernel/memory/vmm_map.cpp
+@@ -91,7 +91,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+                "map_page: KERNEL page mapped as user-accessible");
+ 
+     l2[idx[2]] = vmm_arch_encode_kernel_leaf(phys_addr, user);
+-    arch::ArchPageTable::tlb_flush(virt_addr);
++    tlb_shootdown(virt_addr, 0, false);
+     return errors::VMM_ERR_OK;
+ #else
+     // NOLINTNEXTLINE(performance-no-int-to-ptr)
+@@ -148,7 +148,7 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+                "map_page: KERNEL page mapped as user-accessible");
+ 
+     pt[idx[3]] = vmm_arch_encode_kernel_leaf(phys_addr, user);
+-    arch::ArchPageTable::tlb_flush(virt_addr);
++    tlb_shootdown(virt_addr, 0, false);
+ #endif
+     return errors::VMM_ERR_OK;
+ }
+@@ -249,7 +249,7 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+     // file. Harmless when these tables are not current (local INVLPG);
+     // required when they are (present→present remaps would otherwise
+     // serve stale TLB/PCID entries, globals included).
+-    arch::ArchPageTable::tlb_flush(virt_addr);
++    tlb_shootdown(virt_addr, 0, false);
+     return errors::VMM_ERR_OK;
+ }
+ 
+@@ -303,7 +303,7 @@ void VMM::map_page_ro_in_pml4(uint64_t virt_addr, uint64_t phys_addr,
+     // Arch RO encoding (issue #363 P2): aarch64 AP_RO, riscv W-clear,
+     // x86_64 RW-clear (+NX when non-executable, idempotent here).
+     *leaf = vmm_arch_encode_ro(*leaf, executable);
+-    arch::ArchPageTable::tlb_flush(virt_addr);
++    tlb_shootdown(virt_addr, 0, false);
+ }
+ 
+ bool VMM::pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
+@@ -374,7 +374,7 @@ void VMM::unmap_page_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
+     }
+     // Unconditional flush (issue #225): the pre-convergence walk flushed
+     // whenever it reached the leaf parent, including absent-leaf clears.
+-    arch::ArchPageTable::tlb_flush(virt_addr);
++    tlb_shootdown(virt_addr, 0, false);
+ }
+ 
+ errors::VmmError VMM::unmap_page_in_pml4_err(uint64_t virt_addr,
+diff --git a/src/kernel/memory/vmm_teardown.cpp b/src/kernel/memory/vmm_teardown.cpp
+index 8335a9c83..9ca38a1f9 100644
+--- a/src/kernel/memory/vmm_teardown.cpp
++++ b/src/kernel/memory/vmm_teardown.cpp
+@@ -221,7 +221,11 @@ void VMM::free_user_pages(uint64_t pml4_phys) {
+         pml4[pml4_idx] = 0;
+     }
+ #endif
+-    // TLB flush is the caller's responsibility (via CR3 reload)
++    // Issue #389: purge remote CPUs at AS teardown — they may hold
++    // entries tagged with the dying ASID, and the ASID allocator can
++    // recycle it to a live AS (local purge rides the choke; the CR3
++    // reload path keeps its own local responsibility).
++    tlb_shootdown(0, 0, true);
+ }
+ 
+ /// @brief Ownership test for a huge/block entry hit during fork

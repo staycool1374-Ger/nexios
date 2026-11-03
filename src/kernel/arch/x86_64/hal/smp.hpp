@@ -80,6 +80,13 @@ void reserve_block_early();
 /// @brief Number of APs woken AND parked (0 on single-CPU runs).
 uint8_t ap_count();
 
+/// @brief True once the scheduler start-gate is published (issue #389).
+/// Fan-out targets park with IF=0 until this lands (Phase-B behavior),
+/// so the shootdown hook fans out only when true — otherwise the
+/// target cannot drain and every flush burns its bounded spin.
+/// @return True after publish_scheduler_ready(), false before.
+bool scheduler_started();
+
 /// @brief The MADT snapshot bring_up() consumed at boot (cached — firmware
 ///        tables are static).  Tests read this instead of re-walking the
 ///        tables (re-walks map kernel-half pages that test isolation

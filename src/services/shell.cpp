@@ -64,6 +64,12 @@
 #include <kernel/arch/hal/cpuid.hpp>
 #include <kernel/sync/notify.hpp>
 #include <kernel/time/timer_wheel.hpp>
+#include <kernel/time/timer_srv.hpp>
+#include <kernel/vfs/vfs_srv.hpp>
+#include <kernel/driver/block_srv.hpp>
+#include <kernel/term/term_srv.hpp>
+#include <kernel/log/log_srv.hpp>
+#include <kernel/daemon/daemon_mgr.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
 #endif
@@ -349,6 +355,33 @@ void Shell::init() {
     register_command("cat",     "Print file contents to terminal",   cmd_cat);
     register_command("touch",   "Create an empty file",              cmd_touch);
     register_command("dmesg",   "Print kernel log buffer",           cmd_dmesg);
+#if CONFIG_TIMER_SRV_FAULT_INJECT && CONFIG_TIMER_SRV
+    register_command("timerfault", "Terminate timer-srv PD (fault drill)", cmd_timerfault);
+#endif
+#if CONFIG_DRIVER_PD_FAULT_INJECT &&                                           \
+    (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                           \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET)
+    register_command("driverfault", "Terminate driver PD by role (fault drill)", cmd_driverfault);
+#endif
+#if CONFIG_VFS_SRV_FAULT_INJECT && CONFIG_VFS_SRV
+    register_command("vfsfault", "Terminate vfs-srv PD (fault drill)", cmd_vfsfault);
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && CONFIG_BLOCK_SRV
+    register_command("blockfault", "Terminate block-srv PD (fault drill)", cmd_blockfault);
+#endif
+#if CONFIG_TERM_SRV
+    register_command("termprobe", "Probe term-srv PD (BIND, expect ok)", cmd_termprobe);
+#endif
+#if CONFIG_LOG_SRV
+    register_command("logprobe", "Probe log-srv PD (BIND, expect ok)", cmd_logprobe);
+#endif
+#if CONFIG_TERM_SRV_FAULT_INJECT && CONFIG_TERM_SRV
+    register_command("termfault", "Terminate term-srv PD (fault drill)", cmd_termfault);
+#endif
+#if CONFIG_LOG_SRV_FAULT_INJECT && CONFIG_LOG_SRV
+    register_command("logfault", "Terminate log-srv PD (fault drill)", cmd_logfault);
+#endif
     register_command("lspci",   "List PCI devices",                  cmd_lspci);
 
     work_dir_[0] = '/';
@@ -2520,6 +2553,136 @@ void Shell::cmd_modlist(int, const char**) {
         Terminal::write("]\n");
     }
 }
+
+#if CONFIG_TIMER_SRV_FAULT_INJECT && CONFIG_TIMER_SRV
+/// @brief Diagnostic fault drill (issue #241, strangler step c).
+/// Terminates the timer-srv PD so the supervisor path (death-notify →
+/// restart → cap re-derive → rebind) can be demonstrated. Diagnostic
+/// only; compiled out by default (never shipped).
+void Shell::cmd_timerfault(int, const char**) {
+    const uint64_t pid = kernel::time::timer_srv::get_timer_srv_pid();
+    if (pid == 0) {
+        Terminal::write("timerfault: timer-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("timer-srv");
+    Terminal::write("S TMR fault kill issued\n");
+}
+#endif
+
+#if CONFIG_DRIVER_PD_FAULT_INJECT &&                                         \
+    (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                           \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET)
+/// @brief Diagnostic fault drill (issue #48, strangler step c).
+/// Terminates one driver PD by role so the supervisor path (death-notify
+/// → sdf_rebind → rebind) can be demonstrated. Diagnostic only;
+/// compiled out by default (never shipped).
+void Shell::cmd_driverfault(int argc, const char** argv) {
+    if (argc < 2) {
+        Terminal::write("Usage: driverfault <serial|kbd|rtc|fb|block|net>\n");
+        return;
+    }
+    const char *role = argv[1];
+    char name[16] = "drv-";
+    size_t i = 4;
+    for (size_t j = 0; role[j] && i < 15; ++j) {
+        char c = role[j];
+        if (c < 'a' || c > 'z') {
+            Terminal::write("Usage: driverfault <serial|kbd|rtc|fb|block|net>\n");
+            return;
+        }
+        name[i++] = c;
+    }
+    name[i] = '\0';
+    kernel::daemon::terminate(name);
+    Terminal::write("S DRV fault kill issued\n");
+}
+#endif
+
+#if CONFIG_VFS_SRV_FAULT_INJECT && CONFIG_VFS_SRV
+/// @brief Diagnostic fault drill (issue #47, strangler step c).
+/// Terminates the vfs-srv PD so the supervisor path (death-notify →
+/// restart → cap re-derive → rebind) can be demonstrated. Diagnostic
+/// only; compiled out by default (never shipped).
+void Shell::cmd_vfsfault(int, const char**) {
+    const uint64_t pid = kernel::vfs_srv::get_vfs_srv_pid();
+    if (pid == 0) {
+        Terminal::write("vfsfault: vfs-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("vfs-srv");
+    Terminal::write("S VFS fault kill issued\n");
+}
+#endif
+
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && CONFIG_BLOCK_SRV
+/// @brief Diagnostic fault drill (issue #47, strangler step c).
+/// Terminates the block-srv PD so the supervisor path (death-notify →
+/// restart → cap re-derive → rebind) can be demonstrated. Diagnostic
+/// only; compiled out by default (never shipped).
+void Shell::cmd_blockfault(int, const char**) {
+    const uint64_t pid = kernel::block_srv::get_block_srv_pid();
+    if (pid == 0) {
+        Terminal::write("blockfault: block-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("block-srv");
+    Terminal::write("S BLK fault kill issued\n");
+}
+#endif
+
+#if CONFIG_TERM_SRV
+/// @brief Probe the term-srv PD (issue #51, parity harness).
+/// BINDs and reports ok/-ENOSYS (no numeric formatting needed).
+void Shell::cmd_termprobe(int, const char**) {
+    const int64_t rc = kernel::term_srv::term_srv_probe_bind();
+    if (rc == 0) {
+        Terminal::write("S TM op=bind rc=0\n");
+    } else {
+        Terminal::write("S TM op=bind rc=-ENOSYS\n");
+    }
+}
+#endif
+
+#if CONFIG_LOG_SRV
+/// @brief Probe the log-srv PD (issue #51, parity harness).
+/// BINDs and reports ok/-ENOSYS (no numeric formatting needed).
+void Shell::cmd_logprobe(int, const char**) {
+    const int64_t rc = kernel::log_srv::log_srv_probe_bind();
+    if (rc == 0) {
+        Terminal::write("S LOG op=bind rc=0\n");
+    } else {
+        Terminal::write("S LOG op=bind rc=-ENOSYS\n");
+    }
+}
+#endif
+
+#if CONFIG_TERM_SRV_FAULT_INJECT && CONFIG_TERM_SRV
+/// @brief Diagnostic fault drill (issue #51, strangler step c).
+void Shell::cmd_termfault(int, const char**) {
+    const uint64_t pid = kernel::term_srv::get_term_srv_pid();
+    if (pid == 0) {
+        Terminal::write("termfault: term-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("term-srv");
+    Terminal::write("S TM fault kill issued\n");
+}
+#endif
+
+#if CONFIG_LOG_SRV_FAULT_INJECT && CONFIG_LOG_SRV
+/// @brief Diagnostic fault drill (issue #51, strangler step c).
+void Shell::cmd_logfault(int, const char**) {
+    const uint64_t pid = kernel::log_srv::get_log_srv_pid();
+    if (pid == 0) {
+        Terminal::write("logfault: log-srv not running\n");
+        return;
+    }
+    kernel::daemon::terminate("log-srv");
+    Terminal::write("S LOG fault kill issued\n");
+}
+#endif
 
 void Shell::cmd_reboot(int, const char**) {
     Terminal::write("Reboot...\n");

@@ -127,7 +127,19 @@ class IPC {
     ///        reply stays queued with immediate false (no block).  Zero keeps
     ///        the full-path contract (consume the matching reply).
     [[nodiscard]] static bool send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                          uint32_t reply_max_size = 0) noexcept;
+                           uint32_t reply_max_size = 0) noexcept;
+
+    /// @brief Bounded send_sync for server proxies (issues #241, #48).
+    ///        Mirrors send_sync exactly (reply matching, dest-death bail,
+    ///        BLOCKED + dequeue_ready + reschedule, hlt wait) but arms a
+    ///        bounded receive timeout (`timeout_ticks`, 0 = forever like
+    ///        send_sync); expiry returns false (`-EAGAIN` at the caller),
+    ///        never a silent success and never a held block. No IRQ window
+    ///        widened vs send_sync. Generic IPC mechanism (no per-server
+    ///        policy); first used by timer-srv, shared by driver PDs.
+    [[nodiscard]] static bool send_sync_bounded(uint64_t dest_id,
+                                  const Message &msg, Message &reply,
+                                  uint64_t timeout_ticks) noexcept;
 
     /// @brief Returns the message queue for a given task ID.
     static MessageQueue &queue(uint64_t task_id);

@@ -591,8 +591,21 @@ class VMM {
     ///       virt_to_phys_in_pml4 (Lock: none; Context: any-task;
     ///       SMP: N/A).
     [[nodiscard]] static errors::VmmError virt_to_phys_in_pml4_err(uint64_t virt_addr,
-                                                     uint64_t pml4_phys,
-                                                     uint64_t &out_phys_addr);
+                                                      uint64_t pml4_phys,
+                                                      uint64_t &out_phys_addr);
+    /// @brief Strip arch upper bits from a LIVE root register value to a
+    ///        table phys (issue #171 P6 aa64 fault): x86 CR3 carries PCID
+    ///        in the low 12 (already stripped by the walk mask); aa64
+    ///        TTBR0/1 carry ASID in bits [63:48] (NOT stripped by the
+    ///        walk mask — passing it raw wraps the L0 base non-canonical
+    ///        and aborts in the walk); riscv read_cr3() pre-strips SATP
+    ///        to phys. Idempotent on clean phys roots (TCB fields).
+    ///        One definition per arch TU (public: pure codec, no state).
+    /// @param live_root Live arch root register value (CR3/TTBR/SATP-phys).
+    /// @return Table physical address suitable as a walk root.
+    /// @note Concurrency/caller contract: Lock: none; Context: any-task;
+    ///       SMP: N/A (pure function of its argument).
+    static uint64_t vmm_arch_root_phys(uint64_t live_root);
 
   private:
     static constexpr uint64_t PAGE_SIZE = CONFIG_PAGE_SIZE;
@@ -854,6 +867,15 @@ class VMM {
     static void test_arm_table_alloc_fail_at(size_t alloc_index) noexcept;
     /// @brief Disarms the injector unconditionally (issue #361).  Test-only.
     static void test_disarm_table_alloc_fail() noexcept;
+    /// @brief Clears one 4K leaf WITHOUT any TLB invalidation (issue #390).
+    ///        Test-only single-source walk for the shootdown negative
+    ///        control: walk-only via pte_leaf_in_pml4, verify the leaf
+    ///        frame against @p expect_phys (fail-loud on walk drift),
+    ///        then clear. Zero flush, zero hook, zero alloc, zero logging.
+    /// @return False on any missing table, huge/block entry, or frame
+    ///         mismatch. CONFIG_DEBUG only (release has no def).
+    [[nodiscard]] static bool test_unmap_no_shootdown(
+        uint64_t virt_addr, uint64_t pml4_phys, uint64_t expect_phys) noexcept;
 #endif
     /// @brief Clears injector state for snapshot restore (issue #361).
     ///        Unconditional decl so test_isolate.cpp needs no #if;

@@ -4,6 +4,7 @@ var dir_5d78c82c73cee529a313d94efe356afe =
     [ "early_init.cpp", "riscv64_2early__init_8cpp.html", "riscv64_2early__init_8cpp" ],
     [ "idt.cpp", "riscv64_2idt_8cpp.html", "riscv64_2idt_8cpp" ],
     [ "interrupt_controller.cpp", "riscv64_2interrupt__controller_8cpp.html", "riscv64_2interrupt__controller_8cpp" ],
+    [ "kslot_backend.cpp", "riscv64_2kslot__backend_8cpp.html", "riscv64_2kslot__backend_8cpp" ],
     [ "rtc.cpp", "riscv64_2rtc_8cpp.html", "riscv64_2rtc_8cpp" ],
     [ "serial.cpp", "riscv64_2serial_8cpp.html", null ],
     [ "test_riscv64.cpp", "test__riscv64_8cpp.html", null ],

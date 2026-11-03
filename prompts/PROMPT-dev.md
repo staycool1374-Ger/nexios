@@ -60,6 +60,11 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Run automated test suites via `bash scripts/run_all_classes.sh <arch> <build>` (or per-class `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>`, `selftest` for CI gate).
 - See AGENTS.md for Circuit Breaker limits.
 
+### Tool & Session Discipline (standing order — violations stall the lane and get the session recreated)
+- ONE tool call per message, all parameters complete. NEVER batch calls; on SchemaError/missing-key, re-issue singly — never loop retries.
+- Read tool for reads, Grep tool for searches, Glob for file lists. NEVER use bash for file reads (`cat/sed/grep/rg/awk/head/tail` via shell); bash is for builds, QEMU runs, and git only, one simple command at a time, no pipes or `;` chains.
+- Permission modals mean NO: treat every approval dialog as denied. Route around with the tools above, record anything uncheckable as an explicit gap, and NEVER halt or ask for more permissions.
+
 ### 5. Bug Tracking & Documentation Updates
 - **Bugs are tracked as GitHub Issues**, not in prompts/BUGS.md (see AGENTS.md "GitHub Issue Tracking"):
   - New failure found during development: file an issue
@@ -70,6 +75,12 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Sync docs (`README.md`, `prompts/ROADMAP.md`).
 - Mirror doc updates into Obsidian via MCP write tools (`mcp__obsidian__write_note`, preserving frontmatter/`[[wikilinks]]`/folder structure) and run `graphify update .` (CLI-only, no MCP equivalent) post-implementation.
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
+## WIRE (mandatory — identical in every lane)
+- ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
+- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+- No ACK by ack-by = faulty lane; the engine restarts it.
+- Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+- DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
 - When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 - After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
 

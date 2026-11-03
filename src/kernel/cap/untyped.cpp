@@ -24,6 +24,7 @@
 #include <kernel/cap/frame.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/nexios_config.h>
 #include <kernel/arch/page_table.hpp>
@@ -132,6 +133,15 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
            size_t size, CapRights rights, uint32_t *gen_out) noexcept {
     if (!cspace)
         return -1;
+    // Issue #240 step-a: cached policy-word check (one short locked load,
+    // zero new lock order); all-allow at step-a so always passes.
+    {
+        SpinLockGuard<sync::SpinLock> guard(cspace->lock_);
+        if (!CNode::policy_allows(cspace->policy_word_,
+                                   kCapBrokerAllowRetype)) {
+            return -1;
+        }
+    }
     // Pin the Untyped (WRITE = mutation right).  The pin keeps the object
     // alive across the transfer so dispose() cannot run mid-retype.
     KernelObject *obj = lookup(cspace, untyped_handle, CapType::Untyped,

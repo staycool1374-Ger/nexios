@@ -216,17 +216,25 @@ el0_sync:
     // C handler's own frames descend into it. Mirrors el0_irq/el1_irq
     // (same x0/x1-live contract); the SVC branch above stays ahead.
     save_all
+    mov     x0, sp             // save_all frame base for the C handler
     bl      aarch64_el0_fault_handler
-    // The handler terminates the faulting task and arms a deferred switch
-    // (issue #28) — apply it.  If no switch is armed (no current task, or
-    // a debugger park which arms none) fall into a park loop: the fault
+    // x0 == 0: recovered/resumed — the C handler redirected ELR in-frame
+    // (recover_ip or guard-arm hook-true); restore the trap frame and eret
+    // (mirrors el1_sync_unexpected .Lel1_recovered).  Nonzero: the handler
+    // terminated the faulting task and armed a deferred switch (issue
+    // #28) — apply it.  If no switch is armed (no current task, or a
+    // debugger park which arms none) fall into a park loop: the fault
     // frame stays on the stack for the debugger (issue #236).
+    cbz     x0, .Lel0_resume
     adrp    x0, scheduler_save_rsp_to
     ldr     x0, [x0, #:lo12:scheduler_save_rsp_to]
     cbz     x0, .Lel0_fault_park
     b       irq_context_switch_common
 .Lel0_fault_park:
     b       .Lel0_fault_park
+.Lel0_resume:
+    restore_all
+    eret
 1:
     ldp     x0, x1, [sp], #16  // restore syscall nr + arg0
     b       syscall_entry

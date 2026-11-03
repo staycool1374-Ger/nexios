@@ -13,12 +13,13 @@ var dir_944750d9cdc0eb2e540dffa1c62806e2 =
     [ "page_table_impl.hpp", "x86__64_2hal_2page__table__impl_8hpp.html", null ],
     [ "pcid.cpp", "pcid_8cpp.html", "pcid_8cpp" ],
     [ "pcid.hpp", "pcid_8hpp.html", "pcid_8hpp" ],
-    [ "percpu.cpp", "percpu_8cpp.html", "percpu_8cpp" ],
-    [ "percpu.hpp", "percpu_8hpp.html", null ],
+    [ "percpu.cpp", "x86__64_2hal_2percpu_8cpp.html", "x86__64_2hal_2percpu_8cpp" ],
+    [ "percpu.hpp", "x86__64_2hal_2percpu_8hpp.html", null ],
     [ "rand_impl.hpp", "x86__64_2hal_2rand__impl_8hpp.html", null ],
     [ "shootdown_ipi.cpp", "shootdown__ipi_8cpp.html", null ],
     [ "shootdown_ipi.hpp", "shootdown__ipi_8hpp.html", "shootdown__ipi_8hpp" ],
-    [ "smp.cpp", "smp_8cpp.html", "smp_8cpp" ],
-    [ "smp.hpp", "smp_8hpp.html", "smp_8hpp" ],
+    [ "smp.cpp", "x86__64_2hal_2smp_8cpp.html", "x86__64_2hal_2smp_8cpp" ],
+    [ "smp.hpp", "x86__64_2hal_2smp_8hpp.html", "x86__64_2hal_2smp_8hpp" ],
+    [ "smp_shootdown.cpp", "x86__64_2hal_2smp__shootdown_8cpp.html", null ],
     [ "timer.cpp", "x86__64_2hal_2timer_8cpp.html", null ]
 ];

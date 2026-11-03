@@ -4,9 +4,10 @@ var searchData=
   ['queue_1',['Queue',['../classkernel_1_1sync_1_1_queue.html#a6514ab9002f8be4b845b4e4f23515769',1,'kernel::sync::Queue']]],
   ['queue_2',['queue',['../classkernel_1_1_i_p_c.html#a65e7afd0f975a597466f7d603dea15c4',1,'kernel::IPC::queue()'],['../classkernel_1_1_ready_queue_manager.html#abf551aa77637585dca5d4d2c573315cb',1,'kernel::ReadyQueueManager::queue()']]],
   ['queue_5fdepth_3',['queue_depth',['../classkernel_1_1_scheduler.html#adad603d784ed57a134fd9483ae5f881a',1,'kernel::Scheduler']]],
-  ['queue_5fremote_4',['queue_remote',['../classarch_1_1_shootdown_batch.html#a7bf540cc427d886e5d4ad7cc8e6a0409',1,'arch::ShootdownBatch']]],
-  ['queue_5ftarget_5',['queue_target',['../classkernel_1_1_scheduler.html#a06e0324382db7afdbdb491d3341ca23f',1,'kernel::Scheduler']]],
-  ['quiesce_5fdepth_6',['quiesce_depth',['../classkernel_1_1_scheduler.html#ad451e4e6a8f758693464c15aa889c2cc',1,'kernel::Scheduler']]],
-  ['quiesce_5fenter_7',['quiesce_enter',['../classkernel_1_1_scheduler.html#aa2daa4d9fead7bd6421fd81b283fcaa7',1,'kernel::Scheduler']]],
-  ['quiesce_5fexit_8',['quiesce_exit',['../classkernel_1_1_scheduler.html#a5fe0e89b62ff62fbc33eac920bd0660b',1,'kernel::Scheduler']]]
+  ['queue_5fremote_4',['queue_remote',['../classarch_1_1_shootdown_batch.html#a7bf540cc427d886e5d4ad7cc8e6a0409',1,'arch::ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid)'],['../classarch_1_1_shootdown_batch.html#a8a248bd468bb33f0f8fb147cb4804bfe',1,'arch::ShootdownBatch::queue_remote(uint64_t cpu, uint64_t va, uint16_t pcid, bool all)']]],
+  ['queue_5fshootdown_5',['queue_shootdown',['../namespacekernel_1_1smp.html#a5a20f3156d15847b60b7a048de59e959',1,'kernel::smp']]],
+  ['queue_5ftarget_6',['queue_target',['../classkernel_1_1_scheduler.html#a06e0324382db7afdbdb491d3341ca23f',1,'kernel::Scheduler']]],
+  ['quiesce_5fdepth_7',['quiesce_depth',['../classkernel_1_1_scheduler.html#ad451e4e6a8f758693464c15aa889c2cc',1,'kernel::Scheduler']]],
+  ['quiesce_5fenter_8',['quiesce_enter',['../classkernel_1_1_scheduler.html#aa2daa4d9fead7bd6421fd81b283fcaa7',1,'kernel::Scheduler']]],
+  ['quiesce_5fexit_9',['quiesce_exit',['../classkernel_1_1_scheduler.html#a5fe0e89b62ff62fbc33eac920bd0660b',1,'kernel::Scheduler']]]
 ];

@@ -5,6 +5,7 @@ var dir_7c4c796ec9937bed8074dafcec3d25e4 =
     [ "acpi.hpp", "acpi_8hpp.html", "acpi_8hpp" ],
     [ "early_init.cpp", "x86__64_2early__init_8cpp.html", "x86__64_2early__init_8cpp" ],
     [ "keyboard.cpp", "keyboard_8cpp.html", null ],
+    [ "kslot_backend.cpp", "x86__64_2kslot__backend_8cpp.html", "x86__64_2kslot__backend_8cpp" ],
     [ "madt.hpp", "madt_8hpp.html", "madt_8hpp" ],
     [ "rtc.cpp", "x86__64_2rtc_8cpp.html", null ],
     [ "serial.cpp", "x86__64_2serial_8cpp.html", null ]

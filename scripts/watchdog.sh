@@ -7,7 +7,8 @@ set -euo pipefail
 
 DEV_SESS="${NEXIOS_DEV_SESS:-nexios-dev}"
 QE_SESS="${NEXIOS_QE_SESS:-nexios-qe}"
-COORD_SESS="${NEXIOS_COORD_SESS:-nexios-coord}"
+AUDIT_SESS="${NEXIOS_AUDIT_SESS:-nexios-audit}"
+DOORBELL_SESS="${NEXIOS_DOORBELL_SESS:-nexios-engine}"
 AGENT_UP="${NEXIOS_AGENT_UP:-$(cd "$(dirname "$0")" && pwd)/agent_up.sh}"
 
 fail() { echo "watchdog: ERROR: $*" >&2; exit 1; }
@@ -55,6 +56,15 @@ qemu_count() {
   echo "${q:-0}"
 }
 
+latest_report() { # $1 room -> newest audit report for this issue, or none
+  # The auditor has no working doorbell; verdicts land as files.
+  # The engine polls this (doctrine) instead of waiting for a ring.
+  local issue rep
+  issue=$(basename "$1"); issue=${issue#nexios-}
+  rep=$(ls -t /Users/arnold/jarvis/audits/report-*-"${issue}".md /Users/arnold/jarvis/audits/report-*-"${issue}"-*.md 2>/dev/null | head -n 1 || true)
+  echo "${rep:-none}"
+}
+
 fingerprint() { # $1 room -> full multi-line fingerprint on stdout
   # Self-test fixture seam (same pattern as NEXIOS_GH_BIN): when set, the
   # fingerprint is read from this file instead of live probes, so the
@@ -64,12 +74,21 @@ fingerprint() { # $1 room -> full multi-line fingerprint on stdout
     cat "$NEXIOS_WATCHDOG_FAKE_FP"
     return 0
   fi
-  local inbox="$1/inbox/dev.md" n last
-  [ -f "$inbox" ] || fail "no inbox at $inbox"
-  n=$(wc -l < "$inbox" | tr -d ' ')
-  last=$(grep 'FROM=' "$inbox" | tail -n 1 || true)
-  echo "inbox_lines=$n"
-  echo "inbox_last=${last:-none}"
+  local box bf n last
+  # Worker-authored lines ONLY: engine/operator FROM=coord orders live in
+  # these same boxes and must never tick the room (a tick means a worker
+  # posted, never that an order was written).
+  for box in dev qe auditor; do
+    bf="$1/inbox/$box.md"
+    if [ -f "$bf" ]; then
+      n=$(grep -cE 'FROM=(dev|qe|audit) ' "$bf" 2>/dev/null || true)
+      last=$(grep -E 'FROM=(dev|qe|audit) ' "$bf" 2>/dev/null | tail -n 1 || true)
+    else
+      n="no-inbox"; last="none"
+    fi
+    echo "inbox_${box}_lines=${n:-0}"
+    echo "inbox_${box}_last=${last:-none}"
+  done
   echo "[dev]"
   echo "sess=$(sess_state "$DEV_SESS")"
   echo "repo=$(repo_state "$HOME/jarvis")"
@@ -79,6 +98,9 @@ fingerprint() { # $1 room -> full multi-line fingerprint on stdout
   echo "repo=$(repo_state "$HOME/jarvis_test")"
   echo "hist=$(hist_last "$HOME/jarvis_test")"
   echo "qemu=$(qemu_count)"
+  echo "[auditor]"
+  echo "sess=$(sess_state "$AUDIT_SESS")"
+  echo "audit=$(latest_report "$1")"
 }
 
 mode_tick() { # $1 canonical issue -> verdict line (+delta), updates state
@@ -147,18 +169,23 @@ mode_disarm() { # $1 issue
 }
 
 mode_status() { # $1 issue
-  local room pidf pid streak
+  local room pidf pid streak ackn
   room=$(room_for "$1")
   pidf="$room/watch.pid"
   streak=$(cat "$room/watch.unchanged" 2>/dev/null || echo 0)
+  if [ -f "$room/ack.overdue" ]; then
+    ackn=$(wc -l < "$room/ack.overdue" | tr -d ' ')
+  else
+    ackn=0
+  fi
   if [ -f "$pidf" ]; then
     pid=$(cat "$pidf" 2>/dev/null || true)
     if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
-      echo "armed pid=$pid streak=$streak"
+      echo "armed pid=$pid streak=$streak ack_overdue=$ackn"
       return 0
     fi
   fi
-  echo "disarmed streak=$streak"
+  echo "disarmed streak=$streak ack_overdue=$ackn"
 }
 
 __tick_alarm() { # $1 issue (internal: one tick + exactly one doorbell attempt)
@@ -170,10 +197,10 @@ __tick_alarm() { # $1 issue (internal: one tick + exactly one doorbell attempt)
   fi
   first=$(printf '%s\n' "$out" | head -n 1)
   line="inbox: TICK — $first — read watch.log"
-  if "$AGENT_UP" msg "$COORD_SESS" "$line" >/dev/null 2>&1; then
-    echo "$line" >> "$room/watch.log"
+  if "$AGENT_UP" wake "$1" coord "$DOORBELL_SESS" "$line" >/dev/null 2>&1; then
+    echo "silent: TICK — $first — read watch.coord.log" >> "$room/watch.coord.log"
   else
-    echo "DOORBELL-FAILED $first" >> "$room/watch.log"
+    echo "DOORBELL-FAILED $first" >> "$room/watch.coord.log"
   fi
 }
 

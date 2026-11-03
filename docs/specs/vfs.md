@@ -214,3 +214,12 @@ vnode_ref_dec(vn):  return __atomic_fetch_sub(&vn->refcount, 1, ACQ_REL) == 1;  
   (see `specs/boundary.md`).
 - **Boundary audit VULN-H2/H4/U2** (ELF size guard, argv/envp cap, stack
   reserve) are IMPLEMENTED — see `specs/boundary.md` ledger.
+
+## 11. vfs-srv Externalization (issue #47, strangler step a)
+
+The userspace vfs-srv PD (`docs/specs/vfs-srv.md`) serves all 7 backends
+behind `CONFIG_VFS_SRV` (default 0). Authorize stays kernel-side: the
+resolve→authorize→operate sequence and `VFS_OPEN_CREATE` distinction
+never leave `syscall_handlers_fs.cpp`/`vfs.cpp`; the PD's RPC surface is
+diagnostic + parity only until the flip (`#76 paths convert` precedent:
+behavior first, mechanism second, delete only after gate).

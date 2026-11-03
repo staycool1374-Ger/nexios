@@ -25,6 +25,10 @@
 #include <kernel/nexios_config.h>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/percpu.hpp>
+#elif defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/percpu.hpp>
+#elif defined(CONFIG_ARCH_RISCV64)
+#include <kernel/arch/riscv64/hal/percpu.hpp>
 #else
 namespace arch {
 /// @brief Current CPU index — single-core archs are always CPU 0.

@@ -226,6 +226,14 @@ inline uint64_t kernel_page_table_base() {
 inline uint64_t user_page_table_base() {
     return read_cr3();
 }
+/// @brief Read the tp register (per-hart base; mirrors write_tp below).
+/// @return Raw tp value.  tp is ABI-reserved, so the read is exact.
+inline uint64_t read_tp() {
+    uint64_t reg_value = 0;
+    asm volatile("mv %0, tp" : "=r"(reg_value));
+    return reg_value;
+}
+
 /// @brief Write the tp register (user thread-local-storage base, issue #74).
 /// @param v User VA of the thread block (0 clears). tp is ABI-reserved so the
 /// compiler never allocates it; the write is exact. Trap-return consumes the

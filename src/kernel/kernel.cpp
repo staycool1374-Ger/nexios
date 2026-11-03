@@ -34,6 +34,7 @@
 #include <kernel/arch/serial.hpp>
 #include <kernel/profiling/sampler.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/arch/page_table.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/iommu/iommu.hpp>
@@ -74,6 +75,7 @@
 #include <kernel/arch/x86_64/hal/pcid.hpp>
 #include <kernel/arch/x86_64/madt.hpp>
 #include <kernel/arch/x86_64/hal/smp.hpp>
+#include <kernel/arch/x86_64/hal/shootdown_ipi.hpp>
 #endif
 #include <kernel/vfs/devfs.hpp>
 #include <kernel/vfs/procfs.hpp>
@@ -82,9 +84,14 @@
 #if defined(CONFIG_ARCH_AARCH64)
 #include <kernel/arch/aarch64/hal/asid.hpp>
 #include <kernel/arch/aarch64/hal/fpu.hpp>
+#include <kernel/arch/aarch64/hal/percpu.hpp>
+#include <kernel/arch/aarch64/hal/gic.hpp>
+#include <kernel/arch/aarch64/hal/smp.hpp>
 #elif defined(CONFIG_ARCH_RISCV64)
 #include <kernel/arch/riscv64/hal/asid.hpp>
 #include <kernel/arch/riscv64/hal/fpu.hpp>
+#include <kernel/arch/riscv64/hal/percpu.hpp>
+#include <kernel/arch/riscv64/hal/smp.hpp>
 #endif
 #include <initrd/initrd.hpp>
 #include <services/terminal/framebuffer.hpp>
@@ -1019,6 +1026,20 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // isr_stubs.asm gs:0x20/0x28 slots are valid immediately (zeroed).
     arch::percpu_init_bsp(0);
 #endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: point TPIDR_EL1 at per_cpu[0] before any ISR
+    // can run.  Slice-0 guarantees Aff0 == 0 here (secondaries halt in
+    // boot.S); the slots are valid immediately (zeroed).
+    arch::percpu_init_bsp(arch::read_mpidr_el1());
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-3: point tp at per_cpu[0] before any trap can run.
+    // Harts >0 are firmware-held until HSM bring-up (S2's aa64 slice-0
+    // equivalent is the boot.S hart!=0 halt); the slots are valid
+    // immediately (zeroed).  The boot hart id comes from OpenSBI in a0.
+    arch::percpu_init_bsp(
+        static_cast<uint64_t>(kernel::gs::boot_info().hart_id));
+#endif
 #if defined(CONFIG_ARCH_X86_64)
     // Issue #251: same hidden-visibility binding as the RSP switch above —
     // RSP and TSS.RSP0 must resolve to the identical descriptor value.
@@ -1339,7 +1360,38 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             kernel::Scheduler::sched_ipi_handler();
             arch::APIC::eoi();
         });
+    // Issue #389: cross-CPU TLB-shootdown batch vector (shared IDT
+    // serves BSP and APs — one registration covers every CPU).  The
+    // apply side is lock-free (per-entry INVPCID/purge, no allocation),
+    // so the hook's remote drain can never deadlock on a held lock.
+    arch::IDT::register_handler_raw(
+        arch::APIC::SHOOTDOWN_BATCH_VECTOR,
+        [](uint64_t, uint64_t, uint64_t) {
+            arch::ShootdownBatch::handle_cpu(arch::cpu_index());
+            arch::APIC::eoi();
+        });
 #endif // CONFIG_ARCH_X86_64
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: cross-CPU scheduler wake SGI (the shared vector
+    // table serves both CPUs; the handler drains the calling CPU's
+    // mailbox).  No EOI in-handler — handle_gic_irq closes the SGI at
+    // its tail (an early eoi() would trip the ownership guard).
+    arch::IDT::register_handler_raw(
+        arch::SMP_SCHED_SGI, [](uint64_t, uint64_t, uint64_t) {
+            kernel::Scheduler::sched_ipi_handler();
+        });
+    // Issue #389: cross-CPU TLB-shootdown SGI (purge-on-receipt — the
+    // SGI carries no payload, so the target self-purges via the
+    // existing `tlb_flush_all` primitive; IS form explicitly not
+    // required).  The shared vector table serves BSP and APs.  No EOI
+    // in-handler — handle_gic_irq closes the SGI at its tail (an early
+    // eoi() would trip the ownership guard as unmatched).
+    arch::IDT::register_handler_raw(
+        arch::SMP_SHOOTDOWN_SGI, [](uint64_t, uint64_t, uint64_t) {
+            arch::ArchPageTable::tlb_flush_all();
+            kernel::smp::note_shootdown_applied();
+        });
+#endif
     boot_mark(kernel::BootStage::ARCH_INIT);
     if (kernel::gs::boot_info().cmdline[0]) {
         kernel::BootParams::parse_cstr(kernel::gs::boot_info().cmdline);
@@ -1435,7 +1487,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::PMM::mark_init_done();
     boot_mark(kernel::BootStage::MEMORY_INIT);
 
+#if !CONFIG_DRIVER_PD_FB
+    // Issue #48: with the fb-device PD live, the PD owns mode-set/present;
+    // the kernel skips its own init (Terminal degrades to serial-only).
     service::Framebuffer::init();
+#endif
     service::Terminal::init();
     if (service::Terminal::instance()) {
         service::Terminal::show_splash();
@@ -1443,7 +1499,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 
 #if defined(CONFIG_ARCH_X86_64)
     init_pic();
+#if !CONFIG_DRIVER_PD_KBD
+    // Issue #48: with the kbd PD live, the PD owns the PS/2 port + IRQ.
     arch::Keyboard::init();
+#endif
 #endif
 
     kernel::vfs::devfs_init();
@@ -1457,8 +1516,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // degraded (boot continues; the grant below is skipped).
     kernel::ramdiskd::boot_allocate();
 
-    // Probe AHCI controller first, fall back to legacy ATA PIO
+    // Probe AHCI controller first, fall back to legacy ATA PIO.
+    // Issue #48: with the block PD live, the PD owns AHCI/ATA probing.
+    // Issue #47: same for the block-srv PD (mutually exclusive).
 #if defined(CONFIG_ARCH_X86_64)
+#if !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV
     {
         auto *ahci = kernel::block::AhciDriver::probe();
         if (ahci) {
@@ -1511,10 +1573,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             }
         }
     }
+#endif // !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV (AHCI/ATA owned by the block PD)
+#endif // CONFIG_ARCH_X86_64
 
-#endif
-
-    // Probe virtio-blk device (arch-independent, uses unified PCI HAL)
+    // Probe virtio-blk device (arch-independent, uses unified PCI HAL).
+    // Issue #48: with the block PD live, the PD owns block probing.
+    // Issue #47: same for the block-srv PD (mutually exclusive).
+#if !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV
     {
         auto *vblk = kernel::block::VirtioBlkDriver::probe();
         if (vblk) {
@@ -1545,10 +1610,13 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] No virtio-blk device found\n");
         }
     }
+#endif // !CONFIG_DRIVER_PD_BLOCK && !CONFIG_BLOCK_SRV (virtio-blk owned by the block PD)
 
     // Probe virtio-net NIC and initialize network stack.
     // Issue #350: ungated — the MMIO finder serves aarch64/riscv64
     // (QEMU virtio-net-device); the PCI finder serves x86_64.
+    // Issue #48: with the net PD live, the PD owns the NIC.
+#if !CONFIG_DRIVER_PD_NET
     {
         static net::Nic g_boot_nic{};
         if (kernel::net::virtio_net_probe(g_boot_nic)) {
@@ -1561,6 +1629,7 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
             debug_write("[BOOT] No virtio-net NIC found\n");
         }
     }
+#endif // !CONFIG_DRIVER_PD_NET (NIC owned by the net PD)
     boot_mark(kernel::BootStage::DRIVER_PROBE);
 
     // Initialize sampling profiler (must be before Timer::init() so record_sample is safe)
@@ -1589,6 +1658,16 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #if defined(CONFIG_ARCH_X86_64)
     kernel::smp::bring_up();
 #endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #351 slice-2: DTB-driven PSCI/spin-table bring-up (same
+    // park-or-panic contract; single-CPU DTB is a silent no-op).
+    kernel::smp::bring_up();
+#endif
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #351 slice-3: DTB-driven SBI HSM bring-up (same park-or-panic
+    // contract; single-hart DTB is a silent no-op; no HSM = no APs).
+    kernel::smp::bring_up();
+#endif
 
     // Phase-2 (issue #9): probe for a live VT-d remapping unit via the ACPI
     // DMAR table.  Presence here only records the unit — DMA translation is
@@ -1606,7 +1685,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::IrqLatencyHistogram::init();
 #endif
 
+#if !CONFIG_DRIVER_PD_RTC
+    // Issue #48: with the RTC PD live, the PD owns the RTC; the kernel
+    // falls back to the documented available()==false path.
     arch::RTC::init();
+#endif
     kernel::gs::WriteContext bctx{kernel::gs::StatePhase::BOOT, 0};
     kernel::gs::try_set_boot_epoch(arch::RTC::read_seconds(), bctx);
     kernel::random_init();
@@ -2492,10 +2575,11 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         }
 
         // ---- Guard-page check (kernel stack overflow) ----
+        // #434 P3: range comparison factored into is_stack_guard_fault
+        // (behavior-identical — the predicate IS the x86 contract).
         if (vector == 14 && t && t->kstack_slot_va_) {
             uint64_t cr2 = read_cr2();
-            if (cr2 >= t->kstack_slot_va_ &&
-                cr2 < t->kstack_slot_va_ + arch::PAGE_SIZE) {
+            if (kernel::is_stack_guard_fault(*t, cr2)) {
 #if CONFIG_STACK_OVERFLOW_HOOK
                 // Issue #308: hook first — a recovering override returns
                 // true (test-only, gated inside the override); otherwise

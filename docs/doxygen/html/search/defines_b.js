@@ -5,8 +5,19 @@ var searchData=
   ['nexios_5farch_5fname_2',['NEXIOS_ARCH_NAME',['../build__info_8hpp.html#ad00fe7a76600b792351c0f065728cec3',1,'build_info.hpp']]],
   ['nexios_5fbuild_5fstr_3',['NEXIOS_BUILD_STR',['../build__info_8hpp.html#ae55a9f5d0cacd3a26a840d0393fef5fc',1,'build_info.hpp']]],
   ['nexios_5fbuild_5fstr_5finner_4',['NEXIOS_BUILD_STR_INNER',['../build__info_8hpp.html#a31047062d29de5d55d1bc0479243109d',1,'build_info.hpp']]],
-  ['nexios_5ffault_5frecovery_5fkeep_5',['NEXIOS_FAULT_RECOVERY_KEEP',['../checked__ptr_8hpp.html#a54a8246615aceffb29f1c21b5aa404c2',1,'checked_ptr.hpp']]],
-  ['nexios_5fstr_6',['NEXIOS_STR',['../version_8cpp.html#abe889db9390fd1522e71dcaed354b617',1,'version.cpp']]],
-  ['nexios_5fstr_5finner_7',['NEXIOS_STR_INNER',['../version_8cpp.html#a94e7948e976a142813e8eb071c08f6ad',1,'version.cpp']]],
-  ['null_8',['NULL',['../stdlib_8h.html#a070d2ce7b6bb7e5c05602aa8c308d0c4',1,'stdlib.h']]]
+  ['nexios_5fcap_5fapi_5fmajor_5',['NEXIOS_CAP_API_MAJOR',['../sdk__version_8h.html#a4709248b1f7e30e7e386a96d878edfff',1,'sdk_version.h']]],
+  ['nexios_5fcap_5fapi_5fminor_6',['NEXIOS_CAP_API_MINOR',['../sdk__version_8h.html#a2993d9654d5d6c5092ec83b0cb00ac9e',1,'sdk_version.h']]],
+  ['nexios_5fcap_5fcopy_7',['NEXIOS_CAP_COPY',['../nexios__cap_8h.html#a11fde3879f22820d0256f45a89c10a08',1,'nexios_cap.h']]],
+  ['nexios_5fcap_5fgrant_8',['NEXIOS_CAP_GRANT',['../nexios__cap_8h.html#a0f62a7eead9a6f0de5526f0d6c442215',1,'nexios_cap.h']]],
+  ['nexios_5fcap_5fread_9',['NEXIOS_CAP_READ',['../nexios__cap_8h.html#ae44c759eed8f9687a3fc6c2c6c8045ca',1,'nexios_cap.h']]],
+  ['nexios_5fcap_5fwrite_10',['NEXIOS_CAP_WRITE',['../nexios__cap_8h.html#a4c58322b999d9771520d020aa3cab451',1,'nexios_cap.h']]],
+  ['nexios_5fcrt0_5fcontract_11',['NEXIOS_CRT0_CONTRACT',['../sdk__version_8h.html#a9cba68502997b0f7a83619c3087c0f5e',1,'sdk_version.h']]],
+  ['nexios_5ffault_5frecovery_5fkeep_12',['NEXIOS_FAULT_RECOVERY_KEEP',['../checked__ptr_8hpp.html#a54a8246615aceffb29f1c21b5aa404c2',1,'checked_ptr.hpp']]],
+  ['nexios_5firq_5fnotify_13',['NEXIOS_IRQ_NOTIFY',['../nexios__cap_8h.html#a06d18b574180349794180db1f6d6a8d5',1,'nexios_cap.h']]],
+  ['nexios_5firq_5fwait_14',['NEXIOS_IRQ_WAIT',['../nexios__cap_8h.html#a0c6e4de906a54ea08823adff08ee05e1',1,'nexios_cap.h']]],
+  ['nexios_5fsdk_5fmajor_15',['NEXIOS_SDK_MAJOR',['../sdk__version_8h.html#ac0823f82d176030d4fe23ee4b4414b5a',1,'sdk_version.h']]],
+  ['nexios_5fsdk_5fminor_16',['NEXIOS_SDK_MINOR',['../sdk__version_8h.html#a08839dfd8ef732c4bd1a1591b91b8bea',1,'sdk_version.h']]],
+  ['nexios_5fstr_17',['NEXIOS_STR',['../version_8cpp.html#abe889db9390fd1522e71dcaed354b617',1,'version.cpp']]],
+  ['nexios_5fstr_5finner_18',['NEXIOS_STR_INNER',['../version_8cpp.html#a94e7948e976a142813e8eb071c08f6ad',1,'version.cpp']]],
+  ['null_19',['NULL',['../stdlib_8h.html#a070d2ce7b6bb7e5c05602aa8c308d0c4',1,'stdlib.h']]]
 ];

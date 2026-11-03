@@ -11,9 +11,28 @@ _start:
     mv s0, a0
     mv s1, a1
 
-    /* Only hart 0 proceeds; park others */
+    /* #351 slice-0: unexpected-topology fail-closed halt. Only hart 0
+     * proceeds; any other hart prints a diagnostic (SBI console_putchar,
+     * same pattern as the fail-stop below) and parks here instead of
+     * running the BSP boot path — no secondary path exists until
+     * slice-3 brings HSM bring-up; the halt stays for anything
+     * unexpected, and the cpu_index()==0 stub is replaced only
+     * together with that bring-up, never before.  Clobbers a0/a7
+     * (dead on this path; s0/s1 already saved the boot info). */
     li t0, 0
     beq a0, t0, 1f
+    li a0, 83          /* 'S' */
+    li a7, 1           /* SBI console_putchar */
+    ecall
+    li a0, 77          /* 'M' */
+    li a7, 1
+    ecall
+    li a0, 80          /* 'P' */
+    li a7, 1
+    ecall
+    li a0, 33          /* '!' */
+    li a7, 1
+    ecall
 0:  wfi
     j 0b
 1:

@@ -38,6 +38,12 @@
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
+// Issue #171 P0: SDK internal versioning (spec §14). Presence of the macros
+// is proven by this include resolving; values are pinned in
+// syscall_abi_surface_mirror_and_version below. The split header carries
+// no includes, so no extra -I is needed (verified: kernel-flags TU
+// including <libc/sdk_version.h> compiles clean).
+#include <libc/sdk_version.h>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <signal.hpp>
@@ -1016,6 +1022,9 @@ JARVIS_TEST(syscall_error_string_maps, "PRE: none | POST: none") {
 //           src/libc/syscall.h numbers must equal the kernel
 //           SyscallNumber values, and the ABI_VERSION query (84) must
 //           return (NEXIOS_ABI_MAJOR << 16) | MINOR via the real handler.
+//           Plus issue #171 P0: the SDK internal version macros
+//           (NEXIOS_SDK_*/CAP_API_*/CRT0_CONTRACT, §14) are pinned to
+//           their 0.1 start values; any bump updates header and test.
 // Input: Static enum asserts for the band boundaries (literals cite
 //        syscall.h lines); dispatched task calls Syscall::handle(84).
 // Expect: All mirror pairs equal; version == 0x10000; MAX_SYSCALL > 79
@@ -1049,6 +1058,13 @@ JARVIS_TEST(syscall_abi_surface_mirror_and_version, "PRE: none | POST: none") {
     JARVIS_ASSERT(t != nullptr);
     JARVIS_ASSERT_FMT(g_ver == 0x10000ULL,
                       "ABI_VERSION returned %lx, want 0x10000", g_ver);
+    // SDK macros (sdk_version.h:28-32): the loader stays dumb, so the pin
+    // lives here. Any bump updates both header and test.
+    JARVIS_ASSERT_EQ(0ULL, static_cast<uint64_t>(NEXIOS_SDK_MAJOR));
+    JARVIS_ASSERT_EQ(1ULL, static_cast<uint64_t>(NEXIOS_SDK_MINOR));
+    JARVIS_ASSERT_EQ(0ULL, static_cast<uint64_t>(NEXIOS_CAP_API_MAJOR));
+    JARVIS_ASSERT_EQ(1ULL, static_cast<uint64_t>(NEXIOS_CAP_API_MINOR));
+    JARVIS_ASSERT_EQ(1ULL, static_cast<uint64_t>(NEXIOS_CRT0_CONTRACT));
     release_task(t);
     Scheduler::drain_zombie_list();
     JARVIS_TEST_PASS();

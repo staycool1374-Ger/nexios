@@ -608,6 +608,64 @@
 #define CONFIG_WATCHDOG_GRACE_TICKS 500
 #endif
 
+/// Timer/Event externalization master switch (issue #241, strangler step a).
+/// 0 = today's in-kernel wheel (shipped default; bit-identical behavior).
+/// 1 = timer-srv PD serves async timeouts; kernel keeps tick + budget only.
+/// All timer-srv kernel code is `#if CONFIG_TIMER_SRV`-guarded (empty TU
+/// when 0); no runtime `if` on this knob. Default: 0.
+#ifndef CONFIG_TIMER_SRV
+#define CONFIG_TIMER_SRV 0
+#endif
+
+/// Timer-srv fault-injection surface (issue #241, strangler step c).
+/// 1 = compile the diagnostic `timerfault` shell command (terminate the
+/// timer-srv PD). Debug-only; never shipped. Default: 0.
+#ifndef CONFIG_TIMER_SRV_FAULT_INJECT
+#define CONFIG_TIMER_SRV_FAULT_INJECT 0
+#endif
+
+/// Timer-srv RTC-degrade leg (issue #241, #194 RTC-degrade probe).
+/// 1 = serve wall-clock tick-derived (RTC unavailable path). Default: 0.
+#ifndef CONFIG_TIMER_SRV_RTC_DEGRADE
+#define CONFIG_TIMER_SRV_RTC_DEGRADE 0
+#endif
+
+/// Driver PD externalization (issue #48, strangler step a). One knob per
+/// role so each PD flips independently; 0 = in-kernel driver (shipped
+/// default, bit-identical behavior). All driver-PD kernel code is
+/// `#if`-guarded (empty TUs when 0); no runtime `if` on these knobs.
+#ifndef CONFIG_DRIVER_PD_SERIAL
+#define CONFIG_DRIVER_PD_SERIAL 0
+#endif
+#ifndef CONFIG_DRIVER_PD_KBD
+#define CONFIG_DRIVER_PD_KBD 0
+#endif
+#ifndef CONFIG_DRIVER_PD_RTC
+#define CONFIG_DRIVER_PD_RTC 0
+#endif
+#ifndef CONFIG_DRIVER_PD_FB
+#define CONFIG_DRIVER_PD_FB 0
+#endif
+#ifndef CONFIG_DRIVER_PD_BLOCK
+#define CONFIG_DRIVER_PD_BLOCK 0
+#endif
+#ifndef CONFIG_DRIVER_PD_NET
+#define CONFIG_DRIVER_PD_NET 0
+#endif
+
+/// Driver-PD fault-injection surface (issue #48, strangler step c).
+/// 1 = compile the diagnostic `driverfault` shell command (terminate a
+/// driver PD by role; supervisor restarts it). Debug-only, never shipped.
+#ifndef CONFIG_DRIVER_PD_FAULT_INJECT
+#define CONFIG_DRIVER_PD_FAULT_INJECT 0
+#endif
+
+/// Maximum caps minted per driver PD in one SDF compose (issue #48).
+/// Bounds the all-or-nothing install chain. Default: 6.
+#ifndef CONFIG_DRIVER_PD_MAX_CAPS
+#define CONFIG_DRIVER_PD_MAX_CAPS 6
+#endif
+
 /// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
 /// (x86_64, sys_ioport_grant).  Each slot is an 8 KiB all-1s bitmap in a
 /// static pool.  Bounded so the pool is a fixed .bss allocation — no
@@ -1237,6 +1295,164 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_WATCHDOG_GRACE_TICKS < 0
 #error "CONFIG_WATCHDOG_GRACE_TICKS must be >= 0 (default 500)"
+#endif
+#if CONFIG_TIMER_SRV != 0 && CONFIG_TIMER_SRV != 1
+#error "CONFIG_TIMER_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TIMER_SRV_FAULT_INJECT != 0 && CONFIG_TIMER_SRV_FAULT_INJECT != 1
+#error "CONFIG_TIMER_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TIMER_SRV_RTC_DEGRADE != 0 && CONFIG_TIMER_SRV_RTC_DEGRADE != 1
+#error "CONFIG_TIMER_SRV_RTC_DEGRADE must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_SERIAL != 0 && CONFIG_DRIVER_PD_SERIAL != 1
+#error "CONFIG_DRIVER_PD_SERIAL must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_KBD != 0 && CONFIG_DRIVER_PD_KBD != 1
+#error "CONFIG_DRIVER_PD_KBD must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_RTC != 0 && CONFIG_DRIVER_PD_RTC != 1
+#error "CONFIG_DRIVER_PD_RTC must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_FB != 0 && CONFIG_DRIVER_PD_FB != 1
+#error "CONFIG_DRIVER_PD_FB must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_BLOCK != 0 && CONFIG_DRIVER_PD_BLOCK != 1
+#error "CONFIG_DRIVER_PD_BLOCK must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_NET != 0 && CONFIG_DRIVER_PD_NET != 1
+#error "CONFIG_DRIVER_PD_NET must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_VFS_SRV != 0 && CONFIG_VFS_SRV != 1
+#error "CONFIG_VFS_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_BLOCK_SRV != 0 && CONFIG_BLOCK_SRV != 1
+#error "CONFIG_BLOCK_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TERM_SRV != 0 && CONFIG_TERM_SRV != 1
+#error "CONFIG_TERM_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_LOG_SRV != 0 && CONFIG_LOG_SRV != 1
+#error "CONFIG_LOG_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_CAP_BROKER != 0 && CONFIG_CAP_BROKER != 1
+#error "CONFIG_CAP_BROKER must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
+#error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_LOG_SRV_FAULT_INJECT != 0 && CONFIG_LOG_SRV_FAULT_INJECT != 1
+#error "CONFIG_LOG_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TERM_SRV_FAULT_INJECT && !CONFIG_TERM_SRV
+#error "CONFIG_TERM_SRV_FAULT_INJECT requires CONFIG_TERM_SRV=1"
+#endif
+#if CONFIG_LOG_SRV_FAULT_INJECT && !CONFIG_LOG_SRV
+#error "CONFIG_LOG_SRV_FAULT_INJECT requires CONFIG_LOG_SRV=1"
+#endif
+
+/// term-srv externalization master switch (issue #51, strangler step a).
+/// 0 = in-kernel terminal emulation (shipped default, bit-identical).
+/// 1 = term-srv PD serves emulation policy; kernel keeps panic raw_write
+/// + serial mechanism. All term-srv code is `#if CONFIG_TERM_SRV`-guarded
+/// (empty TU when 0); no runtime `if` on this knob. Default: 0.
+#ifndef CONFIG_TERM_SRV
+#define CONFIG_TERM_SRV 0
+#endif
+
+/// log-srv externalization master switch (issue #51, strangler step a).
+/// 0 = in-kernel Klog/Dmesg sink (shipped default, bit-identical).
+/// 1 = log-srv PD sinks logs; kernel keeps panic path. Guarded like above.
+/// Default: 0.
+#ifndef CONFIG_LOG_SRV
+#define CONFIG_LOG_SRV 0
+#endif
+
+/// term-srv fault-injection surface (issue #51, strangler step c).
+/// 1 = compile the diagnostic `termfault` shell command. Debug-only.
+#ifndef CONFIG_TERM_SRV_FAULT_INJECT
+#define CONFIG_TERM_SRV_FAULT_INJECT 0
+#endif
+
+/// log-srv fault-injection surface (issue #51, strangler step c).
+/// 1 = compile the diagnostic `logfault` shell command. Debug-only.
+#ifndef CONFIG_LOG_SRV_FAULT_INJECT
+#define CONFIG_LOG_SRV_FAULT_INJECT 0
+#endif
+
+/// cap-broker externalization master switch (issue #240, strangler step a).
+/// 0 = ambient delegation authority (shipped default, bit-identical behavior).
+/// 1 = cap-broker PD serves delegation policy; kernel enforces a cached
+/// per-CNode policy word. All cap-broker kernel code is `#if
+/// CONFIG_CAP_BROKER`-guarded (empty TU when 0); no runtime `if` on this
+/// knob. Default: 0.
+#ifndef CONFIG_CAP_BROKER
+#define CONFIG_CAP_BROKER 0
+#endif
+#if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
+#error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT != 0 && CONFIG_BLOCK_SRV_FAULT_INJECT != 1
+#error "CONFIG_BLOCK_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_BLOCK_SRV && CONFIG_DRIVER_PD_BLOCK
+#error "CONFIG_BLOCK_SRV and CONFIG_DRIVER_PD_BLOCK are mutually exclusive (one block owner: #47 block-srv)"
+#endif
+#if CONFIG_VFS_SRV_FAULT_INJECT && !CONFIG_VFS_SRV
+#error "CONFIG_VFS_SRV_FAULT_INJECT requires CONFIG_VFS_SRV=1"
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && !CONFIG_BLOCK_SRV
+#error "CONFIG_BLOCK_SRV_FAULT_INJECT requires CONFIG_BLOCK_SRV=1"
+#endif
+
+/// vfs-srv externalization master switch (issue #47, strangler step a).
+/// 0 = in-kernel VFS backends (shipped default, bit-identical behavior).
+/// 1 = vfs-srv PD serves backends; authorize stays kernel-side.
+/// All vfs-srv kernel code is `#if CONFIG_VFS_SRV`-guarded (empty TU
+/// when 0); no runtime `if` on this knob. Default: 0.
+#ifndef CONFIG_VFS_SRV
+#define CONFIG_VFS_SRV 0
+#endif
+
+/// block-srv externalization master switch (issue #47, strangler step a).
+/// 0 = in-kernel block probing (shipped default, bit-identical behavior).
+/// 1 = block-srv PD serves block I/O via SDF MMIO/DMA; the kernel skips
+/// AHCI/ATA + virtio-blk probing. Mutually exclusive with
+/// CONFIG_DRIVER_PD_BLOCK (hard error below). Default: 0.
+#ifndef CONFIG_BLOCK_SRV
+#define CONFIG_BLOCK_SRV 0
+#endif
+
+/// vfs-srv fault-injection surface (issue #47, strangler step c).
+/// 1 = compile the diagnostic `vfsfault` shell command. Debug-only.
+#ifndef CONFIG_VFS_SRV_FAULT_INJECT
+#define CONFIG_VFS_SRV_FAULT_INJECT 0
+#endif
+
+/// block-srv fault-injection surface (issue #47, strangler step c).
+/// 1 = compile the diagnostic `blockfault` shell command. Debug-only.
+#ifndef CONFIG_BLOCK_SRV_FAULT_INJECT
+#define CONFIG_BLOCK_SRV_FAULT_INJECT 0
+#endif
+#if CONFIG_DRIVER_PD_FAULT_INJECT != 0 && CONFIG_DRIVER_PD_FAULT_INJECT != 1
+#error "CONFIG_DRIVER_PD_FAULT_INJECT must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_DRIVER_PD_MAX_CAPS < 1
+#error "CONFIG_DRIVER_PD_MAX_CAPS must be >= 1 (default 6)"
+#endif
+// Issue #48 (VERIFY NEED step-a blocker 1): fb/block/net SDF rows land
+// with S4/S5/S6 (scanout-RAM Frame caps, PCI/virtio discovery binds).
+// Enabling these knobs before the rows exist would compose-fail the PD
+// at boot while the kernel already yielded the devices — fail closed
+// here instead (build-time, unmistakable), never a runtime wedge.
+#if CONFIG_DRIVER_PD_FB
+#error "CONFIG_DRIVER_PD_FB=1 needs the S4 fb-device row (not landed yet)"
+#endif
+#if CONFIG_DRIVER_PD_BLOCK
+#error "CONFIG_DRIVER_PD_BLOCK=1 needs the S5 block-device rows (not landed yet)"
+#endif
+#if CONFIG_DRIVER_PD_NET
+#error "CONFIG_DRIVER_PD_NET=1 needs the S6 net-device row (not landed yet)"
 #endif
 #if CONFIG_IOPB_MAX_TASKS < 1
 #error "CONFIG_IOPB_MAX_TASKS must be >= 1 (default 4)"

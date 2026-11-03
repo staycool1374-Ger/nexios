@@ -305,6 +305,10 @@ static inline long sys_watchdog_kick(void) {
 #define NEXIOS_ABI_MINOR 0
 #define SYS_MAX          86
 
+// SDK internal versioning macros live in sdk_version.h (spec §14,
+// issue #171) so kernel test TUs can consume them without libc types.
+#include "sdk_version.h"
+
 static inline long sys_tls_set(unsigned long base) {
     return __syscall5(SYS_TLS_SET, (long)base, 0, 0, 0);
 }

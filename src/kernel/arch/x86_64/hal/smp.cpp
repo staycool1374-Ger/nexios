@@ -185,6 +185,10 @@ bool trampoline_block_usable() {
 
 uint8_t ap_count() { return g_aps_up; }
 
+bool scheduler_started() {
+    return __atomic_load_n(&scheduler_ready_, __ATOMIC_ACQUIRE);
+}
+
 /// @brief Publish the scheduler start-gate (called once by the BSP after
 ///        reboot_from_table() finishes spawning, before its idle loop).
 void publish_scheduler_ready() {

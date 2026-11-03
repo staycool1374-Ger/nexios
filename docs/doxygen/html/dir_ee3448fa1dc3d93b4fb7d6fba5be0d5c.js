@@ -1,5 +1,7 @@
 var dir_ee3448fa1dc3d93b4fb7d6fba5be0d5c =
 [
+    [ "cap", "dir_194ad5bcadfb4f1b02225e6068aea6ad.html", "dir_194ad5bcadfb4f1b02225e6068aea6ad" ],
+    [ "gen", "dir_be7adaf98db644263120264e66d1c691.html", "dir_be7adaf98db644263120264e66d1c691" ],
     [ "sys", "dir_5e66a34aa5f28d3b126d023efdd22628.html", "dir_5e66a34aa5f28d3b126d023efdd22628" ],
     [ "ctype.c", "ctype_8c.html", "ctype_8c" ],
     [ "ctype.h", "ctype_8h.html", "ctype_8h" ],
@@ -8,6 +10,7 @@ var dir_ee3448fa1dc3d93b4fb7d6fba5be0d5c =
     [ "ipc.c", "ipc_8c.html", "ipc_8c" ],
     [ "ipc.h", "ipc_8h.html", "ipc_8h" ],
     [ "picolib_stubs.c", "picolib__stubs_8c.html", "picolib__stubs_8c" ],
+    [ "sdk_version.h", "sdk__version_8h.html", "sdk__version_8h" ],
     [ "signal.h", "signal_8h.html", "signal_8h" ],
     [ "stdarg.h", "stdarg_8h.html", "stdarg_8h" ],
     [ "stdio.c", "stdio_8c.html", "stdio_8c" ],

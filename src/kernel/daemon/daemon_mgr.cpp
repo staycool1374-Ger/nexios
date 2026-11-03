@@ -21,6 +21,7 @@
 
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/ramdisk/ramdiskd.hpp>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf.hpp>
@@ -63,10 +64,23 @@ bool register_daemon(const char *name, const char *initrd_path,
     entries_[num_daemons_].restart_count = 0;
     entries_[num_daemons_].set_pid_fn = set_pid;
     entries_[num_daemons_].get_pid_fn = get_pid;
+    entries_[num_daemons_].ss_budget = 0;
+    entries_[num_daemons_].on_restart_fn = nullptr;
     ++num_daemons_;
 
     Logger::info("daemon_mgr: registered '%s' at path '%s' (PID=%d)", name,
                  initrd_path, entries_[num_daemons_ - 1].pid);
+    return true;
+}
+
+bool register_daemon_ex(const char *name, const char *initrd_path,
+                        void (*set_pid)(uint64_t), uint64_t (*get_pid)(),
+                        uint64_t ss_budget, void (*on_restart)(uint64_t)) {
+    if (!register_daemon(name, initrd_path, set_pid, get_pid)) {
+        return false;
+    }
+    entries_[num_daemons_ - 1].ss_budget = ss_budget;
+    entries_[num_daemons_ - 1].on_restart_fn = on_restart;
     return true;
 }
 
@@ -221,10 +235,27 @@ void restart_stale_daemons() {
         }
         {
             uint64_t bg = 0;
-            uint64_t budget =
-                (strcmp(entries_[i].name, "iocd") == 0) ? 3ULL : 2ULL;
+            // Entry budget wins when set (register_daemon_ex); legacy
+            // name-based defaults preserved otherwise (unchanged behavior).
+            uint64_t budget = entries_[i].ss_budget;
+            if (budget == 0) {
+                budget =
+                    (strcmp(entries_[i].name, "iocd") == 0)
+                        ? 3ULL
+                        : ((strcmp(entries_[i].name, "timer-srv") == 0)
+                               ? 1ULL
+                               : 2ULL);
+            }
             task->init_sporadic_server(budget, 10, bg, 1);
         }
+
+        // Issue #48 (VERIFY NEED step-a blocker 3): a restarted daemon
+        // must rejoin under the same exemption the boot path grants
+        // (taskdefs reboot_from_table: set_edf_exempt for every
+        // SPORADIC_SERVER). Without it the replacement stays admission-
+        // counted and every restart permanently consumes Liu-Leyland
+        // budget until runelf is denied — a restart reservation leak.
+        Scheduler::set_edf_exempt(*task, true);
 
         kernel::Scheduler::add_task(*task);
 
@@ -232,6 +263,15 @@ void restart_stale_daemons() {
         entries_[i].pid = task->id;
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
+        }
+#if CONFIG_TIMER_SRV
+        if (entries_[i].name != nullptr &&
+            strcmp(entries_[i].name, "timer-srv") == 0) {
+            kernel::time::timer_srv::on_restart(task->id);
+        }
+#endif
+        if (entries_[i].on_restart_fn != nullptr) {
+            entries_[i].on_restart_fn(task->id);
         }
         // Issue #275: a restarted ramdiskd lost its CSpace with the old
         // task — re-grant storage and push the handles (fail-closed).
@@ -319,10 +359,22 @@ void ensure_running(const char *name) {
         }
         {
             uint64_t bg = 0;
-            uint64_t budget =
-                (strcmp(entries_[i].name, "iocd") == 0) ? 3ULL : 2ULL;
+            uint64_t budget = entries_[i].ss_budget;
+            if (budget == 0) {
+                budget =
+                    (strcmp(entries_[i].name, "iocd") == 0)
+                        ? 3ULL
+                        : ((strcmp(entries_[i].name, "timer-srv") == 0)
+                               ? 1ULL
+                               : 2ULL);
+            }
             task->init_sporadic_server(budget, 10, bg, 1);
         }
+
+        // Issue #48 (VERIFY NEED step-a blocker 3): same boot-path
+        // exemption as restart_stale_daemons above — a re-spawned daemon
+        // must not become admission-counted.
+        Scheduler::set_edf_exempt(*task, true);
 
         Scheduler::add_task(*task);
 
@@ -330,6 +382,15 @@ void ensure_running(const char *name) {
         entries_[i].restart_count = 0;
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
+        }
+#if CONFIG_TIMER_SRV
+        if (entries_[i].name != nullptr &&
+            strcmp(entries_[i].name, "timer-srv") == 0) {
+            kernel::time::timer_srv::on_restart(task->id);
+        }
+#endif
+        if (entries_[i].on_restart_fn != nullptr) {
+            entries_[i].on_restart_fn(task->id);
         }
         // Issue #275: re-grant storage to a (re)spawned ramdiskd.
         if (entries_[i].name != nullptr &&

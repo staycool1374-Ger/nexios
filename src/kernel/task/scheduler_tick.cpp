@@ -66,7 +66,7 @@ using sched_debug::g_diag_tick_count;
 
 void Scheduler::on_tick() noexcept {
 #if defined(CONFIG_DEBUG)
-    ++g_diag_tick_count;
+    __atomic_fetch_add(&g_diag_tick_count, 1ULL, __ATOMIC_RELAXED);
 #endif
     // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
     // body below is BSP-only (unchanged); the AP skips accounting,
@@ -78,13 +78,14 @@ void Scheduler::on_tick() noexcept {
     uint64_t current_tick = arch::Timer::ticks();
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     if (all_tasks_.size() >= 6) {
-        bool lk_held = scheduler_lock_.try_lock();
-        IPC_SCHED_TRACE("[TICK]", "t=", current_tick, "lk=",
-                        (uint64_t)lk_held, "h=",
-                        (uint64_t)scheduler_lock_.holder(), "nt=",
-                        (uint64_t)all_tasks_.size());
-        if (lk_held)
-            scheduler_lock_.unlock();
+        const bool lk_held = scheduler_lock_.try_lock();
+        if (lk_held) {
+            SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
+            IPC_SCHED_TRACE("[TICK]", "t=", current_tick, "lk=",
+                            (uint64_t)lk_held, "h=",
+                            (uint64_t)scheduler_lock_.holder(), "nt=",
+                            (uint64_t)all_tasks_.size());
+        }
     }
     // ==== Lock-contention detector (diagnostic only) ====
     // NOTE: on_tick may be called from task context (e.g. tests calling
@@ -98,9 +99,9 @@ void Scheduler::on_tick() noexcept {
         bool held = scheduler_lock_.try_lock();
         const void *curr_holder = scheduler_lock_.holder();
         if (held) {
+            SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
             current_cpu().lk0_count = 0;
             current_cpu().last_holder = nullptr;
-            scheduler_lock_.unlock();
         } else {
             if (curr_holder != current_cpu().last_holder) {
                 // Holder changed — lock was released and re-acquired
@@ -160,7 +161,7 @@ void Scheduler::on_tick() noexcept {
 
     bool lock_acquired = scheduler_lock_.try_lock();
     if (lock_acquired) {
-        SpinLockGuard<sync::SpinLock> guard(scheduler_lock_, adopt_lock);
+        SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
 #if defined(CONFIG_DEBUG_IPC_SCHED)
         // Universal hang detector: if no actual context switch has occurred for
         // STALL_LIMIT ticks while a non-idle task is still runnable, the
@@ -930,7 +931,7 @@ void Scheduler::on_tick() noexcept {
 
 void Scheduler::rate_monotonic_schedule() noexcept {
 #if defined(CONFIG_DEBUG)
-    ++g_diag_rms_count;
+    __atomic_fetch_add(&g_diag_rms_count, 1ULL, __ATOMIC_RELAXED);
 #endif
     // Issue #26: RMS never raises TPR itself.  It tolerates preemption
     // only from strictly higher classes (the tick at 0xE0 is above every
@@ -941,7 +942,7 @@ void Scheduler::rate_monotonic_schedule() noexcept {
 
     if (!scheduler_lock_.try_lock())
         return;
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_, adopt_lock);
+    SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
 
     auto *current = current_task();
     if (!current || current->magic != TaskControlBlock::TCB_MAGIC)

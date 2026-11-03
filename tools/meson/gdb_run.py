@@ -60,14 +60,22 @@ def ensure_nolto_builddir(arch, build):
 
 
 def build_nolto(arch, build, test_class):
-    """Configure the test class and compile the NO_LTO tree."""
+    """Configure the test class and compile the NO_LTO tree.
+
+    Bake via the meson test_class option (the test_config custom_target
+    regenerates src/test-config.txt from it at build time) and assert the
+    bake, mirroring qemu_test.py run_attempt. The old standalone
+    gen_test_config.py call only wrote dead copies (builddir/test-config.txt
+    has no consumer; the repo compat copy is overwritten by stage_initrd)
+    while the custom_target reverted src/test-config.txt to the stale
+    option — every debug-test run booted the wrong class (#419).
+    """
     builddir = ensure_nolto_builddir(arch, build)
     subprocess.run(
-        [sys.executable, str(HERE / "gen_test_config.py"), test_class,
-         str(builddir / "test-config.txt"),
-         str(HERE.parent.parent / "initrd" / "tests" / "test-config.txt")],
+        ["meson", "configure", "-Dtest_class=%s" % test_class, str(builddir)],
         check=True)
     subprocess.run(["meson", "compile", "-C", str(builddir)], check=True)
+    harness.assert_baked(arch, builddir, test_class.split(","))
     return builddir
 
 
@@ -176,10 +184,10 @@ def cmd_debug_test(args):
         print("ERROR: GDB script not found: %s" % args.gdb_script)
         return 2
     if args.cls == "none":
-        test_class = "none"
+        requested = ["none"]
     else:
-        test_class = args.cls
-    builddir = build_nolto(args.arch, args.build, test_class)
+        requested = harness.resolve_classes(args.arch, args.build, args.cls)
+    builddir = build_nolto(args.arch, args.build, ",".join(requested))
     tag = harness.checkout_tag()
     logdir = Path(tempfile.mkdtemp(prefix="jarvis-meson-gdb-"))
     paths = {

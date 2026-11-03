@@ -349,8 +349,18 @@ JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
     static uint64_t g_live_after = 0;
     static uint64_t g_gs_same = 0;
 
+    // Part-B bases must pass the TLS_SET user-half gate on every arch
+    // (sys_tls_set: x86_64 canonical + 47-bit limit; riscv64 Sv39
+    // bits[63:39]==0 + limit — the old 0x7A7x values are non-canonical
+    // under Sv39 so the rv64 call failed closed; mirrors the per-arch
+    // k_tls_base convention above).
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t k_base_b = 0x0000007E00000000ULL;
+    constexpr uint64_t k_base_x = 0x0000007F00000000ULL;
+#else
     constexpr uint64_t k_base_b = 0x00007A7400000000ULL;
     constexpr uint64_t k_base_x = 0x00007A7500000000ULL;
+#endif
 #if defined(CONFIG_ARCH_X86_64)
     uint64_t gs_before = arch::rdmsr(arch::MSR_GS_BASE);
 #endif

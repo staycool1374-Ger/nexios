@@ -18,5 +18,6 @@ var searchData=
   ['dmesgservice_15',['DmesgService',['../classkernel_1_1log_1_1_dmesg_service.html',1,'kernel::log']]],
   ['driver_16',['Driver',['../structkernel_1_1_driver.html',1,'kernel']]],
   ['driverregistry_17',['DriverRegistry',['../classkernel_1_1_driver_registry.html',1,'kernel']]],
-  ['dynview_18',['DynView',['../structkernel_1_1elf_1_1_dyn_view.html',1,'kernel::elf']]]
+  ['dtbcpuentry_18',['DtbCpuEntry',['../structkernel_1_1boot_1_1_dtb_cpu_entry.html',1,'kernel::boot']]],
+  ['dynview_19',['DynView',['../structkernel_1_1elf_1_1_dyn_view.html',1,'kernel::elf']]]
 ];

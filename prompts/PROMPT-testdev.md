@@ -30,8 +30,19 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 * **Target:** All work occurs in `src/kernel/test/` on the `testbed` branch. No production code.
 * **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` (safe class, fast) or `bash scripts/run_all_classes.sh x86_64 debug` (full suite).
  * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
+## WIRE (mandatory — identical in every lane)
+- ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
+- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+- No ACK by ack-by = faulty lane; the engine restarts it.
+- Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+- DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
 * When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 * After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
+
+### Tool & Session Discipline (standing order — violations stall the lane and get the session recreated)
+- ONE tool call per message, all parameters complete. NEVER batch calls; on SchemaError/missing-key, re-issue singly — never loop retries.
+- Read tool for reads, Grep tool for searches, Glob for file lists. NEVER use bash for file reads; bash is for builds, QEMU runs, and git only, one simple command at a time, no pipes or `;` chains.
+- Permission modals mean NO: treat every approval dialog as denied. Route around, record uncheckable items as explicit gaps, never halt, never ask for more permissions.
 
 ### Pseudocode in Stub Tests
 * Some stub tests contain `/* Pseudocode: ... */` comments describing intended behavior — use these for insight when implementing.

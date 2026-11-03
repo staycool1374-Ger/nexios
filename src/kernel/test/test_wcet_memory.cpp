@@ -132,11 +132,13 @@ JARVIS_TEST(wcet_mempool_alloc_free, "PRE: none | POST: none") {
 //           alias (same pattern as the snapshot guard pages).  The physical
 //           page is allocated once, mapped/unmapped N times, and freed —
 //           the PMM free-page count must be net-zero across the WHOLE test.
-//           If the alias' 2 MB region is still a huge page, the first map
+//           If the alias' region is still a huge/block page, the first map
 //           splits it (allocating a PT page unmap leaves in place); the
 //           split is performed as a warm-up and then re-huged + freed here
 //           so the live PD matches the snapshot (no tracker leak, no
-//           dangling PT).
+//           dangling PT).  Split detection is empirical (entry-changed),
+//           not a descriptor-bit test: bit 7 is the PS flag on x86_64
+//           but AP[1] read-only on aarch64 (#418).
 // Input: 200 iterations mapping HHDM_OFFSET+phys -> phys.
 // Expect: max > 0 and PMM::free_pages_ref() unchanged over the test.
 // Depends: kernel/memory/vmm.hpp, kernel/memory/pmm.hpp, arch::rdtsc
@@ -149,18 +151,21 @@ JARVIS_TEST(wcet_vmm_map_unmap, "PRE: none | POST: none") {
     JARVIS_ASSERT_FMT(phys != 0, "PMM::alloc_page failed for scratch page");
     uint64_t va = arch::HHDM_OFFSET + phys;
 
-    // If the alias' 2 MB region is still huge, split it once (warm-up) so
-    // the measured loop never allocates a PT page; remember the huge entry
-    // to re-huge at the end.
+    // Split the alias' region once (warm-up) so the measured loop never
+    // allocates a PT page; remember the entry to restore at the end.
+    // Split detection is empirical: huge/block flag bits are arch-specific
+    // (x86_64 PS bit vs aarch64 AP bits, #418), so compare the PD entry
+    // before/after instead of testing descriptor bits.
     // Issue #200: HHDM PD surgery is IRQ-critical — mask the timer ISR
     // and task preemption across the warm-up split only. The timed loop
     // below stays unguarded (no allocation there; WCET timing unperturbed).
-    uint64_t saved_huge = kernel_pd_entry(va);
-    bool split_now = (saved_huge & (1ULL << 7)) != 0;
-    if (split_now) {
+    uint64_t saved_entry = kernel_pd_entry(va);
+    bool split_now = false;
+    {
         arch::IrqGuard split_guard;
         VMM::map_page(va, phys, false);
         VMM::unmap_page(va);
+        split_now = (kernel_pd_entry(va) != saved_entry);
     }
 
     CycleStats r = measure_cycles(ITERATIONS, [va, phys]() {
@@ -168,14 +173,16 @@ JARVIS_TEST(wcet_vmm_map_unmap, "PRE: none | POST: none") {
         VMM::unmap_page(va);
     });
 
-    // Re-huge + free the split PT page (only if we created it).
+    // Re-huge + free the split PT page (only if the warm-up created it).
     // Issue #200: guarded like the warm-up split (IRQ-critical surgery).
     if (split_now) {
         arch::IrqGuard rehuge_guard;
         uint64_t pt_phys = kernel_pd_entry(va) & 0x000FFFFFFFFFF000ULL;
-        kernel_pd_entry_restore(va, saved_huge);
-        if (pt_phys)
+        bool owned = (pt_phys != 0) && PMM::is_allocated(pt_phys);
+        kernel_pd_entry_restore(va, saved_entry);
+        if (owned)
             PMM::free_page(pt_phys);
+        JARVIS_ASSERT_FMT(owned, "vmm warm-up split table not PMM-owned");
     }
     PMM::free_page(phys);
 

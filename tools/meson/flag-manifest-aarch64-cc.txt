@@ -6,6 +6,7 @@
 -O2
 -ffunction-sections
 -fdata-sections
+-fno-pie
 -g
 -Og
 -DCONFIG_DEBUG

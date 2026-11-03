@@ -30,7 +30,7 @@ mermaid.initialize({ startOnLoad: true, theme: theme });
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.5</span>
+   <div id="projectname">Jarvis RTOS<span id="projectnumber">&#160;0.5.7</span>
    </div>
   </td>
  </tr>
@@ -152,8 +152,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:aca50fe995582fa2e7697f4b241bf54ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to its physical address with error code.  <br /></td></tr>
 <tr class="memitem:a76ece689da1d37a1ff4c78d747035edf" id="r_a76ece689da1d37a1ff4c78d747035edf"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a76ece689da1d37a1ff4c78d747035edf">current_pml4</a> ()</td></tr>
 <tr class="memdesc:a76ece689da1d37a1ff4c78d747035edf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the physical address of the current PML4 table.  <br /></td></tr>
-<tr class="memitem:a7d5545bc151a7c9769696e1129ac086f" id="r_a7d5545bc151a7c9769696e1129ac086f"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a7d5545bc151a7c9769696e1129ac086f">smp_tlb_shootdown_hook</a> (uint64_t va, uint16_t context_id, bool all)</td></tr>
-<tr class="memdesc:a7d5545bc151a7c9769696e1129ac086f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU shootdown hook, overridden by SMP ports (issue #352). Weak no-op default: single-CPU runs need only the local invalidate in tlb_shootdown. SMP enablement replaces this (tracked separately — not #386, which owns globals).  <br /></td></tr>
+<tr class="memitem:af6604ce99223ea279bbf0b504752ff93" id="r_af6604ce99223ea279bbf0b504752ff93"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#af6604ce99223ea279bbf0b504752ff93">smp_tlb_shootdown_hook</a> (uint64_t va, uint16_t context_id, bool all)</td></tr>
+<tr class="memdesc:af6604ce99223ea279bbf0b504752ff93"><td class="mdescLeft">&#160;</td><td class="mdescRight">Cross-CPU shootdown hook, overridden by SMP ports (issue #352). Weak no-op default: single-CPU runs need only the local invalidate in tlb_shootdown. SMP enablement replaces this (tracked separately — not #386, which owns globals).  <br /></td></tr>
 <tr class="memitem:a6694e81169de0e456fd29aadc0688e62" id="r_a6694e81169de0e456fd29aadc0688e62"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a6694e81169de0e456fd29aadc0688e62">tlb_shootdown</a> (uint64_t va, uint16_t context_id, bool all)</td></tr>
 <tr class="memdesc:a6694e81169de0e456fd29aadc0688e62"><td class="mdescLeft">&#160;</td><td class="mdescRight">Invalidate TLB state for an address space (issue #352): local arch invalidate (full flush for all=true, else VA+context-ID targeted) followed by the SMP hook above. Test-facing entry point for shootdown-hook invocation coverage. No callers yet — unmap/teardown paths keep their existing local invalidates until QE adopts this choke point.  <br /></td></tr>
 <tr class="memitem:a385de660f1f7a0aab86ad1a31cb4971b" id="r_a385de660f1f7a0aab86ad1a31cb4971b"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a385de660f1f7a0aab86ad1a31cb4971b">clone_kernel_pml4</a> ()</td></tr>
@@ -216,6 +216,8 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memdesc:a32036fcad3f6784d43cef83b23423d49"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to a physical address using a specific PML4.  <br /></td></tr>
 <tr class="memitem:a464e326efd7e29354e19617ca99d9e86" id="r_a464e326efd7e29354e19617ca99d9e86"><td class="memItemLeft">static <a class="el" href="namespacekernel_1_1errors.html#a2b154c9bf76e28a9152bbfc3b970074d">errors::VmmError</a>&#160;</td><td class="memItemRight"><a class="el" href="#a464e326efd7e29354e19617ca99d9e86">virt_to_phys_in_pml4_err</a> (uint64_t virt_addr, uint64_t pml4_phys, uint64_t &amp;out_phys_addr)</td></tr>
 <tr class="memdesc:a464e326efd7e29354e19617ca99d9e86"><td class="mdescLeft">&#160;</td><td class="mdescRight">Translates a virtual address to a physical address using a specific PML4 with error code.  <br /></td></tr>
+<tr class="memitem:a0a3f668059e335d3aa824dea139a43cf" id="r_a0a3f668059e335d3aa824dea139a43cf"><td class="memItemLeft">static uint64_t&#160;</td><td class="memItemRight"><a class="el" href="#a0a3f668059e335d3aa824dea139a43cf">vmm_arch_root_phys</a> (uint64_t live_root)</td></tr>
+<tr class="memdesc:a0a3f668059e335d3aa824dea139a43cf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Strip arch upper bits from a LIVE root register value to a table phys (issue #171 P6 aa64 fault): x86 CR3 carries PCID in the low 12 (already stripped by the walk mask); aa64 TTBR0/1 carry ASID in bits [63:48] (NOT stripped by the walk mask — passing it raw wraps the L0 base non-canonical and aborts in the walk); riscv read_cr3() pre-strips SATP to phys. Idempotent on clean phys roots (TCB fields). One definition per arch TU (public: pure codec, no state).  <br /></td></tr>
 <tr class="memitem:a118d59a51184acb5eae3f473f195ee59" id="r_a118d59a51184acb5eae3f473f195ee59"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a118d59a51184acb5eae3f473f195ee59">set_hhdm_modified</a> ()</td></tr>
 <tr class="memdesc:a118d59a51184acb5eae3f473f195ee59"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the HHDM modification flag (issue #366: the single SET path — release store, pairs with the acquire <span class="tt"><a class="el" href="#a70bf58e478f1a27ad8e1badfeb9fc1f2" title="Returns true if any test has modified the HHDM page tables since the last clear/take call (acquire: p...">hhdm_was_modified</a></span> / acq_rel <span class="tt"><a class="el" href="#ac5cc5b13afcd183532d0f49f56d164d5" title="Atomically take the HHDM flag: returns the previous value and clears it in one step,...">take_hhdm_modified</a></span> reads; callable only from the test-active arm path and the flag-semantics test; set-true is idempotent, no gate inside).  <br /></td></tr>
 <tr class="memitem:a70bf58e478f1a27ad8e1badfeb9fc1f2" id="r_a70bf58e478f1a27ad8e1badfeb9fc1f2"><td class="memItemLeft">static bool&#160;</td><td class="memItemRight"><a class="el" href="#a70bf58e478f1a27ad8e1badfeb9fc1f2">hhdm_was_modified</a> ()</td></tr>
@@ -1749,8 +1751,8 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a7d5545bc151a7c9769696e1129ac086f" name="a7d5545bc151a7c9769696e1129ac086f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7d5545bc151a7c9769696e1129ac086f">&#9670;&#160;</a></span>smp_tlb_shootdown_hook()</h2>
+<a id="af6604ce99223ea279bbf0b504752ff93" name="af6604ce99223ea279bbf0b504752ff93"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af6604ce99223ea279bbf0b504752ff93">&#9670;&#160;</a></span>smp_tlb_shootdown_hook()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1783,6 +1785,12 @@ Here is the call graph for this function:</div>
 
 <p>Cross-CPU shootdown hook, overridden by SMP ports (issue #352). Weak no-op default: single-CPU runs need only the local invalidate in tlb_shootdown. SMP enablement replaces this (tracked separately — not #386, which owns globals). </p>
 <dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract: Lock: none. Context: any-task. SMP: N/A (default body). </dd></dl>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="classkernel_1_1_v_m_m_af6604ce99223ea279bbf0b504752ff93_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af6604ce99223ea279bbf0b504752ff93_cgraph" loading="lazy" alt=""/></div>
+<!-- MAP 19 -->
+</div>
 
 </div>
 </div>
@@ -1946,7 +1954,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a6694e81169de0e456fd29aadc0688e62_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a6694e81169de0e456fd29aadc0688e62_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 19 -->
+<!-- MAP 20 -->
 </div>
 
 </div>
@@ -1994,7 +2002,7 @@ Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only. SMP:
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a9d3b6e67113f63864a37d28320a7bc28_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 20 -->
+<!-- MAP 21 -->
 </div>
 
 </div>
@@ -2046,7 +2054,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_addd04cbcf116823799ad42392fe20c45_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_addd04cbcf116823799ad42392fe20c45_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 21 -->
+<!-- MAP 22 -->
 </div>
 
 </div>
@@ -2099,7 +2107,7 @@ Concurrency/caller contract (issue #366): Lock: none. Context: kernel-only. SMP:
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a4aba9fc6e5febed05a0dc3edfb0dc22f_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 22 -->
+<!-- MAP 23 -->
 </div>
 
 </div>
@@ -2151,7 +2159,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_ac3620fa463b4b1321bf9296e4bfd35e4_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_ac3620fa463b4b1321bf9296e4bfd35e4_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 23 -->
+<!-- MAP 24 -->
 </div>
 
 </div>
@@ -2198,7 +2206,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a0bf86a0e97402ac5e989fa1aa55a0df5_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 24 -->
+<!-- MAP 25 -->
 </div>
 
 </div>
@@ -2247,7 +2255,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_af16c2a20fa00db35b4aea6f91227818b_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 25 -->
+<!-- MAP 26 -->
 </div>
 
 </div>
@@ -2292,7 +2300,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a87e909fad18b6d7d49eb348c5183cbca_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a87e909fad18b6d7d49eb348c5183cbca_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 26 -->
+<!-- MAP 27 -->
 </div>
 
 </div>
@@ -2338,7 +2346,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a818b86723c8492766747bd3dade54dc6_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a818b86723c8492766747bd3dade54dc6_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 27 -->
+<!-- MAP 28 -->
 </div>
 
 </div>
@@ -2387,7 +2395,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a21f16b2e0bd481ac0584f2a27fb1887a_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a21f16b2e0bd481ac0584f2a27fb1887a_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 28 -->
+<!-- MAP 29 -->
 </div>
 
 </div>
@@ -2442,7 +2450,7 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_aca50fe995582fa2e7697f4b241bf54ac_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 29 -->
+<!-- MAP 30 -->
 </div>
 
 </div>
@@ -2553,8 +2561,43 @@ Here is the call graph for this function:</div>
 Here is the call graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="classkernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph.png" border="0" usemap="#aclasskernel_1_1_v_m_m_a464e326efd7e29354e19617ca99d9e86_cgraph" loading="lazy" alt=""/></div>
-<!-- MAP 30 -->
+<!-- MAP 31 -->
 </div>
+
+</div>
+</div>
+<a id="a0a3f668059e335d3aa824dea139a43cf" name="a0a3f668059e335d3aa824dea139a43cf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0a3f668059e335d3aa824dea139a43cf">&#9670;&#160;</a></span>vmm_arch_root_phys()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">uint64_t kernel::VMM::vmm_arch_root_phys </td>
+          <td>(</td>
+          <td class="paramtype">uint64_t</td>          <td class="paramname"><span class="paramname"><em>live_root</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel static">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Strip arch upper bits from a LIVE root register value to a table phys (issue #171 P6 aa64 fault): x86 CR3 carries PCID in the low 12 (already stripped by the walk mask); aa64 TTBR0/1 carry ASID in bits [63:48] (NOT stripped by the walk mask — passing it raw wraps the L0 base non-canonical and aborts in the walk); riscv read_cr3() pre-strips SATP to phys. Idempotent on clean phys roots (TCB fields). One definition per arch TU (public: pure codec, no state). </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">live_root</td><td>Live arch root register value (CR3/TTBR/SATP-phys). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>Table physical address suitable as a walk root. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Concurrency/caller contract: Lock: none; Context: any-task; SMP: N/A (pure function of its argument). </dd></dl>
 
 </div>
 </div>
@@ -2609,6 +2652,9 @@ Here is the call graph for this function:</div>
 </div>
 <hr/>The documentation for this class was generated from the following files:<ul>
 <li>src/kernel/memory/<a class="el" href="vmm_8hpp_source.html">vmm.hpp</a></li>
+<li>src/kernel/arch/aarch64/hal/<a class="el" href="aarch64_2hal_2smp__shootdown_8cpp.html">smp_shootdown.cpp</a></li>
+<li>src/kernel/arch/riscv64/hal/<a class="el" href="riscv64_2hal_2smp__shootdown_8cpp.html">smp_shootdown.cpp</a></li>
+<li>src/kernel/arch/x86_64/hal/<a class="el" href="x86__64_2hal_2smp__shootdown_8cpp.html">smp_shootdown.cpp</a></li>
 <li>src/kernel/memory/<a class="el" href="vmm_8cpp.html">vmm.cpp</a></li>
 <li>src/kernel/memory/<a class="el" href="vmm__cap_8cpp.html">vmm_cap.cpp</a></li>
 <li>src/kernel/memory/<a class="el" href="vmm__clone_8cpp.html">vmm_clone.cpp</a></li>

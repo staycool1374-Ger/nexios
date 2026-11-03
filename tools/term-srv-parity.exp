@@ -1,0 +1,23 @@
+#!/usr/bin/expect -f
+# term-srv parity capture (issue #51, strangler step b): boot an ISO,
+# run /bin/term-srv-parity.c.elf, capture `S TM ` lines to a file.
+# Args: <iso> <serial_log> <out_filtered> [fat32.img]
+# Delegates to tools/srv-pd-parity.py (QEMU monitor sendkey +
+# file-backed COM1). Raw expect-on-spawn cannot work here: file-backed
+# serial is invisible on the spawn channel, and the spawn pty is not
+# guest input (the shell reads COM1/PS2). The ISO must bake
+# test_class=none (interactive shell).
+set iso [lindex $argv 0]
+set serial_log [lindex $argv 1]
+set out_filtered [lindex $argv 2]
+set fat [lindex $argv 3]
+if {$fat eq ""} { set fat "build/meson-x86_64/packaging/fat32.img" }
+set tmp "build/term-srv-parity/exp-[pid]"
+exec mkdir -p $tmp
+if {[catch {exec python3 tools/srv-pd-parity.py $iso /bin/term-srv-parity.c.elf "S TM " $tmp --fat32 $fat --port 4490} res]} {
+    puts "PARITY-CAPTURE-FAIL $res"
+    exit 1
+}
+exec cp $tmp/com1.log $serial_log
+exec cp $tmp/filtered.txt $out_filtered
+puts "PARITY-CAPTURE-OK $out_filtered"

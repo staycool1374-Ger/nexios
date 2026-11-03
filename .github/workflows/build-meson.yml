@@ -166,7 +166,8 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          build-essential git make python3 python3-pip ninja-build \
+          build-essential git make python3 python3-pip nasm ninja-build ovmf \
+          xorriso mtools cpio dosfstools grub-common grub-pc-bin \
           gcc-x86-64-linux-gnu g++-x86-64-linux-gnu
         sudo pip3 install --break-system-packages 'meson==1.12.0'
         for tool in gcc g++ as ld ar objcopy objdump strip readelf gdb; do
@@ -175,6 +176,9 @@ jobs:
 
     - name: Meson setup
       run: meson setup build/meson-x86_64 --cross-file cross/x86_64-elf.txt -Darch=x86_64
+
+    - name: Style gate + build
+      run: tools/meson/build.sh build/meson-x86_64
 
     - name: Host suites
       run: meson test -C build/meson-x86_64 --suite host --print-errorlogs
@@ -205,7 +209,7 @@ jobs:
     - name: Parity ledger report
       run: |
         python3 tools/check-parity.py --report
-        python3 tools/check_no_make_refs.sh
+        bash tools/check_no_make_refs.sh
 
   makefile-freeze:
     # Frozen-build freeze (issue #170 A1/X1): any change set touching the

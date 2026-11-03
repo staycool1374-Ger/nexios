@@ -22,6 +22,7 @@
 #pragma once
 
 #include <types.hpp>
+#include <kernel/nexios_config.h>
 
 namespace service {
 
@@ -122,6 +123,41 @@ private:
     static void cmd_meminfo(int argc, const char** argv);
     /// @brief Built-in: reboots the system.
     static void cmd_reboot(int argc, const char** argv);
+#if CONFIG_TIMER_SRV_FAULT_INJECT && CONFIG_TIMER_SRV
+    /// @brief Diagnostic: terminate timer-srv PD (issue #241 fault drill).
+    static void cmd_timerfault(int argc, const char** argv);
+#endif
+#if CONFIG_TERM_SRV
+    /// @brief Probe term-srv PD liveness (issue #51 parity harness).
+    static void cmd_termprobe(int argc, const char** argv);
+#endif
+#if CONFIG_LOG_SRV
+    /// @brief Probe log-srv PD liveness (issue #51 parity harness).
+    static void cmd_logprobe(int argc, const char** argv);
+#endif
+#if CONFIG_TERM_SRV_FAULT_INJECT && CONFIG_TERM_SRV
+    /// @brief Diagnostic: terminate term-srv PD (issue #51 fault drill).
+    static void cmd_termfault(int argc, const char** argv);
+#endif
+#if CONFIG_LOG_SRV_FAULT_INJECT && CONFIG_LOG_SRV
+    /// @brief Diagnostic: terminate log-srv PD (issue #51 fault drill).
+    static void cmd_logfault(int argc, const char** argv);
+#endif
+#if CONFIG_DRIVER_PD_FAULT_INJECT &&                                          \
+    (CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                       \
+     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                          \
+     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET)
+    /// @brief Diagnostic: terminate driver PD by role (issue #48 fault drill).
+    static void cmd_driverfault(int argc, const char** argv);
+#endif
+#if CONFIG_VFS_SRV_FAULT_INJECT && CONFIG_VFS_SRV
+    /// @brief Diagnostic: terminate vfs-srv PD (issue #47 fault drill).
+    static void cmd_vfsfault(int argc, const char** argv);
+#endif
+#if CONFIG_BLOCK_SRV_FAULT_INJECT && CONFIG_BLOCK_SRV
+    /// @brief Diagnostic: terminate block-srv PD (issue #47 fault drill).
+    static void cmd_blockfault(int argc, const char** argv);
+#endif
     /// @brief Built-in: runs a program by name.
     static void cmd_run(int argc, const char** argv);
     /// @brief Built-in: shows kernel version.

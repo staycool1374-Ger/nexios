@@ -58,8 +58,7 @@ test_registry_gen = custom_target('test_registry_gen',
 test_config = custom_target('test_config',
   output : 'test-config.txt',
   command : [py3, files('../tools/meson/gen_test_config.py'),
-    get_option('test_class'), '@OUTPUT@',
-    meson.project_source_root() / 'initrd' / 'tests' / 'test-config.txt'],
+    get_option('test_class'), '@OUTPUT@'],
   build_by_default : true)
 
 # --- Kernel TU discovery (mirrors mk/rules.mk SRC_CXX_*) ---
@@ -179,13 +178,31 @@ kernel_includes = [kernel_includes, include_directories('.')]
 # source-tree entries come from the root meson.build)
 
 kernel_cpp = files(generic_srcs + arch_srcs)
-kernel_asm_s = files(generic_s + arch_s)
+# Kernel .S via an explicit CC rule (mirrors Make `%.o: %.S`
+# `$(CC) $(CCFLAGS)` and the nasm_gen precedent below): Meson routes
+# in-tree .S through the C++ rule, which breaks flag parity (the .S
+# units picked up cpp flags, missing -O2 -static; issue #433 H).
+# CCFLAGS-equivalent args make the parity test see Make-identical flags.
+# The .S inputs are self-contained (no .include), so like nasm/crt0 no
+# depfile is emitted. Generated .o outputs are invisible to the
+# source-set gate on both sides (like nasm), while the link still
+# fails loudly on a missing object.
+s_gen = generator(cc_prog,
+  output : '@BASENAME@.o',
+  arguments : cc_base_flags + cc_arch_flags + cc_includes + cc_build_flags + ['-c', '@INPUT@', '-o', '@OUTPUT@'])
+asm_s_inputs = []
+foreach s : generic_s + arch_s
+  asm_s_inputs += [s_gen.process(s)]
+endforeach
 
 # --- crt0 (in-tree userspace entry; userspace links consume it) ---
+# Installed to the SDK staging tree (issue #171 P5) alongside libc.a.
 crt0_o = custom_target('crt0',
   input : files('../src/libc/crt0.S'),
   output : 'crt0.o',
   command : [cc_prog] + cc_base_flags + cc_arch_flags + cc_includes + cc_build_flags + ['-c', '@INPUT@', '-o', '@OUTPUT@'],
+  install : true,
+  install_dir : '/opt/nexios-sdk/lib',
 )
 
 # --- objcopy flavor per arch (mirrors OBJCOPY_FMT/OBJCOPY_ARCH) ---
@@ -318,7 +335,10 @@ if arch == 'x86_64'
     '-Wl,-z,max-page-size=0x1000',
     '-Wl,-Map=' + kernel_map]
 elif arch == 'aarch64'
-  link_args = ['-nostdlib',
+  # Issue #439: -no-pie (mirror x86_64 above) — the CI aarch64-linux-gnu
+  # driver defaults to PIE and without it emits orphan .rela.dyn that
+  # collides with .data under linker_aarch64.ld (no orphan placement).
+  link_args = ['-nostdlib', '-no-pie',
     '-Wl,-T,' + meson.project_source_root() / 'linker' / 'linker_aarch64.ld',
     '-Wl,-Map=' + kernel_map,
     '-lgcc']
@@ -338,7 +358,7 @@ kernel_unpatched = executable('kernel-unpatched',
   # Generated registry header as a source: build-order edge so the header
   # is generated before any TU compiles (never fall back to a stale
   # in-tree copy). Meson does not try to compile the .h itself.
-  [test_registry_gen] + kernel_cpp + kernel_asm_s + asm_inputs,
+  [test_registry_gen] + kernel_cpp + asm_s_inputs + asm_inputs,
   include_directories : kernel_includes,
   objects : blob_objs + extra_link_inputs + dtb_obj,
   link_args : link_args,

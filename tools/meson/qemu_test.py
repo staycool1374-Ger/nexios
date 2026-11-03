@@ -77,7 +77,7 @@ def checkout_tag():
 
 
 def find_ovmf():
-    """Locate edk2-x86_64-code.fd (mirrors the Makefile/OVMF_CODE search)."""
+    """Locate OVMF firmware (mirrors the Makefile/OVMF_CODE search)."""
     candidates = [
         "/opt/homebrew/Cellar/qemu",
         "/usr/share/qemu",
@@ -86,6 +86,23 @@ def find_ovmf():
     for base in candidates:
         for path in sorted(Path(base).rglob("edk2-x86_64-code.fd")):
             return str(path)
+    # Ubuntu ovmf package layout has no edk2-*.fd names: probe the real
+    # CODE-image paths the distro package installs (mirrors the CI
+    # "Locate OVMF firmware" step; observed on ubuntu-24.04 runners:
+    # /usr/share/ovmf/OVMF.fd present, run 40526115948). Exact edk2
+    # name above stays preferred; these are same-shape CODE fallbacks.
+    # No _secboot variants: an enforced-secure-boot image would refuse
+    # the unsigned test ISO.
+    for path in (
+        "/usr/share/OVMF/OVMF_CODE.fd",
+        "/usr/share/OVMF/OVMF_CODE_4M.fd",
+        "/usr/share/ovmf/OVMF.fd",
+        "/usr/share/qemu/OVMF.fd",
+        "/usr/share/OVMF/OVMF.fd",
+    ):
+        if Path(path).is_file():
+            return path
+    return None
     return ""
 
 
@@ -127,6 +144,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                      "-serial", "file:%s" % paths["com1"],
                      "-device", "isa-debugcon,chardev=dbg",
                      "-monitor", "none",
+                     "-display", "none",
                      "-machine", "q35", "-cpu", "max",
                      "-drive", "if=pflash,format=raw,readonly=on,file=%s" % ovmf,
                      "-device", "intel-iommu,intremap=off,dma-translation=on"]
@@ -142,6 +160,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                     "-serial", "file:%s" % paths["com1"],
                     "-device", "isa-debugcon,chardev=dbg",
                     "-monitor", "none",
+                    "-display", "none",
                     "-machine", "q35,sata=off", "-cpu", "max",
                      "-drive", "if=pflash,format=raw,readonly=on,file=%s" % ovmf,
                      "-device", "ich9-ahci,id=ahci0",
@@ -159,6 +178,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                      "-serial", "file:%s" % paths["com1"],
                      "-device", "isa-debugcon,chardev=dbg",
                      "-monitor", "none",
+                     "-display", "none",
                      "-netdev", "user,id=net0",
                      "-device", "virtio-net-pci,netdev=net0,disable-legacy=on",
                      "-boot", "order=d",

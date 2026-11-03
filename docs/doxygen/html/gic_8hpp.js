@@ -1,5 +1,8 @@
 var gic_8hpp =
 [
+    [ "arch::gic_ap_init", "namespacearch.html#adabc32bf1756fd112eae8ac6b38217eb", null ],
+    [ "arch::gic_enable_sgi", "namespacearch.html#ab2d1354d590df2cc604fcbd6c3fc09cc", null ],
+    [ "arch::gic_send_sgi", "namespacearch.html#ab28ce5abdad030159a8ee8afbe48e7a9", null ],
     [ "arch::gic_v3_read_iar", "namespacearch.html#abe825a3f67343b75c57efa83cb71feec", null ],
     [ "arch::gic_v3_set_igrpen1", "namespacearch.html#a0e66b1a01d873e894c6676c2d63657c4", null ],
     [ "arch::gic_v3_set_pmr", "namespacearch.html#a5cb9e37cba4166320e1c12a7a759a083", null ],
@@ -13,6 +16,7 @@ var gic_8hpp =
     [ "arch::gicd_ipriority_off", "namespacearch.html#af5ed23cd28797ee6a7a5d9948a2ae11d", null ],
     [ "arch::gicd_itargetsr_off", "namespacearch.html#aa366ce47406f47944a11e4378f18c36d", null ],
     [ "arch::gicd_reg", "namespacearch.html#abb9df6f2809054a385414ac4aa9eff3a", null ],
+    [ "arch::gicr_frame_for_aff0", "namespacearch.html#a9f7fa7c0c625f76e7e93134ec97ccce4", null ],
     [ "arch::gicr_rd_reg", "namespacearch.html#a4da73406011eca3290f9e1baebeb720e", null ],
     [ "arch::gicr_sgi_reg", "namespacearch.html#a0be0121227150927d9c3e750b7d86455", null ],
     [ "arch::GIC_MAX_INTID", "namespacearch.html#afe97831d31010696a7be96c938f23aac", null ],
@@ -24,6 +28,7 @@ var gic_8hpp =
     [ "arch::GICC_IAR", "namespacearch.html#a482011a570ed30cf60b56b575e5f4ecf", null ],
     [ "arch::GICC_PMR", "namespacearch.html#a4116c31f44abf39e5c8ede6721a65690", null ],
     [ "arch::GICD_BASE", "namespacearch.html#a12f8e4c8b8adadb460137a2c9fd4ba14", null ],
+    [ "arch::GICD_CPENDSGIR", "namespacearch.html#a4fe78db7f200565907bacf3741325059", null ],
     [ "arch::GICD_CTLR", "namespacearch.html#ac7f969e6cdfb3ba30b1cd75aec7265ae", null ],
     [ "arch::GICD_CTLR_ENABLE", "namespacearch.html#a94e76b098df2d029e803b049a6542640", null ],
     [ "arch::GICD_CTLR_ENABLE_GRP1", "namespacearch.html#a35388bca0e140dccc290bc2deb4bf793", null ],
@@ -39,6 +44,10 @@ var gic_8hpp =
     [ "arch::GICD_NSACR", "namespacearch.html#af6d482207fc1d589711fe7f535470893", null ],
     [ "arch::GICD_PIDR2", "namespacearch.html#af5e06a8d847d25e67b5473f314bc81cf", null ],
     [ "arch::GICD_SGIR", "namespacearch.html#aebf085a47380ef9e7303c1aa568f5f2e", null ],
+    [ "arch::GICD_SGIR_FILTER_TARGET_LIST", "namespacearch.html#aeed84c10544efd908f4c0e9a2e0406b0", null ],
+    [ "arch::GICD_SGIR_INTID_MASK", "namespacearch.html#af7b89d274c8449439c717ed96eab0adc", null ],
+    [ "arch::GICD_SGIR_TARGET_SHIFT", "namespacearch.html#a66461f9fec17e21a4cb0071e42c91803", null ],
+    [ "arch::GICD_SPENDSGIR", "namespacearch.html#a2842a1705109ee01fe45a09b13a69217", null ],
     [ "arch::GICD_TYPER", "namespacearch.html#aadb69e090b70cb8ed04861bb776ab546", null ],
     [ "arch::GICR_ICENABLER0", "namespacearch.html#a0a572c70d81a18206016f3c795172fd5", null ],
     [ "arch::GICR_IGROUPR0", "namespacearch.html#ad3c0b10a2051dab9d984ab330e0ee9be", null ],
@@ -46,6 +55,8 @@ var gic_8hpp =
     [ "arch::GICR_ISENABLER0", "namespacearch.html#a78d90969cf2e5838fd65f902472d8bed", null ],
     [ "arch::GICR_RD_BASE", "namespacearch.html#a024087ec76a8f9982b009fa6696f23dd", null ],
     [ "arch::GICR_SGI_BASE", "namespacearch.html#aea75d86f398e56dec26a630d41bc1b91", null ],
+    [ "arch::GICR_STRIDE", "namespacearch.html#ae011dbabb72cddab5e4a4ee6cd9f9431", null ],
+    [ "arch::GICR_TYPER", "namespacearch.html#a283d3d1406fd60cc1b2bcb9340d9372d", null ],
     [ "arch::GICR_WAKER", "namespacearch.html#a7250075e1293fefcadae16792b540e49", null ],
     [ "arch::GICR_WAKER_CHILDREN_ONLINE", "namespacearch.html#aeb8904daa05f0ab2d29338a6cc1a685c", null ],
     [ "arch::GICR_WAKER_MAX_POLLS", "namespacearch.html#ad410a2c6d620490a71f7ab1cc2cecc1d", null ],
@@ -56,5 +67,9 @@ var gic_8hpp =
     [ "arch::INTID_RTC", "namespacearch.html#aa58e5a794a7b439c68022656d6277820", null ],
     [ "arch::INTID_UART0", "namespacearch.html#a9b746daa507660e7743691e667ca07db", null ],
     [ "arch::INTID_VIRTIO_BASE", "namespacearch.html#aeeafcfd241f3a99696922a39209fe588", null ],
-    [ "arch::INTID_VIRTIO_COUNT", "namespacearch.html#a7b55eeed8e47404ab1b74ea1ce05ca38", null ]
+    [ "arch::INTID_VIRTIO_COUNT", "namespacearch.html#a7b55eeed8e47404ab1b74ea1ce05ca38", null ],
+    [ "arch::SMP_LOOPBACK_SGI", "namespacearch.html#aae734bfea1182e073c01c4454d929662", null ],
+    [ "arch::SMP_SCHED_SGI", "namespacearch.html#ab71c836551259c46a7c17ba356a4446a", null ],
+    [ "arch::SMP_SGI_ENABLE_MASK", "namespacearch.html#ac3599fe93cd45f7e49270d1168284bbc", null ],
+    [ "arch::SMP_SHOOTDOWN_SGI", "namespacearch.html#a4387f0bcdf2b6bb2f8e78c50acaa74c0", null ]
 ];

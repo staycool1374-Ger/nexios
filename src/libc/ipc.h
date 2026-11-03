@@ -28,6 +28,9 @@ extern "C" {
 
 int ipc_send(unsigned long dest, unsigned long type, const void* data, unsigned long size, unsigned long flags);
 int ipc_recv(void* buf, unsigned long max_size);
+/// @brief Receive with a bounded wheel timeout (issue #241).
+/// @param timeout_ticks 0 = block forever (identical to ipc_recv).
+int ipc_recv_timeout(void* buf, unsigned long max_size, unsigned long timeout_ticks);
 /// @brief Send a message and block until the reply arrives.
 ///        Contract (issue #317 option b): the reply PAYLOAD is written to
 ///        @p reply_buf (a real destination), NOT over @p data.  @p reply_buf

@@ -1,0 +1,34 @@
+#!/usr/bin/expect -f
+# timer-srv fault demo (issue #241, strangler step c): boot ON+fault-inject
+# ISO, run parity probe, `timerfault`, wait for restart + rebind, run again.
+# Args: <iso> <serial_log>
+# Serial tee is the §9.3 artifact: copy the log path to the issue.
+set iso [lindex $argv 0]
+set serial_log [lindex $argv 1]
+set timeout 180
+spawn qemu-system-x86_64 -cdrom $iso -m 256M -serial file:$serial_log -display none -boot order=d -cpu max
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT waiting for prompt"; exit 1 }
+}
+send "loadelf /bin/timer-srv-parity.c.elf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after loadelf"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after first run"; exit 1 }
+}
+send "timerfault\r"
+expect {
+    -re "restarted" {}
+    timeout { puts "EXPECT-TIMEOUT waiting for restart"; exit 1 }
+}
+send "runelf\r"
+expect {
+    -re "\\\\\$ " {}
+    timeout { puts "EXPECT-TIMEOUT after second run"; exit 1 }
+}
+puts "FAULT-DEMO-OK see $serial_log"

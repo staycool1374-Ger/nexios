@@ -409,10 +409,10 @@ uint64_t Scheduler::queue_depth(uint64_t cpu) noexcept {
 bool Scheduler::set_sched_policy(TaskControlBlock &task,
                                  SchedPolicy policy) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "set_sched_policy"));
     arch::IrqGuard irq_guard{};
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     if (policy == SchedPolicy::EDF) {
         // Fail-closed: EDF without a finite deadline is meaningless.
         if (task.period_ticks == 0 ||
@@ -428,10 +428,10 @@ bool Scheduler::set_sched_policy(TaskControlBlock &task,
 
 void Scheduler::set_edf_exempt(TaskControlBlock &task, bool exempt) noexcept {
 
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
     ENSURE(validate_task_ptr(&task, "set_edf_exempt"));
     arch::IrqGuard irq_guard{};
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    SchedulerLockGuard guard(scheduler_lock_);
     task.edf_exempt = exempt;
     // Same migration as a policy change: an exempted task must leave the
     // EDF list for the bitmap (and vice versa), or it is stranded.
@@ -458,8 +458,8 @@ void Scheduler::assign_deadline_priority(TaskControlBlock &task) noexcept {
     if (prio == task.priority)
         return;
     arch::IrqGuard irq_guard{};
-    ENSURE(scheduler_lock_.holder() == nullptr); // issue #369 T2b: no reentrant take (non-recursive)
-    SpinLockGuard<sync::SpinLock> guard(scheduler_lock_);
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
+    SchedulerLockGuard guard(scheduler_lock_);
     task.priority = prio;
     task.base_priority = prio;
     // Re-bucket (bitmap) or re-sort (EDF tie-break) so the new value

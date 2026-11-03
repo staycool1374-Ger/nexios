@@ -191,6 +191,7 @@ var test__registry_8cpp =
     [ "register_timer_tests", "test__registry_8cpp.html#a3f4c2592c00b4acd661a99641afcf35b", null ],
     [ "register_timer_wheel_tests", "test__registry_8cpp.html#ae8393f88129129ca3f3f00e0c90f1108", null ],
     [ "register_timing_tests", "test__registry_8cpp.html#ae0544e73b7c51711f6ab21c285e927f8", null ],
+    [ "register_tlb_shootdown_tests", "test__registry_8cpp.html#ab13548e5e90ca21e605b21fbc918d6b9", null ],
     [ "register_tls_tests", "test__registry_8cpp.html#a39d52e21b47bf80c5cb1fc4168d1a330", null ],
     [ "register_tmpfs_invalid_mount_tests", "test__registry_8cpp.html#a86ab2eaf80161ed7af2b13d1a85e7888", null ],
     [ "register_tmpfs_mount_unmount_failure_tests", "test__registry_8cpp.html#a915cd65fb9053891c403ebf3bcb8d1de", null ],

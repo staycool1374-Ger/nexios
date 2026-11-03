@@ -35,6 +35,21 @@
 
 namespace arch {
 
+/// @brief Re-assert the own-CPU TPR to ACCEPT_ALL (issue #351, slice-2).
+/// x86_64: restores the shadow + hardware class (quiesce windows must not
+/// resume masked — INV-TPR1).  Other arches: no TPR exists, no-op.
+/// Byte-identical x86 behavior; lets shared scheduler TUs call this
+/// without CONFIG_ARCH guards (the slice-4 IPI interface extends the
+/// same pattern to reschedule/shootdown delivery).
+inline void tpr_reassert_accept_all() noexcept {
+#if defined(CONFIG_ARCH_X86_64)
+    per_cpu_current()->tpr_shadow = APIC::TPR_CLASS_ACCEPT_ALL;
+    APIC::set_tpr_class(APIC::TPR_CLASS_ACCEPT_ALL);
+#else
+    // No TPR off-x86: nothing to re-assert (INV-TPR1 is x86-only).
+#endif
+}
+
 /// @brief RAII guard that raises the calling CPU's TPR to a priority
 ///        class on construction and restores the saved class on
 ///        destruction.  Never replaces IrqGuard: callers keep their

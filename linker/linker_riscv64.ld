@@ -74,6 +74,14 @@ SECTIONS
         . = ALIGN(8);
         _expected_code_crc = .;
         QUAD(0x0000000000000000)
+        /* Issue #351 slice-3: AP entry PA slot. QUAD() is resolved by the
+         * linker to the symbol's absolute address (VMA==LMA==PA for the
+         * low .boot region). C++ cannot take &rv64_ap_entry directly:
+         * high-VMA code is out of PC-relative range (R_RISCV_PCREL_HI20
+         * truncation) and %hi/%lo rejects >=0x80000000 (signed-32 check),
+         * so the address travels as DATA here, read PC-relatively. */
+        rv64_ap_entry_pa_slot = .;
+        QUAD(rv64_ap_entry)
         KEEP(*(.marker.rodata.end))
         _rodata_end = .;
     } :rodata

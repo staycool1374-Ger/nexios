@@ -530,6 +530,19 @@ TaskControlBlock *load(const ELF64Header *hdr, const uint8_t *file_data,
 ///        program-header table (for canary installation).
 /// @param file_size Total file size in bytes.
 /// @return New TaskControlBlock, or nullptr on failure (partial state freed).
+///
+/// @brief Binding bootstrapping rule (issue #171 P4): no loader magic.
+///        A freshly finalized task owns NO capabilities: cspace_ stays
+///        null (lazy ensure_cspace on the first cap syscall) and the
+///        loader passes only argc/argv/envp on the user stack plus the
+///        entry point in the trap frame — no versioned launch struct
+///        (reserved-absent), no pre-seeded handles. Whatever a driver
+///        needs, its creator must grant/copy/mint into its CSpace before
+///        first dispatch (caller-relative handles). Exec preserves the
+///        rule by inheritance: exec_into_current keeps cspace_ untouched
+///        (mappings/FDs/TLS reset, caps kept). Any behavior change here
+///        requires a plan amendment and re-audit first (P4 scope: comment
+///        + seeding test only).
 TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
                                        uint64_t ustack_phys,
                                        const uint8_t *phdr_image,
@@ -596,10 +609,10 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
         return nullptr;
     }
     tcb->stack_phys_ = kstack_phys;
-    uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_virt);
-    tcb->kernel_stack_top = kstack_virt + TaskControlBlock::STACK_SIZE;
+    // #434 P2: route through the kslot window (guard page below the
+    // stack) via the shared funnel — HHDM fallback only on exhaustion.
+    TaskControlBlock::provision_kstack(tcb, kstack_phys,
+                                       TaskControlBlock::STACK_SIZE);
 
     tcb->install_page_table(pml4);
     tcb->is_user_ = true;
@@ -754,11 +767,23 @@ static void install_segment_canaries(TaskControlBlock *tcb,
     }
 
     if (text_base) {
-        tcb->canary_before[text] = text_base;
-        canary_write_at(text_base,
-                        TaskControlBlock::CANARY_MAGIC ^ (text + 1),
-                        tcb->get_page_table());
-        tcb->canary_installed |= (1u << text);
+        // Issue #429: never clobber the entry bytes. The canary slot is
+        // the first 8 bytes of the first X segment; when the ELF entry
+        // point lives there (the normal case: _start at the segment base),
+        // writing the canary destroys the entry and the task faults on
+        // dispatch (observed: UDF at entry, no sys_exit, unreaped leak).
+        // Skip the install in that case: the verify loop skips zero
+        // addresses, so an uninstalled canary is fail-closed (none
+        // claimed, none checked). canary_before[text] stays 0.
+        if (hdr->entry >= text_base && hdr->entry < text_base + 8) {
+            tcb->canary_before[text] = 0;
+        } else {
+            tcb->canary_before[text] = text_base;
+            canary_write_at(text_base,
+                            TaskControlBlock::CANARY_MAGIC ^ (text + 1),
+                            tcb->get_page_table());
+            tcb->canary_installed |= (1u << text);
+        }
     }
     if (text_after) {
         tcb->canary_after[text] = text_after;

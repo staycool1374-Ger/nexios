@@ -195,11 +195,46 @@ class HeadersChecker(Checker):
 
     _include = re.compile(r'#include\s+[<"]([^>"]+)[>"]')
 
+    @staticmethod
+    def _first_significant_line(text: str) -> tuple[str, int]:
+        """First non-blank, non-comment line + its 1-based number (#405).
+
+        Skips blank lines, `//` line comments, and `/* ... */` blocks
+        (multi-line aware; content trailing a same-line close counts).
+        Returns ("", 1) when no significant line exists."""
+        in_block = False
+        for idx, line in enumerate(text.splitlines(), start=1):
+            stripped = line.strip()
+            if in_block:
+                close = stripped.find("*/")
+                if close == -1:
+                    continue
+                stripped = stripped[close + 2:].strip()
+                in_block = False
+                if not stripped:
+                    continue
+            if not stripped:
+                continue
+            if stripped.startswith("//"):
+                continue
+            if stripped.startswith("/*"):
+                close = stripped.find("*/", 2)
+                if close == -1:
+                    in_block = True
+                    continue
+                rest = stripped[close + 2:].strip()
+                if not rest:
+                    continue
+                stripped = rest
+            return stripped, idx
+        return "", 1
+
     def check_file(self, rel_path: str, text: str) -> None:
         if not rel_path.endswith(".hpp") and not rel_path.endswith(".h"):
             return
-        if not text.startswith("#pragma once") and "//" not in text[:20]:
-            self.add(rel_path, 1, "Missing '#pragma once'")
+        first_text, first_line = self._first_significant_line(text)
+        if not first_text.startswith("#pragma once"):
+            self.add(rel_path, first_line, "Missing '#pragma once'")
 
         last_includes: list[str] = []
         for m in self._include.finditer(text):
@@ -848,6 +883,12 @@ class DescriptiveNamesChecker(Checker):
         cfg_dn = self.cfg.get("descriptive_names", {})
         blocklist = set(cfg_dn.get("blocklist", ["t", "v", "val", "tmp", "temp", "ptr", "p"]))
         allow_loop = set(cfg_dn.get("allow_loop_indices", ["i", "j", "k", "idx"]))
+        # Issue #406: arch/hardware mnemonics are exempt by design — they
+        # mirror datasheet/register names and units, so renaming them would
+        # hurt readability (PA = physical address, VA = virtual address,
+        # SP = stack pointer, IP = instruction pointer / IP address,
+        # IF = interrupt flag, Hz/ns = units; both cases: asm uses lower).
+        # Full list lives in style_config.json allow_common_abbrevs.
         allow_common = set(cfg_dn.get("allow_common_abbrevs", ["id"]))
         min_len = cfg_dn.get("min_length", 3)
         max_loop_lines = cfg_dn.get("max_loop_body_lines", 5)
@@ -862,20 +903,17 @@ class DescriptiveNamesChecker(Checker):
             if name in self._keywords:
                 continue
 
-            # Check for blocklisted names
+            # Issue #406: one site emits at most one warning — strongest
+            # reason wins (blocklisted > single-character > too short).
             if name in blocklist:
                 self.add(rel_path, decl_line,
                          f"Blocklisted variable name '{name}' — use a descriptive name")
-
-            # Check minimum length (but allow 'i', 'j', 'k' in tight loops, and common abbrevs)
-            if len(name) < min_len and name not in allow_loop and name not in allow_common:
-                self.add(rel_path, decl_line,
-                         f"Variable name '{name}' is too short (min {min_len} chars)")
-
-            # Check single-char declarations that are NOT loop indices or common abbrevs
-            if len(name) == 1 and name not in allow_loop and name not in allow_common:
+            elif len(name) == 1 and name not in allow_loop and name not in allow_common:
                 self.add(rel_path, decl_line,
                          f"Single-character variable '{name}' — use a descriptive name")
+            elif len(name) < min_len and name not in allow_loop and name not in allow_common:
+                self.add(rel_path, decl_line,
+                         f"Variable name '{name}' is too short (min {min_len} chars)")
 
         for m in self._fn_param.finditer(text):
             name = m.group(2)
@@ -883,7 +921,7 @@ class DescriptiveNamesChecker(Checker):
             if name in blocklist:
                 self.add(rel_path, param_line,
                          f"Blocklisted parameter name '{name}' — use a descriptive name")
-            if len(name) < min_len and name not in allow_loop and name not in allow_common:
+            elif len(name) < min_len and name not in allow_loop and name not in allow_common:
                 self.add(rel_path, param_line,
                          f"Parameter name '{name}' is too short (min {min_len} chars)")
 

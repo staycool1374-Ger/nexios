@@ -9,6 +9,10 @@ int ipc_recv(void* buf, size_t max_size) {
     return (int)__syscall5(2, 0, (long)buf, (long)max_size, 0);
 }
 
+int ipc_recv_timeout(void* buf, size_t max_size, unsigned long timeout_ticks) {
+    return (int)__syscall5(2, 0, (long)buf, (long)max_size, (long)timeout_ticks);
+}
+
 int ipc_send_sync(unsigned long dest, unsigned long type, const void* data, size_t size, void* reply_buf) {
     // Issue #317 option (b): the reply buffer address is threaded through the
     // 5th argument register (reply is written THERE, not over the request).
