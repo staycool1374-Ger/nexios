@@ -2512,6 +2512,47 @@ def starvation_gaps(nodes):
     return sorted(n.get("issue") for n in (nodes or []) if n.get("starved"))
 
 
+STARVE_TICKS = 2  # consecutive starved ticks before a re-wake order
+
+
+def starvation_action(count, lane_unacked, oid_live, stored, cap=RING_LIMIT):
+    """none | observe | rewake | await | escalate for one starved lane. Pure.
+
+    First sighting only observes (today's NEED line, unchanged text). The
+    second consecutive tick files a re-wake order. While that oid stays
+    live the lane is awaited (status line, no refiling); once it resolves
+    without clearing the gap a fresh oid files, until count reaches cap —
+    then one escalated NEED names the operator and the lane goes quiet
+    (node["starved"] still holds the heartbeat). An already-escalated or
+    otherwise-driven (unacked) lane gets nothing. Deviation note: count
+    persists across oid resolution (it keeps incrementing past cap; the
+    escalate decision plus the once-flag are what cap bounds), so an
+    ACK-without-action cycle escalates instead of paging forever. The
+    none path preserves the prior store verbatim (no increment), so a
+    driven-then-freed lane resumes its starvation era instead of jumping
+    straight to escalate. Live-flow invariant: a live ledger oid implies
+    an outstanding order (prune and outstanding share the
+    posts-newer-than-coord condition), so `await` fires only on
+    ledger/hand-seeded edges — a tested fail-safe, not a hot path.
+    """
+    stored = stored or {}
+    if lane_unacked:
+        return "none"
+    if count <= 0:
+        return "none"
+    if stored.get("escalated"):
+        return "none"
+    if count < STARVE_TICKS:
+        return "observe"
+    if oid_live:
+        if count >= cap:
+            return "escalate"
+        return "await"
+    if count >= cap:
+        return "escalate"
+    return "rewake"
+
+
 def starvation_sweep(boxes, st, probes, has_unacked, halt_now):
     """Sorted starved roles for both lanes. Pure apart from inputs.
 
@@ -3558,16 +3599,84 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     if halt_now:
         actions.append("HALT #%d: retry budget exhausted (%d/%d) -> MANUAL_INTERVENTION"
                        % (issue, retries, budget))
-    # Item C (#461): starvation invariant on final same-tick state. A lane
-    # still waiting on input with no order behind it gets a log-only NEED
-    # (the gate that should have fired owns the actual order — no filing,
-    # no ring, no double-drive). Halting rooms never starve; node["starved"]
-    # keeps the cycle from counting this as quiet.
+    # Item C (#461) + item 4 (#462): starvation invariant with teeth, on
+    # final same-tick state. First sighting observes (log-only NEED, as
+    # before); the second consecutive tick files a re-wake order (NOTE +
+    # room-scoped ring); a live re-wake oid is awaited, a resolved one
+    # refiles, and count >= RING_LIMIT escalates once to the operator.
+    # Halting rooms never starve; node["starved"] keeps the cycle from
+    # counting this as quiet (cycle_progress unchanged).
     _starved_roles = starvation_sweep(boxes, st, probes, has_unacked, halt_now)
-    for _role in _starved_roles:
-        actions.append("NEED starvation #%d %s: %s, NEXT '%s', no order"
-                       % (issue, _role, probes[_role],
-                          (boxes[_role]["next"] or "")[:80]))
+    _sv_new = {}
+    _sv_prev_all = st.get("starve") or {}
+    for _role in ("dev", "qe"):
+        _sv_prev = _sv_prev_all.get(_role) or {}
+        if _role not in _starved_roles:
+            continue
+        _sv_count = int(_sv_prev.get("count") or 0) + 1
+        _sv_oid = _sv_prev.get("oid")
+        _sv_live = (_sv_oid in rings
+                    and rings.get(_sv_oid) not in (-1, RING_ESCALATED))
+        _sv_act = starvation_action(_sv_count, _role in has_unacked,
+                                    _sv_live, _sv_prev)
+        if _sv_act == "observe":
+            actions.append("NEED starvation #%d %s: %s, NEXT '%s', no order"
+                           % (issue, _role, probes[_role],
+                              (boxes[_role]["next"] or "")[:80]))
+            _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+                              "escalated": bool(_sv_prev.get("escalated"))}
+        elif _sv_act == "rewake":
+            _sw_note, _sw_oid = coord_note(_role, "STARVATION RE-WAKE #%d %s: NEXT '%s' waits on input with no order; post STATE/NEXT or act; ACK it with post_update ref=<id> before starting" % (issue, _role, (boxes[_role]["next"] or "")[:80]), ack_by=True)
+            if _sw_oid in rings:
+                actions.append("order deferred %s starvation re-wake (oid collision)" % _role)
+                _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+                                  "escalated": False}
+            elif ctx.dry:
+                actions.append("WOULD post %s starvation re-wake (oid %s)" % (_role, _sw_oid))
+                rings[_sw_oid] = 0
+                has_unacked.add(_role)
+                file_order_deadline(ad_store, _sw_oid)
+                if _role == "dev":
+                    cycle["dev_order"] = issue
+                _sv_new[_role] = {"count": _sv_count, "oid": _sw_oid,
+                                  "escalated": False}
+            elif append_box_note(room_dir, _role, _sw_note):
+                rings[_sw_oid] = 0
+                has_unacked.add(_role)
+                file_order_deadline(ad_store, _sw_oid)
+                actions.append("order filed %s starvation re-wake (oid %s)" % (_role, _sw_oid))
+                _sv_new[_role] = {"count": _sv_count, "oid": _sw_oid,
+                                  "escalated": False}
+                if (_role not in deaf and probes[_role].startswith("IDLE")
+                        and not session_rung(actions, SESS[_role], cycle["rung"])):
+                    _sw_res = ring(ctx, SESS[_role], _role,
+                                   "starvation re-wake -- reply with STATE/NEXT",
+                                   oid=_sw_oid, issue=issue)
+                    actions.append(_sw_res)
+                    if _sw_res.startswith(("rang ", "WOULD ring ")):
+                        rings[_sw_oid] = 1
+            else:
+                actions.append("NOTE-FAILED %s starvation re-wake #%d" % (_role, issue))
+                _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+                                  "escalated": False}
+            events.append("starvation-rewake-%s" % _role)
+        elif _sv_act == "await":
+            actions.append("starvation re-wake %s outstanding (oid %s); awaiting ACK"
+                           % (_role, _sv_oid))
+            _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+                              "escalated": False}
+        elif _sv_act == "escalate":
+            actions.append("NEED starvation #%d %s ESCALATED (re-wake %s, no order progress in %d ticks); operator intervention, no new order"
+                           % (issue, _role, _sv_oid, _sv_count))
+            events.append("starvation-escalated-%s" % _role)
+            _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+                              "escalated": True}
+        else:
+            # none (defensive: unacked or post-escalate quiet): preserve
+            # the prior store verbatim, no increment — a driven-then-freed
+            # lane resumes its era instead of jumping to escalate.
+            if _sv_prev:
+                _sv_new[_role] = dict(_sv_prev)
     node["starved"] = _starved_roles
     g_acts, gh_posted = gh_transitions(ctx, issue, st, node, actions, halt_now, fresh)
     actions.extend(g_acts)
@@ -3615,6 +3724,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["dev_stale"] = ds_store
         else:
             s.pop("dev_stale", None)
+        if isinstance(_sv_new, dict) and _sv_new:
+            s["starve"] = _sv_new
+        else:
+            s.pop("starve", None)
         if rn_store:
             s["ready_need"] = rn_store
         else:
@@ -5317,6 +5430,31 @@ def mode_self_test():
     check("rotate-preserves-set",
           sorted(i for i, _, _ in rotate_rooms(_rr3, 1)) == [54, 240, 390]
           and rotate_rooms(_rr3, 1)[0][1] == "/r390", True)
+    # Item 4 (#462): starvation teeth. First tick observes, second
+    # re-wakes, live oid awaits, resolved oid refiles, cap escalates
+    # once. Bite: ignoring count flips observe/rewake rows to FAIL.
+    check("starve-observe-first-tick",
+          starvation_action(1, False, False, {}, 3) == "observe", True)
+    check("starve-rewake-second-tick",
+          starvation_action(2, False, False, {"count": 1, "oid": None}, 3) == "rewake", True)
+    check("starve-await-after-rewake",
+          starvation_action(3, False, True, {"count": 2, "oid": "dev:ts"}, 5) == "await", True)
+    check("starve-rewake-after-resolve",
+          starvation_action(3, False, False, {"count": 2, "oid": "dev:ts"}, 5) == "rewake", True)
+    check("starve-escalate-at-cap",
+          starvation_action(3, False, False, {"count": 2, "oid": "dev:ts"}, 3) == "escalate", True)
+    check("starve-escalate-live-at-cap",
+          starvation_action(3, False, True, {"count": 2, "oid": "dev:ts"}, 3) == "escalate", True)
+    check("starve-reset-when-clear",
+          starvation_action(0, False, False, {"count": 2}, 3) == "none", True)
+    check("starve-skip-when-unacked",
+          starvation_action(2, True, False, {"count": 1}, 3) == "none", True)
+    check("starve-quiet-after-escalate",
+          starvation_action(9, False, False, {"count": 8, "escalated": True}, 3) == "none", True)
+    check("starve-ticks-wired-observe",
+          starvation_action(STARVE_TICKS - 1, False, False, {}, 3) == "observe", True)
+    check("starve-ticks-wired-rewake",
+          starvation_action(STARVE_TICKS, False, False, {"count": 1}, 3) == "rewake", True)
     _open = {"halt": False, "state": "IN_PROGRESS"}
     _rooms = [(51, "/r51", dict(_open)), (52, "/r52", dict(_open))]
     check("pick-backlog-exclude",
