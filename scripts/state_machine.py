@@ -485,7 +485,14 @@ def load_boxes(room_dir):
         all_lines = read_lines(p)
         posts = worker_posts(all_lines)
         tail12 = all_lines[-12:]
-        st, nx, cx = last_state_next(tail12)
+        # Status trailers belong to the latest post, whose long findings
+        # body can push them out of the tail window (room 390, 12:44:39Z:
+        # DONE post parsed as next=None, hiding "waiting auditor" and
+        # starving the audit demand). Scan from the last POST line instead.
+        _post_idx = max((i for i, l in enumerate(all_lines)
+                         if POST_RE.match(l)), default=None)
+        st, nx, cx = last_state_next(
+            all_lines[_post_idx:] if _post_idx is not None else tail12)
         # Full-box scan: a filed order must not fall out of the tail window
         # before the next tick's unacked loop sees it (G1 follow-through).
         coord = [l for l in all_lines if " FROM=coord NOTE" in l]
@@ -6183,7 +6190,10 @@ def mode_self_test():
     check("order-ring-action",
           [order_ring_action(n, True) for n in (0, 2, 3, 4)] == ["ring", "ring", "escalate", "awaiting"]
           and [order_ring_action(n, False) for n in (0, 2, 3, 4)] == ["ring", "ring", "recreate", "awaiting"]
-          and escalate_ledger(True) == -1 and escalate_ledger(False) == RING_ESCALATED,
+          and escalate_ledger(True) == -1 and escalate_ledger(False) == RING_ESCALATED
+          and last_state_next(["2026-11-03T12:44:39Z FROM=dev NOTE :: DONE x",
+                               "STATE: waiting :: delivered",
+                               "NEXT: waiting auditor plan-review"] + ["body %d" % i for i in range(30)]) == ("waiting :: delivered", "waiting auditor plan-review", None),
           True)
     check("reset-resume-rings",
           reset_resume_rings({"next:qe:a": 1, "dev:x": 2, "next:dev:b": 3}) == 2, True)
