@@ -866,6 +866,18 @@ def auditor_brief_text(issue, tip, scope, room_dir=None):
                room_dir or "the room"))
 
 
+def verdict_identity(kind, tip, demand_key):
+    """Hand-back identity of an audit verdict. Pure (#465 follow-up).
+    A duplicate post (same kind, same tip, same demand era) carries no new
+    information versus the handed verdict, even with a newer timestamp."""
+    return (kind, (tip or "")[:7], demand_key)
+
+
+def verdict_already_handed(asess, ident):
+    """True when this exact verdict was already handed to the requester."""
+    return bool(ident) and (asess or {}).get("verdict_handed") == list(ident)
+
+
 def audit_demand_key(requester, text):
     """Stable id for one audit request (mirrors resume_now hashing). Pure."""
     return "%s:%s" % (requester, hashlib.md5(text.encode()).hexdigest()[:8])
@@ -1304,6 +1316,13 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     aprobe = fast_probe(ctx, ctx.audit_sess) if live else "ABSENT"
     rep = latest_audit_report(ctx, issue)
     seen_verdict = False
+    _vkind = "APPROVED" if "APPROVED" in (auditor_decision(
+        boxes["auditor"]["all"], boxes["auditor"].get("full")) or "") else "NEED"
+    _vident = verdict_identity(_vkind, tip or cur_tip, demand_key)
+    if verdict_already_handed(asess, _vident):
+        acted.append("duplicate audit verdict suppressed (already handed %s @%s)"
+                     % (_vkind, (tip or cur_tip or "?")[:7]))
+        seen_verdict = True
     for post in fresh.get("auditor", []):
         if "DECISION" not in post:
             continue
@@ -1321,6 +1340,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
         else:
             if append_box_note(room_dir, target, note):
                 acted.append("audit verdict handed to %s" % target)
+                asess["verdict_handed"] = list(_vident)
                 asess["handled_demand"] = asess.get("demand_key")
                 asess["reruns"] = 0
                 asess.pop("restart_capped", None)
@@ -1345,6 +1365,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
             else:
                 if append_box_note(room_dir, target, note):
                     acted.append("audit verdict handed to %s (unhandled scan)" % target)
+                    asess["verdict_handed"] = list(_vident)
                     asess["handled_demand"] = asess.get("demand_key")
                     asess["reruns"] = 0
                     asess.pop("restart_capped", None)
@@ -6226,6 +6247,10 @@ def mode_self_test():
           [order_ring_action(n, True) for n in (0, 2, 3, 4)] == ["ring", "ring", "escalate", "awaiting"]
           and [order_ring_action(n, False) for n in (0, 2, 3, 4)] == ["ring", "ring", "recreate", "awaiting"]
           and escalate_ledger(True) == -1 and escalate_ledger(False) == RING_ESCALATED
+          and verdict_identity("APPROVED", "0971e4402", "dev:aa") == ("APPROVED", "0971e44", "dev:aa")
+          and verdict_already_handed({"verdict_handed": ["APPROVED", "0971e44", "dev:aa"]}, ("APPROVED", "0971e44", "dev:aa")) is True
+          and verdict_already_handed({"verdict_handed": ["NEED", "0971e44", "dev:aa"]}, ("APPROVED", "0971e44", "dev:aa")) is False
+          and verdict_already_handed({}, ("APPROVED", "0971e44", "dev:aa")) is False
           and newest_audit_done_post({"dev": {"full": ["2026-11-03T12:44:39Z FROM=dev NOTE :: DONE x, awaiting audit", "NEXT: waiting auditor plan-review", "body"]}, "qe": {"full": []}}) == "2026-11-03T12:44:39"
           and newest_audit_done_post({"dev": {"full": ["2026-11-03T12:44:52Z FROM=dev NOTE :: DONE recon delivered", "NEXT: idle"]}, "qe": {"full": []}}) is None
           and last_state_next(["2026-11-03T12:44:39Z FROM=dev NOTE :: DONE x",
