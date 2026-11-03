@@ -106,6 +106,8 @@ AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
 AUDIT_RETASK_S = 300  # re-ring a lost/idle auditor order after ~2 ticks
 AUDIT_TEARDOWN_TICKS = 2  # idle ticks after verdict handoff before teardown
 AUDIT_REASK_MAX = RING_LIMIT  # same 3-ring doctrine for audit orders
+AUDIT_RESTART_S = 540  # 3 tick intervals with no verdict progress -> kill + relaunch (#464)
+AUDIT_RERUN_MAX = RING_LIMIT  # relaunches before escalating to the operator (#464)
 
 
 def utcnow():
@@ -1004,7 +1006,8 @@ def audit_ring_action(n):
 
 
 def audit_retask_gate(demand, fresh_need, probe, live, brief_present, brief_tip, cur_tip,
-                      verdict_on_file, demand_key, handled_demand, oid, rings, claimed_by, age_s):
+                      verdict_on_file, demand_key, handled_demand, oid, rings, claimed_by, age_s,
+                      stored_tip=None):
     """One-word gate for the audit lane. Pure. Vocabulary:
     skip-no-demand | launch | defer-working | defer-busy | skip-done |
     brief-then-ring | ring | escalate | awaiting | ring-again | hold-stale."""
@@ -1017,7 +1020,12 @@ def audit_retask_gate(demand, fresh_need, probe, live, brief_present, brief_tip,
     if claimed_by not in (None,):
         return "defer-busy"
     if verdict_on_file and not fresh_need and demand_key == handled_demand:
-        return "skip-done"
+        # Item 6 (#464): same text, new tip is new work — an old verdict
+        # must not skip a fresh checkout.
+        if stored_tip and cur_tip and stored_tip != cur_tip:
+            pass
+        else:
+            return "skip-done"
     if not brief_present or (cur_tip and brief_tip and brief_tip != cur_tip):
         return "brief-then-ring"
     n = (rings or {}).get(oid, 0) if oid else 0
@@ -1102,23 +1110,98 @@ def audit_sla_next(asess, demand_key, action, now_ts):
     return sla
 
 
-def audit_teardown_gate(live, probe, verdict_on_file, handled_past_verdict, demand, fresh_need,
-                        other_demand, dup_audit, idle_ticks, n_ticks, teardown_enabled, dry):
+def _asess_keep(asess, **over):
+    """audit_session copy with updates, never dropping keys. Pure.
+
+    The session record accumulates additive keys (launched_at, reruns,
+    restart_capped, sla, demand_key, tip); every lifecycle return path
+    must carry them forward — a partial-dict rebuild silently voids
+    the restart budget or the SLA era."""
+    kept = dict(asess or {})
+    kept.update(over)
+    return kept
+
+
+def report_mtime_ts(path):
+    """Report file mtime as ts19Z, or None. I/O (stat only)."""
+    try:
+        return datetime.datetime.fromtimestamp(
+            os.path.getmtime(path),
+            tz=datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def audit_demand_answered(stored, demand_key, tip, verdict_ts, handled_demand):
+    """True when the current demand+tip already has its verdict. Pure.
+
+    stored: the audit_pending dict (since/tip/demand_key); demand_key:
+    current demand's key (None = no demand); tip: current checkout tip;
+    verdict_ts: newest DECISION ts19; handled_demand: the key recorded
+    at hand-back. An answered pair never recreates audit_pending —
+    this suppression kills the answered-ping re-ring loop (#464). A new
+    tip is new work even under a repeated text (same key)."""
+    if not demand_key or not verdict_ts or not handled_demand:
+        return False
+    if demand_key != handled_demand:
+        return False
+    stored = stored or {}
+    if stored.get("demand_key") not in (None, demand_key):
+        return False
+    stored_tip = stored.get("tip")
+    if stored_tip and tip and stored_tip != tip:
+        return False
+    since = (stored.get("since") or "")[:19]
+    return (not since) or verdict_ts >= since
+
+
+def audit_restart_gate(live, launched_at, last_progress_ts, now_ts,
+                       restart_s=AUDIT_RESTART_S, reruns=0,
+                       cap=AUDIT_RERUN_MAX, dry=False):
+    """none | grace | restart | would-restart | escalate. Pure.
+
+    grace: live but no engine-set launched_at (legacy session) — the
+    caller stamps now and never kills on first sight. none: progress
+    (verdict, worker post, or report) since launch, or age below
+    restart_s. restart: older than restart_s with zero progress since
+    launch. escalate: reruns at cap — operator intervention, no
+    relaunch."""
+    if not live:
+        return "none"
+    if not launched_at:
+        return "grace"
+    if reruns is None:
+        reruns = 0
+    age = _ts_age_s(launched_at, now_ts)
+    if age is None or age < restart_s:
+        return "none"
+    if last_progress_ts and last_progress_ts >= launched_at[:19]:
+        return "none"
+    if reruns >= cap:
+        return "escalate"
+    return "would-restart" if dry else "restart"
+
+
+def audit_teardown_gate(live, verdict_on_file, handled_past_verdict,
+                        dup_audit, idle_ticks, n_ticks, teardown_enabled,
+                        dry):
     """(new_idle_ticks, action) for auditor teardown. Pure except dry flag use.
-    Actions: absent | disabled | hold-dup | hold-demand | hold-verdict |
-    hold-working | countdown | kill | would-kill."""
+    Actions: absent | disabled | hold-dup | hold-verdict | countdown |
+    kill | would-kill.
+
+    Item 6 (#464): one-shot sessions. hold-demand is gone — an answered
+    demand must never veto teardown (demand + re-ring manufactured the
+    close-can-never-happen livelock); hold-working is gone — a handed
+    verdict counts every tick regardless of probe, teardown fires at
+    n_ticks."""
     if not live:
         return 0, "absent"
     if not teardown_enabled:
         return 0, "disabled"
     if dup_audit:
         return 0, "hold-dup"
-    if fresh_need or demand or other_demand:
-        return 0, "hold-demand"
     if not verdict_on_file or not handled_past_verdict:
         return 0, "hold-verdict"
-    if not str(probe).startswith("IDLE"):
-        return 0, "hold-working"
     k = (idle_ticks or 0) + 1
     if k < (n_ticks or 2):
         return k, "countdown"
@@ -1154,7 +1237,12 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     re-tasks the live session with a fresh brief + ring when another room
     needs it (FIFO across rooms, one claim per tick), awaits the verdict,
     hands findings back to the requester (NOTE + ring), and tears the
-    session down after AUDIT_TEARDOWN_TICKS quiet post-verdict ticks.
+    session down after AUDIT_TEARDOWN_TICKS quiet post-verdict ticks —
+    one-shot: no demand vetoes teardown (#464). A live session with no
+    verdict/post/report progress for AUDIT_RESTART_S is presumed stuck
+    and killed + relaunched with the identical brief (reruns+1, cap
+    AUDIT_RERUN_MAX then escalate); an answered demand+tip never
+    recreates audit_pending.
     Legacy pending/phase heuristic stays as fallback. Returns (acted,
     need_verdict, ap_store, as_store, audit_note): ap_store as before ({} or
     the audit_pending dict); as_store is the audit_session record to persist
@@ -1191,6 +1279,8 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
             if append_box_note(room_dir, target, note):
                 acted.append("audit verdict handed to %s" % target)
                 asess["handled_demand"] = asess.get("demand_key")
+                asess["reruns"] = 0
+                asess.pop("restart_capped", None)
                 if target in SESS and fast_probe(ctx, SESS[target]).startswith("IDLE"):
                     acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid,
                                       issue=issue))
@@ -1213,6 +1303,8 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
                 if append_box_note(room_dir, target, note):
                     acted.append("audit verdict handed to %s (unhandled scan)" % target)
                     asess["handled_demand"] = asess.get("demand_key")
+                    asess["reruns"] = 0
+                    asess.pop("restart_capped", None)
                     if target in SESS and fast_probe(ctx, SESS[target]).startswith("IDLE"):
                         acted.append(ring(ctx, SESS[target], target, "audit verdict ready", oid=oid,
                                           issue=issue))
@@ -1229,22 +1321,27 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
             other_demand = True
             break
     cur_idle = asess.get("idle_ticks", 0) if isinstance(asess.get("idle_ticks"), int) else 0
+    # Item 6 (#464): one-shot teardown. Demand never vetoes (answered
+    # pings re-ringed the session warm forever); verdict+handled counts
+    # every tick regardless of probe.
+    _dup_audit = ((len(pane_role_sessions(ctx).get("audit", [])) > 1)
+                  if live and not (fresh_need or demand or other_demand) and verdict_ts and handled_past
+                  else False)
     new_idle, t_act = audit_teardown_gate(
-        live, aprobe, bool(verdict_ts), handled_past, demand is not None,
-        fresh_need is not None, other_demand,
-        (len(pane_role_sessions(ctx).get("audit", [])) > 1) if live and not (fresh_need or demand or other_demand) and verdict_ts and handled_past else False,
+        live, bool(verdict_ts), handled_past, _dup_audit,
         cur_idle, AUDIT_TEARDOWN_TICKS, ctx.allow_audit_teardown, ctx.dry)
     if t_act in ("kill", "would-kill"):
-        res = kill_audit_session(ctx, "verdict %s handled, idle %d/%d, no demand"
+        res = kill_audit_session(ctx, "verdict %s handed, %d/%d ticks"
                                  % (verdict_ts or "-", new_idle, AUDIT_TEARDOWN_TICKS))
         acted.append(res)
         if not ctx.dry and res.startswith("auditor teardown"):
             for o in list(rings):
                 if o.startswith(AUDIT_OID_PREFIX) and isinstance(rings.get(o), int) and rings[o] > 0:
                     rings[o] = -1
-            asess = {"state": "parked", "idle_ticks": 0,
-                     "handled_demand": asess.get("handled_demand"),
-                     "verdict_ts": verdict_ts}
+            asess = _asess_keep(asess, state="parked", idle_ticks=0,
+                                handled_demand=asess.get("handled_demand"),
+                                verdict_ts=verdict_ts, launched_at=None,
+                                demand_key=None, oid=None, tip=None)
             store = {}
         audit_note = audit_planned_text(bool(verdict_ts), bool(rep), False,
                                         bool(stored), demand, qhead, issue)
@@ -1267,15 +1364,54 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
                                         bool(stored), demand, qhead, issue)
         return acted, False, store, (asess or None), audit_note
     if t_act == "absent" and asess.get("state") == "live":
-        asess = {"state": "absent", "idle_ticks": 0,
-                 "handled_demand": asess.get("handled_demand"),
-                 "verdict_ts": verdict_ts}
+        asess = _asess_keep(asess, state="absent", idle_ticks=0,
+                            handled_demand=asess.get("handled_demand"),
+                            verdict_ts=verdict_ts, launched_at=None)
+    # Item 6 (#464): long-running watchdog. A live session with no
+    # verdict/post/report progress since the engine-set launched_at is
+    # presumed stuck: kill + fall through to relaunch the identical
+    # on-disk brief (reruns+1), cap at AUDIT_RERUN_MAX then escalate.
+    # Legacy sessions without launched_at get one grace stamp, never a
+    # first-sight kill.
+    _lap = None
+    for _ts in (verdict_ts,
+                newest_post_ts(boxes["auditor"]["all"]),
+                report_mtime_ts(rep) if rep else None):
+        if _ts and (not _lap or _ts[:19] > _lap[:19]):
+            _lap = _ts
+    _r_act = audit_restart_gate(live, asess.get("launched_at"), _lap,
+                                utcnow(),
+                                reruns=int(asess.get("reruns") or 0),
+                                dry=ctx.dry)
+    if _r_act == "grace":
+        asess["launched_at"] = utcnow()
+        asess["state"] = "live"
+        asess["idle_ticks"] = 0
+    elif _r_act in ("restart", "would-restart"):
+        _r_elapsed = int(_ts_age_s(asess.get("launched_at"), utcnow()) or 0)
+        asess = _asess_keep(asess, state="parked", idle_ticks=0,
+                            reruns=int(asess.get("reruns") or 0) + 1,
+                            launched_at=None)
+        if ctx.dry:
+            acted.append("WOULD auditor restart (long-running, %ds > %ds, no verdict; reruns=%d)"
+                         % (_r_elapsed, AUDIT_RESTART_S, asess.get("reruns")))
+        else:
+            acted.append(kill_audit_session(ctx, "long-running %ds > %ds, no verdict since launch; reruns=%d"
+                                            % (_r_elapsed, AUDIT_RESTART_S, asess.get("reruns"))))
+        live = False
+    elif _r_act == "escalate":
+        acted.append("NEED audit #%d: restart cap reached (reruns=%d, no verdict since launch); operator intervention, no relaunch"
+                     % (issue, AUDIT_RERUN_MAX))
+        asess = _asess_keep(asess, restart_capped=True)
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), True,
+                                        bool(stored), demand, qhead, issue)
+        return acted, False, store, (asess or None), audit_note
     dec = auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full"))
     if dec and not fresh_need and not demand:
         if stored and store is None:
             acted.append("verdict on file; stale audit_pending cleared")
             store = {}
-        audit_note = audit_planned_text(True, bool(rep), live, bool(stored), None, qhead, issue)
+        audit_note = audit_planned_text(True, bool(rep), live, bool(store if isinstance(store, dict) else stored), None, qhead, issue)
         return acted, False, store, (asess or None), audit_note
     if demand is None and not stored:
         audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, False, None, qhead, issue)
@@ -1298,6 +1434,18 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
         info = git_info(ctx.dev_dir)
         cur_tip = info[1] if info else tip
         tip = cur_tip or tip
+    # Item 6 (#464): answered demand+tip never recreates audit_pending.
+    # A verdict-handed demand re-asked on the identical tip is done —
+    # suppress it (no ring, no store) instead of re-ringing the ping
+    # loop that kept a killed session warm.
+    if audit_demand_answered(stored, demand_key, tip or cur_tip, verdict_ts,
+                             asess.get("handled_demand")):
+        acted.append("audit demand answered (demand %s, tip %s); suppressed, no re-ring"
+                     % (demand_key, (tip or cur_tip or "?")[:7]))
+        store = {}
+        demand = None
+        demand_key = None
+        qhead = audit_queue_head(issue, demand, rooms_all)
     oid = None
     for o in list(rings):
         if o.startswith(AUDIT_OID_PREFIX) and isinstance(rings.get(o), int) and rings[o] > 0:
@@ -1313,7 +1461,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     age_s = pending_age_s(stored)
     act = audit_retask_gate(demand, fresh_need, aprobe, live, brief_present, brief_tip, cur_tip,
                             bool(verdict_ts), demand_key, asess.get("handled_demand"), oid, rings,
-                            claimed, age_s)
+                            claimed, age_s, stored.get("tip"))
     # Item B (#461): age-based auditor SLA, orthogonal to the ring-count
     # doctrine. Evaluated only while a demand is outstanding (orphaned
     # stores age silently). The re-ring reuses the live oid and never
@@ -1356,7 +1504,9 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
         acted.append("NEED audit #%d: demand aging %ds with no ring progress (oid %s); re-drive needed"
                      % (issue, int(_sage or 0), oid))
     if act == "skip-no-demand":
-        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, bool(stored), None, qhead, issue)
+        # Effective store (suppression may have cleared it): never show
+        # "awaiting verdict" for an answered demand.
+        audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, bool(store if isinstance(store, dict) else stored), None, qhead, issue)
         return acted, False, store, (asess or None), audit_note
     if act == "skip-done":
         audit_note = audit_planned_text(True, bool(rep), live, bool(stored), demand, qhead, issue)
@@ -1399,7 +1549,11 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
             return acted, True, store, (asess or None), audit_note
         asess["state"] = "live"
         asess["idle_ticks"] = 0
+        if asess.get("demand_key") != demand_key:
+            asess["reruns"] = 0
+            asess.pop("restart_capped", None)
         asess["demand_key"] = demand_key
+        asess["launched_at"] = utcnow()
         ctx.audit_claimed = (ctx.tick_seq, issue)
         audit_note = audit_planned_text(bool(verdict_ts), bool(rep), True, True, demand, qhead, issue)
         return acted, True, {"requester": requester,
@@ -6163,21 +6317,67 @@ def mode_self_test():
           audit_sla_age_s({"since": "2026-11-02T08:00:00Z"}, {"key": "k", "first": "2026-11-02T07:00:00Z"}, "k", "2026-11-02T09:00:00Z") == 7200.0, True)
     check("audit-sla-age-store-only",
           audit_sla_age_s({"since": "2026-11-02T08:30:00Z"}, {}, "k", "2026-11-02T09:00:00Z") == 1800.0, True)
-    check("audit-teardown-absent", audit_teardown_gate(False, "ABSENT", False, False, None, None, False, False, 0, 2, True, False) == (0, "absent"), True)
-    check("audit-teardown-disabled", audit_teardown_gate(True, "IDLE", True, True, None, None, False, False, 0, 2, False, False) == (0, "disabled"), True)
-    check("audit-teardown-hold-dup", audit_teardown_gate(True, "IDLE", True, True, None, None, False, True, 0, 2, True, False) == (0, "hold-dup"), True)
-    check("audit-teardown-hold-demand", audit_teardown_gate(True, "IDLE", True, True, {"requester": "dev"}, None, False, False, 0, 2, True, False) == (0, "hold-demand"), True)
-    check("audit-teardown-hold-fresh", audit_teardown_gate(True, "IDLE", True, True, None, {"requester": "dev"}, False, False, 0, 2, True, False) == (0, "hold-demand"), True)
-    check("audit-teardown-hold-verdict", audit_teardown_gate(True, "IDLE", False, False, None, None, False, False, 0, 2, True, False) == (0, "hold-verdict"), True)
-    check("audit-teardown-hold-unhandled", audit_teardown_gate(True, "IDLE", True, False, None, None, False, False, 0, 2, True, False) == (0, "hold-verdict"), True)
-    check("audit-teardown-hold-working", audit_teardown_gate(True, "WORKING", True, True, None, None, False, False, 0, 2, True, False) == (0, "hold-working"), True)
-    check("audit-teardown-countdown", audit_teardown_gate(True, "IDLE-static", True, True, None, None, False, False, 0, 2, True, False) == (1, "countdown"), True)
-    check("audit-teardown-kill", audit_teardown_gate(True, "IDLE-static", True, True, None, None, False, False, 1, 2, True, False) == (2, "kill"), True)
-    check("audit-teardown-would-kill", audit_teardown_gate(True, "IDLE-static", True, True, None, None, False, False, 1, 2, True, True) == (2, "would-kill"), True)
-    check("audit-teardown-hold-other",
-          audit_teardown_gate(True, "IDLE-static", True, True, None, None, True, False, 0, 2, True, False) == (0, "hold-demand"), True)
+    # Item 6 (#464): one-shot teardown — demand/fresh/other never veto,
+    # verdict+handled counts every tick regardless of probe. Bite: any
+    # demand-shaped veto re-added flips kill-with-distinct-demand to FAIL.
+    check("audit-teardown-absent", audit_teardown_gate(False, False, False, False, 0, 2, True, False) == (0, "absent"), True)
+    check("audit-teardown-disabled", audit_teardown_gate(True, True, True, False, 0, 2, False, False) == (0, "disabled"), True)
+    check("audit-teardown-hold-dup", audit_teardown_gate(True, True, True, True, 0, 2, True, False) == (0, "hold-dup"), True)
+    check("audit-teardown-hold-verdict", audit_teardown_gate(True, False, False, False, 0, 2, True, False) == (0, "hold-verdict"), True)
+    check("audit-teardown-hold-unhandled", audit_teardown_gate(True, True, False, False, 0, 2, True, False) == (0, "hold-verdict"), True)
+    check("audit-teardown-countdown", audit_teardown_gate(True, True, True, False, 0, 2, True, False) == (1, "countdown"), True)
+    check("audit-teardown-kill", audit_teardown_gate(True, True, True, False, 1, 2, True, False) == (2, "kill"), True)
+    check("audit-teardown-kill-with-distinct-demand", audit_teardown_gate(True, True, True, False, 1, 2, True, False) == (2, "kill"), True)
+    check("audit-teardown-would-kill", audit_teardown_gate(True, True, True, False, 1, 2, True, True) == (2, "would-kill"), True)
+    check("audit-teardown-countdown-hold-dup-wins",
+          audit_teardown_gate(True, True, True, True, 1, 2, True, False) == (0, "hold-dup"), True)
+    # Item 6 (#464): long-running restart gate.
+    check("audit-restart-none-not-live", audit_restart_gate(False, "t", "t", "t") == "none", True)
+    check("audit-restart-legacy-grace",
+          audit_restart_gate(True, None, None, "2026-11-03T10:00:00Z") == "grace", True)
+    check("audit-restart-none-with-progress",
+          audit_restart_gate(True, "2026-11-03T09:00:00Z", "2026-11-03T09:30:00Z", "2026-11-03T10:00:00Z") == "none", True)
+    check("audit-restart-none-early",
+          audit_restart_gate(True, "2026-11-03T09:55:00Z", None, "2026-11-03T10:00:00Z") == "none", True)
+    check("audit-restart-after-540",
+          audit_restart_gate(True, "2026-11-03T09:00:00Z", None, "2026-11-03T10:00:00Z") == "restart", True)
+    check("audit-restart-would-dry",
+          audit_restart_gate(True, "2026-11-03T09:00:00Z", None, "2026-11-03T10:00:00Z", dry=True) == "would-restart", True)
+    check("audit-restart-progress-at-launch",
+          audit_restart_gate(True, "2026-11-03T09:00:00Z", "2026-11-03T09:00:00Z", "2026-11-03T10:00:00Z") == "none", True)
+    check("audit-restart-cap-escalates",
+          audit_restart_gate(True, "2026-11-03T09:00:00Z", None, "2026-11-03T10:00:00Z", reruns=3) == "escalate", True)
+    check("audit-restart-cap-with-progress",
+          audit_restart_gate(True, "2026-11-03T09:00:00Z", "2026-11-03T09:30:00Z", "2026-11-03T10:00:00Z", reruns=3) == "none", True)
+    # Item 6 (#464): answered demand+tip suppression.
+    _ans_stored = {"requester": "dev", "since": "2026-11-03T09:00:00Z", "tip": "abc1234", "demand_key": "dev:ab12cd34"}
+    check("audit-demand-answered-same-tip",
+          audit_demand_answered(_ans_stored, "dev:ab12cd34", "abc1234", "2026-11-03T09:30:00Z", "dev:ab12cd34") is True, True)
+    check("audit-demand-answered-cleared-store",
+          audit_demand_answered({}, "dev:ab12cd34", "abc1234", "2026-11-03T09:30:00Z", "dev:ab12cd34") is True, True)
+    check("audit-demand-answered-new-tip",
+          audit_demand_answered(_ans_stored, "dev:ab12cd34", "def5678", "2026-11-03T09:30:00Z", "dev:ab12cd34") is False, True)
+    check("audit-demand-answered-new-text",
+          audit_demand_answered(_ans_stored, "qe:ff00ff00", "abc1234", "2026-11-03T09:30:00Z", "qe:ff00ff00") is False, True)
+    check("audit-demand-answered-new-demand-key",
+          audit_demand_answered(_ans_stored, "dev:ab12cd34", "abc1234", "2026-11-03T09:30:00Z", "dev:ff00ff00") is False, True)
+    check("audit-demand-answered-no-verdict",
+          audit_demand_answered(_ans_stored, "dev:ab12cd34", "abc1234", None, "dev:ab12cd34") is False, True)
+    check("audit-demand-answered-stale-verdict",
+          audit_demand_answered(_ans_stored, "dev:ab12cd34", "abc1234", "2026-11-03T08:00:00Z", "dev:ab12cd34") is False, True)
+    check("audit-demand-answered-no-demand",
+          audit_demand_answered(_ans_stored, None, "abc1234", "2026-11-03T09:30:00Z", "dev:ab12cd34") is False, True)
+    check("audit-demand-answered-other-store",
+          audit_demand_answered({"demand_key": "qe:x"}, "dev:ab12cd34", "abc1234", "2026-11-03T09:30:00Z", "dev:ab12cd34") is False, True)
+    check("audit-asess-keep",
+          _asess_keep({"a": 1}, b=2) == {"a": 1, "b": 2} and _asess_keep(None, b=2) == {"b": 2}, True)
+    check("audit-report-mtime-missing", report_mtime_ts("/no/such/file.md") is None, True)
     check("audit-retask-neg-skip-done",
           audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", True, "k", "k", "audit:ts", {"audit:ts": -1}, None, 0) == "skip-done", True)
+    check("audit-retask-skip-done-same-tip",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "tip", "tip", True, "k", "k", None, {}, None, 0, "tip") == "skip-done", True)
+    check("audit-retask-new-tip-no-skip",
+          audit_retask_gate({"requester": "dev", "text": "t"}, None, "IDLE-static", True, True, "new", "new", True, "k", "k", None, {}, None, 0, "old") == "ring", True)
     check("audit-state-demand-next-plan-review",
           audit_state_demand({"pending": "plain work"},
                              {"dev": {"next": "waiting auditor plan-review"}, "qe": {"next": None}}) == {"requester": "dev", "text": "waiting auditor plan-review"}, True)
