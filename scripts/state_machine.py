@@ -876,7 +876,7 @@ def audit_verdict_ts(box_all):
     best = None
     for line in box_all or []:
         m = POST_RE.match(line)
-        if m and m.group(3) == "DECISION" and (best is None or line[:19] > best):
+        if m and (m.group(3) == "DECISION" or "DECISION:" in (m.group(4) or "")) and (best is None or line[:19] > best):
             best = line[:19]
     return best
 
@@ -6006,6 +6006,8 @@ def mode_self_test():
                                  "STATE: x", "NEXT: y", "DECISION: APPROVED step-a"]) == ("2026-11-02T10:01:22", "DECISION: APPROVED step-a"), True)
     check("audit-trailer-none",
           audit_trailer_verdict(["2026-11-02T10:01:22Z FROM=audit READY :: x", "STATE: x"]) == (None, None), True)
+    check("audit-verdict-ts-inline-ready",
+          audit_verdict_ts(["2026-11-03T11:34:47Z FROM=audit READY :: DECISION: APPROVED — x"]) == "2026-11-03T11:34:47", True)
     check("audit-verdict-ts-full-trailer",
           audit_verdict_ts_full([], ["2026-11-02T10:01:22Z FROM=audit READY :: x", "DECISION: NEED rework"]) == "2026-11-02T10:01:22", True)
     check("audit-unhandled-first-sight",
