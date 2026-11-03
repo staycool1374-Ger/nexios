@@ -230,6 +230,7 @@ void register_fpu_inv_tests();
 void register_cap_shm_tests();
 void register_cap_death_tests();
 void register_cap_pager_tests();
+void register_cap_broker_tests(); // issue #240 step-a stubs
 void register_ipc_fastpath_tests();
 #if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64) || \
     defined(CONFIG_ARCH_RISCV64)
@@ -433,6 +434,7 @@ static void run_cap_iommu_group() { register_cap_iommu_tests(); }
 static void run_cap_shm_group() { register_cap_shm_tests(); }
 static void run_cap_death_group() { register_cap_death_tests(); }
 static void run_cap_pager_group() { register_cap_pager_tests(); }
+static void run_cap_broker_group() { register_cap_broker_tests(); }
 static void run_ipc_fastpath_group() { register_ipc_fastpath_tests(); }
 static void run_ipc_pipe_blocking_group() {
     register_pipe_blocking_tests();
@@ -808,6 +810,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- cap_pager: external pager protocol (issue #107) --
     {"cap_pager", []() { run_cap_pager_group(); }},
 
+    // -- cap_broker: capability-broker policy stubs (issue #240 step-a) --
+    {"cap_broker", []() { run_cap_broker_group(); }},
+
     // -- ipc_fastpath: in-register IPC fastpath (issue #11) --
     {"ipc_fastpath", []() { run_ipc_fastpath_group(); }},
 
@@ -1175,6 +1180,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_cap_shm_group();
          run_cap_death_group();
          run_cap_pager_group();
+         run_cap_broker_group();
      }},
     // proc_elf: process lifecycle + ELF loading (issue #173).  Named
     // proc_elf (not process_elf) — the fine-grained file class

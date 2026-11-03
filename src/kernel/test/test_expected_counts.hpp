@@ -104,6 +104,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_shm",               7,    0,       0      },  // cap-gated shared-memory rings
     {"cap_death",             9,    0,       0      },  // async task-death notifications
     {"cap_pager",             15,   0,       0      },  // external pager protocol
+    {"cap_broker",             6,   6,       6      },  // broker policy stubs (issue #240 step-a)
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath
     {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics
     {"vfs_procfs",             9,   0,       0      },  // procfs nodes
@@ -300,7 +301,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_syscall",        85,   0,       0      },  // syscall_*, debug_syscall, tls
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
-    {"capability",          149,  0,       0      },  // cap_* excl. iommu_live
+    {"capability",          161,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker)
     {"proc_elf",            131,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM)
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
     {"libc_stdio",            5,   0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (x86_64 only)
