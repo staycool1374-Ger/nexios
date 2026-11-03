@@ -160,6 +160,12 @@ void CNode::clear_grant(uint32_t idx) noexcept {
     slots[idx].rights &= ~CapRights::GRANT;
 }
 
+void CNode::set_policy_word(uint32_t word) noexcept {
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    policy_word_ = word;
+    ++policy_gen_; // atomic with the store under the same lock (S3 note)
+}
+
 KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
                      CapRights need_rights) noexcept {
     if (!cspace)
@@ -242,8 +248,13 @@ size_t occupied_count(const CNode *cspace) noexcept {
 ///        the pin taken here is released on both success and failure.
 ///        Forwards an optional generation out-slot to the dst install
 ///        (issue #266: lets syscall returns encode with no TOCTOU).
+///        Issue #240 step-a: reads the cached policy word under the existing
+///        src lock snapshot (one load, zero new locks); all-allow at step-a
+///        so the check always passes (zero delta). Step-b adds default-deny
+///        + gen-compare fail-closed.
 int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
-                   CapRights rights, uint32_t *gen_out = nullptr) noexcept {
+                   CapRights rights, uint32_t *gen_out = nullptr,
+                   uint32_t op_mask = kCapBrokerAllowCopy) noexcept {
     if (!src || !dst || src == dst)
         return -1;
     // lookup() returns the target with acquire() already taken.
@@ -259,6 +270,10 @@ int do_copy_pinned(CNode *src, uint64_t src_handle, CNode *dst,
         const uint32_t idx = handle_slot(src_handle);
         if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
             !src->slots[idx].occupied) {
+            target->release();
+            return -1;
+        }
+        if (!CNode::policy_allows(src->policy_word_, op_mask)) {
             target->release();
             return -1;
         }
@@ -294,6 +309,8 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
     if (!target)
         return -1;
     // Capture the type/rights under the lock, then clear GRANT (mint-once).
+    // Issue #240 step-a: policy-word read under the existing lock (one
+    // load, zero new locks); all-allow so always passes (zero delta).
     CapType type = CapType::Null;
     CapRights rights = CapRights::NONE;
     uint32_t src_gen = 0;
@@ -302,6 +319,11 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
         const uint32_t idx = handle_slot(src_handle);
         if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
             !src->slots[idx].occupied) {
+            target->release();
+            return -1;
+        }
+        if (!CNode::policy_allows(src->policy_word_,
+                                   kCapBrokerAllowGrant)) {
             target->release();
             return -1;
         }
@@ -323,7 +345,8 @@ int grant(CNode *src, uint64_t src_handle, CNode *dst,
 int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
          uint32_t badge, uint32_t *gen_out) noexcept {
     (void)badge; // badge re-branding lands with endpoint integration (Phase 4)
-    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out);
+    return do_copy_pinned(src, src_handle, dst, rights_mask, gen_out,
+                           kCapBrokerAllowMint);
 }
 
 } // namespace kernel::cap

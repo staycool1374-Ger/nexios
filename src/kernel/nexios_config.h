@@ -1335,6 +1335,9 @@ extern "C" void panic(const char *msg);
 #if CONFIG_LOG_SRV != 0 && CONFIG_LOG_SRV != 1
 #error "CONFIG_LOG_SRV must be 0 or 1 (default 0)"
 #endif
+#if CONFIG_CAP_BROKER != 0 && CONFIG_CAP_BROKER != 1
+#error "CONFIG_CAP_BROKER must be 0 or 1 (default 0)"
+#endif
 #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
 #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif
@@ -1375,6 +1378,16 @@ extern "C" void panic(const char *msg);
 /// 1 = compile the diagnostic `logfault` shell command. Debug-only.
 #ifndef CONFIG_LOG_SRV_FAULT_INJECT
 #define CONFIG_LOG_SRV_FAULT_INJECT 0
+#endif
+
+/// cap-broker externalization master switch (issue #240, strangler step a).
+/// 0 = ambient delegation authority (shipped default, bit-identical behavior).
+/// 1 = cap-broker PD serves delegation policy; kernel enforces a cached
+/// per-CNode policy word. All cap-broker kernel code is `#if
+/// CONFIG_CAP_BROKER`-guarded (empty TU when 0); no runtime `if` on this
+/// knob. Default: 0.
+#ifndef CONFIG_CAP_BROKER
+#define CONFIG_CAP_BROKER 0
 #endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"

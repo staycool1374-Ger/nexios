@@ -4,7 +4,7 @@
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
-    CONFIG_LOG_SRV
+    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
 
 #include <kernel/task/task.hpp>
 #include <kernel/arch/hal/device_regions.hpp>
@@ -202,24 +202,31 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // Log sink policy only (issue #51): Klog/Dmesg sink + drop/meter.
         // No device caps ever; same structural rule as TERM_SRV.
         return 0;
+    case PdRole::CAP_BROKER:
+        // Delegation policy only (issue #240): broker-allows /
+        // kernel-enforces over a cached per-CNode word. No device caps
+        // ever; the row is the empty set by structural rule.
+        return 0;
     }
     return 0;
 }
 
 bool sdf_zero_caps_allowed(PdRole role) {
-    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV (empty sets by
-    // design) and degraded BLOCK_SRV (no controller/IOMMU captured) may
-    // start capless. Every other zero-cap row is a compose failure.
+    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV + CAP_BROKER
+    // (empty sets by design) and degraded BLOCK_SRV (no controller/IOMMU
+    // captured) may start capless. Every other zero-cap row is a
+    // compose failure.
     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
-           role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV;
+           role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV ||
+           role == PdRole::CAP_BROKER;
 }
 
 bool sdf_policy_only(PdRole role) {
-    // Structural no-double-ownership rule (issues #47/#51): policy-only
-    // roles must never hold device caps. The #48 SDF boundary test
-    // consumes this predicate directly.
+    // Structural no-double-ownership rule (issues #47/#51, #240):
+    // policy-only roles must never hold device caps. The #48 SDF
+    // boundary test consumes this predicate directly.
     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
-           role == PdRole::LOG_SRV;
+           role == PdRole::LOG_SRV || role == PdRole::CAP_BROKER;
 }
 
 bool capture_block_topology() {
@@ -325,6 +332,7 @@ bool pd_owns_device(PdRole role) {
         return CONFIG_BLOCK_SRV != 0;
     case PdRole::TERM_SRV:
     case PdRole::LOG_SRV:
+    case PdRole::CAP_BROKER:
         // Policy-only PDs never own devices (structural rule).
         return false;
     }
@@ -334,4 +342,4 @@ bool pd_owns_device(PdRole role) {
 } // namespace sdf
 } // namespace kernel
 
-#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV
+#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV / CONFIG_CAP_BROKER
