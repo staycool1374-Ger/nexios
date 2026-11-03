@@ -90,6 +90,8 @@
 - Any activity reads WORKING, never IDLE: two-sample probe (content + timer/token + CPU-delta over a window, norm keeps every signal), IDLE only on proven-static windows (#462).
 - Stale NEXTs stop counting as busy (age-timeout + lane-segment backlog guard, live order always wins); starved lanes get teeth (observe → re-wake order → await → cap-escalate, heartbeat held); rotate the sweep so one room can't win every doorbell (#462).
 - IDLE is a global claim: gate every IDLE acceptance on a cross-room work scan and deny with an assignment when work waits; auditor sessions are one-shot (kill after handed verdict, restart when >3 ticks silent with no progress, answered demand+tip never re-rings, same-text new-tip is new work) (#463/#464).
+- ACK is receipt, done-by is delivery: every engine order carries a done-by stamp plus evidence kind, overdue re-rings once without a new oid and then escalates NEED-only (never auto-recreate — the lane is alive), and ACK (-1) or ledger cleanup never clears the delivery record; backlog briefs carry the same finish line so DONE is defined before the work starts (#466).
+- Best-effort shell probes under `set -euo pipefail` carry `|| true` (a probe that finds nothing must skip, never abort its caller); lifecycle paths get fixture-room dry-tick smoke — green pure-function rows prove nothing about the wiring (#466).
 
 ## Entry format
 
@@ -101,6 +103,24 @@
 ```
 
 ## Entries
+
+### #466 — engine delivery enforcement + cursor-true phase/pending (R1–R4 implementation)
+
+- **Learned:** (1) A green pure-function suite proves nothing about lifecycle wiring: 509/509 selftest rows passed while every live tick died in `UnboundLocalError` (a name bound 60 lines below its first use). Pin lifecycle paths with fixture-room dry ticks (`tick --issues N --dry-run` against a scratch `/tmp/nexios-N` room) that execute the real function, not just more pure rows. (2) Under `set -euo pipefail`, a best-effort `$(grep … | tail)` probe whose grep finds nothing aborts its caller — the probe becomes the outage. Every best-effort probe carries `|| true` (precedent: the adjacent `pgrep … || true`); the fail direction must be skip-and-continue, never abort. (3) Stash-prove before/after on the identical fixture is the cheapest conviction for a crash fix (stashed-original traceback vs fixed-tree clean run). (4) Self-test debris poisons reruns: a failing self-test aborts before its own cleanup, so the next run inherits the room — clear fixture rooms before rerunning.
+- **Adapted:** `demand`/`demand_key` + tip resolution hoisted above the C4 identity check in `auditor_lifecycle` (git lookup only on verdict-active ticks); `|| true` on the wake fast-path probe in `scripts/agent_up.sh`; fixture-room dry-tick smoke recorded on the issue.
+- **Style re-surface:** the fail direction must be explicit in every probe (skip vs abort); test the seam (lifecycle wiring), not just the units.
+
+### #464 — one-shot auditor: kill after handed verdict, restart when long-running
+
+- **Learned:** `hold-demand` is invalid for auditor/planner lanes: a demand veto on teardown plus an answered-demand re-ring is a close-can-never-fire loop (each manufactures the other's precondition). One-shot is the invariant — verdict posted + handed + handled-past-verdict tears the session down the same tick, no demand veto; a genuinely new demand launches fresh (the brief is fully tip-pinned, no state worth preserving). Long-running is bounded by a watchdog, not by hope: no verdict/post/report progress for 3 tick intervals kills + relaunches the identical brief with reruns+1, capped at the ring limit, then escalates. An answered demand+tip never recreates pending: kill-after-done without that suppression just thrashes launch/kill every tick.
+- **Adapted:** `audit_teardown_gate` (no demand veto; verdict+handled counts every tick), `AUDIT_RESTART_S`/`AUDIT_RERUN_MAX` + `audit_restart_gate`, answered-demand+tip suppression in `auditor_lifecycle`, `verdict_identity`/`verdict_already_handed` dedup on hand-back in `scripts/state_machine.py`.
+- **Style re-surface:** one mechanism per policy (teardown owns liveness, the SLA owns aging, the identity owns dedup — no shared preconditions); fail closed on caps (restart budget, rerun cap, then NEED, never a 4th launch).
+
+### #465 — ACK doctrine: receipt-only, missing-ACK means faulty worker
+
+- **Learned:** An ACK closes receipt and nothing else — "ACK, starting" is a valid ACK-with-content where the content is new routable information, never a second receipt. Promising ("starting") versus delivering (a future result post) are different deadlines owned by different mechanisms: ack-by drives restart discipline, done-by drives evidence delivery, and conflating them recreates the ACK-without-delivery hole. Display must never conflate the two: a fresh ACK proves receipt, never work. Wire parsers must accept every live verdict shape (inline `DECISION:` on READY/NEED posts, not just kind-DECISION) and read the post block from the last POST line, not a tail window — both blind spots silently null out real verdicts. Demand keys must be era-qualified (a DONE routed to audit reopens an answered demand) and hand-backs identity-qualified (kind+tip+demand-key, kind-flips always deliver) or duplicate posts ping-pong forever. A wake fast path is safe only when the sweep lock makes overlap a skip by construction.
+- **Adapted:** ACK-MISSING escalate-to-recreate + `ack_by_ts`/`file_order_deadline`/`ack_overdue_ids` in `scripts/state_machine.py`; `audit_verdict_ts` inline-DECISION match + post-block `load_boxes` scan + DONE-reopens-demand + `verdict_identity` dedup; targeted one-shot `tick --issues N` on demand-shaped wakes in `scripts/agent_up.sh` (skip-if-locked); the four WIRE rules in `prompts/PROMPT-dev.md`/`PROMPT-testdev.md`/`PROMPT-audit.md`; delivery follow-up tracked as #466 R1.
+- **Style re-surface:** strict parsers accept every live wire shape (prove with the exact observed line, not the schema); uncapped history for detectors (tails drop the evidence that matters); one re-ring per oid per cycle across overlapping filers.
 
 ### #170 — Meson cutover lane, developer track (DRAFT — issue open, coordinator closes)
 

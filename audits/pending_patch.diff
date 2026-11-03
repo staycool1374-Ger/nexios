@@ -1,0 +1,1002 @@
+diff --git a/docs/engine-wake-watch.md b/docs/engine-wake-watch.md
+new file mode 100644
+index 000000000..9aebf8a1e
+--- /dev/null
++++ b/docs/engine-wake-watch.md
+@@ -0,0 +1,63 @@
++# Engine wake fast-path watch (#466 R4)
++
++One quiet week of fast-path ticks with zero duplicate filings closes R4;
++any duplicate filing opens a follow-up issue with the log excerpts —
++never an inline patch (the window must stay observation-only).
++
++## Window
++
++- Start: the merge sha + engine restart time that first deploys #466 R1/R2.
++  Record both here when the window opens (R1/R2 must be deployed first
++  so the sample is not contaminated by pre-delivery code).
++- Freeze for the window: `scripts/agent_up.sh` wake path and the
++  demand-shaped predicate — no engine code changes until the tally.
++
++## Why this watch exists
++
++`fire_targeted_tick` (agent_up.sh) fires a detached one-shot
++`tick --issues N` on every demand-shaped worker post
++(`NEED ::`, `DECISION ::`, inline `DECISION:`, `DONE:`/`DONE `).
++The sweep lock serializes it with the 180 s loop (skip-if-held), so
++overlap is safe by construction. The known pressure point is the
++shared-second edge: `coord_note` oids embed `role:ts19`, so two filers
++in the same second share an oid ("order deferred ... (oid collision)"
++is the visible symptom, seen 12:43:04Z). A same-second collision is
++NOT a duplicate order — a duplicate is the same oid filed twice, or
++two same-lane filings within 5 s for one demand.
++
++## Metrics (per day)
++
++1. Fast-path tick count: `fire_targeted_tick` invocations.
++2. Lock skips: `cycle skipped: another engine tick holds the lock` lines
++   (state_machine.py) — skips are the safety valve working, not loss.
++3. `order filed` lines per (room, lane, oid) from engine-console.log.
++4. `oid collision` lines (shared-second edge — expected rare, not a defect).
++5. Duplicate candidates: same oid filed twice, or two same-lane filings
++   within 5 s for one demand. Zero is the pass criterion.
++
++## Log queries
++
++Against `logs/state-machine/engine-console.log` and
++`logs/state-machine/state-machine.log` (window lines only —
++exclude everything before the recorded start time):
++
++- Ticks fired: lines matching `fire_targeted_tick` / `tick --issues`
++- Skips: `cycle skipped: another engine tick holds the lock`
++- Filings: `order filed` (group by oid, lane, room)
++- Collisions: `oid collision`
++- Escalations (R1 cross-check): `DLR-OVERDUE`, `delivery ... ESCALATED`
++
++## Evidence template (post as a #466 comment)
++
++- Window: <start ts> → <end ts> (7+ days), merge sha <sha>.
++- Fast-path ticks: <n>, lock skips: <n>, oid collisions: <n>.
++- Duplicate filings: <0 | excerpts>.
++- Verdict: close R4 (zero) / follow-up issue (nonzero, with excerpts
++  and the deterministic-oid proposal — never patch inline).
++
++## Decision rule
++
++- Zero duplicate filings for 7 consecutive days → close R4 with the
++  evidence comment above.
++- Any duplicate → open a follow-up issue with the log excerpts and the
++  deterministic-oid proposal; the window restarts after that fix.
+diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
+index dd09c07ee..182b0f3b4 100644
+--- a/prompts/LEARNINGS.md
++++ b/prompts/LEARNINGS.md
+@@ -90,6 +90,7 @@
+ - Any activity reads WORKING, never IDLE: two-sample probe (content + timer/token + CPU-delta over a window, norm keeps every signal), IDLE only on proven-static windows (#462).
+ - Stale NEXTs stop counting as busy (age-timeout + lane-segment backlog guard, live order always wins); starved lanes get teeth (observe → re-wake order → await → cap-escalate, heartbeat held); rotate the sweep so one room can't win every doorbell (#462).
+ - IDLE is a global claim: gate every IDLE acceptance on a cross-room work scan and deny with an assignment when work waits; auditor sessions are one-shot (kill after handed verdict, restart when >3 ticks silent with no progress, answered demand+tip never re-rings, same-text new-tip is new work) (#463/#464).
++- ACK is receipt, done-by is delivery: every engine order carries a done-by stamp plus evidence kind, overdue re-rings once without a new oid and then escalates NEED-only (never auto-recreate — the lane is alive), and ACK (-1) or ledger cleanup never clears the delivery record; backlog briefs carry the same finish line so DONE is defined before the work starts (#466).
+ 
+ ## Entry format
+ 
+@@ -102,6 +103,18 @@
+ 
+ ## Entries
+ 
++### #464 — one-shot auditor: kill after handed verdict, restart when long-running
++
++- **Learned:** `hold-demand` is invalid for auditor/planner lanes: a demand veto on teardown plus an answered-demand re-ring is a close-can-never-fire loop (each manufactures the other's precondition). One-shot is the invariant — verdict posted + handed + handled-past-verdict tears the session down the same tick, no demand veto; a genuinely new demand launches fresh (the brief is fully tip-pinned, no state worth preserving). Long-running is bounded by a watchdog, not by hope: no verdict/post/report progress for 3 tick intervals kills + relaunches the identical brief with reruns+1, capped at the ring limit, then escalates. An answered demand+tip never recreates pending: kill-after-done without that suppression just thrashes launch/kill every tick.
++- **Adapted:** `audit_teardown_gate` (no demand veto; verdict+handled counts every tick), `AUDIT_RESTART_S`/`AUDIT_RERUN_MAX` + `audit_restart_gate`, answered-demand+tip suppression in `auditor_lifecycle`, `verdict_identity`/`verdict_already_handed` dedup on hand-back in `scripts/state_machine.py`.
++- **Style re-surface:** one mechanism per policy (teardown owns liveness, the SLA owns aging, the identity owns dedup — no shared preconditions); fail closed on caps (restart budget, rerun cap, then NEED, never a 4th launch).
++
++### #465 — ACK doctrine: receipt-only, missing-ACK means faulty worker
++
++- **Learned:** An ACK closes receipt and nothing else — "ACK, starting" is a valid ACK-with-content where the content is new routable information, never a second receipt. Promising ("starting") versus delivering (a future result post) are different deadlines owned by different mechanisms: ack-by drives restart discipline, done-by drives evidence delivery, and conflating them recreates the ACK-without-delivery hole. Display must never conflate the two: a fresh ACK proves receipt, never work. Wire parsers must accept every live verdict shape (inline `DECISION:` on READY/NEED posts, not just kind-DECISION) and read the post block from the last POST line, not a tail window — both blind spots silently null out real verdicts. Demand keys must be era-qualified (a DONE routed to audit reopens an answered demand) and hand-backs identity-qualified (kind+tip+demand-key, kind-flips always deliver) or duplicate posts ping-pong forever. A wake fast path is safe only when the sweep lock makes overlap a skip by construction.
++- **Adapted:** ACK-MISSING escalate-to-recreate + `ack_by_ts`/`file_order_deadline`/`ack_overdue_ids` in `scripts/state_machine.py`; `audit_verdict_ts` inline-DECISION match + post-block `load_boxes` scan + DONE-reopens-demand + `verdict_identity` dedup; targeted one-shot `tick --issues N` on demand-shaped wakes in `scripts/agent_up.sh` (skip-if-locked); the four WIRE rules in `prompts/PROMPT-dev.md`/`PROMPT-testdev.md`/`PROMPT-audit.md`; delivery follow-up tracked as #466 R1.
++- **Style re-surface:** strict parsers accept every live wire shape (prove with the exact observed line, not the schema); uncapped history for detectors (tails drop the evidence that matters); one re-ring per oid per cycle across overlapping filers.
++
+ ### #170 — Meson cutover lane, developer track (DRAFT — issue open, coordinator closes)
+ 
+ - **Learned:** (1) One builddir per arch is NOT one builddir per arch×build: the runner mapped release onto the debug dir and wiped it via the LTO marker, so the entire release gate silently tested debug/lto-off binaries — a config nothing gates (stack-marker panics, 1-fail bench, STALLs all confined to it). Separate builddirs per build are load-bearing; prove with marker introspection (`lto=X buildtype=Y`), never assume. (2) Fresh-`setup` paths must be exercised per buildtype: `meson.build cc` was undefined yet debug configured green for months because only the release branch referenced it — dead-until-release code rots. (3) Manual `timeout(1)` wrappers are not policy: per-class budgets come from MEASURED per-arch pass walls + margin via arch-qualified class selectors (`arch:class` beats bare `class` in the resolver); document provenance (date/load/upper-bound) in-table, and a TCG margin trip is a filed flake, never a silent inflate. (4) Zero kernel diff ⇒ zero lane regressions possible: with no `src/` changes every failure is environmental (host load/TCG) or pre-existing-on-main — classify first (code-read the runner/marker trail), file only kernel-side findings (#417 holder ENSUREs, #418 aarch64 PMM drift). (5) Off-x86 gates use the DESIGNED per-arch lists (`list_tests.py` AARCH64/RISCV64_CLASSES, which document their known-red exclusions) — never the x86-derived 22/26; running the wrong list manufactures "failures" that are excluded by design.
+diff --git a/prompts/PROMPT-audit.md b/prompts/PROMPT-audit.md
+index 866db16dc..c9c9fd836 100644
+--- a/prompts/PROMPT-audit.md
++++ b/prompts/PROMPT-audit.md
+@@ -78,6 +78,7 @@ paths before code is accepted.
+ - Verdict delivery is the REPORT FILE itself (`audits/report-<UTC>-<issue>.md`); the inbox line + ring are best-effort. The engine polls the audits directory — a posted report is a delivered verdict even if no ring goes out.
+ ## WIRE (mandatory — identical in every lane)
+ - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
++- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+ - No ACK by ack-by = faulty lane; the engine restarts it.
+ - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+ - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
+diff --git a/prompts/PROMPT-dev.md b/prompts/PROMPT-dev.md
+index a8ecd8887..5bad7e334 100644
+--- a/prompts/PROMPT-dev.md
++++ b/prompts/PROMPT-dev.md
+@@ -77,6 +77,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
+ - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
+ ## WIRE (mandatory — identical in every lane)
+ - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
++- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+ - No ACK by ack-by = faulty lane; the engine restarts it.
+ - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+ - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
+diff --git a/prompts/PROMPT-testdev.md b/prompts/PROMPT-testdev.md
+index bf59786cb..58f1719d5 100644
+--- a/prompts/PROMPT-testdev.md
++++ b/prompts/PROMPT-testdev.md
+@@ -32,6 +32,7 @@ system in the appropiate manner in a real driven scenario. Simulating the system
+  * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
+ ## WIRE (mandatory — identical in every lane)
+ - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
++- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
+ - No ACK by ack-by = faulty lane; the engine restarts it.
+ - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
+ - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
+diff --git a/scripts/agent_up.sh b/scripts/agent_up.sh
+index 53f11d414..99e22589a 100755
+--- a/scripts/agent_up.sh
++++ b/scripts/agent_up.sh
+@@ -1173,7 +1173,7 @@ mode_wake() {
+     # The sweep lock serializes with the loop (skip-if-held), so overlap
+     # is safe. Non-demand posts (pure ACKs, status) stay sweep-driven.
+     case "$2" in dev|qe|auditor)
+-      last_post=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.* FROM=(dev|qe|auditor|audit) (NEED|READY|DECISION|NOTE) ::' "$rt/inbox/$2.md" 2>/dev/null | tail -n 1)
++      last_post=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.* FROM=(dev|qe|auditor|audit) (NEED|READY|DECISION|NOTE) ::' "$rt/inbox/$2.md" 2>/dev/null | tail -n 1 || true)
+       case "$last_post" in
+         *' NEED :: '*|*' DECISION :: '*|*' DECISION: '*|*'DONE:'*|*'DONE '*)
+           fire_targeted_tick "$1" ;;
+diff --git a/scripts/state_machine.py b/scripts/state_machine.py
+index d1d59dbbd..69ae9aa49 100644
+--- a/scripts/state_machine.py
++++ b/scripts/state_machine.py
+@@ -100,6 +100,8 @@ AUDIT_TIMEOUT_S = 1800  # live auditor silent this long -> NEED stuck
+ AUDIT_SLA_RERING_S = 900  # outstanding audit demand this old -> one extra ring (#461 B)
+ AUDIT_SLA_ESCALATE_S = 1800  # outstanding audit demand this old -> NEED escalation (#461 B)
+ ACK_SLA_S = 900  # worker orders carry ack-by <filed+900s>; overdue -> one nudge (#461 F)
++DONE_SLA_S = 1800  # work orders carry done-by <filed+1800s>; overdue -> one re-ring, then escalate (#466 R1)
++DONE_ESCALATE_GRACE_S = 900  # second window after the overdue re-ring before NEED escalation (#466 R1)
+ DEV_STALE_S = 1800  # non-idle NEXT with no lane post this old reads stale, not busy (#462 item 2)
+ GH_CLOSE_POLL_TICKS = 5  # poll GitHub closure at most every N ticks in merge-close (#461 D)
+ AUDIT_OID_PREFIX = "audit:"  # ledger namespace for auditor-lane orders
+@@ -490,14 +492,19 @@ def load_boxes(room_dir):
+         # DONE post parsed as next=None, hiding "waiting auditor" and
+         # starving the audit demand). Scan from the last POST line instead.
+         _post_idx = max((i for i, l in enumerate(all_lines)
+-                         if POST_RE.match(l)), default=None)
++                          if POST_RE.match(l)), default=None)
+         st, nx, cx = last_state_next(
+             all_lines[_post_idx:] if _post_idx is not None else tail12)
++        # Status-ts (#466 R2): the ts of the post owning the parsed
++        # STATE/NEXT — lets pending derivation tell a stale trailer
++        # ("waiting auditor plan-review") from a live one.
++        _status_ts = all_lines[_post_idx][:19] if _post_idx is not None else None
+         # Full-box scan: a filed order must not fall out of the tail window
+         # before the next tick's unacked loop sees it (G1 follow-through).
+         coord = [l for l in all_lines if " FROM=coord NOTE" in l]
+         boxes[box] = {"all": posts, "full": all_lines, "tail": tail12, "state": st, "ctx": cx,
+-                      "next": nx, "coord_last": coord[-1][:160] if coord else None}
++                      "next": nx, "coord_last": coord[-1][:160] if coord else None,
++                      "status_ts": _status_ts}
+     return boxes
+ 
+ 
+@@ -844,6 +851,31 @@ def auditor_approved(box_all, full=None):
+     return False
+ 
+ 
++def auditor_approved_ts(box_all, full=None):
++    """Newest APPROVED verdict ts19, or None. Pure (#466 R2).
++
++    Same strict selection as auditor_approved (newest verdict-shaped
++    auditor post wins; a newer DECISION: trailer overrides it), but
++    returns the winning verdict's ts only when it says APPROVED — a
++    newest NEED yields None so the era logic re-opens instead of
++    closing out."""
++    for line in reversed(box_all or []):
++        m = POST_RE.match(line)
++        if not m or m.group(2) not in ("audit", "auditor"):
++            continue
++        if m.group(3) != "DECISION" and "DECISION:" not in m.group(4):
++            continue
++        post_ts = line[:19]
++        tts, ttext = audit_trailer_verdict(full or [])
++        if tts and tts > post_ts:
++            return tts if re.search(r"\bAPPROVED\b", ttext or "") else None
++        return post_ts if re.search(r"\bAPPROVED\b", m.group(4)) else None
++    tts, ttext = audit_trailer_verdict(full or [])
++    if tts:
++        return tts if re.search(r"\bAPPROVED\b", ttext or "") else None
++    return None
++
++
+ def pending_age_s(stored):
+     try:
+         dt = datetime.datetime.strptime(stored.get("since", ""),
+@@ -1316,6 +1348,22 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+     aprobe = fast_probe(ctx, ctx.audit_sess) if live else "ABSENT"
+     rep = latest_audit_report(ctx, issue)
+     seen_verdict = False
++    # #466 R2 (crash fix): the C4 hand-back identity read tip/cur_tip/
++    # demand_key bound 60+/170+ lines below -> UnboundLocalError on every
++    # tick reaching this function. Hoist the pure demand derivation plus
++    # the tip resolution here; the git lookup runs only when a verdict
++    # is on file, was handed, or sits in fresh posts (quiet ticks pay
++    # nothing). Later blocks reuse these locals (no re-derivation).
++    demand = audit_demand(boxes, st, fresh)
++    demand_key = audit_demand_key(demand["requester"], demand["text"]) if demand else None
++    tip = stored.get("tip")
++    cur_tip = None
++    if verdict_ts or asess.get("verdict_handed") or any(
++            "DECISION" in p for p in (fresh.get("auditor") or [])):
++        _early_info = git_info(ctx.dev_dir)
++        if _early_info:
++            cur_tip = _early_info[1]
++            tip = cur_tip or tip
+     _vkind = "APPROVED" if "APPROVED" in (auditor_decision(
+         boxes["auditor"]["all"], boxes["auditor"].get("full")) or "") else "NEED"
+     _vident = verdict_identity(_vkind, tip or cur_tip, demand_key)
+@@ -1341,6 +1389,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+             if append_box_note(room_dir, target, note):
+                 acted.append("audit verdict handed to %s" % target)
+                 asess["verdict_handed"] = list(_vident)
++                asess["verdict_handed_ts"] = post[:19]
+                 asess["handled_demand"] = asess.get("demand_key")
+                 asess["reruns"] = 0
+                 asess.pop("restart_capped", None)
+@@ -1366,6 +1415,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+                 if append_box_note(room_dir, target, note):
+                     acted.append("audit verdict handed to %s (unhandled scan)" % target)
+                     asess["verdict_handed"] = list(_vident)
++                    asess["verdict_handed_ts"] = uhts
+                     asess["handled_demand"] = asess.get("demand_key")
+                     asess["reruns"] = 0
+                     asess.pop("restart_capped", None)
+@@ -1376,8 +1426,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
+                     acted.append("HAND-BACK-FAILED %s" % target)
+     if any("audit verdict handed to" in a or "WOULD hand audit verdict" in a for a in acted):
+         store = {}
+-    demand = audit_demand(boxes, st, fresh)
+-    demand_key = audit_demand_key(demand["requester"], demand["text"]) if demand else None
++    # demand/demand_key hoisted beside the C4 identity check above.
+     qhead = audit_queue_head(issue, demand, rooms_all)
+     other_demand = False
+     for iss, _rdir, ost in rooms_all or []:
+@@ -1852,17 +1901,25 @@ def ring(ctx, sess, box, text, channel="inbox", oid=None, issue=None, pointer=No
+     return "RING-FAILED %s: %s" % (sess, out.strip()[:120])
+ 
+ 
+-def coord_note(role, text, ack_by=None):
++def coord_note(role, text, ack_by=None, done_by=False, evidence=None,
++               done_sla_s=DONE_SLA_S):
+     """Engine order line for a lane box + its ledger oid. Pure.
+ 
+     The oid embeds the post timestamp exactly as has_unacked derives it,
+     so the written id and the ledger key always agree. ack_by=True stamps
+     ack-by <filed+ACK_SLA_S> before the oid so [oid ...] stays trailing;
+     the caller records the deadline via file_order_deadline (#461 F).
++    done_by=True (with evidence=) stamps done-by <filed+DONE_SLA_S> plus
++    `done = <evidence>` ahead of the ack-by so [oid ...] stays trailing;
++    the caller records it via file_order_delivery (#466 R1). ACK is
++    receipt only — only the evidence post closes a done-by deadline.
+     """
+     ts = utcnow()
+     oid = "%s:%s" % (role, ts[:19])
+-    body = text + (" ack-by %s" % ack_by_ts(ts[:19]) if ack_by else "")
++    body = text + (" done = %s" % evidence if evidence else "")
++    if done_by:
++        body += " done-by %s" % done_by_ts(ts[:19], done_sla_s)
++    body += (" ack-by %s" % ack_by_ts(ts[:19]) if ack_by else "")
+     return ("%s FROM=coord NOTE :: %s [oid %s]" % (ts, body, oid)), oid
+ 
+ 
+@@ -1926,6 +1983,141 @@ def prune_deadlines(deadlines, rings):
+             if (rings or {}).get(o) not in (None, -1, RING_ESCALATED)}
+ 
+ 
++def done_by_ts(order_ts19, sla_s=DONE_SLA_S):
++    """done-by delivery stamp for an order ts, or None. Pure (#466 R1).
++
++    Same arithmetic as ack_by_ts with the delivery SLA: the stamp answers
++    "when is the evidence post due", not "when is the ACK due"."""
++    try:
++        base = datetime.datetime.strptime((order_ts19 or "")[:19], "%Y-%m-%dT%H:%M:%S")
++    except (ValueError, TypeError):
++        return None
++    return (base + datetime.timedelta(seconds=sla_s)).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def file_order_delivery(dl_store, oid, evidence, done_sla_s=DONE_SLA_S):
++    """Record the done-by delivery deadline for a freshly filed order. Pure (#466 R1).
++
++    Mutates and returns the passed store
++    ({oid: {"filed": ts19, "done_by": ts, "evidence": kind, "nudged": 0,
++    "escalated": 0}}); orders without a parseable ts are not tracked.
++    ACKs never clear this store (ACK is receipt, not delivery)."""
++    ts = oid.split(":", 1)[1][:19] if ":" in (oid or "") else ""
++    by = done_by_ts(ts, done_sla_s)
++    if by:
++        dl_store[oid] = {"filed": ts, "done_by": by, "evidence": evidence,
++                         "nudged": 0, "escalated": 0}
++    return dl_store
++
++
++def _newest_word_ts(posts, role, word_re):
++    """Newest sender-role post header matching word_re (ts19), or None. Pure."""
++    best = None
++    for post in posts or []:
++        m = POST_RE.match(post or "")
++        if not m or m.group(2) != role:
++            continue
++        if word_re.search(m.group(4)) and (best is None or post[:19] > best):
++            best = post[:19]
++    return best
++
++
++def _newest_kind_ts(posts, role, kind):
++    """Newest sender-role post of one wire kind (ts19), or None. Pure."""
++    best = None
++    for post in posts or []:
++        m = POST_RE.match(post or "")
++        if not m or m.group(2) != role or m.group(3) != kind:
++            continue
++        if best is None or post[:19] > best:
++            best = post[:19]
++    return best
++
++
++def delivery_ts(filed19, role, evidence, posts):
++    """Newest evidence artifact ts19 newer than the order filing, or None. Pure (#466 R1).
++
++    Evidence kinds: DONE (dev DONE declaration / generic DONE word),
++    VERIFIED (qe VERIFIED declaration), IMPL-READY (gated dev IMPL READY),
++    READY (any READY post), NOTE (any post — liveness, not content).
++    The filed cutoff is load-bearing: an older deliverable from a
++    previous cycle must never satisfy a newer order."""
++    filed = (filed19 or "")[:19]
++    if not filed or role not in ("dev", "qe"):
++        return None
++    if evidence == "DONE":
++        found = dev_done_ts(posts) if role == "dev" else _newest_word_ts(posts, role, DONE_WORD_RE)
++    elif evidence == "VERIFIED":
++        found = qe_verified_ts(posts) if role == "qe" else _newest_word_ts(posts, role, VERIFIED_WORD_RE)
++    elif evidence == "IMPL-READY":
++        found = dev_impl_ready_ts(posts)
++    elif evidence == "READY":
++        found = _newest_kind_ts(posts, role, "READY")
++    elif evidence == "NOTE":
++        found = None
++        for post in posts or []:
++            m = POST_RE.match(post or "")
++            if not m or m.group(2) != role:
++                continue
++            if found is None or post[:19] > found:
++                found = post[:19]
++    else:
++        return None
++    if not found:
++        return None
++    return found[:19] if found[:19] > filed else None
++
++
++def delivery_live(oid, info, rings, boxes):
++    """Whether a delivery record still needs enforcement. Pure (#466 R1).
++
++    Terminal only on: escalation recorded (RING_ESCALATED ledger mark),
++    lane supersession (a newer coord order for the lane), or delivered
++    evidence newer than the filing. ACK (-1) and ledger cleanup (None)
++    explicitly keep the record: receipt is not delivery."""
++    if (rings or {}).get(oid) == RING_ESCALATED:
++        return False
++    if (info or {}).get("escalated"):
++        return False
++    role, _, ots = (oid or "").partition(":")
++    if role not in ("dev", "qe"):
++        return False
++    cur = ((boxes or {}).get(role) or {}).get("coord_last")
++    if cur and ots < cur[:19]:
++        return False
++    if delivery_ts((info or {}).get("filed"), role, (info or {}).get("evidence"),
++                   ((boxes or {}).get(role) or {}).get("all", [])):
++        return False
++    return True
++
++
++def delivery_overdue_ids(store, rings, boxes, now_ts):
++    """Live delivery oids past their done-by deadline, oldest first. Pure (#466 R1)."""
++    out = []
++    for oid, info in (store or {}).items():
++        if not delivery_live(oid, info, rings, boxes):
++            continue
++        if ack_overdue((info or {}).get("done_by"), now_ts):
++            out.append(oid)
++    return sorted(out)
++
++
++def delivery_escalate_due(info, now_ts):
++    """True on/after done-by + grace (second sighting escalates). Pure (#466 R1)."""
++    try:
++        now = datetime.datetime.strptime((now_ts or "")[:19], "%Y-%m-%dT%H:%M:%S")
++        by = datetime.datetime.strptime((info or {}).get("done_by", "")[:19], "%Y-%m-%dT%H:%M:%S")
++    except (ValueError, TypeError):
++        return False
++    return now >= by + datetime.timedelta(seconds=DONE_ESCALATE_GRACE_S)
++
++
++def prune_delivery(store, rings, boxes):
++    """Drop delivered/superseded/escalated delivery records. Pure (#466 R1)."""
++    return {o: i for o, i in (store or {}).items()
++            if delivery_live(o, i, rings, boxes)}
++
++
+ def write_ack_overdue(room_dir, pairs):
+     """Live-only ack.overdue visibility file (one 'oid by' per line). I/O.
+ 
+@@ -1946,6 +2138,29 @@ def write_ack_overdue(room_dir, pairs):
+         return "ack-overdue-FAILED"
+ 
+ 
++def backlog_brief_text(target, current_issue, stale_detail, done_by):
++    """Pure BACKLOG SWAP / BACKLOG/RECOVERY brief body (#466 R1).
++
++    Both heads carry the same finish line: a backlog assignment is done
++    only when the findings NOTE lands (DONE in the header + evidence),
++    never when the order is merely ACKed. done_by is the order's
++    delivery stamp (None when unknown — line still present)."""
++    if stale_detail is not None:
++        head = ("BACKLOG/RECOVERY (#%d) -- dev NEXT in #%d stale ('%s', no lane post since %s); read-only recon unless it is your own in-flight work\n"
++                % (target, target, stale_detail[0][:80], stale_detail[1][:19]))
++    else:
++        head = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
++                % (target, current_issue))
++    return (head +
++            "issue: %d\nbranch: none yet (read-only until recalled)\n"
++            "Task: read-only recon of #%d per its room pending/next; "
++            "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
++            "Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment carries [oid <id>] — ACK it the same way.\n"
++            "Finish line: DONE = findings NOTE posted to inbox/dev.md with DONE in the header + evidence, else NOT done. done-by %s. A pure ACK never satisfies done-by.\n"
++            "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY — read inbox/dev.md\"\n"
++            % (target, target, done_by or "none", target))
++
++
+ def write_brief(ctx, room_dir, name, content):
+     p = os.path.join(room_dir, "prompts", name)
+     if ctx.dry:
+@@ -2788,39 +3003,91 @@ def starvation_sweep(boxes, st, probes, has_unacked, halt_now):
+     return out
+ 
+ 
+-def derive_room_phase(issue_closed, dev_done, audit_approved, qe_verified,
+-                      impl_ready):
+-    """RECON | IMPL | VERIFY | CLOSE-OUT | CLOSED from lane evidence. Pure.
++def derive_room_phase(issue_closed, dev_done_ts, approved_ts, qe_verified_ts,
++                      impl_ready_ts):
++    """RECON | IMPL | VERIFY | CLOSE-OUT | CLOSED from lane evidence ts19s. Pure (#466 R2).
+ 
+-    CLOSED only when the issue is closed (never originated here); CLOSE-OUT
+-    when the work is demonstrably finished (dev DONE + audit APPROVED);
+-    VERIFY while a gated READY stands (or qe VERIFIED proves the era);
+-    IMPL once the plan is approved; RECON otherwise."""
++    Era-guarded: CLOSE-OUT only when the work is demonstrably finished AND
++    nothing newer re-opened the era — the approval must not postdate the
++    DONE, and no gated IMPL READY may postdate the DONE either. A newer
++    plan approval or a newer IMPL READY re-opens the era (VERIFY while a
++    gated READY stands, IMPL once the plan is approved) instead of forcing
++    CLOSE-OUT on stale text. CLOSED only when the issue is closed (never
++    originated here); qe VERIFIED proves the era but never blocks CLOSE-OUT
++    (closeout_stage owns merge-close). All ts args are ts19-or-None."""
+     if issue_closed:
+         return "CLOSED"
+-    if dev_done and audit_approved:
++    if dev_done_ts and approved_ts and approved_ts <= dev_done_ts and (
++            not impl_ready_ts or dev_done_ts >= impl_ready_ts):
+         return "CLOSE-OUT"
+-    if impl_ready or qe_verified:
++    if impl_ready_ts or qe_verified_ts:
+         return "VERIFY"
+-    if audit_approved:
++    if approved_ts:
+         return "IMPL"
+     return "RECON"
+ 
+ 
+-def room_pending_text(phase, dev_next, qe_next, audit_planned):
++def next_room_state(phase, prev_state, gh_closed):
++    """Derived room state transition from the derived phase. Pure (#466 R2).
++
++    CLOSE-OUT + IN_PROGRESS advances to CLOSING; any other phase with
++    CLOSING regresses to IN_PROGRESS (a newer IMPL READY or plan approval
++    re-opened the era) unless GitHub already closed; CLOSED is terminal
++    and never regresses. All other states pass through untouched."""
++    prev = prev_state or ""
++    if gh_closed or prev == "CLOSED":
++        return prev
++    if phase == "CLOSE-OUT":
++        return "CLOSING" if prev == "IN_PROGRESS" else prev
++    if prev == "CLOSING":
++        return "IN_PROGRESS"
++    return prev
++
++
++_WAITING_AUDIT_RE = re.compile(r"waiting.*audit|plan-review", re.I)
++
++
++def pending_lane_text(role, phase, nxt, status_ts, anchor_ts, closeout):
++    """One lane's pending segment, cursor-true. Pure (#466 R2).
++
++    A waiting-audit/plan-review NEXT older than the lane's anchor artifact
++    (verdict handoff, approval, or IMPL READY — whatever the lane already
++    acted on) is stale text, not a wait: it is replaced by the phase
++    obligation. In CLOSE-OUT every waiting-audit NEXT is definitionally
++    stale. Non-waiting NEXTs and NEXTs newer than the anchor pass through
++    unchanged; fail-closed (missing anchor keeps the stale text rather
++    than hiding a genuine wait)."""
++    if nxt and _WAITING_AUDIT_RE.search(nxt) and (
++            (status_ts or "") < (anchor_ts or "") or closeout):
++        if phase == "CLOSE-OUT":
++            return "%s: awaiting merge-close" % role
++        if phase == "VERIFY":
++            return "%s: verifying" % role
++        return "%s: addressing audit verdict" % role
++    return ("%s: %s" % (role, nxt)) if nxt else None
++
++
++def room_pending_text(phase, dev_next, qe_next, audit_planned,
++                      dev_status_ts=None, dev_anchor_ts=None,
++                      qe_status_ts=None, qe_anchor_ts=None):
+     """One-line pending derived from the latest NEXTs. Pure (cap 200).
+ 
+     Lane-tag prefixes keep downstream consumers honest (the backlog swap
+     guard reads lane segments via pending_owes_lane). No NEXTs on a virgin RECON names both lanes
+     explicitly so the swap guard still holds; other phaseless silences
+-    report no NEXT rather than inventing one."""
++    report no NEXT rather than inventing one. The optional status/anchor
++    ts pair per lane suppresses stale waiting-audit trailers (#466 R2);
++    omitted (None) preserves the legacy verbatim text."""
+     if phase == "CLOSED":
+         return "CLOSED"
+     bits = []
+-    if dev_next:
+-        bits.append("dev: %s" % dev_next)
+-    if qe_next:
+-        bits.append("qe: %s" % qe_next)
++    closeout = (phase == "CLOSE-OUT")
++    for _role, _nxt, _sts, _anc in (
++            ("dev", dev_next, dev_status_ts, dev_anchor_ts),
++            ("qe", qe_next, qe_status_ts, qe_anchor_ts)):
++        _seg = pending_lane_text(_role, phase, _nxt, _sts, _anc, closeout)
++        if _seg:
++            bits.append(_seg)
+     if audit_planned and audit_planned != "-":
+         bits.append("audit: %s" % audit_planned)
+     if bits:
+@@ -3298,6 +3565,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     ack_since = st.get("ack_since") or None
+     ack_failures = int(st.get("ack_failures", 0) or 0)
+     ad_store = {}  # item F (#461): ack-by deadlines filed this tick
++    dl_store = {}  # #466 R1: done-by delivery deadlines filed this tick
+     resume_now = {}
+     for role in ("dev", "qe"):
+         nx = (boxes[role]["next"] or "")
+@@ -3418,6 +3686,39 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                                 "ACK overdue -- reply with ACK:%s" % _oid,
+                                 oid=_oid, issue=issue))
+         ad_store[_oid] = {"by": _info.get("by"), "nudged": 1}
++    # #466 R1: delivery enforcement. An overdue done-by re-rings once with
++    # NO new oid and NO ring-count increment (same shape as the ACK nudge);
++    # the second sighting escalates to the operator as NEED (no auto
++    # recreate — the lane is alive, ACK-MISSING already owns dead
++    # sessions). ACKs never satisfy this: only the evidence post recorded
++    # in the delivery store closes the deadline.
++    _dl_now = utcnow()
++    _dl_known = dict(st.get("delivery") or {})
++    _dl_known.update(dl_store)
++    for _doid in delivery_overdue_ids(_dl_known, rings, boxes, _dl_now):
++        _dlane = ref_lane(_doid)
++        if _dlane not in ("dev", "qe"):
++            continue
++        _dinfo = _dl_known.get(_doid) or {}
++        if not _dinfo.get("nudged"):
++            actions.append("DLR-OVERDUE %s (done-by %s, evidence %s)"
++                           % (_doid, _dinfo.get("done_by"), _dinfo.get("evidence")))
++            events.append("delivery-overdue-%s" % _dlane)
++            if _dlane not in deaf and probes[_dlane].startswith("IDLE") \
++                    and not session_rung(actions, SESS[_dlane], cycle["rung"]):
++                actions.append(ring(ctx, SESS[_dlane], _dlane,
++                                    "delivery overdue -- post %s (order %s)"
++                                    % (_dinfo.get("evidence"), _doid),
++                                    oid=_doid, issue=issue))
++            _dinfo = dict(_dinfo, nudged=1)
++            dl_store[_doid] = _dinfo
++        elif delivery_escalate_due(_dinfo, _dl_now):
++            actions.append("NEED delivery #%d %s %s ESCALATED (no %s post since %s; done-by %s)"
++                           % (issue, _dlane, _doid, _dinfo.get("evidence"),
++                              (_dinfo.get("filed") or "?")[:19], _dinfo.get("done_by")))
++            events.append("delivery-escalated-%s" % _dlane)
++            _dinfo = dict(_dinfo, escalated=1)
++            dl_store[_doid] = _dinfo
+     for role, oid in resume_now.items():
+         if role in has_unacked or role in deaf:
+             continue
+@@ -3528,7 +3829,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+         # ring with the standard dev:<ts>/qe:<ts> oid), not a ring-only
+         # pointer. first:<role> stays only the one-shot guard flag: set
+         # -1 when filed (never rung, never ACKed; never write 0 — falsy).
+-        note, ioid = coord_note(role, "INTAKE #%d %s first brief -- read prompts/%s.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, role, role), ack_by=True)
++        note, ioid = coord_note(role, "INTAKE #%d %s first brief -- read prompts/%s.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, role, role), ack_by=True, done_by=True, evidence="NOTE")
+         if ioid in rings:
+             actions.append("order deferred %s intake (oid collision)" % role)
+             continue
+@@ -3538,6 +3839,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             rings[first_oid] = -1
+             has_unacked.add(role)
+             file_order_deadline(ad_store, ioid)
++            file_order_delivery(dl_store, ioid, "NOTE")
+             if role == "dev":
+                 cycle["dev_order"] = issue
+         else:
+@@ -3546,6 +3848,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[first_oid] = -1
+                 has_unacked.add(role)
+                 file_order_deadline(ad_store, ioid)
++                file_order_delivery(dl_store, ioid, "NOTE")
+                 actions.append("order filed %s intake (oid %s)" % (role, ioid))
+                 if role == "dev":
+                     cycle["dev_order"] = issue
+@@ -3605,7 +3908,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             events.append("stale-dev-persists")
+             ds_store = dict(_prev_ds)
+         else:
+-            _ds_note, _ds_oid = coord_note("dev", "STALE RECON #%d: NEXT '%s' has no lane post since %s; post STATE/NEXT now or continue; ACK it with post_update ref=<id> before starting" % (issue, (dev_next or "")[:80], _dev_last or "never"), ack_by=True)
++            _ds_note, _ds_oid = coord_note("dev", "STALE RECON #%d: NEXT '%s' has no lane post since %s; post STATE/NEXT now or continue; ACK it with post_update ref=<id> before starting" % (issue, (dev_next or "")[:80], _dev_last or "never"), ack_by=True, done_by=True, evidence="NOTE")
+             if _ds_oid in rings:
+                 actions.append("order deferred dev stale re-wake (oid collision)")
+             elif ctx.dry:
+@@ -3613,6 +3916,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_ds_oid] = 0
+                 has_unacked.add("dev")
+                 file_order_deadline(ad_store, _ds_oid)
++                file_order_delivery(dl_store, _ds_oid, "NOTE")
+                 ds_store = {"next": dev_next or "", "oid": _ds_oid,
+                             "filed": _ds_oid[4:23]}
+                 cycle["dev_order"] = issue
+@@ -3620,6 +3924,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_ds_oid] = 0
+                 has_unacked.add("dev")
+                 file_order_deadline(ad_store, _ds_oid)
++                file_order_delivery(dl_store, _ds_oid, "NOTE")
+                 actions.append("order filed dev stale re-wake (oid %s)" % _ds_oid)
+                 ds_store = {"next": dev_next or "", "oid": _ds_oid,
+                             "filed": _ds_oid[4:23]}
+@@ -3671,30 +3976,20 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     if backlog_target is not None:
+         target = backlog_target
+         _sdet = stale_room_detail(rooms_all, target, _sweep_now)
+-        if _sdet is not None:
+-            _head = ("BACKLOG/RECOVERY (#%d) -- dev NEXT in #%d stale ('%s', no lane post since %s); read-only recon unless it is your own in-flight work\n"
+-                     % (target, target, _sdet[0][:80], _sdet[1][:19]))
+-        else:
+-            _head = ("BACKLOG SWAP (#%d) -- dev blocked on qe output in #%d\n"
+-                     % (target, issue))
+-        brief = (_head +
+-                 "issue: %d\nbranch: none yet (read-only until recalled)\n"
+-                 "Task: read-only recon of #%d per its room pending/next; "
+-                 "no branch, no code. Every post ends with STATE/NEXT lines plus a CTX: <n>%% line (pane footer). "
+-"Post NOTE to inbox/dev.md + RING. If a ring or NOTE carries [oid <id>], ACK it with post_update ref=<id>; the backlog assignment carries [oid <id>] — ACK it the same way.\n"
+-                 "scripts/agent_up.sh wake %d dev nexios-engine \"inbox: dev READY — read inbox/dev.md\"\n"
+-                 % (target, target, target))
++        note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target), ack_by=True, done_by=True, evidence="DONE")
++        brief = backlog_brief_text(target, issue, _sdet, done_by_ts(boid[4:23]))
+         actions.append(write_brief(ctx, room_dir,
+                                    "dev-%d-backlog.txt" % target, brief))
+-        note, boid = coord_note("dev", "BACKLOG assignment #%d (this room #%d): read prompts/dev-%d-backlog.txt; ACK it with post_update ref=<id> before starting" % (target, issue, target), ack_by=True)
+         if ctx.dry:
+             actions.append("WOULD post backlog order #%d (oid %s)" % (target, boid))
+             file_order_deadline(ad_store, boid)
++            file_order_delivery(dl_store, boid, "DONE")
+             has_unacked.add("dev")
+         else:
+             if append_box_note(room_dir, "dev", note):
+                 rings[boid] = 0
+                 file_order_deadline(ad_store, boid)
++                file_order_delivery(dl_store, boid, "DONE")
+                 has_unacked.add("dev")
+                 actions.append("order filed dev backlog #%d (oid %s)" % (target, boid))
+                 if ("dev" not in deaf and probes["dev"].startswith("IDLE")
+@@ -3734,7 +4029,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     if not dd_store and impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
+                                           fresh.get("dev"), _approved, rings, has_unacked,
+                                           stored_impl):
+-        note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue, ack_by=True)
++        note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue, ack_by=True, done_by=True, evidence="IMPL-READY")
+         if di_oid in rings:
+             actions.append("order deferred dev IMPL (oid collision)")
+         elif ctx.dry:
+@@ -3742,12 +4037,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             rings[di_oid] = 0
+             has_unacked.add("dev")
+             file_order_deadline(ad_store, di_oid)
++            file_order_delivery(dl_store, di_oid, "IMPL-READY")
+             di_store = {"next": _dev_next, "oid": di_oid}
+             cycle["dev_order"] = issue
+         elif append_box_note(room_dir, "dev", note):
+             rings[di_oid] = 0
+             has_unacked.add("dev")
+             file_order_deadline(ad_store, di_oid)
++            file_order_delivery(dl_store, di_oid, "IMPL-READY")
+             actions.append("order filed dev IMPL (oid %s)" % di_oid)
+             di_store = {"next": _dev_next, "oid": di_oid}
+             cycle["dev_order"] = issue
+@@ -3841,15 +4138,17 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+     # exactly the filed-or-due set (S3).
+     qo_store = None
+     if qe_will_file:
+-        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts), ack_by=True)
++        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts), ack_by=True, done_by=True, evidence="VERIFIED")
+         if ctx.dry:
+             actions.append("WOULD post qe order IMPL READY (oid %s)" % qoid)
+             file_order_deadline(ad_store, qoid)
++            file_order_delivery(dl_store, qoid, "VERIFIED")
+             has_unacked.add("qe")
+         else:
+             if append_box_note(room_dir, "qe", note):
+                 rings[qoid] = 0
+                 file_order_deadline(ad_store, qoid)
++                file_order_delivery(dl_store, qoid, "VERIFIED")
+                 has_unacked.add("qe")
+                 actions.append("order filed qe IMPL READY (oid %s)" % qoid)
+                 qo_store = {"for": impl_ts}
+@@ -3898,7 +4197,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 events.append("closeout-branch-missing")
+             else:
+                 _c_text = closeout_order_text(issue, _c_stage, _c_branch, _c_tip)
+-                _c_note, _c_oid = coord_note(_c_lane, _c_text, ack_by=True)
++                _c_evidence = "VERIFIED" if _c_stage == "verify" else "DONE"
++                _c_note, _c_oid = coord_note(_c_lane, _c_text, ack_by=True, done_by=True, evidence=_c_evidence)
+                 if _c_oid in rings:
+                     actions.append("order deferred %s %s (oid collision)" % (_c_lane, _c_stage))
+                 elif ctx.dry:
+@@ -3906,12 +4206,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                     rings[_c_oid] = 0
+                     has_unacked.add(_c_lane)
+                     file_order_deadline(ad_store, _c_oid)
++                    file_order_delivery(dl_store, _c_oid, _c_evidence)
+                     co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                     events.append("closeout-order-filed")
+                 elif append_box_note(room_dir, _c_lane, _c_note):
+                     rings[_c_oid] = 0
+                     has_unacked.add(_c_lane)
+                     file_order_deadline(ad_store, _c_oid)
++                    file_order_delivery(dl_store, _c_oid, _c_evidence)
+                     actions.append("order filed %s %s (oid %s)" % (_c_lane, _c_stage, _c_oid))
+                     co_store = {"for": _c_done, "stage": _c_stage, "oid": _c_oid, "poll": 0}
+                     events.append("closeout-order-filed")
+@@ -4002,7 +4304,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+             _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+                               "escalated": bool(_sv_prev.get("escalated"))}
+         elif _sv_act == "rewake":
+-            _sw_note, _sw_oid = coord_note(_role, "STARVATION RE-WAKE #%d %s: NEXT '%s' waits on input with no order; post STATE/NEXT or act; ACK it with post_update ref=<id> before starting" % (issue, _role, (boxes[_role]["next"] or "")[:80]), ack_by=True)
++            _sw_note, _sw_oid = coord_note(_role, "STARVATION RE-WAKE #%d %s: NEXT '%s' waits on input with no order; post STATE/NEXT or act; ACK it with post_update ref=<id> before starting" % (issue, _role, (boxes[_role]["next"] or "")[:80]), ack_by=True, done_by=True, evidence="NOTE", done_sla_s=3600)
+             if _sw_oid in rings:
+                 actions.append("order deferred %s starvation re-wake (oid collision)" % _role)
+                 _sv_new[_role] = {"count": _sv_count, "oid": _sv_oid,
+@@ -4012,6 +4314,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_sw_oid] = 0
+                 has_unacked.add(_role)
+                 file_order_deadline(ad_store, _sw_oid)
++                file_order_delivery(dl_store, _sw_oid, "NOTE", 3600)
+                 if _role == "dev":
+                     cycle["dev_order"] = issue
+                 _sv_new[_role] = {"count": _sv_count, "oid": _sw_oid,
+@@ -4020,6 +4323,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 rings[_sw_oid] = 0
+                 has_unacked.add(_role)
+                 file_order_deadline(ad_store, _sw_oid)
++                file_order_delivery(dl_store, _sw_oid, "NOTE", 3600)
+                 actions.append("order filed %s starvation re-wake (oid %s)" % (_role, _sw_oid))
+                 _sv_new[_role] = {"count": _sv_count, "oid": _sw_oid,
+                                   "escalated": False}
+@@ -4122,6 +4426,16 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+                 s["ack_deadline"] = kept
+             else:
+                 s.pop("ack_deadline", None)
++        if dl_store:
++            merged_dl = dict(s.get("delivery") or {})
++            merged_dl.update(dl_store)
++            s["delivery"] = merged_dl
++        if isinstance(s.get("delivery"), dict):
++            kept_dl = prune_delivery(s["delivery"], rings, boxes)
++            if kept_dl:
++                s["delivery"] = kept_dl
++            else:
++                s.pop("delivery", None)
+         if isinstance(co_store, dict) and co_store:
+             s["closeout"] = co_store
+         if ghc_store:
+@@ -4135,15 +4449,26 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
+         if not s.get("halt") and not halt_now:
+             _dev_done = dev_done_ts(boxes["dev"]["all"])
+             _qe_verified = qe_verified_ts(boxes["qe"]["all"])
++            _approved_ts = auditor_approved_ts(boxes["auditor"]["all"],
++                                               boxes["auditor"].get("full"))
++            # #466 R2: cursor-true anchors. A waiting-audit trailer is
++            # stale once the lane acted past it (verdict handoff,
++            # approval, or IMPL READY); qe anchors on the IMPL READY.
++            _asess_now = as_store if isinstance(as_store, dict) else (st.get("audit_session") or {})
++            _dev_anchor = max(_approved_ts or "", _asess_now.get("verdict_handed_ts") or "",
++                              impl_ts or "") or None
+             _phase = derive_room_phase(bool(st.get("gh_closed") or st.get("phase") == "CLOSED"),
+-                                       _dev_done, _approved, _qe_verified, impl_ts)
++                                       _dev_done, _approved_ts, _qe_verified, impl_ts)
+             s["phase"] = _phase
+-            if _phase == "CLOSE-OUT" and s.get("state") == "IN_PROGRESS":
+-                s["state"] = "CLOSING"
++            _nst = next_room_state(_phase, s.get("state"), bool(st.get("gh_closed")))
++            if _nst != (s.get("state") or ""):
++                s["state"] = _nst
+             _cur_pending = s.get("pending") or ""
+             _new_pending = room_pending_text(
+                 _phase, boxes["dev"]["next"], boxes["qe"]["next"],
+-                audit_note if need_verdict else None)
++                audit_note if need_verdict else None,
++                boxes["dev"].get("status_ts"), _dev_anchor,
++                boxes["qe"].get("status_ts"), impl_ts or None)
+             if _new_pending != _cur_pending:
+                 s["pending"] = pending_refresh(_cur_pending, _new_pending,
+                                                s.get("halt"), halt_now)
+@@ -5574,6 +5899,63 @@ def mode_self_test():
+           file_order_deadline(_ad, "dev:2026-11-02T21:28:52") == {"dev:2026-11-02T21:28:52": {"by": "2026-11-02T21:43:52Z", "nudged": 0}}, True)
+     check("file-order-deadline-bad-oid",
+           file_order_deadline({}, "bogus") == {}, True)
++    # #466 R1: delivery enforcement (ACK is receipt, done-by is delivery).
++    _dl = {}
++    check("delivery-meta-done-by",
++          file_order_delivery(_dl, "dev:2026-11-02T21:28:52", "DONE") == {"dev:2026-11-02T21:28:52": {"filed": "2026-11-02T21:28:52", "done_by": "2026-11-02T21:58:52Z", "evidence": "DONE", "nudged": 0, "escalated": 0}}, True)
++    check("delivery-done-by-stamp",
++          done_by_ts("2026-11-02T21:28:52") == "2026-11-02T21:58:52Z"
++          and done_by_ts("garbage") is None, True)
++    check("delivery-ts-done-after-filed",
++          delivery_ts("2026-11-02T21:28:52", "dev", "DONE",
++                      ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"]) == "2026-11-02T22:10:00", True)
++    check("delivery-ts-older-done-ignored",
++          delivery_ts("2026-11-02T23:00:00", "dev", "DONE",
++                      ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"]) is None, True)
++    check("delivery-ts-note-any-post",
++          delivery_ts("2026-11-02T21:28:52", "qe", "NOTE",
++                      ["2026-11-02T22:00:00Z FROM=qe NOTE :: working"]) == "2026-11-02T22:00:00", True)
++    check("delivery-ts-wrong-role-ignored",
++          delivery_ts("2026-11-02T21:28:52", "qe", "NOTE",
++                      ["2026-11-02T22:00:00Z FROM=dev NOTE :: working"]) is None, True)
++    _dstore = {"dev:2026-11-02T21:28:52": {"filed": "2026-11-02T21:28:52", "done_by": "2026-11-02T21:58:52Z", "evidence": "DONE", "nudged": 0, "escalated": 0}}
++    _dboxes = {"dev": {"all": [], "coord_last": None}, "qe": {"all": [], "coord_last": None}}
++    check("delivery-overdue-idle",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": 1}, _dboxes, "2026-11-02T22:00:00Z") == ["dev:2026-11-02T21:28:52"], True)
++    check("delivery-not-overdue-before-done-by",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": 1}, _dboxes, "2026-11-02T21:30:00Z") == [], True)
++    check("delivery-not-overdue-done",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": 1},
++                               {"dev": {"all": ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"], "coord_last": None}, "qe": {"all": [], "coord_last": None}},
++                               "2026-11-02T23:00:00Z") == [], True)
++    check("delivery-ack-does-not-clear",
++          delivery_overdue_ids(_dstore, {"dev:2026-11-02T21:28:52": -1}, _dboxes, "2026-11-02T22:00:00Z") == ["dev:2026-11-02T21:28:52"], True)
++    check("delivery-escalated-terminal",
++          delivery_overdue_ids({"dev:2026-11-02T21:28:52": dict(_dstore["dev:2026-11-02T21:28:52"], escalated=1)},
++                               {"dev:2026-11-02T21:28:52": 3}, _dboxes, "2026-11-02T23:30:00Z") == [], True)
++    check("delivery-nudge-once",
++          delivery_escalate_due({"done_by": "2026-11-02T21:58:52Z"}, "2026-11-02T21:59:00Z") is False
++          and delivery_escalate_due({"done_by": "2026-11-02T21:58:52Z"}, "2026-11-02T22:13:52Z") is True, True)
++    _supboxes = {"dev": {"all": [], "coord_last": "2026-11-02T22:30:00Z FROM=coord NOTE :: BACKLOG assignment [oid dev:2026-11-02T22:30:00]"}, "qe": {"all": [], "coord_last": None}}
++    check("delivery-prune-superseded",
++          prune_delivery(_dstore, {"dev:2026-11-02T21:28:52": 1}, _supboxes) == {}, True)
++    check("delivery-prune-keeps-live",
++          prune_delivery(_dstore, {"dev:2026-11-02T21:28:52": 1}, _dboxes) == _dstore, True)
++    check("delivery-prune-drops-delivered",
++          prune_delivery(_dstore, {"dev:2026-11-02T21:28:52": -1},
++                         {"dev": {"all": ["2026-11-02T22:10:00Z FROM=dev READY :: step-a DONE"], "coord_last": None}, "qe": {"all": [], "coord_last": None}}) == {}, True)
++    _bb1 = backlog_brief_text(240, 390, None, "2026-11-02T21:58:52Z")
++    _bb2 = backlog_brief_text(240, 390, ("stale next", "2026-11-02T18:00:00Z"), "2026-11-02T21:58:52Z")
++    check("backlog-brief-finish-line",
++          "BACKLOG SWAP (#240)" in _bb1 and "BACKLOG/RECOVERY (#240)" in _bb2
++          and _bb1.count("Finish line:") == 1 and _bb2.count("Finish line:") == 1
++          and "done-by 2026-11-02T21:58:52Z" in _bb1 and "done-by 2026-11-02T21:58:52Z" in _bb2
++          and "ACK it with post_update ref=<id>" in _bb1 and "pure ACK never satisfies done-by" in _bb2, True)
++    _cn2, _coid2 = coord_note("dev", "x", ack_by=True, done_by=True, evidence="DONE")
++    check("coord-note-done-by-keeps-oid-last",
++          _cn2.endswith("[oid %s]" % _coid2) and " done = DONE " in _cn2
++          and " done-by " in _cn2 and " ack-by " in _cn2
++          and _cn2.index(" done-by ") < _cn2.index(" ack-by ") < _cn2.index(" [oid "), True)
+     check("ring-line-notes-unchanged",
+           ring(SimpleNamespace(dry=True), "s", "", "t", channel="notes") == "WOULD ring s: notes: t -- read logs/consultant-notes.md", True)
+     _w1 = "2026-11-02T18:46:59Z FROM=dev WAKE :: inbox: dev READY"
+@@ -6016,16 +6398,36 @@ def mode_self_test():
+     check("starvation-sweep-halt-suppresses",
+           starvation_sweep(_cboxes, dict(_cst, halt=True), {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == []
+           and starvation_sweep(_cboxes, _cst, {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), True) == [], True)
+-    check("phase-recon", derive_room_phase(False, None, False, None, None) == "RECON", True)
+-    check("phase-impl", derive_room_phase(False, None, True, None, None) == "IMPL", True)
++    check("phase-recon", derive_room_phase(False, None, None, None, None) == "RECON", True)
++    check("phase-impl", derive_room_phase(False, None, "2026-11-02T08:00:00Z", None, None) == "IMPL", True)
+     check("phase-verify-ready",
+-          derive_room_phase(False, None, True, None, "2026-11-02T08:03:09Z") == "VERIFY", True)
++          derive_room_phase(False, None, "2026-11-02T08:00:00Z", None, "2026-11-02T08:03:09Z") == "VERIFY", True)
+     check("phase-verify-qe",
+-          derive_room_phase(False, None, False, "2026-11-02T08:03:09Z", None) == "VERIFY", True)
++          derive_room_phase(False, None, None, "2026-11-02T08:03:09Z", None) == "VERIFY", True)
+     check("phase-close-out",
+-          derive_room_phase(False, "2026-11-02T08:03:09Z", True, None, None) == "CLOSE-OUT", True)
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", None, None) == "CLOSE-OUT", True)
+     check("phase-closed",
+-          derive_room_phase(True, "2026-11-02T08:03:09Z", True, "2026-11-02T08:03:09Z", "2026-11-02T08:03:09Z") == "CLOSED", True)
++          derive_room_phase(True, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z", "2026-11-02T08:03:09Z") == "CLOSED", True)
++    # #466 R2: era guards — a newer approval or IMPL READY re-opens.
++    check("phase-new-impl-reopens",
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", None, "2026-11-02T09:00:00Z") == "VERIFY", True)
++    check("phase-new-approval-after-done",
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T09:00:00Z", None, None) == "IMPL", True)
++    check("phase-closeout-normal",
++          derive_room_phase(False, "2026-11-02T09:00:00Z", "2026-11-02T08:00:00Z", "2026-11-02T09:30:00Z", "2026-11-02T08:30:00Z") == "CLOSE-OUT", True)
++    check("phase-closed-terminal",
++          derive_room_phase(True, None, None, None, "2026-11-02T09:00:00Z") == "CLOSED", True)
++    check("state-closeout-closing",
++          next_room_state("CLOSE-OUT", "IN_PROGRESS", False) == "CLOSING", True)
++    check("state-regress-to-inprogress",
++          next_room_state("IMPL", "CLOSING", False) == "IN_PROGRESS"
++          and next_room_state("VERIFY", "CLOSING", False) == "IN_PROGRESS", True)
++    check("state-closed-terminal",
++          next_room_state("IMPL", "CLOSED", False) == "CLOSED"
++          and next_room_state("IMPL", "IN_PROGRESS", True) == "IN_PROGRESS", True)
++    check("state-passthrough",
++          next_room_state("IMPL", "IN_PROGRESS", False) == "IN_PROGRESS"
++          and next_room_state("CLOSE-OUT", "HOLD", False) == "HOLD", True)
+     check("pending-from-next",
+           room_pending_text("IMPL", "waiting IMPL order", "idle :: waiting", "ring audit lane") == "IMPL: dev: waiting IMPL order | qe: idle :: waiting | audit: ring audit lane", True)
+     check("pending-no-audit-bit",
+@@ -6035,6 +6437,36 @@ def mode_self_test():
+     check("pending-closed", room_pending_text("CLOSED", "x", "y", "z") == "CLOSED", True)
+     check("pending-cap-200",
+           len(room_pending_text("IMPL", "x" * 300, None, None)) == 200, True)
++    # #466 R2: stale waiting-audit trailers follow the handled cursor.
++    check("pending-suppresses-stale-handoff",
++          room_pending_text("IMPL", "waiting auditor plan-review", None, None,
++                            "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z") == "IMPL: dev: addressing audit verdict", True)
++    check("pending-keeps-live-next",
++          room_pending_text("IMPL", "waiting auditor plan-review", None, None,
++                            "2026-11-02T09:00:00Z", "2026-11-02T08:00:00Z") == "IMPL: dev: waiting auditor plan-review", True)
++    check("pending-keeps-nonwaiting",
++          room_pending_text("IMPL", "working revised code", None, None,
++                            "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z") == "IMPL: dev: working revised code", True)
++    check("pending-no-anchor-keeps-text",
++          room_pending_text("IMPL", "waiting auditor plan-review", None, None,
++                            "2026-11-02T08:00:00Z", None) == "IMPL: dev: waiting auditor plan-review", True)
++    check("pending-closeout-no-stale-audit",
++          room_pending_text("CLOSE-OUT", "waiting auditor plan-review", "idle", None,
++                            "2026-11-02T08:00:00Z", None) == "CLOSE-OUT: dev: awaiting merge-close | qe: idle", True)
++    check("pending-verify-era",
++          room_pending_text("VERIFY", "waiting auditor plan-review", None, None,
++                            "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z") == "VERIFY: dev: verifying", True)
++    # #466 R2: approved-ts helper mirrors auditor_approved selection.
++    check("approved-ts-post",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=audit DECISION :: DECISION: APPROVED ok"], []) == "2026-11-02T08:00:00", True)
++    check("approved-ts-need-none",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=audit DECISION :: DECISION: NEED S1 x"], []) is None, True)
++    check("approved-ts-trailer-newer",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=audit READY :: review posted"],
++                              ["2026-11-02T08:00:00Z FROM=audit READY :: review posted",
++                               "DECISION: APPROVED fine"]) == "2026-11-02T08:00:00", True)
++    check("approved-ts-spoof-ignored",
++          auditor_approved_ts(["2026-11-02T08:00:00Z FROM=dev NOTE :: DECISION: APPROVED"], []) is None, True)
+     check("pending-preserves-manual",
+           pending_refresh("MANUAL_INTERVENTION: x", "IMPL: y", False, False) == "MANUAL_INTERVENTION: x"
+           and pending_refresh("old", "new", True, False) == "old"
+@@ -6109,8 +6541,8 @@ def mode_self_test():
+     check("merge-ready-unapproved",
+           merge_ready_ok("x NEED y", "2026-11-02T09:00:00Z", [], True, None) is False, True)
+     check("closeout-state-closing",
+-          derive_room_phase(False, "2026-11-02T08:03:09Z", True, None, None) == "CLOSE-OUT"
+-          and derive_room_phase(True, "2026-11-02T08:03:09Z", True, "2026-11-02T09:00:00Z", None) == "CLOSED", True)
++          derive_room_phase(False, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", None, None) == "CLOSE-OUT"
++          and derive_room_phase(True, "2026-11-02T08:03:09Z", "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z", None) == "CLOSED", True)
+     check("audit-state-live", audit_state(True) == "WORKING", True)
+     check("audit-state-absent", audit_state(False) == "-", True)
+     _appr = "2026-11-02T08:00:00Z FROM=audit DECISION :: APPROVED — step-a may proceed"

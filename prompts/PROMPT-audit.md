@@ -78,6 +78,7 @@ paths before code is accepted.
 - Verdict delivery is the REPORT FILE itself (`audits/report-<UTC>-<issue>.md`); the inbox line + ring are best-effort. The engine polls the audits directory — a posted report is a delivered verdict even if no ring goes out.
 ## WIRE (mandatory — identical in every lane)
 - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
+- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
 - No ACK by ack-by = faulty lane; the engine restarts it.
 - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
 - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.

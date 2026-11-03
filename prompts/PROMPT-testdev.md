@@ -32,6 +32,7 @@ system in the appropiate manner in a real driven scenario. Simulating the system
  * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
 ## WIRE (mandatory — identical in every lane)
 - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
+- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
 - No ACK by ack-by = faulty lane; the engine restarts it.
 - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
 - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.

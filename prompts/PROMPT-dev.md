@@ -77,6 +77,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
 ## WIRE (mandatory — identical in every lane)
 - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
+- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
 - No ACK by ack-by = faulty lane; the engine restarts it.
 - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
 - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.

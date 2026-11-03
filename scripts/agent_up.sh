@@ -1173,7 +1173,7 @@ mode_wake() {
     # The sweep lock serializes with the loop (skip-if-held), so overlap
     # is safe. Non-demand posts (pure ACKs, status) stay sweep-driven.
     case "$2" in dev|qe|auditor)
-      last_post=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.* FROM=(dev|qe|auditor|audit) (NEED|READY|DECISION|NOTE) ::' "$rt/inbox/$2.md" 2>/dev/null | tail -n 1)
+      last_post=$(grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.* FROM=(dev|qe|auditor|audit) (NEED|READY|DECISION|NOTE) ::' "$rt/inbox/$2.md" 2>/dev/null | tail -n 1 || true)
       case "$last_post" in
         *' NEED :: '*|*' DECISION :: '*|*' DECISION: '*|*'DONE:'*|*'DONE '*)
           fire_targeted_tick "$1" ;;
