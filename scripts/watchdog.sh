@@ -169,18 +169,23 @@ mode_disarm() { # $1 issue
 }
 
 mode_status() { # $1 issue
-  local room pidf pid streak
+  local room pidf pid streak ackn
   room=$(room_for "$1")
   pidf="$room/watch.pid"
   streak=$(cat "$room/watch.unchanged" 2>/dev/null || echo 0)
+  if [ -f "$room/ack.overdue" ]; then
+    ackn=$(wc -l < "$room/ack.overdue" | tr -d ' ')
+  else
+    ackn=0
+  fi
   if [ -f "$pidf" ]; then
     pid=$(cat "$pidf" 2>/dev/null || true)
     if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
-      echo "armed pid=$pid streak=$streak"
+      echo "armed pid=$pid streak=$streak ack_overdue=$ackn"
       return 0
     fi
   fi
-  echo "disarmed streak=$streak"
+  echo "disarmed streak=$streak ack_overdue=$ackn"
 }
 
 __tick_alarm() { # $1 issue (internal: one tick + exactly one doorbell attempt)

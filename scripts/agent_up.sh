@@ -591,7 +591,7 @@ path, pairs = sys.argv[1], sys.argv[2:]
 ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
            "retry_budget", "state", "updated", "release_armed", "gh_notes"}
 STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
-          "CLOSED", "FEEDBACK"}
+          "CLOSED", "FEEDBACK", "CLOSING"}
 lock_path = os.path.join(os.path.dirname(path), "state.lock")
 with open(lock_path, "a+") as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
@@ -1720,10 +1720,10 @@ mode_self_test() {
   "$SCRIPT_DIR/agent_up.sh" watch 9993 arm 3600 >/dev/null
   chk test -f "$r93/watch.pid"
   chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 arm 3600
-  chk bash -c '"$0" watch 9993 status | grep -q "^armed pid=[0-9]* streak=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
+  chk bash -c '"$0" watch 9993 status | grep -q "^armed pid=[0-9]* streak=[0-9]* ack_overdue=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
   "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm >/dev/null
   chk_neg test -e "$r93/watch.pid"
-  chk bash -c '"$0" watch 9993 status | grep -q "^disarmed streak=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
+  chk bash -c '"$0" watch 9993 status | grep -q "^disarmed streak=[0-9]* ack_overdue=[0-9]*$"' "$SCRIPT_DIR/agent_up.sh"
   chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm
   chk env NEXIOS_ENGINE_DRY=1 "$SCRIPT_DIR/agent_up.sh" wake 9999 dev "$ENGINE_SESS" "wake-selftest-$$"
   chk grep -q "FROM=dev WAKE :: wake-selftest-$$" /tmp/nexios-9999/inbox/coord.md
