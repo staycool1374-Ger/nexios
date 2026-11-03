@@ -454,6 +454,20 @@ def discover_rooms(only=None, skip_debris=False):
     return out
 
 
+def rotate_rooms(rooms, offset):
+    """Round-robin room order for one sweep. Pure.
+
+    Rotates left by offset mod len (empty-safe, tuple identity/content
+    preserved). Decisions per room are order-independent; only the ring
+    order changes, so no single room wins the shared dev/qe doorbell
+    (G2 one-ring-per-cycle) every sweep (item 3, #462)."""
+    rooms = list(rooms or [])
+    if not rooms:
+        return rooms
+    offset = offset % len(rooms)
+    return rooms[offset:] + rooms[:offset]
+
+
 def load_boxes(room_dir):
     """Per-box tails: posts, last STATE/NEXT, full worker-authored list."""
     boxes = {}
@@ -4372,7 +4386,14 @@ def cmd_tick(ctx, issues, interval):
             emit_summary(ctx, tracker, ctx.graph, msg)
             break
         ctx.tick_seq += 1
-        ctx.log("tick #%d rooms=%s" % (ctx.tick_seq, [i for i, _, _ in rooms]))
+        # Item 3 (#462): round-robin sweep order. discover_rooms glob
+        # sort always yields the lowest issue first, so without rotation
+        # that room takes the only dev/qe doorbell (G2 one-ring-per-cycle)
+        # every sweep while later rooms file orders they never ring.
+        _rr = (ctx.tick_seq - 1) % max(len(rooms), 1)
+        rooms = rotate_rooms(rooms, _rr)
+        ctx.log("tick #%d rooms=%s (rr offset %d)"
+                % (ctx.tick_seq, [i for i, _, _ in rooms], _rr))
         # G6 + S1: one sweep-wide cycle (shared rung/busy sets) and a
         # per-cycle engine lock, so a fast-path `tick --issues N --once`
         # is safe while the 180 s loop sleeps and a no-op mid-cycle.
@@ -5283,6 +5304,19 @@ def mode_self_test():
           pending_owes_lane("X: dev: waiting verdict", "dev") is True, True)
     check("backlog-idle-swap-when-waiting-auditor",
           backlog_idle_due(**dict(_idle, pending="IMPL: dev: waiting auditor plan-review | qe: idle")), True)
+    # Item 3 (#462): round-robin sweep order. Bite: returning the input
+    # unchanged flips every offset row to FAIL.
+    _rr3 = [(240, "/r240", {}), (390, "/r390", {}), (54, "/r54", {})]
+    check("rotate-rooms-zero",
+          [i for i, _, _ in rotate_rooms(_rr3, 0)] == [240, 390, 54], True)
+    check("rotate-rooms-offset2",
+          [i for i, _, _ in rotate_rooms(_rr3, 2)] == [54, 240, 390], True)
+    check("rotate-rooms-wrap",
+          [i for i, _, _ in rotate_rooms(_rr3, 5)] == [54, 240, 390], True)
+    check("rotate-rooms-empty", rotate_rooms([], 3) == [], True)
+    check("rotate-preserves-set",
+          sorted(i for i, _, _ in rotate_rooms(_rr3, 1)) == [54, 240, 390]
+          and rotate_rooms(_rr3, 1)[0][1] == "/r390", True)
     _open = {"halt": False, "state": "IN_PROGRESS"}
     _rooms = [(51, "/r51", dict(_open)), (52, "/r52", dict(_open))]
     check("pick-backlog-exclude",
