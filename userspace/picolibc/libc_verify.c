@@ -105,6 +105,12 @@ int main(void) {
                (unsigned)strlen(snb), snb);
     }
 
+    /* ---- #455 item 1: snprintf NULL,0 returns the would-be length ---- */
+    {
+        int r0 = snprintf(NULL, 0, "hello");
+        printf("LIBC_VERIFY: snprintf0 %d\n", r0);
+    }
+
     /* ---- #303 M9: sscanf mismatch + hex/string ---- */
     {
         int sv = 12345;
@@ -164,6 +170,15 @@ int main(void) {
         printf("LIBC_VERIFY: realloc %u %lu\n", rok,
                (unsigned long)oom);
         free(oom);
+        /* ---- #455 item 4: malloc(0) is a writable unique block ---- */
+        unsigned malloc0w = 0;
+        void *zw = malloc(0);
+        if (zw != NULL) {
+            *(unsigned char *)zw = 0xA5;
+            malloc0w = (*(unsigned char *)zw == 0xA5) ? 1 : 0;
+        }
+        printf("LIBC_VERIFY: malloc0w %u\n", malloc0w);
+        free(zw);
     }
 
     /* ---- #303 M11: string/memory ---- */

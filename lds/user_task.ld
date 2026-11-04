@@ -13,12 +13,32 @@ ENTRY(_start)
  * a PT_LOAD (C4 audit gate: no kernel-half addresses in driver
  * images). Stack alignment stays a link-flag concern
  * (-Wl,-z,max-page-size=0x1000, as in the in-tree userspace rule),
- * not a script concern. */
+ * not a script concern.
+ *
+ * C++ / constructor support (issue #455 item 3): .init_array (+ .fini
+ * for symmetry, unwalked) with PROVIDE start/end symbols. crt0 walks
+ * .init_array bounded and NULL-safe between TLS_SET and main; the weak
+ * references in crt0.S keep toolchain-default links (no .init_array
+ * inputs) working with a zero-length skip. */
 
 SECTIONS
 {
     .nexios_sdk :
     {
         KEEP(*(.nexios_sdk))
+    }
+
+    .init_array :
+    {
+        PROVIDE(__init_array_start = .);
+        KEEP(*(.init_array .init_array.*))
+        PROVIDE(__init_array_end = .);
+    }
+
+    .fini_array :
+    {
+        PROVIDE(__fini_array_start = .);
+        KEEP(*(.fini_array .fini_array.*))
+        PROVIDE(__fini_array_end = .);
     }
 } INSERT AFTER .rodata;
