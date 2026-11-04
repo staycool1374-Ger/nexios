@@ -52,6 +52,9 @@ enum class CapRights : uint32_t {
     WRITE = 1u << 1,  ///< endpoint send / frame write-mapping
     GRANT = 1u << 2,  ///< may grant (copy into another CSpace)
     COPY = 1u << 3,   ///< may copy (duplicate into own CSpace)
+    SHARE = 1u << 4,  ///< may spawn a thread sharing the target's address
+                      ///< space (issue #52; Task caps only — checked by
+                      ///< SYS_THREAD_CREATE, never implied by WRITE)
 };
 
 /// @brief Bitwise-or for capability rights.
@@ -84,6 +87,8 @@ inline constexpr CapRights &operator&=(CapRights &lhs, CapRights rhs) noexcept {
 static_assert(kernel::to_underlying(CapRights::READ) == 1u,
               "rights bit positions are ABI");
 static_assert(kernel::to_underlying(CapRights::COPY) == 8u,
+              "rights bit positions are ABI");
+static_assert(kernel::to_underlying(CapRights::SHARE) == 16u,
               "rights bit positions are ABI");
 
 /// @brief Bits allocated to the cspace id in a capability handle.

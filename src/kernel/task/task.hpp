@@ -305,9 +305,10 @@ struct TaskControlBlock {
           wcet_observed_ns(0),
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
-          stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
-          page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
-          user_stack_size_(0), user_data(nullptr), is_user_(false),
+           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
+           page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
+           user_stack_size_(0), user_stack_va_(0), thread_group_(0),
+           user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
            program_break_start(0), kstack_low_water_(0), text_size_(0),
@@ -476,6 +477,22 @@ struct TaskControlBlock {
     uint64_t stack_pdpt_phys_;
     uint64_t user_stack_;
     uint64_t user_stack_size_;
+    /// @brief VA of this task's own thread-window stack mapping (issue
+    ///        #52).  Private tasks use mem::STACK_VADDR + PAGE_SIZE
+    ///        (never recorded — stays 0); threads record their window
+    ///        slot so teardown unmaps exactly its own pages from the
+    ///        shared root.  Zeroed at every memset birth site
+    ///        (create/create_user/clone/spawn_thread).
+    uint64_t user_stack_va_;
+    /// @brief Thread address-space group (issue #52).  0 = private
+    ///        address space (fork/ELF semantics — cleanup frees the root).
+    ///        Nonzero = slot index + 1 into the thread group table
+    ///        (task.cpp): the task shares that group's root PML4 and
+    ///        frees only its own stack pages at teardown; the last
+    ///        member frees the root.  Group metadata lives independent
+    ///        of any single TCB, so owner death never frees a live root.
+    ///        Zeroed at every memset birth site.
+    uint64_t thread_group_;
     void *user_data;
     /// @brief True for user-mode tasks (own user half in page_table_).
     ///        v0.4.0 MP-1: every task — kernel AND user — now owns a private
@@ -995,6 +1012,28 @@ struct TaskControlBlock {
     /// @return TaskError code.
     static errors::TaskError clone_err(uint64_t *regs,
                                         TaskControlBlock *&out_tcb);
+
+    /// @brief Spawns a thread sharing the owner's address space (issue
+    ///        #52) — TCB-per-thread scheduler integration.  The child
+    ///        shares the owner's root PML4 (no deep copy, no kernel-half
+    ///        re-merge), owns a private stack carved from the thread
+    ///        window, starts at @p entry with a zeroed register frame,
+    ///        inherits priority/affinity, and is admission-exempt
+    ///        (period 0, mirroring user-child clone).
+    /// @param owner   Live user task whose address space is shared.  Must
+    ///                own a private root (thread_group_ == 0) or already
+    ///                belong to a group.
+    /// @param entry   User-mode entry PC (must be mapped + executable in
+    ///                the shared root).
+    /// @param stack_bytes Private stack size in bytes (page-rounded,
+    ///                bounded by CONFIG_THREAD_MAX_STACK_SIZE).
+    /// @return The new thread TCB (READY, not yet admitted), or nullptr
+    ///         on any validation/allocation failure (zero side effects).
+    static TaskControlBlock *spawn_thread(TaskControlBlock &owner,
+                                          uint64_t entry,
+                                          uint64_t stack_bytes);
+    /// @brief True when this task shares its address space with others.
+    bool is_thread() const noexcept { return thread_group_ != 0; }
 
     /// @brief Provision a TCB's kernel stack through the kslot window
     ///        (#434 P2): slot attempt via the shared pool, backend map

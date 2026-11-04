@@ -290,12 +290,25 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_WATCHDOG_CREATE 91
 #define SYS_WATCHDOG_KICK   92
 
+// Issue #52 — shared-address-space thread spawn (matches kernel
+// SyscallNumber). arg0 = owner pid (0 = self, capless), arg1 = entry PC,
+// arg2 = stack bytes, arg3 = Task-cap handle with SHARE (cross-task only).
+#define SYS_THREAD_CREATE   93
+
 static inline long sys_watchdog_create(unsigned long period_ticks) {
     return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
 }
 
 static inline long sys_watchdog_kick(void) {
     return __syscall5(SYS_WATCHDOG_KICK, 0, 0, 0, 0);
+}
+
+static inline long sys_thread_create(unsigned long owner_pid,
+                                       unsigned long entry,
+                                       unsigned long stack_bytes,
+                                       unsigned long cap_handle) {
+    return __syscall5(SYS_THREAD_CREATE, (long)owner_pid, (long)entry,
+                      (long)stack_bytes, (long)cap_handle);
 }
 
 // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==

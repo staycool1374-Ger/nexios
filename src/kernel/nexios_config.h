@@ -786,6 +786,35 @@
 #define CONFIG_USER_SHM_REGION_SIZE 0x200000ULL // 2 MiB
 #endif
 
+/// Base of the fixed user-space thread-stack window (issue #52).  Each
+/// thread sharing an address space owns a private stack carved from this
+/// window (slot = CONFIG_THREAD_STACK_SIZE + one guard page).  Lies above
+/// the SHM window (0x62000000 + 8*2MiB = 0x63000000) and below
+/// mem::STACK_VADDR (0x70000000); a static_assert in task.cpp pins the
+/// window bounds (disjoint from HEAP/MMIO/SHM/STACK, no wrap).
+#ifndef CONFIG_USER_THREAD_STACK_BASE
+#define CONFIG_USER_THREAD_STACK_BASE 0x64000000ULL
+#endif
+
+/// Maximum number of thread-stack slots in the window (issue #52).
+/// Bounded static freelist — no dynamic allocation on real-time paths.
+#ifndef CONFIG_THREAD_MAX_STACKS
+#define CONFIG_THREAD_MAX_STACKS 64
+#endif
+
+/// Maximum number of live thread address-space groups (issue #52).  One
+/// group per shared root PML4; independent of any single TCB so owner
+/// death never frees a live root.
+#ifndef CONFIG_THREAD_MAX_GROUPS
+#define CONFIG_THREAD_MAX_GROUPS 16
+#endif
+
+/// Maximum user stack size (bytes) accepted by SYS_THREAD_CREATE (issue
+/// #52).  Must be a multiple of the page size; fail-closed EINVAL above.
+#ifndef CONFIG_THREAD_MAX_STACK_SIZE
+#define CONFIG_THREAD_MAX_STACK_SIZE 0x10000ULL // 64 KiB
+#endif
+
 /// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
 /// by a TU-local live counter in cap/iommu.cpp.
 #ifndef CONFIG_CAP_MAX_IOMMU
