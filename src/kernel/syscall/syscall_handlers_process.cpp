@@ -222,6 +222,12 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     kernel::test::mark_vfs_touched();
     if (!syscall_is_user_task())
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    // Issue #52: a thread shares its address space — exec would swap the
+    // shared root out from under its siblings.  Fail closed (threads exit
+    // and the group leader re-execs, or spawn a fresh process).
+    auto *exec_task = syscall_task();
+    if (exec_task != nullptr && exec_task->is_thread())
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     vfs::Vnode *vn = nullptr;
     char path_buf[SYSCALL_MAX_PATH];
     // NOLINTNEXTLINE(performance-no-int-to-ptr)

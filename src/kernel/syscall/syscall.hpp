@@ -120,7 +120,8 @@ enum class SyscallNumber : uint8_t {
     TASK_DEBUG_WRITE_MEM = 90, ///< write target memory via handle (issue #225)
     WATCHDOG_CREATE = 91, ///< arm watchdog: arg0=period_ticks, arg1=pid (0=self, else needs WdogCap), arg2=cap handle (issues #41/#277)
     WATCHDOG_KICK = 92,   ///< kick watchdog: arg0=pid (0=self, else needs WdogCap), arg1=cap handle, arg2=0 reserved (issues #41/#277)
-    MAX_SYSCALL = 93,
+    THREAD_CREATE = 93,   ///< spawn thread sharing an address space (issue #52): arg0 = owner pid (0 = self), arg1 = entry PC, arg2 = stack bytes, arg3 = Task-cap handle with SHARE (cross-task only, 0 = self)
+    MAX_SYSCALL = 94,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -410,6 +411,8 @@ class Syscall {
                                         uint64_t *);
     static uint64_t sys_watchdog_kick(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
+    static uint64_t sys_thread_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -526,6 +529,7 @@ class Syscall {
 #endif
             &Syscall::sys_watchdog_create, // 91 WATCHDOG_CREATE (issue #41)
             &Syscall::sys_watchdog_kick,   // 92 WATCHDOG_KICK (issue #41)
+            &Syscall::sys_thread_create,   // 93 THREAD_CREATE (issue #52)
     };
 };
 
