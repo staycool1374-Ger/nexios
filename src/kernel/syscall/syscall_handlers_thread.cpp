@@ -534,23 +534,18 @@ uint64_t Syscall::sys_thread_join(uint64_t arg0, uint64_t arg1, uint64_t arg2,
             if (!TaskControlBlock::thread_join_try_claim(*target)) {
                 // Lost the claim race: fall through to the handoff latch
                 // below.
-            } else if (status_ptr != nullptr &&
-                       !safe_copy_to_user(status_ptr, &target->exit_code,
-                                          1)) {
-                __atomic_store_n(&target->join_reaped_, false,
-                                 __ATOMIC_RELEASE);
-                cur->thread_join_unregister();
-                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             } else {
+                // Issue #53 S1-2 / S3-1: single status copy after claim
+                // (the guard-then-body double copy is collapsed — one
+                // trap, retryable via claim release on copy failure).
                 uint64_t code = target->exit_code;
-                if (status_ptr != nullptr) {
-                    if (!safe_copy_to_user(status_ptr, &code, 1)) {
-                        __atomic_store_n(&target->join_reaped_, false,
-                                         __ATOMIC_RELEASE);
-                        cur->thread_join_unregister();
-                        return static_cast<uint64_t>(
-                            errors::SYS_ERR_GENERIC_FAIL);
-                    }
+                if (status_ptr != nullptr &&
+                    !safe_copy_to_user(status_ptr, &code, 1)) {
+                    __atomic_store_n(&target->join_reaped_, false,
+                                     __ATOMIC_RELEASE);
+                    cur->thread_join_unregister();
+                    return static_cast<uint64_t>(
+                        errors::SYS_ERR_GENERIC_FAIL);
                 }
                 thread_join_reap(*target);
                 __atomic_store_n(&cur->join_target_id_, uint64_t{0},

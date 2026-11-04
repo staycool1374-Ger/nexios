@@ -2717,20 +2717,23 @@ void TaskControlBlock::complete_teardown() noexcept {
     // v0.4.0 MP-1: keyed on the authoritative is_user_ flag — a kernel task
     // owns a private kernel-half PML4 but never a user stack.
     if (is_user_ && user_stack_) {
-        if (thread_group_ != 0) {
+        // Issue #53 S1-2: only a window-slot member owns a private stack
+        // range in a shared root.  The owner member (user_stack_va_ == 0,
+        // joined at spawn) shares its STACK_VADDR range with the group —
+        // survivors' copied stack canaries read it — so it neither unmaps
+        // nor frees here; the last member's blind free_user_pages walk
+        // reclaims the whole root exactly once.
+        if (thread_group_ != 0 && user_stack_va_ != 0) {
             // Issue #52: grouped teardown unmaps exactly its own stack
-            // pages from the shared root (owner: the private STACK_VADDR
-            // range; thread: its window slot), then frees the frames.
+            // pages from the shared root (the thread's window slot), then
+            // frees the frames below.
             // Unmapping first keeps the last member's free_user_pages
             // walk from revisiting freed frames.
             // Audit S2-1: the unmap runs under IrqGuard + group guard —
             // the same serial section as the spawn maps, so concurrent
             // create/exit on this root cannot race intermediate-table
             // alloc/free (VMM map/unmap take no locks).
-            uint64_t own_stack_va = (user_stack_va_ != 0)
-                                        ? user_stack_va_ + arch::PAGE_SIZE
-                                        : mem::STACK_VADDR +
-                                              arch::PAGE_SIZE;
+            uint64_t own_stack_va = user_stack_va_ + arch::PAGE_SIZE;
             size_t own_pages =
                 (user_stack_size_ + 4095) / arch::PAGE_SIZE;
             {
@@ -2744,9 +2747,11 @@ void TaskControlBlock::complete_teardown() noexcept {
                 }
             }
         }
-        size_t pages = (user_stack_size_ + 4095) / arch::PAGE_SIZE;
-        for (size_t i = 0; i < pages; ++i) {
-            PMM::free_page(user_stack_ + i * arch::PAGE_SIZE);
+        if (thread_group_ == 0 || user_stack_va_ != 0) {
+            size_t pages = (user_stack_size_ + 4095) / arch::PAGE_SIZE;
+            for (size_t i = 0; i < pages; ++i) {
+                PMM::free_page(user_stack_ + i * arch::PAGE_SIZE);
+            }
         }
         user_stack_ = 0;
     }
@@ -2816,7 +2821,15 @@ void TaskControlBlock::complete_teardown() noexcept {
         // Issue #271 P1: unmap retained golden pages first so the blind
         // free below skips them (pages owned by mapping tasks, retention
         // decides frees at zero/zero).
-        kernel::elf::ElfLoader::unmap_golden(this);
+        // Issue #53 S1-2: retention unmap is root-scoped, not task-scoped.
+        // Threads share their group's root, so unmap_golden's phys-match
+        // guard (which assumes private fork-style tables) matches a live
+        // survivor's pages: a non-last member must neither unmap the set
+        // nor drop the group's single ref.  Private roots unmap here; the
+        // last group member unmaps below, just ahead of its root free.
+        if (thread_group_ == 0) {
+            kernel::elf::ElfLoader::unmap_golden(this);
+        }
         if (thread_group_ != 0) {
             // Issue #52: shared-root teardown.  Own stack pages were
             // unmapped + freed above; recycle the window slot, then leave
@@ -2843,6 +2856,10 @@ void TaskControlBlock::complete_teardown() noexcept {
                 last_member = thread_group_leave_locked(
                     *this, group_root, group_pcid);
                 if (last_member) {
+                    // Issue #53 S1-2: the root dies with us — unmap the
+                    // retained set (and drop its single ref) before the
+                    // blind free reclaims the shared leaves + tables.
+                    kernel::elf::ElfLoader::unmap_golden(this);
                     VMM::free_user_pages(group_root);
                     arch::context_id_free(group_pcid);
                     PMM::free_page(group_root);
