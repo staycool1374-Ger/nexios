@@ -70,9 +70,10 @@ install_data(files(
 install_data(files('../lds/user_task.ld'),
   install_dir : '/opt/nexios-sdk/lds')
 
-# --- Userspace discovery (mirrors USERSPACE_SRC; picolibc separate) ---
+# --- Userspace discovery (mirrors USERSPACE_SRC; picolibc + pthread lib separate) ---
 _user_find = run_command('find', meson.project_source_root() / 'userspace',
   '-path', meson.project_source_root() / 'userspace' / 'picolibc', '-prune',
+  '-o', '-path', meson.project_source_root() / 'userspace' / 'pthread', '-prune',
   '-o', '-name', '*.c', '-print',
   '-o', '-name', '*.S', '-print',
   check : true)
@@ -99,6 +100,10 @@ foreach src : userspace_srcs
   # the EL0/U-mode smoke tests) — mirroring mk/rules.mk, where each
   # probe is built only on the arch that embeds it.
   if arch == 'x86_64' and out_name == 'errno_probe.c.elf'
+    continue
+  endif
+  # pthread_verify links explicitly below (needs the pthread include dir).
+  if out_name == 'pthread_verify.c.elf'
     continue
   endif
   if (arch == 'aarch64' or arch == 'riscv64') and out_name == 'fork-marker.c.elf'
@@ -217,6 +222,31 @@ if arch == 'x86_64'
   )
   bin_elf_targets += [errno_elf]
 endif
+
+# --- pthread phase-(i) library + verify program (issue #53) ---
+# The library lives in userspace/pthread/ (pruned from the generic loop
+# above, mirroring the picolibc prune — its sources are not programs).
+# pthread.o links explicitly into consumers (the picolib_stubs.o idiom);
+# the link recipe is proven by the verify target below.
+pthread_inc = meson.project_source_root() / 'userspace' / 'pthread'
+pthread_o = custom_target('pthread.o',
+  input : files('../userspace/pthread/pthread.c'),
+  output : 'pthread.o',
+  command : [cc_prog] + cc_usr_flags + libc_includes
+    + ['-c', '@INPUT@', '-o', '@OUTPUT@'],
+  build_by_default : true,
+)
+pthread_verify_elf = custom_target('pthread_verify.c.elf',
+  input : [crt0_path, files('../userspace/pthread_verify.c'), pthread_o,
+           libc_a],
+  output : 'pthread_verify.c.elf',
+  command : [cc_prog] + cc_usr_flags + libc_includes
+    + ['-I', pthread_inc, '-Wl,-z,max-page-size=0x1000',
+        '-o', '@OUTPUT@', '@INPUT@'],
+  depends : [libc_a],
+  build_by_default : true,
+)
+bin_elf_targets += [pthread_verify_elf]
 
 if arch == 'aarch64' or arch == 'riscv64'
   # Fork-marker probe (mirrors FORK_MARKER_SRC/OBJ, mk/rules.mk:384-409):

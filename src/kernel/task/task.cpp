@@ -86,6 +86,7 @@ RecentTask g_recent_tasks[kRecentTasks]{};
 size_t g_recent_tasks_idx = 0;
 } // namespace
 
+
 namespace kernel {
 namespace debug {
 // Issue #264: per-slot single-writer contract. The slot index is claimed
@@ -124,6 +125,63 @@ uint64_t find_entry_owner(uint64_t value) {
 #include <kernel/arch/timer.hpp>
 
 namespace kernel {
+
+/// @brief Join-rendezvous handoff (issue #53, phase ii): if a joiner is
+///        registered on the terminating thread @p t, hand it t.exit_code
+///        and wake it.  Lock-free like the waitpid wake path: the slot is
+///        installed by an atomic CAS and cleared by the joiner's collect
+///        path or its death cleanup, so a set slot always names a live or
+///        zombie-but-unfreed TCB; the is_valid + back-pointer checks below
+///        drop a stale slot without touching it.  The joiner's rescan
+///        collects and reaps, so a missed wake (spurious, or a reap racing
+///        the rescan) still converges via the handoff latch (join_ready_).
+void TaskControlBlock::thread_join_note_termination(
+    TaskControlBlock &t) noexcept {
+    if (!t.is_thread()) {
+        return;
+    }
+    auto *joiner = __atomic_load_n(&t.join_waiter_, __ATOMIC_ACQUIRE);
+    if (joiner == nullptr) {
+        return;
+    }
+    if (!TaskControlBlock::is_valid(joiner) ||
+        __atomic_load_n(&joiner->join_target_id_, __ATOMIC_ACQUIRE) !=
+            t.id) {
+        // Stale slot (joiner died without cleanup — defensive; cleanup
+        // clears it first).  Drop it; the joiner is gone either way.
+        __atomic_store_n(&t.join_waiter_, nullptr, __ATOMIC_RELEASE);
+        return;
+    }
+    __atomic_store_n(&joiner->join_status_, t.exit_code, __ATOMIC_RELEASE);
+    __atomic_store_n(&joiner->join_ready_, true, __ATOMIC_RELEASE);
+    // Wake only a blocked joiner (mirrors wake_waiting_parent: never
+    // resurrect a TERMINATED task via set_task_ready).  Plain read like
+    // the waitpid wake paths (same trap/IRQ discipline).
+    if (joiner->state == TaskState::BLOCKED) {
+        Scheduler::set_task_ready(*joiner);
+    }
+    // Slot cleared by the joiner's collect path (or its death cleanup).
+}
+
+/// @brief Clear a dying joiner's registration (issue #53): resolve the
+///        target by id (never a stored pointer — the target may have been
+///        reaped) and drop this task's slot only if it still names us.
+///        Called from TCB::cleanup() before any free, so a later EXIT of
+///        the target never touches freed memory.
+void TaskControlBlock::thread_join_unregister() noexcept {
+    const uint64_t target_id =
+        __atomic_load_n(&join_target_id_, __ATOMIC_ACQUIRE);
+    if (target_id == 0) {
+        return;
+    }
+    auto *target = Scheduler::find_task(target_id);
+    if (target != nullptr && TaskControlBlock::is_valid(target) &&
+        __atomic_load_n(&target->join_waiter_, __ATOMIC_ACQUIRE) == this) {
+        __atomic_store_n(&target->join_waiter_, nullptr, __ATOMIC_RELEASE);
+    }
+    __atomic_store_n(&join_target_id_, static_cast<uint64_t>(0),
+                     __ATOMIC_RELEASE);
+}
 
 /// @brief Trampoline wrapper for kernel task entry points.
 /// Set as RIP in the ISR save frame; RDI (first argument) is set to the
@@ -1545,6 +1603,7 @@ bool thread_group_leave_locked(TaskControlBlock &task,
     group.shared_pcid = 0;
     return true;
 }
+
 } // namespace
 
 /// @brief Fail-closed admission check for clone() user parents (issue #400).
@@ -1977,7 +2036,8 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 
 TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
                                                  uint64_t entry,
-                                                 uint64_t stack_bytes) {
+                                                 uint64_t stack_bytes,
+                                                 uint64_t entry_arg) {
     // Validate-before-allocate (issue #400 discipline): every check below
     // runs before the first allocation, so nullptr returns leave zero
     // side effects and zero PMM mutation.
@@ -2311,6 +2371,11 @@ TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
     *--frame = 0;                   // rcx
     *--frame = 0;                   // rbx
     *--frame = 0;                   // rax = 0 (thread return value)
+    // Issue #53 (option Y): the birth-context pointer rides in the first
+    // C argument register (rdi), the thread's own tid in the second
+    // (rsi), so a plain C trampoline(ctx, tid) receives both.
+    frame[5] = entry_arg;           // rdi = birth context (0 = none)
+    frame[4] = tcb->id;             // rsi = own tid (pthread_self)
     tcb->context.rsp = reinterpret_cast<uint64_t>(frame);
 #elif defined(CONFIG_ARCH_AARCH64)
     uint64_t *frame = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
@@ -2321,6 +2386,11 @@ TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
     *--frame = user_rsp; // SP_EL0
     for (int reg_idx = 0; reg_idx < 31; ++reg_idx)
         *--frame = 0; // X0-X30 (X0 = 0: thread return value)
+    // Issue #53 (option Y): the birth-context pointer rides in x0
+    // (frame[0] per the vectors.S save-area layout), the thread's own
+    // tid in x1, so a plain C trampoline(ctx, tid) receives both.
+    frame[0] = entry_arg; // X0 = birth context (0 = none)
+    frame[1] = tcb->id;   // X1 = own tid (pthread_self)
     tcb->context.sp_el0 = reinterpret_cast<uint64_t>(frame);
 #elif defined(CONFIG_ARCH_RISCV64)
     // Trap frame matching syscall_entry.S save-area layout (see
@@ -2331,6 +2401,12 @@ TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
     frame[1] = user_rsp;  // X2/SP = thread user stack
     frame[31] = entry;    // SEPC = entry point
     frame[32] = (1ULL << 5) | (3ULL << 13); // SSTATUS: SPIE + FS=11
+    // Issue #53 (option Y): the birth-context pointer rides in a0
+    // (frame[9] = OFF_A0 per syscall_entry.S), the thread's own tid in
+    // a1 (frame[10] = OFF_A1), so a plain C trampoline(ctx, tid)
+    // receives both.
+    frame[9] = entry_arg; // A0 = birth context (0 = none)
+    frame[10] = tcb->id;  // A1 = own tid (pthread_self)
     tcb->context.sp = reinterpret_cast<uint64_t>(frame);
 #endif
 
@@ -2588,6 +2664,13 @@ void TaskControlBlock::complete_teardown() noexcept {
         waiting_on_queue = nullptr;
     }
     kernel::task_step(kernel::TaskCleanupSteps::SyncDetach); // issue #347 Slice C
+
+    // Issue #53: drop a pending JOIN registration held by this task.  A
+    // dying joiner must not leave its TCB pointer in the target's join
+    // slot: the target's termination handoff would otherwise touch freed
+    // memory.  Resolved by id (never a stored pointer); only clears when
+    // the slot still names this task (a re-registered joiner wins).
+    thread_join_unregister();
 
     // Notify the daemon manager so registered daemon PIDs are reset to 0.
     // Must run before msg_queue is destroyed so blocked senders get fast-fail
