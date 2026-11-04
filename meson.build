@@ -141,7 +141,10 @@ if arch == 'x86_64'
   cc_arch_flags = ['-m64']
 elif arch == 'aarch64'
   # Issue #439: -fno-pie (C-side mirror of the arch_flags fix above).
-  cc_arch_flags = ['-fno-pie']
+  # Issue #53: -mno-outline-atomics (C-side mirror of #437) — freestanding
+  # userspace has no libgcc to satisfy outline-atomics helpers
+  # (__aarch64_cas4_*); inline LDXR/STXR loops instead.
+  cc_arch_flags = ['-fno-pie', '-mno-outline-atomics']
 else
   cc_arch_flags = ['-DCONFIG_ARCH_RISCV64', '-mcmodel=medany', '-fno-pie']
 endif

@@ -81,6 +81,10 @@ Scheduler::terminate_err(TaskControlBlock &task,
     dequeue_ready(task);
     task.state = TaskState::TERMINATED;
     task.exit_code = exit_code;
+    // Issue #53: join-rendezvous handoff for terminating threads (covers
+    // kill/fault/watchdog paths funnelled here, mirroring sys_exit's
+    // inline handoff).  No-ops for non-threads (checked inside).
+    TaskControlBlock::thread_join_note_termination(task);
     // If the parent is blocked in waitpid for this child, wake it now so it
     // does not deadlock waiting for a child that exited without sys_exit.
     wake_waiting_parent(task);

@@ -50,5 +50,23 @@ bool is_timerfd_vnode(const vfs::Vnode *node);
 /// @param nonblock True when O_NONBLOCK is set on the fd.
 uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
                             bool nonblock);
+/// @brief Read the 5th syscall argument from the trap frame (issue #317,
+/// option b). The 4-arg ABI leaves one dedicated register free for all
+/// defined syscalls: x86_64 rdi, aarch64 x4, riscv64 a4. No entry-stub
+/// change: the register is already in the frame handed to the handler.
+/// Single source of truth (was a TU-local copy in the ipc handler).
+/// @param regs Trap-frame word array (may be null in tests → 0).
+static inline uint64_t syscall_arg4(const uint64_t *regs) noexcept {
+#if defined(CONFIG_ARCH_X86_64)
+    return regs ? regs[5] : 0;  // rdi
+#elif defined(CONFIG_ARCH_AARCH64)
+    return regs ? regs[4] : 0;  // x4
+#elif defined(CONFIG_ARCH_RISCV64)
+    return regs ? regs[13] : 0;  // a4
+#else
+    (void)regs;
+    return 0;
+#endif
+}
 
 } // namespace kernel
