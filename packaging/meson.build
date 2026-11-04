@@ -158,9 +158,22 @@ if arch == 'x86_64'
     command : [cc_prog] + cc_usr_flags + libc_includes + ['-c', '@INPUT@', '-o', '@OUTPUT@'],
     build_by_default : false,
   )
+  # stderr-unbuffered startup (issue #455 item 5): constructor TU compiled
+  # sysroot-only — the in-tree stdarg.h stub (via libc_includes) shadows
+  # the compiler builtin and breaks picolibc stdio.h (__gnuc_va_list),
+  # the same latent conflict documented on verify_elf below.
+  picolibc_stdio_init = custom_target('nexios_stdio_init.o',
+    input : files('../userspace/picolibc/nexios_stdio_init.c'),
+    output : 'nexios_stdio_init.o',
+    command : [cc_prog] + cc_usr_flags
+      + ['-I', sysroot_inc, '-c', '@INPUT@', '-o', '@OUTPUT@'],
+    depends : [sysroot_stamp],
+    build_by_default : false,
+  )
   verify_elf = custom_target('libc_verify.c.elf',
     input : [crt0_path, files('../userspace/picolibc/libc_verify.c'),
-             picolibc_glue, picolibc_stubs, picolibc_errno],
+             picolibc_glue, picolibc_stubs, picolibc_errno,
+             picolibc_stdio_init],
     output : 'libc_verify.c.elf',
     # NOTE: no -I src/libc here (unlike the generic userspace rule):
     # libc_verify.c uses picolibc headers only, and the in-tree
