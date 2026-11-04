@@ -3314,6 +3314,81 @@ def next_room_state(phase, prev_state, gh_closed):
 _WAITING_AUDIT_RE = re.compile(r"waiting.*audit|plan-review", re.I)
 
 
+# Cross-lane QE wait (issue #469): dev NEXT naming QE-side progress.
+# S3-1: require dev waits + narrow QE|merge|verif match; waiting-audit /
+# plan-review excluded (audit lane owns those, never qe).
+_QE_WAIT_RE = re.compile(r"waiting[^.]{0,80}\b(qe|merge|verif\w*)\b", re.I)
+
+
+def dev_waits_qe_pull(boxes):
+    """True when the dev lane waits on QE-side progress. Pure.
+
+    Matches NEXTs like 'waiting QE pull', 'waiting ... merge/verify';
+    waiting-audit / plan-review NEXTs are excluded (S3-1)."""
+    dnxt = ((boxes or {}).get("dev") or {}).get("next") or ""
+    return bool(_QE_WAIT_RE.search(dnxt)
+                and not _WAITING_AUDIT_RE.search(dnxt))
+
+
+def record_cross_qe(role, boxes, rst):
+    """Cross-lane qe scan flag for one room. Pure apart from inputs.
+
+    True only for the qe lane when dev waits on QE-side progress
+    (S3-1: dev waits + narrow match, synthesized from the dev box).
+    All other lanes/rooms are unaffected."""
+    if role != "qe":
+        return False
+    if not dev_waits_qe_pull(boxes):
+        return False
+    dfacts = lane_facts_from_boxes(boxes, rst or {}, "dev")
+    return bool((dfacts or {}).get("waits"))
+
+
+def testbed_behind_main(ctx, qd):
+    """(behind, main_tip): testbed missing origin/main commits. Fail-closed.
+
+    behind True only when proven (count > 0); any error (no checkout,
+    unknown refs) yields (False, None) so no restage files. Read-only git."""
+    try:
+        if not qd:
+            return (False, None)
+        rc1, out1 = ctx.run(["git", "-C", qd, "rev-list", "--count",
+                             "testbed..origin/main"], timeout=30)
+        rc2, out2 = ctx.run(["git", "-C", qd, "rev-parse", "origin/main"],
+                            timeout=30)
+        if rc1 != 0 or rc2 != 0:
+            return (False, None)
+        n = int((out1.strip().splitlines() or ["0"])[0])
+        tip = (out2.strip().splitlines() or [None])[0]
+        return (n > 0, tip)
+    except Exception:
+        return (False, None)
+
+
+def qe_restage_due(stored_for, ts, dev_wait_qe, qe_probe, qe_unacked,
+                   pull_filed_main, behind, main_tip):
+    """Pure gate: re-stage testbed + file qe PULL this tick. Issue #469 B.
+
+    Single-flight (S3-2): only when qe is IDLE, has no unacked order, a
+    baseline staging exists (stored_for set), the stored round still
+    applies (stored_for == ts), testbed is proven behind, and no PULL
+    was already filed for this main tip. Fresh-IMPL rounds (stored_for
+    != ts) take the normal path and never reach here."""
+    if not stored_for or stored_for != ts:
+        return False
+    if not dev_wait_qe:
+        return False
+    if not str(qe_probe or "").startswith("IDLE"):
+        return False
+    if qe_unacked:
+        return False
+    if not behind or not main_tip:
+        return False
+    if pull_filed_main == main_tip:
+        return False
+    return True
+
+
 def pending_lane_text(role, phase, nxt, status_ts, anchor_ts, closeout):
     """One lane's pending segment, cursor-true. Pure (#466 R2).
 
@@ -3454,15 +3529,19 @@ def collect_scan_records(rooms_all, role, now_ts):
 
     One snapshot per sweep per lane (the caller caches it in
     cycle["scan"]); the current room's record is rebuilt live at the
-    gate, so same-sweep staleness only affects other rooms."""
+    gate, so same-sweep staleness only affects other rooms. The qe
+    sweep synthesizes a cross-lane flag from each room's dev box
+    (issue #469)."""
     out = []
     for iss, rdir, rst in (rooms_all or []):
         _boxes = load_boxes(rdir)
-        out.append(scan_room_record(role, iss, rst,
-                                    lane_facts_from_boxes(_boxes, rst, role),
-                                    (_boxes[role]["next"] or ""),
-                                    newest_post_ts(_boxes[role]["all"]),
-                                    now_ts))
+        _rec = scan_room_record(role, iss, rst,
+                                lane_facts_from_boxes(_boxes, rst, role),
+                                (_boxes[role]["next"] or ""),
+                                newest_post_ts(_boxes[role]["all"]),
+                                now_ts)
+        _rec["cross"] = record_cross_qe(role, _boxes, rst)
+        out.append(_rec)
     return out
 
 
@@ -3472,9 +3551,10 @@ def global_work_scan(role, records, current_issue, busy):
     Only live rooms count (IN_PROGRESS/CLOSING, unhalted — halted and
     retired rooms hold no actionable work). Priority: live order
     (lowest issue) → fresh post (lowest) → active lane (lowest;
-    engagement only, the lane's own gates own any order) → oldest
-    stale → lowest backlog-eligible (intrinsic ok, not current, not
-    busy). The current room's record must already carry live
+    engagement only, the lane's own gates own any order) → cross-lane
+    qe need (lowest; dev WAITING QE while qe rests — issue #469) →
+    oldest stale → lowest backlog-eligible (intrinsic ok, not current,
+    not busy). The current room's record must already carry live
     order/post facts (the caller rebuilds it at the gate)."""
     busy = busy or set()
     live = [r for r in (records or [])
@@ -3490,6 +3570,12 @@ def global_work_scan(role, records, current_issue, busy):
             return {"kind": kind, "issue": cands[0], "why": why,
                     "age_s": next(r.get("age_s") for r in live
                                   if r["issue"] == cands[0])}
+    crosses = sorted(r["issue"] for r in live if r.get("cross"))
+    if crosses:
+        return {"kind": "cross", "issue": crosses[0],
+                "why": "dev WAITING QE needs qe pull",
+                "age_s": next(r.get("age_s") for r in live
+                              if r["issue"] == crosses[0])}
     stales = [r for r in live if r.get("stale")]
     if stales:
         oldest = max(stales, key=lambda r: (r.get("age_s") is None,
@@ -4577,10 +4663,12 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         _recs = [r for r in collect_scan_records(rooms_all, role,
                                                  _sweep_now)
                  if r["issue"] != issue]
-        _recs.append(scan_room_record(role, issue, st, _lf,
-                                      (boxes[role]["next"] or ""),
-                                      newest_post_ts(boxes[role]["all"]),
-                                      _sweep_now))
+        _live = scan_room_record(role, issue, st, _lf,
+                                 (boxes[role]["next"] or ""),
+                                 newest_post_ts(boxes[role]["all"]),
+                                 _sweep_now)
+        _live["cross"] = record_cross_qe(role, boxes, st)
+        _recs.append(_live)
         _scan = global_work_scan(role, _recs, issue,
                                  cycle["busy"] | _busy_rooms())
         _dec = idle_decision(role, probes[role], has_unacked,
@@ -4826,10 +4914,28 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     qm_store = None
     cl_store = None
     rs_store = None
+    pull_store = None
     if not ctx.dry:
-        if impl_ts:
-            ts = impl_ts
-            if (st.get("qe_merge") or {}).get("for") != ts:
+        # Item B (#469): post-merge re-stage. The normal path stages on a
+        # fresh IMPL READY (qe_merge.for != ts). When the stored round
+        # still applies but dev waits on QE-side progress while testbed
+        # lags origin/main, re-enter to re-stage. Single-flight per
+        # qe_restage_due (S3-2): qe IDLE, no unacked qe order, proven
+        # behind, no PULL filed for this main tip.
+        _rs_stored_for = (st.get("qe_merge") or {}).get("for")
+        _rs_ts = impl_ts or _rs_stored_for
+        _rs_restage = False
+        _rs_main = None
+        if _rs_ts and _rs_stored_for == _rs_ts:
+            _rs_behind, _rs_main = testbed_behind_main(ctx, ctx.qe_dir)
+            _rs_restage = qe_restage_due(
+                _rs_stored_for, _rs_ts, dev_waits_qe_pull(boxes),
+                (probes or {}).get("qe"), "qe" in has_unacked,
+                (st.get("qe_pull") or {}).get("main"),
+                _rs_behind, _rs_main)
+        if _rs_ts:
+            ts = _rs_ts
+            if ((st.get("qe_merge") or {}).get("for") != ts) or _rs_restage:
                 qd = ctx.qe_dir
                 if not qd or not os.path.isdir(qd):
                     actions.append("NEED qe-merge #%d: testbed checkout unknown" % issue)
@@ -4886,6 +4992,33 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                         if rc_q == 0:
                             actions.append("testbed staged for #%d (merge --no-commit held)" % issue)
                             qm_store = {"for": ts}
+                            if _rs_restage:
+                                # Restage path only (fresh IMPL already woke
+                                # qe via IMPL READY): wake qe to verify the
+                                # re-staged tree. Single-flight is owned by
+                                # the qe_restage_due gate (no PULL filed for
+                                # this main tip); the oid-collision check
+                                # below is the fail-safe.
+                                _pl_text = ("PULL #%d: testbed re-staged with origin/main after dev merge (dev WAITING QE); verify the staged tree per prompts/qe.txt + room pending and post VERIFIED; ACK it with post_update ref=<id> before starting" % issue)
+                                _pl_note, _pl_oid = coord_note("qe", _pl_text, ack_by=True, done_by=True, evidence="VERIFIED")
+                                if _pl_oid in rings:
+                                    actions.append("order deferred qe PULL #%d (oid collision)" % issue)
+                                elif append_box_note(room_dir, "qe", _pl_note):
+                                    rings[_pl_oid] = 0
+                                    has_unacked.add("qe")
+                                    file_order_deadline(ad_store, _pl_oid)
+                                    file_order_delivery(dl_store, _pl_oid, "VERIFIED")
+                                    pull_store = {"for": ts, "main": _rs_main, "oid": _pl_oid}
+                                    actions.append("order filed qe PULL #%d (oid %s)" % (issue, _pl_oid))
+                                    if ("qe" not in deaf and probes["qe"].startswith("IDLE")
+                                            and not session_rung(actions, SESS["qe"], cycle["rung"])):
+                                        _pl_res = ring(ctx, SESS["qe"], "qe", "qe PULL order",
+                                                       oid=_pl_oid, issue=issue)
+                                        actions.append(_pl_res)
+                                        if _pl_res.startswith(("rang ", "WOULD ring ")):
+                                            rings[_pl_oid] = 1
+                                else:
+                                    actions.append("NOTE-FAILED qe PULL #%d" % issue)
                         else:
                             actions.append("NEED qe-merge #%d failed: %s" % (issue, last_q))
                             if "conflict" in last_q.lower():
@@ -5080,6 +5213,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s["qe_clean"] = cl_store
             else:
                 s.pop("qe_clean", None)
+        if isinstance(pull_store, dict):
+            if pull_store:
+                s["qe_pull"] = pull_store
+            else:
+                s.pop("qe_pull", None)
         if isinstance(qo_store, dict) and qo_store:
             s["qe_order"] = qo_store
         if isinstance(di_store, dict):
@@ -7044,6 +7182,55 @@ def mode_self_test():
     check("scan-record-busy-live-order",
           scan_room_record("dev", 1, {"state": "IN_PROGRESS", "rings": {"dev:2026-11-03T00:00:00": 1}},
                            {}, None, None, "2026-11-03T00:00:01")["busy"] is True, True)
+    # Issue #469: cross-lane qe need (dev WAITING QE while qe rests).
+    _sxo = global_work_scan("qe", [_rmk(444, cross=True),
+                                   _rmk(455, order=True)], 52, set())
+    check("scan-order-beats-cross",
+          _sxo is not None and _sxo["kind"] == "order" and _sxo["issue"] == 455, True)
+    _sxx = global_work_scan("qe", [_rmk(444, cross=True),
+                                   _rmk(52, cross=True)], 53, set())
+    check("scan-cross-lowest",
+          _sxx is not None and _sxx["kind"] == "cross" and _sxx["issue"] == 52, True)
+    _sxs = global_work_scan("qe", [_rmk(444, stale=True, age_s=9999.0),
+                                     _rmk(52, cross=True)], 53, set())
+    check("scan-cross-beats-stale",
+          _sxs is not None and _sxs["kind"] == "cross", True)
+    check("scan-cross-denied-shape",
+          idle_decision("qe", "IDLE-static", set(), [], None, False,
+                        {"kind": "cross", "issue": 444}) == "denied:cross:#444", True)
+    _wqb = lambda nxt: {"dev": {"next": nxt, "all": [], "coord_last": None},
+                        "qe": {"next": "", "all": [], "coord_last": None}}
+    check("waits-qe-pull",
+          dev_waits_qe_pull(_wqb("waiting QE pull of origin main")), True)
+    check("waits-merge-close-qe",
+          dev_waits_qe_pull(_wqb("waiting QE merge verification")), True)
+    check("waits-audit-excluded",
+          dev_waits_qe_pull(_wqb("waiting auditor verdict")) is False, True)
+    check("waits-plan-review-excluded",
+          dev_waits_qe_pull(_wqb("waiting plan-review")) is False, True)
+    check("waits-no-next",
+          dev_waits_qe_pull(_wqb("")) is False, True)
+    check("restage-due-true",
+          qe_restage_due("2026-11-03T21:31:18Z", "2026-11-03T21:31:18Z",
+                         True, "IDLE-static", False, None, True, "abc1234"), True)
+    check("restage-fresh-impl",
+          qe_restage_due(None, "2026-11-03T21:31:18Z",
+                         True, "IDLE-static", False, None, True, "abc1234") is False, True)
+    check("restage-qe-busy",
+          qe_restage_due("2026-11-03T21:31:18Z", "2026-11-03T21:31:18Z",
+                         True, "WORKING (#444)", False, None, True, "abc1234") is False, True)
+    check("restage-qe-unacked",
+          qe_restage_due("2026-11-03T21:31:18Z", "2026-11-03T21:31:18Z",
+                         True, "IDLE-static", True, None, True, "abc1234") is False, True)
+    check("restage-caught-up",
+          qe_restage_due("2026-11-03T21:31:18Z", "2026-11-03T21:31:18Z",
+                         True, "IDLE-static", False, None, False, "abc1234") is False, True)
+    check("restage-pull-filed",
+          qe_restage_due("2026-11-03T21:31:18Z", "2026-11-03T21:31:18Z",
+                         True, "IDLE-static", False, "abc1234", True, "abc1234") is False, True)
+    check("restage-no-dev-wait",
+          qe_restage_due("2026-11-03T21:31:18Z", "2026-11-03T21:31:18Z",
+                         False, "IDLE-static", False, None, True, "abc1234") is False, True)
     check("idle-decision-none-working",
           idle_decision("dev", "WORKING-markers", set(), [], None, False,
                         {"kind": "order", "issue": 7}) == "none", True)
