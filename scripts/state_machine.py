@@ -6185,6 +6185,35 @@ def status_planned_audit(ctx, issue, boxes, st):
     return audit_planned_text(verdict, report, live, stored, demand, qhead, issue)
 
 
+ISSUE_LIFECYCLE = ("open", "planned", "implementing", "testing", "closing")
+
+
+def issue_state_for(st, boxes):
+    """Lifecycle state of an issue for the status table. Pure, display-only.
+    CLOSE-OUT/CLOSING/CLOSED (or gh-closed) read as closing, except while
+    the merge-close window still waits on QE verification (dev WAITING QE) —
+    that window is testing. VERIFY as testing, IMPL as implementing; RECON
+    reads as planned once the auditor has posted, else open. Anything
+    unrecognized is open. Never persisted."""
+    st = st or {}
+    phase = st.get("phase") or ""
+    if phase in ("CLOSE-OUT", "CLOSING", "CLOSED") or st.get("gh_closed"):
+        pend = (st.get("pending") or "").lower()
+        if "waiting qe" in pend or "waiting test" in pend:
+            return "testing"
+        return "closing"
+    if phase == "VERIFY":
+        return "testing"
+    if phase == "IMPL":
+        return "implementing"
+    if phase == "RECON":
+        aud = ((boxes or {}).get("auditor") or {}).get("all", [])
+        if any(True for _p in aud):
+            return "planned"
+        return "open"
+    return "open"
+
+
 def cmd_status(ctx, issues):
     rooms = discover_rooms(issues)
     if not rooms:
@@ -6238,7 +6267,8 @@ def cmd_status(ctx, issues):
                              planned))
                 if starvation_gap(role, probe, facts[role].get(issue, {}), st, hu):
                     starved_all.append(issue)
-        print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
+        _istate = issue_state_for(st, boxes)
+        print(fmt_table(issue, {"kind": "state=" + _istate, "rest": ""},
                         rows), flush=True)
     for _v in watchdog_invariant(sorted(set(starved_all)), engine_loop_live()):
         print(_v, flush=True)
