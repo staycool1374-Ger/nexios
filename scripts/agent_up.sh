@@ -475,6 +475,19 @@ mode_setup() {
     [ -f "$rt/inbox/$r.md" ] || echo "# inbox/$r.md — append-only. Format: <ISO8601> FROM=<role> NEED|READY|NOTE :: <text>" > "$rt/inbox/$r.md"
   done
   [ -f "$rt/state.json" ] || { write_state_skeleton "$rt/state.json" "$1"; info "seeded state.json (IN_PROGRESS, retries 0/3)"; }
+  if ! python3 -c "import json,sys; sys.exit(0 if 'scope' in json.load(open(sys.argv[1])) else 1)" "$rt/state.json" 2>/dev/null; then
+    _sl=""
+    _slug=$(clean_gh_repo "$REPO_ROOT" 2>/dev/null || true)
+    if [ -n "$_slug" ]; then
+      _sl=$(gh api "repos/$_slug/issues/$1/labels" --jq '.[].name' 2>/dev/null || true)
+    fi
+    _scope=$(printf '%s\n' "$_sl" | scope_for_labels)
+    if mode_state_set "$1" "scope=$_scope" >/dev/null; then
+      info "room scope: $_scope"
+    else
+      info "room scope: seed failed, engine backfills on first tick"
+    fi
+  fi
   write_protocol "$rt"
   write_anchor "$rt"
   link_runtime "$1" "$rt"
@@ -526,6 +539,21 @@ checkout_staleness() {
   else
     echo diverged
   fi
+}
+
+# stdin: newline-separated GitHub label names. stdout: full |
+# audit-only | testing-only (lane scope for the room). Pure except stdin.
+scope_for_labels() {
+  local has_a= has_t= n
+  while IFS= read -r n; do
+    case "$(printf '%s' "$n" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+      audit) has_a=1 ;;
+      testing) has_t=1 ;;
+    esac
+  done
+  if [ -n "$has_t" ] && [ -z "$has_a" ]; then echo testing-only
+  elif [ -n "$has_a" ] && [ -z "$has_t" ]; then echo audit-only
+  else echo full; fi
 }
 
 normalize_checkout() {
@@ -612,7 +640,9 @@ def die(msg):
 
 path, pairs = sys.argv[1], sys.argv[2:]
 ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
-           "retry_budget", "state", "updated", "release_armed", "gh_notes"}
+           "retry_budget", "state", "updated", "release_armed", "gh_notes",
+           "scope"}
+ROOM_SCOPES = ("full", "audit-only", "testing-only")
 STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
           "CLOSED", "FEEDBACK", "CLOSING"}
 lock_path = os.path.join(os.path.dirname(path), "state.lock")
@@ -645,6 +675,8 @@ with open(lock_path, "a+") as lock:
             value = value.lower() in ("1", "true", "yes")
         elif key == "state" and value not in STATES:
             die("%r not in the AGENTS.md vocabulary" % value)
+        elif key == "scope" and value not in ROOM_SCOPES:
+            die("scope must be one of %s, got %r" % ("/".join(ROOM_SCOPES), value))
         state[key] = value
     state["updated"] = datetime.datetime.now(
         datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1789,6 +1821,29 @@ mode_self_test() {
   chk test -z "$(git -C "$swork" stash list)"
   chk test "$(git -C "$swork" branch --show-current)" = "localonly"
   rm -rf "$(dirname "$spar")" "$(dirname "$spush")" "$(dirname "$swork")"
+  # room lane-scope from GH labels (pure mapping, no network)
+  chk test "$(printf 'testing\n' | scope_for_labels)" = "testing-only"
+  chk test "$(printf 'audit\n' | scope_for_labels)" = "audit-only"
+  chk test "$(printf 'testing\naudit\n' | scope_for_labels)" = "full"
+  chk test "$(printf 'bug\n' | scope_for_labels)" = "full"
+  chk test "$(printf '' | scope_for_labels)" = "full"
+  chk test "$(printf 'Audit\n' | scope_for_labels)" = "audit-only"
+  chk test "$(printf ' TESTING \n' | scope_for_labels)" = "testing-only"
+  # setup seeds room scope from issue labels (hermetic gh double, no network)
+  mkdir -p /tmp/agentup-scope-$$/bin
+  printf '#!/bin/sh\necho testing\n' > /tmp/agentup-scope-$$/bin/gh
+  chmod +x /tmp/agentup-scope-$$/bin/gh
+  PATH="/tmp/agentup-scope-$$/bin:$PATH" "$SCRIPT_DIR/agent_up.sh" setup 4199994 >/dev/null
+  chk test "$(python3 -c "import json; print(json.load(open('/tmp/nexios-4199994/state.json')).get('scope'))")" = "testing-only"
+  rm -rf /tmp/nexios-4199994 /tmp/agentup-scope-$$ "$REPO_ROOT/.nexios-runtime/4199994"
+  # state key validation accepts the lane scope vocabulary, rejects the rest
+  mkdir -p /tmp/nexios-4199998
+  printf '{"issue": 4199998}' > /tmp/nexios-4199998/state.json
+  chk "$SCRIPT_DIR/agent_up.sh" state 4199998 scope=testing-only
+  chk grep -q '"scope": "testing-only"' /tmp/nexios-4199998/state.json
+  chk_neg "$SCRIPT_DIR/agent_up.sh" state 4199998 scope=bogus
+  chk grep -q '"scope": "testing-only"' /tmp/nexios-4199998/state.json
+  rm -rf /tmp/nexios-4199998
   rm -rf "$r93"
   rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
          "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \

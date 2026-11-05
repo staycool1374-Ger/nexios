@@ -1033,6 +1033,14 @@ def audit_demand(boxes, st, fresh=None):
                     m = POST_RE.match(line)
                     if m and m.group(3) == "NEED" and "audit" in line.lower():
                         return {"requester": box, "text": line[-200:]}
+    if (st or {}).get("scope") == "testing-only":
+        _sqt = qe_verified_tip((boxes.get("qe") or {}).get("all", []),
+                               (boxes.get("qe") or {}).get("full", []))
+        if _sqt:
+            _sat = approved_verdict_tip((boxes.get("auditor") or {}).get("all", []),
+                                        (boxes.get("auditor") or {}).get("full", []))
+            if _sat is None or _sat[:7] != _sqt[:7]:
+                return {"requester": "qe", "text": "IMPL audit %s" % _sqt[:7]}
     return audit_state_demand(st, boxes)
 
 
@@ -1421,6 +1429,12 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     # for an IMPL demand because cur_tip won here).
     if _ndt and (_avt is None or _avt[:7] != _ndt[1][:7]):
         tip = _ndt[1]
+    elif (st.get("scope") or "full") == "testing-only":
+        _lqt = qe_verified_tip((boxes.get("qe") or {}).get("all", []),
+                               (boxes.get("qe") or {}).get("full", []))
+        _lat = approved_verdict_tip(boxes["auditor"]["all"], boxes["auditor"].get("full"))
+        if _lqt and (_lat is None or _lat[:7] != _lqt[:7]):
+            tip = _lqt
     _vkind = "APPROVED" if "APPROVED" in (auditor_decision(
         boxes["auditor"]["all"], boxes["auditor"].get("full")) or "") else "NEED"
     _vtip_named = decision_tip(boxes["auditor"]["all"], boxes["auditor"].get("full"))
@@ -1871,6 +1885,8 @@ def pick_backlog(rooms_here, current_issue, exclude=None):
     excl = exclude or set()
     for iss, _rdir, st in rooms_here:
         if iss == current_issue or iss in excl:
+            continue
+        if (st or {}).get("scope", "full") != "full":
             continue
         if st.get("halt"):
             continue
@@ -2758,16 +2774,19 @@ def approved_verdict_tip(all_posts, full_lines):
     return decision_tip(all_posts, full_lines, kind="APPROVED")
 
 
-def closeout_stage(issue_closed, dev_done, approved, qe_verified):
+def closeout_stage(issue_closed, dev_done, approved, qe_verified, scope="full"):
     """impl | verify | merge-close | done for a room. Pure.
 
     done only when GitHub is closed; merge-close once qe VERIFIED joins
     dev DONE + audit APPROVED; verify once dev DONE exists (verification
     runs parallel to audit — holding it on approval parked rooms with
     stale approvals behind unaudited tips); impl otherwise (close-out
-    does not own it)."""
+    does not own it). testing-only rooms have no dev DONE: qe VERIFIED +
+    audit APPROVED on the test branch goes straight to merge-close."""
     if issue_closed:
         return "done"
+    if scope == "testing-only" and qe_verified and approved:
+        return "merge-close"
     if dev_done and approved:
         return "merge-close" if qe_verified else "verify"
     if dev_done:
@@ -2815,6 +2834,11 @@ def closeout_branch(posts_all, full_lines, fields):
     _rdy = newest_impl_ready_post(posts_all)
     if _rdy and _rdy not in cands:
         cands.append(_rdy)
+    for post in posts_all or []:
+        m = POST_RE.match(post)
+        if m and m.group(2) == "qe" and m.group(3) == "READY" and "VERIFIED" in m.group(4):
+            if post not in cands:
+                cands.append(post)
     for post in cands:
         for line in post_body_lines(full_lines, post):
             m = re.match(r"^\s*branch\s*:\s*(\S+)\s*$", line, re.I)
@@ -3238,6 +3262,31 @@ def impl_promotion_due(dev_next, contacted, fresh_dev, approved, rings,
     return True
 
 
+def testing_promotion_due(qe_next, contacted, fresh_qe, approach, rings,
+                          has_unacked, stored):
+    """QE-scoped TESTING promotion gate (Gap A mirror for testing-only rooms). Pure.
+
+    True when QE explicitly waits for a TESTING order, the lane was
+    contacted before, nothing is in flight, a verification approach is on
+    file, no live qe order exists, and no order was already filed for this
+    exact NEXT text. Takes the LIVE rings dict -- never the state.json
+    snapshot (in-tick ACKs/filings). No auditor-approval gate: QE owns
+    testing-only work end to end; the approach NOTE is the readiness proof."""
+    if not (re.search(r"waiting|await|park", qe_next or "", re.I)
+            and "TESTING" in (qe_next or "").upper()):
+        return False
+    if not contacted or fresh_qe:
+        return False
+    if not approach or "qe" in (has_unacked or set()):
+        return False
+    for oid, val in (rings or {}).items():
+        if oid.startswith("qe:") and val not in (-1, RING_ESCALATED):
+            return False
+    if (stored or {}).get("next") == (qe_next or ""):
+        return False
+    return True
+
+
 def impl_stalled(dev_next, contacted, fresh_dev, approved, rings,
                  has_unacked, stored):
     """ACKed-but-stale-NEXT detector (Gap A follow-through). Pure.
@@ -3634,7 +3683,8 @@ def scan_room_record(role, issue, st, facts, nxt, last_ts, now_ts,
                                       last_ts, now_ts, stale_s)),
             "backlog_ok": bool(role == "dev"
                                and not (st or {}).get("halt")
-                               and (st or {}).get("state") not in ("CLOSED", "HOLD"))}
+                               and (st or {}).get("state") not in ("CLOSED", "HOLD")
+                               and (st or {}).get("scope", "full") == "full")}
 
 
 def collect_scan_records(rooms_all, role, now_ts):
@@ -3891,6 +3941,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
 
     boxes = load_boxes(room_dir)
     handled = st.get("handled") or {}
+    # Lane scope (full | audit-only | testing-only): cached in state.json
+    # at setup; backfilled once here for older rooms (one gh call per
+    # room lifetime, then the stored value wins over re-fetch).
+    _scope = st.get("scope")
+    if _scope not in ROOM_SCOPES:
+        _scope = scope_for_labels(github_issue_labels(ctx, issue))
+        events.append("scope=%s" % _scope)
+    node["scope"] = _scope
     fresh = new_posts(boxes, handled)
     # G1: WAKE lines are durable demand, not tick-exhaust. Surface each as
     # an event, and resurface the post it answers so a WAKE whose post is
@@ -4615,7 +4673,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     # only approved-plan rooms with zero branch artifacts qualify.
     _rb_target = _recon_target_of(dev_next)
     _rb_active = (
-        _rb_target is not None and _recon_target_gone(_rb_target)
+        _scope == "full"
+        and _rb_target is not None and _recon_target_gone(_rb_target)
         and bool(auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full"))
                  and "APPROVED" in (auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full")) or ""))
         and closeout_branch(boxes["dev"]["all"], boxes["dev"]["full"],
@@ -4707,6 +4766,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     stored_impl = st.get("dev_impl") or {}
     di_store = None
     dd_store = None
+    qt_store = None
     # Item E (#461): a standing (gated) READY covers any promotion — the
     # NEXT-change reset below must not re-ring work already done (room 240:
     # 21:50 re-ring after the 21:44 READY stood). Log once per READY ts,
@@ -4722,7 +4782,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             di_store = {}
     _dev_next = boxes["dev"]["next"] or ""
     _approved = auditor_approved(boxes["auditor"]["all"], boxes["auditor"].get("full"))
-    if not dd_store and impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
+    if _scope == "full" and not dd_store and impl_promotion_due(_dev_next, bool(boxes["dev"]["all"]),
                                           fresh.get("dev"), _approved, rings, has_unacked,
                                           stored_impl):
         note, di_oid = coord_note("dev", "IMPL promotion #%d: plan approved (auditor APPROVED on file); start IMPL per room briefs/notes; ACK it with post_update ref=<id> before starting" % issue, ack_by=True, done_by=True, evidence="IMPL-READY")
@@ -4755,10 +4815,54 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         else:
             actions.append("NOTE-FAILED dev IMPL #%d" % issue)
         events.append("dev-impl-order-filed")
-    elif not dd_store and impl_stalled(_dev_next, bool(boxes["dev"]["all"]), fresh.get("dev"),
+    elif _scope == "full" and not dd_store and impl_stalled(_dev_next, bool(boxes["dev"]["all"]), fresh.get("dev"),
                                       _approved, rings, has_unacked, stored_impl):
         actions.append("NEED dev #%d: IMPL order %s filed+resolved but NEXT unchanged (stale NEXT; no new order)"
                        % (issue, stored_impl.get("oid")))
+
+    # QE-scoped TESTING promotion (mirror of Gap A IMPL promotion, qe-only
+    # rooms only): QE posted an approach and explicitly waits for a TESTING
+    # order. Evidence VERIFIED (tip + diff present required downstream)
+    # engages the same done-by teeth as IMPL-READY; dedup keys on the exact
+    # NEXT text. No auditor-approval gate: QE owns testing-only work.
+    _qe_next = boxes["qe"]["next"]
+    _qe_approach = any("approach" in (qp or "").lower()
+                       for qp in boxes["qe"]["all"])
+    qt_store = None
+    if _scope == "testing-only" and testing_promotion_due(
+            _qe_next, bool(boxes["qe"]["all"]), fresh.get("qe"),
+            _qe_approach, rings, has_unacked, st.get("qe_testing")):
+        _tq_text = ("TESTING #%d: implement the missing tests from the issue stubs and run the E2E suites "
+                    "per room pending + prompts/qe.txt approach; post VERIFIED with tip: + diff present: + branch:; "
+                    "ACK it with post_update ref=<id> before starting" % issue)
+        _tq_note, _tq_oid = coord_note("qe", _tq_text, ack_by=True, done_by=True, evidence="VERIFIED")
+        if _tq_oid in rings:
+            actions.append("order deferred qe TESTING (oid collision)")
+        elif ctx.dry:
+            actions.append("WOULD post qe TESTING order (oid %s)" % _tq_oid)
+            rings[_tq_oid] = 0
+            has_unacked.add("qe")
+            file_order_deadline(ad_store, _tq_oid)
+            file_order_delivery(dl_store, _tq_oid, "VERIFIED")
+            qt_store = {"next": _qe_next, "oid": _tq_oid}
+            events.append("qe-testing-order-filed")
+        elif append_box_note(room_dir, "qe", _tq_note):
+            rings[_tq_oid] = 0
+            has_unacked.add("qe")
+            file_order_deadline(ad_store, _tq_oid)
+            file_order_delivery(dl_store, _tq_oid, "VERIFIED")
+            actions.append("order filed qe TESTING (oid %s)" % _tq_oid)
+            qt_store = {"next": _qe_next, "oid": _tq_oid}
+            events.append("qe-testing-order-filed")
+            if ("qe" not in deaf and probes["qe"].startswith("IDLE")
+                    and not session_rung(actions, SESS["qe"], cycle["rung"])):
+                _tq_res = ring(ctx, SESS["qe"], "qe", "TESTING order -- implement stubs + run E2E",
+                               oid=_tq_oid, issue=issue)
+                actions.append(_tq_res)
+                if _tq_res.startswith(("rang ", "WOULD ring ")):
+                    rings[_tq_oid] = 1
+        else:
+            actions.append("NOTE-FAILED qe TESTING #%d" % issue)
 
     # Item 5 (#463): work-conserving IDLE gate. IDLE is a global claim:
     # a lane may rest only when no actionable work exists in ANY room.
@@ -4914,7 +5018,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 events.append("closeout-reuse-qe")
         except Exception:
             pass
-    _c_stage = closeout_stage(bool(st.get("gh_closed")), _c_done, _c_approved, _c_qv)
+    _c_stage = closeout_stage(bool(st.get("gh_closed")), _c_done, _c_approved, _c_qv, _scope)
     co_store = None
     bq_store = None
     ghc_store = False
@@ -5026,10 +5130,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if closeout_due(_c_stage, _c_done, st.get("closeout"), rings, _c_lane_busy) and not _c_s11_block:
             _c_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"]["full"],
                                         (gated or {}).get("fields"))
+            if not _c_branch and _scope == "testing-only":
+                _c_branch = closeout_branch(boxes["qe"]["all"], boxes["qe"].get("full"), {})
             _c_tip = ((gated or {}).get("fields") or {}).get("tip")
             _ndt_tip = newest_done_tip(boxes["dev"]["all"], boxes["dev"].get("full"))
             if _ndt_tip:
                 _c_tip = _ndt_tip[1]
+            if not _c_tip and _c_stage == "merge-close" and _scope == "testing-only":
+                _c_tip = _c_qv_tip
             if _c_preempt and _c_branch and not ctx.dry:
                 try:
                     _rch, _outh = ctx.run(["git", "rev-parse", "--short", _c_branch],
@@ -5522,6 +5630,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             posted = s.get("gh_posted") or {}
             posted.update(gh_posted)
             s["gh_posted"] = posted
+        if "scope" not in s and _scope in ROOM_SCOPES:
+            s["scope"] = _scope
         if isinstance(dq_store, dict) and dq_store:
             s["decision_brief"] = dq_store
         if isinstance(dr_store, dict) and dr_store:
@@ -5558,6 +5668,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["impl_dedup"] = dd_store
         else:
             s.pop("impl_dedup", None)
+        if isinstance(qt_store, dict) and qt_store:
+            s["qe_testing"] = qt_store
+        else:
+            s.pop("qe_testing", None)
         if isinstance(ds_store, dict) and ds_store:
             s["dev_stale"] = ds_store
         if isinstance(bar_store, dict):
@@ -6677,6 +6791,24 @@ def detect_decision_request(boxes):
 
 ISSUE_LIFECYCLE = ("open", "planned", "implementing", "testing", "closing")
 
+ROOM_SCOPES = ("full", "audit-only", "testing-only")
+
+
+def scope_for_labels(names):
+    """Room lane-scope from GitHub label names. Pure.
+
+    testing without audit -> testing-only (QE owns the work);
+    audit without testing -> audit-only (auditor owns it);
+    anything else (none, both, unknown) -> full pipeline."""
+    norm = {str(n or "").strip().lower() for n in (names or [])}
+    has_audit = "audit" in norm
+    has_testing = "testing" in norm
+    if has_testing and not has_audit:
+        return "testing-only"
+    if has_audit and not has_testing:
+        return "audit-only"
+    return "full"
+
 
 def issue_state_for(st, boxes):
     """Lifecycle state of an issue for the status table. Pure, display-only.
@@ -6978,8 +7110,28 @@ def github_issue_text(ctx, issue):
         return None, None
 
 
-def issue_briefs_text(issue, dev_branch, title, body):
-    """RECON brief pair for one issue. Pure: no I/O, {repo} stays literal."""
+def github_issue_labels(ctx, issue):
+    """Label names for an issue, or [] on any failure. Read-only."""
+    slug = github_repo_slug(ctx)
+    if not slug:
+        return []
+    rc, out = ctx.run(["gh", "api", "repos/%s/issues/%d/labels" % (slug, issue),
+                       "--paginate"], timeout=30)
+    if rc != 0:
+        return []
+    try:
+        arr = json.loads(out or "[]")
+        return [str(e.get("name") or "") for e in arr
+                if isinstance(e, dict) and e.get("name")]
+    except ValueError:
+        return []
+
+
+def issue_briefs_text(issue, dev_branch, title, body, scope="full"):
+    """RECON brief pair for one issue. Pure: no I/O, {repo} stays literal.
+
+    scope testing-only/audit-only appends lane task lines; full keeps the
+    legacy bytes exactly (default preserves every existing caller)."""
     seed = "%s\n\n%s" % (title, (body or "").strip())
     dev_brief = ("%s\n\nIssue: %d\nRole prompt: {repo}/prompts/PROMPT-dev.md\n"
                  "Branch: %s (recon first; feature branch at impl)\n"
@@ -7000,6 +7152,23 @@ def issue_briefs_text(issue, dev_branch, title, body):
                 "No diff-verification runs until dev posts IMPL READY. While parked: build testbed @ tip, boot QEMU, run the baseline suites from your approach, post the tally with STATE:/NEXT: trailers.\n"
                 "scripts/agent_up.sh wake %d qe nexios-engine \"inbox: qe READY \u2014 read inbox/qe.md\"\n"
                 % (seed, issue, issue))
+    if scope == "testing-only":
+        dev_brief += ("Scope: testing-only (label testing) -- QE owns this room's work: "
+                      "no PLAN, no IMPL, no branch, no merge from you. Stay idle except backlog "
+                      "swaps to other rooms (post one STATE/NEXT idle NOTE + RING, then idle). "
+                      "If ordered MERGE-CLOSE later, merge the named branch as usual.\n")
+        qe_brief += ("Scope: testing-only (label testing) -- you own this room: implement "
+                     "the missing tests from the issue stubs, run the E2E suites, post approach "
+                     "NOTE first, then wait with NEXT 'waiting TESTING order'; on TESTING order execute fully; post VERIFIED with tip: + "
+                     "diff present: + branch:.\n")
+    elif scope == "audit-only":
+        dev_brief += ("Scope: audit-only (label audit) -- auditor owns this room's work: "
+                      "no PLAN, no IMPL, no branch, no merge from you. Stay idle except backlog "
+                      "swaps to other rooms (post one STATE/NEXT idle NOTE + RING, then idle). "
+                      "If ordered MERGE-CLOSE later, merge the named branch as usual.\n")
+        qe_brief += ("Scope: audit-only (label audit) -- auditor owns this room's work: "
+                     "no verification work from you. Stay idle (post one STATE/NEXT idle NOTE + "
+                     "RING, then idle).\n")
     return dev_brief, qe_brief
 
 
@@ -7031,7 +7200,8 @@ def cmd_provision(ctx, issues, a):
             ctx.log("%s NEED issue text unavailable (no invention); stop" % tag)
             rc_all = 1
             continue
-        dev_brief, qe_brief = issue_briefs_text(issue, a.dev_branch, title, body)
+        _scope = scope_for_labels(github_issue_labels(ctx, issue))
+        dev_brief, qe_brief = issue_briefs_text(issue, a.dev_branch, title, body, scope=_scope)
         if ctx.dry:
             ctx.log("%s WOULD write prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
                     % (tag, len(dev_brief), len(qe_brief)))
@@ -7076,8 +7246,9 @@ def cmd_brief(ctx, issues, a):
             if title is None:
                 print("#%d NEED issue text unavailable (no invention); stop" % issue)
                 return 1
+            _scope = scope_for_labels(github_issue_labels(ctx, issue))
             dev_brief, qe_brief = issue_briefs_text(
-                issue, a.dev_branch, title, _body)
+                issue, a.dev_branch, title, _body, scope=_scope)
             print("WOULD write #%d prompts/dev.txt (%dB) + prompts/qe.txt (%dB)"
                   % (issue, len(dev_brief), len(qe_brief)))
         return 0
@@ -7091,7 +7262,8 @@ def cmd_brief(ctx, issues, a):
         if title is None:
             sys.stderr.write("#%d NEED issue text unavailable (no invention); stop\n" % issue)
             return 1
-        texts[issue] = issue_briefs_text(issue, a.dev_branch, title, body)
+        _scope = scope_for_labels(github_issue_labels(ctx, issue))
+        texts[issue] = issue_briefs_text(issue, a.dev_branch, title, body, scope=_scope)
     rc = 0
     for issue in issues:
         dev_brief, qe_brief = texts[issue]
@@ -8826,6 +8998,84 @@ def mode_self_test():
           engine_fetch_due(1) is False and engine_fetch_due(6, 5) is False, True)
     check("engine-fetch-due-bad-input",
           engine_fetch_due(None) is False and engine_fetch_due("x") is False, True)
+    check("scope-testing-only",
+          scope_for_labels(["testing"]) == "testing-only", True)
+    check("scope-audit-only",
+          scope_for_labels(["audit"]) == "audit-only", True)
+    check("scope-both-full",
+          scope_for_labels(["testing", "audit"]) == "full", True)
+    check("scope-none-full",
+          scope_for_labels([]) == "full" and scope_for_labels(["bug"]) == "full", True)
+    check("scope-case-insensitive",
+          scope_for_labels(["Audit"]) == "audit-only"
+          and scope_for_labels([" TESTING "]) == "testing-only", True)
+    _sbd, _sbq = issue_briefs_text(1, "b", "t", "x")
+    _std, _stq = issue_briefs_text(1, "b", "t", "x", scope="testing-only")
+    _sad, _saq = issue_briefs_text(1, "b", "t", "x", scope="audit-only")
+    check("brief-full-unchanged",
+          "Scope:" not in _sbd and "Scope:" not in _sbq, True)
+    check("brief-testing-dev-stay-out",
+          "no PLAN, no IMPL" in _std and "MERGE-CLOSE" in _std, True)
+    check("brief-testing-qe-contract",
+          "post VERIFIED with tip:" in _stq and "branch:" in _stq, True)
+    check("brief-audit-qe-idle",
+          "no verification work" in _saq, True)
+    _tw = "waiting TESTING order (approach ready)"
+    check("testing-due-true",
+          testing_promotion_due(_tw, True, [], True, {}, set(), {}), True)
+    check("testing-due-no-next",
+          testing_promotion_due("idle :: waiting", True, [], True, {}, set(), {}) is False, True)
+    check("testing-due-virgin-no-posts",
+          testing_promotion_due(_tw, False, [], True, {}, set(), {}) is False, True)
+    check("testing-due-fresh-post",
+          testing_promotion_due(_tw, True, ["x"], True, {}, set(), {}) is False, True)
+    check("testing-due-no-approach",
+          testing_promotion_due(_tw, True, [], False, {}, set(), {}) is False, True)
+    check("testing-due-unacked-lane",
+          testing_promotion_due(_tw, True, [], True, {}, {"qe"}, {}) is False, True)
+    check("testing-due-live-ring",
+          testing_promotion_due(_tw, True, [], True, {"qe:2026-11-02T08:00:00": 1}, set(), {}) is False, True)
+    check("testing-due-dedupe-same-next",
+          testing_promotion_due(_tw, True, [], True, {}, set(), {"next": _tw, "oid": "qe:2026-11-02T08:00:00"}) is False, True)
+    check("testing-due-stored-old-next",
+          testing_promotion_due(_tw, True, [], True, {}, set(), {"next": "waiting TESTING old", "oid": "qe:2026-11-02T07:00:00"}), True)
+    _qvp = "2026-11-04T23:35:03Z FROM=qe READY :: QE VERIFIED: S1-2 E2E PASS"
+    _qvb = ["tip: abc1234", "diff present: y"]
+    _qbox = {"dev": {"all": [], "full": []},
+             "qe": {"all": [_qvp], "full": [_qvp] + _qvb},
+             "auditor": {"all": [], "full": []}}
+    check("audit-demand-qe-scope-synth",
+          audit_demand(_qbox, {"pending": "plain work", "scope": "testing-only"}, None) == {"requester": "qe", "text": "IMPL audit abc1234"}, True)
+    _abox = {"dev": {"all": [], "full": []},
+             "qe": {"all": [_qvp], "full": [_qvp] + _qvb},
+             "auditor": {"all": ["2026-11-04T23:40:00Z FROM=audit READY :: DECISION: APPROVED ok"],
+                         "full": ["2026-11-04T23:40:00Z FROM=audit READY :: DECISION: APPROVED ok", "tip: abc1234"]}}
+    check("audit-demand-qe-scope-answered",
+          audit_demand(_abox, {"pending": "plain work", "scope": "testing-only"}, None) is None, True)
+    check("audit-demand-qe-scope-full-rooms-untouched",
+          audit_demand(_qbox, {"pending": "plain work", "scope": "full"}, None) is None, True)
+    check("closeout-stage-testing-merge-close",
+          closeout_stage(False, None, True, "2026-11-04T23:35:03Z", "testing-only") == "merge-close", True)
+    check("closeout-stage-testing-no-approval",
+          closeout_stage(False, None, False, "2026-11-04T23:35:03Z", "testing-only") == "impl", True)
+    check("closeout-stage-testing-nothing",
+          closeout_stage(False, None, False, None, "testing-only") == "impl", True)
+    _qb = ["2026-11-04T23:35:03Z FROM=qe READY :: QE VERIFIED ok"]
+    check("closeout-branch-qe-fallback",
+          closeout_branch(_qb, _qb + ["branch: fix/x"], {}) == "fix/x", True)
+    _db = ["2026-11-02T08:03:09Z FROM=dev READY :: step DONE"]
+    check("closeout-branch-dev-wins",
+          closeout_branch(_db + _qb, _db + ["branch: fix/y"] + _qb + ["branch: fix/x"], {}) == "fix/y", True)
+    _sco = [(52, "/r52", {"state": "IN_PROGRESS", "scope": "testing-only"}),
+            (53, "/r53", {"state": "IN_PROGRESS", "scope": "full"})]
+    check("pick-backlog-skips-scoped",
+          pick_backlog(_sco, 51) == 53, True)
+    check("scan-backlog-scoped-false",
+          scan_room_record("dev", 52, {"state": "IN_PROGRESS", "scope": "testing-only"},
+                           {}, "working :: x", None, "2026-11-03T00:00:01")["backlog_ok"] is False, True)
+    check("scan-backlog-full-true",
+          scan_room_record("dev", 52, {"state": "IN_PROGRESS"},
+                           {}, "working :: x", None, "2026-11-03T00:00:01")["backlog_ok"] is True, True)
     check("mergeclose-preempts-true",
           mergeclose_preempts_starvation("working :: waiting fresh MERGE-CLOSE order",
                                          "CLOSE-OUT: dev: awaiting merge-close", True, True, True) is True, True)
