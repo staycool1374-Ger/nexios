@@ -2344,6 +2344,25 @@ mode_watch() {
   exec "$SCRIPT_DIR/watchdog.sh" "$act" "$issue" "$@"
 }
 
+# A tick loop that outlived its session blocks resurrection via the pgrep
+# guard in ensure_engine_loop, while ticking stale code with no session to
+# manage it. Reap only the definitionally-orphaned (session absent) and
+# age-guarded (one-shot interval-0 ticks finish in seconds; anything older
+# than 3 min is the stale loop, never an in-flight one-shot).
+reap_orphan_loop() {
+  local _lp _age _age_s
+  for _lp in $(pgrep -f '[s]tate_machine\.py tick --all' 2>/dev/null); do
+    if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+      return 0
+    fi
+    _age=$(ps -o etime= -p "$_lp" 2>/dev/null | tr -d '[:space:]')
+    [ -n "$_age" ] || continue
+    _age_s=$(printf '%s' "$_age" | awk -F'[-:]' '{s=0; for(i=1;i<=NF;i++) s=s*60+$i; print s}')
+    if [ "${_age_s:-0}" -gt 180 ]; then
+      kill "$_lp" 2>/dev/null && info "reaped orphaned tick loop (pid $_lp, age $_age)" || true
+    fi
+  done
+}
 mode_engine() {
   # Engine-loop-only lifecycle (workers, consultant, rooms untouched).
   # restart = fresh tick loop on current working-tree code.
@@ -2355,11 +2374,13 @@ mode_engine() {
       else
         info "engine loop not running ($ENGINE_SESS absent)"
       fi
+      reap_orphan_loop
       ;;
     restart)
       if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
         tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
       fi
+      reap_orphan_loop
       ensure_engine_loop
       ;;
     status)
