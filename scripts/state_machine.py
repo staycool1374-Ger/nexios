@@ -5433,6 +5433,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     g_acts, gh_posted = gh_transitions(ctx, issue, st, node, actions, halt_now, fresh, _dq_found)
     actions.extend(g_acts)
     dr_store = None
+    dc_store = None
     _brief_for = ((st.get("decision_brief") or {}).get("for") or "")
     if dq_store:
         _brief_for = max(_brief_for, dq_store.get("for") or "")
@@ -5445,6 +5446,13 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 ctx._gh_need = True
         else:
             _rm = match_decision_comment(_rc, _rsince)
+            _unparsed = None if _rm else unparsed_operator_answer(_rc, _rsince)
+            if _unparsed and ((st.get("decision_clarify") or {}).get("for") or "") < _unparsed["ts"]:
+                actions.append("NEED operator decision clarify #%d (%s commented %s, no DECISION: line; "
+                               "coordinator to interpret or reply with DECISION: <choice>): %s"
+                               % (issue, _unparsed["user"], _unparsed["ts"], _unparsed["text"]))
+                events.append("decision-clarify")
+                dc_store = {"for": _unparsed["ts"], "by": _unparsed["user"]}
             if _rm and ((st.get("gh_decision_relayed") or {}).get("for") or "") < _rm["ts"]:
                 _rlane = (((st.get("decision_brief") or dq_store or {}).get("role")) or "dev")
                 if _rlane not in ("dev", "qe"):
@@ -5501,6 +5509,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["decision_brief"] = dq_store
         if isinstance(dr_store, dict) and dr_store:
             s["gh_decision_relayed"] = dr_store
+        if isinstance(dc_store, dict) and dc_store:
+            s["decision_clarify"] = dc_store
         if isinstance(qm_store, dict) and qm_store:
             s["qe_merge"] = qm_store
             s.pop("qe_clean", None)
@@ -6040,6 +6050,33 @@ def match_decision_comment(comments, since_ts):
     return best
 
 
+RELAY_MARKERS = ("OPERATOR DECISION REQUESTED", "DECISION BRIEF")
+
+
+def unparsed_operator_answer(comments, since_ts):
+    """Newest operator comment the relay loop cannot parse, or None. Pure.
+
+    A comment newer than since_ts with no DECISION: wire line and no relay
+    marker text: the human answered (or chatted) but the strict matcher
+    (match_decision_comment) will never fire on it. Lets the tick flag
+    UNPARSED-ANSWER instead of latching on silence. Coordinator interprets;
+    the deterministic gate stays byte-exact."""
+    best = None
+    for c in comments or []:
+        ts = c.get("ts") or ""
+        if ts <= (since_ts or ""):
+            continue
+        body = c.get("body") or ""
+        if any(DECISION_LINE_RE.match(line) for line in body.splitlines()):
+            continue
+        if any(m in body for m in RELAY_MARKERS):
+            continue
+        if best is None or ts > best["ts"]:
+            best = {"user": c.get("user") or "?",
+                    "ts": ts, "text": (body.strip().splitlines() or ["?"])[0][:160]}
+    return best
+
+
 def gh_issue_comments(ctx, issue):
     """[{user, ts, body}] for an issue, or None on failure. Read-only."""
     slug = github_repo_slug(ctx)
@@ -6079,6 +6116,9 @@ def gh_transitions(ctx, issue, st, node, actions, halt_now, fresh=None, decision
     armed = bool(st.get("gh_notes"))
     posted = st.get("gh_posted") or {}
     wanted = {}
+    _REPLY_HINT = ("Reply on this issue with one line: the word DECISION, a colon, then your choice "
+                     "(for example Y). The engine relays that line back to the lane verbatim; "
+                     "anything else is read as discussion, not a decision.")
     if decision and isinstance(decision, dict) and decision.get("brief"):
         _dts = decision.get("ts") or "?"
         _dkey = "decision:%s" % _dts
@@ -6090,8 +6130,9 @@ def gh_transitions(ctx, issue, st, node, actions, halt_now, fresh=None, decision
                 _dkk = _dkey if _di == 0 else "%s#%d" % (_dkey, _di + 1)
                 if _dkk not in posted:
                     _dtag = "" if _dn == 1 else " (%d/%d)" % (_di + 1, _dn)
+                    _dbody = _dch if _di < _dn - 1 else "%s\n\n%s" % (_dch, _REPLY_HINT)
                     wanted[_dkk] = ("OPERATOR DECISION REQUESTED #%d (%s)%s:\n\n%s"
-                                    % (issue, _dwho, _dtag, _dch))
+                                    % (issue, _dwho, _dtag, _dbody))
     if armed:
         phase = st.get("phase") or "?"
         if ("phase:" + phase) not in posted:
@@ -7433,6 +7474,24 @@ def mode_self_test():
     check("decision-match-newest", bool(_mm) and _mm["text"] == "actually Z" and _mm["user"] == "op", True)
     check("decision-match-since-filters", match_decision_comment(_mc, "2026-11-04T16:00:00") is None, True)
     check("decision-match-none", match_decision_comment([{"user": "x", "ts": "2026-11-04T17:00:00", "body": "nope"}], "2026-11-04T14:00:00") is None, True)
+    _tmpl = ("OPERATOR DECISION REQUESTED #53 (dev lane 2026-11-04T13:09:11):\n\nbrief\n\n"
+             "Reply on this issue with one line: the word DECISION, a colon, then your choice "
+             "(for example Y). The engine relays that line back to the lane verbatim; "
+             "anything else is read as discussion, not a decision.")
+    check("decision-template-no-self-match",
+          match_decision_comment([{"user": "op", "ts": "2026-11-04T16:00:00", "body": _tmpl}], "2026-11-04T14:00:00") is None
+          and unparsed_operator_answer([{"user": "op", "ts": "2026-11-04T16:00:00", "body": _tmpl}], "2026-11-04T14:00:00") is None, True)
+    _prose = [{"user": "op", "ts": "2026-11-04T16:11:51", "body": "Option Y confirmed and signed by OPERATOR"}]
+    check("decision-unparsed-prose",
+          (unparsed_operator_answer(_prose, "2026-11-04T14:00:00") or {}).get("ts") == "2026-11-04T16:11:51", True)
+    check("decision-unparsed-skips-wire",
+          unparsed_operator_answer([{"user": "op", "ts": "2026-11-04T16:00:00", "body": "lgtm\nDECISION: go with Y"}], "2026-11-04T14:00:00") is None, True)
+    check("decision-unparsed-since-filters",
+          unparsed_operator_answer(_prose, "2026-11-04T17:00:00") is None, True)
+    check("decision-unparsed-newest-wins",
+          (unparsed_operator_answer([{"user": "a", "ts": "2026-11-04T16:00:00", "body": "looking"},
+                                     {"user": "op", "ts": "2026-11-04T16:30:00", "body": "Y it is"}],
+                                    "2026-11-04T14:00:00") or {}).get("ts") == "2026-11-04T16:30:00", True)
     check("issue-state-closing", issue_state_for({"phase": "CLOSE-OUT"}, {}) == "closing", True)
     check("issue-state-testing", issue_state_for({"phase": "VERIFY"}, {}) == "testing", True)
     check("issue-state-implementing", issue_state_for({"phase": "IMPL"}, {}) == "implementing", True)
