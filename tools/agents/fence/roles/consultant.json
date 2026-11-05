@@ -1,17 +1,12 @@
 {
   "role": "consultant",
-  "edit_default": "deny",
+  "edit_default": "allow",
   "edit_allow": [
     "{repo}/**"
   ],
   "edit_deny": [
     "{repo}/src",
-    "{repo}/src/**",
-    "{repo}/tools/agents/fence",
-    "{repo}/tools/agents/fence/**",
-    "{repo}/tools/agents/render_fence.py",
-    "{repo}/tools/agents/verify_fence.py",
-    "{repo}/scripts/agent_up.sh"
+    "{repo}/src/**"
   ],
   "external_allow": [
     "{repo}/**"

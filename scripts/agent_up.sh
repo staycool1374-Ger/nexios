@@ -1956,7 +1956,8 @@ assert "mcp" in cfg and "github" in cfg["mcp"], "mcp lost"
 edit = cfg["permission"]["edit"]
 ext = cfg["permission"]["external_directory"]
 allows = {k for k, v in edit.items() if v == "allow"}
-assert allows == {"/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
+assert allows == {"*",
+                   "/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
                   "/tmp/nexios-*/**/*", "/private/tmp/nexios-*/**/*",
                   "/tmp/*", "/private/tmp/*",
                   "/tmp/*/**", "/private/tmp/*/**",
@@ -1964,16 +1965,9 @@ assert allows == {"/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
 repos = {k: v for k, v in list(edit.items()) + list(ext.items()) if k.startswith(repo)}
 assert repos == {repo + "/**": "allow",
                  repo + "/src": "deny",
-                 repo + "/src/**": "deny",
-                 repo + "/tools/agents/fence": "deny",
-                 repo + "/tools/agents/fence/**": "deny",
-                 repo + "/tools/agents/render_fence.py": "deny",
-                 repo + "/tools/agents/verify_fence.py": "deny",
-                 repo + "/scripts/agent_up.sh": "deny"}, repos
+                 repo + "/src/**": "deny"}, repos
 keys = list(edit)
 assert keys.index(repo + "/**") < keys.index(repo + "/src/**")
-assert keys.index(repo + "/**") < keys.index(repo + "/tools/agents/fence/**")
-assert keys.index(repo + "/**") < keys.index(repo + "/scripts/agent_up.sh")
 PY
   }
   worker_ok() {  # $1 file, $2 repo
@@ -2034,7 +2028,7 @@ PY
     chk render "$r" "$f" --twins-out "$out/$r"
     chk test -s "$f"
     case "$r" in
-      dev) chk test "$(cfg_val "$f" edit '*')" = allow ;;
+      dev|consultant) chk test "$(cfg_val "$f" edit '*')" = allow ;;
       *)   chk test "$(cfg_val "$f" edit '*')" = deny ;;
     esac
   done

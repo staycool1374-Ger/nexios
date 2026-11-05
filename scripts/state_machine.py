@@ -3497,6 +3497,45 @@ def lane_probe_short(probe):
     return (probe or "-").split(" (")[0].split(";")[0][:40]
 
 
+ENGINE_WAIT_RE = re.compile(r"(waiting|blocked|parked|need)[^.]{0,80}\b(engine|restage|routing)\b", re.I)
+ENGINE_ESCALATE_TICKS = 3  # sweeps waiting on the engine before the operator NEED
+
+
+def engine_wait_hits(boxes):
+    """NEXT texts naming engine-owned action, per waiting role. Pure.
+
+    Matches waits on engine/restage/routing (restage, merge sequencing,
+    branch routing). Lane waits (dev/qe/audit/verdict) and bare idle
+    never match: those have owners and ladders already.
+    """
+    out = {}
+    for _role in ("dev", "qe", "auditor"):
+        _nxt = ((boxes or {}).get(_role) or {}).get("next") or ""
+        if ENGINE_WAIT_RE.search(_nxt):
+            out[_role] = _nxt.strip()
+    return out
+
+
+def engine_wait_streak(prev, key):
+    """Streak for an unchanged engine-wait key, else 1. Pure (#485)."""
+    prev = prev or {}
+    if key and prev.get("key") == key:
+        return (prev.get("streak") or 0) + 1
+    return 1
+
+
+def engine_wait_recovery(next_text):
+    """Operator recovery hint for an engine-wait NEXT. Pure."""
+    _low = (next_text or "").lower()
+    if "restage" in _low:
+        return "restage the testbed checkout at the VERIFIED tip and trigger re-audit"
+    if "merge" in _low or "clean" in _low:
+        return "merge or stash the unmerged VERIFIED evidence (#484), then clean"
+    if "rout" in _low:
+        return "route the step-a branch order"
+    return "operator decision needed (scope/merge call)"
+
+
 def sync_mismatch(claim, probe_class):
     """True only for stale-claim (working vs quiet) and hidden-work
     (idle vs active). Waiting lanes and unknown inputs never mismatch.
@@ -5803,6 +5842,25 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             events.append("lane-sync-escalated-%s" % _role)
             _sy_store["escalated"] = True
             _sy_new[_role] = _sy_store
+    _ew_prev = st.get("engine_wait") or {}
+    _ew_hits = {} if st.get("halt") else engine_wait_hits(boxes)
+    _ew_key = " | ".join(sorted(set(_ew_hits.values())))
+    _ew_store = None
+    if _ew_hits and _ew_prev.get("escalated") and (_ew_prev.get("key") or "") == _ew_key:
+        _ew_store = dict(_ew_prev)
+    elif _ew_hits:
+        _ew_streak = engine_wait_streak(_ew_prev, _ew_key)
+        if _ew_streak < ENGINE_ESCALATE_TICKS:
+            actions.append("ENGINE-WAIT watch #%d: waiting on engine (%s) [%dx]"
+                           % (issue, _ew_key[:160], _ew_streak))
+            events.append("engine-wait-watch")
+            _ew_store = {"streak": _ew_streak, "key": _ew_key}
+        else:
+            _ew_first = sorted(_ew_hits)[0]
+            actions.append("NEED engine wait #%d ESCALATED (waiting '%s' for %d sweeps, no engine order filed); operator: %s -- no new order"
+                           % (issue, _ew_first[:120], _ew_streak, engine_wait_recovery(_ew_first)))
+            events.append("engine-wait-escalated")
+            _ew_store = {"streak": _ew_streak, "key": _ew_key, "escalated": True}
     _loop_tip = _c_tip_early if "_c_tip_early" in dir() else None
     try:
         _loop_tip = _c_tip_early
@@ -5967,6 +6025,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["lane_sync"] = _sy_new
         else:
             s.pop("lane_sync", None)
+        if isinstance(_ew_store, dict) and _ew_store:
+            s["engine_wait"] = _ew_store
+        else:
+            s.pop("engine_wait", None)
         if rn_store:
             s["ready_need"] = rn_store
         else:
@@ -7008,10 +7070,23 @@ def cmd_tick(ctx, issues, interval):
 
 
 def status_planned_lane(role, box, st, probe):
-    """Next-step read for one worker lane. Pure, read-only (no rings)."""
+    """Next-step read for one worker lane. Pure, read-only (no rings).
+
+    Escalated waits and engine-owned waits surface here instead of the
+    routine reads: a lane parked on someone else's action must name
+    that waiter in the status table.
+    """
     if (st or {}).get("halt"):
         return "HALTED: no actions"
     box = box or {}
+    if (((st or {}).get("starve") or {}).get(role) or {}).get("escalated"):
+        return "ESCALATED: starved, operator decides"
+    _ew = (st or {}).get("engine_wait") or {}
+    _nxt = box.get("next") or ""
+    if _ew.get("escalated") and ENGINE_WAIT_RE.search(_nxt):
+        return "ESCALATED: engine wait"
+    if _ew.get("streak") and ENGINE_WAIT_RE.search(_nxt):
+        return "WAITING ENGINE"
     posts = box.get("all", [])
     coord_last = box.get("coord_last")
     if coord_last and order_outstanding(
@@ -7198,9 +7273,11 @@ def status_lane_activity(role, state11, pending, phase, operator_hold=False, nxt
     word = (state11 or "").split()[0]
     if word == "ABSENT":
         return "-"
+    if operator_hold and role in ("dev", "qe"):
+        return "WAITING FOR OPERATOR"
+    if nxt and ENGINE_WAIT_RE.search(nxt):
+        return "WAITING ENGINE"
     if word == "BLOCKED":
-        if operator_hold and role in ("dev", "qe"):
-            return "WAITING FOR OPERATOR"
         if role == "dev":
             return "WAITING " + lane_wait_target(pending, role, phase)
     if word == "WORKING" and nxt is not None:
@@ -7230,6 +7307,10 @@ def planned_enum(text, exists):
     low = t.lower()
     if t.startswith("HALTED"):
         return "HALTED"
+    if t.startswith("ESCALATED:"):
+        return "ESCALATED: OPERATOR"
+    if t.startswith("WAITING ENGINE"):
+        return "WAITING ENGINE"
     if t.startswith("ring:") or t.startswith("NEED ") or "order filed" in low or "order deferred" in low or "collect verdict" in low:
         return "EXPECTING RESULT/OK"
     if "no audit requested" in low or "no briefed work" in low:
@@ -8003,6 +8084,27 @@ def mode_self_test():
     check("activity-waiting-for-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting anything", "VERIFY", True) == "WAITING FOR OPERATOR", True)
     check("activity-qe-operator-hold", status_lane_activity("qe", "BLOCKED", "qe: idle", "", True) == "WAITING FOR OPERATOR", True)
     check("planned-reading-issue", planned_for("WAITING FOR OPERATOR", 53) == "READING ISSUE #53", True)
+    check("activity-waiting-engine",
+          status_lane_activity("qe", "WORKING (#441)", "", "", nxt="blocked awaiting engine merge") == "WAITING ENGINE", True)
+    check("activity-waiting-engine-beats-idle-verb",
+          status_lane_activity("qe", "IDLE", "", "", nxt="waiting engine restage") == "WAITING ENGINE", True)
+    check("activity-operator-hold-beats-engine-wait",
+          status_lane_activity("dev", "BLOCKED", "", "", True, nxt="waiting engine routing") == "WAITING FOR OPERATOR", True)
+    check("planned-escalated-starve",
+          planned_enum("ESCALATED: starved, ack it", True) == "ESCALATED: OPERATOR", True)
+    check("planned-waiting-engine",
+          planned_enum("WAITING ENGINE", True) == "WAITING ENGINE", True)
+    _st_esc = {"starve": {"qe": {"count": 3, "escalated": True}}, "pending": "x", "rings": {}}
+    check("planned-lane-escalated-starve",
+          status_planned_lane("qe", {"all": [], "next": "waiting engine restage"}, _st_esc, "IDLE-x") == "ESCALATED: starved, operator decides", True)
+    _st_ew = {"engine_wait": {"streak": 5, "escalated": True, "key": "w"}, "pending": "x", "rings": {}}
+    check("planned-lane-escalated-engine-wait",
+          status_planned_lane("qe", {"all": [], "next": "waiting engine restage"}, _st_ew, "IDLE-x") == "ESCALATED: engine wait", True)
+    _st_ew2 = {"engine_wait": {"streak": 2, "key": "w"}, "pending": "x", "rings": {}}
+    check("planned-lane-waiting-engine",
+          status_planned_lane("qe", {"all": [], "next": "waiting engine restage"}, _st_ew2, "IDLE-x") == "WAITING ENGINE", True)
+    check("planned-lane-engine-wait-ignores-unrelated-next",
+          status_planned_lane("qe", {"all": [], "next": "idle :: parked"}, _st_ew2, "IDLE-x") == "awaits: idle :: parked", True)
     check("planned-for-other", planned_for("WAITING QE", 53) is None, True)
     check("activity-dev-blocked-qe", status_lane_activity("dev", "BLOCKED", "dev: waiting QE pull", "CLOSE-OUT") == "WAITING QE", True)
     check("activity-dev-blocked-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting operator decision", "VERIFY") == "WAITING OPERATOR", True)
@@ -8403,6 +8505,30 @@ def mode_self_test():
           sync_mismatch("working", "active") is False and sync_mismatch("idle", "quiet") is False, True)
     check("sync-probe-short",
           lane_probe_short("IDLE (static; tokens=1%)") == "IDLE" and lane_probe_short("") == "-", True)
+    _ewb = {"dev": {"next": "blocked waiting engine routing for step-a branch"}, "qe": {"next": "idle"}, "auditor": {"next": ""}}
+    check("engine-wait-hits-routing",
+          engine_wait_hits(_ewb) == {"dev": "blocked waiting engine routing for step-a branch"}, True)
+    check("engine-wait-hits-restage",
+          engine_wait_hits({"qe": {"next": "waiting engine restage then re-audit"}}) == {"qe": "waiting engine restage then re-audit"}, True)
+    check("engine-wait-hits-clean-sequencing",
+          engine_wait_hits({"qe": {"next": "NEED engine direction on 441-CLEAN vs unmerged diffs"}}) == {"qe": "NEED engine direction on 441-CLEAN vs unmerged diffs"}, True)
+    check("engine-wait-ignores-lane-waits",
+          engine_wait_hits({"dev": {"next": "waiting qe live BIND verify"}, "qe": {"next": "waiting dev IMPL READY then flip"}}) == {}, True)
+    check("engine-wait-ignores-idle",
+          engine_wait_hits({"qe": {"next": "idle :: testing-only scope"}}) == {}, True)
+    check("engine-wait-ignores-empty",
+          engine_wait_hits({}) == {} and engine_wait_hits({"dev": {}}) == {}, True)
+    check("engine-wait-streak-new-era",
+          engine_wait_streak({}, "a") == 1 and engine_wait_streak({"key": "b", "streak": 5}, "a") == 1, True)
+    check("engine-wait-streak-continues",
+          engine_wait_streak({"key": "a", "streak": 2}, "a") == 3, True)
+    check("engine-wait-streak-empty-key",
+          engine_wait_streak({"key": "a", "streak": 2}, "") == 1, True)
+    check("engine-wait-recovery-hints",
+          engine_wait_recovery("waiting engine restage x").startswith("restage")
+          and engine_wait_recovery("blocked awaiting engine merge").startswith("merge or stash")
+          and engine_wait_recovery("blocked waiting engine routing").startswith("route")
+          and engine_wait_recovery("waiting engine something-else").startswith("operator decision"), True)
     # Item 5 (#463): work-conserving scan + IDLE gate. Bite: forcing
     # global_work_scan to None flips every denied row to FAIL.
     _rmk = lambda iss, **kw: dict({"issue": iss, "halt": False,
