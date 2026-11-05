@@ -2350,7 +2350,11 @@ mode_watch() {
 # age-guarded (one-shot interval-0 ticks finish in seconds; anything older
 # than 3 min is the stale loop, never an in-flight one-shot).
 reap_orphan_loop() {
-  local _lp _age _age_s
+  # A TERMED loop can take seconds to unwind (in-flight git ops, state
+  # writeback); starting the replacement before the old PID exits leaves
+  # two writers on the same rooms. Wait for the exit, KILL past a grace
+  # period — a loop that ignores TERM is wedged by definition.
+  local _lp _age _age_s _wait
   for _lp in $(pgrep -f '[s]tate_machine\.py tick --all' 2>/dev/null); do
     if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
       return 0
@@ -2359,7 +2363,17 @@ reap_orphan_loop() {
     [ -n "$_age" ] || continue
     _age_s=$(printf '%s' "$_age" | awk -F'[-:]' '{s=0; for(i=1;i<=NF;i++) s=s*60+$i; print s}')
     if [ "${_age_s:-0}" -gt 180 ]; then
-      kill "$_lp" 2>/dev/null && info "reaped orphaned tick loop (pid $_lp, age $_age)" || true
+      kill "$_lp" 2>/dev/null || continue
+      info "reaped orphaned tick loop (pid $_lp, age $_age), waiting exit"
+      _wait=0
+      while ps -p "$_lp" >/dev/null 2>&1 && [ "$_wait" -lt 15 ]; do
+        sleep 1
+        _wait=$((_wait + 1))
+      done
+      if ps -p "$_lp" >/dev/null 2>&1; then
+        kill -9 "$_lp" 2>/dev/null || true
+        info "orphaned tick loop (pid $_lp) ignored TERM, KILLed"
+      fi
     fi
   done
 }
