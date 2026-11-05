@@ -2772,6 +2772,65 @@ def foreign_verified_evidence(qe_boxes_by_issue, issue, testbed_tip):
     return sorted(out)
 
 
+def stash_gate(dirty, ev_rooms, stored_stash, ts, tree_hash):
+    """Whether to auto-stash now: dirty tree holding other rooms' VERIFIED
+    evidence, no live stash for this tree state. Pure (#485).
+
+    The stash preserves the evidence (restorable by construction) so the
+    merge can stage; CLEAN would destroy it, so CLEAN must not file.
+    """
+    if not dirty or not ev_rooms:
+        return False
+    stored = stored_stash or {}
+    if stored.get("tree") == tree_hash and stored.get("for") == ts:
+        return False
+    return True
+
+
+def stash_evidence_for_merge(ctx, qd, room_issues, dirty_lines, tip, issue):
+    """Engine-executed evidence stash (restorable, verified). Pure I/O.
+
+    Saves a per-room patch inventory, stashes tracked+untracked work
+    (minus the auto-appended exempt paths), then verifies: the stash
+    entry exists AND the tree is clean by the same exempt-filtered
+    definition the CLEAN gate uses. Returns (ok, msg, inventory).
+    Nothing is destroyed on any failure path: a failed or unverified
+    stash leaves the tree untouched for the operator runbook.
+    """
+    ts19 = utcnow()[:19]
+    rooms = ",".join("#%d" % r for r in sorted(room_issues or []))
+    msg = "qe-evidence rooms %s %s (pre-CLEAN, auto, #%d)" % (
+        rooms, ts19, issue)
+    inv = ["qe-evidence inventory %s tip %s rooms %s" % (ts19, tip, rooms)]
+    inv += [("  " + l) for l in (dirty_lines or [])[:40]]
+    if not qd or not os.path.isdir(qd):
+        return False, "testbed checkout unknown", "\n".join(inv)
+    try:
+        excludes = [":!" + e.rstrip("/") for e in QE_EXEMPT]
+        rc, _ = ctx.run(["git", "-C", qd, "stash", "push", "-u",
+                          "-m", msg, "--", "."] + excludes,
+                         timeout=120, cwd=qd)
+    except Exception as exc:
+        return False, "stash spawn failed: %s" % exc, "\n".join(inv)
+    if rc != 0:
+        return False, "stash push exited %s" % rc, "\n".join(inv)
+    try:
+        _rc2, _out2 = ctx.run(["git", "-C", qd, "stash", "list", "-3"],
+                            timeout=30, cwd=qd)
+    except Exception as exc:
+        return False, "stash list failed: %s" % exc, "\n".join(inv)
+    if _rc2 != 0 or (msg not in (_out2 or "")):
+        return False, "stash entry missing after push", "\n".join(inv)
+    _info = git_info(qd)
+    _rest = [l for l in ((_info[2] if _info else None) or [])
+             if not l.split()[-1].startswith(QE_EXEMPT)] if _info else None
+    if _rest is None:
+        return False, "tree unreadable after stash", "\n".join(inv)
+    if _rest:
+        return False, "tree still dirty after stash (%d lines)" % len(_rest), "\n".join(inv)
+    return True, msg, "\n".join(inv)
+
+
 def clean_refused_repeat(stored_clean, merged_for, ts, tree_hash):
     """True when a prior CLEAN demonstrably had no effect. Pure (#484).
 
@@ -5472,6 +5531,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         qh_store = None
     qm_store = None
     cl_store = None
+    qs_store = None
     rs_store = None
     pull_store = None
     if not ctx.dry:
@@ -5537,9 +5597,37 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                         _cl_oid0 = _cl_stored.get("oid")
                         _cl_live = _cl_oid0 and rings.get(_cl_oid0) not in (None, -1, RING_ESCALATED)
                         if _cl_open:
-                            actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); merge/stash evidence first or use scratch clone -- CLEAN not filed"
-                                           % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1]))
-                            events.append("qe-clean-blocked-evidence")
+                            _sq_due = stash_gate(dirty_q, _cl_open, st.get("qe_stash"), ts, _cl_tree)
+                            _sq_active = str((probes or {}).get("qe") or "").startswith("WORKING")
+                            if _sq_due and _sq_active:
+                                actions.append("deferred qe evidence stash #%d: qe session active in checkout, retry when idle (rooms %s)"
+                                               % (issue, ",".join("#%d" % _e for _e in _cl_open)))
+                                events.append("qe-evidence-stash-deferred")
+                            elif _sq_due and ctx.dry:
+                                actions.append("WOULD stash qe evidence #%d (rooms %s @ %s, tree %s)"
+                                               % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1], _cl_tree))
+                                qs_store = {"for": ts, "rooms": sorted(_cl_open),
+                                            "tip": info_q[1], "tree": _cl_tree,
+                                            "msg": "dry-run stash plan"}
+                                events.append("qe-evidence-stash-planned")
+                            elif _sq_due:
+                                _sq_ok, _sq_msg, _sq_inv = stash_evidence_for_merge(
+                                    ctx, qd, _cl_open, dirty_q, info_q[1], issue)
+                                if _sq_ok:
+                                    actions.append("STASHED qe evidence #%d: %s; inventory %d lines; qe-merge unblocked next sweep"
+                                                   % (issue, _sq_msg, len(_sq_inv.splitlines())))
+                                    events.append("qe-evidence-stashed")
+                                    qs_store = {"for": ts, "rooms": sorted(_cl_open),
+                                                "tip": info_q[1], "tree": _cl_tree,
+                                                "msg": _sq_msg}
+                                else:
+                                    actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); auto-stash failed (%s) -- operator runbook #485, CLEAN not filed"
+                                                   % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1], _sq_msg))
+                                    events.append("qe-clean-blocked-evidence")
+                            else:
+                                actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); stash %s on file, awaiting qe-merge -- CLEAN not filed"
+                                               % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1], (st.get("qe_stash") or {}).get("msg", "?")))
+                                events.append("qe-clean-blocked-evidence")
                         elif _cl_stored.get("for") == ts and _cl_live:
                             actions.append("order deferred qe CLEAN #%d (already filed %s)" % (issue, _cl_oid0))
                         elif _cl_stored.get("for") == ts and _cl_oid0 in (rings or {}):
@@ -5995,6 +6083,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s.pop("qe_pull", None)
         if isinstance(qo_store, dict) and qo_store:
             s["qe_order"] = qo_store
+        if isinstance(qs_store, dict) and qs_store:
+            s["qe_stash"] = qs_store
         if isinstance(di_store, dict):
             if di_store:
                 s["dev_impl"] = di_store
@@ -9102,6 +9192,18 @@ def mode_self_test():
           clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "2026-11-05T13:55:00", "2026-11-05T14:00:44", "ab12cd34") is False, True)
     check("clean-refused-repeat-no-store",
           clean_refused_repeat({}, "", "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("stash-gate-dirty-evidence",
+          stash_gate([" M a"], [470], {}, "2026-11-05T14:00:44", "ab12cd34") is True, True)
+    check("stash-gate-clean",
+          stash_gate([], [470], {}, "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("stash-gate-no-evidence",
+          stash_gate([" M a"], [], {}, "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("stash-gate-already-stashed",
+          stash_gate([" M a"], [470], {"for": "2026-11-05T14:00:44", "tree": "ab12cd34"}, "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("stash-gate-new-ts-restashes",
+          stash_gate([" M a"], [470], {"for": "2026-11-05T13:51:35", "tree": "ab12cd34"}, "2026-11-05T14:00:44", "ff99ee00") is True, True)
+    check("stash-gate-room-set-not-needed",
+          stash_gate([" M a"], [470, 471], None, "2026-11-05T14:00:44", "ab12cd34") is True, True)
     stt = {"pending": "provisioned from issue text"}
     check("status-plan-armed-unacked",
           status_planned_lane("qe", {"all": [], "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
