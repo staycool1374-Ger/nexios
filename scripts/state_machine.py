@@ -2406,6 +2406,7 @@ READY_FIELD_RE = re.compile(
 QE_DIFF_RE = re.compile(r"diff\s+present\s*:\s*(y|n|yes|no)\b", re.I)
 DONE_WORD_RE = re.compile(r"\bDONE\b")
 VERIFIED_WORD_RE = re.compile(r"\bVERIFIED\b")
+QE_NEGATED_RE = re.compile(r"\bNOT[\s_-]*VERIFIED\b|\bUNVERIFIED\b", re.I)
 # Branch vocabulary for close-out orders (S3: no leading dash, no ..
 # traversal, no revision syntax — anything exotic fails closed to NEED).
 READY_BRANCH_RE = re.compile(r"^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]{1,120}$")
@@ -2667,6 +2668,8 @@ def qe_verified_ts(posts):
         m = POST_RE.match(post)
         if not m or m.group(2) != "qe":
             continue
+        if QE_NEGATED_RE.search(m.group(4)):
+            continue
         if VERIFIED_WORD_RE.search(m.group(4)):
             found = post[:20]
     return found
@@ -2711,6 +2714,8 @@ def qe_verified_tip(all_posts, full_lines=None):
         if not m or m.group(2) != "qe":
             continue
         if "VERIFIED" not in post:
+            continue
+        if QE_NEGATED_RE.search(m.group(4)):
             continue
         best = post
     if best is None:
@@ -7527,6 +7532,17 @@ def mode_self_test():
     check("planned-absent", planned_enum("anything", False) == "-", True)
     check("planned-audit-idle", planned_enum("no audit requested", True) == "CHECKING STATUS", True)
     check("engine-start-unknown", engine_start_info(SimpleNamespace(log_dir="/nonexistent-xyz")) == ("unknown", "--:--"), True)
+    _nv1 = "2026-11-04T23:45:08Z FROM=qe NOTE :: QE #53: IMPL READY 21:16:58Z NOT VERIFIED (fixed by S1-2)"
+    _nv2 = "2026-11-04T23:35:03Z FROM=qe READY :: QE #53 VERIFIED: S1-2 join fix E2E PASS 16/16, 0 FAIL"
+    check("qe-verified-refusal-ignored",
+          qe_verified_ts([_nv2, _nv1]) == "2026-11-04T23:35:03Z", True)
+    check("qe-verified-only-refusal-none",
+          qe_verified_ts([_nv1]) is None, True)
+    check("qe-verified-tip-refusal-ignored",
+          qe_verified_tip([_nv2, _nv1], [_nv2, _nv1, "tip 0feae8162"]) is None, True)
+    _pv = "2026-11-04T23:35:03Z FROM=qe READY :: VERIFIED ok"
+    check("qe-verified-tip-positive-kept",
+          qe_verified_tip([_pv], [_pv, "tip: abc1234"]) == "abc1234", True)
     check("ring-line-notes-unchanged",
           ring(SimpleNamespace(dry=True), "s", "", "t", channel="notes") == "WOULD ring s: notes: t -- read logs/consultant-notes.md", True)
     _w1 = "2026-11-02T18:46:59Z FROM=dev WAKE :: inbox: dev READY"
