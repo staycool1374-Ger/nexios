@@ -510,8 +510,31 @@ check_branch() {
 # On root: no-op. Elsewhere + clean tree: checkout root. Elsewhere + dirty
 # tree: named TRACKED-ONLY stash, then checkout root (untracked build
 # artifacts and QEMU logs are never stashed). Detached HEAD: same rules.
+# Refs-only refresh + staleness report. Prints one of:
+# current | behind <n> | diverged | unknown. Never touches the worktree
+# (safe under dirty trees, running builds, active bisects); the fetch is
+# fail-open so offline never blocks startup. Local-only branches (no
+# origin/<want>) report unknown.
+checkout_staleness() {
+  local dir="$1" want="$2" lt rt
+  git -C "$dir" fetch origin --quiet 2>/dev/null || true
+  lt=$(git -C "$dir" rev-parse --verify "$want" 2>/dev/null) || { echo unknown; return 0; }
+  rt=$(git -C "$dir" rev-parse --verify "origin/$want" 2>/dev/null) || { echo unknown; return 0; }
+  [ "$lt" = "$rt" ] && { echo current; return 0; }
+  if git -C "$dir" merge-base --is-ancestor "$lt" "$rt" 2>/dev/null; then
+    echo "behind $(git -C "$dir" rev-list --count "$lt..$rt" 2>/dev/null || echo ?)"
+  else
+    echo diverged
+  fi
+}
+
 normalize_checkout() {
-  local dir="$1" role="$2" want="$3" cur ts
+  local dir="$1" role="$2" want="$3" cur ts stale
+  stale=$(checkout_staleness "$dir" "$want")
+  case "$stale" in
+    current|unknown) ;;
+    *) info "$role checkout: starting stale ($want $stale vs origin/$want, worktree untouched)" ;;
+  esac
   cur=$(git -C "$dir" branch --show-current)
   [ "${cur:-HEAD}" = "$want" ] && return 0
   if git -C "$dir" diff --quiet && git -C "$dir" diff --cached --quiet; then
@@ -1746,6 +1769,26 @@ mode_self_test() {
   chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm
   chk env NEXIOS_ENGINE_DRY=1 "$SCRIPT_DIR/agent_up.sh" wake 9999 dev "$ENGINE_SESS" "wake-selftest-$$"
   chk grep -q "FROM=dev WAKE :: wake-selftest-$$" /tmp/nexios-9999/inbox/coord.md
+  # checkout_staleness: refs-only refresh, worktree never touched (file-remote, offline-safe)
+  local spar spush swork
+  spar=$(mktemp -d)/origin.git; spush=$(mktemp -d)/w2; swork=$(mktemp -d)/w1
+  git init --bare -q "$spar"
+  git init -b main -q "$swork"
+  git -C "$swork" config user.email t@t && git -C "$swork" config user.name t
+  git -C "$swork" commit -q --allow-empty -m one
+  git -C "$swork" remote add origin "$spar"
+  git -C "$swork" push -q origin main
+  chk test "$(checkout_staleness "$swork" main)" = "current"
+  git clone -q "$spar" "$spush" 2>/dev/null
+  git -C "$spush" config user.email t@t && git -C "$spush" config user.name t
+  git -C "$spush" commit -q --allow-empty -m two
+  git -C "$spush" push -q origin main
+  chk test "$(checkout_staleness "$swork" main)" = "behind 1"
+  git -C "$swork" checkout -qb localonly
+  chk test "$(checkout_staleness "$swork" localonly)" = "unknown"
+  chk test -z "$(git -C "$swork" stash list)"
+  chk test "$(git -C "$swork" branch --show-current)" = "localonly"
+  rm -rf "$(dirname "$spar")" "$(dirname "$spush")" "$(dirname "$swork")"
   rm -rf "$r93"
   rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
          "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \

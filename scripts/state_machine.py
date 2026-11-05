@@ -2847,6 +2847,7 @@ def closeout_order_text(issue, stage, branch, tip):
 SRC_SCOPE_PATHS = ("src", "userspace", "docs", "packaging",
                      "meson.build", "meson.options")
 LOOP_WATCH_TICKS = 3
+ENGINE_FETCH_EVERY = 5  # sweeps between origin ref refreshes (fail-open, read-only)
 
 
 def s11_untracked(status_lines):
@@ -2898,6 +2899,17 @@ def loop_watch(prev_loop, pending, rings, tip, phase, progressed):
         count, first = 1, utcnow()[:19]
     store = {"hash": h, "count": count, "first": first}
     return store, count >= LOOP_WATCH_TICKS
+
+
+def engine_fetch_due(tick_seq, every=ENGINE_FETCH_EVERY):
+    """Whether this sweep refreshes origin refs. Pure.
+
+    Periodic refs-only refresh keeps merge-base/tip verdicts from going
+    stale-blind. Fail-open by design; the caller never blocks on it."""
+    try:
+        return int(tick_seq) % max(int(every), 1) == 0
+    except (TypeError, ValueError):
+        return False
 
 
 def mergeclose_preempts_starvation(dev_next, pending, worktree_clean,
@@ -6507,6 +6519,14 @@ def cmd_tick(ctx, issues, interval):
         rooms = rotate_rooms(rooms, _rr)
         ctx.log("tick #%d rooms=%s (rr offset %d)"
                 % (ctx.tick_seq, [i for i, _, _ in rooms], _rr))
+        if not ctx.dry and engine_fetch_due(ctx.tick_seq):
+            try:
+                _fr = ctx.run(["git", "-C", ctx.dev_dir, "fetch", "origin", "--quiet"],
+                              timeout=60)
+            except Exception:
+                _fr = (1, "")
+            if _fr[0] != 0:
+                ctx.log("origin ref refresh failed (offline?); continuing on local refs")
         # G6 + S1: one sweep-wide cycle (shared rung/busy sets) and a
         # per-cycle engine lock, so a fast-path `tick --issues N --once`
         # is safe while the 180 s loop sleeps and a no-op mid-cycle.
@@ -8800,6 +8820,12 @@ def mode_self_test():
           and loop_watch(_lw3, "p", {}, "t", "ph", True)[1] is False, True)
     check("loop-watch-new-hash-resets",
           loop_watch(_lw3, "other", {}, "t", "ph", False)[0]["count"] == 1, True)
+    check("engine-fetch-due-periodic",
+          engine_fetch_due(5) is True and engine_fetch_due(10, 5) is True, True)
+    check("engine-fetch-due-off-cycle",
+          engine_fetch_due(1) is False and engine_fetch_due(6, 5) is False, True)
+    check("engine-fetch-due-bad-input",
+          engine_fetch_due(None) is False and engine_fetch_due("x") is False, True)
     check("mergeclose-preempts-true",
           mergeclose_preempts_starvation("working :: waiting fresh MERGE-CLOSE order",
                                          "CLOSE-OUT: dev: awaiting merge-close", True, True, True) is True, True)
