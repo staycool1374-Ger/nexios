@@ -3002,10 +3002,20 @@ def s11_meson_files(build_text):
     load-bearing inputs a tip must contain (e.g. packaging file lists).
     Scope is string literals only — loop-var files(src) and find-sources
     are unresolvable and not load-bearing (S3-1). Leading ../ is stripped
-    so entries compare against repo-relative ls-tree paths."""
+    so entries compare against repo-relative ls-tree paths.
+    Concatenated calls (issue #493: files('../linker/linker_' + arch +
+    '.ld')) are dynamically constructed and unresolvable — the whole
+    call is skipped (fail-open, same as the loop-var exclusion). A +
+    inside a string literal does not count (literals are stripped
+    before the check)."""
     out = []
     for m in re.finditer(r"files\s*\((.*?)\)", build_text or "", re.S):
-        for q in re.finditer(r"""['"]([^'"]+)['"]""", m.group(1)):
+        args = m.group(1)
+        # Strip string literals; a remaining + means dynamic concat.
+        stripped = re.sub(r"""['\"](?:[^'\"\\]|\\.)*['\"]""", "", args)
+        if "+" in stripped:
+            continue
+        for q in re.finditer(r"""['"]([^'"]+)['"]""", args):
             lit = q.group(1)
             while lit.startswith("../"):
                 lit = lit[3:]
@@ -9769,6 +9779,12 @@ def mode_self_test():
           s11_meson_files("x = files('../userspace/pthread/pthread.c', 'a.c')") == ["userspace/pthread/pthread.c", "a.c"], True)
     check("s11-meson-strips-dedups-skips",
           s11_meson_files("a = files('../../x.c', '../../x.c', '$v.c')\nb = files(src)") == ["x.c"], True)
+    check("s11-meson-concat-skipped",
+          s11_meson_files("x = files('../linker/linker_' + arch + '.ld')") == [], True)
+    check("s11-meson-plain-enforced",
+          s11_meson_files("x = files('src/a.c')") == ["src/a.c"], True)
+    check("s11-meson-mixed-keeps-literal",
+          s11_meson_files("a = files('../linker/linker_' + arch + '.ld')\nb = files('src/keep.c')") == ["src/keep.c"], True)
     check("stale-refresh-fires",
           stale_refresh_due(True, True, True, True) is True, True)
     check("stale-refresh-clean-required",
