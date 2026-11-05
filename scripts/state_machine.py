@@ -3551,6 +3551,21 @@ def lane_probe_class(probe):
     return "unknown"
 
 
+def qe_verify_order_live(coord_last, rings):
+    """True when the lane's newest coord note is a live VERIFY-family
+    order (VERIFY, PULL, or IMPL READY). Pure (#485 follow-up).
+
+    Prevents a second verify order while one is already outstanding;
+    NEED-kind ACKs do not clear it (they never resolve orders).
+    """
+    if not coord_last:
+        return False
+    if not any(k in coord_last for k in ("VERIFY", "PULL", "IMPL READY")):
+        return False
+    oid = "qe:" + (coord_last or "")[:19]
+    return oid in (rings or {}) and (rings or {}).get(oid) not in (None, -1, RING_ESCALATED)
+
+
 def reverify_due(merged_tip, verified_tip, stored, halted):
     """Whether a post-merge QE re-verify order must file. Pure.
 
@@ -5716,49 +5731,6 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                             rings[_pl_oid] = 1
                                 else:
                                     actions.append("NOTE-FAILED qe PULL #%d" % issue)
-                            if not _rs_restage:
-                                _rv_tip = None
-                                try:
-                                    _rcH, _outH = ctx.run(["git", "-C", qd, "rev-parse", "--short", "HEAD"],
-                                                          timeout=30, cwd=qd)
-                                    if _rcH == 0:
-                                        _rv_tip = (_outH.strip().splitlines() or [""])[0].strip() or None
-                                except Exception:
-                                    _rv_tip = None
-                                _rv_done = qe_verified_tip((boxes.get("qe") or {}).get("all", []),
-                                                           (boxes.get("qe") or {}).get("full", []))
-                                _rv_co_live = isinstance(co_store, dict) and co_store.get("stage") == "verify"
-                                if _rv_co_live:
-                                    actions.append("re-verify #%d deferred: closeout VERIFY order already filed this tick" % issue)
-                                elif reverify_due(_rv_tip, _rv_done, st.get("qe_reverify"), halt_now):
-                                    _rv_text = ("RE-VERIFY #%d: testbed re-staged @ %s (qe-merge of origin/main held --no-commit); run the verification gates per prompts/qe.txt + room pending and post VERIFIED with tip: + diff present: + branch:; ACK it with post_update ref=<id> before starting" % (issue, _rv_tip))
-                                    _rv_note, _rv_oid = coord_note("qe", _rv_text, ack_by=True, done_by=True, evidence="VERIFIED")
-                                    if _rv_oid in rings:
-                                        actions.append("order deferred qe RE-VERIFY #%d (oid collision)" % issue)
-                                    elif ctx.dry:
-                                        actions.append("WOULD post qe RE-VERIFY order #%d (oid %s)" % (issue, _rv_oid))
-                                        rings[_rv_oid] = 0
-                                        has_unacked.add("qe")
-                                        file_order_deadline(ad_store, _rv_oid)
-                                        file_order_delivery(dl_store, _rv_oid, "VERIFIED")
-                                        rv_store = {"for": ts, "tip": _rv_tip, "oid": _rv_oid}
-                                        events.append("qe-reverify-order-filed")
-                                    elif append_box_note(room_dir, "qe", _rv_note):
-                                        rings[_rv_oid] = 0
-                                        has_unacked.add("qe")
-                                        file_order_deadline(ad_store, _rv_oid)
-                                        file_order_delivery(dl_store, _rv_oid, "VERIFIED")
-                                        rv_store = {"for": ts, "tip": _rv_tip, "oid": _rv_oid}
-                                        actions.append("order filed qe RE-VERIFY #%d (oid %s)" % (issue, _rv_oid))
-                                        if ("qe" not in deaf and probes["qe"].startswith("IDLE")
-                                                and not session_rung(actions, SESS["qe"], cycle["rung"])):
-                                            _rv_res = ring(ctx, SESS["qe"], "qe", "qe RE-VERIFY order",
-                                                           oid=_rv_oid, issue=issue)
-                                            actions.append(_rv_res)
-                                            if _rv_res.startswith(("rang ", "WOULD ring ")):
-                                                rings[_rv_oid] = 1
-                                    else:
-                                        actions.append("NOTE-FAILED qe RE-VERIFY #%d" % issue)
                         else:
                             actions.append("NEED qe-merge #%d failed: %s" % (issue, last_q))
                             if "conflict" in last_q.lower():
@@ -6008,6 +5980,53 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                            % (issue, _ew_first[:120], _ew_streak, engine_wait_recovery(_ew_first)))
             events.append("engine-wait-escalated")
             _ew_store = {"streak": _ew_streak, "key": _ew_key, "escalated": True}
+    _rv_qd = getattr(ctx, "qe_dir", None)
+    _rv_head = None
+    if _rv_qd and os.path.isdir(_rv_qd) and not st.get("halt"):
+        try:
+            _rv_rc, _rv_out = ctx.run(["git", "-C", _rv_qd, "rev-parse", "--short", "HEAD"],
+                                       timeout=30, cwd=_rv_qd)
+            if _rv_rc == 0:
+                _rv_head = (_rv_out.strip().splitlines() or [""])[0].strip() or None
+        except Exception:
+            _rv_head = None
+    _rv_done = qe_verified_tip((boxes.get("qe") or {}).get("all", []),
+                               (boxes.get("qe") or {}).get("full", []))
+    _rv_co = isinstance(co_store, dict) and co_store.get("stage") == "verify"
+    _rv_live = qe_verify_order_live((boxes.get("qe") or {}).get("coord_last"), rings)
+    if _rv_co:
+        actions.append("re-verify #%d deferred: closeout VERIFY order already filed this tick" % issue)
+    elif _rv_live:
+        actions.append("re-verify #%d deferred: live QE verify order already outstanding" % issue)
+    elif reverify_due(_rv_head, _rv_done, st.get("qe_reverify"), bool(st.get("halt"))):
+        _rv_text = ("RE-VERIFY #%d: testbed re-staged @ %s; run the verification gates per prompts/qe.txt + room pending and post VERIFIED with tip: + diff present: + branch:; ACK it with post_update ref=<id> before starting" % (issue, _rv_head))
+        _rv_note, _rv_oid = coord_note("qe", _rv_text, ack_by=True, done_by=True, evidence="VERIFIED")
+        if _rv_oid in rings:
+            actions.append("order deferred qe RE-VERIFY #%d (oid collision)" % issue)
+        elif ctx.dry:
+            actions.append("WOULD post qe RE-VERIFY order #%d (oid %s)" % (issue, _rv_oid))
+            rings[_rv_oid] = 0
+            has_unacked.add("qe")
+            file_order_deadline(ad_store, _rv_oid)
+            file_order_delivery(dl_store, _rv_oid, "VERIFIED")
+            rv_store = {"tip": _rv_head, "oid": _rv_oid}
+            events.append("qe-reverify-order-filed")
+        elif append_box_note(room_dir, "qe", _rv_note):
+            rings[_rv_oid] = 0
+            has_unacked.add("qe")
+            file_order_deadline(ad_store, _rv_oid)
+            file_order_delivery(dl_store, _rv_oid, "VERIFIED")
+            rv_store = {"tip": _rv_head, "oid": _rv_oid}
+            actions.append("order filed qe RE-VERIFY #%d (oid %s)" % (issue, _rv_oid))
+            if ("qe" not in deaf and probes["qe"].startswith("IDLE")
+                    and not session_rung(actions, SESS["qe"], cycle["rung"])):
+                _rv_res = ring(ctx, SESS["qe"], "qe", "qe RE-VERIFY order",
+                               oid=_rv_oid, issue=issue)
+                actions.append(_rv_res)
+                if _rv_res.startswith(("rang ", "WOULD ring ")):
+                    rings[_rv_oid] = 1
+        else:
+            actions.append("NOTE-FAILED qe RE-VERIFY #%d" % issue)
     _loop_tip = _c_tip_early if "_c_tip_early" in dir() else None
     try:
         _loop_tip = _c_tip_early
@@ -9265,6 +9284,16 @@ def mode_self_test():
           reverify_due(None, None, {}, False) is False, True)
     check("reverify-due-new-tip-after-verify",
           reverify_due("aa11bb2", "0c86c48", {"tip": "0c86c48"}, False) is True, True)
+    check("reverify-live-verify-order",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: RE-VERIFY #441 [oid qe:2026-11-05T14:00:44]", {"qe:2026-11-05T14:00:44": 0}) is True, True)
+    check("reverify-live-pull-counts",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: PULL #441 blah", {"qe:2026-11-05T14:00:44": 1}) is True, True)
+    check("reverify-live-acked-not-live",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: VERIFY #441 blah", {"qe:2026-11-05T14:00:44": -1}) is False, True)
+    check("reverify-live-rewake-ignored",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: STARVATION RE-WAKE #441 blah", {"qe:2026-11-05T14:00:44": 0}) is False, True)
+    check("reverify-live-no-note",
+          qe_verify_order_live(None, {"qe:2026-11-05T14:00:44": 0}) is False, True)
     check("stash-gate-dirty-evidence",
           stash_gate([" M a"], [470], {}, "2026-11-05T14:00:44", "ab12cd34") is True, True)
     check("stash-gate-clean",
