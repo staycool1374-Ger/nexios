@@ -3943,20 +3943,17 @@ def recreating_peers(actions):
     return out
 
 
-def first_contact_due(role, has_posts, brief_present, probe, deaf, rings):
-    """One-shot first ring for a virgin lane. Pure.
+def intake_note_due(has_posts, brief_present, rings, role):
+    """Whether the virgin-lane INTAKE NOTE must be filed now. Pure (#482).
 
-    Fires only when the lane never posted, a staged brief exists, the lane
-    probes IDLE and reachable, and no prior first-contact ring is ledgered.
+    Fires when a staged brief exists, the lane never posted, and no prior
+    greeting is ledgered — independent of the lane probe: a WORKING lane
+    queues the order in its box and reads it when free. Only the doorbell
+    stays probe-gated (at the call site, IDLE + reachable + unrung).
     """
     if has_posts or not brief_present:
-        return False, None
-    oid = "first:%s" % role
-    if rings.get(oid):
-        return False, None
-    if deaf or not str(probe).startswith("IDLE"):
-        return False, None
-    return True, oid
+        return False
+    return not rings.get("first:%s" % role)
 
 
 def ring_peer_handoff(ctx, peer, sender, ts, oid, issue=None):
@@ -4456,11 +4453,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             brief_present = os.path.getsize(brief_p) > 0
         except OSError:
             brief_present = False
-        due, first_oid = first_contact_due(role, bool(boxes[role]["all"]),
-                                           brief_present, probes[role],
-                                           role in deaf, rings)
-        if not due:
+        if not intake_note_due(bool(boxes[role]["all"]), brief_present,
+                                rings, role):
             continue
+        first_oid = "first:%s" % role
         # Gap B: intake is a full acked order (coord NOTE + room-scoped
         # ring with the standard dev:<ts>/qe:<ts> oid), not a ring-only
         # pointer. first:<role> stays only the one-shot guard flag: set
@@ -7661,22 +7657,18 @@ def mode_self_test():
     check("status-plan-halted",
           status_planned_lane("dev", dict(b_idle, next="x"), {"halt": True},
                               "IDLE-static") == "HALTED: no actions", True)
-    check("first-due-virgin-idle",
-          first_contact_due("dev", False, True, "IDLE-static", False, {}) == (True, "first:dev"), True)
-    check("first-due-contacted",
-          first_contact_due("dev", True, True, "IDLE-static", False, {}) == (False, None), True)
-    check("first-due-no-brief",
-          first_contact_due("dev", False, False, "IDLE-static", False, {}) == (False, None), True)
-    check("first-due-working",
-          first_contact_due("dev", False, True, "WORKING-markers", False, {}) == (False, None), True)
-    check("first-due-deaf",
-          first_contact_due("dev", False, True, "IDLE-static", True, {}) == (False, None), True)
-    check("first-due-rung-once",
-          first_contact_due("dev", False, True, "IDLE-static", False,
-                            {"first:dev": 1}) == (False, None), True)
-    check("first-due-namespace-isolated",
-          first_contact_due("qe", False, True, "IDLE-static", False,
-                            {"first:dev": 1}) == (True, "first:qe"), True)
+    check("first-note-virgin-files",
+          intake_note_due(False, True, {}, "dev") is True, True)
+    check("first-note-contacted",
+          intake_note_due(True, True, {}, "dev") is False, True)
+    check("first-note-no-brief",
+          intake_note_due(False, False, {}, "dev") is False, True)
+    check("first-note-working-files-too",
+          intake_note_due(False, True, {}, "dev") is True, True)
+    check("first-note-rung-once",
+          intake_note_due(False, True, {"first:dev": 1}, "dev") is False, True)
+    check("first-note-namespace-isolated",
+          intake_note_due(False, True, {"first:dev": 1}, "qe") is True, True)
     check("ring-line-legacy",
           ring_line("dev", "first brief") == "inbox: first brief -- read inbox/dev.md", True)
     check("ring-line-oid",
@@ -8665,10 +8657,10 @@ def mode_self_test():
           impl_stalled(_iw, True, [], True, {"dev:2026-11-02T08:00:00": 4}, set(), _st) is False, True)
     check("impl-stalled-fresh-post",
           impl_stalled(_iw, True, ["x"], True, {"dev:2026-11-02T08:00:00": -1}, set(), _st) is False, True)
-    check("first-due-guard-minus-one",
-          first_contact_due("dev", False, True, "IDLE-static", False, {"first:dev": -1}) == (False, None), True)
-    check("first-due-guard-zero-not-guard",
-          first_contact_due("dev", False, True, "IDLE-static", False, {"first:dev": 0}) == (True, "first:dev"), True)
+    check("first-note-guard-minus-one",
+          intake_note_due(False, True, {"first:dev": -1}, "dev") is False, True)
+    check("first-note-guard-zero-not-guard",
+          intake_note_due(False, True, {"first:dev": 0}, "dev") is True, True)
     _inote, _ioid = coord_note("dev", "INTAKE #99 dev first brief")
     check("intake-oid-shape",
           ACK_OID_RE.fullmatch(_ioid) is not None and ref_lane(_ioid) == "dev", True)
