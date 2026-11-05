@@ -1248,15 +1248,20 @@ def explicit_tip_in_text(text):
 def room_artifact_tip(dev_all, dev_full, demand_text):
     """Auditable tip from the room artifact, never the checkout. Pure (#498).
 
-    Newest dev DONE tip (branch-name answers travel with `tip:` lines, so
-    the branch tip is covered here), else explicit `tip:` in the demand
-    post, else None (no artifact -> none-state, process-only verdict).
+    Explicit demand-text `tip:` wins over auto-derivation (a human
+    explicitly naming the artifact outranks it — room DONE posts can be
+    polluted with another room's tip); newest dev DONE tip is the
+    fallback (branch-name answers travel with `tip:` lines, so the branch
+    tip is covered here); else None (none-state, process-only verdict).
     A bare branch name is not a tip. Checkout HEAD is never consulted:
     any checkout move must leave every brief unchanged."""
+    dt = explicit_tip_in_text(demand_text)
+    if dt:
+        return dt
     ndt = newest_done_tip(dev_all, dev_full)
     if ndt:
         return ndt[1]
-    return explicit_tip_in_text(demand_text)
+    return None
 
 
 def newest_audit_done_post(boxes):
@@ -10189,6 +10194,9 @@ def mode_self_test():
                             "whatever") == "2035e8e0d", True)
     check("room-artifact-tip-demand-text",
           room_artifact_tip([], [], "NEED audit review\ntip: 05102e2ad") == "05102e2ad", True)
+    check("room-artifact-tip-demand-beats-polluted-done",
+          room_artifact_tip([_cb_old], [_cb_old, "branch: fix/477-handover-gate", "tip: 2035e8e0d"],
+                            "NEED audit review of EXACT tip df9189c0e\ntip: df9189c0e") == "df9189c0e", True)
     check("room-artifact-tip-none-state",
           room_artifact_tip([], [], "no tip here") is None, True)
     check("explicit-tip-in-text",
