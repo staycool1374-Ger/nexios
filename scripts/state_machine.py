@@ -3468,9 +3468,32 @@ def room_lane_facts(room_dir, rst, role):
     return lane_facts_from_boxes(load_boxes(room_dir), rst, role)
 
 
+# Note (issue #491): engine-wait suppression reuses the existing ENGINE_WAIT_RE
+# defined below (covers engine|restage|routing) — no duplicate definition here
+# so the module has a single source of truth for engine-owned waits.
+
+
+def starvation_suppressed(role, boxes, st):
+    """True when the starvation ladder must skip this lane. Pure.
+
+    Two suppression paths (issue #491), both parked-by-design:
+    (1) role dev in a testing-only room (QE owns the work; dev parked on
+    QE by design, never starving); (2) the lane NEXT names an engine wait
+    (ENGINE_WAIT_RE — the engine-wait ladder owns it; one wait, one
+    ladder, never a double page). Anything missing (no boxes/next/scope)
+    is fail-open (False): suppression needs a proven reason."""
+    if not role or not isinstance(boxes, dict):
+        return False
+    nxt = ((boxes.get(role) or {}).get("next")) or ""
+    if not nxt:
+        return False
+    if role == "dev" and (st or {}).get("scope") == "testing-only":
+        return True
+    return bool(ENGINE_WAIT_RE.search(nxt))
+
+
 def starvation_gap(role, probe, facts, st, has_unacked):
     """True when an IDLE lane's input-wait has no engine order behind it. Pure.
-
     The gap that parked 240/390/54: the lane is IDLE, its NEXT waits on
     input, but no unacked order names the lane and no fresh post is in
     flight — every gate had its chance and none fired. Halt rooms never
@@ -3675,11 +3698,15 @@ def starvation_sweep(boxes, st, probes, has_unacked, halt_now):
     """Sorted starved roles for both lanes. Pure apart from inputs.
 
     Runs on final same-tick state (all filings reflected in has_unacked);
-    a halting room never starves (its NEEDs are moot, its quiet moot)."""
+    a halting room never starves (its NEEDs are moot, its quiet moot).
+    Suppressed roles (issue #491: testing-only dev, engine-wait NEXTs)
+    are skipped — parked-by-design lanes never starve."""
     if halt_now:
         return []
     out = []
     for role in ("dev", "qe"):
+        if starvation_suppressed(role, boxes, st):
+            continue
         if starvation_gap(role, (probes or {}).get(role),
                           lane_facts_from_boxes(boxes, st, role),
                           st, has_unacked):
@@ -5886,7 +5913,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             # none (defensive: unacked or post-escalate quiet): preserve
             # the prior store verbatim, no increment — a driven-then-freed
             # lane resumes its era instead of jumping to escalate.
-            if _sv_prev:
+            # Suppressed stores are dropped, not preserved (issue #491):
+            # a stale escalated store from before suppression deployed
+            # (#474 testing-only dev, #470 engine-wait) must clear on the
+            # same tick instead of lingering beside the quiet lane.
+            if _sv_prev and not starvation_suppressed(_role, boxes, st):
                 _sv_new[_role] = dict(_sv_prev)
         # Era mark for the next tick's preserve decision: the wait text
         # this store was filed under. Preserved stores already carry one.
@@ -8875,6 +8906,31 @@ def mode_self_test():
           starvation_gap("dev", "IDLE-static", dict(_cwait, waits=False), _cst, set()) is False, True)
     check("starvation-gap-excludes-other-state",
           starvation_gap("dev", "IDLE-static", _cwait, dict(_cst, state="HOLD"), set()) is False, True)
+    _sup_boxes = {"dev": {"all": [], "coord_last": None, "next": "waiting QE E2E gates"},
+                  "qe": {"all": [], "coord_last": None, "next": "waiting engine restage then re-audit"}}
+    _sup_st = {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS",
+               "scope": "testing-only"}
+    check("starvation-suppressed-testing-only-dev",
+          starvation_suppressed("dev", _sup_boxes, _sup_st), True)
+    check("starvation-suppressed-qe-idle-not-suppressed",
+          starvation_suppressed("qe", {"qe": {"next": "idle"}}, dict(_sup_st, scope="full")) is False, True)
+    check("starvation-suppressed-engine-wait-qe",
+          starvation_suppressed("qe", _sup_boxes, dict(_sup_st, scope="full")), True)
+    check("starvation-suppressed-no-false-positive",
+          starvation_suppressed("dev", {"dev": {"next": "working IMPL"}}, {"scope": "full"}) is False, True)
+    check("starvation-suppressed-missing-boxes",
+          starvation_suppressed("dev", {}, _sup_st) is False, True)
+    check("starvation-suppressed-missing-next",
+          starvation_suppressed("dev", {"dev": {}}, _sup_st) is False, True)
+    check("starvation-sweep-suppressed-dev-empty",
+          starvation_sweep(_sup_boxes, _sup_st, {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == [], True)
+    check("starvation-sweep-engine-wait-both-empty",
+          starvation_sweep(_sup_boxes, dict(_sup_st, scope="full"), {"dev": "WORKING-markers", "qe": "IDLE-static"}, set(), False) == [], True)
+    check("starvation-sweep-unsuppressed-still-fires",
+          starvation_sweep({"dev": {"all": [], "coord_last": None, "next": "waiting auditor verdict"},
+                            "qe": {"all": [], "coord_last": None, "next": "idle"}},
+                           {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS", "scope": "full"},
+                           {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == ["dev"], True)
     check("starvation-gaps-sorted",
           starvation_gaps([{"issue": 54}, {"issue": 240, "starved": ["qe"]},
                            {"issue": 390, "starved": ["dev"]}]) == [240, 390], True)
