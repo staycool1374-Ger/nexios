@@ -1665,12 +1665,12 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     # suppress it (no ring, no store) instead of re-ringing the ping
     # loop that kept a killed session warm.
     _vtip_cover = decision_tip(boxes["auditor"]["all"], boxes["auditor"].get("full"))
-    if audit_demand_answered(stored, demand_key, tip or cur_tip, verdict_ts,
+    if audit_demand_answered(stored, demand_key, cur_tip or tip, verdict_ts,
                              asess.get("handled_demand"),
                              newest_audit_done_post(boxes),
                              verdict_tip=_vtip_cover):
         acted.append("audit demand answered (demand %s, tip %s); suppressed, no re-ring"
-                     % (demand_key, (tip or cur_tip or "?")[:7]))
+                     % (demand_key, (cur_tip or tip or "?")[:7]))
         store = {}
         demand = None
         demand_key = None
@@ -10055,6 +10055,21 @@ def mode_self_test():
           audit_demand_answered(_ans_stored, "dev:ab12cd34", "abc1234", "2026-11-03T08:00:00Z", "dev:ab12cd34") is False, True)
     check("audit-demand-answered-no-demand",
           audit_demand_answered(_ans_stored, None, "abc1234", "2026-11-03T09:30:00Z", "dev:ab12cd34") is False, True)
+    check("audit-demand-answered-stale-brief-fresh-artifact",
+          audit_demand_answered({"requester": "dev", "since": "2026-11-05T20:00:00Z",
+                                 "tip": "deb53ed61", "demand_key": "dev:63e0c14f"},
+                                "dev:63e0c14f", "df9189c0e", "2026-11-05T21:00:00Z",
+                                "dev:63e0c14f") is False, True)
+    check("audit-demand-answered-matching-artifact-tip",
+          audit_demand_answered({"requester": "dev", "since": "2026-11-05T20:00:00Z",
+                                 "tip": "df9189c0e", "demand_key": "dev:63e0c14f"},
+                                "dev:63e0c14f", "df9189c0e", "2026-11-05T21:00:00Z",
+                                "dev:63e0c14f") is True, True)
+    check("audit-demand-answered-none-artifact-legacy",
+          audit_demand_answered({"requester": "dev", "since": "2026-11-05T20:00:00Z",
+                                 "demand_key": "dev:63e0c14f"},
+                                "dev:63e0c14f", None, "2026-11-05T21:00:00Z",
+                                "dev:63e0c14f") is True, True)
     check("audit-demand-answered-other-store",
           audit_demand_answered({"demand_key": "qe:x"}, "dev:ab12cd34", "abc1234", "2026-11-03T09:30:00Z", "dev:ab12cd34") is False, True)
     check("audit-asess-keep",
