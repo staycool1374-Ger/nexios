@@ -84,6 +84,13 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 - After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
 
+## DECISION BRIEF (operator-grade questions - mandatory shape)
+- When blocked on a design choice only the operator can make (API shape, invariant waiver, scope call): keep working every unblocked part, do NOT stall the lane.
+- Post ONE NOTE to your room inbox carrying a standalone line `REQUEST: operator decision <short topic>`, then the brief:
+  OPTIONS: every viable option (how it works). Per option: advantages, disadvantages, audit/S1 impact, syscall-number cost, test/verification impact, reversibility.
+  RECOMMENDATION: your pick + what it unblocks. NOT VIABLE: ruled-out options + one-line why.
+- The engine relays the brief verbatim to the rooms GitHub issue; the operator answers there with `DECISION: <choice>`, which the engine files back as an order. Never invent the decision; never merge under an undecided question.
+
 ### ResourceTracker (Strict Awareness)
 - See AGENTS.md ResourceTracker section for leak-detection rules.
 - **Adding new resources:** If you introduce a new kernel resource type, add counters + track_* calls in ResourceTracker AND update `test_isolate.cpp` buffer layout. No exceptions.

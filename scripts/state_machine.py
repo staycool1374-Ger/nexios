@@ -2839,6 +2839,102 @@ def closeout_order_text(issue, stage, branch, tip):
             % (issue, branch, issue))
 
 
+SRC_SCOPE_PATHS = ("src", "userspace", "docs", "packaging",
+                     "meson.build", "meson.options")
+LOOP_WATCH_TICKS = 3
+
+
+def s11_untracked(status_lines):
+    out = []
+    for line in status_lines or []:
+        if line.startswith("??"):
+            path = line[2:].strip().lstrip()
+            if path:
+                out.append(path)
+    return out
+
+
+def s11_missing_files(ls_tree_files, required_files):
+    have = set(ls_tree_files or [])
+    return [f for f in (required_files or []) if f not in have]
+
+
+def s11_gate(untracked, ls_tree_files, required_files):
+    missing = s11_missing_files(ls_tree_files, required_files)
+    has_un = bool(untracked)
+    return (not has_un and not missing, missing, has_un)
+
+
+def stale_refresh_due(branch_behind_main, engine_commits_in_path,
+                      worktree_clean, dev_blocked):
+    return bool(branch_behind_main and engine_commits_in_path
+                and worktree_clean and dev_blocked)
+
+
+def loop_hash(pending, rings, tip, phase):
+    try:
+        ring_part = ",".join(sorted("%s=%s" % (k, v)
+                                    for k, v in (rings or {}).items()))
+    except Exception:
+        ring_part = str(rings)
+    blob = "%s|%s|%s|%s" % (pending or "", ring_part, tip or "", phase or "")
+    return hashlib.md5(blob.encode()).hexdigest()[:8]
+
+
+def loop_watch(prev_loop, pending, rings, tip, phase, progressed):
+    prev_loop = prev_loop or {}
+    h = loop_hash(pending, rings, tip, phase)
+    if progressed:
+        return {"hash": h, "count": 1, "first": utcnow()[:19]}, False
+    if prev_loop.get("hash") == h:
+        count = int(prev_loop.get("count") or 0) + 1
+        first = prev_loop.get("first") or utcnow()[:19]
+    else:
+        count, first = 1, utcnow()[:19]
+    store = {"hash": h, "count": count, "first": first}
+    return store, count >= LOOP_WATCH_TICKS
+
+
+def mergeclose_preempts_starvation(dev_next, pending, worktree_clean,
+                                   branch_verifiable, merge_path_clean):
+    dn = (dev_next or "").lower()
+    pe = (pending or "").lower()
+    return bool("waiting fresh merge-close" in dn
+                and "awaiting merge-close" in pe
+                and worktree_clean and branch_verifiable
+                and merge_path_clean)
+
+
+def mergeclose_tip(branch_head, done_tip):
+    if branch_head and done_tip and branch_head[:7] != done_tip[:7]:
+        return branch_head
+    return branch_head or done_tip
+
+
+def src_diff_empty(diff_names):
+    return not bool(diff_names)
+
+
+def reaudit_needed(branch_approved, identical_src):
+    return not bool(branch_approved and identical_src)
+
+
+def reverify_needed(branch_verified, identical_src):
+    return not bool(branch_verified and identical_src)
+
+
+def src_identical(ctx, tip_a, tip_b):
+    if not tip_a or not tip_b:
+        return False
+    try:
+        rc, _ = ctx.run(["git", "diff", "--quiet", tip_a, tip_b, "--"]
+                        + list(SRC_SCOPE_PATHS),
+                        timeout=30, cwd=ctx.dev_dir)
+        return rc == 0
+    except Exception:
+        return False
+
+
 def merge_ready_ok(decision, qe_verified, qe_all, has_closeout, qe_evidence):
     """Strict VERIFIED gate with legacy fallback. Pure.
 
@@ -4779,19 +4875,153 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     # the legacy meaning; rooms without a parsed done tip are unaffected.
     _c_approved = bool(dec and "APPROVED" in dec) and (_c_appr_tip is None or not _c_tip_early
                                                       or tip_covers(ctx, _c_appr_tip, _c_tip_early))
+    _c_reused_audit = False
+    _c_reused_qe = False
+    if dec and "APPROVED" in dec and not _c_approved and _c_appr_tip and _c_tip_early:
+        try:
+            if src_identical(ctx, _c_appr_tip, _c_tip_early):
+                _c_approved = True
+                _c_reused_audit = True
+                actions.append("closeout reuses branch APPROVED %s for %s (identical src, #481)"
+                               % (_c_appr_tip[:7], _c_tip_early[:7]))
+                events.append("closeout-reuse-audit")
+        except Exception:
+            pass
+    if _c_qv is None and _c_qv_raw and _c_qv_tip and _c_qv_done:
+        try:
+            if src_identical(ctx, _c_qv_tip, _c_qv_done[1]):
+                _c_qv = _c_qv_raw
+                _c_reused_qe = True
+                actions.append("closeout reuses branch VERIFIED %s for %s (identical src, #481)"
+                               % (_c_qv_tip[:7], _c_qv_done[1][:7]))
+                events.append("closeout-reuse-qe")
+        except Exception:
+            pass
     _c_stage = closeout_stage(bool(st.get("gh_closed")), _c_done, _c_approved, _c_qv)
     co_store = None
     bq_store = None
     ghc_store = False
+    rf_store = None
+    loop_store = None
+    _c_preempt = False
+    _c_s11_block = False
     if _c_stage in ("verify", "merge-close"):
         _c_lane = "qe" if _c_stage == "verify" else "dev"
-        if closeout_due(_c_stage, _c_done, st.get("closeout"), rings, _c_lane in has_unacked):
+        _c_pre_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"].get("full"),
+                                        (gated or {}).get("fields"))
+        _c_pre_brok = False
+        _c_pre_clean = True
+        _c_pre_merge = False
+        _c_pre_untracked = []
+        if _c_pre_branch and not ctx.dry:
+            try:
+                _rcb, _ = ctx.run(["git", "rev-parse", "--verify", "--short", _c_pre_branch],
+                                  timeout=30, cwd=ctx.dev_dir)
+                _c_pre_brok = (__rcb == 0)
+            except Exception:
+                pass
+            try:
+                _rcs, _outs = ctx.run(["git", "status", "--porcelain"],
+                                      timeout=30, cwd=ctx.dev_dir)
+                if _rcs == 0:
+                    _slines = [_l for _l in (_outs or "").splitlines() if _l.strip()]
+                    _c_pre_clean = not bool(_slines)
+                    _c_pre_untracked = s11_untracked(_slines)
+            except Exception:
+                pass
+            try:
+                _rcm, _ = ctx.run(["git", "merge-base", "--is-ancestor", "main", _c_pre_branch],
+                                  timeout=30, cwd=ctx.dev_dir)
+                _c_pre_merge = (_rcm == 0)
+            except Exception:
+                pass
+            if _c_pre_untracked:
+                _c_s11_block = True
+                actions.append("NEED re-commit #%d: %d untracked file(s) not in tip (%s); git add -A + amend before handover (#477 S1-1)"
+                               % (issue, len(_c_pre_untracked), ", ".join(_c_pre_untracked[:4])))
+                events.append("closeout-s11-untracked")
+            try:
+                _dev_blocked = "blocked" in (dev_next or "").lower()
+                _rcb2, _ = ctx.run(["git", "merge-base", "--is-ancestor", "main", _c_pre_branch],
+                                   timeout=30, cwd=ctx.dev_dir)
+                _behind = (_rcb2 != 0)
+                _rce, _oute = ctx.run(["git", "log", "main..%s" % _c_pre_branch, "--oneline", "--",
+                                       "scripts/state_machine.py", "scripts/agent_up.sh",
+                                       "scripts/nexios-bin"],
+                                      timeout=30, cwd=ctx.dev_dir)
+                _eng_in_path = (_rce == 0 and bool((_oute or "").strip()))
+                if stale_refresh_due(_behind, _eng_in_path, _c_pre_clean, _dev_blocked):
+                    _rf_stored = st.get("refresh") or {}
+                    _rf_live = _rf_stored.get("oid") and rings.get(_rf_stored.get("oid")) not in (None, -1, RING_ESCALATED)
+                    if _rf_stored.get("for") == (_c_done or _c_pre_branch) and _rf_live:
+                        actions.append("order deferred dev REFRESH #%d (already filed %s)"
+                                       % (issue, _rf_stored.get("oid")))
+                    elif _rf_stored.get("for") == (_c_done or _c_pre_branch) and _rf_stored.get("oid") in (rings or {}):
+                        actions.append("NEED dev REFRESH #%d unanswered (order %s ACKed, branch still stale)"
+                                       % (issue, _rf_stored.get("oid")))
+                        events.append("refresh-unanswered")
+                    else:
+                        _rf_text = ("REFRESH #%d: branch %s is stale (engine commits in merge path, behind main); "
+                                    "run: git fetch origin && git rebase --onto origin/main <engine-base> %s && git push --force-with-lease origin %s; "
+                                    "then post DONE with the new tip; ACK it with post_update ref=<id> before starting"
+                                    % (issue, _c_pre_branch, _c_pre_branch, _c_pre_branch))
+                        _rf_note, _rf_oid = coord_note("dev", _rf_text, ack_by=True, done_by=True, evidence="DONE")
+                        if _rf_oid in rings:
+                            actions.append("order deferred dev REFRESH #%d (oid collision)" % issue)
+                        elif ctx.dry:
+                            actions.append("WOULD post dev REFRESH order #%d (oid %s)" % (issue, _rf_oid))
+                            rings[_rf_oid] = 0
+                            has_unacked.add("dev")
+                            file_order_deadline(ad_store, _rf_oid)
+                            file_order_delivery(dl_store, _rf_oid, "DONE")
+                            rf_store = {"for": _c_done or _c_pre_branch, "oid": _rf_oid,
+                                        "branch": _c_pre_branch}
+                            events.append("refresh-order-filed")
+                        elif append_box_note(room_dir, "dev", _rf_note):
+                            rings[_rf_oid] = 0
+                            has_unacked.add("dev")
+                            file_order_deadline(ad_store, _rf_oid)
+                            file_order_delivery(dl_store, _rf_oid, "DONE")
+                            rf_store = {"for": _c_done or _c_pre_branch, "oid": _rf_oid,
+                                        "branch": _c_pre_branch}
+                            actions.append("order filed dev REFRESH #%d (oid %s)" % (issue, _rf_oid))
+                            if ("dev" not in deaf and probes["dev"].startswith("IDLE")
+                                    and not session_rung(actions, SESS["dev"], cycle["rung"])):
+                                _rf_res = ring(ctx, SESS["dev"], "dev", "stale refresh order",
+                                               oid=_rf_oid, issue=issue)
+                                actions.append(_rf_res)
+                                if _rf_res.startswith(("rang ", "WOULD ring ")):
+                                    rings[_rf_oid] = 1
+                        else:
+                            actions.append("NOTE-FAILED dev REFRESH #%d" % issue)
+            except Exception:
+                pass
+            if _c_stage == "merge-close" and mergeclose_preempts_starvation(
+                    dev_next, st.get("pending"), _c_pre_clean, _c_pre_brok, _c_pre_merge):
+                _c_preempt = True
+                actions.append("closeout MERGE-CLOSE preempts starvation #%d (dev READY merge-close, clean tip) (#480)"
+                               % issue)
+                events.append("closeout-preempts-starvation")
+        _c_lane_busy = (_c_lane in has_unacked) and not _c_preempt
+        if _c_s11_block:
+            actions.append("closeout order suppressed #%d: S1-1 re-commit required before handover" % issue)
+            events.append("closeout-s11-suppressed")
+        if closeout_due(_c_stage, _c_done, st.get("closeout"), rings, _c_lane_busy) and not _c_s11_block:
             _c_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"]["full"],
                                         (gated or {}).get("fields"))
             _c_tip = ((gated or {}).get("fields") or {}).get("tip")
             _ndt_tip = newest_done_tip(boxes["dev"]["all"], boxes["dev"].get("full"))
             if _ndt_tip:
                 _c_tip = _ndt_tip[1]
+            if _c_preempt and _c_branch and not ctx.dry:
+                try:
+                    _rch, _outh = ctx.run(["git", "rev-parse", "--short", _c_branch],
+                                          timeout=30, cwd=ctx.dev_dir)
+                    if _rch == 0:
+                        _head = (_outh.strip().splitlines() or [""])[0].strip()
+                        _c_tip = mergeclose_tip(_head, _c_tip)
+                except Exception:
+                    pass
             _c_brok = False
             if _c_branch:
                 _brc, _bro = ctx.run(["git", "rev-parse", "--verify", "--short", _c_branch],
@@ -5170,7 +5400,75 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             if _sv_prev:
                 _sv_new[_role] = dict(_sv_prev)
     node["starved"] = _starved_roles
-    g_acts, gh_posted = gh_transitions(ctx, issue, st, node, actions, halt_now, fresh)
+    _loop_tip = _c_tip_early if "_c_tip_early" in dir() else None
+    try:
+        _loop_tip = _c_tip_early
+    except Exception:
+        _loop_tip = None
+    _loop_progressed = bool(acked) or bool([e for e in events if e in ("CHANGED", "retire-check")]) or bool(ghc_store) or bool(co_store)
+    try:
+        loop_store, _is_loop = loop_watch(st.get("loop"), st.get("pending"), rings,
+                                          _loop_tip, st.get("phase"), _loop_progressed)
+    except Exception:
+        loop_store, _is_loop = (st.get("loop") or {}), False
+    node["loop"] = dict(loop_store or {})
+    if _is_loop:
+        _lp = st.get("pending") or ""
+        if "branch-name" in " ".join(actions).lower() or "branch unverifiable" in " ".join(actions).lower():
+            _brk = "auto-refresh branch onto main (#478)"
+        elif "starvation" in _lp.lower() or _starved_roles:
+            _brk = "re-ring once, then escalate operator"
+        elif "clean" in _lp.lower():
+            _brk = "re-file CLEAN with patch save"
+        else:
+            _brk = "operator intervention"
+        actions.append("NEED loop #%d: pending hash %s repeated %dx since %s -- break via %s (#479)"
+                       % (issue, (loop_store or {}).get("hash"), (loop_store or {}).get("count"),
+                          (loop_store or {}).get("first"), _brk))
+        events.append("loop-detected")
+    _dq_found = detect_decision_request(boxes) if not st.get("halt") else None
+    dq_store = None
+    if _dq_found and (st.get("decision_brief") or {}).get("for") != _dq_found["ts"]:
+        dq_store = {"for": _dq_found["ts"], "role": _dq_found["role"]}
+    g_acts, gh_posted = gh_transitions(ctx, issue, st, node, actions, halt_now, fresh, _dq_found)
+    actions.extend(g_acts)
+    dr_store = None
+    _brief_for = ((st.get("decision_brief") or {}).get("for") or "")
+    if dq_store:
+        _brief_for = max(_brief_for, dq_store.get("for") or "")
+    if not ctx.dry and not st.get("halt") and not st.get("gh_closed") and _brief_for:
+        _rsince = max(_brief_for, ((st.get("gh_decision_relayed") or {}).get("for") or ""))
+        _rc = gh_issue_comments(ctx, issue)
+        if _rc is None:
+            if not getattr(ctx, "_gh_need", False):
+                actions.append("NEED gh issue comments unreadable (auth?); decision relay paused")
+                ctx._gh_need = True
+        else:
+            _rm = match_decision_comment(_rc, _rsince)
+            if _rm and ((st.get("gh_decision_relayed") or {}).get("for") or "") < _rm["ts"]:
+                _rlane = (((st.get("decision_brief") or dq_store or {}).get("role")) or "dev")
+                if _rlane not in ("dev", "qe"):
+                    _rlane = "dev"
+                _rtext = ("OPERATOR DECISION (#%d): %s (operator %s decided %s on the issue thread); apply it and report; ACK it with post_update ref=<id> before starting" % (issue, _rm["text"][:500], _rm["user"], _rm["ts"]))
+                _rnote, _roid = coord_note(_rlane, _rtext, ack_by=True, done_by=True, evidence="NOTE")
+                if _roid in rings:
+                    actions.append("order deferred operator decision #%d (oid collision)" % issue)
+                elif append_box_note(room_dir, _rlane, _rnote):
+                    rings[_roid] = 0
+                    has_unacked.add(_rlane)
+                    file_order_deadline(ad_store, _roid)
+                    file_order_delivery(dl_store, _roid, "NOTE")
+                    actions.append("order filed operator decision #%d to %s (oid %s)" % (issue, _rlane, _roid))
+                    dr_store = {"for": _rm["ts"], "by": _rm["user"], "oid": _roid}
+                    if (_rlane not in deaf and probes[_rlane].startswith("IDLE")
+                            and not session_rung(actions, SESS[_rlane], cycle["rung"])):
+                        _rr = ring(ctx, SESS[_rlane], _rlane, "operator decision",
+                                   oid=_roid, issue=issue)
+                        actions.append(_rr)
+                        if _rr.startswith(("rang ", "WOULD ring ")):
+                            rings[_roid] = 1
+                else:
+                    actions.append("NOTE-FAILED operator decision #%d" % issue)
     actions.extend(g_acts)
     def mutate(s):
         h = s.get("handled") or {}
@@ -5199,6 +5497,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             posted = s.get("gh_posted") or {}
             posted.update(gh_posted)
             s["gh_posted"] = posted
+        if isinstance(dq_store, dict) and dq_store:
+            s["decision_brief"] = dq_store
+        if isinstance(dr_store, dict) and dr_store:
+            s["gh_decision_relayed"] = dr_store
         if isinstance(qm_store, dict) and qm_store:
             s["qe_merge"] = qm_store
             s.pop("qe_clean", None)
@@ -5277,6 +5579,16 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s["closeout_bq"] = bq_store
             else:
                 s.pop("closeout_bq", None)
+        if isinstance(rf_store, dict):
+            if rf_store:
+                s["refresh"] = rf_store
+            else:
+                s.pop("refresh", None)
+        if isinstance(loop_store, dict):
+            if loop_store:
+                s["loop"] = loop_store
+            else:
+                s.pop("loop", None)
         if isinstance(rb_store, dict):
             if rb_store:
                 s["dev_rebrief"] = rb_store
@@ -5686,35 +5998,117 @@ def gh_post_comment(ctx, issue, body):
     return rc == 0
 
 
-def gh_transitions(ctx, issue, st, node, actions, halt_now, fresh=None):
+DECISION_LINE_RE = re.compile(r"^\s*DECISION\s*:\s*(.+?)\s*$")
+DECISION_BRIEF_CHARS = 1700
+
+
+def chunk_brief(text, limit=DECISION_BRIEF_CHARS):
+    """Split a decision brief into comment-sized chunks. Pure.
+    Greedy line packing; overlong single lines hard-split. Returns
+    non-empty list of strings (numbering added by the caller)."""
+    out, cur, n = [], [], 0
+    for line in (text or "").splitlines() or [""]:
+        while len(line) > limit:
+            if cur:
+                out.append("\n".join(cur))
+                cur, n = [], 0
+            out.append(line[:limit])
+            line = line[limit:]
+        if n + len(line) + (1 if cur else 0) > limit and cur:
+            out.append("\n".join(cur))
+            cur, n = [], 0
+        cur.append(line)
+        n += len(line) + 1
+    if cur:
+        out.append("\n".join(cur))
+    return [c for c in out if c.strip()] or ["(empty brief)"]
+
+
+def match_decision_comment(comments, since_ts):
+    """Newest operator DECISION line newer than since_ts. Pure.
+    comments: [{user, ts, body}]. Returns {user, ts, text} or None."""
+    best = None
+    for c in comments or []:
+        ts = c.get("ts") or ""
+        if ts <= (since_ts or ""):
+            continue
+        for line in (c.get("body") or "").splitlines():
+            m = DECISION_LINE_RE.match(line)
+            if m and (best is None or ts > best["ts"]):
+                best = {"user": c.get("user") or "?",
+                        "ts": ts, "text": m.group(1)}
+    return best
+
+
+def gh_issue_comments(ctx, issue):
+    """[{user, ts, body}] for an issue, or None on failure. Read-only."""
+    slug = github_repo_slug(ctx)
+    if not slug:
+        return None
+    rc, out = ctx.run([gh_bin(), "api",
+                       "repos/%s/issues/%d/comments" % (slug, issue),
+                       "--paginate"], timeout=60)
+    if rc != 0:
+        return None
+    try:
+        arr = json.loads(out or "[]")
+    except (ValueError, TypeError):
+        return None
+    got = []
+    for c in arr:
+        if not isinstance(c, dict):
+            continue
+        got.append({"user": ((c.get("user") or {}).get("login") or "?"),
+                    "ts": (c.get("created_at") or "")[:19],
+                    "body": c.get("body") or ""})
+    return got
+
+def gh_transitions(ctx, issue, st, node, actions, halt_now, fresh=None, decision=None):
     """Post-on-transition progress notes to the room's own issue (opt-in).
 
     Armed per room via `state <issue> gh_notes=true` (default off: a robot
     posting as the operator must be explicitly armed). One comment per event,
     templated bodies, deduped via state.json gh_posted. #410 stays human.
+    Decision briefs are the exception: a lane NOTE carrying an explicit
+    REQUEST: operator decision line is relayed as-is (chunked past the API
+    cap), attributed with lane + timestamp, deduped the same way. The
+    lanes explicit request is the arm; no robot-authored content posts.
     Returns (acts, posted_dict_or_None).
     """
     acts = []
-    if not st.get("gh_notes"):
-        return acts, None
+    armed = bool(st.get("gh_notes"))
     posted = st.get("gh_posted") or {}
     wanted = {}
-    phase = st.get("phase") or "?"
-    if ("phase:" + phase) not in posted:
-        wanted["phase:" + phase] = "phase -> %s" % phase
-    if node.get("merge_ready") and not posted.get("merge"):
-        wanted["merge"] = "MERGE-READY: audit APPROVED + QE READY on file"
-    if halt_now and not posted.get("halt"):
-        wanted["halt"] = "HALT: %s" % (st.get("pending") or "?")[:160]
-    if node.get("retired") and not posted.get("retired"):
-        wanted["retired"] = "lane retired and cleaned"
-    if any("audit verdict handed to" in a for a in actions):
-        dec_ts = [q[:20] for q in (fresh or {}).get("auditor", []) if "DECISION" in q]
-        key = "verdict:%s" % (max(dec_ts) if dec_ts else (st.get("handled") or {}).get("auditor", "?"))
-        if key not in posted:
-            wanted[key] = "audit verdict handed to lane"
-    if any("case closed" in a for a in actions) and not posted.get("release-closed"):
-        wanted["release-closed"] = "release case verified + closed"
+    if decision and isinstance(decision, dict) and decision.get("brief"):
+        _dts = decision.get("ts") or "?"
+        _dkey = "decision:%s" % _dts
+        if _dkey not in posted:
+            _dchunks = chunk_brief(decision["brief"])
+            _dn = len(_dchunks)
+            _dwho = "%s lane %s" % (decision.get("role", "?"), _dts)
+            for _di, _dch in enumerate(_dchunks):
+                _dkk = _dkey if _di == 0 else "%s#%d" % (_dkey, _di + 1)
+                if _dkk not in posted:
+                    _dtag = "" if _dn == 1 else " (%d/%d)" % (_di + 1, _dn)
+                    wanted[_dkk] = ("OPERATOR DECISION REQUESTED #%d (%s)%s:\n\n%s"
+                                    % (issue, _dwho, _dtag, _dch))
+    if armed:
+        phase = st.get("phase") or "?"
+        if ("phase:" + phase) not in posted:
+            wanted["phase:" + phase] = "phase -> %s" % phase
+        if node.get("merge_ready") and not posted.get("merge"):
+            wanted["merge"] = "MERGE-READY: audit APPROVED + QE READY on file"
+        if halt_now and not posted.get("halt"):
+            wanted["halt"] = "HALT: %s" % (st.get("pending") or "?")[:160]
+        if node.get("retired") and not posted.get("retired"):
+            wanted["retired"] = "lane retired and cleaned"
+        if any("audit verdict handed to" in a for a in actions):
+            dec_ts = [q[:20] for q in (fresh or {}).get("auditor", []) if "DECISION" in q]
+            key = "verdict:%s" % (max(dec_ts) if dec_ts else (st.get("handled") or {}).get("auditor", "?"))
+            if key not in posted:
+                wanted[key] = "audit verdict handed to lane"
+        if any("case closed" in a for a in actions) and not posted.get("release-closed"):
+            wanted["release-closed"] = "release case verified + closed"
     if not wanted:
         return acts, None
     if ctx.dry:
@@ -5723,7 +6117,10 @@ def gh_transitions(ctx, issue, st, node, actions, halt_now, fresh=None):
         return acts, None
     new_posts = {}
     for k in sorted(wanted):
-        body = "state-machine tick #%d: #%d %s" % (ctx.tick_seq, issue, wanted[k])
+        if k.startswith("decision:"):
+            body = wanted[k]
+        else:
+            body = "state-machine tick #%d: #%d %s" % (ctx.tick_seq, issue, wanted[k])
         if gh_post_comment(ctx, issue, body):
             acts.append("gh note posted [%s]" % k)
             new_posts[k] = utcnow()
@@ -5734,7 +6131,6 @@ def gh_transitions(ctx, issue, st, node, actions, halt_now, fresh=None):
             ctx._gh_dead = True
             break
     return acts, (new_posts or None)
-
 
 QE_EXEMPT = ("test-history.txt", "graphify-out/")
 
@@ -5818,8 +6214,8 @@ def fmt_table(issue, verdict, rows):
     def cell(s, w):
         s = str(s).replace("\n", " ")
         return (s[:w - 1] + "\u2026") if len(s) > w else s.ljust(w)
-    head = "#%s verdict=%s %s" % (issue, verdict.get("kind", "?"),
-                                  verdict.get("rest", ""))
+    head = "#%s %s %s" % (issue, verdict.get("kind", "?"),
+                          verdict.get("rest", ""))
     bar = "+%s+%s+%s+%s+" % tuple("-" * (w + 2) for w in W)
     out = [head, bar,
            "| %s | %s | %s | %s |" % (
@@ -6185,12 +6581,200 @@ def status_planned_audit(ctx, issue, boxes, st):
     return audit_planned_text(verdict, report, live, stored, demand, qhead, issue)
 
 
+DECISION_REQ_RE = re.compile(r"REQUEST\s*:\s*operator decision\b", re.I)
+
+
+def detect_decision_request(boxes):
+    """Newest lane NOTE explicitly requesting an operator decision. Pure.
+    Shape: a dev/qe NOTE post whose header summary or body carries a
+    standalone 'REQUEST: operator decision' line (the lane keeps working
+    unblocked parts; the question itself needs an architect). Returns
+    {ts, role, summary, brief} with brief = full post body, or None."""
+    cands = []
+    for role in ("dev", "qe"):
+        box = (boxes or {}).get(role) or {}
+        full = box.get("full", [])
+        for post in box.get("all", []):
+            m = POST_RE.match(post)
+            if not m or m.group(2) != role or m.group(3) != "NOTE":
+                continue
+            body = post_body_lines(full, post, max_lines=120)
+            if not DECISION_REQ_RE.search(m.group(4) + "\n" + "\n".join(body)):
+                continue
+            cands.append({"ts": post[:19], "role": role,
+                          "summary": m.group(4) or "",
+                          "brief": "\n".join(body).strip()})
+    if not cands:
+        return None
+    return max(cands, key=lambda c: c["ts"])
+
+
+ISSUE_LIFECYCLE = ("open", "planned", "implementing", "testing", "closing")
+
+
+def issue_state_for(st, boxes):
+    """Lifecycle state of an issue for the status table. Pure, display-only.
+    Strictly phase-driven: CLOSE-OUT/CLOSING/CLOSED (or gh-closed) read as
+    closing, VERIFY as testing, IMPL as implementing; RECON reads as planned
+    once the auditor has posted, else open. Anything unrecognized is open.
+    Never persisted."""
+    st = st or {}
+    phase = st.get("phase") or ""
+    if phase in ("CLOSE-OUT", "CLOSING", "CLOSED") or st.get("gh_closed"):
+        pend = (st.get("pending") or "").lower()
+        if "waiting qe" in pend or "waiting test" in pend:
+            return "testing"
+        return "closing"
+    if phase == "VERIFY":
+        return "testing"
+    if phase == "IMPL":
+        return "implementing"
+    if phase == "RECON":
+        aud = ((boxes or {}).get("auditor") or {}).get("all", [])
+        if any(True for _p in aud):
+            return "planned"
+        return "open"
+    return "open"
+
+
+def lane_focus_issue(facts):
+    """Issue the lane is actually engaged in, or None. Pure.
+    Priority mirrors the old display: unacked order first, then fresh
+    post, then active NEXT; lowest issue wins."""
+    for kind in ("order", "post", "active"):
+        cands = [iss for iss, f in (facts or {}).items()
+                 if (f or {}).get(kind)]
+        if cands:
+            return min(cands)
+    return None
+
+
+def status_lane_state(role, probe, here, facts, issue, focus, operator_hold=False):
+    """Per-issue lane STATE with a 1:1 WORKING relation. Pure, display-only.
+    WORKING (#n) appears only on the focused issue row. An open operator
+    question blocks dependent dev/qe lanes even when their session idles:
+    a parked wait is BLOCKED, not IDLE. IDLE means truly free. ABSENT
+    passes through; a lane stuck on a permission modal reads BLOCKED."""
+    probe = probe or ""
+    if probe == "ABSENT":
+        return "ABSENT"
+    if probe.startswith("BLOCKED-modal"):
+        return "BLOCKED"
+    here = here or {}
+    if focus is not None and issue == focus:
+        return "WORKING (#%d)" % issue
+    if operator_hold and role in ("dev", "qe"):
+        return "BLOCKED"
+    if here.get("waits"):
+        return "BLOCKED"
+    if probe.startswith("IDLE"):
+        return "IDLE"
+    if here.get("order") or here.get("post") or here.get("active"):
+        return "WORKING"
+    return "IDLE"
+
+
+def lane_wait_target(pending, role, phase):
+    """Who a BLOCKED lane waits on: QE / AUDIT / DEV / OPERATOR. Pure.
+    Parsed from the lane segment of the room pending text
+    ("... dev: <...> | qe: <...>"); phase is the last-resort default.
+    QE and audit lanes always wait on dev."""
+    if role != "dev":
+        return "DEV"
+    seg = pending or ""
+    m = re.search(r"\bdev\s*:(.*?)(?:\||$)", seg, re.I | re.S)
+    if m:
+        seg = m.group(1)
+    low = seg.lower()
+    if "operator" in low:
+        return "OPERATOR"
+    if "qe" in low or "merge" in low or "verif" in low or "test" in low:
+        return "QE"
+    if "audit" in low:
+        return "AUDIT"
+    return "QE" if phase in ("VERIFY", "CLOSE-OUT", "CLOSING") else "AUDIT"
+
+
+STATUS_ACTIVITY = {
+    ("dev", "WORKING"): "IMPLEMENTATION",
+    ("qe", "WORKING"): "IMPLEMENTING TESTS",
+    ("audit", "WORKING"): "AUDITING",
+    ("qe", "BLOCKED"): "WAITING DEV",
+    ("audit", "BLOCKED"): "WAITING DEV",
+    ("dev", "IDLE"): "WAITING NEW WORK",
+    ("qe", "IDLE"): "WAITING NEW WORK",
+    ("audit", "IDLE"): "WAITING NEW WORK",
+}
+
+
+def status_lane_activity(role, state11, pending, phase, operator_hold=False):
+    """Closed-vocabulary ACTIVITY cell. Pure, display-only."""
+    word = (state11 or "").split()[0]
+    if word == "ABSENT":
+        return "-"
+    if word == "BLOCKED":
+        if operator_hold and role in ("dev", "qe"):
+            return "WAITING FOR OPERATOR"
+        if role == "dev":
+            return "WAITING " + lane_wait_target(pending, role, phase)
+    return STATUS_ACTIVITY.get((role, word), "-")
+
+
+def planned_for(activity, issue):
+    """Operator-side next step for a blocked-on-operator lane. Pure.
+    Returns READING ISSUE #n when the lane waits on the operator reading
+    the issue thread, else None (caller falls back to planned_enum)."""
+    if activity == "WAITING FOR OPERATOR":
+        return "READING ISSUE #%d" % issue
+    return None
+
+
+def planned_enum(text, exists):
+    """Closed-vocabulary PLANNED cell. Pure, display-only.
+    CHECKING STATUS: routine sweep, nothing outstanding. EXPECTING
+    RESULT/OK: an order, verdict, or artifact is awaited. HALTED:
+    room halted. Absent lanes render -."""
+    if not exists:
+        return "-"
+    t = text or ""
+    low = t.lower()
+    if t.startswith("HALTED"):
+        return "HALTED"
+    if t.startswith("ring:") or t.startswith("NEED ") or "order filed" in low or "order deferred" in low or "collect verdict" in low:
+        return "EXPECTING RESULT/OK"
+    if "no audit requested" in low or "no briefed work" in low:
+        return "CHECKING STATUS"
+    if any(k in t for k in ("verdict on file", "report on file",
+                            "awaiting verdict", "queued", "ring audit")):
+        return "EXPECTING RESULT/OK"
+    return "CHECKING STATUS"
+
+
+def engine_start_info(ctx):
+    """(start-datetime, uptime mmm:ss) of the engine loop. Display-only.
+    Sourced from the engine-restart log last loop-started stamp."""
+    try:
+        with open(os.path.join(ctx.log_dir, "engine-restart.log")) as fh:
+            _lines = [ln.strip() for ln in fh if ln.strip()]
+        ts = (_lines[-1].split() or ["?"])[0]
+        dt = datetime.datetime.strptime(
+            ts[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+        secs = int((datetime.datetime.now(datetime.timezone.utc) - dt
+                    ).total_seconds())
+        if secs < 0:
+            raise ValueError
+        return ts, "%03d:%02d" % (secs // 60, secs % 60)
+    except (OSError, ValueError, IndexError):
+        return "unknown", "--:--"
+
 def cmd_status(ctx, issues):
     rooms = discover_rooms(issues)
     if not rooms:
         print("no rooms")
         return 2
     print("next tick %s" % tick_eta(ctx), flush=True)
+    _est, _up = engine_start_info(ctx)
+    print("engine started %s (uptime %s)" % (_est, _up), flush=True)
     facts = {"dev": lane_facts_all(rooms, "dev"),
              "qe": lane_facts_all(rooms, "qe")}
     # Item 5 (#463): the same work-conserving scan, read-only. Never
@@ -6199,9 +6783,15 @@ def cmd_status(ctx, issues):
     _status_scans = {role: collect_scan_records(rooms, role, _status_now)
                      for role in ("dev", "qe")}
     _status_busy = {r["issue"] for r in _status_scans["dev"] if r.get("busy")}
+    _focus = {role: lane_focus_issue(facts[role]) for role in ("dev", "qe")}
     starved_all = []
     for issue, rdir, st in rooms:
         boxes = load_boxes(rdir)
+        _istate = issue_state_for(st, boxes)
+        _pend = st.get("pending") or ""
+        _phase = st.get("phase") or ""
+        _dreq = detect_decision_request(boxes)
+        _open_q = bool(_dreq and ((st.get("gh_decision_relayed") or {}).get("for") or "") < _dreq["ts"])
         hu = {r for r in ("dev", "qe") if any(
             o.startswith(r + ":") and v not in (-1, RING_ESCALATED)
             for o, v in (st.get("rings") or {}).items())}
@@ -6210,35 +6800,35 @@ def cmd_status(ctx, issues):
                            ("audit", SESS["audit"])):
             if role == "audit":
                 live = audit_session_live(ctx)
-                rep = latest_audit_report(ctx, issue)
-                extra = ("report %s" % os.path.basename(rep)) if rep else (
-                    auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full")) or "no verdict")
-                activity = status_activity(live, False, "", "", extra)
-                planned = "-" if not live else status_planned_audit(
-                    ctx, issue, boxes, st)
-                state = audit_state(live)
-                rows.append((role, state, activity, planned))
+                if not live:
+                    rows.append((role, "ABSENT", "-", "-"))
+                else:
+                    _astate = ("WORKING (#%d)" % issue) if st.get("audit_pending") else "IDLE"
+                    rows.append((role, _astate,
+                                 status_lane_activity(role, _astate, _pend, _phase),
+                                 planned_enum(status_planned_audit(ctx, issue, boxes, st), True)))
             else:
                 probe = fast_probe(ctx, sess)
                 exists = probe != "ABSENT"
-                activity = status_activity(exists, probe.startswith("IDLE"),
-                                           boxes[role]["state"],
-                                           boxes[role]["next"], None)
-                planned = "-" if not exists else status_planned_lane(
-                    role, boxes[role], st, probe)
-                if planned == "NEED idle: no briefed work":
-                    _hit = global_work_scan(role, _status_scans[role],
-                                            issue, _status_busy)
-                    if _hit is not None:
-                        planned = ("IDLE-denied (%s #%d; scan: %s)"
-                                   % (_hit["kind"], _hit["issue"],
-                                      _hit["why"]))
-                rows.append((role, lane_state(probe, facts[role].get(issue, {}),
-                                             facts[role], issue), activity,
-                             planned))
+                here = facts[role].get(issue, {})
+                _lstate = status_lane_state(role, probe, here, facts[role], issue, _focus[role], _open_q)
+                activity = status_lane_activity(role, _lstate, _pend, _phase, _open_q)
+                if not exists:
+                    planned = "-"
+                else:
+                    planned = status_planned_lane(role, boxes[role], st, probe)
+                    if planned == "NEED idle: no briefed work":
+                        _hit = global_work_scan(role, _status_scans[role],
+                                                issue, _status_busy)
+                        if _hit is not None:
+                            planned = ("IDLE-denied (%s #%d; scan: %s)"
+                                       % (_hit["kind"], _hit["issue"],
+                                          _hit["why"]))
+                    planned = planned_for(activity, issue) or planned_enum(planned, True)
+                rows.append((role, _lstate, activity, planned))
                 if starvation_gap(role, probe, facts[role].get(issue, {}), st, hu):
                     starved_all.append(issue)
-        print(fmt_table(issue, {"kind": "STATUS", "rest": (st.get("pending") or "")[:60]},
+        print(fmt_table(issue, {"kind": "state=" + _istate, "rest": ""},
                         rows), flush=True)
     for _v in watchdog_invariant(sorted(set(starved_all)), engine_loop_live()):
         print(_v, flush=True)
@@ -6809,6 +7399,75 @@ def mode_self_test():
           _cn2.endswith("[oid %s]" % _coid2) and " done = DONE " in _cn2
           and " done-by " in _cn2 and " ack-by " in _cn2
           and _cn2.index(" done-by ") < _cn2.index(" ack-by ") < _cn2.index(" [oid "), True)
+    _dq1 = "2026-11-04T13:09:11Z FROM=dev NOTE :: Phase ii started; JOIN question"
+    _dq1b = ["STATE: working", "NEXT: waiting operator decision", "REQUEST: operator decision Y vs Z", "Y: wrap syscall", "Z: waiver"]
+    _dqbox = {"dev": {"all": [_dq1], "full": [_dq1] + _dq1b}, "qe": {"all": [], "full": []}}
+    _dq = detect_decision_request(_dqbox)
+    check("decision-detect-body",
+          bool(_dq) and _dq["ts"] == "2026-11-04T13:09:11" and _dq["role"] == "dev" and "Y: wrap" in _dq["brief"], True)
+    _dq0 = "2026-11-04T13:09:11Z FROM=dev NOTE :: Phase ii started"
+    _dq0b = ["STATE: working", "NEXT: waiting operator decision", "Phase ii started. Blocker here. REQUEST: operator decision Y vs Z plus context after."]
+    check("decision-midline-marker", (detect_decision_request({"dev": {"all": [_dq0], "full": [_dq0] + _dq0b}, "qe": {"all": [], "full": []}}) or {}).get("ts") == "2026-11-04T13:09:11", True)
+    _dq2 = "2026-11-04T13:10:00Z FROM=dev NOTE :: REQUEST: operator decision now"
+    check("decision-detect-header",
+          (detect_decision_request({"dev": {"all": [_dq2], "full": [_dq2]}, "qe": {"all": [], "full": []}}) or {}).get("ts") == "2026-11-04T13:10:00", True)
+    _dq3 = "2026-11-04T13:10:00Z FROM=dev READY :: IMPL READY notes REQUEST: operator decision inside"
+    check("decision-ready-kind-ignored",
+          detect_decision_request({"dev": {"all": [_dq3], "full": [_dq3]}, "qe": {"all": [], "full": []}}) is None, True)
+    _dq3b = "2026-11-04T13:10:00Z FROM=dev NOTE :: plain status"
+    check("decision-none",
+          detect_decision_request({"dev": {"all": [_dq3b], "full": [_dq3b]}, "qe": {"all": [], "full": []}}) is None, True)
+    _dq4a = "2026-11-04T13:00:00Z FROM=dev NOTE :: old"
+    _dq4b = "2026-11-04T14:00:00Z FROM=qe NOTE :: new"
+    _dqbox4 = {"dev": {"all": [_dq4a], "full": [_dq4a, "REQUEST: operator decision A"]}, "qe": {"all": [_dq4b], "full": [_dq4b, "REQUEST: operator decision B"]}}
+    check("decision-newest-wins",
+          (detect_decision_request(_dqbox4) or {}).get("ts") == "2026-11-04T14:00:00", True)
+    check("decision-chunk-short", chunk_brief("hello") == ["hello"], True)
+    _long = "\n".join(["x" * 100] * 30)
+    _ch = chunk_brief(_long)
+    check("decision-chunk-packs", len(_ch) >= 2 and all(len(c) <= 1700 for c in _ch), True)
+    check("decision-chunk-empty", chunk_brief("") == ["(empty brief)"], True)
+    _mc = [{"user": "op", "ts": "2026-11-04T15:00:00", "body": "lgtm\nDECISION: go with Y\nthanks"},
+           {"user": "op", "ts": "2026-11-04T16:00:00", "body": "DECISION: actually Z"}]
+    _mm = match_decision_comment(_mc, "2026-11-04T14:00:00")
+    check("decision-match-newest", bool(_mm) and _mm["text"] == "actually Z" and _mm["user"] == "op", True)
+    check("decision-match-since-filters", match_decision_comment(_mc, "2026-11-04T16:00:00") is None, True)
+    check("decision-match-none", match_decision_comment([{"user": "x", "ts": "2026-11-04T17:00:00", "body": "nope"}], "2026-11-04T14:00:00") is None, True)
+    check("issue-state-closing", issue_state_for({"phase": "CLOSE-OUT"}, {}) == "closing", True)
+    check("issue-state-testing", issue_state_for({"phase": "VERIFY"}, {}) == "testing", True)
+    check("issue-state-implementing", issue_state_for({"phase": "IMPL"}, {}) == "implementing", True)
+    check("issue-state-open", issue_state_for({"phase": "RECON"}, {"auditor": {"all": []}}) == "open", True)
+    check("issue-state-planned", issue_state_for({"phase": "RECON"}, {"auditor": {"all": ["2026-11-03T23:34:51Z FROM=audit READY :: x"]}}) == "planned", True)
+    check("issue-state-waiting-qe-testing",
+          issue_state_for({"phase": "CLOSE-OUT", "pending": "CLOSE-OUT: dev: waiting QE pull"}, {}) == "testing", True)
+    check("issue-state-merge-close-closing",
+          issue_state_for({"phase": "CLOSE-OUT", "pending": "CLOSE-OUT: dev: awaiting merge-close"}, {}) == "closing", True)
+    _ff = {52: {"order": False, "post": True, "active": False}, 53: {"order": True, "post": False, "active": False}}
+    check("lane-focus-order-wins", lane_focus_issue(_ff) == 53, True)
+    check("lane-focus-none", lane_focus_issue({52: {}}) is None, True)
+    _sh = {"order": False, "post": True, "active": False, "waits": False}
+    check("status-focus-row", status_lane_state("dev", "WORKING-x", _sh, {52: _sh}, 52, 52) == "WORKING (#52)", True)
+    check("status-nonfocus-blocked", status_lane_state("dev", "WORKING-x", {"waits": True}, {52: _sh}, 444, 52) == "BLOCKED", True)
+    check("status-nonfocus-idle", status_lane_state("dev", "WORKING-x", {}, {52: _sh}, 444, 52) == "IDLE", True)
+    check("status-absent", status_lane_state("dev", "ABSENT", {}, {}, 52, None) == "ABSENT", True)
+    check("status-probe-idle-parked-wait", status_lane_state("qe", "IDLE-static", {"waits": True}, {}, 52, None) == "BLOCKED", True)
+    check("status-probe-idle-free", status_lane_state("qe", "IDLE-static", {}, {}, 52, None) == "IDLE", True)
+    check("status-operator-hold", status_lane_state("qe", "IDLE-static", {}, {}, 53, None, True) == "BLOCKED", True)
+    check("status-operator-hold-focus-wins", status_lane_state("dev", "WORKING-x", {"order": True}, {53: {"order": True}}, 53, 53, True) == "WORKING (#53)", True)
+    check("activity-waiting-for-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting anything", "VERIFY", True) == "WAITING FOR OPERATOR", True)
+    check("activity-qe-operator-hold", status_lane_activity("qe", "BLOCKED", "qe: idle", "", True) == "WAITING FOR OPERATOR", True)
+    check("planned-reading-issue", planned_for("WAITING FOR OPERATOR", 53) == "READING ISSUE #53", True)
+    check("planned-for-other", planned_for("WAITING QE", 53) is None, True)
+    check("activity-dev-blocked-qe", status_lane_activity("dev", "BLOCKED", "dev: waiting QE pull", "CLOSE-OUT") == "WAITING QE", True)
+    check("activity-dev-blocked-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting operator decision", "VERIFY") == "WAITING OPERATOR", True)
+    check("activity-qe-working", status_lane_activity("qe", "WORKING (#52)", "", "") == "IMPLEMENTING TESTS", True)
+    check("activity-idle", status_lane_activity("dev", "IDLE", "", "") == "WAITING NEW WORK", True)
+    check("planned-ring", planned_enum("ring: unacked order", True) == "EXPECTING RESULT/OK", True)
+    check("planned-awaits", planned_enum("awaits: foo", True) == "CHECKING STATUS", True)
+    check("planned-need", planned_enum("NEED qe-merge: clean first", True) == "EXPECTING RESULT/OK", True)
+    check("planned-absent", planned_enum("anything", False) == "-", True)
+    check("planned-audit-idle", planned_enum("no audit requested", True) == "CHECKING STATUS", True)
+    check("engine-start-unknown", engine_start_info(SimpleNamespace(log_dir="/nonexistent-xyz")) == ("unknown", "--:--"), True)
     check("ring-line-notes-unchanged",
           ring(SimpleNamespace(dry=True), "s", "", "t", channel="notes") == "WOULD ring s: notes: t -- read logs/consultant-notes.md", True)
     _w1 = "2026-11-02T18:46:59Z FROM=dev WAKE :: inbox: dev READY"
@@ -8009,6 +8668,69 @@ def mode_self_test():
                 os.environ[key] = old
     check("probe-seam-canned", _seam_probe("IDLE-static") == "IDLE-static", True)
     check("probe-seam-unknown-holds", _seam_probe("bogus") == "UNKNOWN-seam", True)
+    check("s11-untracked-detects",
+          s11_untracked(["M src/a.cpp", "?? new/file.hpp", "?? userspace/pthread/x.c"]) == ["new/file.hpp", "userspace/pthread/x.c"], True)
+    check("s11-untracked-clean",
+          s11_untracked(["M src/a.cpp", "A  src/b.cpp"]) == [], True)
+    check("s11-missing-detects",
+          s11_missing_files(["src/a.cpp"], ["src/a.cpp", "src/missing.hpp"]) == ["src/missing.hpp"], True)
+    check("s11-missing-clean",
+          s11_missing_files(["src/a.cpp", "src/b.hpp"], ["src/a.cpp"]) == [], True)
+    check("s11-gate-clean",
+          s11_gate([], ["src/a.cpp"], ["src/a.cpp"])[0] is True, True)
+    check("s11-gate-untracked-blocks",
+          s11_gate(["new/x.hpp"], ["src/a.cpp"], ["src/a.cpp"])[0] is False, True)
+    check("s11-gate-missing-blocks",
+          s11_gate([], ["src/a.cpp"], ["src/a.cpp", "src/missing.hpp"])[0] is False, True)
+    check("stale-refresh-fires",
+          stale_refresh_due(True, True, True, True) is True, True)
+    check("stale-refresh-clean-required",
+          stale_refresh_due(True, True, False, True) is False, True)
+    check("stale-refresh-blocked-required",
+          stale_refresh_due(True, True, True, False) is False, True)
+    check("stale-refresh-behind-required",
+          stale_refresh_due(False, True, True, True) is False, True)
+    check("loop-hash-stable",
+          loop_hash("p", {"a:1": 1}, "tip", "ph") == loop_hash("p", {"a:1": 1}, "tip", "ph"), True)
+    check("loop-hash-differs",
+          loop_hash("p1", {}, "t", "ph") != loop_hash("p2", {}, "t", "ph"), True)
+    _lw1, _lf1 = loop_watch({}, "p", {}, "t", "ph", False)
+    check("loop-watch-first-no-loop",
+          _lw1["count"] == 1 and _lf1 is False, True)
+    _lw2, _lf2 = loop_watch(_lw1, "p", {}, "t", "ph", False)
+    _lw3, _lf3 = loop_watch(_lw2, "p", {}, "t", "ph", False)
+    check("loop-watch-three-fires",
+          _lw3["count"] == 3 and _lf3 is True, True)
+    check("loop-watch-progress-resets",
+          loop_watch(_lw3, "p", {}, "t", "ph", True)[0]["count"] == 1
+          and loop_watch(_lw3, "p", {}, "t", "ph", True)[1] is False, True)
+    check("loop-watch-new-hash-resets",
+          loop_watch(_lw3, "other", {}, "t", "ph", False)[0]["count"] == 1, True)
+    check("mergeclose-preempts-true",
+          mergeclose_preempts_starvation("working :: waiting fresh MERGE-CLOSE order",
+                                         "CLOSE-OUT: dev: awaiting merge-close", True, True, True) is True, True)
+    check("mergeclose-preempts-dirty-suppresses",
+          mergeclose_preempts_starvation("working :: waiting fresh MERGE-CLOSE order",
+                                         "CLOSE-OUT: dev: awaiting merge-close", False, True, True) is False, True)
+    check("mergeclose-preempts-pending-required",
+          mergeclose_preempts_starvation("working :: waiting fresh MERGE-CLOSE order",
+                                         "VERIFY: dev: working impl", True, True, True) is False, True)
+    check("mergeclose-tip-prefers-head",
+          mergeclose_tip("9a6ac63", "0feae81") == "9a6ac63", True)
+    check("mergeclose-tip-same-keeps",
+          mergeclose_tip("9a6ac63", "9a6ac63ec") == "9a6ac63", True)
+    check("src-diff-empty-true",
+          src_diff_empty([]) is True, True)
+    check("src-diff-empty-false",
+          src_diff_empty(["src/a.cpp"]) is False, True)
+    check("reaudit-skip-identical",
+          reaudit_needed(True, True) is False, True)
+    check("reaudit-needed-differs",
+          reaudit_needed(True, False) is True, True)
+    check("reverify-skip-identical",
+          reverify_needed(True, True) is False, True)
+    check("reverify-needed-unverified",
+          reverify_needed(False, True) is True, True)
     print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
     return 0 if passed == total else 1
 
