@@ -1049,21 +1049,24 @@ def audit_demand(boxes, st, fresh=None):
 
 
 def audit_queue_head(issue, demand, rooms_all):
-    """Oldest outstanding audit demand (self included). Pure; FIFO, no starvation."""
+    """Oldest outstanding audit demand (self included). Pure; FIFO, no starvation.
+
+    Head = min over self + other demanders by (since, issue); the room
+    proceeds iff head == self (issue #494: the old min-excluded-self
+    deadlocked 2+ concurrent demands — each room saw the other as head
+    and both deferred forever)."""
     if demand is None:
         return None
-    best = (utcnow(), issue)
+    best = ((demand or {}).get("since") or utcnow(), issue)
     for iss, _rdir, ost in rooms_all or []:
         if iss == issue:
-            continue
+            continue  # self already seeded from demand; ost may be stale
         ost = ost or {}
         if ost.get("audit_pending") and not (ost.get("halt") or (ost.get("state") or "") in ("CLOSED", "HOLD", "CLOSING")):
             since = (ost["audit_pending"].get("since") or "9" * 20)
             if (since, iss) < best:
                 best = (since, iss)
-    if best[1] != issue and best < (utcnow(), issue):
-        return best[1]
-    return issue
+    return best[1]
 
 
 def audit_ring_action(n):
@@ -3002,10 +3005,20 @@ def s11_meson_files(build_text):
     load-bearing inputs a tip must contain (e.g. packaging file lists).
     Scope is string literals only — loop-var files(src) and find-sources
     are unresolvable and not load-bearing (S3-1). Leading ../ is stripped
-    so entries compare against repo-relative ls-tree paths."""
+    so entries compare against repo-relative ls-tree paths.
+    Concatenated calls (issue #493: files('../linker/linker_' + arch +
+    '.ld')) are dynamically constructed and unresolvable — the whole
+    call is skipped (fail-open, same as the loop-var exclusion). A +
+    inside a string literal does not count (literals are stripped
+    before the check)."""
     out = []
     for m in re.finditer(r"files\s*\((.*?)\)", build_text or "", re.S):
-        for q in re.finditer(r"""['"]([^'"]+)['"]""", m.group(1)):
+        args = m.group(1)
+        # Strip string literals; a remaining + means dynamic concat.
+        stripped = re.sub(r"""['\"](?:[^'\"\\]|\\.)*['\"]""", "", args)
+        if "+" in stripped:
+            continue
+        for q in re.finditer(r"""['"]([^'"]+)['"]""", args):
             lit = q.group(1)
             while lit.startswith("../"):
                 lit = lit[3:]
@@ -3468,9 +3481,32 @@ def room_lane_facts(room_dir, rst, role):
     return lane_facts_from_boxes(load_boxes(room_dir), rst, role)
 
 
+# Note (issue #491): engine-wait suppression reuses the existing ENGINE_WAIT_RE
+# defined below (covers engine|restage|routing) — no duplicate definition here
+# so the module has a single source of truth for engine-owned waits.
+
+
+def starvation_suppressed(role, boxes, st):
+    """True when the starvation ladder must skip this lane. Pure.
+
+    Two suppression paths (issue #491), both parked-by-design:
+    (1) role dev in a testing-only room (QE owns the work; dev parked on
+    QE by design, never starving); (2) the lane NEXT names an engine wait
+    (ENGINE_WAIT_RE — the engine-wait ladder owns it; one wait, one
+    ladder, never a double page). Anything missing (no boxes/next/scope)
+    is fail-open (False): suppression needs a proven reason."""
+    if not role or not isinstance(boxes, dict):
+        return False
+    nxt = ((boxes.get(role) or {}).get("next")) or ""
+    if not nxt:
+        return False
+    if role == "dev" and (st or {}).get("scope") == "testing-only":
+        return True
+    return bool(ENGINE_WAIT_RE.search(nxt))
+
+
 def starvation_gap(role, probe, facts, st, has_unacked):
     """True when an IDLE lane's input-wait has no engine order behind it. Pure.
-
     The gap that parked 240/390/54: the lane is IDLE, its NEXT waits on
     input, but no unacked order names the lane and no fresh post is in
     flight — every gate had its chance and none fired. Halt rooms never
@@ -3510,6 +3546,23 @@ def starvation_era_continues(stored, current_next):
     if not prev:
         return True
     return prev.strip().lower() == (current_next or "").strip().lower()
+
+
+def starvation_should_preserve(role, boxes, st, prev):
+    """True when a non-starved tick should preserve the starvation store.
+
+    Pure (issue #491 S2 fix). Suppressed lanes (testing-only dev,
+    engine-wait NEXTs) never preserve: a stale escalated store from
+    before suppression deployed must drop on the same tick instead of
+    lingering beside the quiet lane. Anything missing is fail-open
+    preserve (conservative): suppression needs a proven reason, and
+    era-continuity is decided by starvation_era_continues."""
+    if not prev:
+        return False
+    if starvation_suppressed(role, boxes, st):
+        return False
+    return bool(starvation_era_continues(
+        prev, ((boxes.get(role) or {}).get("next") or "")))
 
 
 SYNC_NEED_TICKS = 3      # consecutive mismatched sweeps before a re-probe order
@@ -3675,11 +3728,15 @@ def starvation_sweep(boxes, st, probes, has_unacked, halt_now):
     """Sorted starved roles for both lanes. Pure apart from inputs.
 
     Runs on final same-tick state (all filings reflected in has_unacked);
-    a halting room never starves (its NEEDs are moot, its quiet moot)."""
+    a halting room never starves (its NEEDs are moot, its quiet moot).
+    Suppressed roles (issue #491: testing-only dev, engine-wait NEXTs)
+    are skipped — parked-by-design lanes never starve."""
     if halt_now:
         return []
     out = []
     for role in ("dev", "qe"):
+        if starvation_suppressed(role, boxes, st):
+            continue
         if starvation_gap(role, (probes or {}).get(role),
                           lane_facts_from_boxes(boxes, st, role),
                           st, has_unacked):
@@ -5818,8 +5875,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             # the prior store verbatim, no increment — a driven-then-freed
             # lane resumes its era instead of jumping to escalate. Same
             # wait only: a changed NEXT starts a new era and recounts.
-            if _sv_prev and starvation_era_continues(
-                    _sv_prev, (boxes[_role]["next"] or "")):
+            # Suppressed lanes never preserve (issue #491 S2): a stale
+            # escalated store drops on the same tick via
+            # starvation_should_preserve.
+            if starvation_should_preserve(_role, boxes, st, _sv_prev):
                 _sv_new[_role] = dict(_sv_prev)
             continue
         _sv_count = int(_sv_prev.get("count") or 0) + 1
@@ -5886,6 +5945,11 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             # none (defensive: unacked or post-escalate quiet): preserve
             # the prior store verbatim, no increment — a driven-then-freed
             # lane resumes its era instead of jumping to escalate.
+            # Note: suppression needs no guard here (dead by construction:
+            # suppressed roles are excluded from _starved_roles at sweep,
+            # so they never reach this branch — the operative drop lives
+            # in the not-starved preserve above via
+            # starvation_should_preserve).
             if _sv_prev:
                 _sv_new[_role] = dict(_sv_prev)
         # Era mark for the next tick's preserve decision: the wait text
@@ -8875,6 +8939,67 @@ def mode_self_test():
           starvation_gap("dev", "IDLE-static", dict(_cwait, waits=False), _cst, set()) is False, True)
     check("starvation-gap-excludes-other-state",
           starvation_gap("dev", "IDLE-static", _cwait, dict(_cst, state="HOLD"), set()) is False, True)
+    _sup_boxes = {"dev": {"all": [], "coord_last": None, "next": "waiting QE E2E gates"},
+                  "qe": {"all": [], "coord_last": None, "next": "waiting engine restage then re-audit"}}
+    _sup_st = {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS",
+               "scope": "testing-only"}
+    check("starvation-suppressed-testing-only-dev",
+          starvation_suppressed("dev", _sup_boxes, _sup_st), True)
+    check("starvation-suppressed-qe-idle-not-suppressed",
+          starvation_suppressed("qe", {"qe": {"next": "idle"}}, dict(_sup_st, scope="full")) is False, True)
+    check("starvation-suppressed-engine-wait-qe",
+          starvation_suppressed("qe", _sup_boxes, dict(_sup_st, scope="full")), True)
+    check("starvation-suppressed-no-false-positive",
+          starvation_suppressed("dev", {"dev": {"next": "working IMPL"}}, {"scope": "full"}) is False, True)
+    check("starvation-suppressed-missing-boxes",
+          starvation_suppressed("dev", {}, _sup_st) is False, True)
+    check("starvation-suppressed-missing-next",
+          starvation_suppressed("dev", {"dev": {}}, _sup_st) is False, True)
+    check("starvation-sweep-suppressed-dev-empty",
+          starvation_sweep(_sup_boxes, _sup_st, {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == [], True)
+    check("starvation-sweep-engine-wait-both-empty",
+          starvation_sweep(_sup_boxes, dict(_sup_st, scope="full"), {"dev": "WORKING-markers", "qe": "IDLE-static"}, set(), False) == [], True)
+    check("starvation-sweep-unsuppressed-still-fires",
+          starvation_sweep({"dev": {"all": [], "coord_last": None, "next": "waiting auditor verdict"},
+                            "qe": {"all": [], "coord_last": None, "next": "idle"}},
+                           {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS", "scope": "full"},
+                           {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == ["dev"], True)
+    _sup_prev = {"count": 3, "oid": "dev:2026-01-01T00:00:00",
+                 "escalated": True, "next": "waiting QE E2E gates"}
+    check("starvation-preserve-drop-suppressed",
+          starvation_should_preserve("dev", _sup_boxes, _sup_st, _sup_prev) is False, True)
+    check("starvation-preserve-drop-engine-wait",
+          starvation_should_preserve("qe", _sup_boxes, dict(_sup_st, scope="full"),
+                                     dict(_sup_prev, next="waiting engine restage then re-audit")) is False, True)
+    check("starvation-preserve-keep-unsuppressed",
+          starvation_should_preserve("dev", {"dev": {"next": "waiting auditor verdict"}},
+                                     {"scope": "full"},
+                                     dict(_sup_prev, next="waiting auditor verdict")) is True, True)
+    check("starvation-preserve-drop-changed-next",
+          starvation_should_preserve("dev", {"dev": {"next": "waiting other"}},
+                                     {"scope": "full"}, _sup_prev) is False, True)
+    check("starvation-preserve-drop-empty-prev",
+          starvation_should_preserve("dev", _sup_boxes, _sup_st, {}) is False, True)
+    _474_boxes = {"dev": {"all": [], "coord_last": None, "next": "waiting QE E2E gates"},
+                  "qe": {"all": [], "coord_last": None, "next": "idle"}}
+    _474_st = {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS",
+               "scope": "testing-only"}
+    _474_prev = {"count": 3, "oid": "dev:2026-11-05T18:09:01",
+                 "escalated": True, "next": "waiting QE E2E gates"}
+    check("starvation-proof-474-stale-drop",
+          starvation_should_preserve("dev", _474_boxes, _474_st, _474_prev) is False
+          and starvation_sweep(_474_boxes, _474_st, {"dev": "IDLE-static", "qe": "IDLE-static"},
+                               set(), False) == [], True)
+    _470_boxes = {"dev": {"all": [], "coord_last": None, "next": "idle"},
+                  "qe": {"all": [], "coord_last": None, "next": "waiting engine restage then re-audit"}}
+    _470_st = {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS",
+               "scope": "full", "engine_wait": {"streak": 3}}
+    _470_prev = {"count": 3, "oid": "qe:2026-11-05T18:09:09",
+                 "escalated": True, "next": "waiting engine restage then re-audit"}
+    check("starvation-proof-470-stale-drop",
+          starvation_should_preserve("qe", _470_boxes, _470_st, _470_prev) is False
+          and starvation_sweep(_470_boxes, _470_st, {"dev": "WORKING-markers", "qe": "IDLE-static"},
+                               set(), False) == [], True)
     check("starvation-gaps-sorted",
           starvation_gaps([{"issue": 54}, {"issue": 240, "starved": ["qe"]},
                            {"issue": 390, "starved": ["dev"]}]) == [240, 390], True)
@@ -9437,6 +9562,20 @@ def mode_self_test():
           audit_queue_head(51, {"requester": "dev", "text": "t"},
                            [(51, "/r", {}),
                             (52, "/r", {"audit_pending": {"since": "2026-11-02T09:00:00Z"}})]) == 52, True)
+    check("audit-queue-solo-self-head",
+          audit_queue_head(51, {"requester": "dev", "since": "2026-11-05T19:00:00Z"}, []) == 51, True)
+    check("audit-queue-older-self-proceeds",
+          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T18:06:46Z"},
+                           [(474, "/r", {"audit_pending": {"since": "2026-11-05T18:09:01Z"}}),
+                            (491, "/r", {})]) == 491, True)
+    check("audit-queue-newer-self-defers",
+          audit_queue_head(474, {"requester": "dev", "since": "2026-11-05T18:09:01Z"},
+                           [(474, "/r", {}),
+                            (491, "/r", {"audit_pending": {"since": "2026-11-05T18:06:46Z"}})]) == 491, True)
+    check("audit-queue-closed-excluded",
+          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T19:00:00Z"},
+                           [(477, "/r", {"audit_pending": {"since": "2026-11-05T18:00:00Z"},
+                                         "state": "CLOSING"})]) == 491, True)
     check("audit-ring-0", audit_ring_action(0) == "ring", True)
     check("audit-ring-2", audit_ring_action(2) == "ring", True)
     check("audit-ring-3-escalate", audit_ring_action(3) == "escalate", True)
@@ -9657,6 +9796,12 @@ def mode_self_test():
           s11_meson_files("x = files('../userspace/pthread/pthread.c', 'a.c')") == ["userspace/pthread/pthread.c", "a.c"], True)
     check("s11-meson-strips-dedups-skips",
           s11_meson_files("a = files('../../x.c', '../../x.c', '$v.c')\nb = files(src)") == ["x.c"], True)
+    check("s11-meson-concat-skipped",
+          s11_meson_files("x = files('../linker/linker_' + arch + '.ld')") == [], True)
+    check("s11-meson-plain-enforced",
+          s11_meson_files("x = files('src/a.c')") == ["src/a.c"], True)
+    check("s11-meson-mixed-keeps-literal",
+          s11_meson_files("a = files('../linker/linker_' + arch + '.ld')\nb = files('src/keep.c')") == ["src/keep.c"], True)
     check("stale-refresh-fires",
           stale_refresh_due(True, True, True, True) is True, True)
     check("stale-refresh-clean-required",
