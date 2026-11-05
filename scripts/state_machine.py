@@ -3438,6 +3438,21 @@ def starvation_gaps(nodes):
 STARVE_TICKS = 2  # consecutive starved ticks before a re-wake order
 
 
+def starvation_era_continues(stored, current_next):
+    """True when a non-starved tick should preserve the starvation store.
+
+    Pure. Same wait (NEXT unchanged) = same era: an ACK-without-progress
+    must not reset the escalation clock, or the ladder re-wakes forever
+    and never reaches escalate. A changed wait starts a new era (recount
+    from observe); legacy stores without an era mark preserve
+    conservatively.
+    """
+    prev = (stored or {}).get("next")
+    if not prev:
+        return True
+    return prev.strip().lower() == (current_next or "").strip().lower()
+
+
 def starvation_action(count, lane_unacked, oid_live, stored, cap=RING_LIMIT):
     """none | observe | rewake | await | escalate for one starved lane. Pure.
 
@@ -5589,6 +5604,13 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     for _role in ("dev", "qe"):
         _sv_prev = _sv_prev_all.get(_role) or {}
         if _role not in _starved_roles:
+            # none (defensive: unacked or post-escalate quiet): preserve
+            # the prior store verbatim, no increment — a driven-then-freed
+            # lane resumes its era instead of jumping to escalate. Same
+            # wait only: a changed NEXT starts a new era and recounts.
+            if _sv_prev and starvation_era_continues(
+                    _sv_prev, (boxes[_role]["next"] or "")):
+                _sv_new[_role] = dict(_sv_prev)
             continue
         _sv_count = int(_sv_prev.get("count") or 0) + 1
         _sv_oid = _sv_prev.get("oid")
@@ -5656,6 +5678,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             # lane resumes its era instead of jumping to escalate.
             if _sv_prev:
                 _sv_new[_role] = dict(_sv_prev)
+        # Era mark for the next tick's preserve decision: the wait text
+        # this store was filed under. Preserved stores already carry one.
+        if _role in _sv_new and "next" not in _sv_new[_role]:
+            _sv_new[_role]["next"] = (boxes[_role]["next"] or "")
     node["starved"] = _starved_roles
     _loop_tip = _c_tip_early if "_c_tip_early" in dir() else None
     try:
@@ -8211,6 +8237,14 @@ def mode_self_test():
           starvation_action(STARVE_TICKS - 1, False, False, {}, 3) == "observe", True)
     check("starve-ticks-wired-rewake",
           starvation_action(STARVE_TICKS, False, False, {"count": 1}, 3) == "rewake", True)
+    check("starve-era-same-next-preserves",
+          starvation_era_continues({"count": 2, "next": "waiting engine restage"}, "waiting engine restage") is True, True)
+    check("starve-era-changed-next-resets",
+          starvation_era_continues({"count": 2, "next": "waiting engine restage"}, "waiting dev READY") is False, True)
+    check("starve-era-empty-next-resets",
+          starvation_era_continues({"count": 2, "next": "waiting x"}, "") is False, True)
+    check("starve-era-legacy-no-mark-preserves",
+          starvation_era_continues({"count": 2}, "waiting x") is True, True)
     # Item 5 (#463): work-conserving scan + IDLE gate. Bite: forcing
     # global_work_scan to None flips every denied row to FAIL.
     _rmk = lambda iss, **kw: dict({"issue": iss, "halt": False,
