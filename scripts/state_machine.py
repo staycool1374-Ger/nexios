@@ -2973,6 +2973,61 @@ def closeout_order_text(issue, stage, branch, tip):
             % (issue, branch, issue))
 
 
+REFIRE_CAP = 3  # doctrine: matches RING_LIMIT/STARVE ladder cap (#496)
+
+
+def refire_sig(*parts):
+    """Advance signature for progress-gated refire (issue #496). Pure.
+
+    Any VERIFIED/DELIVER/DONE post (newest ts), tip change, or phase move
+    resets the count; ACKs, STATE posts and re-states do not advance it."""
+    return "|".join("" if p is None else str(p) for p in parts)
+
+
+def refire_check(stored, sig, cap=REFIRE_CAP):
+    """(file_order, file_need_once, new_entry) for one order-shape. Pure.
+
+    New signature -> count 1, file. Same signature -> count+1; below cap
+    file again, at cap file ONE NEED instead, beyond cap stay quiet until
+    the signature moves. Count is clamped so the store stays tiny."""
+    stored = stored or {}
+    if stored.get("sig") != sig:
+        return True, False, {"count": 1, "sig": sig}
+    n = min(int(stored.get("count") or 0) + 1, cap + 1)
+    if n < cap:
+        return True, False, {"count": n, "sig": sig}
+    if n == cap:
+        return False, True, {"count": n, "sig": sig}
+    return False, False, {"count": n, "sig": sig}
+
+
+def refire_record(all_refire, key, entry):
+    """Merge one order-shape entry into the refire store. Pure."""
+    d = dict(all_refire or {})
+    d[key] = entry
+    return d
+
+
+def testing_terminal_due(scope, stage, qe_verified, approved):
+    """Whether a testing-only room may close without a branch. Pure (#497).
+
+    Terminal readiness for QE-owned rooms (#483): qe VERIFIED tip plus
+    audit decision. Full-scope rooms always need the branch path."""
+    return bool(scope == "testing-only" and stage == "merge-close"
+                and qe_verified and approved)
+
+
+def closeout_done_confirm_text(issue, tip):
+    """DONE-confirm order body for testing-only close-out (issue #497).
+
+    No merge, no branch: qe confirms the VERIFIED+APPROVED evidence set
+    and posts DONE confirmed. The tip rides along for the record only."""
+    return ("CLOSEOUT #%d DONE-confirm (testing-only, no merge, no branch): "
+            "QE VERIFIED tip %s + audit APPROVED on file; post DONE confirmed; "
+            "ACK it with post_update ref=<id> before starting"
+            % (issue, tip or "?"))
+
+
 SRC_SCOPE_PATHS = ("src", "userspace", "docs", "packaging",
                      "meson.build", "meson.options")
 LOOP_WATCH_TICKS = 3
@@ -5259,31 +5314,51 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     # qe_order_due true next tick, and the peer-pointer skip below stays
     # exactly the filed-or-due set (S3).
     qo_store = None
+    rc_store = None
     if qe_will_file:
-        note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts), ack_by=True, done_by=True, evidence="VERIFIED")
-        if ctx.dry:
-            actions.append("WOULD post qe order IMPL READY (oid %s)" % qoid)
-            file_order_deadline(ad_store, qoid)
-            file_order_delivery(dl_store, qoid, "VERIFIED")
-            has_unacked.add("qe")
+        _rf_key = "qe-impl-ready|%s" % impl_ts
+        _rf_sig = refire_sig(qe_verified_ts(boxes["qe"]["all"]),
+                             dev_done_ts(boxes["dev"]["all"]),
+                             ((gated or {}).get("fields") or {}).get("tip"),
+                             st.get("phase"))
+        _rf_allow, _rf_need, _rf_entry = refire_check(
+            (st.get("refire") or {}).get(_rf_key), _rf_sig)
+        if rc_store is None:
+            rc_store = dict(st.get("refire") or {})
+        rc_store[_rf_key] = _rf_entry
+        if not _rf_allow:
+            if _rf_need:
+                actions.append("NEED qe IMPL READY #%d capped (%d identical filings, no state advance: qe never VERIFIED impl %s, no new VERIFIED/DELIVER/DONE, tip/phase unchanged); quiet until VERIFIED/tip/phase moves"
+                               % (issue, _rf_entry["count"], impl_ts))
+                events.append("refire-capped-qe-impl-ready")
+            else:
+                actions.append("refire suppressed qe IMPL READY #%d (capped, sig unchanged; quiet until advance)" % issue)
+            events.append("qe-order-filed")
         else:
-            if append_box_note(room_dir, "qe", note):
-                rings[qoid] = 0
+            note, qoid = coord_note("qe", "IMPL READY #%d dev %s — start verification per prompts/qe.txt + room pending; ACK it with post_update ref=<id> before starting" % (issue, impl_ts), ack_by=True, done_by=True, evidence="VERIFIED")
+            if ctx.dry:
+                actions.append("WOULD post qe order IMPL READY (oid %s)" % qoid)
                 file_order_deadline(ad_store, qoid)
                 file_order_delivery(dl_store, qoid, "VERIFIED")
                 has_unacked.add("qe")
-                actions.append("order filed qe IMPL READY (oid %s)" % qoid)
-                qo_store = {"for": impl_ts}
-                if ("qe" not in deaf and probes["qe"].startswith("IDLE")
-                        and not session_rung(actions, SESS["qe"], cycle["rung"])):
-                    res = ring(ctx, SESS["qe"], "qe", "IMPL READY verification",
-                               oid=qoid, issue=issue)
-                    actions.append(res)
-                    if res.startswith(("rang ", "WOULD ring ")):
-                        rings[qoid] = 1
             else:
-                actions.append("NOTE-FAILED qe IMPL READY #%d" % issue)
-        events.append("qe-order-filed")
+                if append_box_note(room_dir, "qe", note):
+                    rings[qoid] = 0
+                    file_order_deadline(ad_store, qoid)
+                    file_order_delivery(dl_store, qoid, "VERIFIED")
+                    has_unacked.add("qe")
+                    actions.append("order filed qe IMPL READY (oid %s)" % qoid)
+                    qo_store = {"for": impl_ts}
+                    if ("qe" not in deaf and probes["qe"].startswith("IDLE")
+                            and not session_rung(actions, SESS["qe"], cycle["rung"])):
+                        res = ring(ctx, SESS["qe"], "qe", "IMPL READY verification",
+                                   oid=qoid, issue=issue)
+                        actions.append(res)
+                        if res.startswith(("rang ", "WOULD ring ")):
+                            rings[qoid] = 1
+                else:
+                    actions.append("NOTE-FAILED qe IMPL READY #%d" % issue)
+            events.append("qe-order-filed")
 
     dec = auditor_decision(boxes["auditor"]["all"], boxes["auditor"].get("full"))
     _c_done = dev_done_ts(boxes["dev"]["all"])
@@ -5431,12 +5506,27 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                        % (issue, _rf_stored.get("oid")))
                         events.append("refresh-unanswered")
                     else:
+                        _rf_key = "dev-refresh|%s" % (_c_done or _c_pre_branch)
+                        _rf_sig = refire_sig(dev_done_ts(boxes["dev"]["all"]),
+                                             _c_tip_early, st.get("phase"), _c_pre_branch)
+                        _rf_allow, _rf_need, _rf_entry = refire_check(
+                            (st.get("refire") or {}).get(_rf_key), _rf_sig)
+                        if rc_store is None:
+                            rc_store = dict(st.get("refire") or {})
+                        rc_store[_rf_key] = _rf_entry
                         _rf_text = ("REFRESH #%d: branch %s is stale (engine commits in merge path, behind main); "
                                     "run: git fetch origin && git rebase --onto origin/main <engine-base> %s && git push --force-with-lease origin %s; "
                                     "then post DONE with the new tip; ACK it with post_update ref=<id> before starting"
                                     % (issue, _c_pre_branch, _c_pre_branch, _c_pre_branch))
                         _rf_note, _rf_oid = coord_note("dev", _rf_text, ack_by=True, done_by=True, evidence="DONE")
-                        if _rf_oid in rings:
+                        if not _rf_allow:
+                            if _rf_need:
+                                actions.append("NEED dev REFRESH #%d capped (%d identical filings, no state advance: branch %s still stale behind main, no new DELIVER/DONE, tip/phase unchanged); quiet until DONE/tip/phase moves"
+                                               % (issue, _rf_entry["count"], _c_pre_branch))
+                                events.append("refire-capped-dev-refresh")
+                            else:
+                                actions.append("refire suppressed dev REFRESH #%d (capped, sig unchanged; quiet until advance)" % issue)
+                        elif _rf_oid in rings:
                             actions.append("order deferred dev REFRESH #%d (oid collision)" % issue)
                         elif ctx.dry:
                             actions.append("WOULD post dev REFRESH order #%d (oid %s)" % (issue, _rf_oid))
@@ -5504,49 +5594,105 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 if _c_brok and not _c_tip:
                     _c_tip = (_bro.strip().splitlines() or [""])[0]
             if not _c_branch or not _c_brok or not _c_tip:
-                actions.append("NEED closeout #%d: branch unverifiable (%s); name branch: in DONE or READY artifacts"
-                               % (issue, _c_branch or "none"))
-                events.append("closeout-branch-missing")
-                _bq_stored = st.get("closeout_bq") or {}
-                _bq_oid0 = _bq_stored.get("oid")
-                _bq_live = _bq_oid0 and rings.get(_bq_oid0) not in (None, -1, RING_ESCALATED)
-                if _bq_stored.get("for") == _c_done and _bq_live:
-                    actions.append("order deferred closeout branch-name #%d (already filed %s)"
-                                   % (issue, _bq_oid0))
-                elif _bq_stored.get("for") == _c_done and _bq_oid0 in (rings or {}):
-                    actions.append("NEED closeout branch-name #%d unanswered (order %s ACKed, no branch posted)"
-                                   % (issue, _bq_oid0))
-                    events.append("closeout-branch-unanswered")
-                else:
-                    _bq_text = ("CLOSEOUT #%d: reply with two standalone lines branch: <step-a branch> + tip: <audited sha> "
-                                "(the branch carrying this room's DONE work and its audited tip); "
-                                "ACK it with post_update ref=<id> before starting" % issue)
-                    _bq_lane = "qe" if _scope == "testing-only" else "dev"
-                    _bq_note, _bq_oid = coord_note(_bq_lane, _bq_text, ack_by=True)
-                    if _bq_oid in rings:
-                        actions.append("order deferred closeout branch-name #%d (oid collision)" % issue)
+                _tc_term = testing_terminal_due(_scope, _c_stage, _c_qv, _c_approved)
+                if _tc_term:
+                    # Terminal path for testing-only rooms (#497): no branch
+                    # can ever exist (QE owns the work, #483); readiness =
+                    # qe VERIFIED tip + audit decision. File a DONE-confirm
+                    # to qe (no merge, no branch) and record closeout so it
+                    # does not refile.
+                    _tc_text = closeout_done_confirm_text(
+                        issue, _c_qv_tip or _c_tip or "")
+                    _tc_note, _tc_oid = coord_note(
+                        "qe", _tc_text, ack_by=True, done_by=True, evidence="DONE")
+                    if _tc_oid in rings:
+                        actions.append("order deferred closeout DONE-confirm #%d (oid collision)" % issue)
                     elif ctx.dry:
-                        actions.append("WOULD post %s branch-name order #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
-                        rings[_bq_oid] = 0
-                        has_unacked.add(_bq_lane)
-                        file_order_deadline(ad_store, _bq_oid)
-                        bq_store = {"for": _c_done, "oid": _bq_oid}
-                        events.append("closeout-branch-order-filed")
-                    elif append_box_note(room_dir, _bq_lane, _bq_note):
-                        rings[_bq_oid] = 0
-                        has_unacked.add(_bq_lane)
-                        file_order_deadline(ad_store, _bq_oid)
-                        bq_store = {"for": _c_done, "oid": _bq_oid}
-                        actions.append("order filed %s branch-name #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
-                        if (_bq_lane not in deaf and probes[_bq_lane].startswith("IDLE")
-                                and not session_rung(actions, SESS[_bq_lane], cycle["rung"])):
-                            _bq_res = ring(ctx, SESS[_bq_lane], _bq_lane, "closeout branch-name order",
-                                           oid=_bq_oid, issue=issue)
-                            actions.append(_bq_res)
-                            if _bq_res.startswith(("rang ", "WOULD ring ")):
-                                rings[_bq_oid] = 1
+                        actions.append("WOULD post qe DONE-confirm order #%d (oid %s)" % (issue, _tc_oid))
+                        rings[_tc_oid] = 0
+                        has_unacked.add("qe")
+                        file_order_deadline(ad_store, _tc_oid)
+                        file_order_delivery(dl_store, _tc_oid, "DONE")
+                        co_store = {"for": _c_done, "stage": _c_stage, "oid": _tc_oid,
+                                    "poll": int((st.get("closeout") or {}).get("poll") or 0)}
+                        events.append("closeout-done-confirm-filed")
+                    elif append_box_note(room_dir, "qe", _tc_note):
+                        rings[_tc_oid] = 0
+                        has_unacked.add("qe")
+                        file_order_deadline(ad_store, _tc_oid)
+                        file_order_delivery(dl_store, _tc_oid, "DONE")
+                        co_store = {"for": _c_done, "stage": _c_stage, "oid": _tc_oid,
+                                    "poll": int((st.get("closeout") or {}).get("poll") or 0)}
+                        actions.append("order filed qe DONE-confirm #%d (oid %s)" % (issue, _tc_oid))
+                        if ("qe" not in deaf and probes["qe"].startswith("IDLE")
+                                and not session_rung(actions, SESS["qe"], cycle["rung"])):
+                            _tc_res = ring(ctx, SESS["qe"], "qe", "closeout DONE-confirm order",
+                                           oid=_tc_oid, issue=issue)
+                            actions.append(_tc_res)
+                            if _tc_res.startswith(("rang ", "WOULD ring ")):
+                                rings[_tc_oid] = 1
+                        events.append("closeout-done-confirm-filed")
                     else:
-                        actions.append("NOTE-FAILED %s branch-name #%d" % (_bq_lane, issue))
+                        actions.append("NOTE-FAILED qe DONE-confirm #%d" % issue)
+                else:
+                    actions.append("NEED closeout #%d: branch unverifiable (%s); name branch: in DONE or READY artifacts"
+                                   % (issue, _c_branch or "none"))
+                    events.append("closeout-branch-missing")
+                    _bq_stored = st.get("closeout_bq") or {}
+                    _bq_oid0 = _bq_stored.get("oid")
+                    _bq_live = _bq_oid0 and rings.get(_bq_oid0) not in (None, -1, RING_ESCALATED)
+                    if _bq_stored.get("for") == _c_done and _bq_live:
+                        actions.append("order deferred closeout branch-name #%d (already filed %s)"
+                                       % (issue, _bq_oid0))
+                    elif _bq_stored.get("for") == _c_done and _bq_oid0 in (rings or {}):
+                        actions.append("NEED closeout branch-name #%d unanswered (order %s ACKed, no branch posted)"
+                                       % (issue, _bq_oid0))
+                        events.append("closeout-branch-unanswered")
+                    else:
+                        _rf_key = "closeout-branch-name|%s" % (_c_done or _c_stage)
+                        _rf_sig = refire_sig(_c_qv_raw, _c_done, _c_tip or "", st.get("phase"))
+                        _rf_allow, _rf_need, _rf_entry = refire_check(
+                            (st.get("refire") or {}).get(_rf_key), _rf_sig)
+                        if rc_store is None:
+                            rc_store = dict(st.get("refire") or {})
+                        rc_store[_rf_key] = _rf_entry
+                        _bq_text = ("CLOSEOUT #%d: reply with two standalone lines branch: <step-a branch> + tip: <audited sha> "
+                                    "(the branch carrying this room's DONE work and its audited tip); "
+                                    "ACK it with post_update ref=<id> before starting" % issue)
+                        _bq_lane = "qe" if _scope == "testing-only" else "dev"
+                        _bq_note, _bq_oid = coord_note(_bq_lane, _bq_text, ack_by=True)
+                        if not _rf_allow:
+                            if _rf_need:
+                                actions.append("NEED closeout branch-name #%d capped (%d identical filings, no state advance: no new VERIFIED/DELIVER/DONE, tip %s, phase %s; branch still unverifiable [%s]); quiet until DONE/tip/phase moves"
+                                               % (issue, _rf_entry["count"], _c_tip or "?",
+                                                  st.get("phase"), _c_branch or "none"))
+                                events.append("refire-capped-closeout-branch-name")
+                            else:
+                                actions.append("refire suppressed closeout branch-name #%d (capped, sig unchanged; quiet until advance)" % issue)
+                        elif _bq_oid in rings:
+                            actions.append("order deferred closeout branch-name #%d (oid collision)" % issue)
+                        elif ctx.dry:
+                            actions.append("WOULD post %s branch-name order #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
+                            rings[_bq_oid] = 0
+                            has_unacked.add(_bq_lane)
+                            file_order_deadline(ad_store, _bq_oid)
+                            bq_store = {"for": _c_done, "oid": _bq_oid}
+                            events.append("closeout-branch-order-filed")
+                        elif append_box_note(room_dir, _bq_lane, _bq_note):
+                            rings[_bq_oid] = 0
+                            has_unacked.add(_bq_lane)
+                            file_order_deadline(ad_store, _bq_oid)
+                            bq_store = {"for": _c_done, "oid": _bq_oid}
+                            actions.append("order filed %s branch-name #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
+                            if (_bq_lane not in deaf and probes[_bq_lane].startswith("IDLE")
+                                    and not session_rung(actions, SESS[_bq_lane], cycle["rung"])):
+                                _bq_res = ring(ctx, SESS[_bq_lane], _bq_lane, "closeout branch-name order",
+                                               oid=_bq_oid, issue=issue)
+                                actions.append(_bq_res)
+                                if _bq_res.startswith(("rang ", "WOULD ring ")):
+                                    rings[_bq_oid] = 1
+                        else:
+                            actions.append("NOTE-FAILED %s branch-name #%d" % (_bq_lane, issue))
             else:
                 bq_store = {}
                 _c_text = closeout_order_text(issue, _c_stage, _c_branch, _c_tip)
@@ -5728,7 +5874,23 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                         else:
                             _cl_text = ("CLEAN #%d: make the testbed checkout clean so qe-merge can stage (save a patch of local mods to /tmp, git checkout -- tracked files, move untracked other-lane files to /tmp); then post DONE cleaned; ACK it with post_update ref=<id> before starting" % issue)
                             _cl_note, _cl_oid = coord_note("qe", _cl_text, ack_by=True, done_by=True, evidence="DONE")
-                            if _cl_oid in rings:
+                            _rf_key = "qe-clean|%s" % ts
+                            _rf_sig = refire_sig(qe_verified_ts(boxes["qe"]["all"]),
+                                                 dev_done_ts(boxes["dev"]["all"]),
+                                                 _cl_tree, st.get("phase"))
+                            _rf_allow, _rf_need, _rf_entry = refire_check(
+                                (st.get("refire") or {}).get(_rf_key), _rf_sig)
+                            if rc_store is None:
+                                rc_store = dict(st.get("refire") or {})
+                            rc_store[_rf_key] = _rf_entry
+                            if not _rf_allow:
+                                if _rf_need:
+                                    actions.append("NEED qe CLEAN #%d capped (%d identical filings, no state advance: tree %s still dirty, no new VERIFIED/DELIVER/DONE, phase unchanged); quiet until cleaned/VERIFIED/tip/phase moves"
+                                                   % (issue, _rf_entry["count"], _cl_tree))
+                                    events.append("refire-capped-qe-clean")
+                                else:
+                                    actions.append("refire suppressed qe CLEAN #%d (capped, sig unchanged; quiet until advance)" % issue)
+                            elif _cl_oid in rings:
                                 actions.append("order deferred qe CLEAN #%d (oid collision)" % issue)
                             elif ctx.dry:
                                 actions.append("WOULD post qe CLEAN order #%d (oid %s)" % (issue, _cl_oid))
@@ -5770,7 +5932,23 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                 # below is the fail-safe.
                                 _pl_text = ("PULL #%d: testbed re-staged with origin/main after dev merge (dev WAITING QE); verify the staged tree per prompts/qe.txt + room pending and post VERIFIED; ACK it with post_update ref=<id> before starting" % issue)
                                 _pl_note, _pl_oid = coord_note("qe", _pl_text, ack_by=True, done_by=True, evidence="VERIFIED")
-                                if _pl_oid in rings:
+                                _rf_key = "qe-pull|%s" % ts
+                                _rf_sig = refire_sig(qe_verified_ts(boxes["qe"]["all"]),
+                                                     dev_done_ts(boxes["dev"]["all"]),
+                                                     _rs_main, st.get("phase"))
+                                _rf_allow, _rf_need, _rf_entry = refire_check(
+                                    (st.get("refire") or {}).get(_rf_key), _rf_sig)
+                                if rc_store is None:
+                                    rc_store = dict(st.get("refire") or {})
+                                rc_store[_rf_key] = _rf_entry
+                                if not _rf_allow:
+                                    if _rf_need:
+                                        actions.append("NEED qe PULL #%d capped (%d identical filings, no state advance: staged tree %s unverified, no new VERIFIED/DELIVER/DONE, main tip/phase unchanged); quiet until VERIFIED/tip/phase moves"
+                                                       % (issue, _rf_entry["count"], _rs_main or "?"))
+                                        events.append("refire-capped-qe-pull")
+                                    else:
+                                        actions.append("refire suppressed qe PULL #%d (capped, sig unchanged; quiet until advance)" % issue)
+                                elif _pl_oid in rings:
                                     actions.append("order deferred qe PULL #%d (oid collision)" % issue)
                                 elif append_box_note(room_dir, "qe", _pl_note):
                                     rings[_pl_oid] = 0
@@ -6065,7 +6243,23 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     elif reverify_due(_rv_head, _rv_done, st.get("qe_reverify"), bool(st.get("halt"))):
         _rv_text = ("RE-VERIFY #%d: testbed re-staged @ %s; run the verification gates per prompts/qe.txt + room pending and post VERIFIED with tip: + diff present: + branch:; ACK it with post_update ref=<id> before starting" % (issue, _rv_head))
         _rv_note, _rv_oid = coord_note("qe", _rv_text, ack_by=True, done_by=True, evidence="VERIFIED")
-        if _rv_oid in rings:
+        _rf_key = "qe-reverify|%s" % _rv_head
+        _rf_sig = refire_sig(qe_verified_ts(boxes["qe"]["all"]),
+                             dev_done_ts(boxes["dev"]["all"]),
+                             _rv_head, st.get("phase"))
+        _rf_allow, _rf_need, _rf_entry = refire_check(
+            (st.get("refire") or {}).get(_rf_key), _rf_sig)
+        if rc_store is None:
+            rc_store = dict(st.get("refire") or {})
+        rc_store[_rf_key] = _rf_entry
+        if not _rf_allow:
+            if _rf_need:
+                actions.append("NEED qe RE-VERIFY #%d capped (%d identical filings, no state advance: staged tip %s unverified, no new VERIFIED/DELIVER/DONE, tip/phase unchanged); quiet until VERIFIED/tip/phase moves"
+                               % (issue, _rf_entry["count"], _rv_head))
+                events.append("refire-capped-qe-reverify")
+            else:
+                actions.append("refire suppressed qe RE-VERIFY #%d (capped, sig unchanged; quiet until advance)" % issue)
+        elif _rv_oid in rings:
             actions.append("order deferred qe RE-VERIFY #%d (oid collision)" % issue)
         elif ctx.dry:
             actions.append("WOULD post qe RE-VERIFY order #%d (oid %s)" % (issue, _rv_oid))
@@ -6303,6 +6497,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s["refresh"] = rf_store
             else:
                 s.pop("refresh", None)
+        if isinstance(rc_store, dict) and rc_store:
+            s["refire"] = rc_store
         if isinstance(loop_store, dict):
             if loop_store:
                 s["loop"] = loop_store
@@ -9576,6 +9772,38 @@ def mode_self_test():
           audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T19:00:00Z"},
                            [(477, "/r", {"audit_pending": {"since": "2026-11-05T18:00:00Z"},
                                          "state": "CLOSING"})]) == 491, True)
+    check("refire-sig-joins",
+          refire_sig("2026-11-05T19:00:00Z", None, "abc1234", "VERIFY") == "2026-11-05T19:00:00Z||abc1234|VERIFY", True)
+    _rf1 = refire_check({}, "s1")
+    check("refire-first-files",
+          _rf1 == (True, False, {"count": 1, "sig": "s1"}), True)
+    _rf2 = refire_check(_rf1[2], "s1")
+    check("refire-second-files",
+          _rf2 == (True, False, {"count": 2, "sig": "s1"}), True)
+    _rf3 = refire_check(_rf2[2], "s1")
+    check("refire-cap-needs-once",
+          _rf3 == (False, True, {"count": 3, "sig": "s1"}), True)
+    check("refire-beyond-cap-quiets",
+          refire_check(_rf3[2], "s1") == (False, False, {"count": 4, "sig": "s1"}), True)
+    check("refire-advance-resets",
+          refire_check(_rf3[2], "s2") == (True, False, {"count": 1, "sig": "s2"}), True)
+    check("refire-record-merges-keys",
+          refire_record({"a": {"count": 3, "sig": "s"}}, "b", {"count": 1, "sig": "t"})
+          == {"a": {"count": 3, "sig": "s"}, "b": {"count": 1, "sig": "t"}}, True)
+    check("testing-terminal-due-true",
+          testing_terminal_due("testing-only", "merge-close", "2026-11-05T19:00:00Z", True) is True, True)
+    check("testing-terminal-due-full-scope",
+          testing_terminal_due("full", "merge-close", "2026-11-05T19:00:00Z", True) is False, True)
+    check("testing-terminal-due-no-verify",
+          testing_terminal_due("testing-only", "merge-close", None, True) is False, True)
+    check("testing-terminal-due-no-approval",
+          testing_terminal_due("testing-only", "merge-close", "2026-11-05T19:00:00Z", False) is False, True)
+    check("testing-terminal-due-wrong-stage",
+          testing_terminal_due("testing-only", "verify", "2026-11-05T19:00:00Z", True) is False, True)
+    check("testing-terminal-text-shape",
+          "DONE-confirm" in closeout_done_confirm_text(470, "4d8798b62")
+          and "4d8798b62" in closeout_done_confirm_text(470, "4d8798b62")
+          and "merge %s into" % "470" not in closeout_done_confirm_text(470, "4d8798b62"), True)
     check("audit-ring-0", audit_ring_action(0) == "ring", True)
     check("audit-ring-2", audit_ring_action(2) == "ring", True)
     check("audit-ring-3-escalate", audit_ring_action(3) == "escalate", True)
