@@ -16,6 +16,7 @@ typedef enum {
     DRV_OP_POLL = 3,
     DRV_OP_MODE_SET = 4,
     DRV_OP_PRESENT = 5,
+    DRV_OP_MAP_SHM = 6,
     DRV_OP_INJECT_FAULT = 240,
 } drv_op_t;
 
@@ -48,5 +49,14 @@ static inline int drv_recv(void *buf, unsigned long max_size,
                            unsigned long timeout_ticks) {
     return ipc_recv_timeout(buf, max_size, timeout_ticks);
 }
+
+/* Serial TX SHM ring (issue #51 step-c-prime, mirrors the kernel
+ * SharedRingHeader layout byte-for-byte — see src/kernel/ipc/shm_ring.hpp;
+ * keep in sync: magic/version/capacity/element_size + 64 B-aligned
+ * head/tail. Element: {uint8 len, char data[7]}. */
+#define SERIAL_TX_RING_ESZ 8
+#define SERIAL_TX_RING_MAGIC 0x4E455852494E47UL
+#define SERIAL_TX_RING_VERSION 1
+#define SERIAL_TX_NOTIFY 0x5458
 
 #endif

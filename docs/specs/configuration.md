@@ -230,6 +230,15 @@ are mutually exclusive (single block owner); fb/block/net PD knobs fail
 closed until the S4/S5/S6 SDF rows land. See `docs/specs/driver-pds.md`,
 `docs/specs/timer-srv.md`, `docs/specs/vfs-srv.md`, `docs/specs/block-srv.md`.
 
+### 1.12.1 Serial TX via SHM ring (issue #51, step-c-prime)
+`CONFIG_SERIAL_TX_SHM` (0) · 0|1 `#error`-guarded.
+1 = kernel console TX pushes into the SDF-composed SHM SPSC ring and
+drv-serial drains to UART (bounded, drop-on-full with counter,
+empty-to-nonempty NOTIFY); 0 = 51c behavior (per-char WRITE RPC when
+`CONFIG_DRIVER_PD_SERIAL`, else raw UART). Reversibility knob: the ring
+path needs re-audit (rescope per operator DECISION A). Wire contract:
+`docs/specs/driver-pds.md` §Wire/Serial TX ring.
+
 ### 1.13 Server PD externalization — term/log (issue #51, step a)
 `CONFIG_TERM_SRV` (0) · `CONFIG_LOG_SRV` (0) ·
 `CONFIG_TERM_SRV_FAULT_INJECT` (0) · `CONFIG_LOG_SRV_FAULT_INJECT` (0).

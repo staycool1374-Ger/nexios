@@ -1,12 +1,17 @@
-/* Driver PD: serial (issue #48 strangler step a + issue #51 step-c TX flip).
+/* Driver PD: serial (issue #48 strangler step a + issue #51 step-c TX flip
+ * + step-c-prime SHM-ring bulk TX).
  *
  * BIND conveys the PD's UART cap (arg0 = encoded MmioCap handle,
  * arg1 = phys base, arg2 = size, flags = cap count); the PD maps it once
  * (x86: SYS_IOPORT_GRANT + raw outb/inb; aarch64/riscv64: SYS_MMIO_MAP +
- * volatile MMIO) and serves polled DRV_OP_WRITE. Replies go to
- * req.owner_id (the send_sync requester queue — reply-to-1 is a dead
- * letter, issue #441 pattern). No logging on the serve path: the PD must
- * never block on a lock its kernel client may hold (§11.1).
+ * volatile MMIO) and serves polled DRV_OP_WRITE. MAP_SHM conveys the TX
+ * ring FrameCap (arg0 = encoded handle, arg1 = page count, arg2 = element
+ * size); the PD SYS_FRAME_MAPs it once and drains ring→UART every loop
+ * iteration (1-tick recv poll when mapped, block-forever when not — zero
+ * idle overhead before the channel is live). Replies go to req.owner_id
+ * (the send_sync requester queue — reply-to-1 is a dead letter, issue
+ * #441 pattern). No logging on the serve path: the PD must never block
+ * on a lock its kernel client may hold (§11.1).
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -20,6 +25,89 @@ static unsigned long g_uart_handle = 0;
 static unsigned long g_uart_phys = 0;
 static unsigned long g_uart_va = 0;
 static int g_uart_mapped = 0;
+
+/* TX SHM ring consumer (issue #51 step-c-prime). Layout mirrors the
+ * kernel SharedRingHeader (shm_ring.hpp): u64 magic/version/capacity/
+ * element_size, then 64 B-aligned head (producer) and tail (consumer).
+ * All shared fields are read with acquire semantics; the tail publish
+ * uses release after the payload copy (SPSC protocol). */
+struct tx_ring_header {
+    uint64_t magic;
+    uint64_t version;
+    uint64_t capacity;
+    uint64_t element_size;
+    uint8_t pad1[32];
+    volatile uint64_t head;
+    uint8_t pad2[56];
+    volatile uint64_t tail;
+    uint8_t pad3[56];
+};
+
+static unsigned long g_tx_handle = 0;
+static unsigned long g_tx_va = 0;
+static unsigned long g_tx_pages = 0;
+static int g_tx_mapped = 0;
+
+/* Forward: UART byte emitter defined below (per-arch). */
+static int uart_putc(unsigned char ch);
+
+static struct tx_ring_header *tx_hdr(void) {
+    return (struct tx_ring_header *)g_tx_va;
+}
+
+static int tx_valid(void) {
+    struct tx_ring_header *h = tx_hdr();
+    uint64_t magic = __atomic_load_n(&h->magic, __ATOMIC_ACQUIRE);
+    uint64_t version = __atomic_load_n(&h->version, __ATOMIC_ACQUIRE);
+    uint64_t cap = __atomic_load_n(&h->capacity, __ATOMIC_ACQUIRE);
+    uint64_t esz = __atomic_load_n(&h->element_size, __ATOMIC_ACQUIRE);
+    if (magic != SERIAL_TX_RING_MAGIC || version != SERIAL_TX_RING_VERSION)
+        return 0;
+    if (cap == 0 || (cap & (cap - 1)) != 0)
+        return 0; /* capacity must be a nonzero power of two (wrap mask) */
+    if (esz != SERIAL_TX_RING_ESZ)
+        return 0;
+    return 1;
+}
+
+/* Pop one element into dst (SERIAL_TX_RING_ESZ bytes). Returns 1 on
+ * data, 0 on empty/invalid. */
+static int tx_pop(unsigned char *dst) {
+    struct tx_ring_header *h = tx_hdr();
+    uint64_t cap = __atomic_load_n(&h->capacity, __ATOMIC_ACQUIRE);
+    uint64_t esz = __atomic_load_n(&h->element_size, __ATOMIC_ACQUIRE);
+    if (cap == 0 || esz == 0)
+        return 0;
+    uint64_t head = __atomic_load_n(&h->head, __ATOMIC_ACQUIRE);
+    uint64_t tail = __atomic_load_n(&h->tail, __ATOMIC_RELAXED);
+    if (head == tail)
+        return 0;
+    unsigned char *base = (unsigned char *)g_tx_va + 4096;
+    unsigned long off = (unsigned long)(((tail / esz) * esz) & (cap - 1));
+    unsigned char *src = base + off;
+    for (unsigned long i = 0; i < esz; i++)
+        dst[i] = src[i];
+    __atomic_store_n(&h->tail, tail + esz, __ATOMIC_RELEASE);
+    return 1;
+}
+
+/* Drain the ring to UART, preserving order. Stops (fail-closed) on the
+ * first UART stall, leaving the remainder for the next loop iteration;
+ * bytes already popped were already emitted, so no duplication. */
+static void tx_drain(void) {
+    unsigned char elem[SERIAL_TX_RING_ESZ];
+    if (!g_tx_mapped)
+        return; /* no ring yet: header reads would fault (NULL VA) */
+    while (tx_pop(elem)) {
+        unsigned long n = elem[0];
+        if (n > SERIAL_TX_RING_ESZ - 1)
+            n = SERIAL_TX_RING_ESZ - 1; /* hostile len: clamp, never OOB */
+        for (unsigned long i = 0; i < n; i++) {
+            if (uart_putc(elem[1 + i]) != 0)
+                return;
+        }
+    }
+}
 
 /* 16550 LSR layout (x86 COM1 + riscv64 virt UART): register offsets from
  * the UART base conveyed by the kernel SDF row (arch::device COM1/UART0
@@ -131,7 +219,12 @@ int main(void) {
 
     static unsigned char rbuf[64];
     for (;;) {
-        int rc = drv_recv(rbuf, sizeof(rbuf), 0);
+        tx_drain();
+        /* 1-tick poll once the ring is live (bounded drain latency for
+         * both RPCs and TX bytes); block forever before MAP (zero idle
+         * overhead — the NOTIFY is a latency optimization, the poll is
+         * the liveness backstop, so a lost notify costs one tick). */
+        int rc = drv_recv(rbuf, sizeof(rbuf), g_tx_mapped ? 1 : 0);
         if (rc < 0)
             continue; // fail-closed: no reply on transport error
         struct DriverRpc req;
@@ -175,6 +268,48 @@ int main(void) {
             }
             rep.arg0 = (uint64_t)1;
             break;
+        case DRV_OP_MAP_SHM: {
+            unsigned long pages = (unsigned long)req.arg1;
+            /* Wire contract: fixed 8 B elements (kernel
+             * kSerialTxRingElemSize); anything else is a version skew —
+             * fail closed, never map a ring we cannot parse. */
+            if ((unsigned long)req.arg2 != SERIAL_TX_RING_ESZ || pages < 2) {
+                rep.status = (uint16_t)(uint16_t)-22;
+                break;
+            }
+            if (g_tx_mapped && (unsigned long)req.arg0 == g_tx_handle) {
+                rep.arg0 = (uint64_t)1; /* idempotent re-MAP */
+                break;
+            }
+            if (g_tx_mapped) {
+                /* New handle under us (restart re-derive): drop the old
+                 * mapping before taking the new one — never double-map. */
+                __syscall5(SYS_FRAME_UNMAP, (long)g_tx_va, 0, 0, 0);
+                g_tx_mapped = 0;
+                g_tx_handle = 0;
+                g_tx_va = 0;
+                g_tx_pages = 0;
+            }
+            long va = __syscall5(SYS_FRAME_MAP, (long)req.arg0, 0, 0, 0);
+            if (va == 0 || va == -1) {
+                rep.status = (uint16_t)(uint16_t)-5;
+                break;
+            }
+            g_tx_va = (unsigned long)va;
+            if (!tx_valid()) {
+                /* Torn/hostile header: unmap, never consume. The frames
+                 * stay composed; a later re-MAP may succeed. */
+                __syscall5(SYS_FRAME_UNMAP, (long)g_tx_va, 0, 0, 0);
+                g_tx_va = 0;
+                rep.status = (uint16_t)(uint16_t)-5;
+                break;
+            }
+            g_tx_handle = (unsigned long)req.arg0;
+            g_tx_pages = pages;
+            g_tx_mapped = 1;
+            rep.arg0 = (uint64_t)1;
+            break;
+        }
         default:
             rep.status = (uint16_t)(uint16_t)-38;
             break;

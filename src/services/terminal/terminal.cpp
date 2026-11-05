@@ -25,7 +25,7 @@
 #include <version.hpp>
 #include <string.hpp>
 #include <constants.hpp>
-#if CONFIG_DRIVER_PD_SERIAL
+#if CONFIG_DRIVER_PD_SERIAL || CONFIG_SERIAL_TX_SHM
 #include <kernel/arch/cpu_context.hpp>
 #include <kernel/driver/driver_pds.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -93,6 +93,47 @@ bool serial_pd_try_putchar(char c) {
 } // namespace
 #endif
 
+#if CONFIG_SERIAL_TX_SHM
+namespace {
+// Lazy SHM-ring bind (issue #51 step-c-prime): the first TX attempt binds
+// the PD (UART conveyance) and maps the ring (FrameCap conveyance), and
+// every PD restart (epoch bump) re-binds + re-maps. BIND/MAP are bounded
+// RPCs — needed only on epoch change; the steady-state push is
+// lock-free and ISR-safe (SPSC push + Notify, both IRQ-path proven).
+bool g_shm_bound = false;
+uint32_t g_shm_bound_epoch = 0;
+
+/// @brief Transmit one char via the SHM TX ring (bounded, fail-closed).
+/// @return true when the ring channel is live (PD owns the byte stream
+/// from here — drops are counted, never duplicated to the raw path),
+/// false for the 51c/raw fallback below.
+bool serial_tx_try_putchar(char c) {
+    using kernel::sdf::PdRole;
+    if (!kernel::sdf::pd_owns_device(PdRole::SERIAL)) {
+        return false;
+    }
+    const uint32_t epoch = kernel::driver_pds::pd_epoch();
+    if (!g_shm_bound || epoch != g_shm_bound_epoch) {
+        if (kernel::isr_nesting_own() != 0) {
+            return false; // bind RPCs block (§11.1); push alone is ISR-safe
+        }
+        if (!kernel::driver_pds::pd_bind(PdRole::SERIAL)) {
+            return false;
+        }
+        if (!kernel::driver_pds::pd_bind_shm(PdRole::SERIAL)) {
+            g_shm_bound = false;
+            return false;
+        }
+        g_shm_bound = true;
+        g_shm_bound_epoch = epoch;
+        kernel::Logger::info("terminal: serial TX via SHM ring");
+    }
+    return kernel::driver_pds::serial_tx_write(&c, 1);
+}
+
+} // namespace
+#endif
+
 Terminal* Terminal::instance_ = nullptr;
 
 void Terminal::init() {
@@ -116,6 +157,16 @@ void Terminal::init() {
 }
 
 static void serial_putchar(char c) {
+#if CONFIG_SERIAL_TX_SHM
+    // Issue #51 step-c-prime: SHM-ring bulk TX first (lock-free push,
+    // PD drains to UART); on a dead/uncomposed ring falls through to the
+    // 51c per-char RPC, then raw. The raw path stays the panic/ISR
+    // fallback (Logger::raw_write bypasses Terminal entirely, so panic
+    // never reaches any PD path).
+    if (serial_tx_try_putchar(c)) {
+        return;
+    }
+#endif
 #if CONFIG_DRIVER_PD_SERIAL
     // Issue #51 step-c: PD-owned TX when safe to block; the raw path
     // below stays the panic/ISR fallback (Logger::raw_write bypasses

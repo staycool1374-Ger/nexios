@@ -5,7 +5,7 @@
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
     CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
-    CONFIG_PROCFS_SRV
+    CONFIG_PROCFS_SRV || CONFIG_SERIAL_TX_SHM
 
 #include <kernel/task/task.hpp>
 #include <kernel/arch/hal/device_regions.hpp>
@@ -17,6 +17,9 @@
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/virtio.hpp>
 #include <kernel/iommu/iommu.hpp>
+#include <kernel/memory/pmm.hpp>
+#include <kernel/memory/address.hpp>
+#include <kernel/ipc/shm_ring.hpp>
 
 namespace kernel {
 namespace sdf {
@@ -27,6 +30,19 @@ namespace {
 CapSpec g_block_mmio[kMaxCapsPerRole] = {};
 uint64_t g_block_mmio_count = 0;
 bool g_block_dma = false;
+
+// TX-ring backing store (issue #51 step-c-prime): per-role ring phys +
+// page count for the SDF-composed SHM channel. Written by the SHM mint
+// path at boot compose + restart rebind (fresh frames every time — never
+// inherited), read by the kernel TX producer. Roles ≥ 6 never carry SHM.
+uint64_t g_shm_tx_phys[6] = {};
+uint64_t g_shm_tx_pages[6] = {};
+// Last SHM mint record: mint_one stages (phys, pages) here; sdf_compose
+// copies them into the role cells only after the whole row composes
+// (all-or-nothing — a failed row leaves the role cells cleared, and the
+// producer fail-closes to the raw path).
+uint64_t g_last_shm_phys = 0;
+uint64_t g_last_shm_pages = 0;
 
 /// @brief Mint one CapSpec into the task CSpace (all-or-nothing caller).
 /// @return slot index or -1. Created caps are disposed by the caller on
@@ -83,10 +99,51 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
         type = cap::CapType::Frame;
         break;
     }
+    case CapKind::SHM: {
+        // TX-ring channel (issue #51 step-c-prime): allocate fresh user
+        // frames, pin them in a FrameCap, and install it in the PD CSpace.
+        // spec.size carries the total byte size; the page count rounds up
+        // (header page + data pages, minimum 2). The header is initialised
+        // here via the HHDM alias while the pages are still pristine —
+        // the PD validates it on MAP and never trusts a torn header.
+        // FrameCap::dispose frees the frames (is_user), so rollback and
+        // PD-death teardown reclaim them; the kernel producer holds no
+        // mapping (HHDM alias only) and re-resolves phys per epoch.
+        if (spec.size == 0) {
+            return -1;
+        }
+        const size_t pages =
+            (spec.size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+        if (pages < 2) {
+            return -1;
+        }
+        const uint64_t phys = PMM::alloc_user_contiguous(pages);
+        if (phys == 0) {
+            return -1;
+        }
+        auto *cap = cap::FrameCap::create(phys, pages, true);
+        if (cap == nullptr) {
+            for (size_t i = 0; i < pages; ++i) {
+                PMM::free_page(phys + i * arch::PAGE_SIZE);
+            }
+            return -1;
+        }
+        auto *hdr = reinterpret_cast<shm::SharedRingHeader *>(
+            arch::HHDM_OFFSET + phys);
+        shm::shm_ring_init(hdr, pages, kSerialTxRingElemSize);
+        if (!shm::shm_ring_valid(hdr)) {
+            cap->release();
+            return -1;
+        }
+        g_last_shm_phys = phys;
+        g_last_shm_pages = pages;
+        obj = cap;
+        type = cap::CapType::Frame;
+        break;
+    }
     case CapKind::MSIX:
-    case CapKind::SHM:
-        // Reserved rows (MSI-X entry claim, SHM channels): wired when the
-        // first PD needs them; never silently mapped to another kind.
+        // Reserved row (MSI-X entry claim): wired when the first PD needs
+        // it; never silently mapped to another kind.
         return -1;
     }
     const cap::CapRights rights =
@@ -114,6 +171,16 @@ void rollback(TaskControlBlock &task, const int *slots, uint64_t count) {
 
 } // namespace
 
+bool sdf_shm_tx_phys(PdRole role, uint64_t &phys_out, uint64_t &pages_out) {
+    const uint64_t role_idx = static_cast<uint64_t>(role);
+    if (role_idx >= 6 || g_shm_tx_pages[role_idx] == 0) {
+        return false;
+    }
+    phys_out = g_shm_tx_phys[role_idx];
+    pages_out = g_shm_tx_pages[role_idx];
+    return phys_out != 0;
+}
+
 uint64_t sdf_row(PdRole role, CapSpec *out) {
     if (out == nullptr) {
         return 0;
@@ -132,6 +199,14 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
 #elif defined(CONFIG_ARCH_RISCV64)
         out[n++] = CapSpec{CapKind::MMIO, arch::device::UART0_BASE, 0x1000,
                            0, 0};
+#endif
+#if CONFIG_SERIAL_TX_SHM
+        // Step-c-prime: SHM TX-ring channel endpoint (issue #51 option A).
+        // The SHM spec is always last (index 1); pd_bind conveys the UART
+        // cap (index 0) while pd_bind_shm conveys the ring FrameCap
+        // (index 1) via a dedicated MAP_SHM round.
+        out[n++] = CapSpec{CapKind::SHM, 0,
+                           kSerialTxRingPages * arch::PAGE_SIZE, 0, 0};
 #endif
         return n;
     }
@@ -337,6 +412,17 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
     }
     int slots[kMaxCapsPerRole] = {-1, -1, -1, -1, -1, -1};
     uint32_t gens[kMaxCapsPerRole] = {};
+    // Fail-closed TX-ring record (issue #51 step-c-prime): a fresh compose
+    // clears the role cells first; they are rewritten only after the whole
+    // row composes. A failed (re)compose therefore leaves no stale ring
+    // for the producer to push into.
+    const uint64_t role_idx0 = static_cast<uint64_t>(role);
+    if (role_idx0 < 6) {
+        g_shm_tx_phys[role_idx0] = 0;
+        g_shm_tx_pages[role_idx0] = 0;
+    }
+    g_last_shm_phys = 0;
+    g_last_shm_pages = 0;
     for (uint64_t i = 0; i < count; ++i) {
         const int slot = mint_one(task, specs[i], &gens[i]);
         if (slot < 0) {
@@ -357,6 +443,15 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
             g_role_gens[role_idx][i] = gens[i];
         }
         g_role_slot_count[role_idx] = count;
+        // Publish the TX-ring backing store (issue #51 step-c-prime):
+        // exactly one SHM spec per row, recorded only on full success.
+        for (uint64_t i = 0; i < count; ++i) {
+            if (specs[i].kind == CapKind::SHM) {
+                g_shm_tx_phys[role_idx] = g_last_shm_phys;
+                g_shm_tx_pages[role_idx] = g_last_shm_pages;
+                break;
+            }
+        }
     }
     return true;
 }

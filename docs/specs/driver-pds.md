@@ -41,6 +41,43 @@ epoch/owner id+gen/args/status. Control via `send_sync` (+FAST ≤48B);
 bulk via SPSC SHM. Bounded wait (`send_sync_bounded`, `kRpcGuardTicks`);
 epoch+gen-validated replies; tombstone drain for dead owners.
 
+### Serial TX ring (issue #51 step-c-prime, option A)
+
+Sync per-char `DRV_OP_WRITE` does not survive boot flood (1 IPC/char at
+SS(1,10) PD budget + unmutexed PD/raw UART sharing garbles; convicted
+live, 51c HELD UNMERGED). The TX path is a kernel SPSC ring drained by
+the PD instead:
+
+- SDF row: SERIAL carries the UART cap (index 0) + one SHM CapSpec
+  (index 1, `kSerialTxRingPages` pages, `CONFIG_SERIAL_TX_SHM`-gated).
+  `mint_one` allocates fresh user frames per compose/rebind (never
+  inherited), pins them in a `FrameCap`, installs it in the PD CSpace,
+  initialises the header via the HHDM alias, and records (phys, pages)
+  for the producer. Rollback/compose-failure clears the record —
+  fail-closed to the raw path.
+- Conveyance: BIND (index 0, UART) then MAP_SHM (index 1: arg0 =
+  encoded FrameCap handle, arg1 = pages, arg2 = 8 B elements). The PD
+  `SYS_FRAME_MAP`s once, validates the header (magic/version/pow2
+  capacity/element size — torn/hostile headers unmap + refuse), and
+  re-maps on a changed handle (unmap-then-map, never double-map).
+- Producer (kernel `serial_tx_write`): packs 7 bytes per 8 B element,
+  drops + counts past a full ring (the print path never blocks),
+  NOTIFYs the PD on empty→nonempty. Returns live-channel-true even on
+  drops: counted loss is the documented backpressure, a raw-path
+  fallback would duplicate bytes (the 51c garble).
+- Consumer (serial-pd drain loop): pops all → `uart_putc` per byte
+  (reused bounded poll; stops fail-closed on stall, remainder next
+  round — no duplication, order preserved). 1-tick recv poll when the
+  ring is mapped (bounded drain latency for RPCs and TX), block-forever
+  before MAP (zero idle overhead). The NOTIFY is a latency
+  optimization; the poll is the liveness backstop.
+- Epochs: PD restart bumps `pd_epoch`; the producer re-resolves phys
+  per epoch, BIND+MAP re-run once per epoch. Panic/ISR keep the raw
+  path (`Logger::raw_write` bypasses Terminal entirely).
+- Reversibility: `CONFIG_SERIAL_TX_SHM` (default 0). OFF = 51c
+  behavior (per-char WRITE RPC when `CONFIG_DRIVER_PD_SERIAL`, else
+  raw). Zero new syscalls (NOTIFY + `SYS_FRAME_MAP` exist).
+
 ## Boundaries (no double ownership)
 
 - #48 owns device caps + PD isolation; #51 owns emulation policy.
