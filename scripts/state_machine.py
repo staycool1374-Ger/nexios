@@ -335,12 +335,14 @@ def ack_scan_posts(role, boxes, handled, fresh):
     return []
 
 
-def match_ack(ref, role, boxes, rings, resume_now):
+def match_ack(ref, role, boxes, rings, resume_now, kind=None):
     """Classify a fresh ACK trailer. Pure. Returns (verdict, oid).
 
-    verdict is "ack" (clear exactly this oid), "ignore-malformed" (bad
-    shape or wrong lane), "ignore-stale" (not outstanding), or (None, None)
-    when there is no ref to classify.
+    verdict is "ack" (clear exactly this oid), "need-answers" (a NEED-kind
+    post references the order: blocked/refusal, the order stays live and
+    must not ledger-resolve, #484), "ignore-malformed" (bad shape or wrong
+    lane), "ignore-stale" (not outstanding), or (None, None) when there is
+    no ref to classify.
     """
     if not ref:
         return None, None
@@ -353,6 +355,8 @@ def match_ack(ref, role, boxes, rings, resume_now):
     if (boxes.get(role) or {}).get("coord_last"):
         cur = "%s:%s" % (role, boxes[role]["coord_last"][:19])
     if ref == cur or ref in rings or ref in resume_now.values():
+        if (kind or "").upper() == "NEED":
+            return "need-answers", ref
         return "ack", ref
     return "ignore-stale", ref
 
@@ -2746,6 +2750,45 @@ def qe_verified_tip(all_posts, full_lines=None):
     return None
 
 
+def foreign_verified_evidence(qe_boxes_by_issue, issue, testbed_tip):
+    """Issues (other than `issue`) with a QE VERIFIED post naming testbed_tip.
+
+    Pure (#484): qe_boxes_by_issue maps issue -> qe box dict (all/full).
+    A VERIFIED naming the shared checkout HEAD means that room's evidence
+    may live in the dirty tree, so CLEAN must not file until the evidence
+    is merged/stashed. Diff wording is free-form across lanes, so
+    tip-equality is the signal (fail-closed); the NEED names the rooms so
+    false positives clear fast.
+    """
+    out = []
+    for _iss, _qb in (qe_boxes_by_issue or {}).items():
+        if _iss == issue:
+            continue
+        _tip = qe_verified_tip((_qb or {}).get("all", []), (_qb or {}).get("full", []))
+        if not _tip or not testbed_tip:
+            continue
+        if _tip[:7] == (testbed_tip or "")[:7]:
+            out.append(_iss)
+    return sorted(out)
+
+
+def clean_refused_repeat(stored_clean, merged_for, ts, tree_hash):
+    """True when a prior CLEAN demonstrably had no effect. Pure (#484).
+
+    Same tree state, a newer trigger ts, and no merge intervened since the
+    stored CLEAN filed: re-filing would loop CLEAN->refuse->CLEAN while the
+    oid rotation hides it from the loop hash. Caller escalates instead.
+    """
+    stored_clean = stored_clean or {}
+    if not stored_clean.get("tree") or not tree_hash:
+        return False
+    if stored_clean.get("tree") != tree_hash:
+        return False
+    if stored_clean.get("for") == ts:
+        return False
+    return (stored_clean.get("for") or "") >= (merged_for or "")
+
+
 def tip_covers(ctx, verdict_tip, done_tip):
     """True when a verdict covers the DONE artifact. Pure-ish I/O.
 
@@ -2893,6 +2936,23 @@ def s11_gate(untracked, ls_tree_files, required_files):
     missing = s11_missing_files(ls_tree_files, required_files)
     has_un = bool(untracked)
     return (not has_un and not missing, missing, has_un)
+
+
+def s11_meson_files(build_text):
+    """String literals inside files() calls (issue #477 S1-1): the
+    load-bearing inputs a tip must contain (e.g. packaging file lists).
+    Scope is string literals only — loop-var files(src) and find-sources
+    are unresolvable and not load-bearing (S3-1). Leading ../ is stripped
+    so entries compare against repo-relative ls-tree paths."""
+    out = []
+    for m in re.finditer(r"files\s*\((.*?)\)", build_text or "", re.S):
+        for q in re.finditer(r"""['"]([^'"]+)['"]""", m.group(1)):
+            lit = q.group(1)
+            while lit.startswith("../"):
+                lit = lit[3:]
+            if lit and "$" not in lit and lit not in out:
+                out.append(lit)
+    return out
 
 
 def stale_refresh_due(branch_behind_main, engine_commits_in_path,
@@ -4112,14 +4172,20 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                     fresh_all[_wbox].append(_post)
     for role in LANES:
         for post in ack_scan_posts(role, boxes, handled, fresh_all.get(role, [])):
+            _akm = POST_RE.match(post)
+            _akind = _akm.group(3) if _akm else None
             ack_verdict, ack_ref = match_ack(post_ack(boxes[role]["full"], post),
-                                            role, boxes, rings, resume_now)
+                                            role, boxes, rings, resume_now,
+                                            kind=_akind)
             if ack_verdict is None:
                 continue
             if ack_verdict == "ignore-malformed":
                 actions.append("ack-ignored %s from %s (malformed or wrong lane)" % (ack_ref, role))
             elif ack_verdict == "ignore-stale":
                 actions.append("ack-ignored %s from %s (not outstanding)" % (ack_ref, role))
+            elif ack_verdict == "need-answers":
+                actions.append("NEED %s answers %s (blocked/refusal — order stays live, no ledger resolve)" % (role, ack_ref))
+                events.append("%s NEED-answers %s" % (role, ack_ref))
             else:
                 rings[ack_ref] = -1
                 actions.append("ack %s from %s" % (ack_ref, role))
@@ -5068,6 +5134,35 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                % (issue, len(_c_pre_untracked), ", ".join(_c_pre_untracked[:4])))
                 events.append("closeout-s11-untracked")
             try:
+                # S1-1 ls-tree half (issue #477): every meson files()
+                # literal must exist in the handover tip (the #53 miss:
+                # files('../userspace/pthread/pthread.c') absent from the
+                # pushed commit). Fail-closed NEED re-commit, same shape
+                # as the untracked half above; skips silently when the
+                # tip or the build files are unreadable (fail-open read,
+                # the auditor still gates the diff).
+                _c_s11_missing = []
+                _rcl, _outl = ctx.run(["git", "ls-tree", "-r", _c_pre_branch,
+                                       "--name-only"], timeout=30,
+                                      cwd=ctx.dev_dir)
+                if _rcl == 0:
+                    _c_req = []
+                    for _bf in ("packaging/meson.build", "src/meson.build"):
+                        try:
+                            with open(os.path.join(ctx.dev_dir, _bf)) as _fh:
+                                _c_req += s11_meson_files(_fh.read())
+                        except OSError:
+                            pass
+                    _c_s11_missing = s11_missing_files(
+                        (_outl or "").splitlines(), _c_req)
+                if _c_s11_missing:
+                    _c_s11_block = True
+                    actions.append("NEED re-commit #%d: %d meson files() input(s) missing from tip (%s); git add -A + amend before handover (#477 S1-1)"
+                                   % (issue, len(_c_s11_missing), ", ".join(_c_s11_missing[:4])))
+                    events.append("closeout-s11-missing")
+            except Exception:
+                pass
+            try:
                 _dev_blocked = "blocked" in (dev_next or "").lower()
                 _rcb2, _ = ctx.run(["git", "merge-base", "--is-ancestor", "main", _c_pre_branch],
                                    timeout=30, cwd=ctx.dev_dir)
@@ -5310,14 +5405,48 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                         actions.append("NEED qe-merge #%d: testbed checkout unknown" % issue)
                     elif dirty_q:
                         actions.append("NEED qe-merge #%d: testbed not clean; clean first" % issue)
+                        _cl_tree = hashlib.md5("\n".join(sorted(dirty_q)).encode()).hexdigest()[:8]
+                        _cl_evb = {}
+                        for _eiss, _erdir, _erst in (rooms_all or []):
+                            if _eiss == issue:
+                                continue
+                            if ((_erst or {}).get("state")) in ("CLOSED", "CLOSING"):
+                                continue
+                            if (_erst or {}).get("halt"):
+                                continue
+                            try:
+                                _cl_evb[_eiss] = load_boxes(_erdir)["qe"]
+                            except Exception:
+                                continue
+                        _cl_evr = foreign_verified_evidence(_cl_evb, issue, info_q[1])
+                        _cl_open = []
+                        for _eiss in _cl_evr:
+                            _ev_tip = qe_verified_tip((_cl_evb.get(_eiss) or {}).get("all", []),
+                                                       (_cl_evb.get(_eiss) or {}).get("full", []))
+                            try:
+                                _rcb, _ = ctx.run(["git", "merge-base", "--is-ancestor",
+                                                   _ev_tip, "origin/main"],
+                                                  timeout=30, cwd=qd)
+                                if _rcb != 0:
+                                    _cl_open.append(_eiss)
+                            except Exception:
+                                _cl_open.append(_eiss)
                         _cl_stored = st.get("qe_clean") or {}
                         _cl_oid0 = _cl_stored.get("oid")
                         _cl_live = _cl_oid0 and rings.get(_cl_oid0) not in (None, -1, RING_ESCALATED)
-                        if _cl_stored.get("for") == ts and _cl_live:
+                        if _cl_open:
+                            actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); merge/stash evidence first or use scratch clone -- CLEAN not filed"
+                                           % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1]))
+                            events.append("qe-clean-blocked-evidence")
+                        elif _cl_stored.get("for") == ts and _cl_live:
                             actions.append("order deferred qe CLEAN #%d (already filed %s)" % (issue, _cl_oid0))
                         elif _cl_stored.get("for") == ts and _cl_oid0 in (rings or {}):
                             actions.append("NEED qe CLEAN #%d unanswered (order %s ACKed, tree still dirty)" % (issue, _cl_oid0))
                             events.append("qe-clean-unanswered")
+                        elif clean_refused_repeat(_cl_stored, ((st.get("qe_merge") or {}).get("for") or ""), ts, _cl_tree):
+                            actions.append("NEED qe CLEAN refused-repeat #%d: tree state %s unchanged since %s (no merge intervened); operator decision -- merge/stash evidence first or authorize scratch"
+                                           % (issue, _cl_tree, _cl_stored.get("oid")))
+                            events.append("qe-clean-refused-repeat")
                         else:
                             _cl_text = ("CLEAN #%d: make the testbed checkout clean so qe-merge can stage (save a patch of local mods to /tmp, git checkout -- tracked files, move untracked other-lane files to /tmp); then post DONE cleaned; ACK it with post_update ref=<id> before starting" % issue)
                             _cl_note, _cl_oid = coord_note("qe", _cl_text, ack_by=True, done_by=True, evidence="DONE")
@@ -5329,14 +5458,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                 has_unacked.add("qe")
                                 file_order_deadline(ad_store, _cl_oid)
                                 file_order_delivery(dl_store, _cl_oid, "DONE")
-                                cl_store = {"for": ts, "oid": _cl_oid}
+                                cl_store = {"for": ts, "oid": _cl_oid, "tree": _cl_tree}
                                 events.append("qe-clean-order-filed")
                             elif append_box_note(room_dir, "qe", _cl_note):
                                 rings[_cl_oid] = 0
                                 has_unacked.add("qe")
                                 file_order_deadline(ad_store, _cl_oid)
                                 file_order_delivery(dl_store, _cl_oid, "DONE")
-                                cl_store = {"for": ts, "oid": _cl_oid}
+                                cl_store = {"for": ts, "oid": _cl_oid, "tree": _cl_tree}
                                 actions.append("order filed qe CLEAN #%d (oid %s)" % (issue, _cl_oid))
                                 if ("qe" not in deaf and probes["qe"].startswith("IDLE")
                                         and not session_rung(actions, SESS["qe"], cycle["rung"])):
@@ -5551,7 +5680,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         elif "starvation" in _lp.lower() or _starved_roles:
             _brk = "re-ring once, then escalate operator"
         elif "clean" in _lp.lower():
-            _brk = "re-file CLEAN with patch save"
+            _brk = "operator decision (CLEAN evidence/refused-repeat guard, #484)"
         else:
             _brk = "operator intervention"
         actions.append("NEED loop #%d: pending hash %s repeated %dx since %s -- break via %s (#479)"
@@ -8638,6 +8767,31 @@ def mode_self_test():
     check("match-ack-clears-peer",
           match_ack("peer:qe:2026-11-02T07:59:00", "qe", {"qe": {"all": []}},
                     {"peer:qe:2026-11-02T07:59:00": 1}, {}) == ("ack", "peer:qe:2026-11-02T07:59:00"), True)
+    check("match-ack-need-kind-no-resolve",
+          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}, kind="NEED") == ("need-answers", "dev:2026-11-02T07:59:00"), True)
+    check("match-ack-note-kind-resolves",
+          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}, kind="NOTE") == ("ack", "dev:2026-11-02T07:59:00"), True)
+    check("match-ack-legacy-default-resolves",
+          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}) == ("ack", "dev:2026-11-02T07:59:00"), True)
+    _fvb = {470: {"all": ["2026-11-05T13:05:32Z FROM=qe NOTE :: VERIFIED #470 tip: 5e9e3d341"], "full": []},
+            471: {"all": ["2026-11-05T14:01:02Z FROM=qe NEED :: NEED direction"], "full": []},
+            472: {"all": ["2026-11-05T13:58:36Z FROM=qe NOTE :: VERIFIED #472 tip: deadbee"], "full": []}}
+    check("foreign-verified-evidence-tip-match",
+          foreign_verified_evidence(_fvb, 441, "5e9e3d3") == [470], True)
+    check("foreign-verified-evidence-skips-self",
+          foreign_verified_evidence(_fvb, 470, "5e9e3d3") == [], True)
+    check("foreign-verified-evidence-no-verified",
+          foreign_verified_evidence({471: _fvb[471]}, 441, "5e9e3d3") == [], True)
+    check("clean-refused-repeat-same-tree",
+          clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "", "2026-11-05T14:00:44", "ab12cd34") is True, True)
+    check("clean-refused-repeat-tree-changed",
+          clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "", "2026-11-05T14:00:44", "ff99ee00") is False, True)
+    check("clean-refused-repeat-same-ts",
+          clean_refused_repeat({"for": "2026-11-05T14:00:44", "oid": "qe:x", "tree": "ab12cd34"}, "", "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("clean-refused-repeat-merge-intervened",
+          clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "2026-11-05T13:55:00", "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("clean-refused-repeat-no-store",
+          clean_refused_repeat({}, "", "2026-11-05T14:00:44", "ab12cd34") is False, True)
     stt = {"pending": "provisioned from issue text"}
     check("status-plan-armed-unacked",
           status_planned_lane("qe", {"all": [], "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
@@ -8985,6 +9139,10 @@ def mode_self_test():
           s11_gate(["new/x.hpp"], ["src/a.cpp"], ["src/a.cpp"])[0] is False, True)
     check("s11-gate-missing-blocks",
           s11_gate([], ["src/a.cpp"], ["src/a.cpp", "src/missing.hpp"])[0] is False, True)
+    check("s11-meson-literal",
+          s11_meson_files("x = files('../userspace/pthread/pthread.c', 'a.c')") == ["userspace/pthread/pthread.c", "a.c"], True)
+    check("s11-meson-strips-dedups-skips",
+          s11_meson_files("a = files('../../x.c', '../../x.c', '$v.c')\nb = files(src)") == ["x.c"], True)
     check("stale-refresh-fires",
           stale_refresh_due(True, True, True, True) is True, True)
     check("stale-refresh-clean-required",
