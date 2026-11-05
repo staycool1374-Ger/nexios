@@ -154,22 +154,7 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     return msg.type;
 }
 
-/// @brief Issue #317 (option b): read the 5th syscall argument (a4) from the
-///        trap frame.  The 4-arg ABI leaves one dedicated register free for
-///        all defined syscalls: x86_64 rdi (frame index 5), aarch64 x4 (index
-///        4), riscv64 a4 (index 13 = OFF_A4 104 / 8).  No entry-stub change:
-///        the register is already in the frame handed to the handler.
-static inline uint64_t syscall_arg4(const uint64_t *regs) noexcept {
-#if defined(CONFIG_ARCH_X86_64)
-    return regs ? regs[5] : 0; // rdi
-#elif defined(CONFIG_ARCH_AARCH64)
-    return regs ? regs[4] : 0; // x4
-#elif defined(CONFIG_ARCH_RISCV64)
-    return regs ? regs[13] : 0; // a4
-#else
-    return static_cast<uint64_t>(errors::SYS_ERR_OK); // No register file on this arch: 4th arg reads as 0 (data).
-#endif
-}
+/// @brief (syscall_arg4 lives in syscall_helpers.hpp — single source.)
 
 uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                 uint64_t arg3, uint64_t *regs) {

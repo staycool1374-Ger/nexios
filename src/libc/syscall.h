@@ -295,6 +295,16 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 // arg2 = stack bytes, arg3 = Task-cap handle with SHARE (cross-task only).
 #define SYS_THREAD_CREATE   93
 
+// Issue #53 — thread exit/join/wrap (matches kernel SyscallNumber).
+// EXIT: arg0 = exit status (self-only, thread-only, never returns).
+// JOIN: arg0 = ThreadCap handle (never a raw tid), arg1 = 0 join | 1
+// detach, arg2 = user status out-pointer (join only, nullable), arg3 = 0.
+// WRAP: arg0 = tid (live child or self), arg1 = SHARE token (cross-task
+// only); returns the generation-tagged ThreadCap handle.
+#define SYS_THREAD_EXIT     94
+#define SYS_THREAD_JOIN     95
+#define SYS_THREAD_WRAP     96
+
 static inline long sys_watchdog_create(unsigned long period_ticks) {
     return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
 }
@@ -306,9 +316,26 @@ static inline long sys_watchdog_kick(void) {
 static inline long sys_thread_create(unsigned long owner_pid,
                                        unsigned long entry,
                                        unsigned long stack_bytes,
-                                       unsigned long cap_handle) {
-    return __syscall5(SYS_THREAD_CREATE, (long)owner_pid, (long)entry,
-                      (long)stack_bytes, (long)cap_handle);
+                                       unsigned long cap_handle,
+                                       unsigned long birth_ctx) {
+    return __syscall5r(SYS_THREAD_CREATE, (long)owner_pid, (long)entry,
+                       (long)stack_bytes, (long)cap_handle, (long)birth_ctx);
+}
+
+static inline long sys_thread_exit(unsigned long status) {
+    return __syscall5(SYS_THREAD_EXIT, (long)status, 0, 0, 0);
+}
+
+static inline long sys_thread_join(unsigned long cap_handle,
+                                    unsigned long op,
+                                    unsigned long status_ptr) {
+    return __syscall5(SYS_THREAD_JOIN, (long)cap_handle, (long)op,
+                      (long)status_ptr, 0);
+}
+
+static inline long sys_thread_wrap(unsigned long tid,
+                                    unsigned long share_token) {
+    return __syscall5(SYS_THREAD_WRAP, (long)tid, (long)share_token, 0, 0);
 }
 
 // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==

@@ -100,6 +100,11 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
         // tasks outside test mode.
         report_user_task_end(*t, true, arg0, 0);
 
+        // Issue #53: join-rendezvous handoff for terminating threads
+        // (before the task leaves the CPU — the joiner may be anywhere).
+        // No-ops for non-threads (checked inside).
+        TaskControlBlock::thread_join_note_termination(*t);
+
         // If the exiting task is the current running task (the normal case for
         // sys_exit), we must switch the CPU off it BEFORE returning to user
         // space, otherwise the syscall epilogue iret's back into a TERMINATED
@@ -179,8 +184,12 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                     if (p->state == TaskState::BLOCKED) {
                         // Waiter hlt-waits in-trap (user) or self-loops
                         // (kernel test): it will collect; keep linkage.
-                    } else {
-                        // Orphan the child so reap_orphans can clean it up
+                    } else if (!t->is_thread() || t->join_detached_) {
+                        // Orphan the child so reap_orphans can clean it up.
+                        // Threads stay parented so a later JOIN can collect
+                        // them (issue #53: EXIT-before-JOIN must converge;
+                        // detached threads auto-reap via the reaper, so
+                        // they orphan like regular tasks).
                         p->remove_child(t);
                         t->parent_id = 0;
                     }
