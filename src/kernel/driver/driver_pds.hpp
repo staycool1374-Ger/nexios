@@ -55,6 +55,18 @@ static_assert(sizeof(DriverRpc) <= 48,
 /// Fail-closed -EAGAIN past this; never parks a kernel task forever.
 inline constexpr uint64_t kRpcGuardTicks = 5000;
 
+/// @brief Driver RPC ops shared with userspace/driver_pd.h (issue #51
+///        step-c: kernel→PD BIND carries cap handles, WRITE carries TX).
+///        Named constants only — no raw op numbers at call sites.
+enum class DrvOp : uint8_t {
+    BIND = 0,
+    READ = 1,
+    WRITE = 2,
+    POLL = 3,
+    MODE_SET = 4,
+    PRESENT = 5,
+};
+
 /// @brief Record the PID of a driver PD role.
 void set_pd_pid(sdf::PdRole role, uint64_t pid);
 /// @brief Get the recorded PID (0 when unset).
@@ -73,6 +85,16 @@ void pd_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
 /// @return true with *reply filled on a validated reply, false fail-closed.
 [[nodiscard]] bool pd_rpc(sdf::PdRole role, const DriverRpc &req,
                           DriverRpc &reply);
+
+/// @brief BIND a driver PD, conveying its composed cap handles (issue #51
+///        step-c): the BIND request args carry the PD's own handles
+///        (arg0 = encoded MmioCap handle, arg1 = phys base, arg2 = size,
+///        flags = cap count) so the PD can map/grant without scanning its
+///        CSpace. Serial today (1 cap); roles needing >3 handles are
+///        fail-closed until the wire grows a second BIND round.
+/// @return true on a validated BIND reply, false fail-closed (PD keeps
+///         BIND-only behavior; kernel keeps the raw path).
+[[nodiscard]] bool pd_bind(sdf::PdRole role);
 
 } // namespace driver_pds
 } // namespace kernel

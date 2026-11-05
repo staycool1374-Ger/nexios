@@ -31,7 +31,7 @@ bool g_block_dma = false;
 /// @brief Mint one CapSpec into the task CSpace (all-or-nothing caller).
 /// @return slot index or -1. Created caps are disposed by the caller on
 ///         any later failure (rollback) or owned by the CSpace on success.
-int mint_one(TaskControlBlock &task, const CapSpec &spec) {
+int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
     task.ensure_cspace();
     cap::CNode *space = task.get_cspace();
     if (space == nullptr) {
@@ -91,7 +91,7 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec) {
     }
     const cap::CapRights rights =
         cap::CapRights::READ | cap::CapRights::WRITE;
-    const int slot = space->install(obj, type, rights, nullptr);
+    const int slot = space->install(obj, type, rights, gen_out);
     if (slot < 0) {
         obj->release();
         return -1;
@@ -120,7 +120,9 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
     }
     switch (role) {
     case PdRole::SERIAL: {
-        // RX-only PD (planner S1): TX stays kernel (console + panic).
+        // Owned PD (issue #51 step-c): TX+RX via polled UART. The kernel
+        // keeps only the panic raw_write fallback (Logger::raw_write
+        // bypasses Terminal entirely, so panic never reaches the PD path).
         uint64_t n = 0;
 #if defined(CONFIG_ARCH_X86_64)
         out[n++] = CapSpec{CapKind::MMIO, arch::device::COM1_PORT, 8, 0, 1};
@@ -291,6 +293,32 @@ bool capture_block_topology() {
     return true;
 }
 
+// Composed cap slots per role (issue #51 step-c): sdf_compose persists the
+// minted (slot, generation) pairs so kernel→PD BIND can convey the PD's own
+// cap handles back to it (the PD cannot scan its CSpace; slots are otherwise
+// undiscoverable). Written at boot compose + restart rebind, read by the
+// serial TX client. Boot-time only content; test snapshot/restore rewinds
+// MemPool but never recomposes PDs, so no stale-slot path exists.
+int g_role_slots[6][kMaxCapsPerRole] = {};
+uint32_t g_role_gens[6][kMaxCapsPerRole] = {};
+uint64_t g_role_slot_count[6] = {};
+
+bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen) {
+    const uint64_t role_idx = static_cast<uint64_t>(role);
+    if (role_idx >= 6 || idx >= kMaxCapsPerRole) {
+        return false;
+    }
+    if (idx >= g_role_slot_count[role_idx]) {
+        return false;
+    }
+    slot = g_role_slots[role_idx][idx];
+    if (slot < 0) {
+        return false;
+    }
+    gen = g_role_gens[role_idx][idx];
+    return true;
+}
+
 bool sdf_compose(TaskControlBlock &task, PdRole role) {
     CapSpec specs[kMaxCapsPerRole] = {};
     const uint64_t count = sdf_row(role, specs);
@@ -308,13 +336,27 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
         return sdf_zero_caps_allowed(role);
     }
     int slots[kMaxCapsPerRole] = {-1, -1, -1, -1, -1, -1};
+    uint32_t gens[kMaxCapsPerRole] = {};
     for (uint64_t i = 0; i < count; ++i) {
-        const int slot = mint_one(task, specs[i]);
+        const int slot = mint_one(task, specs[i], &gens[i]);
         if (slot < 0) {
             rollback(task, slots, i);
             return false;
         }
         slots[i] = slot;
+    }
+    // Persist the composed (slot, gen) pairs for kernel→PD BIND handle
+    // conveyance (issue #51 step-c). Roles ≥ 6 (VFS_SRV and later) share
+    // the driver_pds pid table but not the slot table — serial TX only
+    // needs roles 0..5, so out-of-range roles skip persistence (their PDs
+    // never receive handles; fail-closed at sdf_role_cap).
+    const uint64_t role_idx = static_cast<uint64_t>(role);
+    if (role_idx < 6) {
+        for (uint64_t i = 0; i < count; ++i) {
+            g_role_slots[role_idx][i] = slots[i];
+            g_role_gens[role_idx][i] = gens[i];
+        }
+        g_role_slot_count[role_idx] = count;
     }
     return true;
 }

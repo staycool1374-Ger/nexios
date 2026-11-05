@@ -7,7 +7,7 @@ Strangler step a (no flip): userspace driver PDs behind per-role
 
 | Role | PD ELF | Caps (exact) | Notes |
 |---|---|---|---|
-| serial | serial-pd.c.elf | Mmio COM1 (RX path) | RX-only; kernel keeps TX + panic |
+| serial | serial-pd.c.elf | Mmio COM1 (io_port) | TX+RX owned (#51 step-c); kernel keeps panic raw_write fallback only |
 | kbd | kbd-pd.c.elf | IRQ 33 + IOPORT 0x60–0x64 (x86) | arch stub off-x86 (decoder stays UART) |
 | rtc | rtc-pd.c.elf | CMOS ports / PL031 / Goldfish (per arch) | no IRQ; feeds timer-srv (#241) |
 | fb | fb-pd.c.elf | device caps only (mode-set/present) | zero IRQ (polled); emulation = #51 |
@@ -18,6 +18,21 @@ Rules: no ambient authority (fail-closed at claim/arm/map); one owner per
 device (compile-time gate); restart re-derives via `sdf_rebind` (never
 inherits domain/vector/mapping); in-flight I/O error-replies (never hangs);
 kill/restart ×3 keeps ResourceTracker delta-0; serial-log fault artifacts.
+
+## Serial TX flip (issue #51 step-c)
+
+Kernel→PD BIND conveys the PD's composed cap handles (arg0 = encoded
+MmioCap handle, arg1 = phys base, arg2 = size, flags = cap count;
+single-cap roles only — multi-cap BIND is a second-round follow-up).
+serial-pd maps once at BIND (x86 `SYS_IOPORT_GRANT`, aa64/rv64
+`SYS_MMIO_MAP`) and serves polled `DRV_OP_WRITE` (arg0 = byte, bounded
+LSR poll, fail-closed `-EAGAIN` on stall), replying to `req.owner_id`
+(the send_sync requester queue; reply-to-1 is a dead letter, #441).
+Kernel TX attempts the RPC only when safe to block (task context,
+ISR-nesting 0, PD alive); every other context — and any RPC failure —
+takes the raw path. `Logger::raw_write` bypasses Terminal entirely, so
+panic never reaches the PD. IRQ4 stays kernel-side until the step-d
+input flip (no dead caps in step-c).
 
 ## Wire
 

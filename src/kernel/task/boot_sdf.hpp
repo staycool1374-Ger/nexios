@@ -96,6 +96,15 @@ bool sdf_compose(TaskControlBlock &task, PdRole role);
 /// @return Same contract as sdf_compose.
 bool sdf_rebind(TaskControlBlock &task, PdRole role);
 
+/// @brief Composed cap handle lookup (issue #51 step-c): the (slot,
+///        generation) pair sdf_compose minted for @p role at boot/rebind.
+///        Kernel→PD BIND conveys the PD's own handles back to it through
+///        this table (the PD cannot scan its CSpace).
+/// @return True with @p slot/@p gen filled; false when the role never
+///         composed or @p idx is out of range (fail-closed, PD keeps its
+///         BIND-only behavior and the kernel keeps the raw path).
+bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen);
+
 /// @brief Single device owner (issue #48 S1): exactly one of {kernel, PD}
 /// may own a device. Compile-time selected by the PD knobs.
 /// @return true when @p role owns the device (its OFF knob compiled out

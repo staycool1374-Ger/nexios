@@ -7,6 +7,9 @@
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/task/boot_sdf.hpp>
+#include <kernel/cap/cap.hpp>
+#include <kernel/cap/cap_types.hpp>
 
 namespace kernel {
 namespace driver_pds {
@@ -110,6 +113,52 @@ bool pd_rpc(sdf::PdRole role, const DriverRpc &req, DriverRpc &reply) {
         return false;
     }
     return true;
+}
+
+bool pd_bind(sdf::PdRole role) {
+    const uint64_t pid = get_pd_pid(role);
+    if (pid == 0 || !pd_alive(role)) {
+        return false;
+    }
+    auto *srv = Scheduler::find_task(pid);
+    if (srv == nullptr) {
+        return false;
+    }
+    auto *space = srv->get_cspace();
+    if (space == nullptr) {
+        return false;
+    }
+    auto *cur = Scheduler::current_task();
+    if (cur == nullptr) {
+        return false;
+    }
+    // Convey the PD's composed caps: re-derive the row (pure function of
+    // role+arch) for phys/size, pair with the persisted (slot, gen) for
+    // the encoded handle. Step-c binds single-cap roles (serial = 1 cap:
+    // arg0 = handle, arg1 = phys, arg2 = size, flags = count). Multi-cap
+    // BIND is a documented second-round follow-up — never silent partial
+    // conveyance (a half-bound PD would misbehave).
+    sdf::CapSpec specs[sdf::kMaxCapsPerRole] = {};
+    const uint64_t count = sdf::sdf_row(role, specs);
+    if (count != 1) {
+        return false;
+    }
+    int slot = -1;
+    uint32_t cap_gen = 0;
+    if (!sdf::sdf_role_cap(role, 0, slot, cap_gen)) {
+        return false;
+    }
+    DriverRpc req{};
+    req.op = static_cast<uint8_t>(DrvOp::BIND);
+    req.owner_id = static_cast<uint32_t>(cur->id);
+    req.owner_gen = cur->generation;
+    req.epoch = pd_epoch();
+    req.flags = static_cast<uint8_t>(count);
+    req.arg0 = cap::encode_user_handle(space->cspace_id, slot, cap_gen);
+    req.arg1 = specs[0].addr;
+    req.arg2 = specs[0].size;
+    DriverRpc reply{};
+    return pd_rpc(role, req, reply);
 }
 
 } // namespace driver_pds
