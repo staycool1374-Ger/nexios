@@ -1049,21 +1049,24 @@ def audit_demand(boxes, st, fresh=None):
 
 
 def audit_queue_head(issue, demand, rooms_all):
-    """Oldest outstanding audit demand (self included). Pure; FIFO, no starvation."""
+    """Oldest outstanding audit demand (self included). Pure; FIFO, no starvation.
+
+    Head = min over self + other demanders by (since, issue); the room
+    proceeds iff head == self (issue #494: the old min-excluded-self
+    deadlocked 2+ concurrent demands — each room saw the other as head
+    and both deferred forever)."""
     if demand is None:
         return None
-    best = (utcnow(), issue)
+    best = ((demand or {}).get("since") or utcnow(), issue)
     for iss, _rdir, ost in rooms_all or []:
         if iss == issue:
-            continue
+            continue  # self already seeded from demand; ost may be stale
         ost = ost or {}
         if ost.get("audit_pending") and not (ost.get("halt") or (ost.get("state") or "") in ("CLOSED", "HOLD", "CLOSING")):
             since = (ost["audit_pending"].get("since") or "9" * 20)
             if (since, iss) < best:
                 best = (since, iss)
-    if best[1] != issue and best < (utcnow(), issue):
-        return best[1]
-    return issue
+    return best[1]
 
 
 def audit_ring_action(n):
@@ -9559,6 +9562,20 @@ def mode_self_test():
           audit_queue_head(51, {"requester": "dev", "text": "t"},
                            [(51, "/r", {}),
                             (52, "/r", {"audit_pending": {"since": "2026-11-02T09:00:00Z"}})]) == 52, True)
+    check("audit-queue-solo-self-head",
+          audit_queue_head(51, {"requester": "dev", "since": "2026-11-05T19:00:00Z"}, []) == 51, True)
+    check("audit-queue-older-self-proceeds",
+          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T18:06:46Z"},
+                           [(474, "/r", {"audit_pending": {"since": "2026-11-05T18:09:01Z"}}),
+                            (491, "/r", {})]) == 491, True)
+    check("audit-queue-newer-self-defers",
+          audit_queue_head(474, {"requester": "dev", "since": "2026-11-05T18:09:01Z"},
+                           [(474, "/r", {}),
+                            (491, "/r", {"audit_pending": {"since": "2026-11-05T18:06:46Z"}})]) == 491, True)
+    check("audit-queue-closed-excluded",
+          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T19:00:00Z"},
+                           [(477, "/r", {"audit_pending": {"since": "2026-11-05T18:00:00Z"},
+                                         "state": "CLOSING"})]) == 491, True)
     check("audit-ring-0", audit_ring_action(0) == "ring", True)
     check("audit-ring-2", audit_ring_action(2) == "ring", True)
     check("audit-ring-3-escalate", audit_ring_action(3) == "escalate", True)
