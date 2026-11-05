@@ -150,7 +150,7 @@ usage: agent_up.sh <mode> [...]
   clean <issue> [--dry-run]  remove a CLOSED lane's merged branches + room;
                      refuses on open issue, unpushed main, live room.
   watch <issue> [arm|disarm|tick|status]  dev/qe activity watchdog
-                     (bare verb = status); arm takes interval_s (default 180).
+                     (bare verb = status); arm takes interval_s (default 60).
                      Legacy: the engine loop owns ticks; tickers stay disarmed.
 EOF
   exit 2
@@ -923,7 +923,7 @@ ensure_engine_loop() {
     return 0
   fi
   mkdir -p "$REPO_ROOT/logs/state-machine"
-  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 --allow-recreate >>logs/state-machine/engine-console.log 2>&1"; then
+  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 60 --allow-recreate >>logs/state-machine/engine-console.log 2>&1"; then
     if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
       [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
       return 0
@@ -1169,7 +1169,7 @@ mode_wake() {
   if [ "$3" = "$ENGINE_SESS" ]; then
     ensure_engine_loop --quiet
     # Event-driven fast path (#465): a demand-shaped worker post fires a
-    # targeted one-shot tick now instead of waiting for the 180 s sweep.
+    # targeted one-shot tick now instead of waiting for the 60 s sweep.
     # The sweep lock serializes with the loop (skip-if-held), so overlap
     # is safe. Non-demand posts (pure ACKs, status) stay sweep-driven.
     case "$2" in dev|qe|auditor)
