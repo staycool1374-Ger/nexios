@@ -2379,6 +2379,12 @@ mode_engine() {
     restart)
       if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
         tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
+        # The server drops the name asynchronously; a blind ensure would
+        # read the ghost and skip the start (leaving no loop at all).
+        for _w in 1 2 3 4 5 6; do
+          tmux has-session -t "$ENGINE_SESS" 2>/dev/null || break
+          sleep 1
+        done
       fi
       reap_orphan_loop
       ensure_engine_loop
