@@ -77,7 +77,7 @@ rendered artifact, a twin, or an agent file under `.opencode/`.
   it, for `mcp`). `launch.agent` must equal the role's own `agent.name`
   and requires `agent.mode` `primary`|`all`.
 - `{repo}` is allowed in any role delta and expands to the checkout being
-  launched (consultant: whole repo r+w except `src/` + fence self-cage).
+  launched (consultant: whole repo r+w except `src/`).
 
 Dev keeps bash as the documented maintenance path and has no edit-tool access to
 this directory (`tools/agents/fence/**`, `.opencode/agents/**` are denied). The
