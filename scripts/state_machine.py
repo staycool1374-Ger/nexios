@@ -6753,8 +6753,13 @@ STATUS_ACTIVITY = {
 }
 
 
-def status_lane_activity(role, state11, pending, phase, operator_hold=False):
-    """Closed-vocabulary ACTIVITY cell. Pure, display-only."""
+def status_lane_activity(role, state11, pending, phase, operator_hold=False, nxt=None):
+    """Closed-vocabulary ACTIVITY cell. Pure, display-only.
+
+    A WORKING lane whose own NEXT is explicitly idle declares no action:
+    it holds an assignment (order/focus) but is parked, so it reads
+    STANDING BY, not the role's active verb. Unknown NEXT (None) keeps
+    the legacy verb. IDLE/ABSENT/BLOCKED paths unchanged."""
     word = (state11 or "").split()[0]
     if word == "ABSENT":
         return "-"
@@ -6763,6 +6768,10 @@ def status_lane_activity(role, state11, pending, phase, operator_hold=False):
             return "WAITING FOR OPERATOR"
         if role == "dev":
             return "WAITING " + lane_wait_target(pending, role, phase)
+    if word == "WORKING" and nxt is not None:
+        _low = nxt.strip().lower()
+        if not _low or _low.startswith("idle"):
+            return "STANDING BY"
     return STATUS_ACTIVITY.get((role, word), "-")
 
 
@@ -6851,14 +6860,16 @@ def cmd_status(ctx, issues):
                 else:
                     _astate = ("WORKING (#%d)" % issue) if st.get("audit_pending") else "IDLE"
                     rows.append((role, _astate,
-                                 status_lane_activity(role, _astate, _pend, _phase),
+                                 status_lane_activity(role, _astate, _pend, _phase,
+                                                      nxt=boxes["auditor"].get("next")),
                                  planned_enum(status_planned_audit(ctx, issue, boxes, st), True)))
             else:
                 probe = fast_probe(ctx, sess)
                 exists = probe != "ABSENT"
                 here = facts[role].get(issue, {})
                 _lstate = status_lane_state(role, probe, here, facts[role], issue, _focus[role], _open_q)
-                activity = status_lane_activity(role, _lstate, _pend, _phase, _open_q)
+                activity = status_lane_activity(role, _lstate, _pend, _phase, _open_q,
+                                                   nxt=boxes[role].get("next"))
                 if not exists:
                     planned = "-"
                 else:
@@ -7526,6 +7537,14 @@ def mode_self_test():
     check("activity-dev-blocked-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting operator decision", "VERIFY") == "WAITING OPERATOR", True)
     check("activity-qe-working", status_lane_activity("qe", "WORKING (#52)", "", "") == "IMPLEMENTING TESTS", True)
     check("activity-idle", status_lane_activity("dev", "IDLE", "", "") == "WAITING NEW WORK", True)
+    check("activity-working-idle-next-standing-by",
+          status_lane_activity("qe", "WORKING (#53)", "", "", nxt="idle") == "STANDING BY"
+          and status_lane_activity("dev", "WORKING (#53)", "", "", nxt="idle :: duplicate ACKed") == "STANDING BY", True)
+    check("activity-working-active-next-kept",
+          status_lane_activity("qe", "WORKING (#53)", "", "", nxt="working E2E now") == "IMPLEMENTING TESTS"
+          and status_lane_activity("dev", "WORKING", "", "", nxt="working impl") == "IMPLEMENTATION", True)
+    check("activity-working-unknown-keeps-verb",
+          status_lane_activity("audit", "WORKING (#53)", "", "") == "AUDITING", True)
     check("planned-ring", planned_enum("ring: unacked order", True) == "EXPECTING RESULT/OK", True)
     check("planned-awaits", planned_enum("awaits: foo", True) == "CHECKING STATUS", True)
     check("planned-need", planned_enum("NEED qe-merge: clean first", True) == "EXPECTING RESULT/OK", True)
