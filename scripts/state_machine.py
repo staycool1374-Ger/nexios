@@ -3453,6 +3453,58 @@ def starvation_era_continues(stored, current_next):
     return prev.strip().lower() == (current_next or "").strip().lower()
 
 
+SYNC_NEED_TICKS = 3      # consecutive mismatched sweeps before a re-probe order
+SYNC_ESCALATE_TICKS = 5  # … before operator escalation (then quiet)
+
+
+def lane_claim_class(nxt):
+    """working | waiting | idle | unknown for a lane NEXT. Pure.
+
+    Waiting lanes (explicit input-waits, parked holds) are never
+    suspicious — parking is legitimate. Only a bare working claim can
+    go stale against a quiet pane.
+    """
+    nxt = (nxt or "").strip()
+    if not nxt:
+        return "unknown"
+    if nxt[:4].lower() == "idle":
+        return "idle"
+    if LANE_WAITS_RE.search(nxt):
+        return "waiting"
+    return "working"
+
+
+def lane_probe_class(probe):
+    """active | quiet | unknown for a worker probe verdict. Pure.
+
+    A WORKING verdict already fuses pane/content/token/CPU movement, so
+    a prefix test carries the full signal. STUCK counts as active (the
+    STUCK ladder owns wedged panes, not the sync ladder); BLOCKED-modal
+    counts as active (someone is at the keyboard).
+    """
+    probe = probe or ""
+    if probe.startswith("BLOCKED"):
+        return "active"
+    if probe.startswith("WORKING") or probe.startswith("STUCK"):
+        return "active"
+    if probe.startswith("IDLE"):
+        return "quiet"
+    return "unknown"
+
+
+def lane_probe_short(probe):
+    """First clause of a probe verdict for status lines. Pure."""
+    return (probe or "-").split(" (")[0].split(";")[0][:40]
+
+
+def sync_mismatch(claim, probe_class):
+    """True only for stale-claim (working vs quiet) and hidden-work
+    (idle vs active). Waiting lanes and unknown inputs never mismatch.
+    Pure (#487)."""
+    return ((claim == "working" and probe_class == "quiet")
+            or (claim == "idle" and probe_class == "active"))
+
+
 def starvation_action(count, lane_unacked, oid_live, stored, cap=RING_LIMIT):
     """none | observe | rewake | await | escalate for one starved lane. Pure.
 
@@ -5683,6 +5735,74 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         if _role in _sv_new and "next" not in _sv_new[_role]:
             _sv_new[_role]["next"] = (boxes[_role]["next"] or "")
     node["starved"] = _starved_roles
+    # Lane claim-vs-pane sync (#487): posts stay authoritative for phase
+    # and pending, ACKs stay receipt-only; the pane corroborates freshness.
+    # Same NEXT continues the era (streak survives parked ACKs); a changed
+    # NEXT, agreement, or a cleared lane starts a new era. Escalated eras
+    # stay quiet until the claim changes.
+    _sy_prev_all = st.get("lane_sync") or {}
+    _sy_new = {}
+    for _role in ("dev", "qe"):
+        _sy_prev = _sy_prev_all.get(_role) or {}
+        _sy_nxt = (boxes[_role]["next"] or "")
+        if _sy_prev.get("escalated"):
+            if (_sy_prev.get("next") or "") == _sy_nxt:
+                _sy_new[_role] = dict(_sy_prev)
+                continue
+            _sy_prev = {}
+        _sy_mm = sync_mismatch(lane_claim_class(_sy_nxt),
+                               lane_probe_class((probes or {}).get(_role)))
+        if not _sy_mm:
+            continue
+        if _sy_prev.get("next") == _sy_nxt and _sy_prev.get("next"):
+            _sy_streak = int(_sy_prev.get("streak") or 0) + 1
+        else:
+            _sy_streak = 1
+        _sy_store = {"streak": _sy_streak, "next": _sy_nxt,
+                     "claim": lane_claim_class(_sy_nxt),
+                     "probe": (probes or {}).get(_role)}
+        if _sy_streak < SYNC_NEED_TICKS:
+            actions.append("SYNC watch #%d %s: claimed %s vs pane %s (NEXT '%s'); corroboration pending"
+                           % (issue, _role, _sy_store["claim"], lane_probe_short((probes or {}).get(_role)), _sy_nxt[:80]))
+            events.append("lane-sync-watch-%s" % _role)
+            _sy_new[_role] = _sy_store
+        elif _sy_streak < SYNC_ESCALATE_TICKS:
+            _sy_text = ("SYNC #%d %s: claimed STATE/NEXT disagrees with pane probe for %d sweeps (claim=%s, probe=%s, NEXT '%s'); re-read the room and re-post STATE/NEXT from a fresh `state` check; ACK it with post_update ref=<id> before starting"
+                        % (issue, _role, _sy_streak, _sy_store["claim"], lane_probe_short((probes or {}).get(_role)), _sy_nxt[:80]))
+            _sy_note, _sy_oid = coord_note(_role, _sy_text, ack_by=True)
+            if _sy_oid in rings:
+                actions.append("order deferred %s lane-sync (oid collision)" % _role)
+                _sy_new[_role] = _sy_store
+            elif ctx.dry:
+                actions.append("WOULD post %s lane-sync order (oid %s)" % (_role, _sy_oid))
+                rings[_sy_oid] = 0
+                has_unacked.add(_role)
+                file_order_deadline(ad_store, _sy_oid)
+                _sy_new[_role] = _sy_store
+                events.append("lane-sync-order-filed")
+            elif append_box_note(room_dir, _role, _sy_note):
+                rings[_sy_oid] = 0
+                has_unacked.add(_role)
+                file_order_deadline(ad_store, _sy_oid)
+                actions.append("order filed %s lane-sync (oid %s)" % (_role, _sy_oid))
+                if (_role not in deaf and probes[_role].startswith("IDLE")
+                        and not session_rung(actions, SESS[_role], cycle["rung"])):
+                    _sy_res = ring(ctx, SESS[_role], _role,
+                                   "lane-sync re-probe -- re-post STATE/NEXT",
+                                   oid=_sy_oid, issue=issue)
+                    actions.append(_sy_res)
+                    if _sy_res.startswith(("rang ", "WOULD ring ")):
+                        rings[_sy_oid] = 1
+                _sy_new[_role] = _sy_store
+                events.append("lane-sync-order-filed")
+            else:
+                actions.append("NOTE-FAILED %s lane-sync #%d" % (_role, issue))
+        else:
+            actions.append("NEED lane SYNC #%d %s ESCALATED (claimed %s vs pane %s for %d sweeps, NEXT '%s'); operator: verify session health, recreate if wedged; no new order"
+                           % (issue, _role, _sy_store["claim"], lane_probe_short((probes or {}).get(_role)), _sy_streak, _sy_nxt[:80]))
+            events.append("lane-sync-escalated-%s" % _role)
+            _sy_store["escalated"] = True
+            _sy_new[_role] = _sy_store
     _loop_tip = _c_tip_early if "_c_tip_early" in dir() else None
     try:
         _loop_tip = _c_tip_early
@@ -5843,6 +5963,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["starve"] = _sv_new
         else:
             s.pop("starve", None)
+        if isinstance(_sy_new, dict) and _sy_new:
+            s["lane_sync"] = _sy_new
+        else:
+            s.pop("lane_sync", None)
         if rn_store:
             s["ready_need"] = rn_store
         else:
@@ -8245,6 +8369,40 @@ def mode_self_test():
           starvation_era_continues({"count": 2, "next": "waiting x"}, "") is False, True)
     check("starve-era-legacy-no-mark-preserves",
           starvation_era_continues({"count": 2}, "waiting x") is True, True)
+    check("sync-claim-working",
+          lane_claim_class("working :: verify TIP") == "working", True)
+    check("sync-claim-waiting",
+          lane_claim_class("waiting engine merge") == "waiting", True)
+    check("sync-claim-parked-waiting",
+          lane_claim_class("STATE: blocked :: parked, NEXT waiting restage") == "waiting", True)
+    check("sync-claim-idle",
+          lane_claim_class("idle :: testing-only scope, dev idle") == "idle", True)
+    check("sync-claim-empty-unknown",
+          lane_claim_class("") == "unknown" and lane_claim_class(None) == "unknown", True)
+    check("sync-probe-working-active",
+          lane_probe_class("WORKING (#441) markers") == "active", True)
+    check("sync-probe-idle-quiet",
+          lane_probe_class("IDLE (static, bare prompt; tokens=12%)") == "quiet", True)
+    check("sync-probe-idle-static-quiet",
+          lane_probe_class("IDLE-static probe") == "quiet", True)
+    check("sync-probe-stuck-active",
+          lane_probe_class("STUCK (frozen window with run markers)") == "active", True)
+    check("sync-probe-blocked-active",
+          lane_probe_class("BLOCKED (permission prompt visible)") == "active", True)
+    check("sync-probe-absent-unknown",
+          lane_probe_class("ABSENT") == "unknown" and lane_probe_class("") == "unknown", True)
+    check("sync-mismatch-stale-claim",
+          sync_mismatch("working", "quiet") is True, True)
+    check("sync-mismatch-hidden-work",
+          sync_mismatch("idle", "active") is True, True)
+    check("sync-mismatch-waiting-never",
+          sync_mismatch("waiting", "quiet") is False and sync_mismatch("waiting", "active") is False, True)
+    check("sync-mismatch-unknown-never",
+          sync_mismatch("unknown", "quiet") is False and sync_mismatch("working", "unknown") is False, True)
+    check("sync-mismatch-agree-never",
+          sync_mismatch("working", "active") is False and sync_mismatch("idle", "quiet") is False, True)
+    check("sync-probe-short",
+          lane_probe_short("IDLE (static; tokens=1%)") == "IDLE" and lane_probe_short("") == "-", True)
     # Item 5 (#463): work-conserving scan + IDLE gate. Bite: forcing
     # global_work_scan to None flips every denied row to FAIL.
     _rmk = lambda iss, **kw: dict({"issue": iss, "halt": False,
