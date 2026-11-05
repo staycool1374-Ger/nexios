@@ -8967,6 +8967,26 @@ def mode_self_test():
                                      {"scope": "full"}, _sup_prev) is False, True)
     check("starvation-preserve-drop-empty-prev",
           starvation_should_preserve("dev", _sup_boxes, _sup_st, {}) is False, True)
+    _474_boxes = {"dev": {"all": [], "coord_last": None, "next": "waiting QE E2E gates"},
+                  "qe": {"all": [], "coord_last": None, "next": "idle"}}
+    _474_st = {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS",
+               "scope": "testing-only"}
+    _474_prev = {"count": 3, "oid": "dev:2026-11-05T18:09:01",
+                 "escalated": True, "next": "waiting QE E2E gates"}
+    check("starvation-proof-474-stale-drop",
+          starvation_should_preserve("dev", _474_boxes, _474_st, _474_prev) is False
+          and starvation_sweep(_474_boxes, _474_st, {"dev": "IDLE-static", "qe": "IDLE-static"},
+                               set(), False) == [], True)
+    _470_boxes = {"dev": {"all": [], "coord_last": None, "next": "idle"},
+                  "qe": {"all": [], "coord_last": None, "next": "waiting engine restage then re-audit"}}
+    _470_st = {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS",
+               "scope": "full", "engine_wait": {"streak": 3}}
+    _470_prev = {"count": 3, "oid": "qe:2026-11-05T18:09:09",
+                 "escalated": True, "next": "waiting engine restage then re-audit"}
+    check("starvation-proof-470-stale-drop",
+          starvation_should_preserve("qe", _470_boxes, _470_st, _470_prev) is False
+          and starvation_sweep(_470_boxes, _470_st, {"dev": "WORKING-markers", "qe": "IDLE-static"},
+                               set(), False) == [], True)
     check("starvation-gaps-sorted",
           starvation_gaps([{"issue": 54}, {"issue": 240, "starved": ["qe"]},
                            {"issue": 390, "starved": ["dev"]}]) == [240, 390], True)
