@@ -3551,6 +3551,21 @@ def lane_probe_class(probe):
     return "unknown"
 
 
+def reverify_due(merged_tip, verified_tip, stored, halted):
+    """Whether a post-merge QE re-verify order must file. Pure.
+
+    A staged merge nobody is asked to verify rots the room: file once
+    per merged tip unless QE already VERIFIED it. #485 follow-up.
+    """
+    if halted or not merged_tip:
+        return False
+    if verified_tip and merged_tip[:7] == verified_tip[:7]:
+        return False
+    if ((stored or {}).get("tip") or "")[:7] == merged_tip[:7]:
+        return False
+    return True
+
+
 def lane_probe_short(probe):
     """First clause of a probe verdict for status lines. Pure."""
     return (probe or "-").split(" (")[0].split(";")[0][:40]
@@ -5531,6 +5546,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         qh_store = None
     qm_store = None
     cl_store = None
+    rv_store = None
     qs_store = None
     rs_store = None
     pull_store = None
@@ -5700,6 +5716,49 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                             rings[_pl_oid] = 1
                                 else:
                                     actions.append("NOTE-FAILED qe PULL #%d" % issue)
+                            if not _rs_restage:
+                                _rv_tip = None
+                                try:
+                                    _rcH, _outH = ctx.run(["git", "-C", qd, "rev-parse", "--short", "HEAD"],
+                                                          timeout=30, cwd=qd)
+                                    if _rcH == 0:
+                                        _rv_tip = (_outH.strip().splitlines() or [""])[0].strip() or None
+                                except Exception:
+                                    _rv_tip = None
+                                _rv_done = qe_verified_tip((boxes.get("qe") or {}).get("all", []),
+                                                           (boxes.get("qe") or {}).get("full", []))
+                                _rv_co_live = isinstance(co_store, dict) and co_store.get("stage") == "verify"
+                                if _rv_co_live:
+                                    actions.append("re-verify #%d deferred: closeout VERIFY order already filed this tick" % issue)
+                                elif reverify_due(_rv_tip, _rv_done, st.get("qe_reverify"), halt_now):
+                                    _rv_text = ("RE-VERIFY #%d: testbed re-staged @ %s (qe-merge of origin/main held --no-commit); run the verification gates per prompts/qe.txt + room pending and post VERIFIED with tip: + diff present: + branch:; ACK it with post_update ref=<id> before starting" % (issue, _rv_tip))
+                                    _rv_note, _rv_oid = coord_note("qe", _rv_text, ack_by=True, done_by=True, evidence="VERIFIED")
+                                    if _rv_oid in rings:
+                                        actions.append("order deferred qe RE-VERIFY #%d (oid collision)" % issue)
+                                    elif ctx.dry:
+                                        actions.append("WOULD post qe RE-VERIFY order #%d (oid %s)" % (issue, _rv_oid))
+                                        rings[_rv_oid] = 0
+                                        has_unacked.add("qe")
+                                        file_order_deadline(ad_store, _rv_oid)
+                                        file_order_delivery(dl_store, _rv_oid, "VERIFIED")
+                                        rv_store = {"for": ts, "tip": _rv_tip, "oid": _rv_oid}
+                                        events.append("qe-reverify-order-filed")
+                                    elif append_box_note(room_dir, "qe", _rv_note):
+                                        rings[_rv_oid] = 0
+                                        has_unacked.add("qe")
+                                        file_order_deadline(ad_store, _rv_oid)
+                                        file_order_delivery(dl_store, _rv_oid, "VERIFIED")
+                                        rv_store = {"for": ts, "tip": _rv_tip, "oid": _rv_oid}
+                                        actions.append("order filed qe RE-VERIFY #%d (oid %s)" % (issue, _rv_oid))
+                                        if ("qe" not in deaf and probes["qe"].startswith("IDLE")
+                                                and not session_rung(actions, SESS["qe"], cycle["rung"])):
+                                            _rv_res = ring(ctx, SESS["qe"], "qe", "qe RE-VERIFY order",
+                                                           oid=_rv_oid, issue=issue)
+                                            actions.append(_rv_res)
+                                            if _rv_res.startswith(("rang ", "WOULD ring ")):
+                                                rings[_rv_oid] = 1
+                                    else:
+                                        actions.append("NOTE-FAILED qe RE-VERIFY #%d" % issue)
                         else:
                             actions.append("NEED qe-merge #%d failed: %s" % (issue, last_q))
                             if "conflict" in last_q.lower():
@@ -6066,6 +6125,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["qe_merge"] = qm_store
             s.pop("qe_clean", None)
             s.pop("qe_resolve", None)
+        if isinstance(rv_store, dict) and rv_store:
+            s["qe_reverify"] = rv_store
         if isinstance(rs_store, dict):
             if rs_store:
                 s["qe_resolve"] = rs_store
@@ -9192,6 +9253,18 @@ def mode_self_test():
           clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "2026-11-05T13:55:00", "2026-11-05T14:00:44", "ab12cd34") is False, True)
     check("clean-refused-repeat-no-store",
           clean_refused_repeat({}, "", "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("reverify-due-new-tip",
+          reverify_due("0c86c48", "5e9e3d3", {}, False) is True, True)
+    check("reverify-due-already-verified",
+          reverify_due("0c86c48", "0c86c48d6", {}, False) is False, True)
+    check("reverify-due-already-ordered",
+          reverify_due("0c86c48", "5e9e3d3", {"tip": "0c86c48"}, False) is False, True)
+    check("reverify-due-halted",
+          reverify_due("0c86c48", None, {}, True) is False, True)
+    check("reverify-due-no-tip",
+          reverify_due(None, None, {}, False) is False, True)
+    check("reverify-due-new-tip-after-verify",
+          reverify_due("aa11bb2", "0c86c48", {"tip": "0c86c48"}, False) is True, True)
     check("stash-gate-dirty-evidence",
           stash_gate([" M a"], [470], {}, "2026-11-05T14:00:44", "ab12cd34") is True, True)
     check("stash-gate-clean",
