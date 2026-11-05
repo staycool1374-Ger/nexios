@@ -3535,6 +3535,23 @@ def starvation_era_continues(stored, current_next):
     return prev.strip().lower() == (current_next or "").strip().lower()
 
 
+def starvation_should_preserve(role, boxes, st, prev):
+    """True when a non-starved tick should preserve the starvation store.
+
+    Pure (issue #491 S2 fix). Suppressed lanes (testing-only dev,
+    engine-wait NEXTs) never preserve: a stale escalated store from
+    before suppression deployed must drop on the same tick instead of
+    lingering beside the quiet lane. Anything missing is fail-open
+    preserve (conservative): suppression needs a proven reason, and
+    era-continuity is decided by starvation_era_continues."""
+    if not prev:
+        return False
+    if starvation_suppressed(role, boxes, st):
+        return False
+    return bool(starvation_era_continues(
+        prev, ((boxes.get(role) or {}).get("next") or "")))
+
+
 SYNC_NEED_TICKS = 3      # consecutive mismatched sweeps before a re-probe order
 SYNC_ESCALATE_TICKS = 5  # … before operator escalation (then quiet)
 
@@ -5845,8 +5862,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             # the prior store verbatim, no increment — a driven-then-freed
             # lane resumes its era instead of jumping to escalate. Same
             # wait only: a changed NEXT starts a new era and recounts.
-            if _sv_prev and starvation_era_continues(
-                    _sv_prev, (boxes[_role]["next"] or "")):
+            # Suppressed lanes never preserve (issue #491 S2): a stale
+            # escalated store drops on the same tick via
+            # starvation_should_preserve.
+            if starvation_should_preserve(_role, boxes, st, _sv_prev):
                 _sv_new[_role] = dict(_sv_prev)
             continue
         _sv_count = int(_sv_prev.get("count") or 0) + 1
@@ -5913,11 +5932,12 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             # none (defensive: unacked or post-escalate quiet): preserve
             # the prior store verbatim, no increment — a driven-then-freed
             # lane resumes its era instead of jumping to escalate.
-            # Suppressed stores are dropped, not preserved (issue #491):
-            # a stale escalated store from before suppression deployed
-            # (#474 testing-only dev, #470 engine-wait) must clear on the
-            # same tick instead of lingering beside the quiet lane.
-            if _sv_prev and not starvation_suppressed(_role, boxes, st):
+            # Note: suppression needs no guard here (dead by construction:
+            # suppressed roles are excluded from _starved_roles at sweep,
+            # so they never reach this branch — the operative drop lives
+            # in the not-starved preserve above via
+            # starvation_should_preserve).
+            if _sv_prev:
                 _sv_new[_role] = dict(_sv_prev)
         # Era mark for the next tick's preserve decision: the wait text
         # this store was filed under. Preserved stores already carry one.
@@ -8931,6 +8951,22 @@ def mode_self_test():
                             "qe": {"all": [], "coord_last": None, "next": "idle"}},
                            {"handled": {}, "rings": {}, "ack_since": None, "state": "IN_PROGRESS", "scope": "full"},
                            {"dev": "IDLE-static", "qe": "IDLE-static"}, set(), False) == ["dev"], True)
+    _sup_prev = {"count": 3, "oid": "dev:2026-01-01T00:00:00",
+                 "escalated": True, "next": "waiting QE E2E gates"}
+    check("starvation-preserve-drop-suppressed",
+          starvation_should_preserve("dev", _sup_boxes, _sup_st, _sup_prev) is False, True)
+    check("starvation-preserve-drop-engine-wait",
+          starvation_should_preserve("qe", _sup_boxes, dict(_sup_st, scope="full"),
+                                     dict(_sup_prev, next="waiting engine restage then re-audit")) is False, True)
+    check("starvation-preserve-keep-unsuppressed",
+          starvation_should_preserve("dev", {"dev": {"next": "waiting auditor verdict"}},
+                                     {"scope": "full"},
+                                     dict(_sup_prev, next="waiting auditor verdict")) is True, True)
+    check("starvation-preserve-drop-changed-next",
+          starvation_should_preserve("dev", {"dev": {"next": "waiting other"}},
+                                     {"scope": "full"}, _sup_prev) is False, True)
+    check("starvation-preserve-drop-empty-prev",
+          starvation_should_preserve("dev", _sup_boxes, _sup_st, {}) is False, True)
     check("starvation-gaps-sorted",
           starvation_gaps([{"issue": 54}, {"issue": 240, "starved": ["qe"]},
                            {"issue": 390, "starved": ["dev"]}]) == [240, 390], True)
