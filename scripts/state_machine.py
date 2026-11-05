@@ -3573,7 +3573,7 @@ def pending_lane_text(role, phase, nxt, status_ts, anchor_ts, closeout):
 
 def room_pending_text(phase, dev_next, qe_next, audit_planned,
                       dev_status_ts=None, dev_anchor_ts=None,
-                      qe_status_ts=None, qe_anchor_ts=None):
+                      qe_status_ts=None, qe_anchor_ts=None, scope="full"):
     """One-line pending derived from the latest NEXTs. Pure (cap 200).
 
     Lane-tag prefixes keep downstream consumers honest (the backlog swap
@@ -3589,6 +3589,8 @@ def room_pending_text(phase, dev_next, qe_next, audit_planned,
     for _role, _nxt, _sts, _anc in (
             ("dev", dev_next, dev_status_ts, dev_anchor_ts),
             ("qe", qe_next, qe_status_ts, qe_anchor_ts)):
+        if _role == "dev" and scope == "testing-only":
+            continue  # dev is never an owner here; legacy idle trailers must not linger
         _seg = pending_lane_text(_role, phase, _nxt, _sts, _anc, closeout)
         if _seg:
             bits.append(_seg)
@@ -3597,6 +3599,8 @@ def room_pending_text(phase, dev_next, qe_next, audit_planned,
     if bits:
         return ("%s: %s" % (phase, " | ".join(bits)))[:200]
     if phase == "RECON":
+        if scope == "testing-only":
+            return "RECON: awaiting qe approach (no worker posts yet)"
         return "RECON: awaiting dev PLAN + qe approach (no worker posts yet)"
     return "%s: no lane NEXT on file" % phase
 
@@ -4379,6 +4383,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             events.append("peer-handoff-hold-%s" % peer)
 
     for role in ("dev", "qe"):
+        if role == "dev" and _scope == "testing-only":
+            continue  # QE owns testing-labeled rooms; dev is never briefed, ordered, or rung here
         brief_p = os.path.join(room_dir, "prompts", "%s.txt" % role)
         try:
             brief_present = os.path.getsize(brief_p) > 0
@@ -5027,7 +5033,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     _c_preempt = False
     _c_s11_block = False
     if _c_stage in ("verify", "merge-close"):
-        _c_lane = "qe" if _c_stage == "verify" else "dev"
+        _c_lane = "qe" if (_c_stage == "verify" or _scope == "testing-only") else "dev"
         _c_pre_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"].get("full"),
                                         (gated or {}).get("fields"))
         _c_pre_brok = False
@@ -5172,31 +5178,32 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                     _bq_text = ("CLOSEOUT #%d: reply with two standalone lines branch: <step-a branch> + tip: <audited sha> "
                                 "(the branch carrying this room's DONE work and its audited tip); "
                                 "ACK it with post_update ref=<id> before starting" % issue)
-                    _bq_note, _bq_oid = coord_note("dev", _bq_text, ack_by=True)
+                    _bq_lane = "qe" if _scope == "testing-only" else "dev"
+                    _bq_note, _bq_oid = coord_note(_bq_lane, _bq_text, ack_by=True)
                     if _bq_oid in rings:
                         actions.append("order deferred closeout branch-name #%d (oid collision)" % issue)
                     elif ctx.dry:
-                        actions.append("WOULD post dev branch-name order #%d (oid %s)" % (issue, _bq_oid))
+                        actions.append("WOULD post %s branch-name order #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
                         rings[_bq_oid] = 0
-                        has_unacked.add("dev")
+                        has_unacked.add(_bq_lane)
                         file_order_deadline(ad_store, _bq_oid)
                         bq_store = {"for": _c_done, "oid": _bq_oid}
                         events.append("closeout-branch-order-filed")
-                    elif append_box_note(room_dir, "dev", _bq_note):
+                    elif append_box_note(room_dir, _bq_lane, _bq_note):
                         rings[_bq_oid] = 0
-                        has_unacked.add("dev")
+                        has_unacked.add(_bq_lane)
                         file_order_deadline(ad_store, _bq_oid)
                         bq_store = {"for": _c_done, "oid": _bq_oid}
-                        actions.append("order filed dev branch-name #%d (oid %s)" % (issue, _bq_oid))
-                        if ("dev" not in deaf and probes["dev"].startswith("IDLE")
-                                and not session_rung(actions, SESS["dev"], cycle["rung"])):
-                            _bq_res = ring(ctx, SESS["dev"], "dev", "closeout branch-name order",
+                        actions.append("order filed %s branch-name #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
+                        if (_bq_lane not in deaf and probes[_bq_lane].startswith("IDLE")
+                                and not session_rung(actions, SESS[_bq_lane], cycle["rung"])):
+                            _bq_res = ring(ctx, SESS[_bq_lane], _bq_lane, "closeout branch-name order",
                                            oid=_bq_oid, issue=issue)
                             actions.append(_bq_res)
                             if _bq_res.startswith(("rang ", "WOULD ring ")):
                                 rings[_bq_oid] = 1
                     else:
-                        actions.append("NOTE-FAILED dev branch-name #%d" % issue)
+                        actions.append("NOTE-FAILED %s branch-name #%d" % (_bq_lane, issue))
             else:
                 bq_store = {}
                 _c_text = closeout_order_text(issue, _c_stage, _c_branch, _c_tip)
@@ -5770,7 +5777,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 _phase, boxes["dev"]["next"], boxes["qe"]["next"],
                 audit_note if need_verdict else None,
                 boxes["dev"].get("status_ts"), _dev_anchor,
-                boxes["qe"].get("status_ts"), impl_ts or None)
+                boxes["qe"].get("status_ts"), impl_ts or None,
+                scope=_scope)
             if _new_pending != _cur_pending:
                 s["pending"] = pending_refresh(_cur_pending, _new_pending,
                                                s.get("halt"), halt_now)
@@ -8302,6 +8310,15 @@ def mode_self_test():
           room_pending_text("IMPL", "waiting IMPL order", None, None) == "IMPL: dev: waiting IMPL order", True)
     check("pending-virgin-names-lanes",
           room_pending_text("RECON", None, None, None) == "RECON: awaiting dev PLAN + qe approach (no worker posts yet)", True)
+    check("pending-testing-only-omits-dev",
+          room_pending_text("RECON", "idle :: testing-only scope, dev idle, QE owns work", None, None,
+                            scope="testing-only") == "RECON: awaiting qe approach (no worker posts yet)", True)
+    check("pending-testing-only-qe-only",
+          room_pending_text("IMPL", "waiting IMPL order", "waiting TESTING order", None,
+                            scope="testing-only") == "IMPL: qe: waiting TESTING order", True)
+    check("pending-testing-only-virgin",
+          room_pending_text("RECON", None, None, None,
+                            scope="testing-only") == "RECON: awaiting qe approach (no worker posts yet)", True)
     check("pending-closed", room_pending_text("CLOSED", "x", "y", "z") == "CLOSED", True)
     check("pending-cap-200",
           len(room_pending_text("IMPL", "x" * 300, None, None)) == 200, True)
