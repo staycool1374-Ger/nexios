@@ -335,12 +335,14 @@ def ack_scan_posts(role, boxes, handled, fresh):
     return []
 
 
-def match_ack(ref, role, boxes, rings, resume_now):
+def match_ack(ref, role, boxes, rings, resume_now, kind=None):
     """Classify a fresh ACK trailer. Pure. Returns (verdict, oid).
 
-    verdict is "ack" (clear exactly this oid), "ignore-malformed" (bad
-    shape or wrong lane), "ignore-stale" (not outstanding), or (None, None)
-    when there is no ref to classify.
+    verdict is "ack" (clear exactly this oid), "need-answers" (a NEED-kind
+    post references the order: blocked/refusal, the order stays live and
+    must not ledger-resolve, #484), "ignore-malformed" (bad shape or wrong
+    lane), "ignore-stale" (not outstanding), or (None, None) when there is
+    no ref to classify.
     """
     if not ref:
         return None, None
@@ -353,6 +355,8 @@ def match_ack(ref, role, boxes, rings, resume_now):
     if (boxes.get(role) or {}).get("coord_last"):
         cur = "%s:%s" % (role, boxes[role]["coord_last"][:19])
     if ref == cur or ref in rings or ref in resume_now.values():
+        if (kind or "").upper() == "NEED":
+            return "need-answers", ref
         return "ack", ref
     return "ignore-stale", ref
 
@@ -2746,6 +2750,45 @@ def qe_verified_tip(all_posts, full_lines=None):
     return None
 
 
+def foreign_verified_evidence(qe_boxes_by_issue, issue, testbed_tip):
+    """Issues (other than `issue`) with a QE VERIFIED post naming testbed_tip.
+
+    Pure (#484): qe_boxes_by_issue maps issue -> qe box dict (all/full).
+    A VERIFIED naming the shared checkout HEAD means that room's evidence
+    may live in the dirty tree, so CLEAN must not file until the evidence
+    is merged/stashed. Diff wording is free-form across lanes, so
+    tip-equality is the signal (fail-closed); the NEED names the rooms so
+    false positives clear fast.
+    """
+    out = []
+    for _iss, _qb in (qe_boxes_by_issue or {}).items():
+        if _iss == issue:
+            continue
+        _tip = qe_verified_tip((_qb or {}).get("all", []), (_qb or {}).get("full", []))
+        if not _tip or not testbed_tip:
+            continue
+        if _tip[:7] == (testbed_tip or "")[:7]:
+            out.append(_iss)
+    return sorted(out)
+
+
+def clean_refused_repeat(stored_clean, merged_for, ts, tree_hash):
+    """True when a prior CLEAN demonstrably had no effect. Pure (#484).
+
+    Same tree state, a newer trigger ts, and no merge intervened since the
+    stored CLEAN filed: re-filing would loop CLEAN->refuse->CLEAN while the
+    oid rotation hides it from the loop hash. Caller escalates instead.
+    """
+    stored_clean = stored_clean or {}
+    if not stored_clean.get("tree") or not tree_hash:
+        return False
+    if stored_clean.get("tree") != tree_hash:
+        return False
+    if stored_clean.get("for") == ts:
+        return False
+    return (stored_clean.get("for") or "") >= (merged_for or "")
+
+
 def tip_covers(ctx, verdict_tip, done_tip):
     """True when a verdict covers the DONE artifact. Pure-ish I/O.
 
@@ -2893,6 +2936,23 @@ def s11_gate(untracked, ls_tree_files, required_files):
     missing = s11_missing_files(ls_tree_files, required_files)
     has_un = bool(untracked)
     return (not has_un and not missing, missing, has_un)
+
+
+def s11_meson_files(build_text):
+    """String literals inside files() calls (issue #477 S1-1): the
+    load-bearing inputs a tip must contain (e.g. packaging file lists).
+    Scope is string literals only — loop-var files(src) and find-sources
+    are unresolvable and not load-bearing (S3-1). Leading ../ is stripped
+    so entries compare against repo-relative ls-tree paths."""
+    out = []
+    for m in re.finditer(r"files\s*\((.*?)\)", build_text or "", re.S):
+        for q in re.finditer(r"""['"]([^'"]+)['"]""", m.group(1)):
+            lit = q.group(1)
+            while lit.startswith("../"):
+                lit = lit[3:]
+            if lit and "$" not in lit and lit not in out:
+                out.append(lit)
+    return out
 
 
 def stale_refresh_due(branch_behind_main, engine_commits_in_path,
@@ -3378,6 +3438,73 @@ def starvation_gaps(nodes):
 STARVE_TICKS = 2  # consecutive starved ticks before a re-wake order
 
 
+def starvation_era_continues(stored, current_next):
+    """True when a non-starved tick should preserve the starvation store.
+
+    Pure. Same wait (NEXT unchanged) = same era: an ACK-without-progress
+    must not reset the escalation clock, or the ladder re-wakes forever
+    and never reaches escalate. A changed wait starts a new era (recount
+    from observe); legacy stores without an era mark preserve
+    conservatively.
+    """
+    prev = (stored or {}).get("next")
+    if not prev:
+        return True
+    return prev.strip().lower() == (current_next or "").strip().lower()
+
+
+SYNC_NEED_TICKS = 3      # consecutive mismatched sweeps before a re-probe order
+SYNC_ESCALATE_TICKS = 5  # … before operator escalation (then quiet)
+
+
+def lane_claim_class(nxt):
+    """working | waiting | idle | unknown for a lane NEXT. Pure.
+
+    Waiting lanes (explicit input-waits, parked holds) are never
+    suspicious — parking is legitimate. Only a bare working claim can
+    go stale against a quiet pane.
+    """
+    nxt = (nxt or "").strip()
+    if not nxt:
+        return "unknown"
+    if nxt[:4].lower() == "idle":
+        return "idle"
+    if LANE_WAITS_RE.search(nxt):
+        return "waiting"
+    return "working"
+
+
+def lane_probe_class(probe):
+    """active | quiet | unknown for a worker probe verdict. Pure.
+
+    A WORKING verdict already fuses pane/content/token/CPU movement, so
+    a prefix test carries the full signal. STUCK counts as active (the
+    STUCK ladder owns wedged panes, not the sync ladder); BLOCKED-modal
+    counts as active (someone is at the keyboard).
+    """
+    probe = probe or ""
+    if probe.startswith("BLOCKED"):
+        return "active"
+    if probe.startswith("WORKING") or probe.startswith("STUCK"):
+        return "active"
+    if probe.startswith("IDLE"):
+        return "quiet"
+    return "unknown"
+
+
+def lane_probe_short(probe):
+    """First clause of a probe verdict for status lines. Pure."""
+    return (probe or "-").split(" (")[0].split(";")[0][:40]
+
+
+def sync_mismatch(claim, probe_class):
+    """True only for stale-claim (working vs quiet) and hidden-work
+    (idle vs active). Waiting lanes and unknown inputs never mismatch.
+    Pure (#487)."""
+    return ((claim == "working" and probe_class == "quiet")
+            or (claim == "idle" and probe_class == "active"))
+
+
 def starvation_action(count, lane_unacked, oid_live, stored, cap=RING_LIMIT):
     """none | observe | rewake | await | escalate for one starved lane. Pure.
 
@@ -3573,7 +3700,7 @@ def pending_lane_text(role, phase, nxt, status_ts, anchor_ts, closeout):
 
 def room_pending_text(phase, dev_next, qe_next, audit_planned,
                       dev_status_ts=None, dev_anchor_ts=None,
-                      qe_status_ts=None, qe_anchor_ts=None):
+                      qe_status_ts=None, qe_anchor_ts=None, scope="full"):
     """One-line pending derived from the latest NEXTs. Pure (cap 200).
 
     Lane-tag prefixes keep downstream consumers honest (the backlog swap
@@ -3589,6 +3716,8 @@ def room_pending_text(phase, dev_next, qe_next, audit_planned,
     for _role, _nxt, _sts, _anc in (
             ("dev", dev_next, dev_status_ts, dev_anchor_ts),
             ("qe", qe_next, qe_status_ts, qe_anchor_ts)):
+        if _role == "dev" and scope == "testing-only":
+            continue  # dev is never an owner here; legacy idle trailers must not linger
         _seg = pending_lane_text(_role, phase, _nxt, _sts, _anc, closeout)
         if _seg:
             bits.append(_seg)
@@ -3597,6 +3726,8 @@ def room_pending_text(phase, dev_next, qe_next, audit_planned,
     if bits:
         return ("%s: %s" % (phase, " | ".join(bits)))[:200]
     if phase == "RECON":
+        if scope == "testing-only":
+            return "RECON: awaiting qe approach (no worker posts yet)"
         return "RECON: awaiting dev PLAN + qe approach (no worker posts yet)"
     return "%s: no lane NEXT on file" % phase
 
@@ -3879,20 +4010,17 @@ def recreating_peers(actions):
     return out
 
 
-def first_contact_due(role, has_posts, brief_present, probe, deaf, rings):
-    """One-shot first ring for a virgin lane. Pure.
+def intake_note_due(has_posts, brief_present, rings, role):
+    """Whether the virgin-lane INTAKE NOTE must be filed now. Pure (#482).
 
-    Fires only when the lane never posted, a staged brief exists, the lane
-    probes IDLE and reachable, and no prior first-contact ring is ledgered.
+    Fires when a staged brief exists, the lane never posted, and no prior
+    greeting is ledgered — independent of the lane probe: a WORKING lane
+    queues the order in its box and reads it when free. Only the doorbell
+    stays probe-gated (at the call site, IDLE + reachable + unrung).
     """
     if has_posts or not brief_present:
-        return False, None
-    oid = "first:%s" % role
-    if rings.get(oid):
-        return False, None
-    if deaf or not str(probe).startswith("IDLE"):
-        return False, None
-    return True, oid
+        return False
+    return not rings.get("first:%s" % role)
 
 
 def ring_peer_handoff(ctx, peer, sender, ts, oid, issue=None):
@@ -4108,14 +4236,20 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                     fresh_all[_wbox].append(_post)
     for role in LANES:
         for post in ack_scan_posts(role, boxes, handled, fresh_all.get(role, [])):
+            _akm = POST_RE.match(post)
+            _akind = _akm.group(3) if _akm else None
             ack_verdict, ack_ref = match_ack(post_ack(boxes[role]["full"], post),
-                                            role, boxes, rings, resume_now)
+                                            role, boxes, rings, resume_now,
+                                            kind=_akind)
             if ack_verdict is None:
                 continue
             if ack_verdict == "ignore-malformed":
                 actions.append("ack-ignored %s from %s (malformed or wrong lane)" % (ack_ref, role))
             elif ack_verdict == "ignore-stale":
                 actions.append("ack-ignored %s from %s (not outstanding)" % (ack_ref, role))
+            elif ack_verdict == "need-answers":
+                actions.append("NEED %s answers %s (blocked/refusal — order stays live, no ledger resolve)" % (role, ack_ref))
+                events.append("%s NEED-answers %s" % (role, ack_ref))
             else:
                 rings[ack_ref] = -1
                 actions.append("ack %s from %s" % (ack_ref, role))
@@ -4379,16 +4513,17 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             events.append("peer-handoff-hold-%s" % peer)
 
     for role in ("dev", "qe"):
+        if role == "dev" and _scope == "testing-only":
+            continue  # QE owns testing-labeled rooms; dev is never briefed, ordered, or rung here
         brief_p = os.path.join(room_dir, "prompts", "%s.txt" % role)
         try:
             brief_present = os.path.getsize(brief_p) > 0
         except OSError:
             brief_present = False
-        due, first_oid = first_contact_due(role, bool(boxes[role]["all"]),
-                                           brief_present, probes[role],
-                                           role in deaf, rings)
-        if not due:
+        if not intake_note_due(bool(boxes[role]["all"]), brief_present,
+                                rings, role):
             continue
+        first_oid = "first:%s" % role
         # Gap B: intake is a full acked order (coord NOTE + room-scoped
         # ring with the standard dev:<ts>/qe:<ts> oid), not a ring-only
         # pointer. first:<role> stays only the one-shot guard flag: set
@@ -5027,7 +5162,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     _c_preempt = False
     _c_s11_block = False
     if _c_stage in ("verify", "merge-close"):
-        _c_lane = "qe" if _c_stage == "verify" else "dev"
+        _c_lane = "qe" if (_c_stage == "verify" or _scope == "testing-only") else "dev"
         _c_pre_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"].get("full"),
                                         (gated or {}).get("fields"))
         _c_pre_brok = False
@@ -5061,6 +5196,35 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 actions.append("NEED re-commit #%d: %d untracked file(s) not in tip (%s); git add -A + amend before handover (#477 S1-1)"
                                % (issue, len(_c_pre_untracked), ", ".join(_c_pre_untracked[:4])))
                 events.append("closeout-s11-untracked")
+            try:
+                # S1-1 ls-tree half (issue #477): every meson files()
+                # literal must exist in the handover tip (the #53 miss:
+                # files('../userspace/pthread/pthread.c') absent from the
+                # pushed commit). Fail-closed NEED re-commit, same shape
+                # as the untracked half above; skips silently when the
+                # tip or the build files are unreadable (fail-open read,
+                # the auditor still gates the diff).
+                _c_s11_missing = []
+                _rcl, _outl = ctx.run(["git", "ls-tree", "-r", _c_pre_branch,
+                                       "--name-only"], timeout=30,
+                                      cwd=ctx.dev_dir)
+                if _rcl == 0:
+                    _c_req = []
+                    for _bf in ("packaging/meson.build", "src/meson.build"):
+                        try:
+                            with open(os.path.join(ctx.dev_dir, _bf)) as _fh:
+                                _c_req += s11_meson_files(_fh.read())
+                        except OSError:
+                            pass
+                    _c_s11_missing = s11_missing_files(
+                        (_outl or "").splitlines(), _c_req)
+                if _c_s11_missing:
+                    _c_s11_block = True
+                    actions.append("NEED re-commit #%d: %d meson files() input(s) missing from tip (%s); git add -A + amend before handover (#477 S1-1)"
+                                   % (issue, len(_c_s11_missing), ", ".join(_c_s11_missing[:4])))
+                    events.append("closeout-s11-missing")
+            except Exception:
+                pass
             try:
                 _dev_blocked = "blocked" in (dev_next or "").lower()
                 _rcb2, _ = ctx.run(["git", "merge-base", "--is-ancestor", "main", _c_pre_branch],
@@ -5172,31 +5336,32 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                     _bq_text = ("CLOSEOUT #%d: reply with two standalone lines branch: <step-a branch> + tip: <audited sha> "
                                 "(the branch carrying this room's DONE work and its audited tip); "
                                 "ACK it with post_update ref=<id> before starting" % issue)
-                    _bq_note, _bq_oid = coord_note("dev", _bq_text, ack_by=True)
+                    _bq_lane = "qe" if _scope == "testing-only" else "dev"
+                    _bq_note, _bq_oid = coord_note(_bq_lane, _bq_text, ack_by=True)
                     if _bq_oid in rings:
                         actions.append("order deferred closeout branch-name #%d (oid collision)" % issue)
                     elif ctx.dry:
-                        actions.append("WOULD post dev branch-name order #%d (oid %s)" % (issue, _bq_oid))
+                        actions.append("WOULD post %s branch-name order #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
                         rings[_bq_oid] = 0
-                        has_unacked.add("dev")
+                        has_unacked.add(_bq_lane)
                         file_order_deadline(ad_store, _bq_oid)
                         bq_store = {"for": _c_done, "oid": _bq_oid}
                         events.append("closeout-branch-order-filed")
-                    elif append_box_note(room_dir, "dev", _bq_note):
+                    elif append_box_note(room_dir, _bq_lane, _bq_note):
                         rings[_bq_oid] = 0
-                        has_unacked.add("dev")
+                        has_unacked.add(_bq_lane)
                         file_order_deadline(ad_store, _bq_oid)
                         bq_store = {"for": _c_done, "oid": _bq_oid}
-                        actions.append("order filed dev branch-name #%d (oid %s)" % (issue, _bq_oid))
-                        if ("dev" not in deaf and probes["dev"].startswith("IDLE")
-                                and not session_rung(actions, SESS["dev"], cycle["rung"])):
-                            _bq_res = ring(ctx, SESS["dev"], "dev", "closeout branch-name order",
+                        actions.append("order filed %s branch-name #%d (oid %s)" % (_bq_lane, issue, _bq_oid))
+                        if (_bq_lane not in deaf and probes[_bq_lane].startswith("IDLE")
+                                and not session_rung(actions, SESS[_bq_lane], cycle["rung"])):
+                            _bq_res = ring(ctx, SESS[_bq_lane], _bq_lane, "closeout branch-name order",
                                            oid=_bq_oid, issue=issue)
                             actions.append(_bq_res)
                             if _bq_res.startswith(("rang ", "WOULD ring ")):
                                 rings[_bq_oid] = 1
                     else:
-                        actions.append("NOTE-FAILED dev branch-name #%d" % issue)
+                        actions.append("NOTE-FAILED %s branch-name #%d" % (_bq_lane, issue))
             else:
                 bq_store = {}
                 _c_text = closeout_order_text(issue, _c_stage, _c_branch, _c_tip)
@@ -5303,14 +5468,48 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                         actions.append("NEED qe-merge #%d: testbed checkout unknown" % issue)
                     elif dirty_q:
                         actions.append("NEED qe-merge #%d: testbed not clean; clean first" % issue)
+                        _cl_tree = hashlib.md5("\n".join(sorted(dirty_q)).encode()).hexdigest()[:8]
+                        _cl_evb = {}
+                        for _eiss, _erdir, _erst in (rooms_all or []):
+                            if _eiss == issue:
+                                continue
+                            if ((_erst or {}).get("state")) in ("CLOSED", "CLOSING"):
+                                continue
+                            if (_erst or {}).get("halt"):
+                                continue
+                            try:
+                                _cl_evb[_eiss] = load_boxes(_erdir)["qe"]
+                            except Exception:
+                                continue
+                        _cl_evr = foreign_verified_evidence(_cl_evb, issue, info_q[1])
+                        _cl_open = []
+                        for _eiss in _cl_evr:
+                            _ev_tip = qe_verified_tip((_cl_evb.get(_eiss) or {}).get("all", []),
+                                                       (_cl_evb.get(_eiss) or {}).get("full", []))
+                            try:
+                                _rcb, _ = ctx.run(["git", "merge-base", "--is-ancestor",
+                                                   _ev_tip, "origin/main"],
+                                                  timeout=30, cwd=qd)
+                                if _rcb != 0:
+                                    _cl_open.append(_eiss)
+                            except Exception:
+                                _cl_open.append(_eiss)
                         _cl_stored = st.get("qe_clean") or {}
                         _cl_oid0 = _cl_stored.get("oid")
                         _cl_live = _cl_oid0 and rings.get(_cl_oid0) not in (None, -1, RING_ESCALATED)
-                        if _cl_stored.get("for") == ts and _cl_live:
+                        if _cl_open:
+                            actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); merge/stash evidence first or use scratch clone -- CLEAN not filed"
+                                           % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1]))
+                            events.append("qe-clean-blocked-evidence")
+                        elif _cl_stored.get("for") == ts and _cl_live:
                             actions.append("order deferred qe CLEAN #%d (already filed %s)" % (issue, _cl_oid0))
                         elif _cl_stored.get("for") == ts and _cl_oid0 in (rings or {}):
                             actions.append("NEED qe CLEAN #%d unanswered (order %s ACKed, tree still dirty)" % (issue, _cl_oid0))
                             events.append("qe-clean-unanswered")
+                        elif clean_refused_repeat(_cl_stored, ((st.get("qe_merge") or {}).get("for") or ""), ts, _cl_tree):
+                            actions.append("NEED qe CLEAN refused-repeat #%d: tree state %s unchanged since %s (no merge intervened); operator decision -- merge/stash evidence first or authorize scratch"
+                                           % (issue, _cl_tree, _cl_stored.get("oid")))
+                            events.append("qe-clean-refused-repeat")
                         else:
                             _cl_text = ("CLEAN #%d: make the testbed checkout clean so qe-merge can stage (save a patch of local mods to /tmp, git checkout -- tracked files, move untracked other-lane files to /tmp); then post DONE cleaned; ACK it with post_update ref=<id> before starting" % issue)
                             _cl_note, _cl_oid = coord_note("qe", _cl_text, ack_by=True, done_by=True, evidence="DONE")
@@ -5322,14 +5521,14 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                                 has_unacked.add("qe")
                                 file_order_deadline(ad_store, _cl_oid)
                                 file_order_delivery(dl_store, _cl_oid, "DONE")
-                                cl_store = {"for": ts, "oid": _cl_oid}
+                                cl_store = {"for": ts, "oid": _cl_oid, "tree": _cl_tree}
                                 events.append("qe-clean-order-filed")
                             elif append_box_note(room_dir, "qe", _cl_note):
                                 rings[_cl_oid] = 0
                                 has_unacked.add("qe")
                                 file_order_deadline(ad_store, _cl_oid)
                                 file_order_delivery(dl_store, _cl_oid, "DONE")
-                                cl_store = {"for": ts, "oid": _cl_oid}
+                                cl_store = {"for": ts, "oid": _cl_oid, "tree": _cl_tree}
                                 actions.append("order filed qe CLEAN #%d (oid %s)" % (issue, _cl_oid))
                                 if ("qe" not in deaf and probes["qe"].startswith("IDLE")
                                         and not session_rung(actions, SESS["qe"], cycle["rung"])):
@@ -5457,6 +5656,13 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     for _role in ("dev", "qe"):
         _sv_prev = _sv_prev_all.get(_role) or {}
         if _role not in _starved_roles:
+            # none (defensive: unacked or post-escalate quiet): preserve
+            # the prior store verbatim, no increment — a driven-then-freed
+            # lane resumes its era instead of jumping to escalate. Same
+            # wait only: a changed NEXT starts a new era and recounts.
+            if _sv_prev and starvation_era_continues(
+                    _sv_prev, (boxes[_role]["next"] or "")):
+                _sv_new[_role] = dict(_sv_prev)
             continue
         _sv_count = int(_sv_prev.get("count") or 0) + 1
         _sv_oid = _sv_prev.get("oid")
@@ -5524,7 +5730,79 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             # lane resumes its era instead of jumping to escalate.
             if _sv_prev:
                 _sv_new[_role] = dict(_sv_prev)
+        # Era mark for the next tick's preserve decision: the wait text
+        # this store was filed under. Preserved stores already carry one.
+        if _role in _sv_new and "next" not in _sv_new[_role]:
+            _sv_new[_role]["next"] = (boxes[_role]["next"] or "")
     node["starved"] = _starved_roles
+    # Lane claim-vs-pane sync (#487): posts stay authoritative for phase
+    # and pending, ACKs stay receipt-only; the pane corroborates freshness.
+    # Same NEXT continues the era (streak survives parked ACKs); a changed
+    # NEXT, agreement, or a cleared lane starts a new era. Escalated eras
+    # stay quiet until the claim changes.
+    _sy_prev_all = st.get("lane_sync") or {}
+    _sy_new = {}
+    for _role in ("dev", "qe"):
+        _sy_prev = _sy_prev_all.get(_role) or {}
+        _sy_nxt = (boxes[_role]["next"] or "")
+        if _sy_prev.get("escalated"):
+            if (_sy_prev.get("next") or "") == _sy_nxt:
+                _sy_new[_role] = dict(_sy_prev)
+                continue
+            _sy_prev = {}
+        _sy_mm = sync_mismatch(lane_claim_class(_sy_nxt),
+                               lane_probe_class((probes or {}).get(_role)))
+        if not _sy_mm:
+            continue
+        if _sy_prev.get("next") == _sy_nxt and _sy_prev.get("next"):
+            _sy_streak = int(_sy_prev.get("streak") or 0) + 1
+        else:
+            _sy_streak = 1
+        _sy_store = {"streak": _sy_streak, "next": _sy_nxt,
+                     "claim": lane_claim_class(_sy_nxt),
+                     "probe": (probes or {}).get(_role)}
+        if _sy_streak < SYNC_NEED_TICKS:
+            actions.append("SYNC watch #%d %s: claimed %s vs pane %s (NEXT '%s'); corroboration pending"
+                           % (issue, _role, _sy_store["claim"], lane_probe_short((probes or {}).get(_role)), _sy_nxt[:80]))
+            events.append("lane-sync-watch-%s" % _role)
+            _sy_new[_role] = _sy_store
+        elif _sy_streak < SYNC_ESCALATE_TICKS:
+            _sy_text = ("SYNC #%d %s: claimed STATE/NEXT disagrees with pane probe for %d sweeps (claim=%s, probe=%s, NEXT '%s'); re-read the room and re-post STATE/NEXT from a fresh `state` check; ACK it with post_update ref=<id> before starting"
+                        % (issue, _role, _sy_streak, _sy_store["claim"], lane_probe_short((probes or {}).get(_role)), _sy_nxt[:80]))
+            _sy_note, _sy_oid = coord_note(_role, _sy_text, ack_by=True)
+            if _sy_oid in rings:
+                actions.append("order deferred %s lane-sync (oid collision)" % _role)
+                _sy_new[_role] = _sy_store
+            elif ctx.dry:
+                actions.append("WOULD post %s lane-sync order (oid %s)" % (_role, _sy_oid))
+                rings[_sy_oid] = 0
+                has_unacked.add(_role)
+                file_order_deadline(ad_store, _sy_oid)
+                _sy_new[_role] = _sy_store
+                events.append("lane-sync-order-filed")
+            elif append_box_note(room_dir, _role, _sy_note):
+                rings[_sy_oid] = 0
+                has_unacked.add(_role)
+                file_order_deadline(ad_store, _sy_oid)
+                actions.append("order filed %s lane-sync (oid %s)" % (_role, _sy_oid))
+                if (_role not in deaf and probes[_role].startswith("IDLE")
+                        and not session_rung(actions, SESS[_role], cycle["rung"])):
+                    _sy_res = ring(ctx, SESS[_role], _role,
+                                   "lane-sync re-probe -- re-post STATE/NEXT",
+                                   oid=_sy_oid, issue=issue)
+                    actions.append(_sy_res)
+                    if _sy_res.startswith(("rang ", "WOULD ring ")):
+                        rings[_sy_oid] = 1
+                _sy_new[_role] = _sy_store
+                events.append("lane-sync-order-filed")
+            else:
+                actions.append("NOTE-FAILED %s lane-sync #%d" % (_role, issue))
+        else:
+            actions.append("NEED lane SYNC #%d %s ESCALATED (claimed %s vs pane %s for %d sweeps, NEXT '%s'); operator: verify session health, recreate if wedged; no new order"
+                           % (issue, _role, _sy_store["claim"], lane_probe_short((probes or {}).get(_role)), _sy_streak, _sy_nxt[:80]))
+            events.append("lane-sync-escalated-%s" % _role)
+            _sy_store["escalated"] = True
+            _sy_new[_role] = _sy_store
     _loop_tip = _c_tip_early if "_c_tip_early" in dir() else None
     try:
         _loop_tip = _c_tip_early
@@ -5544,7 +5822,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         elif "starvation" in _lp.lower() or _starved_roles:
             _brk = "re-ring once, then escalate operator"
         elif "clean" in _lp.lower():
-            _brk = "re-file CLEAN with patch save"
+            _brk = "operator decision (CLEAN evidence/refused-repeat guard, #484)"
         else:
             _brk = "operator intervention"
         actions.append("NEED loop #%d: pending hash %s repeated %dx since %s -- break via %s (#479)"
@@ -5685,6 +5963,10 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["starve"] = _sv_new
         else:
             s.pop("starve", None)
+        if isinstance(_sy_new, dict) and _sy_new:
+            s["lane_sync"] = _sy_new
+        else:
+            s.pop("lane_sync", None)
         if rn_store:
             s["ready_need"] = rn_store
         else:
@@ -5770,7 +6052,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 _phase, boxes["dev"]["next"], boxes["qe"]["next"],
                 audit_note if need_verdict else None,
                 boxes["dev"].get("status_ts"), _dev_anchor,
-                boxes["qe"].get("status_ts"), impl_ts or None)
+                boxes["qe"].get("status_ts"), impl_ts or None,
+                scope=_scope)
             if _new_pending != _cur_pending:
                 s["pending"] = pending_refresh(_cur_pending, _new_pending,
                                                s.get("halt"), halt_now)
@@ -7524,22 +7807,18 @@ def mode_self_test():
     check("status-plan-halted",
           status_planned_lane("dev", dict(b_idle, next="x"), {"halt": True},
                               "IDLE-static") == "HALTED: no actions", True)
-    check("first-due-virgin-idle",
-          first_contact_due("dev", False, True, "IDLE-static", False, {}) == (True, "first:dev"), True)
-    check("first-due-contacted",
-          first_contact_due("dev", True, True, "IDLE-static", False, {}) == (False, None), True)
-    check("first-due-no-brief",
-          first_contact_due("dev", False, False, "IDLE-static", False, {}) == (False, None), True)
-    check("first-due-working",
-          first_contact_due("dev", False, True, "WORKING-markers", False, {}) == (False, None), True)
-    check("first-due-deaf",
-          first_contact_due("dev", False, True, "IDLE-static", True, {}) == (False, None), True)
-    check("first-due-rung-once",
-          first_contact_due("dev", False, True, "IDLE-static", False,
-                            {"first:dev": 1}) == (False, None), True)
-    check("first-due-namespace-isolated",
-          first_contact_due("qe", False, True, "IDLE-static", False,
-                            {"first:dev": 1}) == (True, "first:qe"), True)
+    check("first-note-virgin-files",
+          intake_note_due(False, True, {}, "dev") is True, True)
+    check("first-note-contacted",
+          intake_note_due(True, True, {}, "dev") is False, True)
+    check("first-note-no-brief",
+          intake_note_due(False, False, {}, "dev") is False, True)
+    check("first-note-working-files-too",
+          intake_note_due(False, True, {}, "dev") is True, True)
+    check("first-note-rung-once",
+          intake_note_due(False, True, {"first:dev": 1}, "dev") is False, True)
+    check("first-note-namespace-isolated",
+          intake_note_due(False, True, {"first:dev": 1}, "qe") is True, True)
     check("ring-line-legacy",
           ring_line("dev", "first brief") == "inbox: first brief -- read inbox/dev.md", True)
     check("ring-line-oid",
@@ -8082,6 +8361,48 @@ def mode_self_test():
           starvation_action(STARVE_TICKS - 1, False, False, {}, 3) == "observe", True)
     check("starve-ticks-wired-rewake",
           starvation_action(STARVE_TICKS, False, False, {"count": 1}, 3) == "rewake", True)
+    check("starve-era-same-next-preserves",
+          starvation_era_continues({"count": 2, "next": "waiting engine restage"}, "waiting engine restage") is True, True)
+    check("starve-era-changed-next-resets",
+          starvation_era_continues({"count": 2, "next": "waiting engine restage"}, "waiting dev READY") is False, True)
+    check("starve-era-empty-next-resets",
+          starvation_era_continues({"count": 2, "next": "waiting x"}, "") is False, True)
+    check("starve-era-legacy-no-mark-preserves",
+          starvation_era_continues({"count": 2}, "waiting x") is True, True)
+    check("sync-claim-working",
+          lane_claim_class("working :: verify TIP") == "working", True)
+    check("sync-claim-waiting",
+          lane_claim_class("waiting engine merge") == "waiting", True)
+    check("sync-claim-parked-waiting",
+          lane_claim_class("STATE: blocked :: parked, NEXT waiting restage") == "waiting", True)
+    check("sync-claim-idle",
+          lane_claim_class("idle :: testing-only scope, dev idle") == "idle", True)
+    check("sync-claim-empty-unknown",
+          lane_claim_class("") == "unknown" and lane_claim_class(None) == "unknown", True)
+    check("sync-probe-working-active",
+          lane_probe_class("WORKING (#441) markers") == "active", True)
+    check("sync-probe-idle-quiet",
+          lane_probe_class("IDLE (static, bare prompt; tokens=12%)") == "quiet", True)
+    check("sync-probe-idle-static-quiet",
+          lane_probe_class("IDLE-static probe") == "quiet", True)
+    check("sync-probe-stuck-active",
+          lane_probe_class("STUCK (frozen window with run markers)") == "active", True)
+    check("sync-probe-blocked-active",
+          lane_probe_class("BLOCKED (permission prompt visible)") == "active", True)
+    check("sync-probe-absent-unknown",
+          lane_probe_class("ABSENT") == "unknown" and lane_probe_class("") == "unknown", True)
+    check("sync-mismatch-stale-claim",
+          sync_mismatch("working", "quiet") is True, True)
+    check("sync-mismatch-hidden-work",
+          sync_mismatch("idle", "active") is True, True)
+    check("sync-mismatch-waiting-never",
+          sync_mismatch("waiting", "quiet") is False and sync_mismatch("waiting", "active") is False, True)
+    check("sync-mismatch-unknown-never",
+          sync_mismatch("unknown", "quiet") is False and sync_mismatch("working", "unknown") is False, True)
+    check("sync-mismatch-agree-never",
+          sync_mismatch("working", "active") is False and sync_mismatch("idle", "quiet") is False, True)
+    check("sync-probe-short",
+          lane_probe_short("IDLE (static; tokens=1%)") == "IDLE" and lane_probe_short("") == "-", True)
     # Item 5 (#463): work-conserving scan + IDLE gate. Bite: forcing
     # global_work_scan to None flips every denied row to FAIL.
     _rmk = lambda iss, **kw: dict({"issue": iss, "halt": False,
@@ -8302,6 +8623,15 @@ def mode_self_test():
           room_pending_text("IMPL", "waiting IMPL order", None, None) == "IMPL: dev: waiting IMPL order", True)
     check("pending-virgin-names-lanes",
           room_pending_text("RECON", None, None, None) == "RECON: awaiting dev PLAN + qe approach (no worker posts yet)", True)
+    check("pending-testing-only-omits-dev",
+          room_pending_text("RECON", "idle :: testing-only scope, dev idle, QE owns work", None, None,
+                            scope="testing-only") == "RECON: awaiting qe approach (no worker posts yet)", True)
+    check("pending-testing-only-qe-only",
+          room_pending_text("IMPL", "waiting IMPL order", "waiting TESTING order", None,
+                            scope="testing-only") == "IMPL: qe: waiting TESTING order", True)
+    check("pending-testing-only-virgin",
+          room_pending_text("RECON", None, None, None,
+                            scope="testing-only") == "RECON: awaiting qe approach (no worker posts yet)", True)
     check("pending-closed", room_pending_text("CLOSED", "x", "y", "z") == "CLOSED", True)
     check("pending-cap-200",
           len(room_pending_text("IMPL", "x" * 300, None, None)) == 200, True)
@@ -8519,10 +8849,10 @@ def mode_self_test():
           impl_stalled(_iw, True, [], True, {"dev:2026-11-02T08:00:00": 4}, set(), _st) is False, True)
     check("impl-stalled-fresh-post",
           impl_stalled(_iw, True, ["x"], True, {"dev:2026-11-02T08:00:00": -1}, set(), _st) is False, True)
-    check("first-due-guard-minus-one",
-          first_contact_due("dev", False, True, "IDLE-static", False, {"first:dev": -1}) == (False, None), True)
-    check("first-due-guard-zero-not-guard",
-          first_contact_due("dev", False, True, "IDLE-static", False, {"first:dev": 0}) == (True, "first:dev"), True)
+    check("first-note-guard-minus-one",
+          intake_note_due(False, True, {"first:dev": -1}, "dev") is False, True)
+    check("first-note-guard-zero-not-guard",
+          intake_note_due(False, True, {"first:dev": 0}, "dev") is True, True)
     _inote, _ioid = coord_note("dev", "INTAKE #99 dev first brief")
     check("intake-oid-shape",
           ACK_OID_RE.fullmatch(_ioid) is not None and ref_lane(_ioid) == "dev", True)
@@ -8621,6 +8951,31 @@ def mode_self_test():
     check("match-ack-clears-peer",
           match_ack("peer:qe:2026-11-02T07:59:00", "qe", {"qe": {"all": []}},
                     {"peer:qe:2026-11-02T07:59:00": 1}, {}) == ("ack", "peer:qe:2026-11-02T07:59:00"), True)
+    check("match-ack-need-kind-no-resolve",
+          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}, kind="NEED") == ("need-answers", "dev:2026-11-02T07:59:00"), True)
+    check("match-ack-note-kind-resolves",
+          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}, kind="NOTE") == ("ack", "dev:2026-11-02T07:59:00"), True)
+    check("match-ack-legacy-default-resolves",
+          match_ack("dev:2026-11-02T07:59:00", "dev", mb, {}, {}) == ("ack", "dev:2026-11-02T07:59:00"), True)
+    _fvb = {470: {"all": ["2026-11-05T13:05:32Z FROM=qe NOTE :: VERIFIED #470 tip: 5e9e3d341"], "full": []},
+            471: {"all": ["2026-11-05T14:01:02Z FROM=qe NEED :: NEED direction"], "full": []},
+            472: {"all": ["2026-11-05T13:58:36Z FROM=qe NOTE :: VERIFIED #472 tip: deadbee"], "full": []}}
+    check("foreign-verified-evidence-tip-match",
+          foreign_verified_evidence(_fvb, 441, "5e9e3d3") == [470], True)
+    check("foreign-verified-evidence-skips-self",
+          foreign_verified_evidence(_fvb, 470, "5e9e3d3") == [], True)
+    check("foreign-verified-evidence-no-verified",
+          foreign_verified_evidence({471: _fvb[471]}, 441, "5e9e3d3") == [], True)
+    check("clean-refused-repeat-same-tree",
+          clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "", "2026-11-05T14:00:44", "ab12cd34") is True, True)
+    check("clean-refused-repeat-tree-changed",
+          clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "", "2026-11-05T14:00:44", "ff99ee00") is False, True)
+    check("clean-refused-repeat-same-ts",
+          clean_refused_repeat({"for": "2026-11-05T14:00:44", "oid": "qe:x", "tree": "ab12cd34"}, "", "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("clean-refused-repeat-merge-intervened",
+          clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "2026-11-05T13:55:00", "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("clean-refused-repeat-no-store",
+          clean_refused_repeat({}, "", "2026-11-05T14:00:44", "ab12cd34") is False, True)
     stt = {"pending": "provisioned from issue text"}
     check("status-plan-armed-unacked",
           status_planned_lane("qe", {"all": [], "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
@@ -8968,6 +9323,10 @@ def mode_self_test():
           s11_gate(["new/x.hpp"], ["src/a.cpp"], ["src/a.cpp"])[0] is False, True)
     check("s11-gate-missing-blocks",
           s11_gate([], ["src/a.cpp"], ["src/a.cpp", "src/missing.hpp"])[0] is False, True)
+    check("s11-meson-literal",
+          s11_meson_files("x = files('../userspace/pthread/pthread.c', 'a.c')") == ["userspace/pthread/pthread.c", "a.c"], True)
+    check("s11-meson-strips-dedups-skips",
+          s11_meson_files("a = files('../../x.c', '../../x.c', '$v.c')\nb = files(src)") == ["x.c"], True)
     check("stale-refresh-fires",
           stale_refresh_due(True, True, True, True) is True, True)
     check("stale-refresh-clean-required",

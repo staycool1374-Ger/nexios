@@ -147,6 +147,10 @@ usage: agent_up.sh <mode> [...]
                      dialog (checks first; person-run only).
   close [--all]      kill worker tmux sessions; --all also kills the
                      consultant + engine loop (+ legacy nexios-coord if present).
+  engine <verb>      engine loop only (workers/consultant/rooms untouched):
+                     close kills $ENGINE_SESS (no-op when absent); restart
+                     kills it if present then starts a fresh tick loop on
+                     current working-tree code; status reports up/down.
   clean <issue> [--dry-run]  remove a CLOSED lane's merged branches + room;
                      refuses on open issue, unpushed main, live room.
   watch <issue> [arm|disarm|tick|status]  dev/qe activity watchdog
@@ -2340,6 +2344,76 @@ mode_watch() {
   exec "$SCRIPT_DIR/watchdog.sh" "$act" "$issue" "$@"
 }
 
+# A tick loop that outlived its session blocks resurrection via the pgrep
+# guard in ensure_engine_loop, while ticking stale code with no session to
+# manage it. Reap only the definitionally-orphaned (session absent) and
+# age-guarded (one-shot interval-0 ticks finish in seconds; anything older
+# than 3 min is the stale loop, never an in-flight one-shot).
+reap_orphan_loop() {
+  # A TERMED loop can take seconds to unwind (in-flight git ops, state
+  # writeback); starting the replacement before the old PID exits leaves
+  # two writers on the same rooms. Wait for the exit, KILL past a grace
+  # period — a loop that ignores TERM is wedged by definition.
+  local _lp _age _age_s _wait
+  for _lp in $(pgrep -f '[s]tate_machine\.py tick --all' 2>/dev/null); do
+    if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+      return 0
+    fi
+    _age=$(ps -o etime= -p "$_lp" 2>/dev/null | tr -d '[:space:]')
+    [ -n "$_age" ] || continue
+    _age_s=$(printf '%s' "$_age" | awk -F'[-:]' '{s=0; for(i=1;i<=NF;i++) s=s*60+$i; print s}')
+    if [ "${_age_s:-0}" -gt 180 ]; then
+      kill "$_lp" 2>/dev/null || continue
+      info "reaped orphaned tick loop (pid $_lp, age $_age), waiting exit"
+      _wait=0
+      while ps -p "$_lp" >/dev/null 2>&1 && [ "$_wait" -lt 15 ]; do
+        sleep 1
+        _wait=$((_wait + 1))
+      done
+      if ps -p "$_lp" >/dev/null 2>&1; then
+        kill -9 "$_lp" 2>/dev/null || true
+        info "orphaned tick loop (pid $_lp) ignored TERM, KILLed"
+      fi
+    fi
+  done
+}
+mode_engine() {
+  # Engine-loop-only lifecycle (workers, consultant, rooms untouched).
+  # restart = fresh tick loop on current working-tree code.
+  local verb="${1:-status}"
+  case "$verb" in
+    close)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
+      else
+        info "engine loop not running ($ENGINE_SESS absent)"
+      fi
+      reap_orphan_loop
+      ;;
+    restart)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
+        # The server drops the name asynchronously; a blind ensure would
+        # read the ghost and skip the start (leaving no loop at all).
+        for _w in 1 2 3 4 5 6; do
+          tmux has-session -t "$ENGINE_SESS" 2>/dev/null || break
+          sleep 1
+        done
+      fi
+      reap_orphan_loop
+      ensure_engine_loop
+      ;;
+    status)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        info "engine loop up ($ENGINE_SESS)"
+        tmux list-panes -t "$ENGINE_SESS" -F '#{pane_current_command} #{pane_pid}' 2>/dev/null || true
+      else
+        info "engine loop down ($ENGINE_SESS absent)"
+      fi
+      ;;
+    *) fail "engine needs a verb (close|restart|status), got '$verb'" ;;
+  esac
+}
 mode_close() {
   local all=0; [ "${1:-}" = "--all" ] && all=1
   for s in "$DEV_SESS" "$QE_SESS" "$AUDIT_SESS"; do
@@ -2378,6 +2452,7 @@ case "$mode" in
   __consult-cmd) CONSULT_TMPDIR=/tmp/agentup-tmp-probe; consult_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
+  engine) mode_engine "$@" ;;
   watch) mode_watch "$@" ;;
   clean) mode_clean "$@" ;;
   __clean-repo) __clean_repo "$@" ;;
