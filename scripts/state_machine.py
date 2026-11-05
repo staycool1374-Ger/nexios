@@ -7451,7 +7451,7 @@ def status_lane_state(role, probe, here, facts, issue, focus, operator_hold=Fals
     if probe.startswith("BLOCKED-modal"):
         return "BLOCKED"
     here = here or {}
-    if focus is not None and issue == focus:
+    if focus is not None and issue == focus and not probe.startswith(("IDLE")):
         return "WORKING (#%d)" % issue
     if operator_hold and role in ("dev", "qe"):
         return "BLOCKED"
@@ -8315,6 +8315,15 @@ def mode_self_test():
     check("status-probe-idle-free", status_lane_state("qe", "IDLE-static", {}, {}, 52, None) == "IDLE", True)
     check("status-operator-hold", status_lane_state("qe", "IDLE-static", {}, {}, 53, None, True) == "BLOCKED", True)
     check("status-operator-hold-focus-wins", status_lane_state("dev", "WORKING-x", {"order": True}, {53: {"order": True}}, 53, 53, True) == "WORKING (#53)", True)
+    check("status-focus-idle-wait-blocked",
+          status_lane_state("dev", "IDLE-static", {"waits": True}, {52: {"waits": True}}, 52, 52) == "BLOCKED", True)
+    check("status-focus-idle-free-idle",
+          status_lane_state("dev", "IDLE-static", {}, {52: {}}, 52, 52) == "IDLE", True)
+    check("status-focus-working-markers",
+          status_lane_state("dev", "WORKING-markers", {"waits": True}, {52: {"waits": True}}, 52, 52) == "WORKING (#52)", True)
+    check("status-unfocused-matrix-intact",
+          status_lane_state("dev", "WORKING-x", {"order": True}, {53: {"order": True}}, 53, None) == "WORKING"
+          and status_lane_state("dev", "IDLE-static", {"waits": True}, {}, 53, None) == "BLOCKED", True)
     check("activity-waiting-for-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting anything", "VERIFY", True) == "WAITING FOR OPERATOR", True)
     check("activity-qe-operator-hold", status_lane_activity("qe", "BLOCKED", "qe: idle", "", True) == "WAITING FOR OPERATOR", True)
     check("planned-reading-issue", planned_for("WAITING FOR OPERATOR", 53) == "READING ISSUE #53", True)
