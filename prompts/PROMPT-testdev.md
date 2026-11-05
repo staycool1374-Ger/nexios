@@ -30,6 +30,13 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 * **Target:** All work occurs in `src/kernel/test/` on the `testbed` branch. No production code.
 * **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` (safe class, fast) or `bash scripts/run_all_classes.sh x86_64 debug` (full suite).
  * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
+## DECISION BRIEF (operator-grade questions - mandatory shape)
+- When blocked on something only the operator can decide (test acceptance wording when the audited APIs do not exist in-tree, e.g. #472 cap::lookup/IRQ-inject items; unmerged-evidence sequencing conflicts with another room's CLEAN order, e.g. #441 vs #471/#472; scope calls on stub coverage): keep working every unblocked part, do NOT stall the lane.
+- Post ONE NOTE to your room inbox carrying a standalone line `REQUEST: operator decision <short topic>`, then the brief:
+  OPTIONS: every viable option (how it works). Per option: advantages, disadvantages, what it unblocks, reversibility.
+  RECOMMENDATION: your pick + what it unblocks. NOT VIABLE: ruled-out options + one-line why.
+- The engine relays the brief verbatim to the rooms GitHub issue; the operator answers there with `DECISION: <choice>`, which the engine files back as an order. Never invent the decision.
+- A NEED post is NOT a decision request: NEED names the lane whose input you wait on (qe/dev/audit/verdict). `REQUEST: operator decision` is only for architect-level calls no lane can make.
 ## WIRE (mandatory — identical in every lane)
 - ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
 - ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
