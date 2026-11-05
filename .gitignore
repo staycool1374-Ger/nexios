@@ -32,3 +32,5 @@ tools/gdb/*.gdb
 .obsidian/
 .nexios-runtime/
 logs/
+graphify-out/
+watch_*
