@@ -79,6 +79,15 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         for (uint64_t i = 0; i < count; ++i) {
             auto *t = Scheduler::task_at(i);
             if (t && t->parent_id == cur->id) {
+                // Issue #53: a thread with a registered joiner is owned by
+                // that joiner (which reaps it on collect) — waitpid skips
+                // it instead of racing the join.  Non-threads and
+                // join-less threads are unaffected.
+                if (t->is_thread() &&
+                    __atomic_load_n(&t->join_waiter_, __ATOMIC_ACQUIRE) !=
+                        nullptr) {
+                    continue;
+                }
                 // (uint64_t)-1 is the any-child wildcard (waitpid pid -1),
                 // not a failure code — deliberately raw, see H6 note #257.
                 if (target_pid == static_cast<uint64_t>(-1) ||
@@ -91,6 +100,14 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (!child)
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         if (child->state == TaskState::TERMINATED) {
+            if (child->is_thread() &&
+                !TaskControlBlock::thread_join_try_claim(*child)) {
+                // Lost the collect race to a concurrent joiner/detach/
+                // reaper collect: re-scan instead of double-reaping.
+                // (waitpid skips joined threads above, so the winner here
+                // can only be a detach-consume or the reaper.)
+                continue;
+            }
             if (status_ptr) {
                 // MP-4 (SMAP): user write via safe_copy_to_user
                 // (stac-wrapped); kernel-task callers write directly.
@@ -221,6 +238,12 @@ uint64_t Syscall::sys_exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                            uint64_t, uint64_t *regs) {
     kernel::test::mark_vfs_touched();
     if (!syscall_is_user_task())
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    // Issue #52: a thread shares its address space — exec would swap the
+    // shared root out from under its siblings.  Fail closed (threads exit
+    // and the group leader re-execs, or spawn a fresh process).
+    auto *exec_task = syscall_task();
+    if (exec_task != nullptr && exec_task->is_thread())
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     vfs::Vnode *vn = nullptr;
     char path_buf[SYSCALL_MAX_PATH];

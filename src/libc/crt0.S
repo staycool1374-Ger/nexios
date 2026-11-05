@@ -6,8 +6,10 @@
  * TLS_SET to the picolibc thread block (picolibc owns the TLS-block layout;
  * crt0 only points the thread register at it — TLS_SET itself needs no
  * live TLS), (4) launch parse (argc/argv/envp from the loader-built stack;
- * the versioned launch struct is reserved-absent in v0.1, P4), (5) main,
- * (6) clean SYS_EXIT on return.
+ * the versioned launch struct is reserved-absent in v0.1, P4), (4b)
+ * .init_array walk (issue #455 item 3: bounded, NULL-safe, post-TLS_SET
+ * pre-main; weak refs so images without .init_array skip at zero cost),
+ * (5) main, (6) clean SYS_EXIT on return.
  *
  * Contract notes (binding): tls_base_ == 0 means unset — the kernel loads
  * nothing; TLS comes only from step 3. crt0.o never maps kernel memory
@@ -41,6 +43,13 @@
  * guarantee, the message is best-effort.
  */
 #include "sdk_version.h"
+
+/* Issue #455 item 3: weak .init_array bounds — images linked without
+ * .init_array inputs (toolchain-default script, no constructors) resolve
+ * these to 0 and the step-4b walk skips. user_task.ld PROVIDEs them when
+ * constructors exist. */
+.weak __init_array_start
+.weak __init_array_end
 
 .section .text
 .global _start
@@ -78,6 +87,40 @@ _start:
     lea 8(%rsp), %rsi
     lea 16(%rsp,%rdi,8), %rdx
     andq $-16, %rsp
+    /* Step 4b: .init_array walk (issue #455 item 3). Bounded (64
+       constructors), NULL-entry skip, no syscalls/alloc; post-TLS_SET
+       pre-main so ctors may use errno. Entry regs are stashed on the
+       stack (ctors clobber caller-saved regs); the 32-byte frame keeps
+       16-alignment. rbx/r12/r13 are callee-saved across ctor calls. */
+    sub $32, %rsp
+    mov %rdi, 0(%rsp)
+    mov %rsi, 8(%rsp)
+    mov %rdx, 16(%rsp)
+    lea __init_array_start(%rip), %rbx
+    lea __init_array_end(%rip), %rcx
+    cmp %rbx, %rcx
+    jbe .Linit_done
+    mov %rcx, %r12
+    mov %rbx, %r13
+.Linit_loop:
+    cmp %r12, %r13
+    jae .Linit_done
+    mov (%r13), %rax
+    add $8, %r13
+    test %rax, %rax
+    jz .Linit_loop
+    mov %r13, %rdx
+    sub %rbx, %rdx
+    shr $3, %rdx
+    cmp $64, %rdx
+    ja .Linit_done
+    call *%rax
+    jmp .Linit_loop
+.Linit_done:
+    mov 0(%rsp), %rdi
+    mov 8(%rsp), %rsi
+    mov 16(%rsp), %rdx
+    add $32, %rsp
     /* Step 5: driver main. */
     call main
     /* Step 6: clean SYS_EXIT (6) with main's return code. */
@@ -147,6 +190,34 @@ _start:
     lsl x2, x0, #3
     add x2, x1, x2
     add x2, x2, #8
+    /* Step 4b: .init_array walk (issue #455 item 3). Bounded (64),
+       NULL-safe, no syscalls/alloc; post-TLS_SET pre-main. x0-x2 are
+       stashed (ctors clobber them); x19-x23 are callee-saved. */
+    sub sp, sp, #32
+    stp x0, x1, [sp]
+    str x2, [sp, #16]
+    adrp x19, __init_array_start
+    add x19, x19, :lo12:__init_array_start
+    adrp x20, __init_array_end
+    add x20, x20, :lo12:__init_array_end
+    cmp x20, x19
+    b.ls .Linit_done
+    mov x21, x19
+.Linit_loop:
+    cmp x21, x20
+    b.hs .Linit_done
+    ldr x22, [x21], #8
+    cbz x22, .Linit_loop
+    sub x23, x21, x19
+    lsr x23, x23, #3
+    cmp x23, #64
+    b.hi .Linit_done
+    blr x22
+    b .Linit_loop
+.Linit_done:
+    ldp x0, x1, [sp]
+    ldr x2, [sp, #16]
+    add sp, sp, #32
     /* Step 5: driver main. */
     bl main
     /* Step 6: clean SYS_EXIT (6) with main's return code. */
@@ -218,6 +289,36 @@ _start:
     slli t0, a0, 3
     add a2, a1, t0
     addi a2, a2, 8
+    /* Step 4b: .init_array walk (issue #455 item 3). Bounded (64),
+       NULL-safe, no syscalls/alloc; post-TLS_SET pre-main. a0-a2 are
+       stashed (ctors clobber them); s0-s3 are callee-saved. */
+    addi sp, sp, -32
+    sd a0, 0(sp)
+    sd a1, 8(sp)
+    sd a2, 16(sp)
+    .option push
+    .option norelax
+    la s0, __init_array_start
+    la s1, __init_array_end
+    .option pop
+    bgeu s0, s1, .Linit_done
+    mv s2, s0
+.Linit_loop:
+    bgeu s2, s1, .Linit_done
+    ld s3, 0(s2)
+    addi s2, s2, 8
+    beqz s3, .Linit_loop
+    sub t0, s2, s0
+    srli t0, t0, 3
+    li t1, 64
+    bgtu t0, t1, .Linit_done
+    jalr s3
+    j .Linit_loop
+.Linit_done:
+    ld a0, 0(sp)
+    ld a1, 8(sp)
+    ld a2, 16(sp)
+    addi sp, sp, 32
     /* Step 5: driver main. */
     call main
     /* Step 6: clean SYS_EXIT (6) with main's return code (already in a0). */

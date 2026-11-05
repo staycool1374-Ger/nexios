@@ -455,7 +455,11 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
         }
     }
     p->waiting_child_pid = 0;
-    if (!waiter_collects) {
+    // Issue #53: joinable threads stay parented so a later JOIN can
+    // collect them (EXIT-before-JOIN must converge); detached threads
+    // orphan like regular tasks so the reaper auto-reaps them.
+    if (!waiter_collects &&
+        (!child.is_thread() || child.join_detached_)) {
         p->remove_child(&child);
         child.parent_id = 0;
     }
@@ -621,6 +625,14 @@ void Scheduler::reap_orphans() noexcept {
                 // registered): the child is an orphan — reap it.
                 can_reap = true;
             }
+        }
+
+        if (can_reap && t->is_thread() &&
+            !TaskControlBlock::thread_join_try_claim(*t)) {
+            // Issue #53: a concurrent JOIN-collect, DETACH-consume, or
+            // waitpid thread-reap won this zombie — back off instead of
+            // double-reaping.  A woken joiner reads its handoff latch.
+            can_reap = false;
         }
 
         if (!can_reap)

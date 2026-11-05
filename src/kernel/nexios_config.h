@@ -786,6 +786,35 @@
 #define CONFIG_USER_SHM_REGION_SIZE 0x200000ULL // 2 MiB
 #endif
 
+/// Base of the fixed user-space thread-stack window (issue #52).  Each
+/// thread sharing an address space owns a private stack carved from this
+/// window (slot = CONFIG_THREAD_STACK_SIZE + one guard page).  Lies above
+/// the SHM window (0x62000000 + 8*2MiB = 0x63000000) and below
+/// mem::STACK_VADDR (0x70000000); a static_assert in task.cpp pins the
+/// window bounds (disjoint from HEAP/MMIO/SHM/STACK, no wrap).
+#ifndef CONFIG_USER_THREAD_STACK_BASE
+#define CONFIG_USER_THREAD_STACK_BASE 0x64000000ULL
+#endif
+
+/// Maximum number of thread-stack slots in the window (issue #52).
+/// Bounded static freelist — no dynamic allocation on real-time paths.
+#ifndef CONFIG_THREAD_MAX_STACKS
+#define CONFIG_THREAD_MAX_STACKS 64
+#endif
+
+/// Maximum number of live thread address-space groups (issue #52).  One
+/// group per shared root PML4; independent of any single TCB so owner
+/// death never frees a live root.
+#ifndef CONFIG_THREAD_MAX_GROUPS
+#define CONFIG_THREAD_MAX_GROUPS 16
+#endif
+
+/// Maximum user stack size (bytes) accepted by SYS_THREAD_CREATE (issue
+/// #52).  Must be a multiple of the page size; fail-closed EINVAL above.
+#ifndef CONFIG_THREAD_MAX_STACK_SIZE
+#define CONFIG_THREAD_MAX_STACK_SIZE 0x10000ULL // 64 KiB
+#endif
+
 /// Maximum number of live IoMmuDmaCap objects (v0.4.2, issue #4).  Enforced
 /// by a TU-local live counter in cap/iommu.cpp.
 #ifndef CONFIG_CAP_MAX_IOMMU
@@ -1338,6 +1367,12 @@ extern "C" void panic(const char *msg);
 #if CONFIG_CAP_BROKER != 0 && CONFIG_CAP_BROKER != 1
 #error "CONFIG_CAP_BROKER must be 0 or 1 (default 0)"
 #endif
+#if CONFIG_WDOG_MON != 0 && CONFIG_WDOG_MON != 1
+#error "CONFIG_WDOG_MON must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_PROCFS_SRV != 0 && CONFIG_PROCFS_SRV != 1
+#error "CONFIG_PROCFS_SRV must be 0 or 1 (default 0)"
+#endif
 #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
 #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif
@@ -1388,6 +1423,26 @@ extern "C" void panic(const char *msg);
 /// knob. Default: 0.
 #ifndef CONFIG_CAP_BROKER
 #define CONFIG_CAP_BROKER 0
+#endif
+
+/// wdog-mon externalization master switch (issue #390, strangler step a).
+/// 0 = in-kernel watchdog supervision (shipped default, bit-identical).
+/// 1 = wdog-mon PD serves supervision policy; kernel keeps tick-scan +
+/// death pulses + watchdogd mechanism. All wdog-mon kernel code is `#if
+/// CONFIG_WDOG_MON`-guarded (empty TU when 0); no runtime `if` on this
+/// knob. Default: 0.
+#ifndef CONFIG_WDOG_MON
+#define CONFIG_WDOG_MON 0
+#endif
+
+/// procfs-srv externalization master switch (issue #54, strangler step a).
+/// 0 = in-kernel procfs renders (shipped default, bit-identical).
+/// 1 = procfs-srv PD serves node renders; kernel keeps fd-table +
+/// authorize + readdir_merged listing. All procfs-srv kernel code is `#if
+/// CONFIG_PROCFS_SRV`-guarded (empty TU when 0); no runtime `if` on this
+/// knob. Default: 0.
+#ifndef CONFIG_PROCFS_SRV
+#define CONFIG_PROCFS_SRV 0
 #endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"

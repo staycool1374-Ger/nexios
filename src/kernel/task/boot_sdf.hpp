@@ -57,7 +57,8 @@ struct CapSpec {
 };
 
 /// @brief Driver PD roles (one SDF row each; VFS_SRV/BLOCK_SRV are
-/// issue #47 and TERM_SRV/LOG_SRV are issue #51; all share this
+/// issue #47, TERM_SRV/LOG_SRV are issue #51, CAP_BROKER is issue #240,
+/// WDOG_MON is issue #390 and PROCFS_SRV is issue #54; all share this
 /// table + compose path).
 enum class PdRole : uint8_t {
     SERIAL = 0,
@@ -71,6 +72,8 @@ enum class PdRole : uint8_t {
     TERM_SRV = 8,
     LOG_SRV = 9,
     CAP_BROKER = 10,
+    WDOG_MON = 11,
+    PROCFS_SRV = 12,
 };
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
@@ -101,10 +104,12 @@ bool pd_owns_device(PdRole role);
 
 /// @brief Structural policy-only predicate (issues #47/#51): true only
 /// for roles whose SDF row MUST stay empty (no device caps ever —
-/// VFS_SRV by design, TERM_SRV/LOG_SRV policy PDs). Used by compose to
+/// VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/PROCFS_SRV
+/// policy PDs). Used by compose to
 /// reject any non-empty row for these roles, and by #48's SDF boundary
 /// test to prove the emulation side holds no device caps.
-/// @return True for VFS_SRV, TERM_SRV, LOG_SRV; false otherwise.
+/// @return True for VFS_SRV, TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON,
+/// PROCFS_SRV; false otherwise.
 bool sdf_policy_only(PdRole role);
 
 /// @brief Capture block topology for the BLOCK_SRV row (issue #47 S2):

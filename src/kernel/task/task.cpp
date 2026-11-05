@@ -61,6 +61,8 @@
 #include <kernel/cap/frame_map.hpp>
 #include <kernel/task/kslot_backend.hpp>
 #include <kernel/irq_delivery.hpp>
+#include <kernel/memory/address.hpp> // issue #52: entry-PC canonical check
+#include <kernel/sync/spinlock_guard.hpp> // issue #52: group-table lock
 #include <assert.hpp>
 
 #if defined(CONFIG_DEBUG)
@@ -83,6 +85,7 @@ constexpr size_t kRecentTasks = 64;
 RecentTask g_recent_tasks[kRecentTasks]{};
 size_t g_recent_tasks_idx = 0;
 } // namespace
+
 
 namespace kernel {
 namespace debug {
@@ -122,6 +125,63 @@ uint64_t find_entry_owner(uint64_t value) {
 #include <kernel/arch/timer.hpp>
 
 namespace kernel {
+
+/// @brief Join-rendezvous handoff (issue #53, phase ii): if a joiner is
+///        registered on the terminating thread @p t, hand it t.exit_code
+///        and wake it.  Lock-free like the waitpid wake path: the slot is
+///        installed by an atomic CAS and cleared by the joiner's collect
+///        path or its death cleanup, so a set slot always names a live or
+///        zombie-but-unfreed TCB; the is_valid + back-pointer checks below
+///        drop a stale slot without touching it.  The joiner's rescan
+///        collects and reaps, so a missed wake (spurious, or a reap racing
+///        the rescan) still converges via the handoff latch (join_ready_).
+void TaskControlBlock::thread_join_note_termination(
+    TaskControlBlock &t) noexcept {
+    if (!t.is_thread()) {
+        return;
+    }
+    auto *joiner = __atomic_load_n(&t.join_waiter_, __ATOMIC_ACQUIRE);
+    if (joiner == nullptr) {
+        return;
+    }
+    if (!TaskControlBlock::is_valid(joiner) ||
+        __atomic_load_n(&joiner->join_target_id_, __ATOMIC_ACQUIRE) !=
+            t.id) {
+        // Stale slot (joiner died without cleanup — defensive; cleanup
+        // clears it first).  Drop it; the joiner is gone either way.
+        __atomic_store_n(&t.join_waiter_, nullptr, __ATOMIC_RELEASE);
+        return;
+    }
+    __atomic_store_n(&joiner->join_status_, t.exit_code, __ATOMIC_RELEASE);
+    __atomic_store_n(&joiner->join_ready_, true, __ATOMIC_RELEASE);
+    // Wake only a blocked joiner (mirrors wake_waiting_parent: never
+    // resurrect a TERMINATED task via set_task_ready).  Plain read like
+    // the waitpid wake paths (same trap/IRQ discipline).
+    if (joiner->state == TaskState::BLOCKED) {
+        Scheduler::set_task_ready(*joiner);
+    }
+    // Slot cleared by the joiner's collect path (or its death cleanup).
+}
+
+/// @brief Clear a dying joiner's registration (issue #53): resolve the
+///        target by id (never a stored pointer — the target may have been
+///        reaped) and drop this task's slot only if it still names us.
+///        Called from TCB::cleanup() before any free, so a later EXIT of
+///        the target never touches freed memory.
+void TaskControlBlock::thread_join_unregister() noexcept {
+    const uint64_t target_id =
+        __atomic_load_n(&join_target_id_, __ATOMIC_ACQUIRE);
+    if (target_id == 0) {
+        return;
+    }
+    auto *target = Scheduler::find_task(target_id);
+    if (target != nullptr && TaskControlBlock::is_valid(target) &&
+        __atomic_load_n(&target->join_waiter_, __ATOMIC_ACQUIRE) == this) {
+        __atomic_store_n(&target->join_waiter_, nullptr, __ATOMIC_RELEASE);
+    }
+    __atomic_store_n(&join_target_id_, static_cast<uint64_t>(0),
+                     __ATOMIC_RELEASE);
+}
 
 /// @brief Trampoline wrapper for kernel task entry points.
 /// Set as RIP in the ISR save frame; RDI (first argument) is set to the
@@ -1398,6 +1458,154 @@ void TaskControlBlock::restore_context(uint64_t &rsp) noexcept {
 }
 #endif
 
+/// @brief Thread address-space groups (issue #52).
+///
+/// A group owns one shared root PML4, a live-member refcount, and the
+/// shared context ID.  Metadata lives in this static table — independent
+/// of any single TCB — so owner death never frees a live root (audit
+/// S1(b)).  All mutations serialize under g_thread_group_lock taken
+/// under an arch::IrqGuard (leaf order IrqGuard -> group lock, never
+/// nested anywhere else); the guard is held across the spawn map loop,
+/// the teardown own-stack unmap, and the atomic leave-to-free on a
+/// shared root (audit S2-1; VMM map/unmap take no locks, so this guard
+/// IS the serialization against concurrent table alloc).  The lock also
+/// guards the global thread-stack window bump/freelist below.
+namespace {
+struct ThreadAddrGroup {
+    bool occupied = false;
+    uint64_t root_pml4 = 0;
+    uint64_t member_count = 0;
+    uint16_t shared_pcid = 0;
+};
+/// @brief Stride of one thread-stack window slot: private stack (bounded
+///        by CONFIG_THREAD_MAX_STACK_SIZE == mem::STACK_SIZE — pinned by
+///        static_assert below) plus one guard page.  Fixed stride keeps
+///        every slot disjoint by construction (audit S1(c)).
+// Audit S3-1: the slot stride and the spawn size bound must agree —
+// CONFIG_THREAD_MAX_STACK_SIZE is tunable, mem::STACK_SIZE is fixed.
+static_assert(mem::STACK_SIZE == CONFIG_THREAD_MAX_STACK_SIZE,
+              "thread stack stride must equal the spawn size bound");
+constexpr uint64_t kThreadStackSlotStride =
+    mem::STACK_SIZE + arch::PAGE_SIZE;
+ThreadAddrGroup g_thread_groups[CONFIG_THREAD_MAX_GROUPS]{};
+sync::SpinLock g_thread_group_lock{};
+uint64_t g_thread_stack_bump = 0;
+uint64_t g_thread_stack_free[CONFIG_THREAD_MAX_STACKS]{};
+uint64_t g_thread_stack_free_count = 0;
+// Window disjointness (audit S1(c)): above SHM (0x63000000), below the
+// private STACK_VADDR, no wrap.  Bounds use the same constants as
+// cap/frame_map.cpp and cap/mmio.cpp pin their windows with.
+static_assert(CONFIG_USER_THREAD_STACK_BASE >= 0x63000000ULL,
+              "thread window must clear the SHM window end");
+static_assert(CONFIG_USER_THREAD_STACK_BASE +
+                      CONFIG_THREAD_MAX_STACKS * kThreadStackSlotStride <=
+                  mem::STACK_VADDR,
+              "thread window must end below STACK_VADDR");
+
+/// @brief Joins @p owner to a group, creating one for a private owner.
+///        Lock: caller holds g_thread_group_lock.
+/// @return Group index, or -1 when the table is full / root missing.
+///         On create the owner is marked (thread_group_) and counted, so
+///         the group survives owner death; the incoming thread is counted
+///         by the caller via thread_group_note_thread_locked.
+///         @p pcid_minted_out reports whether this call minted a fresh
+///         shared ID (audit S2-3): the owner adopts it only on the spawn
+///         success path, so a failure unwind can free an ID nobody
+///         retains.  Always false when no group is created.
+int thread_group_join_locked(TaskControlBlock &owner, bool &pcid_minted_out) {
+    pcid_minted_out = false;
+    if (owner.thread_group_ != 0) {
+        uint64_t group_idx = owner.thread_group_ - 1;
+        if (group_idx >= CONFIG_THREAD_MAX_GROUPS ||
+            !g_thread_groups[group_idx].occupied) {
+            return -1;
+        }
+        ++g_thread_groups[group_idx].member_count;
+        return static_cast<int>(group_idx);
+    }
+    uint64_t root = owner.get_page_table();
+    if (root == 0) {
+        return -1;
+    }
+    for (uint64_t group_idx = 0; group_idx < CONFIG_THREAD_MAX_GROUPS;
+         ++group_idx) {
+        if (g_thread_groups[group_idx].occupied) {
+            continue;
+        }
+        uint16_t shared_id = owner.pcid_;
+        if (shared_id == 0) {
+            // Eager stable ID (audit S2-4): the group owns one ID for the
+            // root's whole life.  0 when unsupported (untagged convention).
+            // Audit S2-3: the owner adopts the minted ID only on the spawn
+            // success path (see spawn_thread) — assigning it here would
+            // leave a retained-by-nobody ID behind when a later failure
+            // unwinds this fresh group.
+            shared_id = arch::context_id_alloc();
+            pcid_minted_out = (shared_id != 0);
+        }
+        g_thread_groups[group_idx].occupied = true;
+        g_thread_groups[group_idx].root_pml4 = root;
+        // Owner + incoming thread.
+        g_thread_groups[group_idx].member_count = 2;
+        g_thread_groups[group_idx].shared_pcid = shared_id;
+        owner.thread_group_ = group_idx + 1;
+        return static_cast<int>(group_idx);
+    }
+    return -1;
+}
+
+/// @brief Carves one window slot VA.  Lock: caller holds
+///        g_thread_group_lock.
+/// @return True with @p slot_va_out set; false when exhausted.
+bool thread_stack_slot_alloc_locked(uint64_t &slot_va_out) {
+    if (g_thread_stack_free_count > 0) {
+        slot_va_out =
+            g_thread_stack_free[--g_thread_stack_free_count];
+        return true;
+    }
+    if (g_thread_stack_bump >= CONFIG_THREAD_MAX_STACKS) {
+        return false;
+    }
+    uint64_t slot_offset = g_thread_stack_bump * kThreadStackSlotStride;
+    slot_va_out = CONFIG_USER_THREAD_STACK_BASE + slot_offset;
+    ++g_thread_stack_bump;
+    return true;
+}
+
+/// @brief Recycles a window slot VA.  Lock: caller holds
+///        g_thread_group_lock.  Live + recycled always equals bumped
+///        (both bounded by CONFIG_THREAD_MAX_STACKS), so the freelist
+///        always has room; the guard is defense-in-depth.
+void thread_stack_slot_free_locked(uint64_t slot_va) {
+    if (g_thread_stack_free_count < CONFIG_THREAD_MAX_STACKS) {
+        g_thread_stack_free[g_thread_stack_free_count++] = slot_va;
+    }
+}
+
+/// @brief Leaves @p task's group, clearing its membership.
+///        Lock: caller holds g_thread_group_lock.
+/// @return True when this was the last member (caller frees the root +
+///         shared ID); root_pml4_out/shared_pcid_out carry the values.
+bool thread_group_leave_locked(TaskControlBlock &task,
+                               uint64_t &root_pml4_out,
+                               uint16_t &shared_pcid_out) {
+    uint64_t group_idx = task.thread_group_ - 1;
+    task.thread_group_ = 0;
+    ThreadAddrGroup &group = g_thread_groups[group_idx];
+    --group.member_count;
+    root_pml4_out = group.root_pml4;
+    shared_pcid_out = group.shared_pcid;
+    if (group.member_count != 0) {
+        return false;
+    }
+    group.occupied = false;
+    group.root_pml4 = 0;
+    group.shared_pcid = 0;
+    return true;
+}
+
+} // namespace
+
 /// @brief Fail-closed admission check for clone() user parents (issue #400).
 /// A user-marked parent must own a live, page-aligned PMM USER block of
 /// user_stack_size_ bytes: exactly the pages the stack-copy loop reads via
@@ -1826,8 +2034,386 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     return tcb;
 }
 
-void TaskControlBlock::add_child(TaskControlBlock *child) noexcept {
-    if (!child)
+TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
+                                                 uint64_t entry,
+                                                 uint64_t stack_bytes,
+                                                 uint64_t entry_arg) {
+    // Validate-before-allocate (issue #400 discipline): every check below
+    // runs before the first allocation, so nullptr returns leave zero
+    // side effects and zero PMM mutation.
+    if (!owner.is_user_ || owner.get_page_table() == 0) {
+        return nullptr;
+    }
+    if (stack_bytes == 0 ||
+        stack_bytes > CONFIG_THREAD_MAX_STACK_SIZE) {
+        return nullptr;
+    }
+    if (entry == 0 || entry >= CONFIG_USER_SPACE_LIMIT) {
+        return nullptr;
+    }
+#if defined(CONFIG_ARCH_X86_64)
+    if (!VirtualAddress(entry).is_canonical()) {
+        return nullptr;
+    }
+#elif defined(CONFIG_ARCH_RISCV64)
+    // Sv39 user half: bits[63:39] must be zero (mirrors sys_tls_set).
+    if ((entry >> 39) != 0) {
+        return nullptr;
+    }
+#endif
+    // No explicit canonical check on AArch64 (audit S3-2): the user half
+    // is enforced by the CONFIG_USER_SPACE_LIMIT bound above plus the
+    // mapped+X probe below (TTBR0 range select + XN in the PTE).
+    // The entry must be mapped + executable in the shared root (audit
+    // S1(a)): a thread born at an unmapped/data PC faults on first
+    // dispatch.  Walk-only probe, never allocates.
+    if (!VMM::pte_is_executable_in_pml4(entry, owner.get_page_table())) {
+        return nullptr;
+    }
+    // Page-round the request (overflow-free: input bounded above).
+    size_t stack_pages =
+        (static_cast<size_t>(stack_bytes) + arch::PAGE_SIZE - 1) /
+        arch::PAGE_SIZE;
+
+    auto *tcb = static_cast<TaskControlBlock *>(
+        MemPool::alloc(sizeof(TaskControlBlock)));
+    if (!tcb) {
+        return nullptr;
+    }
+    memset(tcb, 0, sizeof(TaskControlBlock));
+
+    TCB_WRITE(tcb, magic, TCB_MAGIC);
+    TCB_WRITE(tcb, id, Scheduler::alloc_id());
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    tcb->tls_base_ = 0; // issue #74: child calls TLS_SET first (#53 glue)
+    // Issue #41: watchdog disarmed, never-armed generation (see create).
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
+    __builtin_memcpy(tcb->name, owner.name, CONFIG_TASK_NAME_LEN);
+    tcb->parent_id = owner.id;
+    TCB_WRITE(tcb, state, TaskState::READY);
+    tcb->priority = owner.priority;
+    tcb->base_priority = owner.base_priority;
+    // Issue #25 C1: inherit the owner's CPU mask (same admissibility).
+    tcb->cpu_affinity = owner.cpu_affinity;
+    // Issue #312 precedent: user-child equivalents are best-effort and
+    // admission-exempt — a thread must not perturb the Liu-Leyland bound.
+    tcb->period_ticks = 0;
+    tcb->deadline_ticks = 0;
+    tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks();
+    tcb->exec_stamp_ns = 0;
+    tcb->sched_policy = SchedPolicy::AUTO;
+    tcb->edf_exempt = false;
+    tcb->ready_deferred_ = false;
+    tcb->remaining_ticks = 0;
+    tcb->exit_code = 0;
+    tcb->waiting_child_pid = 0;
+    tcb->waiting_child_status = nullptr;
+    tcb->user_data = owner.user_data;
+    // Shared address space: the break is address-space state — inherit the
+    // current values so brk/sbrk continue from the same point.
+    tcb->program_break = owner.program_break;
+    tcb->program_break_start = owner.program_break_start;
+
+    tcb->blocked_next = nullptr;
+    tcb->blocked_prev = nullptr;
+
+    // Process hierarchy: linked as a child so the proven zombie/waitpid
+    // reap path collects threads (audit S2-3: waitpid MAY reap threads;
+    // kill addresses each thread per-TCB).  Linked late (after the last
+    // failure point) so failures never leave a dangling sibling link.
+    tcb->first_child = nullptr;
+    tcb->next_sibling = nullptr;
+    tcb->prev_sibling = nullptr;
+    tcb->num_children = 0;
+
+    // Per-task IPC objects: fresh queues, never inherited (mirrors clone).
+    tcb->msg_queue.init();
+    tcb->msg_queue.owner = tcb;
+    kernel::test::ResourceTracker::instance().track_msg_queue_add();
+
+    tcb->notify.init();
+    kernel::test::ResourceTracker::instance().track_notify_add();
+
+    tcb->event_group.init();
+    kernel::test::ResourceTracker::instance().track_event_group_add();
+
+    // Copy fd_table with vnode ref bumps (mirrors clone): the thread owns
+    // independent references torn down at its own cleanup.
+    for (size_t fd_idx = 0; fd_idx < vfs::MAX_FDS; ++fd_idx) {
+        tcb->fd_table.fds[fd_idx] = owner.fd_table.fds[fd_idx];
+        if (tcb->fd_table.fds[fd_idx].used &&
+            tcb->fd_table.fds[fd_idx].vnode) {
+            vfs::vnode_ref_inc(tcb->fd_table.fds[fd_idx].vnode);
+        }
+    }
+
+    size_t cwd_len = 0;
+    while (owner.cwd[cwd_len] && cwd_len < 255)
+        ++cwd_len;
+    for (size_t cwd_idx = 0; cwd_idx <= cwd_len; ++cwd_idx)
+        tcb->cwd[cwd_idx] = owner.cwd[cwd_idx];
+    tcb->cwd_vnode = owner.cwd_vnode;
+    vfs::vnode_ref_inc(tcb->cwd_vnode);
+
+    tcb->buf_list_head = -1;
+
+    // Fresh thread: no inherited FP state (unlike clone's copy) and no
+    // trap-time flush needed — the thread never ran.  memset already
+    // zeroed fpu_state.
+    tcb->fpu_used = false;
+    tcb->fpu_state_gen = 0;
+
+    // Allocate and set up the kernel stack (mirrors clone's kslot path).
+    size_t kernel_pages = (STACK_SIZE + 4095) / arch::PAGE_SIZE;
+    uint64_t kstack_phys = PMM::alloc_contiguous(kernel_pages);
+    if (!kstack_phys) {
+        ASSERT(errors::TaskError::TASK_ERR_STACK_ALLOC);
+        TaskControlBlock::destroy(tcb);
+        return nullptr;
+    }
+    tcb->stack_phys_ = kstack_phys;
+
+    uint64_t slot_va = alloc_kslot(STACK_SIZE);
+    if (slot_va) {
+        tcb->kstack_slot_va_ = slot_va;
+        tcb->kstack_slot_size_ = ((STACK_SIZE + 4095) / 4096) * 4096 + 4096;
+        uint64_t kstack_va = slot_va + 4096;
+        for (size_t kstack_idx = 0; kstack_idx < kernel_pages;
+             ++kstack_idx)
+            kslot_backend::map_window_page(
+                kstack_va + kstack_idx * arch::PAGE_SIZE,
+                kstack_phys + kstack_idx * arch::PAGE_SIZE);
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        tcb->kernel_stack = reinterpret_cast<uint8_t *>(kstack_va);
+        tcb->kernel_stack_top = kstack_va + STACK_SIZE;
+    } else {
+        tcb->kstack_slot_va_ = 0;
+        tcb->kstack_slot_size_ = 0;
+        uint64_t kstack_virt = arch::HHDM_OFFSET + kstack_phys;
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        TCB_WRITE(tcb, kernel_stack,
+                  reinterpret_cast<uint8_t *>(kstack_virt));
+        tcb->kernel_stack_top = kstack_virt + STACK_SIZE;
+    }
+
+    // Private user stack for the shared root.  Allocated before joining
+    // the group so group-mutation failure unwinds with plain frees.
+    uint64_t ustack_phys = PMM::alloc_user_contiguous(stack_pages);
+    if (!ustack_phys) {
+        ASSERT(errors::TaskError::TASK_ERR_USTACK_ALLOC);
+        TaskControlBlock::destroy(tcb);
+        return nullptr;
+    }
+
+    // Join the group + carve the window slot + map the stack atomically
+    // under IrqGuard -> group lock (audit S2-1: one serial section for
+    // shared-root mutation; IRQ-safe so a fault-time map can never
+    // interleave; VMM map/unmap take no locks, so this guard IS the
+    // serialization against concurrent create/exit table alloc).
+    uint64_t thread_slot_va = 0;
+    uint64_t shared_root = 0;
+    bool owner_was_member = (owner.thread_group_ != 0);
+    bool pcid_minted = false;
+    bool map_failed = false;
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> group_guard(g_thread_group_lock);
+        int group_idx = thread_group_join_locked(owner, pcid_minted);
+        if (group_idx < 0) {
+            for (size_t free_idx = 0; free_idx < stack_pages;
+                 ++free_idx) {
+                PMM::free_page(ustack_phys +
+                               free_idx * arch::PAGE_SIZE);
+            }
+            TaskControlBlock::destroy(tcb);
+            return nullptr;
+        }
+        if (!thread_stack_slot_alloc_locked(thread_slot_va)) {
+            // Unwind the join (the group itself stays valid: every live
+            // member holds a ref, so member_count cannot hit 0 here
+            // unless this join created the group — handled below).
+            ThreadAddrGroup &group = g_thread_groups[group_idx];
+            if (owner_was_member) {
+                --group.member_count;
+            } else {
+                owner.thread_group_ = 0;
+                group.member_count -= 2;
+                if (group.member_count == 0) {
+                    // Audit S2-3: this fresh group retains nobody — free
+                    // a minted shared ID (pcid_minted implies nonzero;
+                    // the owner's pre-existing ID is never freed: the
+                    // owner keeps running on it).
+                    if (pcid_minted) {
+                        arch::context_id_free(group.shared_pcid);
+                    }
+                    group.occupied = false;
+                    group.root_pml4 = 0;
+                    group.shared_pcid = 0;
+                }
+            }
+            for (size_t free_idx = 0; free_idx < stack_pages;
+                 ++free_idx) {
+                PMM::free_page(ustack_phys +
+                               free_idx * arch::PAGE_SIZE);
+            }
+            TaskControlBlock::destroy(tcb);
+            return nullptr;
+        }
+        tcb->thread_group_ = static_cast<uint64_t>(group_idx) + 1;
+        tcb->pcid_ = g_thread_groups[group_idx].shared_pcid;
+        if (owner.pcid_ == 0 &&
+            g_thread_groups[group_idx].shared_pcid != 0) {
+            // Audit S2-3/S2-4: the owner adopts the shared ID once the
+            // group + slot are established — every member dispatches on
+            // one tag, so the shared root is never aliased untagged.
+            owner.pcid_ = g_thread_groups[group_idx].shared_pcid;
+        }
+        shared_root = g_thread_groups[group_idx].root_pml4;
+
+        // Map the private stack into the shared root under the same
+        // guard: guard page first, then data pages (issue #325-D:
+        // stacks are data, never executable).
+        uint64_t stack_map_base = thread_slot_va + arch::PAGE_SIZE;
+        for (size_t map_idx = 0; map_idx < stack_pages; ++map_idx) {
+            if (VMM::map_page_in_pml4_err(
+                    stack_map_base + map_idx * arch::PAGE_SIZE,
+                    ustack_phys + map_idx * arch::PAGE_SIZE, true,
+                    shared_root, false) != errors::VMM_ERR_OK) {
+                // Unwind the mapped prefix, then leave the group — all
+                // under the same guard via the _locked helpers.
+                for (size_t unmap_idx = 0; unmap_idx < map_idx;
+                     ++unmap_idx) {
+                    VMM::unmap_page_in_pml4(
+                        stack_map_base + unmap_idx * arch::PAGE_SIZE,
+                        shared_root);
+                }
+                for (size_t free_idx = 0; free_idx < stack_pages;
+                     ++free_idx) {
+                    PMM::free_page(ustack_phys +
+                                   free_idx * arch::PAGE_SIZE);
+                }
+                thread_stack_slot_free_locked(thread_slot_va);
+                uint64_t last_root = 0;
+                uint16_t last_pcid = 0;
+                // The TCB was already marked; leave() clears it.  Last-
+                // member here would require the owner to have died
+                // mid-spawn (cross-task TOCTOU); handle it generally so
+                // the root + ID never leak.
+                bool last_member = thread_group_leave_locked(
+                    *tcb, last_root, last_pcid);
+                if (last_member) {
+                    VMM::free_user_pages(last_root);
+                    arch::context_id_free(last_pcid);
+                    PMM::free_page(last_root);
+                }
+                map_failed = true;
+                break;
+            }
+        }
+    }
+    if (map_failed) {
+        // leave() above cleared thread_group_, so destroy() takes the
+        // non-thread teardown path (no group re-lock).
+        TaskControlBlock::destroy(tcb);
+        return nullptr;
+    }
+
+    tcb->install_page_table(shared_root);
+    tcb->is_user_ = true;
+    tcb->user_stack_ = ustack_phys;
+    tcb->user_stack_size_ = stack_pages * arch::PAGE_SIZE;
+    tcb->user_stack_va_ = thread_slot_va;
+    uint64_t user_rsp =
+        thread_slot_va + arch::PAGE_SIZE + stack_pages * arch::PAGE_SIZE;
+
+    // User segments are already armed in the shared root — copy the
+    // owner's canary addresses and arm only the fresh kernel stack.
+    for (size_t canary_idx = 0;
+         canary_idx < TaskControlBlock::CANARY_SEGMENTS; ++canary_idx) {
+        tcb->canary_before[canary_idx] = owner.canary_before[canary_idx];
+        tcb->canary_after[canary_idx] = owner.canary_after[canary_idx];
+    }
+    tcb->canary_installed = owner.canary_installed;
+    canary_install_kernel_stack(tcb);
+    owner.add_child(tcb);
+
+#if defined(CONFIG_ARCH_X86_64)
+    // Fresh register frame (create_user form): entry PC, fresh user RSP,
+    // zeroed general regs, child return value 0.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    uint64_t *frame = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
+    *--frame = arch::SEG_USER_DATA; // SS
+    *--frame = user_rsp;             // RSP
+    *--frame = arch::RFLAGS_DEFAULT; // RFLAGS
+    *--frame = arch::SEG_USER_CODE; // CS
+    *--frame = entry;               // RIP
+    *--frame = 0;                   // error_code
+    *--frame = 0;                   // vector
+    *--frame = 0;                   // r15
+    *--frame = 0;                   // r14
+    *--frame = 0;                   // r13
+    *--frame = 0;                   // r12
+    *--frame = 0;                   // r11
+    *--frame = 0;                   // r10
+    *--frame = 0;                   // r9
+    *--frame = 0;                   // r8
+    *--frame = 0;                   // rbp
+    *--frame = 0;                   // rdi
+    *--frame = 0;                   // rsi
+    *--frame = 0;                   // rdx
+    *--frame = 0;                   // rcx
+    *--frame = 0;                   // rbx
+    *--frame = 0;                   // rax = 0 (thread return value)
+    // Issue #53 (option Y): the birth-context pointer rides in the first
+    // C argument register (rdi), the thread's own tid in the second
+    // (rsi), so a plain C trampoline(ctx, tid) receives both.
+    frame[5] = entry_arg;           // rdi = birth context (0 = none)
+    frame[4] = tcb->id;             // rsi = own tid (pthread_self)
+    tcb->context.rsp = reinterpret_cast<uint64_t>(frame);
+#elif defined(CONFIG_ARCH_AARCH64)
+    uint64_t *frame = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
+    *--frame = 0;    // padding
+    *--frame = 0;    // padding
+    *--frame = 0x0;  // SPSR_EL1: EL0t, DAIF unmasked (see create_user)
+    *--frame = entry;    // ELR_EL1
+    *--frame = user_rsp; // SP_EL0
+    for (int reg_idx = 0; reg_idx < 31; ++reg_idx)
+        *--frame = 0; // X0-X30 (X0 = 0: thread return value)
+    // Issue #53 (option Y): the birth-context pointer rides in x0
+    // (frame[0] per the vectors.S save-area layout), the thread's own
+    // tid in x1, so a plain C trampoline(ctx, tid) receives both.
+    frame[0] = entry_arg; // X0 = birth context (0 = none)
+    frame[1] = tcb->id;   // X1 = own tid (pthread_self)
+    tcb->context.sp_el0 = reinterpret_cast<uint64_t>(frame);
+#elif defined(CONFIG_ARCH_RISCV64)
+    // Trap frame matching syscall_entry.S save-area layout (see
+    // create_user): zeroed, SP + SEPC + SSTATUS set.
+    uint64_t *frame = reinterpret_cast<uint64_t *>(tcb->kernel_stack_top);
+    frame -= 37;
+    __builtin_memset(frame, 0, 37 * 8);
+    frame[1] = user_rsp;  // X2/SP = thread user stack
+    frame[31] = entry;    // SEPC = entry point
+    frame[32] = (1ULL << 5) | (3ULL << 13); // SSTATUS: SPIE + FS=11
+    // Issue #53 (option Y): the birth-context pointer rides in a0
+    // (frame[9] = OFF_A0 per syscall_entry.S), the thread's own tid in
+    // a1 (frame[10] = OFF_A1), so a plain C trampoline(ctx, tid)
+    // receives both.
+    frame[9] = entry_arg; // A0 = birth context (0 = none)
+    frame[10] = tcb->id;  // A1 = own tid (pthread_self)
+    tcb->context.sp = reinterpret_cast<uint64_t>(frame);
+#endif
+
+    return tcb;
+}
+
+void TaskControlBlock::add_child(TaskControlBlock *child) noexcept {    if (!child)
         return;
     child->next_sibling = first_child;
     child->prev_sibling = nullptr;
@@ -2079,6 +2665,13 @@ void TaskControlBlock::complete_teardown() noexcept {
     }
     kernel::task_step(kernel::TaskCleanupSteps::SyncDetach); // issue #347 Slice C
 
+    // Issue #53: drop a pending JOIN registration held by this task.  A
+    // dying joiner must not leave its TCB pointer in the target's join
+    // slot: the target's termination handoff would otherwise touch freed
+    // memory.  Resolved by id (never a stored pointer); only clears when
+    // the slot still names this task (a re-registered joiner wins).
+    thread_join_unregister();
+
     // Notify the daemon manager so registered daemon PIDs are reset to 0.
     // Must run before msg_queue is destroyed so blocked senders get fast-fail
     // instead of blocking on a zombie destination.
@@ -2124,9 +2717,41 @@ void TaskControlBlock::complete_teardown() noexcept {
     // v0.4.0 MP-1: keyed on the authoritative is_user_ flag — a kernel task
     // owns a private kernel-half PML4 but never a user stack.
     if (is_user_ && user_stack_) {
-        size_t pages = (user_stack_size_ + 4095) / arch::PAGE_SIZE;
-        for (size_t i = 0; i < pages; ++i) {
-            PMM::free_page(user_stack_ + i * arch::PAGE_SIZE);
+        // Issue #53 S1-2: only a window-slot member owns a private stack
+        // range in a shared root.  The owner member (user_stack_va_ == 0,
+        // joined at spawn) shares its STACK_VADDR range with the group —
+        // survivors' copied stack canaries read it — so it neither unmaps
+        // nor frees here; the last member's blind free_user_pages walk
+        // reclaims the whole root exactly once.
+        if (thread_group_ != 0 && user_stack_va_ != 0) {
+            // Issue #52: grouped teardown unmaps exactly its own stack
+            // pages from the shared root (the thread's window slot), then
+            // frees the frames below.
+            // Unmapping first keeps the last member's free_user_pages
+            // walk from revisiting freed frames.
+            // Audit S2-1: the unmap runs under IrqGuard + group guard —
+            // the same serial section as the spawn maps, so concurrent
+            // create/exit on this root cannot race intermediate-table
+            // alloc/free (VMM map/unmap take no locks).
+            uint64_t own_stack_va = user_stack_va_ + arch::PAGE_SIZE;
+            size_t own_pages =
+                (user_stack_size_ + 4095) / arch::PAGE_SIZE;
+            {
+                arch::IrqGuard thread_unmap_guard{};
+                SpinLockGuard<sync::SpinLock> thread_unmap_group(
+                    g_thread_group_lock);
+                for (size_t own_idx = 0; own_idx < own_pages; ++own_idx) {
+                    VMM::unmap_page_in_pml4(
+                        own_stack_va + own_idx * arch::PAGE_SIZE,
+                        get_page_table());
+                }
+            }
+        }
+        if (thread_group_ == 0 || user_stack_va_ != 0) {
+            size_t pages = (user_stack_size_ + 4095) / arch::PAGE_SIZE;
+            for (size_t i = 0; i < pages; ++i) {
+                PMM::free_page(user_stack_ + i * arch::PAGE_SIZE);
+            }
         }
         user_stack_ = 0;
     }
@@ -2188,30 +2813,84 @@ void TaskControlBlock::complete_teardown() noexcept {
 
         // Unconditional teardown (v0.4.0 MP-7): every PML4 is either private
         // (deep-copied or freshly built via clone_kernel_pml4) or the boot
-        // kernel PML4; no task ever shares another task's user entries.
+        // kernel PML4; issue #52 threads share their group's root (handled
+        // below — the root dies with the last member only).
         // free_user_pages() skips kernel-owned table/data pages via
         // PMM::is_user_page, so a partially deep-copied address space (OOM
         // during clone) is fully reclaimed here — no leak.
         // Issue #271 P1: unmap retained golden pages first so the blind
         // free below skips them (pages owned by mapping tasks, retention
         // decides frees at zero/zero).
-        kernel::elf::ElfLoader::unmap_golden(this);
-        // Issue #352 + #390: release the context ID AFTER the cross-CPU
-        // purge (free_user_pages fans out via tlb_shootdown(0,0,true)).
-        // Releasing first lets the ID be reissued while a remote CPU
-        // still holds entries tagged with it (stale-tag reuse). Keyed on
-        // the live TCB, never after free; 0 is a no-op. Arch-neutral.
-        VMM::free_user_pages(get_page_table());
-        arch::context_id_free(pcid_);
-        pcid_ = 0;
-        PMM::free_page(get_page_table());
-#if defined(CONFIG_ARCH_X86_64)
-        if (stack_pdpt_phys_) {
-            free_stack_pdpt(stack_pdpt_phys_);
-            stack_pdpt_phys_ = 0;
+        // Issue #53 S1-2: retention unmap is root-scoped, not task-scoped.
+        // Threads share their group's root, so unmap_golden's phys-match
+        // guard (which assumes private fork-style tables) matches a live
+        // survivor's pages: a non-last member must neither unmap the set
+        // nor drop the group's single ref.  Private roots unmap here; the
+        // last group member unmaps below, just ahead of its root free.
+        if (thread_group_ == 0) {
+            kernel::elf::ElfLoader::unmap_golden(this);
         }
+        if (thread_group_ != 0) {
+            // Issue #52: shared-root teardown.  Own stack pages were
+            // unmapped + freed above; recycle the window slot, then leave
+            // the group.  Only the last member frees the root (audit
+            // S1(b)): its free_user_pages walk reclaims the shared
+            // TEXT/DATA/HEAP leaves and tables, then the root page and
+            // the shared context ID die with it (audit S2-4).
+            // Audit S2-1: leave-to-free is atomic under IrqGuard + group
+            // guard — no concurrent join/create can observe the
+            // zero-count group and build on the root mid-free (VMM and
+            // PMM take no group-ordered locks, so the nesting
+            // group -> pmm/shootdown has no reverse path).
+            bool last_member = false;
+            {
+                arch::IrqGuard irq_guard{};
+                SpinLockGuard<sync::SpinLock> group_guard(
+                    g_thread_group_lock);
+                if (user_stack_va_ != 0) {
+                    thread_stack_slot_free_locked(user_stack_va_);
+                    user_stack_va_ = 0;
+                }
+                uint64_t group_root = 0;
+                uint16_t group_pcid = 0;
+                last_member = thread_group_leave_locked(
+                    *this, group_root, group_pcid);
+                if (last_member) {
+                    // Issue #53 S1-2: the root dies with us — unmap the
+                    // retained set (and drop its single ref) before the
+                    // blind free reclaims the shared leaves + tables.
+                    kernel::elf::ElfLoader::unmap_golden(this);
+                    VMM::free_user_pages(group_root);
+                    arch::context_id_free(group_pcid);
+                    PMM::free_page(group_root);
+                }
+            }
+            pcid_ = 0;
+#if defined(CONFIG_ARCH_X86_64)
+            // Threads never allocate a private stack PDPT (fork-only
+            // shape): stack_pdpt_phys_ stays 0 by construction.
+#endif
+            clear_page_table();
+            user_stack_size_ = 0;
+        } else {
+            // Issue #352 + #390: release the context ID AFTER the
+            // cross-CPU purge (free_user_pages fans out via
+            // tlb_shootdown(0,0,true)).  Releasing first lets the ID be
+            // reissued while a remote CPU still holds entries tagged with
+            // it (stale-tag reuse). Keyed on the live TCB, never after
+            // free; 0 is a no-op. Arch-neutral.
+            VMM::free_user_pages(get_page_table());
+            arch::context_id_free(pcid_);
+            pcid_ = 0;
+            PMM::free_page(get_page_table());
+#if defined(CONFIG_ARCH_X86_64)
+            if (stack_pdpt_phys_) {
+                free_stack_pdpt(stack_pdpt_phys_);
+                stack_pdpt_phys_ = 0;
+            }
 #endif // CONFIG_ARCH_X86_64
-        clear_page_table();
+            clear_page_table();
+        }
     }
     kernel::task_step(kernel::TaskCleanupSteps::PageTeardown); // issue #347 Slice C
 

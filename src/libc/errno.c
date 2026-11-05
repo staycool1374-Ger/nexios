@@ -49,3 +49,11 @@ static uintptr_t read_tp(void) {
 int *__errno_location(void) {
     return &((struct nexios_tcb *)read_tp())->errno_value;
 }
+
+/// @brief Owning thread id for pthread_self (issue #53, option Y).
+/// Reads the TP-published thread_id cell (offset 8, never the errno
+/// cell). Zero when TLS was never set to a thread block (crt0 main
+/// thread) — callers map 0 to the main-thread id.
+unsigned long __pthread_self_tid(void) {
+    return ((struct nexios_tcb *)read_tp())->thread_id;
+}

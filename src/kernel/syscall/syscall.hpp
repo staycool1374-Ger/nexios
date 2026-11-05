@@ -120,7 +120,11 @@ enum class SyscallNumber : uint8_t {
     TASK_DEBUG_WRITE_MEM = 90, ///< write target memory via handle (issue #225)
     WATCHDOG_CREATE = 91, ///< arm watchdog: arg0=period_ticks, arg1=pid (0=self, else needs WdogCap), arg2=cap handle (issues #41/#277)
     WATCHDOG_KICK = 92,   ///< kick watchdog: arg0=pid (0=self, else needs WdogCap), arg1=cap handle, arg2=0 reserved (issues #41/#277)
-    MAX_SYSCALL = 93,
+    THREAD_CREATE = 93,   ///< spawn thread sharing an address space (issue #52): arg0 = owner pid (0 = self), arg1 = entry PC, arg2 = stack bytes, arg3 = Task-cap handle with SHARE (cross-task only, 0 = self)
+    THREAD_EXIT = 94,     ///< terminate the calling thread (issue #53): arg0 = exit status; self-only, thread-only, never returns
+    THREAD_JOIN = 95,     ///< join/detach a thread (issue #53): arg0 = Task-cap handle naming the target (never a raw tid), arg1 = 0 join (blocks, status to arg2) | 1 detach, arg2 = user status out-pointer (join only, nullable), arg3 = reserved, must be 0
+    THREAD_WRAP = 96,     ///< mint a ThreadCap for a thread (issue #53, option Y): arg0 = tid of a live child thread (or self), arg1 = Task-cap handle with SHARE (cross-task wrap only, 0 = child-or-self); returns the generation-tagged cap handle (never a raw index)
+    MAX_SYSCALL = 97,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -410,6 +414,14 @@ class Syscall {
                                         uint64_t *);
     static uint64_t sys_watchdog_kick(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
+    static uint64_t sys_thread_create(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
+    static uint64_t sys_thread_exit(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_thread_join(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_thread_wrap(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -526,6 +538,10 @@ class Syscall {
 #endif
             &Syscall::sys_watchdog_create, // 91 WATCHDOG_CREATE (issue #41)
             &Syscall::sys_watchdog_kick,   // 92 WATCHDOG_KICK (issue #41)
+            &Syscall::sys_thread_create,   // 93 THREAD_CREATE (issue #52)
+            &Syscall::sys_thread_exit,     // 94 THREAD_EXIT (issue #53)
+            &Syscall::sys_thread_join,     // 95 THREAD_JOIN (issue #53)
+            &Syscall::sys_thread_wrap,     // 96 THREAD_WRAP (issue #53, Y)
     };
 };
 

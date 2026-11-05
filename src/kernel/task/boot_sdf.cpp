@@ -4,7 +4,8 @@
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
-    CONFIG_LOG_SRV || CONFIG_CAP_BROKER
+    CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
+    CONFIG_PROCFS_SRV
 
 #include <kernel/task/task.hpp>
 #include <kernel/arch/hal/device_regions.hpp>
@@ -207,26 +208,38 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // kernel-enforces over a cached per-CNode word. No device caps
         // ever; the row is the empty set by structural rule.
         return 0;
+    case PdRole::WDOG_MON:
+        // Supervision policy only (issue #390): monitor-composes-policy
+        // over the kernel tick-scan + death pulses + watchdogd base.
+        // No device caps ever; the row is the empty set by rule.
+        return 0;
+    case PdRole::PROCFS_SRV:
+        // Render policy only (issue #54): renders stay in-kernel
+        // pre-flip (vfsd PROCFS_RENDER=7 probe retains sole ownership).
+        // No device caps ever; the row is the empty set by rule.
+        return 0;
     }
     return 0;
 }
 
 bool sdf_zero_caps_allowed(PdRole role) {
-    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV + CAP_BROKER
-    // (empty sets by design) and degraded BLOCK_SRV (no controller/IOMMU
-    // captured) may start capless. Every other zero-cap row is a
-    // compose failure.
+    // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV + CAP_BROKER +
+    // WDOG_MON + PROCFS_SRV (empty sets by design) and degraded
+    // BLOCK_SRV (no controller/IOMMU captured) may start capless.
+    // Every other zero-cap row is a compose failure.
     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
            role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV ||
-           role == PdRole::CAP_BROKER;
+           role == PdRole::CAP_BROKER || role == PdRole::WDOG_MON ||
+           role == PdRole::PROCFS_SRV;
 }
 
 bool sdf_policy_only(PdRole role) {
-    // Structural no-double-ownership rule (issues #47/#51, #240):
-    // policy-only roles must never hold device caps. The #48 SDF
+    // Structural no-double-ownership rule (issues #47/#51, #240, #390,
+    // #54): policy-only roles must never hold device caps. The #48 SDF
     // boundary test consumes this predicate directly.
     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
-           role == PdRole::LOG_SRV || role == PdRole::CAP_BROKER;
+           role == PdRole::LOG_SRV || role == PdRole::CAP_BROKER ||
+           role == PdRole::WDOG_MON || role == PdRole::PROCFS_SRV;
 }
 
 bool capture_block_topology() {
@@ -333,6 +346,8 @@ bool pd_owns_device(PdRole role) {
     case PdRole::TERM_SRV:
     case PdRole::LOG_SRV:
     case PdRole::CAP_BROKER:
+    case PdRole::WDOG_MON:
+    case PdRole::PROCFS_SRV:
         // Policy-only PDs never own devices (structural rule).
         return false;
     }
@@ -342,4 +357,4 @@ bool pd_owns_device(PdRole role) {
 } // namespace sdf
 } // namespace kernel
 
-#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV / CONFIG_CAP_BROKER
+#endif // any CONFIG_DRIVER_PD_* / CONFIG_VFS_SRV / CONFIG_BLOCK_SRV / CONFIG_TERM_SRV / CONFIG_LOG_SRV / CONFIG_CAP_BROKER / CONFIG_WDOG_MON / CONFIG_PROCFS_SRV

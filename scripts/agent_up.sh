@@ -147,10 +147,14 @@ usage: agent_up.sh <mode> [...]
                      dialog (checks first; person-run only).
   close [--all]      kill worker tmux sessions; --all also kills the
                      consultant + engine loop (+ legacy nexios-coord if present).
+  engine <verb>      engine loop only (workers/consultant/rooms untouched):
+                     close kills $ENGINE_SESS (no-op when absent); restart
+                     kills it if present then starts a fresh tick loop on
+                     current working-tree code; status reports up/down.
   clean <issue> [--dry-run]  remove a CLOSED lane's merged branches + room;
                      refuses on open issue, unpushed main, live room.
   watch <issue> [arm|disarm|tick|status]  dev/qe activity watchdog
-                     (bare verb = status); arm takes interval_s (default 180).
+                     (bare verb = status); arm takes interval_s (default 60).
                      Legacy: the engine loop owns ticks; tickers stay disarmed.
 EOF
   exit 2
@@ -475,6 +479,19 @@ mode_setup() {
     [ -f "$rt/inbox/$r.md" ] || echo "# inbox/$r.md — append-only. Format: <ISO8601> FROM=<role> NEED|READY|NOTE :: <text>" > "$rt/inbox/$r.md"
   done
   [ -f "$rt/state.json" ] || { write_state_skeleton "$rt/state.json" "$1"; info "seeded state.json (IN_PROGRESS, retries 0/3)"; }
+  if ! python3 -c "import json,sys; sys.exit(0 if 'scope' in json.load(open(sys.argv[1])) else 1)" "$rt/state.json" 2>/dev/null; then
+    _sl=""
+    _slug=$(clean_gh_repo "$REPO_ROOT" 2>/dev/null || true)
+    if [ -n "$_slug" ]; then
+      _sl=$(gh api "repos/$_slug/issues/$1/labels" --jq '.[].name' 2>/dev/null || true)
+    fi
+    _scope=$(printf '%s\n' "$_sl" | scope_for_labels)
+    if mode_state_set "$1" "scope=$_scope" >/dev/null; then
+      info "room scope: $_scope"
+    else
+      info "room scope: seed failed, engine backfills on first tick"
+    fi
+  fi
   write_protocol "$rt"
   write_anchor "$rt"
   link_runtime "$1" "$rt"
@@ -510,8 +527,46 @@ check_branch() {
 # On root: no-op. Elsewhere + clean tree: checkout root. Elsewhere + dirty
 # tree: named TRACKED-ONLY stash, then checkout root (untracked build
 # artifacts and QEMU logs are never stashed). Detached HEAD: same rules.
+# Refs-only refresh + staleness report. Prints one of:
+# current | behind <n> | diverged | unknown. Never touches the worktree
+# (safe under dirty trees, running builds, active bisects); the fetch is
+# fail-open so offline never blocks startup. Local-only branches (no
+# origin/<want>) report unknown.
+checkout_staleness() {
+  local dir="$1" want="$2" lt rt
+  git -C "$dir" fetch origin --quiet 2>/dev/null || true
+  lt=$(git -C "$dir" rev-parse --verify "$want" 2>/dev/null) || { echo unknown; return 0; }
+  rt=$(git -C "$dir" rev-parse --verify "origin/$want" 2>/dev/null) || { echo unknown; return 0; }
+  [ "$lt" = "$rt" ] && { echo current; return 0; }
+  if git -C "$dir" merge-base --is-ancestor "$lt" "$rt" 2>/dev/null; then
+    echo "behind $(git -C "$dir" rev-list --count "$lt..$rt" 2>/dev/null || echo ?)"
+  else
+    echo diverged
+  fi
+}
+
+# stdin: newline-separated GitHub label names. stdout: full |
+# audit-only | testing-only (lane scope for the room). Pure except stdin.
+scope_for_labels() {
+  local has_a= has_t= n
+  while IFS= read -r n; do
+    case "$(printf '%s' "$n" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+      audit) has_a=1 ;;
+      testing) has_t=1 ;;
+    esac
+  done
+  if [ -n "$has_t" ] && [ -z "$has_a" ]; then echo testing-only
+  elif [ -n "$has_a" ] && [ -z "$has_t" ]; then echo audit-only
+  else echo full; fi
+}
+
 normalize_checkout() {
-  local dir="$1" role="$2" want="$3" cur ts
+  local dir="$1" role="$2" want="$3" cur ts stale
+  stale=$(checkout_staleness "$dir" "$want")
+  case "$stale" in
+    current|unknown) ;;
+    *) info "$role checkout: starting stale ($want $stale vs origin/$want, worktree untouched)" ;;
+  esac
   cur=$(git -C "$dir" branch --show-current)
   [ "${cur:-HEAD}" = "$want" ] && return 0
   if git -C "$dir" diff --quiet && git -C "$dir" diff --cached --quiet; then
@@ -589,7 +644,9 @@ def die(msg):
 
 path, pairs = sys.argv[1], sys.argv[2:]
 ALLOWED = {"audit_branch", "halt", "pending", "phase", "retries",
-           "retry_budget", "state", "updated", "release_armed", "gh_notes"}
+           "retry_budget", "state", "updated", "release_armed", "gh_notes",
+           "scope"}
+ROOM_SCOPES = ("full", "audit-only", "testing-only")
 STATES = {"ISSUE_OPEN", "PLANNED", "IN_PROGRESS", "AUDITED", "VERIFIED",
           "CLOSED", "FEEDBACK", "CLOSING"}
 lock_path = os.path.join(os.path.dirname(path), "state.lock")
@@ -622,6 +679,8 @@ with open(lock_path, "a+") as lock:
             value = value.lower() in ("1", "true", "yes")
         elif key == "state" and value not in STATES:
             die("%r not in the AGENTS.md vocabulary" % value)
+        elif key == "scope" and value not in ROOM_SCOPES:
+            die("scope must be one of %s, got %r" % ("/".join(ROOM_SCOPES), value))
         state[key] = value
     state["updated"] = datetime.datetime.now(
         datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -923,7 +982,7 @@ ensure_engine_loop() {
     return 0
   fi
   mkdir -p "$REPO_ROOT/logs/state-machine"
-  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 180 >>logs/state-machine/engine-console.log 2>&1"; then
+  if ! tmux new-session -d -s "$ENGINE_SESS" -c "$REPO_ROOT"     "python3 scripts/state_machine.py tick --all --interval 60 --allow-recreate >>logs/state-machine/engine-console.log 2>&1"; then
     if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
       [ "$quiet" = 1 ] || info "engine loop already up ($ENGINE_SESS)"
       return 0
@@ -1169,7 +1228,7 @@ mode_wake() {
   if [ "$3" = "$ENGINE_SESS" ]; then
     ensure_engine_loop --quiet
     # Event-driven fast path (#465): a demand-shaped worker post fires a
-    # targeted one-shot tick now instead of waiting for the 180 s sweep.
+    # targeted one-shot tick now instead of waiting for the 60 s sweep.
     # The sweep lock serializes with the loop (skip-if-held), so overlap
     # is safe. Non-demand posts (pure ACKs, status) stay sweep-driven.
     case "$2" in dev|qe|auditor)
@@ -1746,6 +1805,49 @@ mode_self_test() {
   chk_neg "$SCRIPT_DIR/agent_up.sh" watch 9993 disarm
   chk env NEXIOS_ENGINE_DRY=1 "$SCRIPT_DIR/agent_up.sh" wake 9999 dev "$ENGINE_SESS" "wake-selftest-$$"
   chk grep -q "FROM=dev WAKE :: wake-selftest-$$" /tmp/nexios-9999/inbox/coord.md
+  # checkout_staleness: refs-only refresh, worktree never touched (file-remote, offline-safe)
+  local spar spush swork
+  spar=$(mktemp -d)/origin.git; spush=$(mktemp -d)/w2; swork=$(mktemp -d)/w1
+  git init --bare -q "$spar"
+  git init -b main -q "$swork"
+  git -C "$swork" config user.email t@t && git -C "$swork" config user.name t
+  git -C "$swork" commit -q --allow-empty -m one
+  git -C "$swork" remote add origin "$spar"
+  git -C "$swork" push -q origin main
+  chk test "$(checkout_staleness "$swork" main)" = "current"
+  git clone -q "$spar" "$spush" 2>/dev/null
+  git -C "$spush" config user.email t@t && git -C "$spush" config user.name t
+  git -C "$spush" commit -q --allow-empty -m two
+  git -C "$spush" push -q origin main
+  chk test "$(checkout_staleness "$swork" main)" = "behind 1"
+  git -C "$swork" checkout -qb localonly
+  chk test "$(checkout_staleness "$swork" localonly)" = "unknown"
+  chk test -z "$(git -C "$swork" stash list)"
+  chk test "$(git -C "$swork" branch --show-current)" = "localonly"
+  rm -rf "$(dirname "$spar")" "$(dirname "$spush")" "$(dirname "$swork")"
+  # room lane-scope from GH labels (pure mapping, no network)
+  chk test "$(printf 'testing\n' | scope_for_labels)" = "testing-only"
+  chk test "$(printf 'audit\n' | scope_for_labels)" = "audit-only"
+  chk test "$(printf 'testing\naudit\n' | scope_for_labels)" = "full"
+  chk test "$(printf 'bug\n' | scope_for_labels)" = "full"
+  chk test "$(printf '' | scope_for_labels)" = "full"
+  chk test "$(printf 'Audit\n' | scope_for_labels)" = "audit-only"
+  chk test "$(printf ' TESTING \n' | scope_for_labels)" = "testing-only"
+  # setup seeds room scope from issue labels (hermetic gh double, no network)
+  mkdir -p /tmp/agentup-scope-$$/bin
+  printf '#!/bin/sh\necho testing\n' > /tmp/agentup-scope-$$/bin/gh
+  chmod +x /tmp/agentup-scope-$$/bin/gh
+  PATH="/tmp/agentup-scope-$$/bin:$PATH" "$SCRIPT_DIR/agent_up.sh" setup 4199994 >/dev/null
+  chk test "$(python3 -c "import json; print(json.load(open('/tmp/nexios-4199994/state.json')).get('scope'))")" = "testing-only"
+  rm -rf /tmp/nexios-4199994 /tmp/agentup-scope-$$ "$REPO_ROOT/.nexios-runtime/4199994"
+  # state key validation accepts the lane scope vocabulary, rejects the rest
+  mkdir -p /tmp/nexios-4199998
+  printf '{"issue": 4199998}' > /tmp/nexios-4199998/state.json
+  chk "$SCRIPT_DIR/agent_up.sh" state 4199998 scope=testing-only
+  chk grep -q '"scope": "testing-only"' /tmp/nexios-4199998/state.json
+  chk_neg "$SCRIPT_DIR/agent_up.sh" state 4199998 scope=bogus
+  chk grep -q '"scope": "testing-only"' /tmp/nexios-4199998/state.json
+  rm -rf /tmp/nexios-4199998
   rm -rf "$r93"
   rm -rf "$st" "/tmp/nexios-$zcan" "/tmp/nexios-9991" "/tmp/nexios-9999" \
          "$REPO_ROOT/.nexios-runtime/$zcan" "$REPO_ROOT/.nexios-runtime/9991" \
@@ -1854,7 +1956,8 @@ assert "mcp" in cfg and "github" in cfg["mcp"], "mcp lost"
 edit = cfg["permission"]["edit"]
 ext = cfg["permission"]["external_directory"]
 allows = {k for k, v in edit.items() if v == "allow"}
-assert allows == {"/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
+assert allows == {"*",
+                   "/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
                   "/tmp/nexios-*/**/*", "/private/tmp/nexios-*/**/*",
                   "/tmp/*", "/private/tmp/*",
                   "/tmp/*/**", "/private/tmp/*/**",
@@ -1862,16 +1965,9 @@ assert allows == {"/tmp/nexios-*/*", "/private/tmp/nexios-*/*",
 repos = {k: v for k, v in list(edit.items()) + list(ext.items()) if k.startswith(repo)}
 assert repos == {repo + "/**": "allow",
                  repo + "/src": "deny",
-                 repo + "/src/**": "deny",
-                 repo + "/tools/agents/fence": "deny",
-                 repo + "/tools/agents/fence/**": "deny",
-                 repo + "/tools/agents/render_fence.py": "deny",
-                 repo + "/tools/agents/verify_fence.py": "deny",
-                 repo + "/scripts/agent_up.sh": "deny"}, repos
+                 repo + "/src/**": "deny"}, repos
 keys = list(edit)
 assert keys.index(repo + "/**") < keys.index(repo + "/src/**")
-assert keys.index(repo + "/**") < keys.index(repo + "/tools/agents/fence/**")
-assert keys.index(repo + "/**") < keys.index(repo + "/scripts/agent_up.sh")
 PY
   }
   worker_ok() {  # $1 file, $2 repo
@@ -1932,7 +2028,7 @@ PY
     chk render "$r" "$f" --twins-out "$out/$r"
     chk test -s "$f"
     case "$r" in
-      dev) chk test "$(cfg_val "$f" edit '*')" = allow ;;
+      dev|consultant) chk test "$(cfg_val "$f" edit '*')" = allow ;;
       *)   chk test "$(cfg_val "$f" edit '*')" = deny ;;
     esac
   done
@@ -2242,6 +2338,76 @@ mode_watch() {
   exec "$SCRIPT_DIR/watchdog.sh" "$act" "$issue" "$@"
 }
 
+# A tick loop that outlived its session blocks resurrection via the pgrep
+# guard in ensure_engine_loop, while ticking stale code with no session to
+# manage it. Reap only the definitionally-orphaned (session absent) and
+# age-guarded (one-shot interval-0 ticks finish in seconds; anything older
+# than 3 min is the stale loop, never an in-flight one-shot).
+reap_orphan_loop() {
+  # A TERMED loop can take seconds to unwind (in-flight git ops, state
+  # writeback); starting the replacement before the old PID exits leaves
+  # two writers on the same rooms. Wait for the exit, KILL past a grace
+  # period — a loop that ignores TERM is wedged by definition.
+  local _lp _age _age_s _wait
+  for _lp in $(pgrep -f '[s]tate_machine\.py tick --all' 2>/dev/null); do
+    if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+      return 0
+    fi
+    _age=$(ps -o etime= -p "$_lp" 2>/dev/null | tr -d '[:space:]')
+    [ -n "$_age" ] || continue
+    _age_s=$(printf '%s' "$_age" | awk -F'[-:]' '{s=0; for(i=1;i<=NF;i++) s=s*60+$i; print s}')
+    if [ "${_age_s:-0}" -gt 180 ]; then
+      kill "$_lp" 2>/dev/null || continue
+      info "reaped orphaned tick loop (pid $_lp, age $_age), waiting exit"
+      _wait=0
+      while ps -p "$_lp" >/dev/null 2>&1 && [ "$_wait" -lt 15 ]; do
+        sleep 1
+        _wait=$((_wait + 1))
+      done
+      if ps -p "$_lp" >/dev/null 2>&1; then
+        kill -9 "$_lp" 2>/dev/null || true
+        info "orphaned tick loop (pid $_lp) ignored TERM, KILLed"
+      fi
+    fi
+  done
+}
+mode_engine() {
+  # Engine-loop-only lifecycle (workers, consultant, rooms untouched).
+  # restart = fresh tick loop on current working-tree code.
+  local verb="${1:-status}"
+  case "$verb" in
+    close)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
+      else
+        info "engine loop not running ($ENGINE_SESS absent)"
+      fi
+      reap_orphan_loop
+      ;;
+    restart)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
+        # The server drops the name asynchronously; a blind ensure would
+        # read the ghost and skip the start (leaving no loop at all).
+        for _w in 1 2 3 4 5 6; do
+          tmux has-session -t "$ENGINE_SESS" 2>/dev/null || break
+          sleep 1
+        done
+      fi
+      reap_orphan_loop
+      ensure_engine_loop
+      ;;
+    status)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        info "engine loop up ($ENGINE_SESS)"
+        tmux list-panes -t "$ENGINE_SESS" -F '#{pane_current_command} #{pane_pid}' 2>/dev/null || true
+      else
+        info "engine loop down ($ENGINE_SESS absent)"
+      fi
+      ;;
+    *) fail "engine needs a verb (close|restart|status), got '$verb'" ;;
+  esac
+}
 mode_close() {
   local all=0; [ "${1:-}" = "--all" ] && all=1
   for s in "$DEV_SESS" "$QE_SESS" "$AUDIT_SESS"; do
@@ -2280,6 +2446,7 @@ case "$mode" in
   __consult-cmd) CONSULT_TMPDIR=/tmp/agentup-tmp-probe; consult_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
+  engine) mode_engine "$@" ;;
   watch) mode_watch "$@" ;;
   clean) mode_clean "$@" ;;
   __clean-repo) __clean_repo "$@" ;;

@@ -81,6 +81,60 @@ def _ref_lane(ref):
     if not m or m.lastindex is None:
         return None
     return m.group(m.lastindex)
+
+_DEMAND_WORD_RE = re.compile(r"\b(DONE|DECISION|VERIFIED|NEED)\b")
+
+def _post_is_demand_shaped(kind, summary, body):
+    """True when a post should wake the engine on arrival. Pure.
+
+    Mirror of the agent_up.sh mode_wake fast-path filter, enforced at the
+    choke point every post flows through: NEED always fires; DECISION /
+    DONE / VERIFIED / NEED in the one-line summary fire; READY fires only
+    with IMPL content (delivery handoff). Pure ACK / status NOTEs stay
+    silent for the 180 s heartbeat. A false positive costs one idempotent
+    lock-skipped tick; a false negative costs a full interval."""
+    upper_sum = (summary or "").upper()
+    if kind == "NEED":
+        return True
+    if "DECISION" in upper_sum or _DEMAND_WORD_RE.search(upper_sum):
+        return True
+    if kind == "READY" and "IMPL" in (upper_sum + "\n" + (body or "").upper()):
+        return True
+    return False
+
+def _fire_fast_tick(room, box, kind, summary, body, ts, room_dir):
+    """Durable WAKE + detached one-shot tick for a demand-shaped post.
+
+    Best-effort arrival trigger (message-driven engine): any failure here
+    must never break the post itself, so everything is guarded and the
+    caller ignores the return. The sweep lock serializes with the
+    interval loop (skip-if-held), so overlap is safe by construction."""
+    try:
+        if not _post_is_demand_shaped(kind, summary, body):
+            return False
+        coord = os.path.join(room_dir, "inbox", "coord.md")
+        if os.path.isfile(coord):
+            with open(coord, "a") as fh:
+                fh.write("%s FROM=%s WAKE :: inbox: %s %s -- read inbox/%s.md\n"
+                         % (ts, box, box, kind, box))
+        root = os.path.dirname(os.path.dirname(HERE))
+        sm = os.path.join(root, "scripts", "state_machine.py")
+        logd = os.path.join(root, "logs", "state-machine")
+        if not (os.path.isfile(sm) and os.path.isdir(room_dir)):
+            return False
+        os.makedirs(logd, exist_ok=True)
+        logf = open(os.path.join(logd, "engine-console.log"), "ab")
+        try:
+            subprocess.Popen(
+                [sys.executable, sm, "tick", "--issues", str(int(room))],
+                cwd=root, stdin=subprocess.DEVNULL,
+                stdout=logf, stderr=subprocess.STDOUT,
+                start_new_session=True)
+        finally:
+            logf.close()
+        return True
+    except Exception:
+        return False
 def _tool_post_update(a):
     errs = []
     room, box = str(a.get("room", "")), a.get("box", "")
@@ -118,7 +172,9 @@ def _tool_post_update(a):
     post = ts + " FROM=" + role + " " + kind + " :: " + summary + "\nSTATE: " + state + " :: " + detail + "\nNEXT: " + nxt + "\n" + ack + body + "\n"
     with open(os.path.join(d, "inbox", box + ".md"), "a") as fh:
         fh.write(post)
-    return False, "posted to " + d + "/inbox/" + box + ".md:\n" + post
+    trig = _fire_fast_tick(room, box, kind, summary, body, ts, d)
+    tail = " [fast-path tick fired]" if trig else ""
+    return False, "posted to " + d + "/inbox/" + box + ".md:\n" + post + tail
 
 def run_tool(name, args):
     if name == "worker_state":

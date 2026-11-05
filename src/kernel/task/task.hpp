@@ -305,9 +305,10 @@ struct TaskControlBlock {
           wcet_observed_ns(0),
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
           exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
-          stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
-          page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
-          user_stack_size_(0), user_data(nullptr), is_user_(false),
+           stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
+           page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
+           user_stack_size_(0), user_stack_va_(0), thread_group_(0),
+           user_data(nullptr), is_user_(false),
           canary_before{0, 0, 0, 0}, canary_after{0, 0, 0, 0},
           canary_installed(0), fpu_used(false), fpu_state_gen(0), fpu_state{}, program_break(0),
            program_break_start(0), kstack_low_water_(0), text_size_(0),
@@ -319,8 +320,11 @@ struct TaskControlBlock {
           dl_prev_(nullptr), pri_next_(nullptr), pri_prev_(nullptr),
             in_ready_queue_(false), ready_deferred_(false),
            rq_priority_(0), all_bucket_(0),
-           zombie_next_(nullptr), waiting_child_pid(0),
-           waiting_child_status(nullptr), pending_signals(0), alarm_ticks(0),
+            zombie_next_(nullptr), waiting_child_pid(0),
+            waiting_child_status(nullptr), join_waiter_(nullptr),
+            join_target_id_(0), join_detached_(false), join_status_(0),
+            join_ready_(false), join_reaped_(false),
+            pending_signals(0), alarm_ticks(0),
            alarm_armed(false), wdog_armed(false), wdog_period_ticks(0),
            wdog_last_kick_tick(0), wdog_expiry_tick(0), wdog_gen(0),
            recv_timeout_armed(false),
@@ -476,6 +480,22 @@ struct TaskControlBlock {
     uint64_t stack_pdpt_phys_;
     uint64_t user_stack_;
     uint64_t user_stack_size_;
+    /// @brief VA of this task's own thread-window stack mapping (issue
+    ///        #52).  Private tasks use mem::STACK_VADDR + PAGE_SIZE
+    ///        (never recorded — stays 0); threads record their window
+    ///        slot so teardown unmaps exactly its own pages from the
+    ///        shared root.  Zeroed at every memset birth site
+    ///        (create/create_user/clone/spawn_thread).
+    uint64_t user_stack_va_;
+    /// @brief Thread address-space group (issue #52).  0 = private
+    ///        address space (fork/ELF semantics — cleanup frees the root).
+    ///        Nonzero = slot index + 1 into the thread group table
+    ///        (task.cpp): the task shares that group's root PML4 and
+    ///        frees only its own stack pages at teardown; the last
+    ///        member frees the root.  Group metadata lives independent
+    ///        of any single TCB, so owner death never frees a live root.
+    ///        Zeroed at every memset birth site.
+    uint64_t thread_group_;
     void *user_data;
     /// @brief True for user-mode tasks (own user half in page_table_).
     ///        v0.4.0 MP-1: every task — kernel AND user — now owns a private
@@ -667,6 +687,44 @@ struct TaskControlBlock {
 
     uint64_t waiting_child_pid;
     uint64_t *waiting_child_status;
+
+    /// @brief Join rendezvous state (issue #53, phase ii).  A thread may
+    ///        have at most one joiner: join_waiter_ points at the joiner
+    ///        TCB while a JOIN is outstanding (null otherwise).  Installed
+    ///        by an atomic compare-exchange in sys_thread_join so exactly
+    ///        one concurrent joiner wins (double-join fails closed); read
+    ///        by the termination handoff.  Never dereferenced without
+    ///        validating the joiner's join_target_id_ first (joiner death
+    ///        clears this slot in cleanup() before any free, so a set slot
+    ///        always names a live-or-zombie-but-unfreed TCB).
+    TaskControlBlock *join_waiter_ = nullptr;
+    /// @brief Join target of this task (issue #53).  Set when this task
+    ///        blocks in THREAD_JOIN; the target is always re-resolved via
+    ///        Scheduler::find_task (never dereferenced from a stored
+    ///        pointer), so id-reuse after reap+recycle cannot alias a new
+    ///        task: the rescan additionally requires the slot back-pointer
+    ///        (target->join_waiter_ == this).  Zero when not joining.
+    uint64_t join_target_id_ = 0;
+    /// @brief Detached flag (issue #53): set by THREAD_JOIN with the
+    ///        detach selector.  A detached thread auto-reaps on death
+    ///        (orphaned for the reaper); JOIN on a detached thread fails
+    ///        closed; detach fails closed when a joiner is registered.
+    bool join_detached_ = false;
+    /// @brief Handoff payload (issue #53): written by the termination
+    ///        handoff when a joiner is registered, read by the joiner's
+    ///        rescan.  Lets a woken joiner return the status even if the
+    ///        target zombie was reaped (e.g. by a racing parent waitpid)
+    ///        before the rescan runs.
+    uint64_t join_status_ = 0;
+    /// @brief Handoff latch (issue #53): set by the termination handoff
+    ///        alongside join_status_; cleared when the joiner consumes it.
+    bool join_ready_ = false;
+    /// @brief Collect claim (issue #53): set under IrqGuard + the thread
+    ///        group lock by the single party that reaps a TERMINATED
+    ///        thread (JOIN-collect or detached-consume).  Serializes
+    ///        concurrent collectors on SMP; the loser takes the fail-closed
+    ///        path (or the handoff status if it was the woken joiner).
+    bool join_reaped_ = false;
 
     /// @brief Signal handler table — one handler per signal number (max 32).
     ///        nullptr means default action (terminate on fatal signals).
@@ -995,6 +1053,62 @@ struct TaskControlBlock {
     /// @return TaskError code.
     static errors::TaskError clone_err(uint64_t *regs,
                                         TaskControlBlock *&out_tcb);
+
+    /// @brief Spawns a thread sharing the owner's address space (issue
+    ///        #52) — TCB-per-thread scheduler integration.  The child
+    ///        shares the owner's root PML4 (no deep copy, no kernel-half
+    ///        re-merge), owns a private stack carved from the thread
+    ///        window, starts at @p entry with a zeroed register frame,
+    ///        inherits priority/affinity, and is admission-exempt
+    ///        (period 0, mirroring user-child clone).
+    /// @param owner   Live user task whose address space is shared.  Must
+    ///                own a private root (thread_group_ == 0) or already
+    ///                belong to a group.
+    /// @param entry   User-mode entry PC (must be mapped + executable in
+    ///                the shared root).
+    /// @param stack_bytes Private stack size in bytes (page-rounded,
+    ///                bounded by CONFIG_THREAD_MAX_STACK_SIZE).
+    /// @return The new thread TCB (READY, not yet admitted), or nullptr
+    ///         on any validation/allocation failure (zero side effects).
+    static TaskControlBlock *spawn_thread(TaskControlBlock &owner,
+                                          uint64_t entry,
+                                          uint64_t stack_bytes,
+                                          uint64_t entry_arg);
+    /// @brief True when this task shares its address space with others.
+    bool is_thread() const noexcept { return thread_group_ != 0; }
+
+    /// @brief Join-rendezvous handoff (issue #53, phase ii): if a joiner
+    ///        is registered on @p t (a terminating thread), deliver
+    ///        t.exit_code to the joiner and wake it.  Called from every
+    ///        termination path (sys_exit inline, Scheduler::terminate)
+    ///        after TERMINATED + exit_code are set.  Fail-closed: a stale
+    ///        slot (joiner died without cleanup — defensive; cleanup
+    ///        clears it first) is dropped, never dereferenced.  Mirrors
+    ///        wake_waiting_parent's delivery discipline; the joiner's
+    ///        rescan collects and reaps.
+    static void thread_join_note_termination(TaskControlBlock &t) noexcept;
+
+    /// @brief Clear a dying joiner's registration (issue #53): if this
+    ///        task is blocked in THREAD_JOIN, drop its slot on the target
+    ///        so the target's termination handoff never touches freed
+    ///        memory.  Called from TCB::cleanup() before any free.
+    ///        Resolves the target by id (never a stored pointer).
+    void thread_join_unregister() noexcept;
+
+    /// @brief Try to claim a TERMINATED thread for collection (issue
+    ///        #53): exactly one collector wins (JOIN-collect, DETACH
+    ///        consume, waitpid thread-reap, reaper thread-reap); losers
+    ///        back off (the woken joiner uses its handoff latch, everyone
+    ///        else fails closed).  Call only on a validated TERMINATED
+    ///        thread; the winner must reap (remove_child + cleanup +
+    ///        remove_task + free).
+    /// @return True when this caller won the claim.
+    static inline bool thread_join_try_claim(TaskControlBlock &t) noexcept {
+        bool expected = false;
+        return __atomic_compare_exchange_n(&t.join_reaped_, &expected, true,
+                                           false, __ATOMIC_ACQ_REL,
+                                           __ATOMIC_RELAXED);
+    }
 
     /// @brief Provision a TCB's kernel stack through the kslot window
     ///        (#434 P2): slot attempt via the shared pool, backend map

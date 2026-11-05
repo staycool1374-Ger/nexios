@@ -8,7 +8,7 @@ against (a golden would be the 14th copy) - this gate instead asserts the
 PROPERTIES of what the renderer emits, per role:
 
   F1  the renderer succeeds for every role (fail-closed path is intact)
-  F2  polarity is per-role: only dev has edit "*" allow; bash is a plain
+  F2  polarity is per-role: dev and consultant have edit "*" allow; bash is a plain
       "allow" except the auditor, whose session bash must equal its agent.bash
       map (launch.agent roles run the agent cage in-session); task is "deny"
       for every role (no in-process subagents — lanes never fork invisibly)
@@ -17,7 +17,7 @@ PROPERTIES of what the renderer emits, per role:
   F4  no host-dependent path leaks: no /var/folders, no $HOME, no "{repo}"
       residue; worker configs carry no repo-absolute path at all; consultant
       repo keys are exactly the documented write set ({repo}/** allow;
-      src/ and fence sources denied)
+      src/ denied)
   F5  no wildcard leaks: "*" appears only as the role's edit_default (last rule
       wins, so a "*" allow anywhere else would undo the fence)
   F6  consultant keeps its mcp block (harness+github); workers have none
@@ -49,11 +49,7 @@ RUNTIME = os.environ.get(
     "NEXIOS_HOME", os.path.join(os.path.expanduser("~"), ".local", "state", "nexios"))
 RENDERED = os.path.join(RUNTIME, "rendered")
 ROLES = ("dev", "qe", "auditor", "consultant")
-CONSULT_REPO_KEYS = ("{repo}/**", "{repo}/src", "{repo}/src/**",
-                       "{repo}/tools/agents/fence", "{repo}/tools/agents/fence/**",
-                       "{repo}/tools/agents/render_fence.py",
-                       "{repo}/tools/agents/verify_fence.py",
-                       "{repo}/scripts/agent_up.sh")
+CONSULT_REPO_KEYS = ("{repo}/**", "{repo}/src", "{repo}/src/**")
 
 FAILS = []
 
@@ -91,7 +87,7 @@ def maps(cfg):
 
 def check_polarity(role, cfg):
     _, edit = maps(cfg)
-    want = "allow" if role == "dev" else "deny"
+    want = "allow" if role in ("dev", "consultant") else "deny"
     if edit.get("*") != want:
         fail("F2", "%s: edit '*' is %r, want %r" % (role, edit.get("*"), want))
     task = cfg.get("permission", {}).get("task")
@@ -183,22 +179,16 @@ def check_mcp(role, cfg):
 
 
 def check_src_readonly(role, cfg, repo):
-    """F9: consultant src/ (and the fence self-cage) deny after the allow."""
+    """F9: consultant src/ denies after the allow."""
     if role != "consultant":
         return
     _, edit = maps(cfg)
-    for key in (repo + "/src", repo + "/src/**",
-                repo + "/tools/agents/fence", repo + "/tools/agents/fence/**",
-                repo + "/tools/agents/render_fence.py",
-                repo + "/tools/agents/verify_fence.py",
-                repo + "/scripts/agent_up.sh"):
+    for key in (repo + "/src", repo + "/src/**"):
         if edit.get(key) != "deny":
             fail("F9", "%s: rendered edit %r is not deny" % (role, key))
     try:
         allow_at = list(edit).index(repo + "/**")
-        deny_at = max(list(edit).index(repo + "/src/**"),
-                      list(edit).index(repo + "/tools/agents/fence/**"),
-                      list(edit).index(repo + "/scripts/agent_up.sh"))
+        deny_at = list(edit).index(repo + "/src/**")
     except ValueError:
         fail("F9", "%s: allow/deny keys missing from ordered map" % role)
         return

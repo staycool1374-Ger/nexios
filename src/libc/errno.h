@@ -27,6 +27,11 @@
 /// here (never reorder existing fields).
 struct nexios_tcb {
     int errno_value;
+    /* Issue #53 (option Y): thread identity for pthread_self. Appended
+       (never reorder existing fields); crt0's 16-byte block covers it.
+       Zero for the main thread (crt0 never sets it) — pthread_self maps
+       0 to the main-thread id. Trampoline-born threads set it at birth. */
+    unsigned long thread_id;
 };
 
 /// @brief Address of the calling task's errno cell (TP + 0).
@@ -37,6 +42,10 @@ int *__errno_location(void);
 /// TP-published cell. Plain `errno = x` / `errno` uses keep working
 /// through the dereference.
 #define errno (*__errno_location())
+
+/// @brief Owning thread id for pthread_self (issue #53, option Y).
+/// Zero when TLS was never set to a thread block (crt0 main thread).
+unsigned long __pthread_self_tid(void);
 
 #define EPERM   1
 #define ENOENT  2
