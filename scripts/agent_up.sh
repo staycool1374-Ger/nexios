@@ -147,6 +147,10 @@ usage: agent_up.sh <mode> [...]
                      dialog (checks first; person-run only).
   close [--all]      kill worker tmux sessions; --all also kills the
                      consultant + engine loop (+ legacy nexios-coord if present).
+  engine <verb>      engine loop only (workers/consultant/rooms untouched):
+                     close kills $ENGINE_SESS (no-op when absent); restart
+                     kills it if present then starts a fresh tick loop on
+                     current working-tree code; status reports up/down.
   clean <issue> [--dry-run]  remove a CLOSED lane's merged branches + room;
                      refuses on open issue, unpushed main, live room.
   watch <issue> [arm|disarm|tick|status]  dev/qe activity watchdog
@@ -2340,6 +2344,35 @@ mode_watch() {
   exec "$SCRIPT_DIR/watchdog.sh" "$act" "$issue" "$@"
 }
 
+mode_engine() {
+  # Engine-loop-only lifecycle (workers, consultant, rooms untouched).
+  # restart = fresh tick loop on current working-tree code.
+  local verb="${1:-status}"
+  case "$verb" in
+    close)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
+      else
+        info "engine loop not running ($ENGINE_SESS absent)"
+      fi
+      ;;
+    restart)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        tmux kill-session -t "$ENGINE_SESS"; info "killed $ENGINE_SESS"
+      fi
+      ensure_engine_loop
+      ;;
+    status)
+      if tmux has-session -t "$ENGINE_SESS" 2>/dev/null; then
+        info "engine loop up ($ENGINE_SESS)"
+        tmux list-panes -t "$ENGINE_SESS" -F '#{pane_current_command} #{pane_pid}' 2>/dev/null || true
+      else
+        info "engine loop down ($ENGINE_SESS absent)"
+      fi
+      ;;
+    *) fail "engine needs a verb (close|restart|status), got '$verb'" ;;
+  esac
+}
 mode_close() {
   local all=0; [ "${1:-}" = "--all" ] && all=1
   for s in "$DEV_SESS" "$QE_SESS" "$AUDIT_SESS"; do
@@ -2378,6 +2411,7 @@ case "$mode" in
   __consult-cmd) CONSULT_TMPDIR=/tmp/agentup-tmp-probe; consult_tui_cmd ;;
   approve) mode_approve "$@" ;;
   close) mode_close "$@" ;;
+  engine) mode_engine "$@" ;;
   watch) mode_watch "$@" ;;
   clean) mode_clean "$@" ;;
   __clean-repo) __clean_repo "$@" ;;
