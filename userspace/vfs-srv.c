@@ -86,7 +86,10 @@ int main(void) {
             break;
         }
 
-        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
+        // Reply to the requester (owner_id carried in the RPC body):
+        // send_sync_bounded waits on the REQUESTER's own queue, so a
+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
     }
     return 0;
 }
