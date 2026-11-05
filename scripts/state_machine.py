@@ -2772,6 +2772,65 @@ def foreign_verified_evidence(qe_boxes_by_issue, issue, testbed_tip):
     return sorted(out)
 
 
+def stash_gate(dirty, ev_rooms, stored_stash, ts, tree_hash):
+    """Whether to auto-stash now: dirty tree holding other rooms' VERIFIED
+    evidence, no live stash for this tree state. Pure (#485).
+
+    The stash preserves the evidence (restorable by construction) so the
+    merge can stage; CLEAN would destroy it, so CLEAN must not file.
+    """
+    if not dirty or not ev_rooms:
+        return False
+    stored = stored_stash or {}
+    if stored.get("tree") == tree_hash and stored.get("for") == ts:
+        return False
+    return True
+
+
+def stash_evidence_for_merge(ctx, qd, room_issues, dirty_lines, tip, issue):
+    """Engine-executed evidence stash (restorable, verified). Pure I/O.
+
+    Saves a per-room patch inventory, stashes tracked+untracked work
+    (minus the auto-appended exempt paths), then verifies: the stash
+    entry exists AND the tree is clean by the same exempt-filtered
+    definition the CLEAN gate uses. Returns (ok, msg, inventory).
+    Nothing is destroyed on any failure path: a failed or unverified
+    stash leaves the tree untouched for the operator runbook.
+    """
+    ts19 = utcnow()[:19]
+    rooms = ",".join("#%d" % r for r in sorted(room_issues or []))
+    msg = "qe-evidence rooms %s %s (pre-CLEAN, auto, #%d)" % (
+        rooms, ts19, issue)
+    inv = ["qe-evidence inventory %s tip %s rooms %s" % (ts19, tip, rooms)]
+    inv += [("  " + l) for l in (dirty_lines or [])[:40]]
+    if not qd or not os.path.isdir(qd):
+        return False, "testbed checkout unknown", "\n".join(inv)
+    try:
+        excludes = [":!" + e.rstrip("/") for e in QE_EXEMPT]
+        rc, _ = ctx.run(["git", "-C", qd, "stash", "push", "-u",
+                          "-m", msg, "--", "."] + excludes,
+                         timeout=120, cwd=qd)
+    except Exception as exc:
+        return False, "stash spawn failed: %s" % exc, "\n".join(inv)
+    if rc != 0:
+        return False, "stash push exited %s" % rc, "\n".join(inv)
+    try:
+        _rc2, _out2 = ctx.run(["git", "-C", qd, "stash", "list", "-3"],
+                            timeout=30, cwd=qd)
+    except Exception as exc:
+        return False, "stash list failed: %s" % exc, "\n".join(inv)
+    if _rc2 != 0 or (msg not in (_out2 or "")):
+        return False, "stash entry missing after push", "\n".join(inv)
+    _info = git_info(qd)
+    _rest = [l for l in ((_info[2] if _info else None) or [])
+             if not l.split()[-1].startswith(QE_EXEMPT)] if _info else None
+    if _rest is None:
+        return False, "tree unreadable after stash", "\n".join(inv)
+    if _rest:
+        return False, "tree still dirty after stash (%d lines)" % len(_rest), "\n".join(inv)
+    return True, msg, "\n".join(inv)
+
+
 def clean_refused_repeat(stored_clean, merged_for, ts, tree_hash):
     """True when a prior CLEAN demonstrably had no effect. Pure (#484).
 
@@ -3490,6 +3549,36 @@ def lane_probe_class(probe):
     if probe.startswith("IDLE"):
         return "quiet"
     return "unknown"
+
+
+def qe_verify_order_live(coord_last, rings):
+    """True when the lane's newest coord note is a live VERIFY-family
+    order (VERIFY, PULL, or IMPL READY). Pure (#485 follow-up).
+
+    Prevents a second verify order while one is already outstanding;
+    NEED-kind ACKs do not clear it (they never resolve orders).
+    """
+    if not coord_last:
+        return False
+    if not any(k in coord_last for k in ("VERIFY", "PULL", "IMPL READY")):
+        return False
+    oid = "qe:" + (coord_last or "")[:19]
+    return oid in (rings or {}) and (rings or {}).get(oid) not in (None, -1, RING_ESCALATED)
+
+
+def reverify_due(merged_tip, verified_tip, stored, halted):
+    """Whether a post-merge QE re-verify order must file. Pure.
+
+    A staged merge nobody is asked to verify rots the room: file once
+    per merged tip unless QE already VERIFIED it. #485 follow-up.
+    """
+    if halted or not merged_tip:
+        return False
+    if verified_tip and merged_tip[:7] == verified_tip[:7]:
+        return False
+    if ((stored or {}).get("tip") or "")[:7] == merged_tip[:7]:
+        return False
+    return True
 
 
 def lane_probe_short(probe):
@@ -5472,6 +5561,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
         qh_store = None
     qm_store = None
     cl_store = None
+    rv_store = None
+    qs_store = None
     rs_store = None
     pull_store = None
     if not ctx.dry:
@@ -5537,9 +5628,37 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                         _cl_oid0 = _cl_stored.get("oid")
                         _cl_live = _cl_oid0 and rings.get(_cl_oid0) not in (None, -1, RING_ESCALATED)
                         if _cl_open:
-                            actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); merge/stash evidence first or use scratch clone -- CLEAN not filed"
-                                           % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1]))
-                            events.append("qe-clean-blocked-evidence")
+                            _sq_due = stash_gate(dirty_q, _cl_open, st.get("qe_stash"), ts, _cl_tree)
+                            _sq_active = str((probes or {}).get("qe") or "").startswith("WORKING")
+                            if _sq_due and _sq_active:
+                                actions.append("deferred qe evidence stash #%d: qe session active in checkout, retry when idle (rooms %s)"
+                                               % (issue, ",".join("#%d" % _e for _e in _cl_open)))
+                                events.append("qe-evidence-stash-deferred")
+                            elif _sq_due and ctx.dry:
+                                actions.append("WOULD stash qe evidence #%d (rooms %s @ %s, tree %s)"
+                                               % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1], _cl_tree))
+                                qs_store = {"for": ts, "rooms": sorted(_cl_open),
+                                            "tip": info_q[1], "tree": _cl_tree,
+                                            "msg": "dry-run stash plan"}
+                                events.append("qe-evidence-stash-planned")
+                            elif _sq_due:
+                                _sq_ok, _sq_msg, _sq_inv = stash_evidence_for_merge(
+                                    ctx, qd, _cl_open, dirty_q, info_q[1], issue)
+                                if _sq_ok:
+                                    actions.append("STASHED qe evidence #%d: %s; inventory %d lines; qe-merge unblocked next sweep"
+                                                   % (issue, _sq_msg, len(_sq_inv.splitlines())))
+                                    events.append("qe-evidence-stashed")
+                                    qs_store = {"for": ts, "rooms": sorted(_cl_open),
+                                                "tip": info_q[1], "tree": _cl_tree,
+                                                "msg": _sq_msg}
+                                else:
+                                    actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); auto-stash failed (%s) -- operator runbook #485, CLEAN not filed"
+                                                   % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1], _sq_msg))
+                                    events.append("qe-clean-blocked-evidence")
+                            else:
+                                actions.append("NEED qe CLEAN blocked #%d: unmerged VERIFIED evidence in shared checkout (rooms %s @ %s); stash %s on file, awaiting qe-merge -- CLEAN not filed"
+                                               % (issue, ",".join("#%d" % _e for _e in _cl_open), info_q[1], (st.get("qe_stash") or {}).get("msg", "?")))
+                                events.append("qe-clean-blocked-evidence")
                         elif _cl_stored.get("for") == ts and _cl_live:
                             actions.append("order deferred qe CLEAN #%d (already filed %s)" % (issue, _cl_oid0))
                         elif _cl_stored.get("for") == ts and _cl_oid0 in (rings or {}):
@@ -5861,6 +5980,53 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                            % (issue, _ew_first[:120], _ew_streak, engine_wait_recovery(_ew_first)))
             events.append("engine-wait-escalated")
             _ew_store = {"streak": _ew_streak, "key": _ew_key, "escalated": True}
+    _rv_qd = getattr(ctx, "qe_dir", None)
+    _rv_head = None
+    if _rv_qd and os.path.isdir(_rv_qd) and not st.get("halt"):
+        try:
+            _rv_rc, _rv_out = ctx.run(["git", "-C", _rv_qd, "rev-parse", "--short", "HEAD"],
+                                       timeout=30, cwd=_rv_qd)
+            if _rv_rc == 0:
+                _rv_head = (_rv_out.strip().splitlines() or [""])[0].strip() or None
+        except Exception:
+            _rv_head = None
+    _rv_done = qe_verified_tip((boxes.get("qe") or {}).get("all", []),
+                               (boxes.get("qe") or {}).get("full", []))
+    _rv_co = isinstance(co_store, dict) and co_store.get("stage") == "verify"
+    _rv_live = qe_verify_order_live((boxes.get("qe") or {}).get("coord_last"), rings)
+    if _rv_co:
+        actions.append("re-verify #%d deferred: closeout VERIFY order already filed this tick" % issue)
+    elif _rv_live:
+        actions.append("re-verify #%d deferred: live QE verify order already outstanding" % issue)
+    elif reverify_due(_rv_head, _rv_done, st.get("qe_reverify"), bool(st.get("halt"))):
+        _rv_text = ("RE-VERIFY #%d: testbed re-staged @ %s; run the verification gates per prompts/qe.txt + room pending and post VERIFIED with tip: + diff present: + branch:; ACK it with post_update ref=<id> before starting" % (issue, _rv_head))
+        _rv_note, _rv_oid = coord_note("qe", _rv_text, ack_by=True, done_by=True, evidence="VERIFIED")
+        if _rv_oid in rings:
+            actions.append("order deferred qe RE-VERIFY #%d (oid collision)" % issue)
+        elif ctx.dry:
+            actions.append("WOULD post qe RE-VERIFY order #%d (oid %s)" % (issue, _rv_oid))
+            rings[_rv_oid] = 0
+            has_unacked.add("qe")
+            file_order_deadline(ad_store, _rv_oid)
+            file_order_delivery(dl_store, _rv_oid, "VERIFIED")
+            rv_store = {"tip": _rv_head, "oid": _rv_oid}
+            events.append("qe-reverify-order-filed")
+        elif append_box_note(room_dir, "qe", _rv_note):
+            rings[_rv_oid] = 0
+            has_unacked.add("qe")
+            file_order_deadline(ad_store, _rv_oid)
+            file_order_delivery(dl_store, _rv_oid, "VERIFIED")
+            rv_store = {"tip": _rv_head, "oid": _rv_oid}
+            actions.append("order filed qe RE-VERIFY #%d (oid %s)" % (issue, _rv_oid))
+            if ("qe" not in deaf and probes["qe"].startswith("IDLE")
+                    and not session_rung(actions, SESS["qe"], cycle["rung"])):
+                _rv_res = ring(ctx, SESS["qe"], "qe", "qe RE-VERIFY order",
+                               oid=_rv_oid, issue=issue)
+                actions.append(_rv_res)
+                if _rv_res.startswith(("rang ", "WOULD ring ")):
+                    rings[_rv_oid] = 1
+        else:
+            actions.append("NOTE-FAILED qe RE-VERIFY #%d" % issue)
     _loop_tip = _c_tip_early if "_c_tip_early" in dir() else None
     try:
         _loop_tip = _c_tip_early
@@ -5978,6 +6144,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
             s["qe_merge"] = qm_store
             s.pop("qe_clean", None)
             s.pop("qe_resolve", None)
+        if isinstance(rv_store, dict) and rv_store:
+            s["qe_reverify"] = rv_store
         if isinstance(rs_store, dict):
             if rs_store:
                 s["qe_resolve"] = rs_store
@@ -5995,6 +6163,8 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 s.pop("qe_pull", None)
         if isinstance(qo_store, dict) and qo_store:
             s["qe_order"] = qo_store
+        if isinstance(qs_store, dict) and qs_store:
+            s["qe_stash"] = qs_store
         if isinstance(di_store, dict):
             if di_store:
                 s["dev_impl"] = di_store
@@ -9102,6 +9272,40 @@ def mode_self_test():
           clean_refused_repeat({"for": "2026-11-05T13:51:35", "oid": "qe:x", "tree": "ab12cd34"}, "2026-11-05T13:55:00", "2026-11-05T14:00:44", "ab12cd34") is False, True)
     check("clean-refused-repeat-no-store",
           clean_refused_repeat({}, "", "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("reverify-due-new-tip",
+          reverify_due("0c86c48", "5e9e3d3", {}, False) is True, True)
+    check("reverify-due-already-verified",
+          reverify_due("0c86c48", "0c86c48d6", {}, False) is False, True)
+    check("reverify-due-already-ordered",
+          reverify_due("0c86c48", "5e9e3d3", {"tip": "0c86c48"}, False) is False, True)
+    check("reverify-due-halted",
+          reverify_due("0c86c48", None, {}, True) is False, True)
+    check("reverify-due-no-tip",
+          reverify_due(None, None, {}, False) is False, True)
+    check("reverify-due-new-tip-after-verify",
+          reverify_due("aa11bb2", "0c86c48", {"tip": "0c86c48"}, False) is True, True)
+    check("reverify-live-verify-order",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: RE-VERIFY #441 [oid qe:2026-11-05T14:00:44]", {"qe:2026-11-05T14:00:44": 0}) is True, True)
+    check("reverify-live-pull-counts",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: PULL #441 blah", {"qe:2026-11-05T14:00:44": 1}) is True, True)
+    check("reverify-live-acked-not-live",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: VERIFY #441 blah", {"qe:2026-11-05T14:00:44": -1}) is False, True)
+    check("reverify-live-rewake-ignored",
+          qe_verify_order_live("2026-11-05T14:00:44Z FROM=coord NOTE :: STARVATION RE-WAKE #441 blah", {"qe:2026-11-05T14:00:44": 0}) is False, True)
+    check("reverify-live-no-note",
+          qe_verify_order_live(None, {"qe:2026-11-05T14:00:44": 0}) is False, True)
+    check("stash-gate-dirty-evidence",
+          stash_gate([" M a"], [470], {}, "2026-11-05T14:00:44", "ab12cd34") is True, True)
+    check("stash-gate-clean",
+          stash_gate([], [470], {}, "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("stash-gate-no-evidence",
+          stash_gate([" M a"], [], {}, "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("stash-gate-already-stashed",
+          stash_gate([" M a"], [470], {"for": "2026-11-05T14:00:44", "tree": "ab12cd34"}, "2026-11-05T14:00:44", "ab12cd34") is False, True)
+    check("stash-gate-new-ts-restashes",
+          stash_gate([" M a"], [470], {"for": "2026-11-05T13:51:35", "tree": "ab12cd34"}, "2026-11-05T14:00:44", "ff99ee00") is True, True)
+    check("stash-gate-room-set-not-needed",
+          stash_gate([" M a"], [470, 471], None, "2026-11-05T14:00:44", "ab12cd34") is True, True)
     stt = {"pending": "provisioned from issue text"}
     check("status-plan-armed-unacked",
           status_planned_lane("qe", {"all": [], "coord_last": "2026-11-02T08:00:00Z FROM=coord NOTE :: o",
