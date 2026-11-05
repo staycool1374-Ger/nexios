@@ -7070,10 +7070,23 @@ def cmd_tick(ctx, issues, interval):
 
 
 def status_planned_lane(role, box, st, probe):
-    """Next-step read for one worker lane. Pure, read-only (no rings)."""
+    """Next-step read for one worker lane. Pure, read-only (no rings).
+
+    Escalated waits and engine-owned waits surface here instead of the
+    routine reads: a lane parked on someone else's action must name
+    that waiter in the status table.
+    """
     if (st or {}).get("halt"):
         return "HALTED: no actions"
     box = box or {}
+    if (((st or {}).get("starve") or {}).get(role) or {}).get("escalated"):
+        return "ESCALATED: starved, operator decides"
+    _ew = (st or {}).get("engine_wait") or {}
+    _nxt = box.get("next") or ""
+    if _ew.get("escalated") and ENGINE_WAIT_RE.search(_nxt):
+        return "ESCALATED: engine wait"
+    if _ew.get("streak") and ENGINE_WAIT_RE.search(_nxt):
+        return "WAITING ENGINE"
     posts = box.get("all", [])
     coord_last = box.get("coord_last")
     if coord_last and order_outstanding(
@@ -7260,9 +7273,11 @@ def status_lane_activity(role, state11, pending, phase, operator_hold=False, nxt
     word = (state11 or "").split()[0]
     if word == "ABSENT":
         return "-"
+    if operator_hold and role in ("dev", "qe"):
+        return "WAITING FOR OPERATOR"
+    if nxt and ENGINE_WAIT_RE.search(nxt):
+        return "WAITING ENGINE"
     if word == "BLOCKED":
-        if operator_hold and role in ("dev", "qe"):
-            return "WAITING FOR OPERATOR"
         if role == "dev":
             return "WAITING " + lane_wait_target(pending, role, phase)
     if word == "WORKING" and nxt is not None:
@@ -7292,6 +7307,10 @@ def planned_enum(text, exists):
     low = t.lower()
     if t.startswith("HALTED"):
         return "HALTED"
+    if t.startswith("ESCALATED:"):
+        return "ESCALATED: OPERATOR"
+    if t.startswith("WAITING ENGINE"):
+        return "WAITING ENGINE"
     if t.startswith("ring:") or t.startswith("NEED ") or "order filed" in low or "order deferred" in low or "collect verdict" in low:
         return "EXPECTING RESULT/OK"
     if "no audit requested" in low or "no briefed work" in low:
@@ -8065,6 +8084,27 @@ def mode_self_test():
     check("activity-waiting-for-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting anything", "VERIFY", True) == "WAITING FOR OPERATOR", True)
     check("activity-qe-operator-hold", status_lane_activity("qe", "BLOCKED", "qe: idle", "", True) == "WAITING FOR OPERATOR", True)
     check("planned-reading-issue", planned_for("WAITING FOR OPERATOR", 53) == "READING ISSUE #53", True)
+    check("activity-waiting-engine",
+          status_lane_activity("qe", "WORKING (#441)", "", "", nxt="blocked awaiting engine merge") == "WAITING ENGINE", True)
+    check("activity-waiting-engine-beats-idle-verb",
+          status_lane_activity("qe", "IDLE", "", "", nxt="waiting engine restage") == "WAITING ENGINE", True)
+    check("activity-operator-hold-beats-engine-wait",
+          status_lane_activity("dev", "BLOCKED", "", "", True, nxt="waiting engine routing") == "WAITING FOR OPERATOR", True)
+    check("planned-escalated-starve",
+          planned_enum("ESCALATED: starved, ack it", True) == "ESCALATED: OPERATOR", True)
+    check("planned-waiting-engine",
+          planned_enum("WAITING ENGINE", True) == "WAITING ENGINE", True)
+    _st_esc = {"starve": {"qe": {"count": 3, "escalated": True}}, "pending": "x", "rings": {}}
+    check("planned-lane-escalated-starve",
+          status_planned_lane("qe", {"all": [], "next": "waiting engine restage"}, _st_esc, "IDLE-x") == "ESCALATED: starved, operator decides", True)
+    _st_ew = {"engine_wait": {"streak": 5, "escalated": True, "key": "w"}, "pending": "x", "rings": {}}
+    check("planned-lane-escalated-engine-wait",
+          status_planned_lane("qe", {"all": [], "next": "waiting engine restage"}, _st_ew, "IDLE-x") == "ESCALATED: engine wait", True)
+    _st_ew2 = {"engine_wait": {"streak": 2, "key": "w"}, "pending": "x", "rings": {}}
+    check("planned-lane-waiting-engine",
+          status_planned_lane("qe", {"all": [], "next": "waiting engine restage"}, _st_ew2, "IDLE-x") == "WAITING ENGINE", True)
+    check("planned-lane-engine-wait-ignores-unrelated-next",
+          status_planned_lane("qe", {"all": [], "next": "idle :: parked"}, _st_ew2, "IDLE-x") == "awaits: idle :: parked", True)
     check("planned-for-other", planned_for("WAITING QE", 53) is None, True)
     check("activity-dev-blocked-qe", status_lane_activity("dev", "BLOCKED", "dev: waiting QE pull", "CLOSE-OUT") == "WAITING QE", True)
     check("activity-dev-blocked-operator", status_lane_activity("dev", "BLOCKED", "dev: waiting operator decision", "VERIFY") == "WAITING OPERATOR", True)
