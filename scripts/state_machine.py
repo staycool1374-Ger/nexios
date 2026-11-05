@@ -1235,6 +1235,30 @@ def _block_names_branch_tip(block):
     return has_b and has_t
 
 
+def explicit_tip_in_text(text):
+    """First standalone `tip:` hex line in free text, or None. Pure (#498).
+
+    Demand posts carry the artifact tip inline; the header summary may be
+    truncated, so the full post text is the source, never the header."""
+    m = re.search(r"^\s*tip\s*:\s*([0-9a-f]{7,40})\s*$", text or "",
+                  re.I | re.M)
+    return m.group(1) if m else None
+
+
+def room_artifact_tip(dev_all, dev_full, demand_text):
+    """Auditable tip from the room artifact, never the checkout. Pure (#498).
+
+    Newest dev DONE tip (branch-name answers travel with `tip:` lines, so
+    the branch tip is covered here), else explicit `tip:` in the demand
+    post, else None (no artifact -> none-state, process-only verdict).
+    A bare branch name is not a tip. Checkout HEAD is never consulted:
+    any checkout move must leave every brief unchanged."""
+    ndt = newest_done_tip(dev_all, dev_full)
+    if ndt:
+        return ndt[1]
+    return explicit_tip_in_text(demand_text)
+
+
 def newest_audit_done_post(boxes):
     """Newest dev/qe DONE ts routed to audit, or None. Pure (#465 follow-up).
     DONE is the WIRE deliverable, but only a DONE that asks for review
@@ -1613,19 +1637,24 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
     brief_present = os.path.exists(brief)
     brief_tip = audit_brief_tip(brief) if brief_present else None
     tip = stored.get("tip")
-    cur_tip = None
+    _artifact_tip = room_artifact_tip(
+        (boxes.get("dev") or {}).get("all"),
+        (boxes.get("dev") or {}).get("full"),
+        ((demand or {}).get("text") or ""))
+    # Room artifact wins over checkout HEAD, always (#498): the brief and
+    # the demand pin what the room actually delivered (newest DONE tip,
+    # else demand-post tip), never whatever HEAD happens to be, so any
+    # checkout move leaves every brief unchanged.
+    cur_tip = _artifact_tip
     if not brief_present or brief_tip is None:
-        info = git_info(ctx.dev_dir)
-        if not info:
-            acted.append("NEED audit brief ungeneratable: dev checkout tip unreadable")
-            audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
-            return acted, True, store, (asess or None), audit_note
-        tip = info[1]
-        cur_tip = tip
+        if _artifact_tip is None:
+            # None-state: no auditable artifact; the brief says so and
+            # the auditor verdict is constrained to process-only.
+            tip = None
+        else:
+            tip = _artifact_tip
     else:
-        info = git_info(ctx.dev_dir)
-        cur_tip = info[1] if info else tip
-        tip = cur_tip or tip
+        tip = brief_tip or _artifact_tip or tip
     # Item 6 (#464): answered demand+tip never recreates audit_pending.
     # A verdict-handed demand re-asked on the identical tip is done —
     # suppress it (no ring, no store) instead of re-ringing the ping
@@ -1734,7 +1763,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
                 acted.append("WOULD write brief %s (lane audit)" % brief)
             else:
                 bw = write_brief(ctx, room_dir, "auditor.txt",
-                                 auditor_brief_text(issue, tip or cur_tip or "unknown", scope_txt[:220], room_dir))
+                                 auditor_brief_text(issue, tip or cur_tip or "none (no auditable artifact)", scope_txt[:220], room_dir))
                 acted.append(bw)
                 if bw.startswith("BRIEF-FAILED"):
                     audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
@@ -1797,7 +1826,7 @@ def auditor_lifecycle(ctx, issue, room_dir, st, boxes, fresh, rooms_all=None):
             return acted, True, new_store, (asess or None), audit_note
         else:
             bw = write_brief(ctx, room_dir, "auditor.txt",
-                             auditor_brief_text(issue, tip or cur_tip or "unknown", scope_txt[:220], room_dir))
+                             auditor_brief_text(issue, tip or cur_tip or "none (no auditable artifact)", scope_txt[:220], room_dir))
             acted.append(bw)
             if bw.startswith("BRIEF-FAILED"):
                 audit_note = audit_planned_text(bool(verdict_ts), bool(rep), live, True, demand, qhead, issue)
@@ -2851,6 +2880,51 @@ def clean_refused_repeat(stored_clean, merged_for, ts, tree_hash):
     return (stored_clean.get("for") or "") >= (merged_for or "")
 
 
+def tip_known_dir(ctx, *tips):
+    """Owning checkout for tips: dev_dir, else qe_dir, else None (#500).
+
+    Read-only git, fail-closed. Dev artifact tips resolve in the dev
+    checkout, qe/testbed branch tips in the qe checkout; anything
+    unknown everywhere stays unknown (the caller fail-closes)."""
+    wants = [t for t in tips if t]
+    if not wants:
+        return None
+    for d in (getattr(ctx, "dev_dir", None), getattr(ctx, "qe_dir", None)):
+        if not d:
+            continue
+        try:
+            ok = True
+            for t in wants:
+                rc, _ = ctx.run(["git", "cat-file", "-e", "%s^{commit}" % t],
+                                timeout=30, cwd=d)
+                if rc != 0:
+                    ok = False
+                    break
+            if ok:
+                return d
+        except Exception:
+            continue
+    return None
+
+
+def tip_known_dir_or_fetch(ctx, *tips):
+    """tip_known_dir, else one `git fetch origin` + retry dev_dir (#500).
+
+    The fetch runs only on a genuine miss and is best-effort; any failure
+    stays fail-closed (None)."""
+    d = tip_known_dir(ctx, *tips)
+    if d is not None:
+        return d
+    dev_dir = getattr(ctx, "dev_dir", None)
+    if not dev_dir:
+        return None
+    try:
+        ctx.run(["git", "fetch", "origin"], timeout=120, cwd=dev_dir)
+    except Exception:
+        return None
+    return tip_known_dir(ctx, *tips)
+
+
 def tip_covers(ctx, verdict_tip, done_tip):
     """True when a verdict covers the DONE artifact. Pure-ish I/O.
 
@@ -2862,9 +2936,12 @@ def tip_covers(ctx, verdict_tip, done_tip):
         return False
     if verdict_tip[:7] == done_tip[:7]:
         return True
+    d = tip_known_dir_or_fetch(ctx, verdict_tip, done_tip)
+    if d is None:
+        return False
     try:
         rc, _ = ctx.run(["git", "merge-base", "--is-ancestor", done_tip, verdict_tip],
-                        timeout=30, cwd=ctx.dev_dir)
+                        timeout=30, cwd=d)
         return rc == 0
     except Exception:
         return False
@@ -2924,12 +3001,15 @@ def closeout_branch(posts_all, full_lines, fields):
     """Branch name for close-out orders, or None. Pure.
 
     The gated READY artifacts first, then branch: in the DONE post body,
-    then inline prose (`branch <name>`) in DONE posts and the newest IMPL
-    READY post. Shape-gated to the branch vocabulary (no leading dash,
-    no .., no revision syntax — anything exotic fails closed to NEED,
-    and the caller git-verifies before any order files)."""
+    then inline `branch:` lines in DONE posts and the newest IMPL READY
+    post. Candidates scan newest-first so a correction supersedes stale
+    posts. Shape-gated to the branch vocabulary (no leading dash, no ..,
+    no revision syntax). Prose fallback is gone (issue #499): only exact
+    standalone `branch:` lines resolve — inline `branch <word>` prose
+    (e.g. echoing the order template's own wording) never invents a
+    branch. Anything exotic fails closed to NEED."""
     br = (fields or {}).get("branch") or ""
-    if br and READY_BRANCH_RE.match(br):
+    if READY_BRANCH_RE.match(br):
         return br
     cands = []
     for post in posts_all or []:
@@ -2944,19 +3024,22 @@ def closeout_branch(posts_all, full_lines, fields):
         if m and m.group(2) == "qe" and m.group(3) == "READY" and "VERIFIED" in m.group(4):
             if post not in cands:
                 cands.append(post)
-    for post in cands:
+    for post in sorted(set(cands), reverse=True):
         for line in post_body_lines(full_lines, post):
             m = re.match(r"^\s*branch\s*:\s*(\S+)\s*$", line, re.I)
             if m and READY_BRANCH_RE.match(m.group(1)):
                 return m.group(1)
-    for post in cands:
-        for line in [post] + post_body_lines(full_lines, post):
-            mb = re.search(r"\bbranch\s+([A-Za-z0-9._/-]{1,120})", line)
-            if mb:
-                cand = mb.group(1).rstrip(".,:;")
-                if READY_BRANCH_RE.match(cand):
-                    return cand
     return None
+
+
+def closeout_branch_order_text(issue):
+    """Branch-name order body (issue #499 de-trapped). Pure.
+
+    Names the required `branch:` / `tip:` standalone lines without any
+    `branch <word>` adjacency, so echoing this template can never resolve
+    to a garbage branch now that only exact lines resolve."""
+    return ("CLOSEOUT #%d: reply with two standalone `branch:` / `tip:` lines for the step-a ref and its audited sha; "
+            "ACK it with post_update ref=<id> before starting" % issue)
 
 
 def closeout_order_text(issue, stage, branch, tip):
@@ -3154,10 +3237,13 @@ def reverify_needed(branch_verified, identical_src):
 def src_identical(ctx, tip_a, tip_b):
     if not tip_a or not tip_b:
         return False
+    d = tip_known_dir_or_fetch(ctx, tip_a, tip_b)
+    if d is None:
+        return False
     try:
         rc, _ = ctx.run(["git", "diff", "--quiet", tip_a, tip_b, "--"]
                         + list(SRC_SCOPE_PATHS),
-                        timeout=30, cwd=ctx.dev_dir)
+                        timeout=30, cwd=d)
         return rc == 0
     except Exception:
         return False
@@ -5421,6 +5507,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
     loop_store = None
     _c_preempt = False
     _c_s11_block = False
+    _c_s11_missing = []
     if _c_stage in ("verify", "merge-close"):
         _c_lane = "qe" if (_c_stage == "verify" or _scope == "testing-only") else "dev"
         _c_pre_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"].get("full"),
@@ -5564,7 +5651,48 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                 events.append("closeout-preempts-starvation")
         _c_lane_busy = (_c_lane in has_unacked) and not _c_preempt
         if _c_s11_block:
-            actions.append("closeout order suppressed #%d: S1-1 re-commit required before handover" % issue)
+            # No silent blocks (#501): the S1-1 gate files one lane-visible
+            # NEED with the remedy, then quiets until the tree/tip moves.
+            # Refs: untracked files + missing meson inputs named below.
+            _rf_key = "closeout-s11|%s" % (_c_pre_branch or "?")
+            _rf_sig = refire_sig(",".join(_c_pre_untracked or []),
+                                 ",".join(_c_s11_missing or []),
+                                 _c_pre_branch, st.get("phase"))
+            _rf_allow, _rf_need, _rf_entry = refire_check(
+                (st.get("refire") or {}).get(_rf_key), _rf_sig, cap=1)
+            if rc_store is None:
+                rc_store = dict(st.get("refire") or {})
+            rc_store[_rf_key] = _rf_entry
+            if _rf_allow:
+                _s11_text = ("NEED closeout #%d S1-1 re-commit required before handover: %d untracked file(s) (%s); %d meson files() input(s) missing from tip (%s); run: git add -A + amend the handover commit, then post DONE; ACK it with post_update ref=<id> before starting"
+                             % (issue, len(_c_pre_untracked or []), ", ".join((_c_pre_untracked or [])[:4]) or "none",
+                                len(_c_s11_missing or []), ", ".join((_c_s11_missing or [])[:4]) or "none"))
+                _s11_note, _s11_oid = coord_note(_c_lane, _s11_text, ack_by=True)
+                if _s11_oid in rings:
+                    actions.append("order deferred closeout S1-1 #%d (oid collision)" % issue)
+                elif ctx.dry:
+                    actions.append("WOULD post %s S1-1 re-commit order #%d (oid %s)" % (_c_lane, issue, _s11_oid))
+                    rings[_s11_oid] = 0
+                    has_unacked.add(_c_lane)
+                    file_order_deadline(ad_store, _s11_oid)
+                    events.append("closeout-s11-order-filed")
+                elif append_box_note(room_dir, _c_lane, _s11_note):
+                    rings[_s11_oid] = 0
+                    has_unacked.add(_c_lane)
+                    file_order_deadline(ad_store, _s11_oid)
+                    actions.append("order filed %s S1-1 re-commit #%d (oid %s)" % (_c_lane, issue, _s11_oid))
+                    if (_c_lane not in deaf and probes[_c_lane].startswith("IDLE")
+                            and not session_rung(actions, SESS[_c_lane], cycle["rung"])):
+                        _s11_res = ring(ctx, SESS[_c_lane], _c_lane, "closeout S1-1 re-commit order",
+                                        oid=_s11_oid, issue=issue)
+                        actions.append(_s11_res)
+                        if _s11_res.startswith(("rang ", "WOULD ring ")):
+                            rings[_s11_oid] = 1
+                    events.append("closeout-s11-order-filed")
+                else:
+                    actions.append("NOTE-FAILED %s S1-1 #%d" % (_c_lane, issue))
+            else:
+                actions.append("refire suppressed closeout S1-1 #%d (NEED on file, sig unchanged; quiet until tree/tip moves)" % issue)
             events.append("closeout-s11-suppressed")
         if closeout_due(_c_stage, _c_done, st.get("closeout"), rings, _c_lane_busy) and not _c_s11_block:
             _c_branch = closeout_branch(boxes["dev"]["all"], boxes["dev"]["full"],
@@ -5656,9 +5784,7 @@ def tick_room(ctx, issue, room_dir, st, rooms_all, cycle=None):
                         if rc_store is None:
                             rc_store = dict(st.get("refire") or {})
                         rc_store[_rf_key] = _rf_entry
-                        _bq_text = ("CLOSEOUT #%d: reply with two standalone lines branch: <step-a branch> + tip: <audited sha> "
-                                    "(the branch carrying this room's DONE work and its audited tip); "
-                                    "ACK it with post_update ref=<id> before starting" % issue)
+                        _bq_text = closeout_branch_order_text(issue)
                         _bq_lane = "qe" if _scope == "testing-only" else "dev"
                         _bq_note, _bq_oid = coord_note(_bq_lane, _bq_text, ack_by=True)
                         if not _rf_allow:
@@ -9348,12 +9474,12 @@ def mode_self_test():
     check("closeout-branch-none",
           closeout_branch(["2026-11-02T08:03:09Z FROM=dev NOTE :: x"],
                           ["2026-11-02T08:03:09Z FROM=dev NOTE :: x"], {}) is None, True)
-    check("closeout-branch-ready-prose",
+    check("closeout-branch-ready-prose-dropped",
           closeout_branch(["2026-11-03T06:37:48Z FROM=dev READY :: IMPL READY step-a at tip 041475059,",
                            "branch feat/240-cap-broker-stepa tip 041475059, 12 files"],
                           ["2026-11-03T06:37:48Z FROM=dev READY :: IMPL READY step-a at tip 041475059,",
                            "branch feat/240-cap-broker-stepa tip 041475059, 12 files"], {})
-          == "feat/240-cap-broker-stepa", True)
+          is None, True)
     check("closeout-branch-ready-prose-no-false-positive",
           closeout_branch(["2026-11-03T13:23:40Z FROM=dev NOTE :: ACK stale check, recon continues",
                            "read-only, no branch/code/QEMU"],
@@ -10039,6 +10165,65 @@ def mode_self_test():
           s11_meson_files("x = files('src/a.c')") == ["src/a.c"], True)
     check("s11-meson-mixed-keeps-literal",
           s11_meson_files("a = files('../linker/linker_' + arch + '.ld')\nb = files('src/keep.c')") == ["src/keep.c"], True)
+    check("refire-cap-one-files-once",
+          refire_check({}, "k", cap=1) == (True, False, {"count": 1, "sig": "k"})
+          and refire_check({"count": 1, "sig": "k"}, "k", cap=1) == (False, False, {"count": 2, "sig": "k"}), True)
+    _cb_old = "2026-11-05T20:00:00Z FROM=dev NOTE :: DONE #51 CLOSEOUT exact lines"
+    _cb_new = "2026-11-05T21:00:00Z FROM=dev NOTE :: DONE #51 CORRECTION own lines"
+    _cb_full = [_cb_old, "STATE: idle", "branch: fix/477-handover-gate", "tip: 2035e8e0d",
+                _cb_new, "STATE: idle", "branch: fix/51c-prime-shm-tx", "tip: 5665c7d91"]
+    check("closeout-branch-newest-first",
+          closeout_branch([_cb_old, _cb_new], _cb_full, {}) == "fix/51c-prime-shm-tx", True)
+    _cb_prose = "2026-11-05T20:00:00Z FROM=dev NOTE :: DONE #51 backlog recon"
+    _cb_prose_full = [_cb_prose, "STATE: working",
+                      "BACKLOG RECON (#51): the branch carrying this room's DONE work"]
+    check("closeout-branch-prose-never-resolves",
+          closeout_branch([_cb_prose], _cb_prose_full, {}) is None, True)
+    check("closeout-branch-exact-lines",
+          closeout_branch([_cb_old], [_cb_old, "branch: fix/477-handover-gate", "tip: 2035e8e0d"], {})
+          == "fix/477-handover-gate", True)
+    check("closeout-branch-template-detrapped",
+          re.search(r"\bbranch\s+[A-Za-z0-9._/-]", closeout_branch_order_text(99)) is None, True)
+    check("room-artifact-tip-done-wins",
+          room_artifact_tip([_cb_old], [_cb_old, "branch: fix/477-handover-gate", "tip: 2035e8e0d"],
+                            "whatever") == "2035e8e0d", True)
+    check("room-artifact-tip-demand-text",
+          room_artifact_tip([], [], "NEED audit review\ntip: 05102e2ad") == "05102e2ad", True)
+    check("room-artifact-tip-none-state",
+          room_artifact_tip([], [], "no tip here") is None, True)
+    check("explicit-tip-in-text",
+          explicit_tip_in_text("header\ntip: cca3a69d5\ntail") == "cca3a69d5"
+          and explicit_tip_in_text("nothing") is None, True)
+    class _StubCtx:
+        dev_dir = "dev"
+        qe_dir = "qe"
+        def __init__(self, have):
+            self._have = have
+        def run(self, cmd, timeout=None, cwd=None):
+            if len(cmd) > 1 and cmd[1] == "fetch":
+                return 0, ""
+            if len(cmd) > 1 and cmd[1] == "merge-base":
+                return 0, ""
+            if len(cmd) > 1 and cmd[1] == "diff":
+                return 0, ""
+            tip = cmd[-1].split("^{commit}")[0]
+            return (0, "") if (cwd, tip) in self._have else (1, "")
+    _stub = _StubCtx({("dev", "aaa1111"), ("qe", "bbb2222")})
+    check("tip-known-dir-dev",
+          tip_known_dir(_stub, "aaa1111") == "dev", True)
+    check("tip-known-dir-qe",
+          tip_known_dir(_stub, "bbb2222") == "qe", True)
+    check("tip-known-dir-unknown",
+          tip_known_dir(_stub, "zzz9999") is None, True)
+    check("tip-known-dir-or-fetch-unknown",
+          tip_known_dir_or_fetch(_stub, "zzz9999") is None, True)
+    check("tip-known-dir-no-ctx",
+          tip_known_dir(None, "aaa1111") is None, True)
+    _stub2 = _StubCtx({("dev", "aaa1111"), ("dev", "bbb2222")})
+    check("tip-covers-owning-checkout",
+          tip_covers(_stub2, "bbb2222", "aaa1111") is True, True)
+    check("tip-covers-split-checkouts-fail-closed",
+          tip_covers(_stub, "bbb2222", "aaa1111") is False, True)
     check("stale-refresh-fires",
           stale_refresh_due(True, True, True, True) is True, True)
     check("stale-refresh-clean-required",
@@ -10135,8 +10320,8 @@ def mode_self_test():
     check("closeout-branch-qe-fallback",
           closeout_branch(_qb, _qb + ["branch: fix/x"], {}) == "fix/x", True)
     _db = ["2026-11-02T08:03:09Z FROM=dev READY :: step DONE"]
-    check("closeout-branch-dev-wins",
-          closeout_branch(_db + _qb, _db + ["branch: fix/y"] + _qb + ["branch: fix/x"], {}) == "fix/y", True)
+    check("closeout-branch-newest-wins",
+          closeout_branch(_db + _qb, _db + ["branch: fix/y"] + _qb + ["branch: fix/x"], {}) == "fix/x", True)
     _sco = [(52, "/r52", {"state": "IN_PROGRESS", "scope": "testing-only"}),
             (53, "/r53", {"state": "IN_PROGRESS", "scope": "full"})]
     check("pick-backlog-skips-scoped",
