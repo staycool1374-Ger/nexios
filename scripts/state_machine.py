@@ -1054,19 +1054,34 @@ def audit_queue_head(issue, demand, rooms_all):
     Head = min over self + other demanders by (since, issue); the room
     proceeds iff head == self (issue #494: the old min-excluded-self
     deadlocked 2+ concurrent demands — each room saw the other as head
-    and both deferred forever)."""
+    and both deferred forever). Self competes via its STORED pending
+    since from its own rooms_all entry (#498 amend-3: demand dicts
+    {requester,text} never carry since, so seeding self from demand
+    always lost to any stored demand and the oldest room deferred
+    forever). No usable stored row means newest demander: seed now()
+    and defer correctly. CLOSED/HOLD/CLOSING+halt exclusions apply
+    to self and others alike."""
     if demand is None:
         return None
-    best = ((demand or {}).get("since") or utcnow(), issue)
+    rooms_all = rooms_all or []
+    own = {}
+    for iss, _rdir, ost in rooms_all:
+        if iss == issue:
+            own = ost or {}
+            break
+    cands = []
+    if (own.get("audit_pending") and not (own.get("halt") or (own.get("state") or "") in ("CLOSED", "HOLD", "CLOSING"))):
+        cands.append(((own["audit_pending"].get("since") or "9" * 20), issue))
+    else:
+        cands.append((utcnow(), issue))
     for iss, _rdir, ost in rooms_all or []:
         if iss == issue:
-            continue  # self already seeded from demand; ost may be stale
+            continue
         ost = ost or {}
         if ost.get("audit_pending") and not (ost.get("halt") or (ost.get("state") or "") in ("CLOSED", "HOLD", "CLOSING")):
             since = (ost["audit_pending"].get("since") or "9" * 20)
-            if (since, iss) < best:
-                best = (since, iss)
-    return best[1]
+            cands.append((since, iss))
+    return min(cands)[1]
 
 
 def audit_ring_action(n):
@@ -9979,17 +9994,17 @@ def mode_self_test():
                            [(51, "/r", {}),
                             (52, "/r", {"audit_pending": {"since": "2026-11-02T09:00:00Z"}})]) == 52, True)
     check("audit-queue-solo-self-head",
-          audit_queue_head(51, {"requester": "dev", "since": "2026-11-05T19:00:00Z"}, []) == 51, True)
+          audit_queue_head(51, {"requester": "dev", "text": "t"}, []) == 51, True)
     check("audit-queue-older-self-proceeds",
-          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T18:06:46Z"},
+          audit_queue_head(491, {"requester": "dev", "text": "t"},
                            [(474, "/r", {"audit_pending": {"since": "2026-11-05T18:09:01Z"}}),
-                            (491, "/r", {})]) == 491, True)
+                            (491, "/r", {"audit_pending": {"since": "2026-11-05T18:06:46Z"}})]) == 491, True)
     check("audit-queue-newer-self-defers",
-          audit_queue_head(474, {"requester": "dev", "since": "2026-11-05T18:09:01Z"},
-                           [(474, "/r", {}),
+          audit_queue_head(474, {"requester": "dev", "text": "t"},
+                           [(474, "/r", {"audit_pending": {"since": "2026-11-05T18:09:01Z"}}),
                             (491, "/r", {"audit_pending": {"since": "2026-11-05T18:06:46Z"}})]) == 491, True)
     check("audit-queue-closed-excluded",
-          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T19:00:00Z"},
+          audit_queue_head(491, {"requester": "dev", "text": "t"},
                            [(477, "/r", {"audit_pending": {"since": "2026-11-05T18:00:00Z"},
                                          "state": "CLOSING"})]) == 491, True)
     check("refire-sig-joins",
