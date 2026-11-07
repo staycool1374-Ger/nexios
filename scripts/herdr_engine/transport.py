@@ -45,6 +45,7 @@ def room_lock(room_dir: str):
             with room_lock._guard:  # type: ignore[attr-defined]
                 n = room_lock._depth.get(room_dir, 0)  # type: ignore[attr-defined]
                 if n == 0:
+                    os.makedirs(room_dir, exist_ok=True)
                     lf = open(os.path.join(room_dir, "state.lock"), "w")
                     fcntl.flock(lf, fcntl.LOCK_EX)
                     room_lock._handles[room_dir] = lf  # type: ignore[attr-defined]

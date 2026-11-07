@@ -204,6 +204,8 @@ class Engine:
     # -- tick ----------------------------------------------------------------
 
     def tick(self, room: int) -> Action | None:
+        if not os.path.exists(os.path.join(room_dir(room), "state.json")):
+            return None  # room not set up yet; herdr_up.sh setup creates it
         with room_lock(room_dir(room)):
             return self._tick_locked(room)
     def _tick_locked(self, room: int) -> Action | None:
