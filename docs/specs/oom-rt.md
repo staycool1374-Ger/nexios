@@ -2,7 +2,8 @@
 
 **Semantics:** contracts for guaranteeing that admission-control, allocation
 failure, and WCET behave gracefully under memory/resource exhaustion.
-Synthesis of `_archive/oom-rt-safety-plan.md`, `_archive/wcet_analysis.md`, the
+Synthesis of the historical OOM RT-safety plan and WCET analysis (originals
+removed 2026-11 after extraction — see git history), the
 `CONFIG_MEMORY_BUDGET` mechanism, and the v0.3.12 Alloc/Free return-value audit
 (ROADMAP).  `[IMPLEMENTED]` = code-verified.
 

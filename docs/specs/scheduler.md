@@ -1,12 +1,12 @@
 # Scheduler, Ready-Queue & Task-Lifecycle Specification
 
 **Semantics:** canonical, binding contract for the single-core deferred-context-switch
-scheduler.  This document is the deduplicated synthesis of the historical papers
-`_archive/scheduler-spec.md`, `_archive/ipc_blocking-redesign-v1.md`,
-`_archive/ipc_blocking-plan.md`, `_archive/phase1-peek-highest.md`,
-`_archive/phase3-clear-stale-switch.md`, `_archive/task-lifecycle-review.md`,
-`_archive/rms-rework-plan.md`, `_archive/task-scheduler-audit-fix.md` and
-`zombie-list-spec.md`.  All "[IMPLEMENTED]" markers are code-verified in the current tree.
+scheduler.  This document is the deduplicated synthesis of the historical
+scheduler papers (scheduler-spec, ipc_blocking redesign/plan, phase1/phase3
+fix-records, task-lifecycle review, task-scheduler audit fix-spec) whose
+originals were removed 2026-11 after extraction — see git history for the
+source papers.  The still-open RMS work lives in `specs/rms-rework.md`.
+All "[IMPLEMENTED]" markers are code-verified in the current tree.
 
 ```
           timer ISR
@@ -192,10 +192,9 @@ sporadic state and zombie list that task context also touches.
 | `IPC::send_sync` | state=BLOCKED, **dequeue then block** | **CHANGED** |
 
 **[CHANGED] send_sync dequeue (ipc.cpp:301):** `send_sync` now calls
-`dequeue_ready(*cur)` immediately before `state = BLOCKED` (VULN-IPC-03,
-`_archive/ipc-sync-audit-fix.md`).  This supersedes the historical "BLOCKED
-without dequeue" INV-5 exception documented in `_archive/ipc_blocking-redesign-v1.md`;
-the ready-queue membership table in that paper is stale on this row.
+`dequeue_ready(*cur)` immediately before `state = BLOCKED` (VULN-IPC-03).
+This supersedes the historical "BLOCKED without dequeue" INV-5 exception;
+any older membership table still showing that row is stale.
 
 ## 6. Task Lifecycle — Ready-Queue Membership
 
@@ -240,8 +239,12 @@ priorities, orphaned flags, dangling pointers).
 - **`isr_nesting_depth` → per-CPU asm** (GS/TPIDR-relative) — deferred to SMP
   (Phase 5, ROADMAP §0.4.1).
 - **`hhdm_modified_` (VAR-17)** — single-core safe today; re-audit under SMP.
-- **Lock split (rms-rework Plan Phase 2):** `ready_queue_lock_` → `scheduler_lock_`
-  ordering and blocked-sender wakeup ordering — not confirmed implemented.
+- **Lock split (`specs/rms-rework.md` Phase 2):** `ready_queue_lock_` →
+  `scheduler_lock_` ordering and blocked-sender wakeup ordering — not
+  confirmed implemented.
+- **SCHED-005:** O(1) removal via authoritative `current_bucket_` on the TCB
+  — not landed; the bucket-scan in `remove()` remains the (correct but O(P))
+  stopgap. Priority changes must still call `move_priority()` (INV-6).
 - **SCHED-007:** non-nullable APIs `TaskControlBlock*` → `TaskControlBlock&`
   (incremental UAF hardening) — not yet landed.
 

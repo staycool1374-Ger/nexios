@@ -2,9 +2,11 @@
 
 **Semantics:** binding contracts for message-passing IPC, the sync primitives,
 and the deferred context-switch machinery that carries IPC blocking.
-Synthesis of `_archive/ipc-sync-audit-fix.md`, `_archive/ipc_blocking-analysis.md`
-(H1 fixed, H2 resolved), `_archive/ipc_blocking-C-rootcause.md`, and the IPC
-rows of `specs/scheduler.md`.  Audit fix status is code-verified where marked.
+Synthesis of the historical IPC papers (sync audit fix-spec, ipc_blocking
+analysis with H1 fixed / H2 resolved, deferred-switch root-cause) whose
+originals were removed 2026-11 after extraction — see git history for the
+source papers — and the IPC rows of `specs/scheduler.md`.  Audit fix status
+is code-verified where marked.
 
 ## 1. Message-Queue Model
 

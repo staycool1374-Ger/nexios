@@ -3,12 +3,11 @@
 **Semantics:** binding contracts for physical-memory management, the fixed
 MemPool allocator, the VMM page-table layer, kernel/user stack provisioning,
 guard pages, and the test snapshot-restore isolation mechanism.
-Synthesis of `_archive/memory-subsystem-audit-fix.md`,
-`_archive/memory-protection-spec.md`, `_archive/kstack-window-pt-pool.md`,
-`_archive/stack-guard-spec.md`, `_archive/fork-pt-deep-copy.md`,
-`_archive/hhdm-snapshot-restore.md`, and the MemPool root cause from
-`_archive/investigation-cumulative-corruption.md`.  `[IMPLEMENTED]` =
-code-verified.
+Synthesis of the historical memory papers (subsystem audit fix-spec,
+memory-protection requirements, kstack-window pool, stack-guard design,
+fork deep-copy, HHDM snapshot-restore, cumulative-corruption investigation)
+whose originals were removed 2026-11 after extraction — see git history
+for the source papers.  `[IMPLEMENTED]` = code-verified.
 
 ## 1. Memory Layout
 

@@ -7,7 +7,8 @@
 instead of copying kernel page-table entries into a new process PML4, walk
 PML4→PML1 and map in **only the missing kernel entries**.
 **Related:** `docs/specs/memory.md` (§ kernel-half copy-by-value table,
-MP-7 fork deep-copy spec), `_archive/fork-pt-deep-copy.md`.
+MP-7 fork deep-copy spec).  The original fork deep-copy design paper was
+removed 2026-11 after extraction — see git history.
 
 ## 1. Current State (verified)
 
