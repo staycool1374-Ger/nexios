@@ -55,6 +55,26 @@ static_assert(sizeof(DriverRpc) <= 48,
 /// Fail-closed -EAGAIN past this; never parks a kernel task forever.
 inline constexpr uint64_t kRpcGuardTicks = 5000;
 
+/// @brief Driver RPC ops shared with userspace/driver_pd.h (issue #51
+///        step-c: kernel→PD BIND carries cap handles, WRITE carries TX;
+///        step-c-prime: MAP_SHM carries the TX-ring FrameCap handle).
+///        Named constants only — no raw op numbers at call sites.
+enum class DrvOp : uint8_t {
+    BIND = 0,
+    READ = 1,
+    WRITE = 2,
+    POLL = 3,
+    MODE_SET = 4,
+    PRESENT = 5,
+    MAP_SHM = 6,
+};
+
+/// @brief Empty→nonempty TX-ring notify value (issue #51 step-c-prime):
+/// the kernel producer signals the serial PD after pushing into an empty
+/// ring. The PD also polls with a 1-tick recv timeout, so a lost notify
+/// only costs latency, never liveness.
+inline constexpr uint64_t kSerialTxNotify = 0x5458;
+
 /// @brief Record the PID of a driver PD role.
 void set_pd_pid(sdf::PdRole role, uint64_t pid);
 /// @brief Get the recorded PID (0 when unset).
@@ -73,6 +93,42 @@ void pd_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
 /// @return true with *reply filled on a validated reply, false fail-closed.
 [[nodiscard]] bool pd_rpc(sdf::PdRole role, const DriverRpc &req,
                           DriverRpc &reply);
+
+/// @brief BIND a driver PD, conveying its composed cap handles (issue #51
+///        step-c): the BIND request args carry the PD's own handles
+///        (arg0 = encoded MmioCap handle, arg1 = phys base, arg2 = size,
+///        flags = cap count) so the PD can map/grant without scanning its
+///        CSpace. Conveys row index 0 (the UART cap); the SHM ring handle
+///        (index 1) arrives via pd_bind_shm — never silent partial
+///        conveyance (a half-bound PD would misbehave).
+/// @return true on a validated BIND reply, false fail-closed (PD keeps
+///         BIND-only behavior; kernel keeps the raw path).
+[[nodiscard]] bool pd_bind(sdf::PdRole role);
+
+/// @brief Convey the SDF-composed SHM TX-ring FrameCap to a driver PD
+/// (issue #51 step-c-prime): MAP_SHM request args carry the ring handle
+/// (arg0 = encoded FrameCap handle, arg1 = page count, arg2 = element
+/// size) so the PD can SYS_FRAME_MAP it once (idempotent re-MAP on
+/// restart re-derives; a changed handle unmaps first, fail-closed).
+/// Requires the role row to carry an SHM spec at index 1 (knob-gated).
+/// @return true on a validated MAP_SHM reply, false fail-closed.
+[[nodiscard]] bool pd_bind_shm(sdf::PdRole role);
+
+#if CONFIG_SERIAL_TX_SHM
+/// @brief Push console bytes into the serial TX SHM ring (issue #51
+///        step-c-prime): packs 7 bytes per 8 B element, drops (counted)
+///        past a full ring — the print path never blocks — and NOTIFYs
+///        the PD on empty→nonempty (the PD's 1-tick poll is the liveness
+///        backstop, so a lost notify costs latency only).
+/// @return true when the ring channel is live (caller skips the raw
+///         path, even when bytes dropped — duplication would garble,
+///         counted loss is the documented backpressure); false when no
+///         live ring (knob off / uncomposed / PD dead) so the caller
+///         falls back to the 51c/raw path.
+bool serial_tx_write(const char *data, uint64_t len);
+/// @brief Lifetime dropped-byte counter (backpressure evidence).
+uint64_t serial_tx_dropped();
+#endif
 
 } // namespace driver_pds
 } // namespace kernel

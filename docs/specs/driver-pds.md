@@ -7,7 +7,7 @@ Strangler step a (no flip): userspace driver PDs behind per-role
 
 | Role | PD ELF | Caps (exact) | Notes |
 |---|---|---|---|
-| serial | serial-pd.c.elf | Mmio COM1 (RX path) | RX-only; kernel keeps TX + panic |
+| serial | serial-pd.c.elf | Mmio COM1 (io_port) | TX+RX owned (#51 step-c); kernel keeps panic raw_write fallback only |
 | kbd | kbd-pd.c.elf | IRQ 33 + IOPORT 0x60–0x64 (x86) | arch stub off-x86 (decoder stays UART) |
 | rtc | rtc-pd.c.elf | CMOS ports / PL031 / Goldfish (per arch) | no IRQ; feeds timer-srv (#241) |
 | fb | fb-pd.c.elf | device caps only (mode-set/present) | zero IRQ (polled); emulation = #51 |
@@ -19,12 +19,64 @@ device (compile-time gate); restart re-derives via `sdf_rebind` (never
 inherits domain/vector/mapping); in-flight I/O error-replies (never hangs);
 kill/restart ×3 keeps ResourceTracker delta-0; serial-log fault artifacts.
 
+## Serial TX flip (issue #51 step-c)
+
+Kernel→PD BIND conveys the PD's composed cap handles (arg0 = encoded
+MmioCap handle, arg1 = phys base, arg2 = size, flags = cap count;
+single-cap roles only — multi-cap BIND is a second-round follow-up).
+serial-pd maps once at BIND (x86 `SYS_IOPORT_GRANT`, aa64/rv64
+`SYS_MMIO_MAP`) and serves polled `DRV_OP_WRITE` (arg0 = byte, bounded
+LSR poll, fail-closed `-EAGAIN` on stall), replying to `req.owner_id`
+(the send_sync requester queue; reply-to-1 is a dead letter, #441).
+Kernel TX attempts the RPC only when safe to block (task context,
+ISR-nesting 0, PD alive); every other context — and any RPC failure —
+takes the raw path. `Logger::raw_write` bypasses Terminal entirely, so
+panic never reaches the PD. IRQ4 stays kernel-side until the step-d
+input flip (no dead caps in step-c).
+
 ## Wire
 
 48 B `DriverRpc` (`userspace/driver_pd.h`, mirrors `TimerRpc`): op/flags/
 epoch/owner id+gen/args/status. Control via `send_sync` (+FAST ≤48B);
 bulk via SPSC SHM. Bounded wait (`send_sync_bounded`, `kRpcGuardTicks`);
 epoch+gen-validated replies; tombstone drain for dead owners.
+
+### Serial TX ring (issue #51 step-c-prime, option A)
+
+Sync per-char `DRV_OP_WRITE` does not survive boot flood (1 IPC/char at
+SS(1,10) PD budget + unmutexed PD/raw UART sharing garbles; convicted
+live, 51c HELD UNMERGED). The TX path is a kernel SPSC ring drained by
+the PD instead:
+
+- SDF row: SERIAL carries the UART cap (index 0) + one SHM CapSpec
+  (index 1, `kSerialTxRingPages` pages, `CONFIG_SERIAL_TX_SHM`-gated).
+  `mint_one` allocates fresh user frames per compose/rebind (never
+  inherited), pins them in a `FrameCap`, installs it in the PD CSpace,
+  initialises the header via the HHDM alias, and records (phys, pages)
+  for the producer. Rollback/compose-failure clears the record —
+  fail-closed to the raw path.
+- Conveyance: BIND (index 0, UART) then MAP_SHM (index 1: arg0 =
+  encoded FrameCap handle, arg1 = pages, arg2 = 8 B elements). The PD
+  `SYS_FRAME_MAP`s once, validates the header (magic/version/pow2
+  capacity/element size — torn/hostile headers unmap + refuse), and
+  re-maps on a changed handle (unmap-then-map, never double-map).
+- Producer (kernel `serial_tx_write`): packs 7 bytes per 8 B element,
+  drops + counts past a full ring (the print path never blocks),
+  NOTIFYs the PD on empty→nonempty. Returns live-channel-true even on
+  drops: counted loss is the documented backpressure, a raw-path
+  fallback would duplicate bytes (the 51c garble).
+- Consumer (serial-pd drain loop): pops all → `uart_putc` per byte
+  (reused bounded poll; stops fail-closed on stall, remainder next
+  round — no duplication, order preserved). 1-tick recv poll when the
+  ring is mapped (bounded drain latency for RPCs and TX), block-forever
+  before MAP (zero idle overhead). The NOTIFY is a latency
+  optimization; the poll is the liveness backstop.
+- Epochs: PD restart bumps `pd_epoch`; the producer re-resolves phys
+  per epoch, BIND+MAP re-run once per epoch. Panic/ISR keep the raw
+  path (`Logger::raw_write` bypasses Terminal entirely).
+- Reversibility: `CONFIG_SERIAL_TX_SHM` (default 0). OFF = 51c
+  behavior (per-char WRITE RPC when `CONFIG_DRIVER_PD_SERIAL`, else
+  raw). Zero new syscalls (NOTIFY + `SYS_FRAME_MAP` exist).
 
 ## Boundaries (no double ownership)
 

@@ -36,6 +36,8 @@
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/keyboard.hpp>
+#include <kernel/task/boot_sdf.hpp>
+#include <kernel/ipc/shm_ring.hpp>
 
 using namespace kernel;
 
@@ -284,12 +286,218 @@ JARVIS_TEST(keyboard_init_bounded_drain, "PRE: iocd | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: SHM TX ring protocol on real frames (issue #51 step-c-prime):
+// init a 4-page ring via the HHDM alias, push 64 ordered {len,data}
+// elements, pop all back and verify order + payload byte-exact.
+// Input: 64 elements with distinct leading bytes
+// Expect: all pops succeed in FIFO order with intact payloads
+// Depends: PMM contiguous alloc, shm_ring protocol, HHDM alias
+JARVIS_TEST(serial_tx_ring_push_drain_order, "PRE: none | POST: none") {
+    constexpr size_t kPages = 4;
+    const uint64_t phys = PMM::alloc_user_contiguous(kPages);
+    JARVIS_ASSERT(phys != 0);
+    auto *hdr = reinterpret_cast<kernel::shm::SharedRingHeader *>(
+        arch::HHDM_OFFSET + phys);
+    uint8_t *data_base = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
+                                                      phys +
+                                                      arch::PAGE_SIZE);
+    kernel::shm::shm_ring_init(hdr, kPages,
+                               kernel::sdf::kSerialTxRingElemSize);
+    JARVIS_ASSERT(kernel::shm::shm_ring_valid(hdr));
+    for (uint64_t i = 0; i < 64; ++i) {
+        uint8_t elem[kernel::sdf::kSerialTxRingElemSize] = {};
+        elem[0] = 7;
+        for (uint64_t b = 0; b < 7; ++b) {
+            elem[1 + b] = static_cast<uint8_t>((i * 7 + b) & 0xFF);
+        }
+        JARVIS_ASSERT_FMT(
+            kernel::shm::shm_ring_push(hdr, data_base, elem),
+            "push %lu failed", i);
+    }
+    for (uint64_t i = 0; i < 64; ++i) {
+        uint8_t elem[kernel::sdf::kSerialTxRingElemSize] = {};
+        JARVIS_ASSERT_FMT(
+            kernel::shm::shm_ring_pop(hdr, data_base, elem),
+            "pop %lu failed", i);
+        JARVIS_ASSERT_FMT(elem[0] == 7, "elem %lu len %u", i, elem[0]);
+        for (uint64_t b = 0; b < 7; ++b) {
+            JARVIS_ASSERT_FMT(
+                elem[1 + b] == static_cast<uint8_t>((i * 7 + b) & 0xFF),
+                "elem %lu byte %lu mismatch", i, b);
+        }
+    }
+    JARVIS_ASSERT(!kernel::shm::shm_ring_has_data(hdr));
+    for (size_t p = 0; p < kPages; ++p) {
+        PMM::free_page(phys + p * arch::PAGE_SIZE);
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: SHM TX ring backpressure (issue #51 step-c-prime): fill the
+// ring to capacity, prove the next push fails closed with head/tail
+// unmoved, then drain fully and prove empty.
+// Input: capacity + 1 pushes on a 4-page ring
+// Expect: exactly capacity pushes succeed; the overflow push returns
+// false; head/tail identical across the failed push; drain empties
+// Depends: PMM contiguous alloc, shm_ring protocol, HHDM alias
+JARVIS_TEST(serial_tx_ring_drop_full, "PRE: none | POST: none") {
+    constexpr size_t kPages = 4;
+    const uint64_t phys = PMM::alloc_user_contiguous(kPages);
+    JARVIS_ASSERT(phys != 0);
+    auto *hdr = reinterpret_cast<kernel::shm::SharedRingHeader *>(
+        arch::HHDM_OFFSET + phys);
+    uint8_t *data_base = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
+                                                      phys +
+                                                      arch::PAGE_SIZE);
+    kernel::shm::shm_ring_init(hdr, kPages,
+                               kernel::sdf::kSerialTxRingElemSize);
+    JARVIS_ASSERT(kernel::shm::shm_ring_valid(hdr));
+    // shm_ring_init rounds capacity DOWN to a power of two:
+    // (4-1) * 4096 = 12288 -> 8192 bytes -> 1024 elements.
+    uint64_t raw = 3 * arch::PAGE_SIZE;
+    uint64_t cap = 1;
+    while (cap * 2 <= raw) {
+        cap *= 2;
+    }
+    const uint64_t n_elem = cap / kernel::sdf::kSerialTxRingElemSize;
+    uint8_t elem[kernel::sdf::kSerialTxRingElemSize] = {};
+    elem[0] = 1;
+    elem[1] = 0xAA;
+    for (uint64_t i = 0; i < n_elem; ++i) {
+        JARVIS_ASSERT_FMT(
+            kernel::shm::shm_ring_push(hdr, data_base, elem),
+            "fill push %lu failed", i);
+    }
+    const uint64_t head_before = hdr->head;
+    const uint64_t tail_before = hdr->tail;
+    JARVIS_ASSERT(!kernel::shm::shm_ring_push(hdr, data_base, elem));
+    JARVIS_ASSERT_FMT(hdr->head == head_before, "head moved on full push");
+    JARVIS_ASSERT_FMT(tail_before == hdr->tail, "tail moved on full push");
+    uint64_t drained = 0;
+    while (kernel::shm::shm_ring_pop(hdr, data_base, elem)) {
+        ++drained;
+    }
+    JARVIS_ASSERT_FMT(drained == n_elem, "drained %lu want %lu", drained,
+                      n_elem);
+    JARVIS_ASSERT(!kernel::shm::shm_ring_has_data(hdr));
+    for (size_t p = 0; p < kPages; ++p) {
+        PMM::free_page(phys + p * arch::PAGE_SIZE);
+    }
+    JARVIS_TEST_PASS();
+}
+
+#if CONFIG_SERIAL_TX_SHM
+namespace {
+
+uint64_t g_tx_shape_count = 0;
+uint64_t g_tx_shape_kind1 = 99;
+uint64_t g_tx_shape_size1 = 0;
+uint64_t g_tx_compose_ok = 0;
+uint64_t g_tx_phys_ok = 0;
+uint64_t g_tx_slot_ok = 0;
+
+} // namespace
+#endif
+
+// Runmode: kernel
+// Testidea: SHM TX SDF row shape (issue #51 step-c-prime): the SERIAL row
+// carries the UART cap at index 0 plus exactly one SHM spec at index 1
+// sized kSerialTxRingPages.
+// Input: sdf_row(SERIAL)
+// Expect: count == 2; specs[0].kind == MMIO; specs[1].kind == SHM with
+// byte size kSerialTxRingPages * PAGE_SIZE
+// Depends: boot_sdf row table (knob-gated; compiled only when the SHM
+// TX knob is on — the OFF build has no SHM spec by design)
+#if CONFIG_SERIAL_TX_SHM
+JARVIS_TEST(serial_tx_sdf_row_shape, "PRE: none | POST: none") {
+    kernel::sdf::CapSpec specs[kernel::sdf::kMaxCapsPerRole] = {};
+    const uint64_t count =
+        kernel::sdf::sdf_row(kernel::sdf::PdRole::SERIAL, specs);
+    g_tx_shape_count = count;
+    JARVIS_ASSERT_FMT(count == 2, "SERIAL row count %lu want 2", count);
+    JARVIS_ASSERT(specs[0].kind == kernel::sdf::CapKind::MMIO);
+    g_tx_shape_kind1 = static_cast<uint64_t>(specs[1].kind);
+    g_tx_shape_size1 = specs[1].size;
+    JARVIS_ASSERT(specs[1].kind == kernel::sdf::CapKind::SHM);
+    JARVIS_ASSERT_FMT(
+        specs[1].size ==
+            kernel::sdf::kSerialTxRingPages * arch::PAGE_SIZE,
+        "SHM size %lu", specs[1].size);
+    JARVIS_TEST_PASS();
+}
+#endif
+
+// Runmode: kernel
+// Testidea: SHM TX compose lifecycle (issue #51 step-c-prime): compose a
+// SERIAL row on a fixture task, prove the ring record + slot persistence
+// land, tear the task down (CSpace dispose frees the ring frames — the
+// harness ResourceTracker fails on any delta).
+// Input: dispatched fixture task runs sdf_compose(SERIAL)
+// Expect: compose true; sdf_shm_tx_phys true with kSerialTxRingPages;
+// sdf_role_cap(idx 1) true; record persists until the next compose
+// Depends: boot_sdf compose, FrameCap dispose, PMM user-contiguous alloc
+#if CONFIG_SERIAL_TX_SHM
+JARVIS_TEST(serial_tx_sdf_compose_shm, "PRE: none | POST: none") {
+    g_tx_compose_ok = 0;
+    g_tx_phys_ok = 0;
+    g_tx_slot_ok = 0;
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *cur = Scheduler::current_task();
+            if (cur == nullptr) {
+                Scheduler::terminate(*Scheduler::current_task(), 1);
+                return;
+            }
+            if (kernel::sdf::sdf_compose(*cur,
+                                         kernel::sdf::PdRole::SERIAL)) {
+                g_tx_compose_ok = 1;
+            }
+            uint64_t phys = 0;
+            uint64_t pages = 0;
+            if (kernel::sdf::sdf_shm_tx_phys(kernel::sdf::PdRole::SERIAL,
+                                             phys, pages) &&
+                phys != 0 &&
+                pages == kernel::sdf::kSerialTxRingPages) {
+                g_tx_phys_ok = 1;
+            }
+            int slot = -1;
+            uint32_t gen = 0;
+            if (kernel::sdf::sdf_role_cap(kernel::sdf::PdRole::SERIAL, 1,
+                                          slot, gen) &&
+                slot >= 0) {
+                g_tx_slot_ok = 1;
+            }
+            Scheduler::terminate(*cur, 0);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT(t->get_page_table() != 0);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(g_tx_compose_ok == 1, "sdf_compose(SERIAL) failed");
+    JARVIS_ASSERT_FMT(g_tx_phys_ok == 1, "shm_tx_phys record missing");
+    JARVIS_ASSERT_FMT(g_tx_slot_ok == 1, "role_cap idx1 missing");
+    JARVIS_TEST_PASS();
+}
+#endif
+
+// Runmode: kernel
 // Testidea: Registers all driver tests with the test framework
 // Input: None
 // Expect: All driver tests are registered (no direct assertion, only
 // logging)
-// Depends: Test framework, Logger, Scheduler, DriverRegistry
+// Depends: Test framework, DriverRegistry
 void register_driver_tests() {
+    Logger::info("Registering SHM TX ring tests");
+    JARVIS_REGISTER_TEST(serial_tx_ring_push_drain_order);
+    JARVIS_REGISTER_TEST(serial_tx_ring_drop_full);
+#if CONFIG_SERIAL_TX_SHM
+    JARVIS_REGISTER_TEST(serial_tx_sdf_row_shape);
+    JARVIS_REGISTER_TEST(serial_tx_sdf_compose_shm);
+#endif
     Logger::info("Registering driver tests");
     JARVIS_REGISTER_TEST(driver_registry_find);
     JARVIS_REGISTER_TEST(driver_registry_count);
