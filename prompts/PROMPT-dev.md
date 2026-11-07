@@ -81,6 +81,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - No ACK by ack-by = faulty lane; the engine restarts it.
 - Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
 - DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
+- DONE self-containment gate (#477 S1-1): `git add -A` then `git status --porcelain` `??` must be 0 and `git ls-tree -r <tip> --name-only` must cover every `files()` literal in `packaging/meson.build`/`src/meson.build` (repro: `git add -A && git status --porcelain | grep '??'` empty + `git ls-tree -r <tip> --name-only | grep <files-literal>` hit); else NEED re-commit before DONE.
 - When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
 - After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
 

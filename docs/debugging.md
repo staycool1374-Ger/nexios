@@ -117,8 +117,8 @@ The kernel maps all physical memory at `0xFFFF800000000000 + phys_addr` (HHDM). 
 
 | Location | File:Line | Purpose |
 |----------|-----------|---------|
-| `panic` | `kernel.cpp:1765` | Kernel panic (any reason) |
-| `handle_interrupt_c` | `kernel.cpp:2300` | All exceptions + interrupts |
+| `panic` | `kernel.cpp:1848` | Kernel panic (any reason) |
+| `handle_interrupt_c` | `kernel.cpp:2383` | All exceptions + interrupts |
 | `handle_interrupt_c if vector == 14` | — | Page fault only |
 | `handle_interrupt_c if vector == 13` | — | General protection fault |
 | `handle_interrupt_c if vector == 8` | — | Double fault |

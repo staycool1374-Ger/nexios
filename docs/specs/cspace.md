@@ -3,7 +3,9 @@
 **Status:** IMPLEMENTED (2026-08-16) — iteration-1 CSpace core, lifecycle
 primitives, SYS_CAP_* syscalls, capability-gated IPC/frame mapping AND the
 Untyped memory allocator + `cap::retype` (§2.8) are landed and green.
-IRQ/MMIO caps remain deferred to v0.4.2+ (see §2.6).
+IRQ/MMIO caps landed after v0.4.2 (`src/kernel/cap/msix.hpp`,
+`src/kernel/syscall/syscall_handlers_irq.cpp`, `test_cap_irq.cpp`,
+`test_cap_msix.cpp`; see §2.6).
 **Build:** v0.4.1-dev (post v0.4.0 release)
 **Owner:** kernel core (scheduler/IPC/memory/syscall)
 **ROADMAP source:** §"Active Development — v0.4.1" + §Phase 4.6 (0.4.1 items 1–3)

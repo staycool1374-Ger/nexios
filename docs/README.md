@@ -2,8 +2,8 @@
 
 **Semantics:** the docs tree is a set of **binding specifications** extracted
 from the design/audit papers.  Historical root-cause analyses, superseded
-plans, and fully-fixed fix-records live in `_archive/` (source material,
-retained for traceability).  Open issues are tracked in `ROADMAP.md` →
+plans, and fully-fixed fix-records were removed 2026-11 after extraction
+(full text in git history).  Open issues are tracked in `ROADMAP.md` →
 "Open Issues".
 
 ## Spec Documents
@@ -100,12 +100,15 @@ retained for traceability).  Open issues are tracked in `ROADMAP.md` →
    └─ governs: nexios_config.h via check-config.py + the matrix runners
 ```
 
-## Source Material (archived)
+## Source Material (history)
 
-`_archive/` holds the original papers the specs were extracted from, including
-the master investigation logs (`investigation-cumulative-corruption.md`,
-`ipc_blocking-analysis.md`) and the `ipc_blocking-c-baseline.log` watchdog dump.
-They are retained for traceability and are **not** normative.
+The original design/audit papers the specs were extracted from were removed
+2026-11 after extraction (superseded plans, fix-records for landed work,
+closed investigation logs). Full text is preserved in git history; the two
+papers with still-open content were rewritten and promoted to
+`specs/rms-rework.md` (lock-split + deadline-rush) and
+`specs/privilege-audit.md` (Ring-3 migration inventory). Historical papers
+are **not** normative — the specs in this tree are.
 
 ## Benchmarks / Generated
 

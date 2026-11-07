@@ -637,6 +637,14 @@
 #ifndef CONFIG_DRIVER_PD_SERIAL
 #define CONFIG_DRIVER_PD_SERIAL 0
 #endif
+/// Serial TX via SHM SPSC ring to drv-serial PD (issue #51 step-c-prime).
+/// 1 = kernel console TX pushes into the SDF-composed SHM ring and the PD
+/// drains to UART (bounded, drop-on-full, empty-to-nonempty NOTIFY);
+/// 0 = 51c behavior (per-char WRITE RPC when CONFIG_DRIVER_PD_SERIAL, else
+/// raw UART). Default: 0 (reversibility; the ring path needs re-audit).
+#ifndef CONFIG_SERIAL_TX_SHM
+#define CONFIG_SERIAL_TX_SHM 0
+#endif
 #ifndef CONFIG_DRIVER_PD_KBD
 #define CONFIG_DRIVER_PD_KBD 0
 #endif
@@ -1336,6 +1344,9 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_DRIVER_PD_SERIAL != 0 && CONFIG_DRIVER_PD_SERIAL != 1
 #error "CONFIG_DRIVER_PD_SERIAL must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_SERIAL_TX_SHM != 0 && CONFIG_SERIAL_TX_SHM != 1
+#error "CONFIG_SERIAL_TX_SHM must be 0 or 1 (default 0)"
 #endif
 #if CONFIG_DRIVER_PD_KBD != 0 && CONFIG_DRIVER_PD_KBD != 1
 #error "CONFIG_DRIVER_PD_KBD must be 0 or 1 (default 0)"

@@ -336,7 +336,7 @@ def cmd_debug_shell(args):
         "close $f;\n"
         "puts \"=== DEBUG SHELL COMPLETE ===\";\n"
         "exit 0;\n"
-    ).format(qemu=" ".join(qemu_cmd), gdb=gdb,
+    ).format(qemu=" ".join(str(x) for x in qemu_cmd), gdb=gdb,
              elf=str(builddir / "src" / "kernel-debug.elf"),
              gdb_script=gdb_script, cmds=args.cmds, port=port)
     try:

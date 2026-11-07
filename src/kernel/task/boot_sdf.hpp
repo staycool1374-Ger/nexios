@@ -44,7 +44,9 @@ enum class CapKind : uint8_t {
     MMIO = 2,   ///< MmioCap on [@p addr, @p size) (@p io_port selects IO).
     DMA = 3,    ///< IoMmuDmaCap domain grant (no payload).
     FRAME = 4,  ///< FrameCap pin (fb scanout RAM; folio pages).
-    SHM = 5,    ///< Shared-memory channel endpoints (reserved).
+    SHM = 5,    ///< TX-ring channel endpoint (issue #51 step-c-prime:
+                ///< fresh user frames + FrameCap pin, installed in the PD
+                ///< CSpace; kernel producer uses the HHDM alias).
 };
 
 /// @brief One mint instruction inside a role row.
@@ -79,6 +81,18 @@ enum class PdRole : uint8_t {
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
 inline constexpr uint64_t kMaxCapsPerRole = 6;
 
+/// @brief TX-ring element size in bytes (issue #51 step-c-prime).
+/// Fixed 8: {uint8 len, char data[7]}. Multiple of 8 per the SPSC
+/// protocol (shm_ring_init requires element_size % 8 == 0). Shared with
+/// userspace (userspace/driver_pd.h SERIAL_TX_RING_ESZ — keep in sync).
+inline constexpr uint64_t kSerialTxRingElemSize = 8;
+
+/// @brief TX-ring backing pages (issue #51 step-c-prime): page 0 holds the
+/// SharedRingHeader, pages 1..N-1 hold the payload. 4 pages = 12 KiB =
+/// 1536 elements ≈ 10 KiB of console text per drain — deep enough for a
+/// boot flood, small enough to waste nothing when idle.
+inline constexpr uint64_t kSerialTxRingPages = 4;
+
 /// @brief Static row: exactly-declared cap set for @p role.
 /// @param out Filled with the row (untouched on unknown role).
 /// @return Number of CapSpecs, 0 for unknown role (fail-closed).
@@ -90,11 +104,27 @@ uint64_t sdf_row(PdRole role, CapSpec *out);
 /// installed on failure — partial installs are unwound first).
 bool sdf_compose(TaskControlBlock &task, PdRole role);
 
+/// @brief Read back the SDF-composed TX-ring backing store for @p role
+/// (issue #51 step-c-prime): the SHM mint's (phys, pages), written only
+/// after the whole row composes; cleared on any (re)compose start.
+/// @return true with *phys_out/*pages_out filled on a live ring record,
+/// false when the role carries no SHM spec (knob off / compose failed).
+bool sdf_shm_tx_phys(PdRole role, uint64_t &phys_out, uint64_t &pages_out);
+
 /// @brief Re-derive a PD's caps after disposal (restart path): dispose is
 /// owned by the caller (cap revoke/drain first); this re-mints the row.
 /// Never inherits a domain, vector, or mapping — always fresh mints.
 /// @return Same contract as sdf_compose.
 bool sdf_rebind(TaskControlBlock &task, PdRole role);
+
+/// @brief Composed cap handle lookup (issue #51 step-c): the (slot,
+///        generation) pair sdf_compose minted for @p role at boot/rebind.
+///        Kernel→PD BIND conveys the PD's own handles back to it through
+///        this table (the PD cannot scan its CSpace).
+/// @return True with @p slot/@p gen filled; false when the role never
+///         composed or @p idx is out of range (fail-closed, PD keeps its
+///         BIND-only behavior and the kernel keeps the raw path).
+bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen);
 
 /// @brief Single device owner (issue #48 S1): exactly one of {kernel, PD}
 /// may own a device. Compile-time selected by the PD knobs.

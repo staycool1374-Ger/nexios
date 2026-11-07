@@ -1,10 +1,14 @@
-/* NexIOS RTOS — Rerunnable user images (issue #271, design only) */
+/* NexIOS RTOS — Rerunnable user images (issue #271, implemented P0–P3) */
 
 /// @file elf-rerun.md
-/// @brief DESIGN SPEC (no implementation): restart a cleanly-exited user
+/// @brief DESIGN SPEC + IMPLEMENTATION RECORD: restart a cleanly-exited user
 ///        program without `loadelf`, deterministically, at any image size.
 ///
-/// Status: SPEC APPROVAL cycle (auditor). Implementation deferred.
+/// Status: IMPLEMENTED — issue #271 closed completed 2026-10-14. P0 VMM
+/// read-only user-map primitive (`a6aa3a414`), P1 golden-set retention
+/// (`43cbec5a6`), P2 rerun builder + shell fallback (`1ef62a349`), P3
+/// auth-decay/fork-composition (`d2b9483ae`) + BSS-canary fix (`8aa9cef6f`);
+/// audits APPROVED, live E2E `RERUN: PASS`.
 ///
 /// Owner constraints (binding):
 /// 1. Rerun needs zero filesystem I/O (a reload during `runelf`, including

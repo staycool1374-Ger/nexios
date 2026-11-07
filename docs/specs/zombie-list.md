@@ -1,8 +1,13 @@
 # ZombieList — Idle-Task Deferred Resource Cleanup
 
-- **Status:** Draft
+- **Status:** IMPLEMENTED — idle-task deferred cleanup via
+  `Scheduler::drain_zombie_list()` (`src/kernel/task/scheduler_lifecycle.cpp`),
+  reached from the `on_tick` reaper path; canonical teardown sequence
+  `cleanup() → remove_task()/unregister_task() → MemPool::free()` (see
+  `specs/scheduler.md` §6 D5/D6).
 - **Target:** v0.3.5 (Idle-Task Deferred Resource Cleanup)
-- **Design Doc:** This file
+- **Design Doc:** This file (retained as the design record; §1 motivation
+  below describes the pre-implementation state)
 
 ## 1. Motivation
 

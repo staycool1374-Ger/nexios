@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">NexIOS actual implementation overview</title>
+  <desc id="desc">Hybrid system diagram showing user mode on the left, kernel mode on the right, with a privilege boundary between them and labeled subsystems like scheduler, IPC, capabilities, memory management, VFS, drivers, terminal, and hardware.</desc>
+  <defs>
+    <style><![CDATA[
+      .title { font: 700 32px 'Segoe UI', Arial, sans-serif; fill: #e6eefb; }
+      .subtitle { font: 600 18px 'Segoe UI', Arial, sans-serif; fill: #b9d0ff; }
+      .label { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #0d1b2a; }
+      .small { font: 600 14px 'Segoe UI', Arial, sans-serif; fill: #0d1b2a; }
+      .smalllight { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #dfeaffe8; }
+      .tiny { font: 600 11px 'Segoe UI', Arial, sans-serif; fill: #0d1b2a; }
+      .kernelbox { fill: #dfe9ff; stroke: #496ec7; stroke-width: 3; rx: 18; }
+      .userbox { fill: #eafaf1; stroke: #4fb36d; stroke-width: 3; rx: 18; }
+      .bigbox { fill: #edf4ff; stroke: #7aa7ff; stroke-width: 3; rx: 18; }
+      .optionalbox { fill: #fff7df; stroke: #d8a93c; stroke-width: 3; stroke-dasharray: 10 8; rx: 18; }
+      .hardware { fill: #f1e8ff; stroke: #8a68d6; stroke-width: 3; rx: 18; }
+      .note { fill: #111827; stroke: #9aa6bf; stroke-width: 1; rx: 8; }
+      .userarrow { stroke: #2e8b57; stroke-width: 3; fill: none; marker-end: url(#arrowheadGreen); }
+      .kernelarrow { stroke: #3558be; stroke-width: 3; fill: none; marker-end: url(#arrowheadBlue); }
+      .dashed { stroke: #5b6b7c; stroke-width: 2.4; fill: none; stroke-dasharray: 12 10; }
+    ]]></style>
+    <marker id="arrowheadGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#2e8b57"/>
+    </marker>
+    <marker id="arrowheadBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#3558be"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="980" fill="#f5f7fb"/>
+  <text x="800" y="46" text-anchor="middle" class="title">NexIOS — actual implementation overview</text>
+  <text x="800" y="78" text-anchor="middle" class="subtitle">Hybrid kernel in transition toward a capability-based microkernel</text>
+
+  <rect x="40" y="100" width="520" height="760" class="userbox"/>
+  <text x="300" y="136" text-anchor="middle" class="label">USER MODE</text>
+  <text x="300" y="158" text-anchor="middle" class="smalllight" fill="#2b6b46">Unprivileged processes, shell, apps, optional service daemons</text>
+
+  <rect x="70" y="190" width="460" height="120" class="bigbox"/>
+  <text x="300" y="230" text-anchor="middle" class="label">Shell / CLI</text>
+  <text x="300" y="255" text-anchor="middle" class="small">userspace/sh.c</text>
+  <text x="300" y="276" text-anchor="middle" class="tiny">reads stdin, resolves commands, launches ELF tasks, handles shell builtins</text>
+
+  <rect x="70" y="340" width="460" height="170" class="bigbox"/>
+  <text x="300" y="380" text-anchor="middle" class="label">User ELF applications</text>
+  <text x="300" y="405" text-anchor="middle" class="small">Processes, programs, and POSIX-like services</text>
+  <text x="300" y="430" text-anchor="middle" class="tiny">syscalls • IPC • shared memory • capability-mediated resource access</text>
+  <text x="300" y="450" text-anchor="middle" class="tiny">single address space per user task, controlled via MMU / kernel validation</text>
+
+  <rect x="70" y="540" width="460" height="250" class="optionalbox"/>
+  <text x="300" y="575" text-anchor="middle" class="label">Optional userspace service PDs / daemons</text>
+  <text x="300" y="605" text-anchor="middle" class="small">vfsd.c, iocd.c, cap-broker.c, timer/log/term/driver PDs</text>
+  <text x="300" y="635" text-anchor="middle" class="tiny">These are planned / gated / parity-stage services; not all paths are turned on by default.</text>
+  <rect x="110" y="650" width="170" height="58" fill="#fffaf0" stroke="#d7b15c" stroke-width="2" rx="10"/>
+  <text x="195" y="687" text-anchor="middle" class="small">vfsd.c</text>
+  <rect x="300" y="650" width="170" height="58" fill="#fffaf0" stroke="#d7b15c" stroke-width="2" rx="10"/>
+  <text x="385" y="687" text-anchor="middle" class="small">iocd.c</text>
+  <rect x="110" y="718" width="170" height="48" fill="#fffaf0" stroke="#d7b15c" stroke-width="2" rx="10"/>
+  <text x="195" y="748" text-anchor="middle" class="small">cap-broker</text>
+  <rect x="300" y="718" width="170" height="48" fill="#fffaf0" stroke="#d7b15c" stroke-width="2" rx="10"/>
+  <text x="385" y="748" text-anchor="middle" class="small">driver PDs</text>
+
+  <line x1="560" y1="100" x2="560" y2="860" class="dashed"/>
+  <text x="560" y="92" text-anchor="middle" class="smalllight" fill="#475569">privilege boundary</text>
+  <text x="560" y="880" text-anchor="middle" class="smalllight" fill="#475569">Ring 3 / user</text>
+
+  <rect x="620" y="100" width="940" height="760" class="kernelbox"/>
+  <text x="1090" y="136" text-anchor="middle" class="label">KERNEL MODE</text>
+  <text x="1090" y="158" text-anchor="middle" class="smalllight" fill="#405a8c">Privileged scheduler, IPC, CSpace, PMM/VMM, filesystem, drivers, and hardware control</text>
+
+  <rect x="680" y="190" width="330" height="120" class="bigbox"/>
+  <text x="845" y="230" text-anchor="middle" class="label">Trap / syscall entry</text>
+  <text x="845" y="255" text-anchor="middle" class="small">validate pointer / argument boundaries</text>
+  <text x="845" y="276" text-anchor="middle" class="tiny">ELF + syscall + VFS boundary checks happen here</text>
+
+  <rect x="1040" y="190" width="420" height="120" class="bigbox"/>
+  <text x="1250" y="230" text-anchor="middle" class="label">Scheduling + task management</text>
+  <text x="1250" y="255" text-anchor="middle" class="small">real-time scheduler, task lifecycles, sporadic server budgets</text>
+  <text x="1250" y="276" text-anchor="middle" class="tiny">ready queue, deadlines, TCBs, paravirtual task state</text>
+
+  <rect x="680" y="340" width="780" height="150" class="bigbox"/>
+  <text x="1070" y="376" text-anchor="middle" class="label">IPC + CSpace capabilities</text>
+  <text x="1070" y="405" text-anchor="middle" class="small">Message queues, endpoints, notifications, shared-memory, capability lookup and revocation</text>
+  <text x="1070" y="432" text-anchor="middle" class="tiny">CSpace is the capability security layer; kernel enforces rights, no ambient authority for delegated resources</text>
+  <rect x="735" y="448" width="190" height="28" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="830" y="468" text-anchor="middle" class="tiny">IPC</text>
+  <rect x="950" y="448" width="190" height="28" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="1045" y="468" text-anchor="middle" class="tiny">Capabilities</text>
+  <rect x="1165" y="448" width="190" height="28" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="1260" y="468" text-anchor="middle" class="tiny">IRQ / MMIO / DMA</text>
+  <rect x="1380" y="448" width="50" height="28" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="1405" y="468" text-anchor="middle" class="tiny">…</text>
+
+  <rect x="680" y="510" width="420" height="170" class="bigbox"/>
+  <text x="890" y="548" text-anchor="middle" class="label">Memory management</text>
+  <text x="890" y="575" text-anchor="middle" class="small">PMM + VMM + page tables + address spaces + mapping policy</text>
+  <text x="890" y="600" text-anchor="middle" class="tiny">ELF load, user mappings, frame ownership, and memory protection remain kernel-owned</text>
+  <rect x="733" y="618" width="170" height="34" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="818" y="640" text-anchor="middle" class="tiny">PMM</text>
+  <rect x="925" y="618" width="170" height="34" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="1010" y="640" text-anchor="middle" class="tiny">VMM</text>
+
+  <rect x="1125" y="510" width="335" height="170" class="bigbox"/>
+  <text x="1292" y="548" text-anchor="middle" class="label">Current in-kernel VFS / drivers / terminal</text>
+  <text x="1292" y="575" text-anchor="middle" class="small">vfs.cpp, device drivers, serial, keyboard, RTC, framebuffer, console paths</text>
+  <text x="1292" y="600" text-anchor="middle" class="tiny">These are still privileged today; optional service PDs are gated and default-off</text>
+  <rect x="1168" y="616" width="120" height="38" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="1228" y="640" text-anchor="middle" class="tiny">VFS core</text>
+  <rect x="1302" y="616" width="120" height="38" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="1362" y="640" text-anchor="middle" class="tiny">Drivers</text>
+  <rect x="1436" y="616" width="12" height="38" fill="#dfe9ff" stroke="#496ec7" stroke-width="2" rx="8"/>
+  <text x="1442" y="640" text-anchor="middle" class="tiny">…</text>
+
+  <rect x="760" y="700" width="740" height="120" class="hardware"/>
+  <text x="1130" y="735" text-anchor="middle" class="label">Hardware</text>
+  <text x="1130" y="760" text-anchor="middle" class="small">CPU, interrupt controller, timers, memory, serial, keyboard, devices, DMA-capable hardware</text>
+  <text x="1130" y="785" text-anchor="middle" class="tiny">Kernel owns actual device access unless a governed capability / PD path is composed and allowed.</text>
+
+  <path d="M530 250 C590 250, 600 250, 680 250" class="userarrow"/>
+  <path d="M530 410 C590 410, 600 410, 680 410" class="userarrow"/>
+  <path d="M530 665 C590 665, 605 665, 680 665" class="userarrow"/>
+
+  <path d="M845 310 L845 340" class="kernelarrow"/>
+  <path d="M1250 310 L1250 340" class="kernelarrow"/>
+  <path d="M1070 490 L1070 510" class="kernelarrow"/>
+  <path d="M890 680 L890 700" class="kernelarrow"/>
+  <path d="M1292 680 L1292 700" class="kernelarrow"/>
+
+  <path d="M680 250 L530 250" class="userarrow"/>
+  <path d="M680 410 L530 410" class="userarrow"/>
+  <path d="M680 665 L530 665" class="userarrow"/>
+
+  <rect x="185" y="870" width="1230" height="70" class="note"/>
+  <text x="800" y="900" text-anchor="middle" class="small">Current state: hybrid kernel. VFS, devices, terminal, and much of the hardware path remain kernel-owned by default; optional userspace server / PD paths are gated behind CONFIG_* knobs and remain in parity / strangler mode until the flip gates are satisfied.</text>
+  <text x="800" y="922" text-anchor="middle" class="tiny">The target architecture is a capability-based microkernel with isolated service PDs, but this diagram reflects the implementation that currently exists in the tree.</text>
+</svg>

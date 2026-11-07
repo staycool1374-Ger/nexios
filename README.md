@@ -5,23 +5,35 @@
 
 <h1 align="center">NexIOS RTOS</h1>
 <p align="center">
-  <em>A deterministic, safety-critical real-time operating system built from scratch in freestanding C++20.</em>
+  <em>A deterministic, real-time operating system built from scratch in freestanding C++20.</em>
 </p>
 <p align="center">
   <strong>🌐 Project website: <a href="https://nexios-2.jimdosite.com">https://nexios-2.jimdosite.com</a></strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml"><img src="https://github.com/staycool1374-Ger/nexios/actions/workflows/ci.yml/badge.svg" alt="CI Build"/></a>
-  <img src="https://img.shields.io/badge/tests-1744%20debug%20%7C%2089%20release-2ea44f?style=flat-square" alt="Tests"/>
   <img src="https://img.shields.io/badge/C++20-freestanding-00599C?style=flat-square&logo=cplusplus" alt="C++20 Freestanding"/>
   <img src="https://img.shields.io/badge/security-capability--based%20%28CSpace%29-fb7185?style=flat-square" alt="Capability Security"/>
-  <img src="https://img.shields.io/badge/scheduling-hard%20real--time-critical?style=flat-square" alt="Hard Real-Time"/>
-  <img src="https://img.shields.io/badge/process-SIL%203%20inspired-orange?style=flat-square" alt="SIL 3 inspired process"/>
-  <img src="https://img.shields.io/badge/version-v0.5.7-blue?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="GNU General Public License v3"/>
 </p>
 
+---
+
+## Table of Contents
+
+- [Overview NexIOS](#overview-nexios)
+- [Diagram of actual implementation](#diagram-of-actual-implementation)
+- [Who Needs This?](#who-needs-this)
+- [Why not Zephyr (or FreeRTOS)?](#why-not-zephyr-or-freertos)
+- [Demo](#demo)
+- [Roadmap & History](#roadmap--history)
+- [Recent Release Highlights](#recent-release-highlights)
+- [Community, Support & Q&A](#community-support--qa)
+- [Build & Quick Start](#build--quick-start)
+  - [Using Docker (recommended)](#using-docker-recommended)
+  - [Running in QEMU Emulator](#running-in-qemu-emulator)
+  - [Upload files into ramdisk (XMODEM)](#upload-files-into-ramdisk-xmodem)
+ 
 ---
 
 ## Overview NexIOS
@@ -30,18 +42,16 @@ A freestanding C++20 multi-architecture real-time operating system with zero dyn
 
 Currently a hybrid kernel actively transitioning toward a capability-based microkernel.
 
-* **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal)
+* **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal), bring-up on Raspberry Pi4 planned
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.7 — SMP multicore enablement across all three architectures (AP bring-up, cross-CPU TLB shootdown, scheduler/IPC hardening), rv64 trap fix (1744/2 debug, 89/0 release; aa64 1029/0, rv64 646/0 — 2 x86-debug FAILs waived pre-existing/flaky, zero product delta)
+* **Status:** v0.5.7 — SMP multicore enablement across all three architectures (AP bring-up, cross-CPU TLB shootdown, scheduler/IPC hardening)
 * **License:** GPLv3
-
-NexIOS RTOS is an independent, ground-up implementation of a real-time operating system.
 
 ---
 
 ## Diagram of actual implementation
 
-<img src="diagram.png" alt="Diagram of actual implementation"/>
+<img src="diagram.svg" alt="Diagram of actual implementation"/>
 
 ---
 
@@ -49,7 +59,7 @@ NexIOS RTOS is an independent, ground-up implementation of a real-time operating
 
 NexIOS combines MMU process isolation and capability-based security (CSpace) with a straightforward workflow:  **your application is just an ELF file on the system — NexIOS keeps it running on time, every time.**
 
-Write your control logic in C, C++, or Rust and execute it directly via the POSIX-compliant NexIOS shell. Applications can be dynamically loaded from storage or secondary media without needing a system reboot. If an application fails, simply reload and restart it. Handy for a rapid application development (RAD) system without re-flashing like: 
+Write your control logic in C, C++, or Rust and execute it directly via the POSIX-compliant NexIOS shell (Note: All userapps are right now simple demonstrations. We are looking for real testers to flag the possible quirks). Applications can be dynamically loaded from storage or secondary media without needing a system reboot. If an application fails, simply reload and restart it. Handy for a rapid application development (RAD) system without re-flashing like: 
 
 * **Robotics & Motion Control:** High-frequency servo and actuator control loops requiring strict sub-millisecond execution windows.
 * **Industrial & Home Automation:** Multi-tasking controllers (e.g., climate regulation, energy management, sensor pipelines) where individual services can be updated on the fly without stopping core safety routines.
@@ -61,19 +71,25 @@ Please read through open roadmap issues before submitting major architectural ch
 
 ---
 
+## Why not Zephyr (or FreeRTOS)?
+
+This project is still highly experimental and not a production system. It's young: QEMU only so far, no certification (and possibly never one), no published latency numbers yet, no broad hardware support, no ecosystem. Those are the next things to fix, and help is welcome.
+
+But most embedded RTOSes (like FreeRTOS or Zephyr) are typically built as a single image where a fault in one thread can take down the whole system. NexIOS goes a different way: apps are plain ELF binaries, each in its own MMU address space, loaded and reloaded at runtime without re-flashing. You don't need to be a kernel expert (or a mathematician) to use it: write your app, drop the ELF on the system, run it from the shell. Isolation and capabilities are handled by the kernel.
+
+Additionally, the NexIOS shell includes the tools needed to measure your application, or you can build your own.
+
+---
+
 ## Demo
 
 <p align="center">
-  <a href="https://youtu.be/-jyvFReC9K8?si=b71XUpnEghm0CTqk">
-    <img src="https://img.youtube.com/vi/foApKYTFSlE/sddefault.jpg" alt="NexIOS demo video — watch on YouTube" width="720"/>
-  </a>
+<a href="https://youtu.be/-jyvFReC9K8">
+  <img src="https://img.youtube.com/vi/-jyvFReC9K8/sddefault.jpg" alt="NexIOS demo video — watch on YouTube" width="720"/>
+</a>
 </p>
 <p align="center">
   <em>NexIOS demo — real-time kernel for safety (click to watch on YouTube)</em>
-</p>
-
-<p align="center">
-  <img src="docs/nexios-architecture.png" alt="NexIOS kernel architecture" width="820"/>
 </p>
 
 ---
@@ -90,26 +106,10 @@ Done roadmap archived in `prompts/README_done.md`.
 ## Recent Release Highlights
 
 ### v0.5.7: SMP Multicore Enablement & Cross-CPU Shootdown
-* **SMP Bring-Up (#351, slices 0–4):** DTB CPU discovery (fail-closed), aarch64 PSCI bring-up + SGI IPI, riscv64 HSM bring-up + SBI IPI + per-CPU identity, arch-neutral IPI send interface, per-hart scheduler slots + AP tick/upcpu/IPI delivery on both AP arches.
-* **Cross-CPU TLB Shootdown (#389):** strong per-arch hook overrides (x86 Batch via S4 iface with PCID-precise + all-bit apply, aa64 SGI-10 purge-on-receipt, rv64 RFENCE broadcast + S-soft fallback) adopted at all VMM unmap/teardown/map-split sites through the `tlb_shootdown` choke point; boot-phase fan-out gated on scheduler start.
-* **Scheduler + IPC Hardening (#402 S4/S6):** PI re-bucket of queued owners on boost/restore (mutex/semaphore, mirroring queue/IPC) and `pool_lock_` guarding of the BufferPool free-list/entries (SMP race fix); full S0–S6 SMP spec audited with carry-not-redo discipline.
-* **RV64 Trap Fix (#440):** foreign-tp slot-0 fallback in the trap epilogue unblocks deferred-switch apply from user context (exec zeroes user tp), fixing the rv64 boot stall.
-* **Foundations carried in:** SMP-safe globals (#386), EL0 guard-arm E2E (#435), toolchain parity (#437 aarch64 atomics, #439 `-fno-pie`), QE shootdown E2E probes.
-* **Test counts:** x86 debug 1744/2 (24/26 classes; smp 79/81 + hal STALL waived pre-existing/flaky), x86 release 89/0 (23/24; smp_multicpu STALL-RECOVERED flake), aarch64 1029/0 (22/22), riscv64 646/0 (19/19).
-
-### v0.5.6: Meson Cutover, Userspace SDK & kstack Guard Parity
-* **Meson Build System (#170):** full Meson cutover for build, test registry, and QEMU harness flows (build.sh, qemu_test.py, gen_test_registry).
-* **Userspace SDK (#171):** Ring-3 driver surface with reference driver (userspace/ref-driver.c), driver guide (docs/writing-a-nexios-driver.md), and staged SDK install under /opt/nexios-sdk.
-* **v0.5.6 Bug Run:** checked_ptr untag fault-repro fix with E2E vehicle, QEMU headless-display parity (F2).
-* **kstack Parity + Guard Page:** aa64 kslot window wiring (P1), ELF birth-stack routing (P2), shared guard-fault predicate + aa64 EL1 abort arm + snapshot round-trip (P3), task integration + regression.
-* **QEMU/Tooling (F2):** headless parity for x86_64 QEMU runs (-display none), tooling hardening.
-
-### v0.5.5: Architecture Parity & Hardening
-* **Interrupt & Timer Subsystems:** Full parity across platforms, including GICv2 initialization (ARM) and PLIC S-context handling (RISC-V).
-* **Task Context & FPU:** Eager FPU switching, architecture-independent fork/clone paths.
-* **Security & Isolation:** Fail-closed contracts for DMA, hardware discovery, and synthetic parent-clone restrictions.
-* **Console Infrastructure:** Bounded URC (Unsolicited Result Code) console discipline and zero-copy shell slices.
-* **Harness & Docs:** shell-smoke E2E chain on release, dump-counts reconciliation.
+* **SMP Bring-Up**
+* **Cross-CPU TLB Shootdown**
+* **Scheduler + IPC Hardening**
+* **Foundations carried:** SMP-safe globals, EL0 guard-arm, toolchain parity
 
 ---
 
@@ -127,8 +127,8 @@ Have questions about the architecture, CSpace capabilities, or real-time schedul
 #### Using Docker (recommended)
 
 ```bash
-docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.5
-docker run --rm -it ghcr.io/staycool1374-ger/nexios-env:v0.5.5
+docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.7
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.7
 # inside the container:
 tools/meson/build.sh
 python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
@@ -145,14 +145,14 @@ python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_sysca
 Run a gate directly without an interactive shell:
 
 ```bash
-docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.5 \
+docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.7 \
     python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
 ```
 
 Pin a different snapshot explicitly (default is the image's own tag):
 
 ```bash
-docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.3
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.7
 ```
 #### Running in QEMU Emulator
 
@@ -162,7 +162,7 @@ docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.
   qemu-system-x86_64 -cdrom build/meson-x86_64/src/nexios-rtos.iso -m 256M \
       -serial mon:stdio -display none
   ```
-* **Cross-Architecture Targeting:** Build the arch builddir, then boot its kernel ELF directly (`x86`, `arm`, or `riscv` shorthands below are illustrative — use full arch names):
+* **Cross-Architecture Targeting:** Build the arch builddir, then boot its kernel ELF directly:
   ```bash
   tools/meson/build.sh build/meson-aarch64    # Boots AArch64 target in QEMU
   qemu-system-aarch64 -M virt -cpu cortex-a72 -kernel build/meson-aarch64/src/kernel-debug.elf \
@@ -194,5 +194,4 @@ tools/upload-ramdisk.py myfile.bin --start-block 1000
 
 Exit codes: `0` ok, `1` dialogue/handshake, `2` usage/count mismatch,
 `3` receiver abort (nothing written), `4` timeout. `--selftest` checks
-the host logic without a target. Details: `docs/specs/xmodem.md`
-(operator section) and issue #313.
+the host logic without a target. Details: `docs/specs/xmodem.md`.

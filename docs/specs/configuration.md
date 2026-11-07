@@ -3,7 +3,7 @@
 **Semantics:** binding contract for the kernel's compile-time configuration
 surface — the `src/kernel/nexios_config.h` tunables, their categories,
 valid ranges and cross-dependencies — and for the two config-matrix runners
-(`run_config_matrix.sh`, `tools/deadline_matrix.sh`) that sweep the
+(`scripts/run_config_matrix.sh`, `tools/deadline_matrix.sh`) that sweep the
 deadline/WCET feature set, plus the `tools/check-config.py` validator.
 
 ```
@@ -14,7 +14,7 @@ deadline/WCET feature set, plus the `tools/check-config.py` validator.
         ▼
   tools/meson/build.sh (NO_LTO / debug / release) ── the chosen matrix row is baked in
         ▼
- matrix runners (run_config_matrix.sh / tools/deadline_matrix.sh)
+ matrix runners (scripts/run_config_matrix.sh / tools/deadline_matrix.sh)
         │  set CONFIG_DEADLINE_* + CONFIG_SPORADIC_*  → meson compile → qemu_test.py
         ▼
  verdict: PASS / FAIL / HANG([HOST-WATCHDOG]) / expected-PANIC(PASS)
@@ -137,7 +137,7 @@ feeds must be re-validated** (check-config cross-check).
 
 ## 2. The Matrix Runners
 
-### 2.1 `run_config_matrix.sh` — 48 meaningful deadline/WCET combos
+### 2.1 `scripts/run_config_matrix.sh` — 48 meaningful deadline/WCET combos
 
 The 5-dimensional sweep: `MONITOR × MISS × WCET × SPORADIC × ACTION` where
 `ACTION` is only meaningful when `MISS==1`:
@@ -208,7 +208,7 @@ Other actions must pass the class normally.  Kills leftover QEMU between runs.
 
 ## 5. Open Items
 
-- **Fix `run_config_matrix.sh` path** (`jarvis_config.h` → `nexios_config.h` /
+- **Fix `scripts/run_config_matrix.sh` path** (`jarvis_config.h` → `nexios_config.h` /
   `CONFIG_DEFS`).
 - **A release-gate constraint applies to every row:** `CONFIG_DEBUG_IPC_SCHED`
   must stay **undefined** for release gates (see `specs/deadline.md` §7); the
@@ -229,6 +229,15 @@ requires its server knob; `CONFIG_BLOCK_SRV` and `CONFIG_DRIVER_PD_BLOCK`
 are mutually exclusive (single block owner); fb/block/net PD knobs fail
 closed until the S4/S5/S6 SDF rows land. See `docs/specs/driver-pds.md`,
 `docs/specs/timer-srv.md`, `docs/specs/vfs-srv.md`, `docs/specs/block-srv.md`.
+
+### 1.12.1 Serial TX via SHM ring (issue #51, step-c-prime)
+`CONFIG_SERIAL_TX_SHM` (0) · 0|1 `#error`-guarded.
+1 = kernel console TX pushes into the SDF-composed SHM SPSC ring and
+drv-serial drains to UART (bounded, drop-on-full with counter,
+empty-to-nonempty NOTIFY); 0 = 51c behavior (per-char WRITE RPC when
+`CONFIG_DRIVER_PD_SERIAL`, else raw UART). Reversibility knob: the ring
+path needs re-audit (rescope per operator DECISION A). Wire contract:
+`docs/specs/driver-pds.md` §Wire/Serial TX ring.
 
 ### 1.13 Server PD externalization — term/log (issue #51, step a)
 `CONFIG_TERM_SRV` (0) · `CONFIG_LOG_SRV` (0) ·

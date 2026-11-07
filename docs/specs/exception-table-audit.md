@@ -1,7 +1,10 @@
 # Exception Vector Table Audit — Modern x86_64 Vectors & Uniform Frames
 
 **Doc ID:** NEX-SPEC-2026-08-23-006
-**Status:** DRAFT (contains one CONCRETE BUG FIX, see §2)
+**Status:** AUDITED + BUG FIXED — the §2 error-code misclassification is
+corrected in tree (`src/kernel/arch/x86_64/isr_stubs.asm`: vectors 21/28/30
+are `ISR_ERR`; assemble-time frame audit cites this spec §3.1). Retained as
+the audit record.
 **Milestone target:** v0.4.3 (bug fix could ride any v0.4.x release)
 **Inspiration:** Cyjon `kernel/idt.asm` — full 32-vector discrimination with
 per-vector error-code push so every frame is uniform.

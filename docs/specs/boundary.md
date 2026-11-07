@@ -1,9 +1,10 @@
 # Syscall / VFS / ELF Boundary Specification
 
 **Semantics:** binding trust-boundary contracts for Ring-3 → kernel entry, the
-VFS/syscall layer, and the ELF loader.  Synthesis of
-`_archive/v0.3.6-boundary-audit-spec.md` (12 confirmed audit defects) and
-`_archive/privilege_audit.md` (ring-level audit).  `[IMPLEMENTED]` =
+VFS/syscall layer, and the ELF loader.  Synthesis of the historical
+boundary-audit implementation spec (12 confirmed audit defects; original
+removed 2026-11 after extraction, see git history) and
+`specs/privilege-audit.md` (ring-level audit).  `[IMPLEMENTED]` =
 code-verified in the current tree.
 
 ```

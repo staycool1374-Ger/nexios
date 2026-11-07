@@ -3,8 +3,8 @@
 **Doc ID:** NEX-SPEC-2026-09-15-002
 **Status:** MEASURED (issue #62)
 **Milestone target:** v0.4.5
-**Prior art:** `docs/_archive/wcet_analysis.md` (1/10/40-task SIMULATED
-table — superseded by driven measurements below, kept frozen).
+**Prior art:** historical 1/10/40-task SIMULATED table (removed 2026-11
+after extraction — see git history) — superseded by driven measurements below.
 
 ## 1. Why re-audit
 

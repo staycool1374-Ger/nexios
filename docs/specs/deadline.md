@@ -171,8 +171,8 @@ Distinct from deadline miss: a blocked task past its real deadline fires the
 ## 7. Gaps / Non-Goals
 
 - **`deadline_rush` is NOT implemented** — deadline-awareness is **post-facto
-  detection only**; there is no deadline-aware *pre-emptive* scheduling
-  (rush-preemption was archived in `_archive/rms-rework-plan.md`).
+detection only**; there is no deadline-aware *pre-emptive* scheduling
+(rush-preemption design retained as `specs/rms-rework.md` Phase 4, deferred).
 - **SS exhaustion as deadline** (`CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE`)
   is off by default.
 - **`CONFIG_DEBUG_IPC_SCHED`** (`ipc_sched_trace.hpp`) must be **undefined** for
