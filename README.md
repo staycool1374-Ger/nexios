@@ -92,10 +92,6 @@ Additionally, the NexIOS shell includes the tools needed to measure your applica
   <em>NexIOS demo — real-time kernel for safety (click to watch on YouTube)</em>
 </p>
 
-<p align="center">
-  <img src="docs/nexios-architecture.png" alt="NexIOS kernel architecture" width="820"/>
-</p>
-
 ---
 
 ## Roadmap & History
