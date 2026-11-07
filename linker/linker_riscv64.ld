@@ -135,8 +135,12 @@ SECTIONS
      * from kernel_phys_end; ~528KB for 256MB RAM).  The ASSERT below guards
      * image growth; boot.S maps one L1_id leaf for it (index derived
      * from the symbol at runtime); HHDM covers it post-transition;
-     * kernel.cpp PMM::reserve_range() pins it. */
-    .boot_stack_rv 0x80E00000 (NOLOAD) : AT(0x80E00000)
+     * kernel.cpp PMM::reserve_range() pins it.
+     * Site history: 0x80E00000 until image growth (kernel_phys_end
+     * 0x80C98000) tripped the stack_base-2MB bound and fail-stopped
+     * every boot — moved to 0x82000000 (~20MB headroom).  Canonical
+     * address: src/kernel/arch/riscv64/hal/memmap.hpp. */
+    .boot_stack_rv 0x82000000 (NOLOAD) : AT(0x82000000)
     {
         _boot_stack_rv_low = .;
         KEEP(*(.boot_stack_rv))
@@ -146,5 +150,7 @@ SECTIONS
     /* A fixed-address NOLOAD section never moves phys_lma, so image growth
      * would silently overlay it.  No ASSERT: this ld rejects ASSERT() here,
      * so boot.S fail-stops at runtime instead (kernel_phys_end check at
-     * _start — image + 2MB metadata slack must stay below 0x80E00000). */
+     * _start — image + 2MB metadata slack must stay below the
+     * .boot_stack_rv base, derived from the symbol so the two can never
+     * desync again). */
 }
