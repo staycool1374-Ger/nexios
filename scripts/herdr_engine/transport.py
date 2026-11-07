@@ -21,6 +21,51 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+def room_lock(room_dir: str):
+    """Per-room exclusive lock shared by ALL engine writers (T8 live finding).
+
+    Every read-modify-write on a room namespace (posts, orders, phases,
+    auditor ledgers) must hold this from load to save; otherwise the async
+    engine tick and a lane MCP post interleave and clobber state.json.
+
+    Process-reentrant: nested acquisition by the same process (e.g. post()
+    calling _save_state()) reuses the held file description instead of
+    self-deadlocking on a second LOCK_EX.
+    """
+    import fcntl
+    import threading
+
+    if not hasattr(room_lock, "_depth"):
+        room_lock._depth = {}  # type: ignore[attr-defined]
+        room_lock._guard = threading.Lock()  # type: ignore[attr-defined]
+        room_lock._handles = {}  # type: ignore[attr-defined]
+
+    class _L:
+        def __enter__(self_inner):
+            with room_lock._guard:  # type: ignore[attr-defined]
+                n = room_lock._depth.get(room_dir, 0)  # type: ignore[attr-defined]
+                if n == 0:
+                    lf = open(os.path.join(room_dir, "state.lock"), "w")
+                    fcntl.flock(lf, fcntl.LOCK_EX)
+                    room_lock._handles[room_dir] = lf  # type: ignore[attr-defined]
+                room_lock._depth[room_dir] = n + 1  # type: ignore[attr-defined]
+            return self_inner
+
+        def __exit__(self_inner, *a):
+            with room_lock._guard:  # type: ignore[attr-defined]
+                n = room_lock._depth.get(room_dir, 1) - 1  # type: ignore[attr-defined]
+                if n <= 0:
+                    try:
+                        lf = room_lock._handles.pop(room_dir)  # type: ignore[attr-defined]
+                        fcntl.flock(lf, fcntl.LOCK_UN)
+                        lf.close()
+                    finally:
+                        room_lock._depth.pop(room_dir, None)  # type: ignore[attr-defined]
+                else:
+                    room_lock._depth[room_dir] = n  # type: ignore[attr-defined]
+    return _L()
+
+
 TS19 = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
 # Post-identity grammar: audit issues its own lane-scoped identity (verdict
 # posts carry kind+tip; audit never owns orders), ACK targets stay dev|qe.
@@ -232,19 +277,40 @@ class Transport:
         p = os.path.join(d, "state.json")
         if os.path.exists(p):
             try:
-                return json.load(open(p))
+                return json.load(open(p, errors="replace"))
             except (OSError, ValueError):
                 return {}
         return {}
 
+    _locked = staticmethod(lambda d: room_lock(d))
+
     @staticmethod
     def _save_state(d: str, st: dict[str, Any]) -> None:
         p = os.path.join(d, "state.json")
-        tmp = p + ".tmp"
-        with open(tmp, "w") as fh:
-            json.dump(st, fh, indent=1)
-            fh.write("\n")
-        os.replace(tmp, p)
+        with Transport._locked(d):
+            tmp = p + f".tmp.{os.getpid()}"
+            with open(tmp, "w") as fh:
+                json.dump(st, fh, indent=1)
+                fh.write("\n")
+            os.replace(tmp, p)
+
+    @classmethod
+    def rfile_order_state(cls, in_room, oid, lane=None, done_by=None,
+                          ack_by=None, demand=""):
+        """Locked order filing: the only room-state writer beside tick()."""
+        d = cls._have_room(in_room)
+        if not d:
+            raise ValueError(f"no room {NHR_BASE}{in_room}")
+        with cls._locked(d):
+            st = cls._load_state(d)
+            orders = st.setdefault("orders", {})
+            if oid in orders:
+                return orders[oid]
+            orders[oid] = {"lane": oid_lane(oid) or "audit", "state": "open",
+                           "filed": "now", "ack_by": ack_by, "done_by": done_by,
+                           "demand": demand}
+            cls._save_state(d, st)
+            return orders[oid]
 
     # -- posts --------------------------------------------------------------
 
@@ -272,55 +338,56 @@ class Transport:
             rj.violations.append(Violation("room", f"body room {post['room']} != room arg {int(room)}"))
             return rj
 
-        st = self._load_state(d)
-        lanes = st.setdefault("lanes", {})
-        lane = lanes.setdefault(role, {})
-        # stale-ts adjudication: per-lane monotonic ts (t, not prose)
-        new_ts = post["ts"]
-        prev_ts = lane.get("last_ts")
-        if prev_ts and new_ts <= prev_ts:
-            rj.violations.append(Violation(
-                "ts", f"stale/out-of-order (lane last {prev_ts}, got {new_ts})",
-                "bump ts; timestamps only, no prose adjudication"))
-            return rj
-        # duplicate oid
-        seen_oids = st.setdefault("seen_oids", [])
-        if post["oid"] in seen_oids:
-            rj.violations.append(Violation("oid", f"duplicate order id {post['oid']}"))
-            return rj
-
-        # ACK ledger: match/prune (fake ACKs get rejected, ledger untouched)
-        acked = 0
-        for a in post.get("acks") or []:
-            orders = st.setdefault("orders", {})
-            entry = orders.get(a)
-            if entry is None:
-                rj.violations.append(Violation(f"acks[oid={a}]", "unknown order id on this room's ledger",
-                                               "copy the oid from the engine ring/NOTE"))
+        with self._locked(d):
+            st = self._load_state(d)
+            lanes = st.setdefault("lanes", {})
+            lane = lanes.setdefault(role, {})
+            # stale-ts adjudication: per-lane monotonic ts (t, not prose)
+            new_ts = post["ts"]
+            prev_ts = lane.get("last_ts")
+            if prev_ts and new_ts <= prev_ts:
+                rj.violations.append(Violation(
+                    "ts", f"stale/out-of-order (lane last {prev_ts}, got {new_ts})",
+                    "bump ts; timestamps only, no prose adjudication"))
                 return rj
-            if oid_lane(a) != role and role != "audit":
-                rj.violations.append(
-                    Violation(f"acks[oid={a}]", f"targets lane '{oid_lane(a)}' but poster lane is '{role}'",
-                              "ACK only orders addressed to your lane"))
+            # duplicate oid
+            seen_oids = st.setdefault("seen_oids", [])
+            if post["oid"] in seen_oids:
+                rj.violations.append(Violation("oid", f"duplicate order id {post['oid']}"))
                 return rj
-            if entry.get("state") == "acked":
-                rj.violations.append(Violation(f"acks[oid={a}]", "already acknowledged", "one ACK clears one oid"))
-                return rj
-            entry["state"] = "acked"
-            entry["acked_by"] = {"lane": role, "post_oid": post["oid"], "ts": new_ts}
-            acked += 1
-            st.setdefault("acks_log", []).append({"oid": a, "cleared_by": post["oid"], "ts": new_ts})
-
-        stream = os.path.join(d, "posts.jsonl")
-        line = json.dumps(post, ensure_ascii=False)
-        with open(stream, "a") as fh:
-            fh.write(line + "\n")
-
-        lane["last_ts"] = new_ts
-        lane["last_state"] = {"state": post["state"], "next": post["next"]}
-        if post["oid"] not in seen_oids:
-            seen_oids.append(post["oid"])
-        self._save_state(d, st)
+    
+            # ACK ledger: match/prune (fake ACKs get rejected, ledger untouched)
+            acked = 0
+            for a in post.get("acks") or []:
+                orders = st.setdefault("orders", {})
+                entry = orders.get(a)
+                if entry is None:
+                    rj.violations.append(Violation(f"acks[oid={a}]", "unknown order id on this room's ledger",
+                                                   "copy the oid from the engine ring/NOTE"))
+                    return rj
+                if oid_lane(a) != role and role != "audit":
+                    rj.violations.append(
+                        Violation(f"acks[oid={a}]", f"targets lane '{oid_lane(a)}' but poster lane is '{role}'",
+                                  "ACK only orders addressed to your lane"))
+                    return rj
+                if entry.get("state") == "acked":
+                    rj.violations.append(Violation(f"acks[oid={a}]", "already acknowledged", "one ACK clears one oid"))
+                    return rj
+                entry["state"] = "acked"
+                entry["acked_by"] = {"lane": role, "post_oid": post["oid"], "ts": new_ts}
+                acked += 1
+                st.setdefault("acks_log", []).append({"oid": a, "cleared_by": post["oid"], "ts": new_ts})
+    
+            stream = os.path.join(d, "posts.jsonl")
+            line = json.dumps(post, ensure_ascii=False)
+            with open(stream, "a") as fh:
+                fh.write(line + "\n")
+    
+            lane["last_ts"] = new_ts
+            lane["last_state"] = {"state": post["state"], "next": post["next"]}
+            if post["oid"] not in seen_oids:
+                seen_oids.append(post["oid"])
+            self._save_state(d, st)
 
         woke = False
         if self.waker and is_demand_shaped(post["kind"], str(post.get("summary", "")), str(post.get("body", ""))):
@@ -328,18 +395,10 @@ class Transport:
             woke = True
         return Posted(body=post, box=box, stream_path=stream, acked=acked, woke=woke)
 
-    def file_order(self, room: int | str, oid: str, lane: str, done_by: str | None = None,
+    def file_order(self, room: int | str, oid: str, lane: str | None = None, done_by: str | None = None,
                    ack_by: str | None = None, demand: str = "") -> dict[str, Any]:
         """Engine-side: file an order on the ledger (ring source of truth)."""
-        d = self._have_room(room)
-        if not d:
-            raise ValueError(f"no room {NHR_BASE}{room}")
-        st = self._load_state(d)
-        orders = st.setdefault("orders", {})
-        orders[oid] = {"lane": oid_lane(oid) or lane, "state": "open",
-                       "filed": "now", "ack_by": ack_by, "done_by": done_by, "demand": demand}
-        self._save_state(d, st)
-        return orders[oid]
+        return self.rfile_order_state(int(room), oid, lane, done_by, ack_by, demand)
 
     # -- views --------------------------------------------------------------
 

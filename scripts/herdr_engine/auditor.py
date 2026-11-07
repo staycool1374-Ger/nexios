@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from herdr_engine.fsm import now_str, room_dir as rdir, load_state, save_state
+from herdr_engine.transport import room_lock
 from herdr_engine.transport import Rejection
 
 BRIEF_TEMPLATE = """You are the audited examiner for room {room}.
@@ -79,14 +80,15 @@ class Audit:
     ledger: dict[str, Instance] = field(default_factory=dict)
 
     def save(self, room: int) -> None:
-        st = load_state(room)
-        if not st:
-            return
-        audits = st.setdefault("audits", {})
-        for key, ins in self.ledger.items():
-            if ins.room == room:
-                audits[key] = ins.dump()
-        save_state(room, st)
+        with room_lock(rdir(room)):
+            st = load_state(room)
+            if not st:
+                return
+            audits = st.setdefault("audits", {})
+            for key, ins in self.ledger.items():
+                if ins.room == room:
+                    audits[key] = ins.dump()
+            save_state(room, st)
 
     def load(self, room: int) -> None:
         st = load_state(room)
@@ -165,9 +167,10 @@ class Audit:
         ins.state = "verdict"
         ins.idle_cycles = 0
         if "NEED" in str(post.get("summary", "")).upper():
-            st = load_state(ins.room)
-            st["re_audit"] = {"key": ins.key, "ts": post.get("ts"), "tip": ins.tip}
-            save_state(ins.room, st)
+            with room_lock(rdir(ins.room)):
+                st = load_state(ins.room)
+                st["re_audit"] = {"key": ins.key, "ts": post.get("ts"), "tip": ins.tip}
+                save_state(ins.room, st)
         self.save(ins.room)
         return ins
 

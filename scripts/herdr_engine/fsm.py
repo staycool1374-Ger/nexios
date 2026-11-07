@@ -17,7 +17,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from herdr_engine.transport import NHR_BASE, oid_lane
+from herdr_engine.transport import NHR_BASE, oid_lane, room_lock
 
 PHASES = ("RECON", "IMPL", "VERIFY", "CLOSE-OUT", "CLOSED")
 GATE_NAMES = {
@@ -48,7 +48,7 @@ def load_state(room) -> dict[str, Any]:
 
 def save_state(room, st: dict[str, Any]) -> None:
     p = os.path.join(room_dir(room), "state.json")
-    tmp = p + ".tmp"
+    tmp = p + f".tmp.{os.getpid()}"  # unique per writer (T8 live finding: engine tick and lane order-filing race on one tmp)
     with open(tmp, "w") as fh:
         json.dump(st, fh, indent=1)
         fh.write("\n")
@@ -175,6 +175,9 @@ class Engine:
     # -- tick ----------------------------------------------------------------
 
     def tick(self, room: int) -> Action | None:
+        with room_lock(room_dir(room)):
+            return self._tick_locked(room)
+    def _tick_locked(self, room: int) -> Action | None:
         st = load_state(room)
         if not st:
             return None
