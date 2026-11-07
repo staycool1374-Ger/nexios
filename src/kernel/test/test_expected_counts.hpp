@@ -65,7 +65,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // task
     {"task_core",             7,    7,       7      },  // TCB cleanup, page tables, clone with real user parents
     {"task_lifecycle",        9,    0,       0      },  // exit, zombie, reparent
-    {"task_fpu",              0,    7,       7      },  // FPU context switch/clone/user isolation (off-x86 only)
+    {"task_fpu",              0,    8,       8      },  // FPU context switch/clone/user isolation (off-x86 only)
     {"task_init",             5,    0,       0      },  // init task exists, reparent, reaper notify/IPC wake
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants
