@@ -721,6 +721,22 @@ class RedemandTest(Basis, unittest.TestCase):
         self.assertEqual(act.verb, "demand-filed")
         self.assertEqual(act.detail["lane"], "qe")
 
+    def test_83_skewed_clocks_latest_is_arrival_order(self):
+        # Live finding (room 403): dev clock ~2h ahead of qe hid a qe NEED
+        # behind a newer-stamped dev post. Latest means arrived-last.
+        self.consume_entry()
+        CLOCK["i"] = 310
+        self.postq(self.ROOM, kind="NOTE", **{
+            "from": "dev", "oid": "dev:2026-11-07T12:00:00",
+            "summary": "working", "ts": "2026-11-07T12:00:00Z"})
+        self.postq(self.ROOM, kind="NEED", **{
+            "from": "qe", "oid": "qe:2026-11-07T10:10:00",
+            "summary": "NEED gaps", "ts": "2026-11-07T10:10:00Z"})
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertEqual(act.detail["lane"], "dev")
+        self.assertIn("gaps:qe:2026-11-07T10:10:00", json.dumps(act.detail))
+
 
 class LinkageTest(Basis, unittest.TestCase):
     """Gate linkage: deciding posts must ACK an open gate-lane demand (T8)."""
@@ -1018,7 +1034,6 @@ class ReworkLoopTest(Basis, unittest.TestCase):
                      "ts": "2026-11-07T10:10:00Z"})
         act = self.eng.tick(self.ROOM)
         self.assertEqual((act.verb, act.detail["lane"]), ("demand-filed", "qe"))
-
 
 class Issue474Backdrop(Basis, unittest.TestCase):
     """#474 shape end-to-end: qe test stubs -> kernel gaps found ->

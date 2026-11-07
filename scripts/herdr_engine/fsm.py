@@ -350,10 +350,14 @@ class Engine:
 
     def _newest_post(self, room: int, frm: str | None = None,
                         kind: str | None = None) -> dict[str, Any] | None:
+        # Arrival order, NOT lane timestamps: lane clocks are untrusted and
+        # skew (observed live: dev ~2h ahead of qe, hiding a qe NEED from
+        # the rework loop behind a newer-stamped dev READY). The stream
+        # append order is engine-observed ground truth for "latest".
         cands = [p for p in posts(room)
                  if (frm is None or p.get("from") == frm)
                  and (kind is None or p.get("kind") == kind)]
-        return max(cands, key=lambda p: p.get("ts", "")) if cands else None
+        return cands[-1] if cands else None
 
     def _newest_demand_ts(self, st: dict[str, Any], lane: str) -> str:
         best = ""
