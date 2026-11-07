@@ -656,3 +656,62 @@ class LinkageTest(Basis, unittest.TestCase):
         rung = [o for o in st["orders"].values() if o.get("ring_count", 0) > 0]
         self.assertTrue(rung)
         self.assertEqual(rung[0].get("rung_to"), f"t-{self.ROOM}-dev")
+
+
+class StallTest(Basis, unittest.TestCase):
+    def setUp(self):
+        CLOCK["i"] = 400
+        self.setup_room(self.ROOM)
+        self.sim = SimHerdr()
+        for lane in ("dev", "qe", "audit"):
+            self.sim.spawn(f"t-{self.ROOM}-{lane}", self.ROOM, lane)
+        self.eng = Engine(runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
+                          clock=fake_clock, transport=Transport())
+
+    def tearDown(self):
+        self.drop_room(self.ROOM)
+
+    def postq(self, **over):
+        b = {"v": 1, "oid": f"qe:{ts(0)}", "from": "qe", "kind": "NEED",
+             "state": "idle", "next": "idle", "ts": ts(CLOCK["i"]), "room": self.ROOM,
+             "summary": "NEED same gap"}
+        b.update(over)
+        return Transport().post(self.ROOM, "qe", b)
+
+    def test_95_three_identical_needs_raise_operator_need(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "VERIFY"
+        st.setdefault("entered_ts", {})["VERIFY"] = ts(300)
+        F.save_state(self.ROOM, st)
+        for i, h in enumerate(["10:00:0%d" % i for i in range(3)]):
+            CLOCK["i"] = 410 + i
+            self.postq(oid=f"qe:2026-11-07T{h}", ts=f"2026-11-07T{h}Z")
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "need")
+        self.assertEqual(F.load_state(self.ROOM)["stalled"]["phase"], "VERIFY")
+
+    def test_96_differing_needs_do_not_stall(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "VERIFY"
+        st.setdefault("entered_ts", {})["VERIFY"] = ts(300)
+        F.save_state(self.ROOM, st)
+        for i, s in enumerate(["NEED gap-a", "NEED gap-b", "NEED gap-a"]):
+            CLOCK["i"] = 410 + i
+            self.postq(oid=f"qe:2026-11-07T10:00:0{i}", summary=s,
+                       ts=f"2026-11-07T10:00:0{i}Z")
+        act = self.eng.tick(self.ROOM)
+        self.assertNotEqual(act.verb, "need")
+
+    def test_97_stall_suppresses_further_demands(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "VERIFY"
+        st.setdefault("entered_ts", {})["VERIFY"] = ts(300)
+        F.save_state(self.ROOM, st)
+        for i in range(3):
+            CLOCK["i"] = 410 + i
+            self.postq(oid=f"qe:2026-11-07T10:00:0{i}", ts=f"2026-11-07T10:00:0{i}Z")
+        self.eng.tick(self.ROOM)
+        n_orders = len(F.load_state(self.ROOM).get("orders", {}))
+        out = self.eng.tick(self.ROOM)
+        self.assertEqual(F.load_state(self.ROOM).get("orders", {}).__len__(), n_orders)
+        self.assertNotEqual(out.verb if out else None, "demand-filed")

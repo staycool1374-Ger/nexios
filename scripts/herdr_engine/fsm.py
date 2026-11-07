@@ -231,14 +231,27 @@ class Engine:
             act = self._apply_transition(room, st, post.get("oid", ""), to)
             return self._record(act)
 
-        # 4) phase-entry demand: file the working lane's first order so a
+        # 4) stall watch: identical NEEDs x3 with no movement ends the
+        # loop with a typed operator NEED instead of another lap
+        stall = self._stall_tick(room, st)
+        if stall is not None:
+            return self._record(stall)
+
+        # 5) phase-entry demand: file the working lane's first order so a
         # phase never waits on a human to originate work
         filed = self._demand_tick(room, st, rt)
         if filed is not None:
             return self._record(filed)
 
-        # 5) follow-up demands: re-verify on fresh IMPL evidence, gap-fix on
+        # 6) follow-up demands: re-verify on fresh IMPL evidence, gap-fix on
         # qe NEEDs. Ledger + timestamps only, never prose (T8 live need).
+        # Skipped entirely once the room is flagged stalled.
+        if st.get("stalled"):
+            return self._record(Action(room, "ok", {
+                "phase": st.get("phase"),
+                "open_orders": sorted(
+                    oid for oid, o in (st.get("orders") or {}).items() if o.get("state") == "open"),
+            }))
         red = self._redemand_tick(room, st, rt)
         if red is not None:
             return self._record(red)
@@ -272,6 +285,8 @@ class Engine:
     # -- phase-entry demand ------------------------------------------------------
 
     def _demand_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> Action | None:
+        if st.get("stalled") or st.get("operator_needed"):
+            return None  # stalled rooms file nothing; the operator owns next move
         ph = st.get("phase")
         if ph not in self.DEMANDS:
             return None
@@ -373,6 +388,27 @@ class Engine:
                     f"address NEED {latest.get('oid')}; see stream; post READY with diff covered",
                     key)
         return None
+
+    def _stall_tick(self, room, st: dict[str, Any]) -> Action | None:
+        """Three identical NEEDs in a row, same lane, no movement since."""
+        if st.get("stalled") or st.get("operator_needed"):
+            return None  # already surfaced; stay quiet, do not re-file
+        tail = posts(room)[-3:]
+        if len(tail) < 3:
+            return None
+        if not all(p.get("kind") == "NEED" for p in tail):
+            return None
+        if len({p.get("from") for p in tail}) != 1:
+            return None
+        if len({p.get("summary") for p in tail}) != 1:
+            return None
+        ev = {"room": room, "phase": st.get("phase"), "repeated": tail[-1].get("summary", "")[:160],
+              "oids": [p.get("oid") for p in tail], "ts": now_str(self.clock)}
+        if not self.dry_run:
+            st["stalled"] = ev
+            save_state(room, st)
+        return Action(room, "need", {"operator": "operator", "why": "stall-loop",
+                                     "evidence": ev, "dry": self.dry_run})
 
     # -- SLA -----------------------------------------------------------------
 
