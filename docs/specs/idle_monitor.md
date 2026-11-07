@@ -1,7 +1,8 @@
 # Idle-Task Safety Monitors (v0.6.x design paper)
 
 **Doc ID:** NEX-SPEC-2026-10-03-001
-**Status:** DRAFT (pending SIL3 design audit; no implementation scheduled)
+**Status:** IMPLEMENTED (issue #43 closed completed 2026-10-04; in tree:
+`src/kernel/task/idle_monitor.{hpp,cpp}`, `src/kernel/test/test_idle_monitor.cpp`)
 **Milestone target:** v0.6.x (design); implementation phases span v0.6.x per §5
 **Issues:** #43 (primary: idle-task safety monitors)
 **Related:** `docs/specs/debugd.md` (design-paper precedent),

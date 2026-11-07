@@ -1,8 +1,10 @@
 # In-Register IPC Fastpath — Register-Passing SEND/RECEIVE/SEND_SYNC (issue #11)
 
 **Doc ID:** NEX-SPEC-2026-09-04-011
-**Status:** DESIGN PAPER — decisions locked (user sign-off + developer
-hard-RT review); no implementation before audit
+**Status:** IMPLEMENTED (issue #11 closed completed 2026-09-04; in-register
+fastpath in tree: `src/kernel/syscall/syscall_handlers_ipc.cpp:205`
+"Issue #11 — in-register IPC fastpath (§3)", FAST class without canary
+walk, blocking semantics delegated to the audited handlers)
 **Milestone target:** v0.4.3 (High-Performance Zero-Copy IPC & Fault Isolation)
 **Related:** `docs/specs/ipc.md` (mailbox model, blocking contract, H2 deferred
 switch), `docs/specs/syscall-fastpath.md` (FAST/FULL tiered dispatch, canary

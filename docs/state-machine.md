@@ -424,6 +424,7 @@ information in text, plus the lane-order lifecycles the picture summarizes.
 | T3 | Dev files DONE with a tip | Verify demand; file TESTING order to QE (approach handshake) | `IMPL → VERIFY` |
 | T4 | QE files VERIFIED **with evidence** (tip + diff-present + branch) | Record era proof; request auditor verdict on the tip | stays `VERIFY`, auditor engaged |
 | T5 | Auditor APPROVED, approval ≤ DONE, no newer READY, QE VERIFIED present | `closeout_stage` → merge-close: merge the lane branch | `VERIFY → CLOSE-OUT` → stored `CLOSING` |
+| T5b | Testing-only scope + QE VERIFIED tip with audit-decision coverage (`testing_terminal_due`) | File DONE-confirm order to QE (no merge, no branch); record closeout so it does not refile | `VERIFY → CLOSE-OUT` → stored `CLOSING` (terminal path for testing-only rooms) |
 | T6 | GitHub closed flag observed (poll, ≤ every 5 ticks in merge-close) | Derive `CLOSED`; retire room when all-done | `CLOSING → CLOSED` (terminal; never regresses, never originated) |
 | T7 | CHANGES requested / evidence missing | `FEEDBACK` demand back to the owning lane | `VERIFY/IMPL → FEEDBACK → RECON/IMPL` on re-brief |
 | T8 | Newer plan approval postdates DONE, or newer gated READY postdates DONE | Era re-opened; regress stored state | `CLOSING → IN_PROGRESS`, phase back to `IMPL`/`VERIFY` |
@@ -500,6 +501,8 @@ restart resumes from declared NEXT with the ring ledger intact.
    decision-request scan → persist state (locked) → verdict table row.
 4. Shared rung/busy sets propagate intra-sweep; write the state graph;
    progress accounting (quiet counter, starvation note, all-done check).
+   The interval loop re-execs the tick entry per sweep, so engine code
+   changes take effect on the next sweep without a restart.
 
 ## 10. Operations cookbook
 
@@ -518,7 +521,7 @@ restart resumes from declared NEXT with the ring ledger intact.
 
 ## 11. Verification
 
-- `state_machine.py selftest`: 697/697 (gates, phases, transitions, scopes, briefs, negation, dedup).
+- `state_machine.py selftest`: 837/837 (gates, phases, transitions, scopes, briefs, negation, dedup).
 - `agent_up.sh self-test`: 201/201 (fences, guards, helpers, scope mapping, hermetic setup seeding).
 - Fabricated-room dry ticks: testing-only rooms file TESTING with no dev
   IMPL; full-scope controls still file IMPL; VERIFIED + APPROVED engages

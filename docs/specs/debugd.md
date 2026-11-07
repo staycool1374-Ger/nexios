@@ -2,7 +2,8 @@
 
 **Doc ID:** NEX-SPEC-2026-09-25-001
 **Status:** DRAFT (pending SIL3 design audit; no implementation scheduled)
-**Milestone target:** v0.5.1 Bring-up Multi-Arch Boot (design); implementation phases span v0.6.x/v1.0.x per §12
+**Milestone target:** v0.8.0 Full equipped functional targets (issue #169,
+6/9 sub-issues done; design phases per §12, implementation tracked on the issue)
 **Issues:** #169 (primary: debugd), #186 (context: bare-metal requirements + runelf introspection)
 **Related:** `docs/debugging.md` (QEMU-GDB flow — debugd complements, never replaces),
 `docs/specs/exception-table-audit.md`, `docs/specs/syscall-abi-picolibc.md`

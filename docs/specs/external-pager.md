@@ -1,7 +1,9 @@
 # External Pager Protocol — User-Space #PF Delegation (issue #107, #105 Part A)
 
 **Doc ID:** NEX-SPEC-2026-09-04-107
-**Status:** DESIGN PAPER — no implementation before review
+**Status:** IMPLEMENTED (issue #107 closed completed 2026-09-04; in tree:
+`src/kernel/ipc/pager_registry.{hpp,cpp}`,
+`src/kernel/syscall/syscall_handlers_pager.cpp`, `test_cap_pager.cpp`)
 **Milestone target:** v0.4.3 (milestone 2, high-risk item)
 **Related:** `docs/specs/death-notify.md` (registry pattern, supervisor pairing),
 `docs/specs/shm.md` (#106 FrameCap/FrameUserMap pairing),
