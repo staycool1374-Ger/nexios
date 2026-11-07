@@ -143,6 +143,7 @@ class Engine:
     # phase -> (working lane, demand text template). Filing happens once per
     # phase entry; it is the engine-side answer to "who files the first order".
     DEMANDS = {
+        "RECON": ("dev", "RECON: read the room GitHub issue; scope the work; post a RECON NOTE with findings (evidence {branch, diff: pending})"),
         "IMPL": ("dev", "IMPL: execute the approved plan; post READY with diff covered"),
         "VERIFY": ("qe", "VERIFY: check the IMPL evidence read-only; post READY DONE/verified or NEED with gaps"),
     }
@@ -176,7 +177,12 @@ class Engine:
         return GATE_REQUIREMENTS.get((ph, to_ph), "no onward gate")
 
     def find_gate(self, room, st: dict[str, Any]) -> tuple[str, str, dict[str, Any]] | None:
-        """(from_phase, to_phase, deciding post) for the room's open gate."""
+        """(from_phase, to_phase, deciding post) for the room's open gate.
+
+        Output-in-boundary (T8): when the gate lane has open orders, the
+        deciding post must ACK one of them — stray READYs never advance.
+        With no open lane orders, the predicate alone decides (as before).
+        """
         ph = st.get("phase")
         to_ph = self.next_phase(ph)
         if ph not in PHASES[:-2] or to_ph is None:
@@ -184,8 +190,14 @@ class Engine:
         name = GATE_NAMES[(ph, to_ph)]
         entered = (st.get("entered_ts") or {}).get(ph, "")
         pred = GATE_PREDICATES[name]
+        gate_lane = {"audit_approval": "audit", "dev_impl_ready": "dev",
+                     "qe_verified": "qe"}.get(name)
+        open_oids = {oid for oid, o in (st.get("orders") or {}).items()
+                     if o.get("state") == "open" and o.get("lane") == gate_lane}
         for p in reversed(posts_since(room, entered)):
             if pred(p):
+                if open_oids and not (set(p.get("acks") or []) & open_oids):
+                    continue  # unlinked READY: shape right, demand wrong
                 return ph, to_ph, p
         return None
 
@@ -205,25 +217,25 @@ class Engine:
         # 1) SLA ladder (never ends silently; budget carries over)
         self._sla_tick(room, st, rt)
 
-        # 1b) phase-entry demand: file the working lane's first order so a
-        # phase never waits on a human to originate work
-        filed = self._demand_tick(room, st, rt)
-        if filed is not None:
-            return self._record(filed)
-
         # 2) ring at most one open order this cycle
         ring = self._ring_tick(room, st, rt)
         if ring is not None:
             return self._record(ring)
 
-        # 3) gates
+        # 3) gates (a ready transition always wins over filing new work)
         gate = self.find_gate(room, st)
         if gate:
             frm, to, post = gate
             act = self._apply_transition(room, st, post.get("oid", ""), to)
             return self._record(act)
 
-        # 4) follow-up demands: re-verify on fresh IMPL evidence, gap-fix on
+        # 4) phase-entry demand: file the working lane's first order so a
+        # phase never waits on a human to originate work
+        filed = self._demand_tick(room, st, rt)
+        if filed is not None:
+            return self._record(filed)
+
+        # 5) follow-up demands: re-verify on fresh IMPL evidence, gap-fix on
         # qe NEEDs. Ledger + timestamps only, never prose (T8 live need).
         red = self._redemand_tick(room, st, rt)
         if red is not None:
@@ -397,9 +409,12 @@ class Engine:
             o["ring_count"] = o.get("ring_count", 0) + 1
             o["ringed_at"] = now
             sent = False
+            name = None
             if not self.dry_run:
-                save_state(room, st)
                 name = self.lane_terminal(rt, room, o.get("lane"))
+                if name:
+                    o["rung_to"] = name
+                save_state(room, st)
                 if name and rt.herdr is not None:
                     rt.herdr.send(name, f"ring {oid} {o.get('demand', '')}".strip())
                     sent = True

@@ -397,8 +397,8 @@ class CliTest(Basis, unittest.TestCase):
         before = json.dumps(json.load(open(f"{NHR_BASE}{self.ROOM}/state.json")), sort_keys=True)
         r = self.run_cli("tick", "--rooms", str(self.ROOM), "--once", "--dry-run")
         self.assertEqual(r.returncode, 0, r.stderr)
-        # T8 contract: quiet loop — ok actions are the absence of work
-        self.assertEqual(r.stdout.strip(), "")
+        # dry run reports the entry demand it WOULD file, writes nothing
+        self.assertIn("demand-filed", r.stdout)
         after = json.dumps(json.load(open(f"{NHR_BASE}{self.ROOM}/state.json")), sort_keys=True)
         self.assertEqual(before, after, "dry-run must not write")
 
@@ -414,7 +414,6 @@ class CliTest(Basis, unittest.TestCase):
             "state": "idle", "next": "idle", "ts": ts(20), "room": self.ROOM})
         r = self.run_cli("tick", "--rooms", str(self.ROOM), "--once", "--dry-run")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.strip(), "")
         self.assertEqual(F.load_state(self.ROOM)["phase"], "RECON")
 
     def test_65_termination_paths(self):
@@ -487,15 +486,26 @@ class DemandTest(Basis, unittest.TestCase):
         self.assertEqual(act.verb, "demand-filed")
         self.assertEqual(act.detail["lane"], "qe")
 
-    def test_73_no_demand_for_closeout_or_recon(self):
-        for ph in ("RECON", "CLOSE-OUT"):
-            st = F.load_state(self.ROOM)
-            st["phase"] = ph
-            st.setdefault("entered_ts", {})[ph] = ts(300)
-            F.save_state(self.ROOM, st)
-            before = dict(F.load_state(self.ROOM).get("orders", {}))
-            self.eng.tick(self.ROOM)
-            self.assertEqual(F.load_state(self.ROOM).get("orders", {}), before)
+    def test_73_no_demand_for_closeout(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "CLOSE-OUT"
+        st.setdefault("entered_ts", {})["CLOSE-OUT"] = ts(300)
+        F.save_state(self.ROOM, st)
+        before = dict(F.load_state(self.ROOM).get("orders", {}))
+        self.eng.tick(self.ROOM)
+        self.assertEqual(F.load_state(self.ROOM).get("orders", {}), before)
+
+    def test_73b_recon_entry_files_scoping_demand(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "RECON"
+        st.setdefault("entered_ts", {})["RECON"] = ts(300)
+        F.save_state(self.ROOM, st)
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertEqual(act.detail["lane"], "dev")
+        devs = [o for o in F.load_state(self.ROOM)["orders"].values() if o.get("lane") == "dev"]
+        self.assertEqual(len(devs), 1)
+        self.assertIn("RECON", devs[0]["demand"])
 
     def test_74_dry_run_reports_without_writing(self):
         from herdr_engine.transport import Transport as T
@@ -572,3 +582,77 @@ class RedemandTest(Basis, unittest.TestCase):
         act = self.eng.tick(self.ROOM)
         self.assertEqual(act.verb, "demand-filed")
         self.assertEqual(act.detail["lane"], "qe")
+
+
+class LinkageTest(Basis, unittest.TestCase):
+    """Gate linkage: deciding posts must ACK an open gate-lane demand (T8)."""
+
+    def setUp(self):
+        CLOCK["i"] = 300
+        self.setup_room(self.ROOM)
+        self.sim = SimHerdr()
+        for lane in ("dev", "qe", "audit"):
+            self.sim.spawn(f"t-{self.ROOM}-{lane}", self.ROOM, lane)
+        self.eng = Engine(runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
+                          clock=fake_clock, transport=Transport())
+
+    def tearDown(self):
+        self.drop_room(self.ROOM)
+
+    def approve(self, **over):
+        b = {"v": 1, "oid": "audit:2026-11-07T10:00:00", "from": "audit",
+             "kind": "DECISION", "state": "idle", "next": "idle",
+             "ts": ts(CLOCK["i"]), "room": self.ROOM,
+             "summary": "APPROVED plan", "evidence": {"tip": "a" * 40}}
+        b.update(over)
+        return self.t.post(self.ROOM, "auditor", b) if hasattr(self, "t") else Transport().post(self.ROOM, "auditor", b)
+
+    def test_90_unlinked_ready_does_not_advance(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st.setdefault("entered_ts", {})["IMPL"] = ts(290)
+        F.save_state(self.ROOM, st)
+        self.approve()
+        self.eng.tick(self.ROOM)   # files the phase demand, no open dev orders yet
+        self.post_dev_ready()
+        for _ in range(3):
+            self.eng.tick(self.ROOM)
+        self.assertEqual(F.load_state(self.ROOM)["phase"], "IMPL",
+                         "stray READY without demand ACK must not advance")
+
+    def post_dev_ready(self, ack=None):
+        b = {"v": 1, "oid": "dev:2026-11-07T10:10:00", "from": "dev",
+             "kind": "READY", "state": "idle", "next": "idle",
+             "ts": ts(CLOCK["i"]), "room": self.ROOM, "summary": "IMPL done",
+             "evidence": {"branch": "refs/heads/x", "diff": "covered"}}
+        if ack:
+            b["acks"] = [ack]
+        return Transport().post(self.ROOM, "dev", b)
+
+    def test_91_linked_ready_advances(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st.setdefault("entered_ts", {})["IMPL"] = ts(290)
+        F.save_state(self.ROOM, st)
+        self.approve()
+        self.eng.tick(self.ROOM)  # files IMPL dev demand
+        st = F.load_state(self.ROOM)
+        oids = [o for o, e in st["orders"].items() if e.get("lane") == "dev" and e["state"] == "open"]
+        self.assertTrue(oids)
+        self.post_dev_ready(ack=oids[0])
+        for _ in range(4):
+            self.eng.tick(self.ROOM)
+        self.assertEqual(F.load_state(self.ROOM)["phase"], "VERIFY")
+
+    def test_92_ring_records_worker(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st.setdefault("entered_ts", {})["IMPL"] = ts(290)
+        F.save_state(self.ROOM, st)
+        self.approve()
+        self.eng.tick(self.ROOM)  # demand
+        self.eng.tick(self.ROOM)  # ring
+        st = F.load_state(self.ROOM)
+        rung = [o for o in st["orders"].values() if o.get("ring_count", 0) > 0]
+        self.assertTrue(rung)
+        self.assertEqual(rung[0].get("rung_to"), f"t-{self.ROOM}-dev")
