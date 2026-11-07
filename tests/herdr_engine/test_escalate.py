@@ -208,3 +208,61 @@ class SlotIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
+
+
+class _Sim:
+    def __init__(self):
+        self.terms = {}
+        self.sends = []
+        self.kills = []
+        self.removes = []
+    def spawn(self, name, room, lane):
+        self.terms[name] = {"labels": {"room": str(room), "lane": lane}}
+    def ls(self):
+        return [type("T", (), {"name": n, "raw": {}})() for n in self.terms]
+    def get(self, name):
+        return type("T", (), {"name": name,
+                              "raw": {"labels": self.terms[name]["labels"]}})()
+    def send(self, name, text):
+        self.sends.append((name, text))
+    def kill(self, name):
+        self.kills.append(name)
+        self.terms.pop(name, None)
+    def rm(self, name):
+        self.removes.append(name)
+
+
+class DiagnosticRungs(unittest.TestCase):
+    def setUp(self):
+        self.d = f"/tmp/nherdr-9921"
+        import shutil, os, json
+        shutil.rmtree(self.d, ignore_errors=True)
+        os.makedirs(self.d)
+        json.dump({"v": 1, "issue": 9921, "phase": "IMPL", "state": "IDLE",
+                   "pending": "", "orders": {}, "entered_ts": {"IMPL": "2026-11-07T09:00:00Z"}},
+                  open(self.d + "/state.json", "w"))
+        self.h = _Sim()
+        self.h.spawn("d1", 9921, "dev")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_40_nudge_carries_gate_requirement(self):
+        from herdr_engine.escalate import Escalator
+        from herdr_engine.fsm import RoomRuntime
+        esc = Escalator(herdr=self.h).fire(9921, "dev:2026-11-07T10:00:00", "ack_by", 1,
+                                           RoomRuntime(herdr=self.h))
+        self.assertEqual(esc.action, "nudge")
+        sent = self.h.sends[-1][1]
+        self.assertIn("to advance IMPL", sent)
+        self.assertIn("diff: covered", sent)
+
+    def test_41_recreate_still_silent_never(self):
+        from herdr_engine.escalate import Escalator
+        from herdr_engine.fsm import RoomRuntime
+        self.h.terms.clear()
+        esc = Escalator(herdr=self.h).fire(9921, "dev:2026-11-07T10:00:00", "ack_by", 3,
+                                           RoomRuntime(herdr=self.h))
+        self.assertEqual(esc.action, "operator_need")
+        self.assertIn("diagnosis", esc.payload)

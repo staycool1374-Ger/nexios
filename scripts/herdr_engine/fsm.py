@@ -26,6 +26,15 @@ GATE_NAMES = {
     ("VERIFY", "CLOSE-OUT"): "qe_verified",
     ("CLOSE-OUT", "CLOSED"): "github_derived",
 }
+# What each gate needs, in lane-readable words. Escalation rungs quote this
+# so a stall tells the lane exactly what post would open the gate (T8 live:
+# volume-only nudges never unstick a shape-mismatched lane).
+GATE_REQUIREMENTS = {
+    ("RECON", "IMPL"): "audit DECISION with summary APPROVED, evidence.tip matching your demand, ACKing a filed audit demand",
+    ("IMPL", "VERIFY"): "dev READY stating IMPL, evidence {branch: refs/heads/<branch>, diff: covered}, ACKing an open dev demand",
+    ("VERIFY", "CLOSE-OUT"): "qe READY stating DONE/verified, evidence {diff: covered}, ACKing an open qe demand",
+    ("CLOSE-OUT", "CLOSED"): "GitHub-derived closure only (the engine never originates CLOSED)",
+}
 HALT_BUDGET_DEFAULT = 3
 
 
@@ -158,6 +167,13 @@ class Engine:
     def next_phase(ph: str) -> str | None:
         i = PHASES.index(ph) if ph in PHASES else None
         return PHASES[i + 1] if i is not None and i + 1 < len(PHASES) else None
+
+    @staticmethod
+    def gate_requirement(ph: str) -> str:
+        to_ph = Engine.next_phase(ph)
+        if to_ph is None:
+            return "no onward gate"
+        return GATE_REQUIREMENTS.get((ph, to_ph), "no onward gate")
 
     def find_gate(self, room, st: dict[str, Any]) -> tuple[str, str, dict[str, Any]] | None:
         """(from_phase, to_phase, deciding post) for the room's open gate."""

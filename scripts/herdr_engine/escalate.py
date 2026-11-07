@@ -52,21 +52,21 @@ class Rungs:
     dry: bool = False
     clock: Callable[[], str] | None = None
 
-    def nudge(self, room, oid, rt: RoomRuntime, lane: str) -> tuple[bool, str | None]:
+    def nudge(self, room, oid, rt: RoomRuntime, lane: str, note: str = "") -> tuple[bool, str | None]:
         name = lane_terminal(rt, room, lane)
         if name and self.herdr is not None:
-            self.herdr.send(name, f"nudge {oid}: please ACK the engine ring")
+            self.herdr.send(name, f"nudge {oid}: please ACK the engine ring" + (f" — {note}" if note else ""))
             return True, name
         return False, None
 
-    def re_ring(self, room, oid, rt: RoomRuntime, lane: str) -> tuple[bool, str | None]:
+    def re_ring(self, room, oid, rt: RoomRuntime, lane: str, note: str = "") -> tuple[bool, str | None]:
         name = lane_terminal(rt, room, lane)
         if name and self.herdr is not None:
-            self.herdr.send(name, f"re-ring {oid} — SLA {oid} breached")
+            self.herdr.send(name, f"re-ring {oid} — SLA breached" + (f" — {note}" if note else ""))
             return True, name
         return False, None
 
-    def re_create(self, room, oid, rt: RoomRuntime, lane: str) -> tuple[bool, str | None]:
+    def re_create(self, room, oid, rt: RoomRuntime, lane: str, note: str = "") -> tuple[bool, str | None]:
         name = lane_terminal(rt, room, lane)
         if name and self.herdr is not None:
             self.herdr.kill(name)
@@ -118,24 +118,41 @@ class Escalator:
         idx = min(max(count - 1, 0), len(LADDER) - 1)
         return LADDER[idx], idx
 
+    def _diagnose(self, room: int, lane: str | None) -> str:
+        """What post would open the room's gate, plus the lane's latest post."""
+        try:
+            from herdr_engine.fsm import Engine as _E, load_state, posts as _posts
+            st = load_state(room)
+            req = _E.gate_requirement(str(st.get("phase")))
+            last = ""
+            lane_posts = [p for p in _posts(room) if p.get("from") == lane]
+            if lane_posts:
+                lp = lane_posts[-1]
+                last = f" | your last post {lp.get('oid')} ({lp.get('ts')}): {(lp.get('summary') or '')[:100]}"
+            return f"to advance {st.get('phase')}: {req}{last}"
+        except Exception:
+            return ""
+
     def fire(self, room: int, oid: str, bound: str, count: int,
              rt: RoomRuntime) -> Escalation:
         idx = self.rung_for(count)[1]
         rung = Rungs(herdr=self.herdr, dry=self.dry, clock=self.clock)
         lane = oid_lane(oid) or "dev"
+        note = self._diagnose(room, lane)
         while True:
             act = LADDER[idx]
             if act == "operator_need":
                 need = rung.operator_need(room, oid, bound, count)
+                need["diagnosis"] = note
                 esc = Escalation(room=room, oid=oid, bound=bound, count=count,
                                  ts=now_str(self.clock), action=act, step=idx,
                                  terminal=True, payload=need)
                 break
-            ok, name = getattr(rung, act.replace("-", "_"))(room, oid, rt, lane)
+            ok, name = getattr(rung, act.replace("-", "_"))(room, oid, rt, lane, note)
             if ok:
                 esc = Escalation(room=room, oid=oid, bound=bound, count=count,
                                  ts=now_str(self.clock), action=act, step=idx,
-                                 payload={"sent": True, "lane": lane})
+                                 payload={"sent": True, "lane": lane, "note": note})
                 break
             idx += 1   # not silent: the broken rung escalates itself
         self.fired.append(esc)
