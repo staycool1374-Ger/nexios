@@ -715,3 +715,34 @@ class StallTest(Basis, unittest.TestCase):
         out = self.eng.tick(self.ROOM)
         self.assertEqual(F.load_state(self.ROOM).get("orders", {}).__len__(), n_orders)
         self.assertNotEqual(out.verb if out else None, "demand-filed")
+
+
+class StallCanonTest(Basis, unittest.TestCase):
+    def setUp(self):
+        CLOCK["i"] = 500
+        self.setup_room(self.ROOM)
+        self.sim = SimHerdr()
+        for lane in ("dev", "qe", "audit"):
+            self.sim.spawn(f"t-{self.ROOM}-{lane}", self.ROOM, lane)
+        self.eng = Engine(runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
+                          clock=fake_clock, transport=Transport())
+
+    def tearDown(self):
+        self.drop_room(self.ROOM)
+
+    def test_98_ids_differ_but_verdict_repeats(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "VERIFY"
+        st.setdefault("entered_ts", {})["VERIFY"] = ts(400)
+        F.save_state(self.ROOM, st)
+        sums = ["NEED re-verify: repeat READY adds no new evidence tip aaaaaaaa at 2026-11-07T10:00:00Z",
+                "NEED re-verify: repeat READY adds no new evidence tip bbbbbbbb at 2026-11-07T10:01:00Z",
+                "NEED re-verify: repeat READY adds no new evidence tip cccccccc at 2026-11-07T10:02:00Z"]
+        for i, sm in enumerate(sums):
+            CLOCK["i"] = 510 + i
+            Transport().post(self.ROOM, "qe", {
+                "v": 1, "oid": f"qe:2026-11-07T10:10:0{i}", "from": "qe", "kind": "NEED",
+                "state": "idle", "next": "idle", "ts": f"2026-11-07T10:10:0{i}Z",
+                "room": self.ROOM, "summary": sm})
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "need")

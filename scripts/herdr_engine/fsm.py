@@ -389,8 +389,21 @@ class Engine:
                     key)
         return None
 
+    @staticmethod
+    def _canon(summary: str) -> str:
+        """Structural normalization for stall comparison (not prose parsing):
+        hex shas, timestamps, and oid-like tokens become placeholders, so a
+        verdict that only re-stamps ids still matches itself."""
+        import re
+        s = re.sub(r"[0-9a-f]{7,64}", "#H", summary)
+        s = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z?", "#T", s)
+        s = re.sub(r"\b(dev|qe|audit|next|peer|first):[^\s,;]+", "#O", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
     def _stall_tick(self, room, st: dict[str, Any]) -> Action | None:
-        """Three identical NEEDs in a row, same lane, no movement since."""
+        """Three NEEDs in a row, same lane, canonically identical summary,
+        no phase movement since — the loop stopped converging."""
         if st.get("stalled") or st.get("operator_needed"):
             return None  # already surfaced; stay quiet, do not re-file
         tail = posts(room)[-3:]
@@ -400,7 +413,7 @@ class Engine:
             return None
         if len({p.get("from") for p in tail}) != 1:
             return None
-        if len({p.get("summary") for p in tail}) != 1:
+        if len({self._canon(p.get("summary") or "") for p in tail}) != 1:
             return None
         ev = {"room": room, "phase": st.get("phase"), "repeated": tail[-1].get("summary", "")[:160],
               "oids": [p.get("oid") for p in tail], "ts": now_str(self.clock)}
