@@ -22,6 +22,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 TS19 = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+# Post-identity grammar: audit issues its own lane-scoped identity (verdict
+# posts carry kind+tip; audit never owns orders), ACK targets stay dev|qe.
+OID_POST_RE = re.compile(
+    r"^(?:(dev|qe|audit):" + TS19 +
+    r"|next:(dev|qe):[0-9a-f]{8}|peer:(dev|qe):" + TS19 + r"|first:(dev|qe))$"
+)
 # Order-id grammar — byte-identical with the legacy bridge / state_machine.py.
 OID_RE = re.compile(
     r"^(?:(dev|qe):" + TS19 + r"|next:(dev|qe):[0-9a-f]{8}|peer:(dev|qe):" + TS19 +
@@ -41,8 +47,8 @@ _MISSING = object()
 
 
 def oid_lane(oid: str) -> str | None:
-    """Lane addressed by an order id (mirrors legacy _ref_lane)."""
-    m = OID_RE.fullmatch(oid or "")
+    """Lane named by a post oid (audit included); ACK order ids stay dev|qe."""
+    m = OID_POST_RE.fullmatch(oid or "")
     if not m:
         return None
     return m.group(m.lastindex)
@@ -128,7 +134,7 @@ def validate_post(body: Any) -> dict[str, Any] | Rejection:
 
     if post["v"] != 1:
         bad("v", "must be 1", "wire schema v1")
-    if not isinstance(post["oid"], str) or not OID_RE.fullmatch(post["oid"]):
+    if not isinstance(post["oid"], str) or not OID_POST_RE.fullmatch(post["oid"]):
         lane = "<role>"
         bad("oid", "not a valid order id",
             f"{lane}:<YYYY-MM-DDTHH:MM:SS> | next:{lane}:<hash8> | peer:{lane}:<ts19> | first:{lane}")
