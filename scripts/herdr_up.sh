@@ -25,6 +25,7 @@ TAG="t0s-$RANDOM"  # unique terminal name prefix per run
 pass=0
 fail=0
 declare -a FAILED=()
+SANDBOX=""  # set by selftest; removed by tidy on exit
 
 note() { printf '%s: %s\n' "$1" "$2"; }
 ok()   { pass=$((pass + 1)); note PASS "$1"; }
@@ -58,7 +59,7 @@ verify_identity() {
   return 0
 }
 
-tidy() { # clean up our throwaway terminals
+tidy() { # clean up our throwaway terminals and the sandbox dir
   local t
   for t in $("$HC_BIN" ls --json 2>/dev/null \
       | "$PYTHON" -c 'import json,sys
@@ -68,6 +69,7 @@ for t in json.load(sys.stdin)["terminals"]:
     "$HC_BIN" kill "$t" >/dev/null 2>&1
     "$HC_BIN" rm "$t" >/dev/null 2>&1
   done
+  [ -n "$SANDBOX" ] && rm -rf "$SANDBOX"
 }
 
 trap 'tidy' EXIT
@@ -76,7 +78,8 @@ selftest() {
   local full=0
   [ "${1:-}" = "--full" ] && full=1
 
-  local sandbox=/tmp/nherdr-selftest-$$
+  SANDBOX=/tmp/nherdr-selftest-$$
+  local sandbox="$SANDBOX"
   local cwd="$sandbox/cwd"
   mkdir -p "$cwd"
   local dummy_cfg="$sandbox/opencode.dummy.json"

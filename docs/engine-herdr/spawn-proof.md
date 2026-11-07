@@ -148,11 +148,10 @@ refusal/mismatch semantics (C7/C8/C9), `hc events` and `wait` shaping
 (C10–C12) all hold under `hc run --bg`. The only "shape" consequence is
 that blocked-detection for opencode rides on screen-text shaping (§4.1) —
 which still satisfies the no-prose-*parsing* goal: matching a stable modal
-header string is not a prose regex over worker speech; §5.1's "only three
-sources of truth" principle is currently "herdr + structured posts + git +
-(opencode screen header for modal". This nuance is recorded for the spec at
-T1 (docs/engine-herdr/spec.md §5.1 needs a fourth, screen-shaped source for
-opencode or an hc-agent bridge).
+header string is not a prose regex over worker speech. §5.1's "only three
+sources of truth" principle therefore gains a fourth, screen-shaped source
+for opencode (or an hc-agent bridge); this nuance is recorded for the spec
+elaboration at T1 (docs/engine-herdr/spec.md).
 
 ## 6. Reproduction
 
