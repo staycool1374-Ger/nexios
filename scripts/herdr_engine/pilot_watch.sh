@@ -29,6 +29,8 @@ snapshot_room() {
     open=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print(sum(1 for o in d.get('orders',{}).values() if o.get('state')=='open'))")
     blocked=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print(sum(1 for o in d.get('orders',{}).values() if o.get('state')=='blocked'))")
     needs=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print(sum(1 for o in d.get('orders',{}).values() if o.get('operator') or o.get('operator_needed')))")
+    stalled=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print('stalled' if d.get('stalled') else 'ok')")
+    mkdir -p /tmp/nherdr-"$ROOM"/reports
   else
     phase=? state=? orders=? open=? needs=? stalled=? blocked=?
   fi
