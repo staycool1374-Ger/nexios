@@ -23,10 +23,23 @@ SRC_ASM_GENERIC := $(filter-out src/kernel/syscall/syscall_entry.asm, $(SRC_ASM_
 ifneq ($(ARCH),x86_64)
 SRC_ASM_GENERIC := $(filter-out src/kernel/arch/%, $(SRC_ASM_GENERIC))
 endif
+# Colocated test homes (#420): one %.cpp pattern per <subsys>/tests/ dir.
+# Shared by the FPU-adjacent filters below and the top-level Makefile
+# (TEST_SRC_FILES registry list, CLANG_TIDY_FILTER). Keep in sync with
+# the test_src_dirs list in src/meson.build.
+TEST_COLOCATED_PATTERNS := src/kernel/arch/tests/%.cpp src/kernel/bench/tests/%.cpp src/kernel/cap/tests/%.cpp src/kernel/console/tests/%.cpp src/kernel/debug/tests/%.cpp src/kernel/driver/tests/%.cpp src/kernel/elf/tests/%.cpp src/kernel/ipc/tests/%.cpp src/kernel/log/tests/%.cpp src/kernel/memory/tests/%.cpp src/kernel/net/tests/%.cpp src/kernel/sync/tests/%.cpp src/kernel/syscall/tests/%.cpp src/kernel/task/tests/%.cpp src/kernel/time/tests/%.cpp src/kernel/vfs/tests/%.cpp src/lib/tests/%.cpp
 # Exclude FPU/SSE test files that fail to compile with GCC 16 on all arches
 # (they are x86_64 SSE-specific and not portable; register symbols are covered
-# by weak stubs in test_weak_stubs.cpp).
-SRC_CXX_GENERIC := $(filter-out src/kernel/test/test_fpu.cpp src/kernel/test/test_fpu_clone.cpp src/kernel/test/test_fpu_multi.cpp src/kernel/test/test_fpu_sse.cpp src/kernel/test/test_fpu_xmm_all.cpp, $(SRC_CXX_GENERIC))
+# by weak stubs in test_weak_stubs.cpp). Matched by basename (%/) so the
+# exclusion survives #420 colocation of test TUs under <subsys>/tests/.
+SRC_CXX_GENERIC := $(filter-out %/test_fpu.cpp %/test_fpu_clone.cpp %/test_fpu_multi.cpp %/test_fpu_sse.cpp %/test_fpu_xmm_all.cpp, $(SRC_CXX_GENERIC))
+# #420: arch-owned tests live under src/kernel/arch/tests/, inside the
+# pruned kernel/arch tree above — add them back explicitly so Make
+# compiles the same set as the Meson test discovery (no double-compile:
+# SRC_CXX_ARCH only takes arch/ top level + arch/$(ARCH)/, never tests/).
+ifneq ($(wildcard src/kernel/arch/tests),)
+SRC_CXX_GENERIC += $(shell find src/kernel/arch/tests -name '*.cpp')
+endif
 
 # External test suite support
 # When EXTERNAL_TEST_DIR is set:
@@ -43,41 +56,43 @@ SELFTEST_INFRA := src/kernel/test/test_registry.cpp \
                   src/kernel/test/test_watchdog.cpp \
                   src/kernel/test/test_weak_stubs.cpp
 # Safe-class test files — compiled into every kernel
-SELFTEST_TESTS := src/kernel/test/test_lib.cpp \
-                  src/kernel/test/test_checked_ptr.cpp \
-                  src/kernel/test/test_block_device.cpp \
-                  src/kernel/test/test_fat32.cpp \
-                  src/kernel/test/test_vfs_fat32.cpp \
-                  src/kernel/test/test_waitpid.cpp \
-                  src/kernel/test/test_shell_interaction.cpp \
-                  src/kernel/test/test_hal_bits.cpp \
-                  src/kernel/test/test_o1_scheduler.cpp \
-                  src/kernel/test/test_zombie_cleanup.cpp \
-                  src/kernel/test/test_wcet_cleanup.cpp \
-                  src/kernel/test/test_idle_cleanup.cpp \
-                  src/kernel/test/test_apic_timer.cpp \
-                  src/kernel/test/test_lapic.cpp \
-                  src/kernel/test/test_ioapic.cpp \
+# (#420: paths follow the colocated homes under <subsys>/tests/).
+SELFTEST_TESTS := src/lib/tests/test_lib.cpp \
+                  src/lib/tests/test_checked_ptr.cpp \
+                  src/kernel/driver/tests/test_block_device.cpp \
+                  src/kernel/vfs/tests/test_fat32.cpp \
+                  src/kernel/vfs/tests/test_vfs_fat32.cpp \
+                  src/kernel/task/tests/test_waitpid.cpp \
+                  src/kernel/console/tests/test_shell_interaction.cpp \
+                  src/kernel/arch/tests/test_hal_bits.cpp \
+                  src/kernel/task/tests/test_o1_scheduler.cpp \
+                  src/kernel/task/tests/test_zombie_cleanup.cpp \
+                  src/kernel/task/tests/test_wcet_cleanup.cpp \
+                  src/kernel/task/tests/test_idle_cleanup.cpp \
+                  src/kernel/arch/tests/test_apic_timer.cpp \
+                  src/kernel/arch/tests/test_lapic.cpp \
+                  src/kernel/arch/tests/test_ioapic.cpp \
                   src/kernel/test/test_core_isolation.cpp \
-                  src/kernel/test/test_load_balancer.cpp \
-                  src/kernel/test/test_cache_coloring.cpp \
-                  src/kernel/test/test_smp_sync.cpp \
-                  src/kernel/test/test_smp_verify.cpp \
-                  src/kernel/test/test_pcid.cpp \
-                  src/kernel/test/test_invpcid.cpp \
-                  src/kernel/test/test_lazy_tlb.cpp \
-                  src/kernel/test/test_ipi_batching.cpp \
-                  src/kernel/test/test_tlb_latency.cpp \
-                  src/kernel/test/test_pml4_sync.cpp \
+                  src/kernel/task/tests/test_load_balancer.cpp \
+                  src/kernel/memory/tests/test_cache_coloring.cpp \
+                  src/kernel/ipc/tests/test_smp_sync.cpp \
+                  src/kernel/arch/tests/test_smp_verify.cpp \
+                  src/kernel/arch/tests/test_pcid.cpp \
+                  src/kernel/arch/tests/test_invpcid.cpp \
+                  src/kernel/memory/tests/test_lazy_tlb.cpp \
+                  src/kernel/bench/tests/test_ipi_batching.cpp \
+                  src/kernel/memory/tests/test_tlb_latency.cpp \
+                  src/kernel/memory/tests/test_pml4_sync.cpp \
                   src/kernel/test/test_irq_alloc.cpp \
-                  src/kernel/test/test_jitter.cpp \
+                  src/kernel/time/tests/test_jitter.cpp \
                   src/kernel/test/test_threaded_irqs.cpp \
                   src/kernel/test/test_gic.cpp \
                    src/kernel/test/test_plic.cpp \
-                   src/kernel/test/test_freelist_consistency.cpp
-# Keep all non-test sources, but replace everything under src/kernel/test/
-# with only the selftest subset
-SRC_CXX_GENERIC := $(filter-out src/kernel/test/%.cpp, $(SRC_CXX_GENERIC))
+                   src/kernel/memory/tests/test_freelist_consistency.cpp
+# Keep all non-test sources, but replace everything under the test dirs
+# (#420: legacy flat dir + TEST_COLOCATED_PATTERNS) with only the
+# selftest subset
+SRC_CXX_GENERIC := $(filter-out src/kernel/test/%.cpp $(TEST_COLOCATED_PATTERNS), $(SRC_CXX_GENERIC))
 SRC_CXX_GENERIC += $(SELFTEST_INFRA) $(SELFTEST_TESTS)
 # Also exclude arch-specific test files (not selftest infrastructure)
 SRC_CXX_ARCH := $(filter-out %test_aarch64.cpp %test_riscv64.cpp, $(SRC_CXX_ARCH))

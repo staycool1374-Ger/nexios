@@ -5,6 +5,10 @@
   "edit_deny": [
     "src/kernel/test/*",
     "src/kernel/test/**/*",
+    "src/kernel/*/tests/*",
+    "src/kernel/*/tests/**/*",
+    "src/lib/tests/*",
+    "src/lib/tests/**/*",
     "src/test/*",
     "src/test/**/*"
   ],

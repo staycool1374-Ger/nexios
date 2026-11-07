@@ -44,7 +44,9 @@ def is_kernel_file(rel_path: str, cfg: dict) -> bool:
 
 
 def is_test_file(rel_path: str) -> bool:
-    return "/test/" in rel_path or rel_path.startswith("src/kernel/test/")
+    # (#420: tests colocate under <subsys>/tests/; match both spellings.)
+    return ("/test/" in rel_path or "/tests/" in rel_path
+            or rel_path.startswith("src/kernel/test/"))
 
 
 def get_line(text: str, pos: int) -> int:

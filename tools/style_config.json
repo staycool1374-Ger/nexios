@@ -52,7 +52,7 @@
   "kernel_only_rules": {
     "enabled": true,
     "paths": ["src/kernel/"],
-    "excludes": ["src/kernel/test/", "src/kernel/tools/"]
+    "excludes": ["src/kernel/test/", "src/kernel/tools/", "src/kernel/arch/tests/", "src/kernel/bench/tests/", "src/kernel/cap/tests/", "src/kernel/console/tests/", "src/kernel/debug/tests/", "src/kernel/driver/tests/", "src/kernel/elf/tests/", "src/kernel/ipc/tests/", "src/kernel/log/tests/", "src/kernel/memory/tests/", "src/kernel/net/tests/", "src/kernel/sync/tests/", "src/kernel/syscall/tests/", "src/kernel/task/tests/", "src/kernel/time/tests/", "src/kernel/vfs/tests/"]
   },
   "descriptive_names": {
     "min_length": 3,

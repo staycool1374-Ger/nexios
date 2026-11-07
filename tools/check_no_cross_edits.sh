@@ -27,14 +27,16 @@
 # per role, so a config path is evidence of the role, but the explicit env var is
 # the launcher's own statement and must not be overridden by a stale path.
 #
-# Fences:
-#   dev role: changes under src/kernel/test/** or src/test/** fail,
+# Fences (#420: legacy flat dir + colocated <subsys>/tests/ homes):
+#   dev role: changes under src/kernel/test/**, src/kernel/*/tests/**,
+#             src/lib/tests/** or src/test/** fail,
 #             UNLESS every added line in each hunk blames to the QE
 #             author identity (DECISION D, issue #433): coordinator-merged
 #             QE test hunks are exempt; dev-authored test hunks still fail.
 #             NEXIOS_GATE_ATTRIBUTION=off disables the exemption
 #             (harness-only; it can only ever strict-en, never loosen).
-#   qe role:  changes under src/** EXCEPT src/kernel/test/** and
+#   qe role:  changes under src/** EXCEPT src/kernel/test/**,
+#             src/kernel/*/tests/**, src/lib/tests/** and
 #             src/test/** fail.
 #
 # Exit-code contract (mirrors check_no_make_refs.sh):
@@ -99,13 +101,13 @@ classify() {
     case "$1" in
         dev)
             case "$2" in
-                src/kernel/test/*|src/test/*) echo "VIOLATION" ;;
+                src/kernel/test/*|src/kernel/*/tests/*|src/lib/tests/*|src/test/*) echo "VIOLATION" ;;
                 *) echo "OK" ;;
             esac
             ;;
         qe)
             case "$2" in
-                src/kernel/test/*|src/test/*) echo "OK" ;;
+                src/kernel/test/*|src/kernel/*/tests/*|src/lib/tests/*|src/test/*) echo "OK" ;;
                 src/*) echo "VIOLATION" ;;
                 *) echo "OK" ;;
             esac

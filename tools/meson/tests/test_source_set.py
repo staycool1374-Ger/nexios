@@ -15,6 +15,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Basename-matched (issue #420): tests colocate under <subsys>/tests/,
+# so the FPU exclusion must survive path-prefix moves. test_gen_registry.py
+# already matches by basename; this gate mirrors it.
+FPU_EXCLUDED_NAMES = {
+    "test_fpu.cpp",
+    "test_fpu_clone.cpp",
+    "test_fpu_multi.cpp",
+    "test_fpu_sse.cpp",
+    "test_fpu_xmm_all.cpp",
+}
+# Legacy exact paths, kept for reference (make_set no longer uses them).
 FPU_EXCLUDED = {
     "src/kernel/test/test_fpu.cpp",
     "src/kernel/test/test_fpu_clone.cpp",
@@ -31,13 +42,19 @@ def make_set(repo, arch):
          "-o", "-name", "*.cpp", "-print"],
         capture_output=True, text=True, check=True,
     )
-    generic = {p for p in out.stdout.splitlines() if p} - {
-        str(repo / "src/kernel/test/test_fpu.cpp"),
-        str(repo / "src/kernel/test/test_fpu_clone.cpp"),
-        str(repo / "src/kernel/test/test_fpu_multi.cpp"),
-        str(repo / "src/kernel/test/test_fpu_sse.cpp"),
-        str(repo / "src/kernel/test/test_fpu_xmm_all.cpp"),
-    } - FPU_EXCLUDED
+    generic = {p for p in out.stdout.splitlines()
+               if p and Path(p).name not in FPU_EXCLUDED_NAMES}
+    # Issue #420: arch-owned tests live under src/kernel/arch/tests/,
+    # inside the pruned kernel/arch tree above — add them back explicitly
+    # so this mirrors mk/rules.mk SRC_CXX_GENERIC exactly.
+    arch_tests = repo / "src" / "kernel" / "arch" / "tests"
+    if arch_tests.is_dir():
+        out_tests = subprocess.run(
+            ["find", str(arch_tests), "-name", "*.cpp", "-print"],
+            capture_output=True, text=True, check=True,
+        )
+        generic |= {p for p in out_tests.stdout.splitlines()
+                    if p and Path(p).name not in FPU_EXCLUDED_NAMES}
     base = subprocess.run(
         ["find", str(repo / "src" / "kernel" / "arch"),
          "-maxdepth", "1", "-name", "*.cpp"],

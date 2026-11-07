@@ -177,6 +177,14 @@ def attribute(elf, addrs):
     return out
 
 
+def is_test_src(src):
+    """True for test TUs: legacy flat dir or #420 colocated <subsys>/tests/."""
+    norm = src.replace("\\", "/")
+    return ("/kernel/test/" in norm or "/tests/" in norm
+            or norm.startswith("src/kernel/test")
+            or norm.startswith("src/test/"))
+
+
 def area_of(src, is_test):
     """Classify a source path into an area bucket."""
     norm = src.replace("\\", "/")
@@ -273,7 +281,7 @@ def main():
                 continue
             if is_scoped_out(src):
                 continue
-            is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
+            is_test = is_test_src(src)
             key = (src, sym_names[i] if i < len(sym_names) else name,
                    area_of(src, is_test))
             universe[key] = True
@@ -287,7 +295,7 @@ def main():
                 continue
             if is_scoped_out(src):
                 continue
-            is_test = "/kernel/test/" in src or src.startswith("src/kernel/test")
+            is_test = is_test_src(src)
             key = (src, sym_names[i] if i < len(sym_names) else name,
                    area_of(src, is_test))
             universe[key] = True
@@ -368,7 +376,7 @@ def main():
     lines.append("|---|---:|---:|---:|")
     ranked = sorted(
         (f for f in file_total
-         if not shorten(f).startswith("src/kernel/test")),
+         if not is_test_src(shorten(f))),
         key=lambda f: pct(file_cov.get(f, 0), file_total[f]))
     for src in ranked[:40]:
         lines.append(f"| `{shorten(src)}` | {file_cov.get(src, 0)} | "
@@ -377,7 +385,7 @@ def main():
 
     gaps = sorted(
         ((file_total[f] - file_cov.get(f, 0), f) for f in file_total
-         if not shorten(f).startswith("src/kernel/test")),
+         if not is_test_src(shorten(f))),
         reverse=True)
     lines.append("\n## Largest absolute gaps (kernel, top 25)\n")
     lines.append("| File | Uncovered | Covered | Total |")
@@ -395,7 +403,7 @@ def main():
         if key in covered:
             continue
         src, name, area = key
-        if shorten(src).startswith("src/kernel/test"):
+        if is_test_src(shorten(src)):
             continue
         by_area.setdefault(area, []).append(
             (shorten(src), pretty_names.get(key, name)))

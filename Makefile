@@ -525,7 +525,8 @@ TEST_REGISTRY_SCRIPT := tools/gen_test_registry.py
 TEST_SRC_DIR         := src/kernel/test
 # Use the actual compiled test file list (respects Makefile exclusions).
 # This avoids referencing symbols from #if 0 / excluded test files.
-TEST_SRC_FILES       := $(filter src/kernel/test/%.cpp, $(SRC_CXX))
+# (#420: legacy flat dir + TEST_COLOCATED_PATTERNS from mk/rules.mk.)
+TEST_SRC_FILES       := $(filter src/kernel/test/%.cpp $(TEST_COLOCATED_PATTERNS), $(SRC_CXX))
 TEST_REGISTRY_DEPS   := $(TEST_SRC_FILES) $(TEST_REGISTRY_SCRIPT)
 
 # Write the file list to a temporary file so the Python script reads the
@@ -1711,7 +1712,7 @@ clean:
 # ------------------------------------------------------------------------------
 # clang-tidy static analysis (debug builds only)
 # ------------------------------------------------------------------------------
-CLANG_TIDY_FILTER := src/kernel/test/%.cpp src/lib/test.cpp src/lib/compiler_rt.cpp src/lib/cxxabi.cpp src/lib/new.cpp
+CLANG_TIDY_FILTER := src/kernel/test/%.cpp $(TEST_COLOCATED_PATTERNS) src/lib/test.cpp src/lib/compiler_rt.cpp src/lib/cxxabi.cpp src/lib/new.cpp
 ifneq ($(EXTERNAL_TEST_DIR),)
 CLANG_TIDY_FILTER += $(EXTERNAL_TEST_DIR)/src/%.cpp
 endif

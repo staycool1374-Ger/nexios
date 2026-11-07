@@ -15,9 +15,40 @@
 # arch_flags, build_flags, kernel_includes.)
 src_root = meson.project_source_root() / 'src'
 
-# --- Test sources: discovery + registry codegen (Phase 2) ---
+# --- Test sources: discovery + registry codegen (Phase 2; #420 colocated) ---
+# Subsystem tests live in <subsys>/tests/ next to the code they verify.
+# Entry [0] is the legacy flat dir, always scanned. Colocated dirs are
+# appended only when they exist, so output is unchanged until files move
+# (prefix-only diffs then). FPU exclusions below are basename-matched and
+# apply identically in every scanned dir.
+fs = import('fs')
 test_src_dir = src_root / 'kernel' / 'test'
-test_find = run_command('find', test_src_dir, '-name', '*.cpp',
+test_src_dirs = [test_src_dir]
+foreach d : [
+  'kernel/arch/tests',
+  'kernel/bench/tests',
+  'kernel/cap/tests',
+  'kernel/console/tests',
+  'kernel/debug/tests',
+  'kernel/driver/tests',
+  'kernel/elf/tests',
+  'kernel/ipc/tests',
+  'kernel/log/tests',
+  'kernel/memory/tests',
+  'kernel/net/tests',
+  'kernel/sync/tests',
+  'kernel/syscall/tests',
+  'kernel/task/tests',
+  'kernel/time/tests',
+  'kernel/vfs/tests',
+  'lib/tests',
+]
+  candidate = src_root / d
+  if fs.is_dir(candidate)
+    test_src_dirs += [candidate]
+  endif
+endforeach
+test_find = run_command('find', test_src_dirs, '-name', '*.cpp',
   check : true)
 test_src_list = []
 foreach f : test_find.stdout().strip().split('\n')
@@ -92,25 +123,25 @@ selftest_infra_rel = [
   'src/kernel/test/test_weak_stubs.cpp',
 ]
 selftest_tests_rel = [
-  'src/kernel/test/test_lib.cpp',
-  'src/kernel/test/test_checked_ptr.cpp',
-  'src/kernel/test/test_block_device.cpp',
-  'src/kernel/test/test_fat32.cpp',
-  'src/kernel/test/test_vfs_fat32.cpp',
-  'src/kernel/test/test_waitpid.cpp',
-  'src/kernel/test/test_shell_interaction.cpp',
-  'src/kernel/test/test_hal_bits.cpp',
-  'src/kernel/test/test_o1_scheduler.cpp',
-  'src/kernel/test/test_zombie_cleanup.cpp',
-  'src/kernel/test/test_wcet_cleanup.cpp',
-  'src/kernel/test/test_idle_cleanup.cpp',
-  'src/kernel/test/test_apic_timer.cpp',
-  'src/kernel/test/test_lapic.cpp',
-  'src/kernel/test/test_ioapic.cpp',
+  'src/lib/tests/test_lib.cpp',
+  'src/lib/tests/test_checked_ptr.cpp',
+  'src/kernel/driver/tests/test_block_device.cpp',
+  'src/kernel/vfs/tests/test_fat32.cpp',
+  'src/kernel/vfs/tests/test_vfs_fat32.cpp',
+  'src/kernel/task/tests/test_waitpid.cpp',
+  'src/kernel/console/tests/test_shell_interaction.cpp',
+  'src/kernel/arch/tests/test_hal_bits.cpp',
+  'src/kernel/task/tests/test_o1_scheduler.cpp',
+  'src/kernel/task/tests/test_zombie_cleanup.cpp',
+  'src/kernel/task/tests/test_wcet_cleanup.cpp',
+  'src/kernel/task/tests/test_idle_cleanup.cpp',
+  'src/kernel/arch/tests/test_apic_timer.cpp',
+  'src/kernel/arch/tests/test_lapic.cpp',
+  'src/kernel/arch/tests/test_ioapic.cpp',
   'src/kernel/test/test_core_isolation.cpp',
-  'src/kernel/test/test_load_balancer.cpp',
-  'src/kernel/test/test_cache_coloring.cpp',
-  'src/kernel/test/test_smp_sync.cpp',
+  'src/kernel/task/tests/test_load_balancer.cpp',
+  'src/kernel/memory/tests/test_cache_coloring.cpp',
+  'src/kernel/ipc/tests/test_smp_sync.cpp',
 ]
 if get_option('external_test_dir') != ''
   foreach f : selftest_infra_rel + selftest_tests_rel
