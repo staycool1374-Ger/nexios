@@ -439,6 +439,10 @@ class Transport:
                 if entry.get("state") == "acked":
                     rj.violations.append(Violation(f"acks[oid={a}]", "already acknowledged", "one ACK clears one oid"))
                     return rj
+                if entry.get("state") != "open":
+                    rj.violations.append(Violation(f"acks[oid={a}]", f"order is {entry.get('state')}, not open",
+                                                   "ACK only open orders"))
+                    return rj
                 entry["state"] = "acked"
                 entry["acked_by"] = {"lane": role, "post_oid": post["oid"], "ts": new_ts}
                 acked += 1

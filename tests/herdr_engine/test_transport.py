@@ -384,3 +384,34 @@ class ReadStream(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
+
+
+class AckGuard(unittest.TestCase):
+    def setUp(self):
+        self.d = f"{NHR_BASE}9005"
+        import shutil, os, json
+        shutil.rmtree(self.d, ignore_errors=True)
+        os.makedirs(self.d)
+        json.dump({"v": 1, "issue": 9005, "phase": "IMPL", "state": "IDLE",
+                   "pending": "", "orders": {}, "entered_ts": {"IMPL": "2026-11-07T09:00:00Z"}},
+                  open(self.d + "/state.json", "w"))
+        self.t = Transport()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def postq(self, **over):
+        b = base(room=9005)
+        b.update(over)
+        return self.t.post(9005, "dev", b)
+
+    def test_90_ack_withdrawn_rejected(self):
+        self.t.file_order(9005, "dev:2026-11-07T10:00:00", lane="dev")
+        st = json.load(open(self.d + "/state.json"))
+        st["orders"]["dev:2026-11-07T10:00:00"]["state"] = "withdrawn"
+        json.dump(st, open(self.d + "/state.json", "w"))
+        r = self.postq(oid="dev:2026-11-07T10:00:01", ts="2026-11-07T10:00:01Z",
+                       acks=["dev:2026-11-07T10:00:00"])
+        self.assertIsInstance(r, Rejection)
+        self.assertTrue(any("not open" in v.error for v in r.violations))

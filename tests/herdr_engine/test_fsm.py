@@ -509,3 +509,66 @@ class DemandTest(Basis, unittest.TestCase):
         self.assertEqual(act.verb, "demand-filed")
         self.assertTrue(act.detail.get("dry"))
         self.assertEqual(F.load_state(self.ROOM).get("orders", {}), {})
+
+
+class RedemandTest(Basis, unittest.TestCase):
+    def setUp(self):
+        CLOCK["i"] = 300
+        for r in (self.ROOM, 9702):
+            self.setup_room(r)
+        self.sim = SimHerdr()
+        for r in (self.ROOM, 9702):
+            for lane in ("dev", "qe", "audit"):
+                self.sim.spawn(f"t-{r}-{lane}", r, lane)
+        from herdr_engine.transport import Transport as T
+        self.eng = Engine(runtimes={r: RoomRuntime(herdr=self.sim) for r in (self.ROOM, 9702)},
+                          clock=fake_clock, transport=T())
+
+    def tearDown(self):
+        for r in (self.ROOM, 9702):
+            self.drop_room(r)
+
+    def postq(self, room, **over):
+        b = {"v": 1, "oid": f"dev:{ts(0)}", "from": "dev", "kind": "NOTE",
+             "state": "idle", "next": "idle", "ts": ts(CLOCK["i"]), "room": room}
+        b.update({k: v for k, v in over.items() if k != "box"})
+        frm = over.get("box", str(b["from"])).replace("audit", "auditor")
+        return Transport().post(room, frm, b)
+
+    def consume_entry(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "VERIFY"
+        st.setdefault("entered_ts", {})["VERIFY"] = ts(290)
+        st.setdefault("demand_filed", {})["VERIFY"] = {
+            "oid": "qe:2026-11-07T09:00:00", "entered": ts(290)}
+        F.save_state(self.ROOM, st)
+
+    def test_80_gapfix_files_dev_on_qe_need(self):
+        self.consume_entry()
+        CLOCK["i"] = 310
+        self.postq(self.ROOM, kind="NEED", **{"from": "qe", "oid": "qe:2026-11-07T10:10:00",
+                   "summary": "NEED gaps", "evidence": {"diff": "none"}})
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertEqual(act.detail["lane"], "dev")
+        self.assertIn("gaps:qe:2026-11-07T10:10:00".replace("qe:", "qe:"), json.dumps(F.load_state(self.ROOM).get("demand_filed", {})))
+
+    def test_81_no_refile_when_open_dev_exists(self):
+        self.consume_entry()
+        self.eng.transport.file_order(self.ROOM, "dev:2026-11-07T09:00:00", lane="dev")
+        CLOCK["i"] = 310
+        self.postq(self.ROOM, kind="NEED", **{"from": "qe", "oid": "qe:2026-11-07T10:10:00",
+                   "summary": "NEED gaps"})
+        before = sorted(F.load_state(self.ROOM)["orders"])
+        self.eng.tick(self.ROOM)
+        self.assertEqual(sorted(F.load_state(self.ROOM)["orders"]), before,
+                         "no new demand filed while a dev order stays open")
+
+    def test_82_reverify_on_fresh_ready(self):
+        self.consume_entry()
+        CLOCK["i"] = 310
+        self.postq(self.ROOM, kind="READY", **{"oid": "dev:2026-11-07T10:11:00",
+                   "summary": "IMPL done", "evidence": {"branch": "refs/heads/x", "diff": "covered"}})
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertEqual(act.detail["lane"], "qe")

@@ -223,6 +223,12 @@ class Engine:
             act = self._apply_transition(room, st, post.get("oid", ""), to)
             return self._record(act)
 
+        # 4) follow-up demands: re-verify on fresh IMPL evidence, gap-fix on
+        # qe NEEDs. Ledger + timestamps only, never prose (T8 live need).
+        red = self._redemand_tick(room, st, rt)
+        if red is not None:
+            return self._record(red)
+
         return self._record(Action(room, "ok", {
             "phase": st.get("phase"),
             "open_orders": sorted(
@@ -283,6 +289,76 @@ class Engine:
         st.setdefault("demand_filed", {})[ph] = {"oid": oid, "entered": entered}
         save_state(room, st)
         return Action(room, "demand-filed", detail)
+
+    def _newest_post(self, room: int, frm: str | None = None,
+                        kind: str | None = None) -> dict[str, Any] | None:
+        cands = [p for p in posts(room)
+                 if (frm is None or p.get("from") == frm)
+                 and (kind is None or p.get("kind") == kind)]
+        return max(cands, key=lambda p: p.get("ts", "")) if cands else None
+
+    def _newest_demand_ts(self, st: dict[str, Any], lane: str) -> str:
+        best = ""
+        for oid in (st.get("orders") or {}):
+            if oid_lane(oid) == lane:
+                ts = oid.split(":", 1)[1] if ":" in oid else ""
+                best = max(best, ts)
+        for key, rec in (st.get("demand_filed") or {}).items():
+            if isinstance(rec, dict) and str(rec.get("oid", "")).startswith(lane + ":"):
+                best = max(best, str(rec.get("oid", ""))[len(lane) + 1:])
+        return best
+
+    def _file_followup(self, room, st, lane: str, text: str, key: str) -> Action:
+        ts = now_str(self.clock)
+        oid = f"{lane}:{ts[:-1]}"
+        ack_by = (self._plus(ts, 900))
+        done_by = (self._plus(ts, 1800))
+        detail = {"demand": oid, "lane": lane, "phase": st.get("phase"), "key": key}
+        if self.dry_run or self.transport is None:
+            detail["dry"] = True
+            return Action(room, "demand-filed", detail)
+        self.transport.file_order(room, oid, lane=lane,
+                                  ack_by=ack_by, done_by=done_by, demand=text)
+        st.clear()
+        st.update(load_state(room))
+        st.setdefault("demand_filed", {})[key] = {"oid": oid, "entered": ts}
+        save_state(room, st)
+        return Action(room, "demand-filed", detail)
+
+    @staticmethod
+    def _plus(ts: str, secs: int) -> str:
+        import datetime
+        base = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=datetime.timezone.utc)
+        return (base + datetime.timedelta(seconds=secs)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _redemand_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> Action | None:
+        if st.get("phase") != "VERIFY":
+            return None
+        filed = st.get("demand_filed", {})
+        # Rule A — re-verify: fresh dev READY newer than the newest qe demand
+        ready = self._newest_post(room, frm="dev", kind="READY")
+        if ready and ready.get("ts", "") > self._newest_demand_ts(st, "qe"):
+            if not any(o.get("state") == "open" and o.get("lane") == "qe"
+                       for o in (st.get("orders") or {}).values()):
+                key = f"reverify:{ready.get('oid')}"
+                if key not in filed:
+                    return self._file_followup(
+                        room, st, "qe",
+                        f"re-verify IMPL evidence {ready.get('oid')}; post READY DONE/verified or NEED with gaps",
+                        key)
+        # Rule B — gap-fix: latest post is a qe NEED and no open dev demand
+        latest = self._newest_post(room)
+        if (latest and latest.get("kind") == "NEED" and latest.get("from") == "qe"
+                and not any(o.get("state") == "open" and o.get("lane") == "dev"
+                            for o in (st.get("orders") or {}).values())):
+            key = f"gaps:{latest.get('oid')}"
+            if key not in filed:
+                return self._file_followup(
+                    room, st, "dev",
+                    f"address NEED {latest.get('oid')}; see stream; post READY with diff covered",
+                    key)
+        return None
 
     # -- SLA -----------------------------------------------------------------
 
