@@ -131,15 +131,24 @@ class RoomRuntime:
 class Engine:
     """Circle-of-rooms FSM driver. One tick = one action per room max."""
 
+    # phase -> (working lane, demand text template). Filing happens once per
+    # phase entry; it is the engine-side answer to "who files the first order".
+    DEMANDS = {
+        "IMPL": ("dev", "IMPL: execute the approved plan; post READY with diff covered"),
+        "VERIFY": ("qe", "VERIFY: check the IMPL evidence read-only; post READY DONE/verified or NEED with gaps"),
+    }
+
     def __init__(
         self,
         runtimes: dict[int, RoomRuntime] | None = None,
         dry_run: bool = False,
         clock: Callable[[], str] | None = None,
+        transport: Any = None,
     ):
         self.runtimes = runtimes or {}
         self.dry_run = dry_run
         self.clock = clock
+        self.transport = transport
         self.wake = threading.Event()  # set by external arrival triggers
         self.actions: list[Action] = []
 
@@ -180,6 +189,12 @@ class Engine:
         # 1) SLA ladder (never ends silently; budget carries over)
         self._sla_tick(room, st, rt)
 
+        # 1b) phase-entry demand: file the working lane's first order so a
+        # phase never waits on a human to originate work
+        filed = self._demand_tick(room, st, rt)
+        if filed is not None:
+            return self._record(filed)
+
         # 2) ring at most one open order this cycle
         ring = self._ring_tick(room, st, rt)
         if ring is not None:
@@ -217,6 +232,41 @@ class Engine:
         else:
             detail["dry"] = True
         return Action(room, "advance", detail)
+
+    # -- phase-entry demand ------------------------------------------------------
+
+    def _demand_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> Action | None:
+        ph = st.get("phase")
+        if ph not in self.DEMANDS:
+            return None
+        lane, text = self.DEMANDS[ph]
+        entered = (st.get("entered_ts") or {}).get(ph, "")
+        for o in (st.get("orders") or {}).values():
+            if o.get("state") == "open" and o.get("lane") == lane:
+                return None  # working lane already has an open demand
+        filed = (st.get("demand_filed") or {}).get(ph)
+        if filed and filed.get("entered") == entered:
+            return None  # already filed for this phase entry; waiting on evidence
+        import datetime
+        ts = now_str(self.clock)
+        oid = f"{lane}:{ts[:-1]}"
+        base = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=datetime.timezone.utc)
+        ack_by = (base + datetime.timedelta(seconds=900)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        done_by = (base + datetime.timedelta(seconds=1800)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        detail = {"demand": oid, "lane": lane, "phase": ph}
+        if self.dry_run or self.transport is None:
+            detail["dry"] = True
+            return Action(room, "demand-filed", detail)
+        self.transport.file_order(room, oid, lane=lane,
+                                  ack_by=ack_by, done_by=done_by, demand=text)
+        # the filing above re-read and saved fresh state; our tick snapshot
+        # is now stale, so refresh before marking (else we would clobber it)
+        st.clear()
+        st.update(load_state(room))
+        st.setdefault("demand_filed", {})[ph] = {"oid": oid, "entered": entered}
+        save_state(room, st)
+        return Action(room, "demand-filed", detail)
 
     # -- SLA -----------------------------------------------------------------
 

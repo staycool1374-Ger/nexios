@@ -39,7 +39,8 @@ def build_engine(rooms: list[int], dry: bool) -> Engine:
     if not dry:
         hc = Herdr(timeout=10.0)
     ladder = Escalator(herdr=hc, dry=dry)
-    eng = Engine(runtimes={r: RoomRuntime(herdr=hc, halt_budget=3) for r in rooms}, dry_run=dry)
+    eng = Engine(runtimes={r: RoomRuntime(herdr=hc, halt_budget=3) for r in rooms},
+                 dry_run=dry, transport=None if dry else Transport())
     eng.rooms_arg = rooms  # explicit fleet wins over the namespace scan
     if not dry:
         ladder.attach(eng)  # wire the SLA ladder as the on_overdue hook

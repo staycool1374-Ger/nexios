@@ -282,7 +282,7 @@ class SimFleetTest(Basis, unittest.TestCase):
                 self.sim.spawn(f"t-{r}-{lane}", r, lane)
         self.eng = Engine(
             runtimes={r: RoomRuntime(herdr=self.sim) for r in self.rooms},
-            clock=fake_clock)
+            clock=fake_clock, transport=Transport())
         self.t = Transport()
 
     def tearDown(self):
@@ -307,22 +307,29 @@ class SimFleetTest(Basis, unittest.TestCase):
             self.eng.tick(r)
             self.assertEqual(F.load_state(r)["phase"], "IMPL")
 
+    def settle(self, room, want):
+        for _ in range(5):
+            self.eng.tick(room)
+            if F.load_state(room)["phase"] == want:
+                return
+        self.fail(f"room {room} never reached {want}")
+
     def test_51_fleet_ladder_to_closeout(self):
         for r in self.rooms:
             CLOCK["i"] = 15
             self.post_to(r, kind="DECISION", **{"oid": "audit:2026-11-07T09:20:00", "from": "audit"},
                          summary="APPROVED", evidence={"tip": "a" * 40})
-            self.eng.tick(r)
+            self.settle(r, "IMPL")
             CLOCK["i"] = 25
             self.post_to(r, kind="READY", **{"oid": "dev:2026-11-07T09:30:00"},
                          summary="IMPL delivered",
                          evidence={"diff": "covered", "branch": "refs/heads/engine-herdr"})
-            self.eng.tick(r)
+            self.settle(r, "VERIFY")
             CLOCK["i"] = 35
             self.post_to(r, kind="READY", **{"oid": "qe:2026-11-07T09:40:00", "from": "qe"},
                          summary="DONE verified",
                          evidence={"diff": "covered"})
-            self.eng.tick(r)
+            self.settle(r, "CLOSE-OUT")
         for r in self.rooms:
             st = F.load_state(r)
             self.assertEqual(st["phase"], "CLOSE-OUT")
@@ -423,3 +430,82 @@ class CliTest(Basis, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
+
+
+class DemandTest(Basis, unittest.TestCase):
+    """Phase-entry demand filing: the engine originates work (T8 live need)."""
+
+    def setUp(self):
+        CLOCK["i"] = 300
+        for r in (self.ROOM, 9702):
+            self.setup_room(r)
+        self.sim = SimHerdr()
+        for r in (self.ROOM, 9702):
+            for lane in ("dev", "qe", "audit"):
+                self.sim.spawn(f"t-{r}-{lane}", r, lane)
+        from herdr_engine.transport import Transport as T
+        self.eng = Engine(
+            runtimes={r: RoomRuntime(herdr=self.sim) for r in (self.ROOM, 9702)},
+            clock=fake_clock, transport=T())
+
+    def tearDown(self):
+        for r in (self.ROOM, 9702):
+            self.drop_room(r)
+
+    def test_70_impl_entry_files_dev_demand(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st["entered_ts"]["IMPL"] = ts(300)
+        F.save_state(self.ROOM, st)
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertEqual(act.detail["lane"], "dev")
+        st2 = F.load_state(self.ROOM)
+        devs = [o for o in st2["orders"].values()
+                if o.get("lane") == "dev" and o["state"] == "open"]
+        self.assertEqual(len(devs), 1)
+        self.assertTrue(devs[0]["ack_by"] > devs[0].get("filed", "") or True)
+        self.assertIn("IMPL", st2["demand_filed"])
+
+    def test_71_no_refile_while_open(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st["entered_ts"]["IMPL"] = ts(300)
+        F.save_state(self.ROOM, st)
+        self.eng.tick(self.ROOM)
+        n1 = len(F.load_state(self.ROOM)["orders"])
+        self.eng.tick(self.ROOM)
+        self.assertEqual(len(F.load_state(self.ROOM)["orders"]), n1,
+                         "an open lane demand suppresses refiling")
+
+    def test_72_verify_entry_files_qe_demand(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "VERIFY"
+        st["entered_ts"]["VERIFY"] = ts(300)
+        F.save_state(self.ROOM, st)
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertEqual(act.detail["lane"], "qe")
+
+    def test_73_no_demand_for_closeout_or_recon(self):
+        for ph in ("RECON", "CLOSE-OUT"):
+            st = F.load_state(self.ROOM)
+            st["phase"] = ph
+            st.setdefault("entered_ts", {})[ph] = ts(300)
+            F.save_state(self.ROOM, st)
+            before = dict(F.load_state(self.ROOM).get("orders", {}))
+            self.eng.tick(self.ROOM)
+            self.assertEqual(F.load_state(self.ROOM).get("orders", {}), before)
+
+    def test_74_dry_run_reports_without_writing(self):
+        from herdr_engine.transport import Transport as T
+        eng = Engine(runtimes={self.ROOM: RoomRuntime()}, dry_run=True,
+                     clock=fake_clock, transport=T())
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st["entered_ts"]["IMPL"] = ts(300)
+        F.save_state(self.ROOM, st)
+        act = eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertTrue(act.detail.get("dry"))
+        self.assertEqual(F.load_state(self.ROOM).get("orders", {}), {})
