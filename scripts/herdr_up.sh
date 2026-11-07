@@ -20,6 +20,7 @@ NEXIOS_HOME="${NEXIOS_HOME:-$HOME/.local/state/nexios}"
 OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
 HC_BIN="${HC_BIN:-$HOME/.local/bin/hc}"
 PYTHON="${PYTHON:-/opt/homebrew/bin/python3}"
+NHR_BASE="${NHR_BASE:-/tmp/nherdr-}"   # pilot namespace root (no prose inboxes)
 TAG="t0s-$RANDOM"  # unique terminal name prefix per run
 
 pass=0
@@ -285,18 +286,87 @@ opencode_full_checks() { # $1 cwd, $2 sandbox
 
 usage() {
   cat <<'EOF'
-Usage: herdr_up.sh selftest [--full]
-  selftest          T0 spawn-proof sub-check (12 fast checks) — no model needed
-  selftest --full   adds the 3 opencode checks (fence identity, blocked
-                    true-positive on a permission modal, true-negative control)
-  -h | help         this text
+Usage: herdr_up.sh <verb> [args]
+  setup <issue> [<issue>...]      create /tmp/nherdr-<issue>/ runtime
+                                  (state.json, prompts/, reports/ — no prose
+                                  inboxes; idempotent)
+  testbed-rooms                   dry report of the T8 pilot layout: planned
+                                  worktrees + existing rooms
+  status                          one line per room in the pilot namespace
+  selftest [--full]               T0 spawn-proof sub-check (12 fast checks;
+                                  --full adds the 3 opencode checks: fence
+                                  identity, blocked true-positive on a
+                                  permission modal, true-negative control)
+  -h | help                       this text
 Requires: hc (herdr-core 0.1.18), homebrew python3, ps. The selftest creates
 and kills throwaway hc terminals tagged t0s-*.
 EOF
 }
 
+utc() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+
+# setup <issue>: idempotently create the pilot runtime namespace split.
+# Layout per docs/engine-herdr/spec.md §1: state.json + prompts/ + reports/.
+setup_issues() {
+  local issue dir ts
+  for issue in "$@"; do
+    case "$issue" in ''|*[!0-9]*) note ERR "setup: issue must be numeric, got '$issue'"; continue ;; esac
+    dir="$NHR_BASE$issue"
+    mkdir -p "$dir/prompts" "$dir/reports"
+    if [ ! -f "$dir/state.json" ]; then
+      printf '{\n "v": 1,\n "issue": %s,\n "phase": "RECON",\n "state": "IDLE",\n "pending": "",\n "updated": "%s",\n "orders": {},\n "acks": {}\n}\n' \
+        "$issue" "$(utc)" > "$dir/state.json"
+      note SETUP "created $dir/state.json (v1, RECON/IDLE)"
+    else
+      note SETUP "kept existing $dir/state.json"
+    fi
+  done
+}
+
+# rooms: list pilot-namespace rooms, one line each.
+each_room() { # reads dirs matching /tmp/nherdr-<digits>
+  local d issue
+  for d in "$NHR_BASE"*; do
+    [ -d "$d" ] || continue
+    issue=${d#$NHR_BASE}
+    case "$issue" in ''|*[!0-9]*) continue ;; esac
+    echo "$d"
+  done
+}
+
+status_rooms() {
+  local dir issue phase state pending found=0
+  for dir in $(each_room); do
+    found=$((found + 1))
+    issue=${dir#$NHR_BASE}
+    phase=$("$PYTHON" -c "import json; d=json.load(open('$dir/state.json')); print(d.get('phase'))" 2>/dev/null)
+    state=$("$PYTHON" -c "import json; d=json.load(open('$dir/state.json')); print(d.get('state'))" 2>/dev/null)
+    pending=$("$PYTHON" -c "import json; d=json.load(open('$dir/state.json')); print((d.get('pending') or '')[:80])" 2>/dev/null)
+    printf 'room %-4s phase=%-9s state=%-10s pending=%s\n' "$issue" "${phase:-?}" "${state:-?}" "${pending:--}"
+  done
+  [ $found = 0 ] && note INFO "no rooms in $NHR_BASE* (run: herdr_up.sh setup <issue>)"
+}
+
+# testbed-rooms: dry report of the T8 pilot layout (real wiring lands in T6/T8).
+report_testbed() {
+  cat <<'EOF'
+planned pilot layout (docs/engine-herdr/spec.md §7):
+  worktrees:
+    ~/jarvis-herdr            spec/branch work (exists since T0)
+    ~/jarvis-herdr-dev-wt1    dev slot 1 (created at pilot start, T8)
+    ~/jarvis-herdr-testbed-wt1  testbed slot 1 (created at pilot start, T8)
+herdr_up.sh -h runs (T1 done-criteria). Slots expand to n=2 each at T6.
+EOF
+  local d issue phase
+  echo "rooms:"
+  status_rooms
+}
+
 case "${1:-help}" in
   selftest) shift || true; selftest "$@" ;;
+  setup) shift || true; setup_issues "$@" ;;
+  testbed-rooms) report_testbed ;;
+  status) status_rooms ;;
   -h|help|--help|'') usage ;;
   *) usage; exit 2 ;;
 esac
