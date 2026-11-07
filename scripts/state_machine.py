@@ -1054,19 +1054,34 @@ def audit_queue_head(issue, demand, rooms_all):
     Head = min over self + other demanders by (since, issue); the room
     proceeds iff head == self (issue #494: the old min-excluded-self
     deadlocked 2+ concurrent demands — each room saw the other as head
-    and both deferred forever)."""
+    and both deferred forever). Self competes via its STORED pending
+    since from its own rooms_all entry (#498 amend-3: demand dicts
+    {requester,text} never carry since, so seeding self from demand
+    always lost to any stored demand and the oldest room deferred
+    forever). No usable stored row means newest demander: seed now()
+    and defer correctly. CLOSED/HOLD/CLOSING+halt exclusions apply
+    to self and others alike."""
     if demand is None:
         return None
-    best = ((demand or {}).get("since") or utcnow(), issue)
+    rooms_all = rooms_all or []
+    own = {}
+    for iss, _rdir, ost in rooms_all:
+        if iss == issue:
+            own = ost or {}
+            break
+    cands = []
+    if (own.get("audit_pending") and not (own.get("halt") or (own.get("state") or "") in ("CLOSED", "HOLD", "CLOSING"))):
+        cands.append(((own["audit_pending"].get("since") or "9" * 20), issue))
+    else:
+        cands.append((utcnow(), issue))
     for iss, _rdir, ost in rooms_all or []:
         if iss == issue:
-            continue  # self already seeded from demand; ost may be stale
+            continue
         ost = ost or {}
         if ost.get("audit_pending") and not (ost.get("halt") or (ost.get("state") or "") in ("CLOSED", "HOLD", "CLOSING")):
             since = (ost["audit_pending"].get("since") or "9" * 20)
-            if (since, iss) < best:
-                best = (since, iss)
-    return best[1]
+            cands.append((since, iss))
+    return min(cands)[1]
 
 
 def audit_ring_action(n):
@@ -7280,11 +7295,65 @@ def load_saved_seq(ctx):
         return 0
 
 
-_STOP = {"flag": None}
+_STOP = {"flag": None}  # type: dict[str, object]
 
 
 def _request_stop(signum, frame):
     _STOP["flag"] = signum
+
+
+REEXEC_SLEEP_STEP_S = 1  # TERM-stop latency bound inside interval sleeps (#498)
+
+
+def code_mtime(path):
+    """mtime of path, or None when unstatable. Fail-open read (#498)."""
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
+def code_changed(recorded, current):
+    """True when the entry file differs from the recorded mtime. Pure (#498).
+
+    None current (transient stat failure) is fail-open False: never re-exec
+    on a missed stat. An older current still counts as changed — checking
+    out older code is still new code to this process."""
+    if current is None:
+        return False
+    return current != recorded
+
+
+def sleep_interruptible(total_s, step_s=REEXEC_SLEEP_STEP_S):
+    """Sleep total_s in step_s chunks; False when a stop was requested (#498).
+
+    time.sleep is PEP-475-retried past TERM while the handler only latches
+    _STOP, so a full-interval sleep pinned the loop and restarts needed
+    TERM-then-KILL. Chunked sleep surfaces a latched stop within ~step_s."""
+    try:
+        remaining = max(float(total_s), 0.0)
+    except (TypeError, ValueError):
+        return True
+    step = step_s if step_s and step_s > 0 else remaining
+    while remaining > 0:
+        if _STOP["flag"] is not None:
+            return False
+        time.sleep(min(step, remaining))
+        remaining -= step
+    return _STOP["flag"] is None
+
+
+def reexec_self(script_path=None):
+    """Replace this process with a fresh interpreter on the same argv (#498).
+
+    Success never returns. Failure logs and returns False so the caller
+    keeps sweeping on aged code and retries next cycle (fail-open)."""
+    path = os.path.abspath(script_path or __file__)
+    try:
+        os.execv(sys.executable, [sys.executable, path] + sys.argv[1:])
+    except OSError as e:
+        print("re-exec failed: %s (continuing aged)" % e, flush=True)
+        return False
 
 
 def fmt_table(issue, verdict, rows):
@@ -7508,6 +7577,12 @@ def cmd_tick(ctx, issues, interval):
             pass
     ctx.tick_seq = load_saved_seq(ctx)
     ctx.tick_interval = interval
+    # Item #498: the loop process pins whatever code it started with. Record
+    # the entry mtime once; each sweep re-stats and re-execs on change (an
+    # operator restart, already the supported transition). --once runs fresh
+    # already, so only looping ticks watch.
+    entry_path = os.path.abspath(__file__)
+    entry_mtime = code_mtime(entry_path) if interval else None
     if ctx.tick_seq:
         ctx.log("resumed seq at #%d" % ctx.tick_seq)
     stop_path = os.path.join(ctx.log_dir, "STOP")
@@ -7530,6 +7605,24 @@ def cmd_tick(ctx, issues, interval):
                 pass
             emit_summary(ctx, tracker, ctx.graph, msg)
             break
+        if entry_mtime is not None:
+            # Item #498: code changed under the running loop. Re-exec is
+            # exec-on-change (not per-sweep): per-sweep exec would reset the
+            # quiet counter every cycle so the designed quiet>=3 clean exit
+            # could never fire, and would respawn the interpreter every 60 s
+            # for no gain. tick_seq survives via the per-cycle graph write,
+            # so this is exactly an operator restart. Dry never execs.
+            _now_mtime = code_mtime(entry_path)
+            if code_changed(entry_mtime, _now_mtime):
+                if ctx.dry:
+                    ctx.log("code changed on disk: WOULD re-exec (dry: skipping)")
+                else:
+                    _msg = ("code changed on disk (mtime %r -> %r): re-exec"
+                            % (entry_mtime, _now_mtime))
+                    print(_msg, flush=True)
+                    ctx.log(_msg)
+                    if reexec_self(entry_path) is False:
+                        ctx.log("re-exec failed: continuing aged, retry next sweep")
         ctx.tick_seq += 1
         # Item 3 (#462): round-robin sweep order. discover_rooms glob
         # sort always yields the lowest issue first, so without rotation
@@ -7567,7 +7660,8 @@ def cmd_tick(ctx, issues, interval):
                 ctx.log(_msg)
                 if not interval:
                     return 0
-                time.sleep(interval)
+                if not sleep_interruptible(interval):
+                    continue
                 rooms = discover_rooms(issues, skip_debris=True)
                 continue
         try:
@@ -7621,7 +7715,8 @@ def cmd_tick(ctx, issues, interval):
                 ctx.log(msg)
                 emit_summary(ctx, tracker, ctx.graph, msg)
                 break
-        time.sleep(interval)
+        if not sleep_interruptible(interval):
+            continue
         rooms = discover_rooms(issues, skip_debris=True)
         done, detail = all_done(tracker, rooms)
         if done:
@@ -9899,17 +9994,17 @@ def mode_self_test():
                            [(51, "/r", {}),
                             (52, "/r", {"audit_pending": {"since": "2026-11-02T09:00:00Z"}})]) == 52, True)
     check("audit-queue-solo-self-head",
-          audit_queue_head(51, {"requester": "dev", "since": "2026-11-05T19:00:00Z"}, []) == 51, True)
+          audit_queue_head(51, {"requester": "dev", "text": "t"}, []) == 51, True)
     check("audit-queue-older-self-proceeds",
-          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T18:06:46Z"},
+          audit_queue_head(491, {"requester": "dev", "text": "t"},
                            [(474, "/r", {"audit_pending": {"since": "2026-11-05T18:09:01Z"}}),
-                            (491, "/r", {})]) == 491, True)
+                            (491, "/r", {"audit_pending": {"since": "2026-11-05T18:06:46Z"}})]) == 491, True)
     check("audit-queue-newer-self-defers",
-          audit_queue_head(474, {"requester": "dev", "since": "2026-11-05T18:09:01Z"},
-                           [(474, "/r", {}),
+          audit_queue_head(474, {"requester": "dev", "text": "t"},
+                           [(474, "/r", {"audit_pending": {"since": "2026-11-05T18:09:01Z"}}),
                             (491, "/r", {"audit_pending": {"since": "2026-11-05T18:06:46Z"}})]) == 491, True)
     check("audit-queue-closed-excluded",
-          audit_queue_head(491, {"requester": "dev", "since": "2026-11-05T19:00:00Z"},
+          audit_queue_head(491, {"requester": "dev", "text": "t"},
                            [(477, "/r", {"audit_pending": {"since": "2026-11-05T18:00:00Z"},
                                          "state": "CLOSING"})]) == 491, True)
     check("refire-sig-joins",
@@ -10380,6 +10475,18 @@ def mode_self_test():
           reverify_needed(True, True) is False, True)
     check("reverify-needed-unverified",
           reverify_needed(False, True) is True, True)
+    check("reexec-same-false", code_changed(100.0, 100.0), False)
+    check("reexec-newer-true", code_changed(100.0, 101.0), True)
+    check("reexec-older-true", code_changed(101.0, 100.0), True)
+    check("reexec-unstatable-false", code_changed(100.0, None), False)
+    check("reexec-live-file-false",
+          code_changed(code_mtime(os.path.abspath(__file__)),
+                       code_mtime(os.path.abspath(__file__))), False)
+    check("sleep-zero-true", sleep_interruptible(0), True)
+    _STOP["flag"] = "TEST"
+    check("sleep-stop-false", sleep_interruptible(60), False)
+    _STOP["flag"] = None
+    check("sleep-stop-cleared-true", sleep_interruptible(0), True)
     print("state-machine self-test: %d/%d PASS" % (passed, total), flush=True)
     return 0 if passed == total else 1
 
