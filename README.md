@@ -51,7 +51,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 ## Diagram of actual implementation
 
-<img src="diagram.png" alt="Diagram of actual implementation"/>
+<img src="diagram.svg" alt="Diagram of actual implementation"/>
 
 ---
 
