@@ -4,6 +4,12 @@ Tools: worker_state(session) -> WORKING|IDLE|STUCK verdict; worker_states() -> b
 post_update accepts an optional ref (engine order id) and appends an
 ACK: <ref> trailer line after NEXT. --selftest runs the built-in matrix.
 Backed by worker-state.sh next to this file.
+
+#507 T3 extension (herdr pilot): `post_update_v1` validates and posts a
+wire-schema-v1 JSON body to /tmp/nherdr-<room> (typed rejections on
+malformed input — never a write, never silence); `herdr_inbox_view`
+renders JSON-lines views. Legacy tools keep operating on /tmp/nexios-<room>.
+--selftest runs the legacy matrix; --selftest-v1 runs the herdr v1 matrix.
 """
 import json, subprocess, sys, os
 import re
@@ -11,6 +17,8 @@ import re
 HERE = os.path.dirname(os.path.abspath(__file__))
 SH = os.path.join(HERE, "worker-state.sh")
 SESSIONS = ["nexios-dev", "nexios-qe"]
+sys.path.insert(0, os.path.join(HERE, os.pardir))
+from herdr_engine.transport import NHR_BASE, Rejection, Transport as HerdrTransport  # noqa: E402
 
 
 import glob as _glob
@@ -176,7 +184,54 @@ def _tool_post_update(a):
     tail = " [fast-path tick fired]" if trig else ""
     return False, "posted to " + d + "/inbox/" + box + ".md:\n" + post + tail
 
+_HERDR_T = None
+
+def _herdr_transport():
+    global _HERDR_T
+    if _HERDR_T is None:
+        _HERDR_T = HerdrTransport()
+    return _HERDR_T
+
+_hd_boxes = ("dev", "qe", "auditor")
+_hd_known = ("v", "oid", "from", "kind", "state", "next", "ts", "room",
+             "ctx_pct", "acks", "evidence", "summary")
+
+def _tool_post_update_v1(a):
+    """Validated wire-schema-v1 post into /tmp/nherdr-<room> (never prose)."""
+    body = a.get("post")
+    if body is None:  # flat form: pull the v1 fields out of the args
+        body = {k: a[k] for k in _hd_known if a.get(k) is not None or k in ("v",)}
+        for k in ("v", "room"):
+            if k in body and isinstance(body[k], str) and body[k].isdigit():
+                body[k] = int(body[k])
+    room = a.get("room", body.get("room") if isinstance(body, dict) else None)
+    box = a.get("box", "dev")
+    if isinstance(room, dict):
+        return True, "REJECTED v1: room must be the room id"
+    if isinstance(room, str):
+        if not room.isdigit():
+            return True, "REJECTED v1: room must be a numeric issue id"
+        room = int(room)
+    r = _herdr_transport().post(room, box, body)
+    if isinstance(r, (Rejection,)):
+        return True, r.render()
+    return False, json.dumps({
+        "posted": r.body, "acked": r.acked, "woke": r.woke, "stream": r.stream_path,
+    })
+
+def _tool_herdr_inbox_view(a):
+    room = a.get("room", "")
+    box = a.get("box", "dev")
+    lines = int(a.get("lines", 5) or 5)
+    if isinstance(room, int):
+        room = str(room)
+    return False, _herdr_transport().inbox_view(room, box, lines)
+
 def run_tool(name, args):
+    if name == "post_update_v1":
+        return _tool_post_update_v1(args)
+    if name == "herdr_inbox_view":
+        return _tool_herdr_inbox_view(args)
     if name == "worker_state":
         sess = args.get("session", "")
         if sess not in SESSIONS + ["nexios-coord"]:
@@ -234,6 +289,92 @@ TOOLS = [
        "body": {"type": "string", "description": "evidence, numbers, file:lines (free text)"}},
        "required": ["room", "box", "kind", "summary", "state", "state_detail", "next"]}}
 ]
+
+TOOLS_V1 = [
+    {"name": "post_update_v1",
+     "description": "Post a wire-schema-v1 JSON body to a herdr pilot room (/tmp/nherdr-<room>): validates v/oid/from/kind/state/next/ts/room/ctx_pct/acks/evidence/summary against the closed schema; malformed posts get a typed rejection (field, error, hint) and never touch the stream. ACK semantics identical to the legacy bridge (one ACK clears one dev|qe order on the room ledger).",
+     "inputSchema": {"type": "object", "properties": {
+       "room": {"type": "integer", "description": "numeric issue id (herdr room)"},
+       "box": {"type": "string", "description": "dev, qe or auditor"},
+       "post": {"type": "object", "description": "the v1 JSON body; see docs/engine-herdr/spec.md 3"}},
+       "required": ["room", "box"]}},
+    {"name": "herdr_inbox_view",
+     "description": "Render the tail of a herdr room's posts.jsonl as JSON lines, each {facing, body}; facing=true when the post is from or acks the requested lane box. Views are rendered by the transport, never parsed back.",
+     "inputSchema": {"type": "object", "properties": {
+       "room": {"type": "string", "description": "numeric issue id"},
+       "box": {"type": "string", "description": "dev, qe or auditor"},
+       "lines": {"type": "integer", "description": "how many (default 5)"}},
+       "required": ["room", "box"]}},
+]
+
+def run_selftest_v1():
+    """herdr v1 bridge matrix — posts + rejections + ledger + view via run_tool."""
+    import shutil
+    passed = 0
+    total = 0
+
+    def check(name, cond):
+        nonlocal passed, total
+        total += 1
+        passed += 1 if cond else 0
+        print("%s %s" % ("PASS" if cond else "FAIL", name), flush=True)
+
+    room = 9991
+    d = NHR_BASE + str(room)
+    if os.path.exists(d):
+        print("FAIL v1 selftest room exists (refusing to touch live room)", flush=True)
+        return 1
+    os.makedirs(os.path.join(d, "prompts"))
+    os.makedirs(os.path.join(d, "reports"))
+    json.dump({"v": 1, "issue": room, "phase": "RECON", "state": "IDLE",
+               "pending": "", "orders": {}}, open(os.path.join(d, "state.json"), "w"))
+    try:
+        entry = _herdr_transport().file_order(room, "dev:2026-11-07T09:00:00",
+                                              lane="dev", demand="plan")
+        check("v1-order-filed", entry["state"] == "open")
+        ok, out = run_tool("post_update_v1", {"room": room, "box": "dev", "post": {
+            "v": 1, "oid": "dev:2026-11-07T10:00:00", "from": "dev", "kind": "NOTE",
+            "state": "working", "next": "working plan",
+            "ts": "2026-11-07T10:00:00Z", "room": room, "ctx_pct": 65,
+            "evidence": {"branch": "refs/heads/engine-herdr", "tip": "a" * 40, "diff": "covered"},
+            "summary": "checkpoint"}})
+        check("v1-valid-post", not ok and json.loads(out)["posted"]["ctx_pct"] == 65)
+        ok, out = run_tool("post_update_v1", {"room": room, "box": "dev", "post": {
+            "v": 2, "oid": "dev:2026-11-07T10:00:01", "from": "dev", "kind": "NOTE",
+            "state": "idle", "next": "idle", "ts": "2026-11-07T10:00:01Z", "room": room}})
+        check("v1-reject-schema-version", ok and "v:" in out and "must be 1" in out)
+        ok, out = run_tool("post_update_v1", {"room": room, "box": "dev", "post": {
+            "v": 1, "oid": "banana", "from": "dev", "kind": "NOTE",
+            "state": "idle", "next": "idle", "ts": "2026-11-07T10:00:02Z", "room": room}})
+        check("v1-reject-oid", ok and "not a valid order id" in out)
+        ok, out = run_tool("post_update_v1", {"room": room, "box": "qe", "post": {
+            "v": 1, "oid": "qe:2026-11-07T10:00:03", "from": "qe", "kind": "READY",
+            "state": "idle", "next": "idle", "ts": "2026-11-07T10:00:03Z", "room": room,
+            "acks": ["dev:2026-11-07T09:00:00"]}})
+        check("v1-reject-wrong-lane-ack", ok and "targets lane" in out)
+        ok, out = run_tool("post_update_v1", {"room": room, "box": "dev", "post": {
+            "v": 1, "oid": "dev:2026-11-07T10:00:04", "from": "dev", "kind": "NOTE",
+            "state": "idle", "next": "idle", "ts": "2026-11-07T10:00:04Z", "room": room,
+            "acks": ["dev:2026-11-07T09:00:00"]}})
+        check("v1-ack-clears-own-lane", not ok and json.loads(out)["acked"] == 1)
+        st = json.load(open(os.path.join(d, "state.json")))
+        check("v1-ledger-acked", st["orders"]["dev:2026-11-07T09:00:00"]["state"] == "acked")
+        check("v1-acks-log", bool(st.get("acks_log")))
+        ok, out = run_tool("post_update_v1", {"room": room, "box": "dev", "post": {
+            "v": 1, "oid": "dev:2026-11-07T10:00:05", "from": "dev", "kind": "NOTE",
+            "state": "idle", "next": "idle", "ts": "2026-11-07T10:00:05Z", "room": room,
+            "acks": ["dev:2026-11-07T09:00:00"]}})
+        check("v1-reject-dup-ack", ok and "already acknowledged" in out)
+        ok, out = run_tool("herdr_inbox_view", {"room": str(room), "box": "qe", "lines": 5})
+        lines = [x for x in out.splitlines() if x.strip().startswith("{")]
+        check("v1-view-non-empty", not ok and bool(lines))
+        facing = [json.loads(x) for x in lines]
+        check("v1-view-faces-others", all(not b["facing"] for b in facing))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    print("herdr v1 bridge self-test: %d/%d PASS" % (passed, total), flush=True)
+    return 0 if passed == total else 1
+
 
 def run_selftest():
     import shutil
@@ -297,6 +438,8 @@ def respond(rid, result=None, error=None):
 def main():
     if "--selftest" in sys.argv:
         return run_selftest()
+    if "--selftest-v1" in sys.argv:
+        return run_selftest_v1()
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -312,7 +455,8 @@ def main():
         elif method == "notifications/initialized":
             pass
         elif method == "tools/list":
-            respond(rid, {"tools": TOOLS})
+            tools = list(TOOLS) + list(TOOLS_V1)
+            respond(rid, {"tools": tools})
         elif method == "tools/call":
             is_err, text = run_tool(params.get("name", ""), params.get("arguments", {}) or {})
             respond(rid, {"content": [{"type": "text", "text": text}], "isError": is_err})
