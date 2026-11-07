@@ -595,6 +595,108 @@ JARVIS_TEST(serial_tx_sdf_compose_shm, "PRE: none | POST: none") {
 #endif
 
 // Runmode: kernel
+// Testidea: SHM TX ring wraparound (issue #51 QE): interleave pushes and
+// pops across several capacity crossings so head/tail grow monotonically
+// past capacity while the (idx*esz)&(cap-1) mask wraps; every popped
+// payload must match its push sequence number.
+// Input: 3 rounds of push-400 / pop-400 on a 4-page ring (1024 elems)
+// Expect: all 1200 pops byte-exact in FIFO order; ring empty at end
+// Depends: PMM contiguous alloc, shm_ring protocol, HHDM alias
+JARVIS_TEST(serial_tx_ring_wrap_interleave, "PRE: none | POST: none") {
+    constexpr size_t kPages = 4;
+    constexpr uint64_t kPerRound = 400;
+    constexpr uint64_t kRounds = 3;
+    const uint64_t phys = PMM::alloc_user_contiguous(kPages);
+    JARVIS_ASSERT(phys != 0);
+    auto *hdr = reinterpret_cast<kernel::shm::SharedRingHeader *>(
+        arch::HHDM_OFFSET + phys);
+    uint8_t *data_base = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
+                                                      phys +
+                                                      arch::PAGE_SIZE);
+    kernel::shm::shm_ring_init(hdr, kPages,
+                               kernel::sdf::kSerialTxRingElemSize);
+    JARVIS_ASSERT(kernel::shm::shm_ring_valid(hdr));
+    uint64_t seq = 0;
+    for (uint64_t round = 0; round < kRounds; ++round) {
+        for (uint64_t idx = 0; idx < kPerRound; ++idx) {
+            uint8_t elem[kernel::sdf::kSerialTxRingElemSize] = {};
+            for (uint64_t pos = 0;
+                 pos < kernel::sdf::kSerialTxRingElemSize; ++pos) {
+                elem[pos] = static_cast<uint8_t>((seq * 8 + pos) & 0xFF);
+            }
+            JARVIS_ASSERT_FMT(
+                kernel::shm::shm_ring_push(hdr, data_base, elem),
+                "round %lu push %lu failed", round, idx);
+            ++seq;
+        }
+        const uint64_t base = round * kPerRound;
+        for (uint64_t idx = 0; idx < kPerRound; ++idx) {
+            uint8_t elem[kernel::sdf::kSerialTxRingElemSize] = {};
+            JARVIS_ASSERT_FMT(
+                kernel::shm::shm_ring_pop(hdr, data_base, elem),
+                "round %lu pop %lu failed", round, idx);
+            const uint64_t want = base + idx;
+            for (uint64_t pos = 0;
+                 pos < kernel::sdf::kSerialTxRingElemSize; ++pos) {
+                JARVIS_ASSERT_FMT(
+                    elem[pos] ==
+                        static_cast<uint8_t>((want * 8 + pos) & 0xFF),
+                    "round %lu elem %lu byte %lu mismatch", round, idx,
+                    pos);
+            }
+        }
+    }
+    // 1200 pushes x 8 B = 9600 B > 8192 B capacity: the mask wrapped.
+    JARVIS_ASSERT(!kernel::shm::shm_ring_has_data(hdr));
+    for (size_t page = 0; page < kPages; ++page) {
+        PMM::free_page(phys + page * arch::PAGE_SIZE);
+    }
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: SHM ring fail-closed probes (issue #51 QE, pins the #343
+// hostile-header guards): null, zeroed, bad-magic, and zero-capacity
+// headers must all refuse push/pop; pop on a zero-capacity header with
+// head != tail must still refuse (no element-size division).
+// Input: synthetic headers on the test stack (no PMM, no tasks)
+// Expect: valid false for null/zeroed/wrong-magic/wrong-version;
+// push/pop/has_space false on every hostile header; has_data true but
+// pop false when head != tail with zero capacity
+// Depends: shm_ring protocol only
+JARVIS_TEST(shm_ring_fail_closed, "PRE: none | POST: none") {
+    uint8_t buf[kernel::sdf::kSerialTxRingElemSize] = {};
+    JARVIS_ASSERT(!kernel::shm::shm_ring_valid(nullptr));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_push(nullptr, buf, buf));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_pop(nullptr, buf, buf));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_has_space(nullptr));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_has_data(nullptr));
+    kernel::shm::SharedRingHeader blank{};
+    JARVIS_ASSERT(!kernel::shm::shm_ring_valid(&blank));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_push(&blank, buf, buf));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_pop(&blank, buf, buf));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_has_space(&blank));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_has_data(&blank));
+    blank.magic = 0xDEADBEEF;
+    blank.version = kernel::shm::SHM_RING_VERSION;
+    JARVIS_ASSERT(!kernel::shm::shm_ring_valid(&blank));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_push(&blank, buf, buf));
+    blank.magic = kernel::shm::SHM_RING_MAGIC;
+    blank.version = kernel::shm::SHM_RING_VERSION + 1;
+    JARVIS_ASSERT(!kernel::shm::shm_ring_valid(&blank));
+    // Well-formed magic+version but zero capacity/element size with
+    // head != tail: has_data observes the indices, pop still refuses.
+    blank.version = kernel::shm::SHM_RING_VERSION;
+    JARVIS_ASSERT(kernel::shm::shm_ring_valid(&blank));
+    blank.head = 8;
+    blank.tail = 0;
+    JARVIS_ASSERT(kernel::shm::shm_ring_has_data(&blank));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_pop(&blank, buf, buf));
+    JARVIS_ASSERT(!kernel::shm::shm_ring_push(&blank, buf, buf));
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all driver tests with the test framework
 // Input: None
 // Expect: All driver tests are registered (no direct assertion, only
@@ -604,6 +706,8 @@ void register_driver_tests() {
     Logger::info("Registering SHM TX ring tests");
     JARVIS_REGISTER_TEST(serial_tx_ring_push_drain_order);
     JARVIS_REGISTER_TEST(serial_tx_ring_drop_full);
+    JARVIS_REGISTER_TEST(serial_tx_ring_wrap_interleave);
+    JARVIS_REGISTER_TEST(shm_ring_fail_closed);
 #if CONFIG_SERIAL_TX_SHM
     JARVIS_REGISTER_TEST(serial_tx_sdf_row_shape);
     JARVIS_REGISTER_TEST(serial_tx_sdf_compose_shm);

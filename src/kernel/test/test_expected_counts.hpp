@@ -312,7 +312,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cross_boundary",        3,    0,       0      },  // ring3 vfsd/iocd chains + keyboard delivery (x86_64 only)
     {"storage",             167,  0,       0      },  // vfs_* + initrd_parser + ramdisk + fat32 pins + readdir overlay
     {"servers",             66,   66,      66     },  // servers_* + services_framework
-    {"drivers",             109,   64,      64     },  // drivers_* + virtio_blk_req + ahci_deep + net + #51 shm-tx ring x2
+    {"drivers",             111,   66,      66     },  // drivers_* + virtio_blk_req + ahci_deep + net + #51 shm-tx ring x2
     {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
     {"smp_multicpu",        21,   3,       3      },  // smp_bringup + smp_sched (x86) + tlb_shootdown E2E (2-CPU)
