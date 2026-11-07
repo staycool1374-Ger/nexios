@@ -176,3 +176,22 @@ history. Nothing on `main` changes at any point.
   `operator_needed` (broken worker infra, not task fate — the task itself
   returns to the queue); identical-NEED live-lock still flags room-level
   `stalled` (workers actively arguing, not waiting).
+
+## 12. Owner ruling (2026-11-07 — audit attaches to authorship, not issues)
+
+- **qe-authored deliveries: no audit step at all** (operator ruling (b)).
+  Ground: the owner rule — developer ships kernel mechanisms, QE owns
+  test-group authorship. A qe lane is kernel-incapable by role, so a
+  qe-authored delivery cannot taint the feature; there is no audit object.
+  No confinement check either: authorship is ledger-verified (`from` on
+  every post), and the incapacity is structural to the role.
+- **dev-authored deliveries: audit as written** (unchanged). The RECON
+  scope NOTE, any kernel touch, any dev implementation — all gated
+  exactly as before. #353 (kernel touched, SIL 3) vs #403 (vehicle-only)
+  is the standing precedent pair.
+- Consequence for #403: dev's RECON NOTE is dev-authored → one audit
+  verdict to open the IMPL gate. Everything after (GDB proofs, T3 vehicle,
+  verification) is qe-authored → proceeds with no audit step.
+- LLMs never amend this: any delivery whose authorship is ambiguous, or
+  any dev-authored diff touching production paths, escalates to the
+  operator instead of routing around the gate.
