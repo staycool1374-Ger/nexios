@@ -56,18 +56,10 @@ def save_state(room, st: dict[str, Any]) -> None:
 
 
 def posts(room) -> list[dict[str, Any]]:
-    try:
-        fh = open(os.path.join(room_dir(room), "posts.jsonl"), errors="replace")
-    except OSError:
-        return []
-    with fh:
-        out = []
-        for ln in fh:
-            try:
-                out.append(json.loads(ln))
-            except ValueError:
-                continue
-        return out
+    # validated read: only schema-clean posts ever reach gates or views
+    from herdr_engine.transport import read_stream
+    valid, _ = read_stream(room_dir(room))
+    return valid
 
 
 def posts_since(room, ts: str) -> list[dict[str, Any]]:
@@ -326,6 +318,13 @@ class Engine:
                 out.append(f"room {room} (absent/unreadable)")
                 continue
             parts = [f"room {room} phase={st.get('phase')}"]
+            try:
+                from herdr_engine.transport import rejected_count
+                nrej = rejected_count(room_dir(room))
+                if nrej:
+                    parts.append(f"rejected={nrej}")
+            except Exception:
+                pass
             for oid, o in sorted((st.get("orders") or {}).items()):
                 line = f"{oid}: {o.get('state')} rings={o.get('ring_count', 0)}"
                 if o.get("operator_needed"):

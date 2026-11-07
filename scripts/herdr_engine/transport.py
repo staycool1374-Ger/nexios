@@ -91,6 +91,52 @@ NHR_BASE = os.environ.get("NHR_BASE", "/tmp/nherdr-")
 _MISSING = object()
 
 
+def read_stream(room_path: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Validate-on-read: every stream line re-checked against schema v1.
+
+    T8 live finding: lanes can append to posts.jsonl by any path (MCP or
+    shell), so write-time validation alone cannot guarantee the wire.
+    Invalid lines are quarantined to posts.rejected.jsonl with their errors
+    and NEVER returned to gates, verdict intake, or views.
+    """
+    valid: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    try:
+        fh = open(os.path.join(room_path, "posts.jsonl"), errors="replace")
+    except OSError:
+        return valid, rejected
+    with fh:
+        for ln in fh:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                body = json.loads(ln)
+            except ValueError as exc:
+                rejected.append({"line": ln[:200], "errors": [f"not JSON: {exc}"]})
+                continue
+            role = body.get("from") if isinstance(body, dict) and body.get("from") in FROMS else None
+            checked = validate_post(body, role=role)
+            if isinstance(checked, Rejection):
+                rejected.append({"line": ln[:200],
+                                 "errors": [v.render() for v in checked.violations]})
+                continue
+            valid.append(checked)
+    if rejected:
+        with open(os.path.join(room_path, "posts.rejected.jsonl"), "a") as fh:
+            for r in rejected:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    return valid, rejected
+
+
+def rejected_count(room_path: str) -> int:
+    try:
+        with open(os.path.join(room_path, "posts.rejected.jsonl")) as fh:
+            return sum(1 for _ in fh)
+    except OSError:
+        return 0
+
+
 def oid_lane(oid: str) -> str | None:
     """Lane named by a post oid (audit included); ACK order ids stay dev|qe."""
     m = OID_POST_RE.fullmatch(oid or "")

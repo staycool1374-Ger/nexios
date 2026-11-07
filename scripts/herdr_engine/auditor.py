@@ -137,18 +137,9 @@ class Audit:
     # -- verdict intake ---------------------------------------------------------
 
     def latest_posts(self, room: int) -> list[dict[str, Any]]:
-        try:
-            fh = open(os.path.join(rdir(room), "posts.jsonl"), errors="replace")
-        except OSError:
-            return []
-        with fh:
-            out = []
-            for ln in fh:
-                try:
-                    out.append(json.loads(ln))
-                except ValueError:
-                    continue
-        return out
+        from herdr_engine.transport import read_stream
+        valid, _ = read_stream(rdir(room))
+        return valid
 
     def accept_verdict(self, ins: Instance, post: dict[str, Any]) -> dict[str, Any] | Rejection:
         """Verdict identity: kind+tip+demand — reject anything else typed."""

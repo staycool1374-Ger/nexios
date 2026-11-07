@@ -332,5 +332,55 @@ class SimRoom(unittest.TestCase):
         self.assertEqual(before, after)
 
 
+class ReadStream(unittest.TestCase):
+    """Validate-on-read: gates only ever see schema-clean posts (T8 live)."""
+
+    d = f"{NHR_BASE}9004"
+
+    def setUp(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+        os.makedirs(self.d)
+        json.dump({"v": 1, "issue": 9004, "phase": "RECON", "state": "IDLE",
+                   "pending": "", "orders": {}}, open(os.path.join(self.d, "state.json"), "w"))
+
+    def tearDown(self):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def write(self, lines):
+        with open(os.path.join(self.d, "posts.jsonl"), "w") as fh:
+            for ln in lines:
+                fh.write(ln + "\n")
+
+    def good_dev(self):
+        import copy
+        b = base(room=9004)
+        b["oid"] = "dev:2026-11-07T10:00:00"
+        return json.dumps(b)
+
+    def test_80_malformed_and_invalid_quarantined(self):
+        from herdr_engine.transport import read_stream, rejected_count
+        self.write([
+            self.good_dev(),
+            "{not json",
+            json.dumps(dict(json.loads(self.good_dev()), kind="STAMP")),
+            json.dumps({"v": 1, "oid": "audit:2026-11-07T10:00:01", "from": "audit",
+                        "kind": "DECISION", "state": "idle", "next": "idle",
+                        "ts": "2026-11-07T10:00:01Z", "room": 9004,
+                        "evidence": {"tip": "pending-abc123ef"}}),
+        ])
+        valid, rejected = read_stream(self.d)
+        self.assertEqual(len(valid), 2, "dev post + audit verdict survive")
+        self.assertEqual(len(rejected), 2, "garbage + bad-kind quarantined")
+        self.assertEqual(rejected_count(self.d), 2)
+        self.assertTrue(all("oid" in v for v in valid))
+
+    def test_81_fsm_posts_only_valid(self):
+        from herdr_engine import fsm as F
+        self.write(["{oops", self.good_dev()])
+        got = F.posts(9004)
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0]["oid"], "dev:2026-11-07T10:00:00")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

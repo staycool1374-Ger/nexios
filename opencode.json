@@ -62,6 +62,15 @@
       "headers": {
         "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
+    },
+    "nexios-worker-state": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "/opt/homebrew/bin/python3",
+        "/Users/arnold/jarvis-herdr/scripts/nexios-bin/mcp-worker-state.py"
+      ],
+      "environment": {}
     }
   }
 }
