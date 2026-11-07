@@ -474,6 +474,35 @@ class Transport:
         """Engine-side: file an order on the ledger (ring source of truth)."""
         return self.rfile_order_state(int(room), oid, lane, demand)
 
+    def discharge(self, room: int | str, frm: str, to: str,
+                  reason: str) -> dict[str, Any]:
+        """Record an OPERATOR discharge of exactly one gate (frm → to).
+
+        The only lawful way a gate opens without its deciding post: the
+        workflow owner rules the step discharged, and the engine records
+        who ruled it and why. Nothing in any tick ever calls this — it is
+        invoked explicitly (cli `discharge` verb) on the operator's direct
+        command. find_gate honors a recorded discharge; status shows it.
+        """
+        d = self._have_room(room)
+        if not d:
+            raise ValueError(f"no room {NHR_BASE}{room}")
+        if not reason or not reason.strip():
+            raise ValueError("discharge requires a reason (the operator's words)")
+        with self._locked(d):
+            st = self._load_state(d)
+            if "phase" not in st:
+                raise ValueError(f"refusing discharge on unreadable state {d}/state.json")
+            key = f"{frm}->{to}"
+            dis = st.setdefault("discharges", {})
+            if key in dis:
+                return dis[key]
+            from herdr_engine.fsm import now_str as _now
+            dis[key] = {"by": "operator", "reason": reason.strip(),
+                        "ts": _now(), "phase_at": st.get("phase")}
+            self._save_state(d, st)
+            return dis[key]
+
     # -- views --------------------------------------------------------------
 
     def inbox_view(self, room: int | str, box: str, lines: int = 5) -> str:

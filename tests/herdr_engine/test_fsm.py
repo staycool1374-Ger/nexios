@@ -886,6 +886,70 @@ class StallCanonTest(Basis, unittest.TestCase):
         self.assertEqual(act.verb, "need")
 
 
+class DischargeTest(Basis, unittest.TestCase):
+    """Operator discharge (§13): the only lawful gateless advance.
+
+    A discharge is recorded only through the explicit API, never by any
+    tick; it opens exactly one gate; the reason is the operator's words.
+    """
+
+    def setUp(self):
+        CLOCK["i"] = 800
+        self.setup_room(self.ROOM)
+        self.sim = SimHerdr()
+        for lane in ("dev", "qe", "audit"):
+            self.sim.spawn(f"t-{self.ROOM}-{lane}", self.ROOM, lane)
+        self.eng = Engine(runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
+                          clock=fake_clock, transport=Transport())
+
+    def tearDown(self):
+        self.drop_room(self.ROOM)
+
+    def test_d0_discharge_advances_without_posts(self):
+        Transport().discharge(self.ROOM, "RECON", "IMPL",
+                              "scope accepted as briefed; no dev-authorship downstream")
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "advance")
+        self.assertEqual(act.detail["to"], "IMPL")
+        self.assertTrue(act.detail["by"].startswith("operator-discharge:"))
+        self.assertIn("scope accepted as briefed", act.detail["by"])
+        self.assertEqual(F.load_state(self.ROOM)["phase"], "IMPL")
+
+    def test_d1_discharge_is_gate_specific(self):
+        Transport().discharge(self.ROOM, "RECON", "IMPL", "operator says so")
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st.setdefault("entered_ts", {})["IMPL"] = ts(800)
+        F.save_state(self.ROOM, st)
+        act = self.eng.tick(self.ROOM)
+        self.assertNotEqual(getattr(act, "verb", None), "advance",
+                            "a RECON→IMPL discharge must not open IMPL→VERIFY")
+        self.assertEqual(F.load_state(self.ROOM)["phase"], "IMPL")
+
+    def test_d2_ticks_never_create_discharges(self):
+        self.post(kind="DECISION", **{"from": "audit"}, summary="APPROVED plan",
+                  evidence={"tip": "a" * 40}, oid=f"audit:{ts(5)}")
+        for _ in range(3):
+            self.eng.tick(self.ROOM)
+        self.assertNotIn("discharges", F.load_state(self.ROOM))
+
+    def test_d3_discharge_needs_reason_and_room(self):
+        with self.assertRaises(ValueError):
+            Transport().discharge(self.ROOM, "RECON", "IMPL", "  ")
+        with self.assertRaises(ValueError):
+            Transport().discharge(99999, "RECON", "IMPL", "operator says so")
+
+    def test_d4_discharge_idempotent(self):
+        r1 = Transport().discharge(self.ROOM, "RECON", "IMPL", "first reason")
+        r2 = Transport().discharge(self.ROOM, "RECON", "IMPL", "second reason")
+        self.assertEqual(r1, r2, "first recorded reason wins; no overwrite")
+
+    def test_d5_status_shows_discharge(self):
+        Transport().discharge(self.ROOM, "RECON", "IMPL", "operator says so")
+        s = self.eng.status([self.ROOM])
+        self.assertIn("discharged[RECON->IMPL]", s)
+
+
 class ReworkLoopTest(Basis, unittest.TestCase):
     """Audit NEED -> dev rework -> re-audit until APPROVED (user workflow)."""
 

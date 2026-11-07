@@ -191,17 +191,25 @@ class Engine:
             return "no onward gate"
         return GATE_REQUIREMENTS.get((ph, to_ph), "no onward gate")
 
-    def find_gate(self, room, st: dict[str, Any]) -> tuple[str, str, dict[str, Any]] | None:
+    def find_gate(self, room, st: dict[str, Any]) -> tuple[str, str, dict[str, Any] | None] | None:
         """(from_phase, to_phase, deciding post) for the room's open gate.
 
         Output-in-boundary (T8): when the gate lane has open orders, the
         deciding post must ACK one of them — stray READYs never advance.
         With no open lane orders, the predicate alone decides (as before).
+
+        Operator discharge (§13): a recorded operator discharge for exactly
+        this (from → to) gate satisfies it with no post (deciding post is
+        None). The discharge is recorded only through the explicit
+        discharge API — nothing in the tick ever creates one.
         """
         ph = st.get("phase")
         to_ph = self.next_phase(ph)
         if ph not in PHASES[:-2] or to_ph is None:
             return None
+        dis = (st.get("discharges") or {}).get(f"{ph}->{to_ph}")
+        if dis and dis.get("by") == "operator":
+            return ph, to_ph, None
         name = GATE_NAMES[(ph, to_ph)]
         entered = (st.get("entered_ts") or {}).get(ph, "")
         pred = GATE_PREDICATES[name]
@@ -237,11 +245,17 @@ class Engine:
         if ring is not None:
             return self._record(ring)
 
-        # 2) gates (a ready transition always wins over filing new work)
+        # 2) gates (a ready transition always wins over filing new work;
+        # an operator discharge advances with no post, by recorded reason)
         gate = self.find_gate(room, st)
         if gate:
             frm, to, post = gate
-            act = self._apply_transition(room, st, post.get("oid", ""), to)
+            if post is None:
+                dis = (st.get("discharges") or {}).get(f"{frm}->{to}", {})
+                act = self._apply_transition(room, st, "", to,
+                                             by=f"operator-discharge:{dis.get('reason', '')[:120]}")
+            else:
+                act = self._apply_transition(room, st, post.get("oid", ""), to)
             return self._record(act)
 
         # 3) handover: a lane NEED hands its claimed orders back (BLOCKED,
@@ -286,8 +300,8 @@ class Engine:
             self.actions.append(act)
         return act
 
-    def _apply_transition(self, room, st, oid, to):
-        detail = {"to": to, "by": oid}
+    def _apply_transition(self, room, st, oid, to, by=None):
+        detail = {"to": to, "by": by if by is not None else oid}
         if not self.dry_run:
             st["phase"] = to
             st.setdefault("entered_ts", {})[to] = now_str(self.clock)
@@ -594,6 +608,9 @@ class Engine:
                 out.append(f"room {room} (absent/unreadable)")
                 continue
             parts = [f"room {room} phase={st.get('phase')}"]
+            for gk, gv in sorted((st.get("discharges") or {}).items()):
+                if isinstance(gv, dict) and gv.get("by") == "operator":
+                    parts.append(f"discharged[{gk}]")
             try:
                 from herdr_engine.transport import rejected_count
                 nrej = rejected_count(room_dir(room))

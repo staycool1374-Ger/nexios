@@ -84,6 +84,36 @@ def cmd_tick(args) -> int:
             eng.wake.clear()
 
 
+def cmd_discharge(args) -> int:
+    """Record an operator discharge of one gate (explicit operator act only).
+
+    Usage: discharge --rooms 403 --gate RECON:IMPL --reason "..."
+    The reason is the operator's own words and is stored on the record;
+    find_gate honors it, status shows it. Nothing in any tick can create
+    a discharge — this verb, run on the operator's direct command, is the
+    only writer.
+    """
+    rooms = parse_rooms(args.rooms)
+    if len(rooms) != 1:
+        print("discharge needs exactly one --rooms <issue>", file=sys.stderr)
+        return 2
+    try:
+        frm, to = args.gate.split(":", 1)
+    except (ValueError, AttributeError):
+        print("discharge needs --gate FROM:TO (e.g. RECON:IMPL)", file=sys.stderr)
+        return 2
+    if not args.reason or not args.reason.strip():
+        print("discharge needs --reason (the operator's words)", file=sys.stderr)
+        return 2
+    t = Transport() if not args.dry_run else None
+    if args.dry_run:
+        print(f"[dry] would discharge room {rooms[0]} gate {frm}->{to}: {args.reason.strip()}")
+        return 0
+    rec = t.discharge(rooms[0], frm.strip(), to.strip(), args.reason)
+    print(f"discharged room {rooms[0]} gate {frm.strip()}->{to.strip()} by={rec['by']} ts={rec['ts']}")
+    return 0
+
+
 def cmd_status(args) -> int:
     rooms = parse_rooms(args.rooms)
     eng = Engine(runtimes={r: RoomRuntime() for r in rooms}, dry_run=True)
@@ -114,6 +144,13 @@ def main() -> int:
     st = sub.add_parser("status", help="rooms overview (phases, orders, NEEDs)")
     st.add_argument("--rooms", default="")
     st.set_defaults(func=cmd_status)
+
+    di = sub.add_parser("discharge", help="record an operator gate discharge (explicit operator act)")
+    di.add_argument("--rooms", default="", help="exactly one room")
+    di.add_argument("--gate", default="", help="FROM:TO (e.g. RECON:IMPL)")
+    di.add_argument("--reason", default="", help="operator's words, stored on the record")
+    di.add_argument("--dry-run", action="store_true")
+    di.set_defaults(func=cmd_discharge)
 
     sf = sub.add_parser("selftest", help="run the tests/herdr_engine corpus")
     sf.set_defaults(func=cmd_selftest)

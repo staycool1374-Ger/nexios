@@ -195,3 +195,22 @@ history. Nothing on `main` changes at any point.
 - LLMs never amend this: any delivery whose authorship is ambiguous, or
   any dev-authored diff touching production paths, escalates to the
   operator instead of routing around the gate.
+
+## 13. Operator discharge (2026-11-07 — the only lawful gateless advance)
+
+- A gate opens without its deciding post if and only if the workflow
+  owner records a discharge: `cli discharge --rooms <issue> --gate
+  FROM:TO --reason "<operator's words>"`. The record stores who (`by:
+  operator`), the reason verbatim, and a timestamp; `status` shows it as
+  `discharged[FROM->TO]`; the advance action cites the reason.
+- Nothing in any tick can create, infer, or widen a discharge: it is
+  gate-specific (no carry-over to other gates), idempotent (first reason
+  wins), and requires a non-empty reason. This is the mechanism by which
+  the owner exercises "LLMs don't change workflow" — the engine never
+  waives a gate; the owner discharges it, on the record.
+- 403 ruling (recorded): RECON scope accepted as briefed — the NOTE
+  mirrors operator-authored #403 and the #353 planner design, and no
+  dev-authorship exists downstream (proofs + T3 vehicle + verification
+  are qe-owned per §12). The RECON→IMPL gate is discharged on that
+  reason. Downstream: qe work proceeds with no audit step (§12 ruling
+  (b)).
