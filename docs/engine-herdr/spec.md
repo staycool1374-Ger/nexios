@@ -214,3 +214,14 @@ history. Nothing on `main` changes at any point.
   are qe-owned per §12). The RECON→IMPL gate is discharged on that
   reason. Downstream: qe work proceeds with no audit step (§12 ruling
   (b)).
+
+## 14. Done means all architectures (operator ruling, 2026-11-07)
+
+- A task is done if and only if it works on ALL architectures. Per-arch
+  partial completion never counts as done — not as a lane verdict, not
+  as a stream claim, not as a CI-deferred IOU. A green run elsewhere
+  does not retire a red architecture; the red one routes to dev as FAIL
+  per the normal rework loop until it is actually green somewhere real.
+- Consequence for #403: the qe lane's "T3 done, rV64 needs CI" NOTEs are
+  superseded — the riscv64 NEED stands as the operative result. The T3
+  vehicle is done when {0,8,8} is measured green on aarch64 AND riscv64.
