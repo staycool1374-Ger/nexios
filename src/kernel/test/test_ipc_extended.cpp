@@ -295,6 +295,74 @@ JARVIS_TEST(ipc_multiple_blocked_senders_wake_one, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Issue #475 literal walk — three senders block FIFO; THREE
+// wake cycles complete them in block order (not LIFO) with no survivor
+// woken by an earlier cycle.
+// Input: BLOCKED receiver with a full queue; dispatch A/B/C (prio 12)
+// sequentially to BLOCKED; drain; wake 3x with reschedule + join between.
+// Expect: list A->B->C with tail C; cycle k completes sender k (results
+// 1,2,3) and leaves later senders untouched (99) until their cycle;
+// list ends empty with tail/null.
+// Depends: kernel::IPC block/wake_sender, Scheduler dispatch/join.
+// NOTE: spawn_fifo_sender reuses the static SendCtx trio of
+// ipc_queue_remove_from_mid — tests run serially, ctx->out_ is rebound
+// per call, so sharing is safe.
+JARVIS_TEST(ipc_fifo_wake_order_three, "PRE: none | POST: none") {
+    auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
+    JARVIS_ASSERT(receiver != nullptr);
+    fill_receiver_queue(*receiver);
+    hold_receiver(*receiver);
+    const uint64_t recv_id = receiver->id;
+
+    g_fifo_first_result = 99;
+    g_fifo_middle_result = 99;
+    g_fifo_last_result = 99;
+    auto *first = spawn_fifo_sender(recv_id, 1, g_fifo_first_result);
+    JARVIS_ASSERT(first != nullptr);
+    JARVIS_ASSERT(await_blocked(first, arch::Timer::ticks() + 500));
+    auto *middle = spawn_fifo_sender(recv_id, 2, g_fifo_middle_result);
+    JARVIS_ASSERT(middle != nullptr);
+    JARVIS_ASSERT(await_blocked(middle, arch::Timer::ticks() + 500));
+    auto *last = spawn_fifo_sender(recv_id, 3, g_fifo_last_result);
+    JARVIS_ASSERT(last != nullptr);
+    JARVIS_ASSERT(await_blocked(last, arch::Timer::ticks() + 500));
+
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == first);
+    JARVIS_ASSERT(first->blocked_next == middle);
+    JARVIS_ASSERT(middle->blocked_next == last);
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == last);
+
+    kernel::Message drain{};
+    while (receiver->msg_queue.pop(drain)) {
+    }
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(first);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_first_result);
+    JARVIS_ASSERT(g_fifo_middle_result == 99);
+    JARVIS_ASSERT(g_fifo_last_result == 99);
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(middle);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_middle_result);
+    JARVIS_ASSERT(g_fifo_last_result == 99);
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(last);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_last_result);
+
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == nullptr);
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == nullptr);
+
+    kernel::test::terminate_if_live(receiver);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
 namespace {
 
 /// @brief Never-replying destination: registered BLOCKED, never
@@ -404,6 +472,13 @@ JARVIS_TEST(ipc_send_sync_timeout, "PRE: none | POST: none") {
     kernel::test::wait_for_termination_safe(expiry);
 
     g_bounded_peer = nullptr;
+    // Issue #475: after expiry the sender must be gone from the peer's
+    // blocked list (interrupts-disabled rollback, ipc.cpp
+    // unblock_sender_rollback), not just flag-clean.
+    JARVIS_ASSERT_FMT(peer->msg_queue.blocked_senders_head == nullptr,
+                      "sender still on peer blocked list after expiry");
+    JARVIS_ASSERT_FMT(peer->msg_queue.blocked_senders_tail == nullptr,
+                      "sender tail still on peer blocked list after expiry");
     kernel::test::terminate_if_live(peer);
     Scheduler::drain_zombie_list();
     JARVIS_ASSERT_FMT(g_bounded_timed_out, "bounded wait did not expire");
@@ -940,6 +1015,7 @@ void register_ipc_extended_tests() {
     JARVIS_REGISTER_TEST(ipc_send_data_size_zero);
     JARVIS_REGISTER_TEST(ipc_queue_remove_from_mid);
     JARVIS_REGISTER_TEST(ipc_multiple_blocked_senders_wake_one);
+    JARVIS_REGISTER_TEST(ipc_fifo_wake_order_three);
     JARVIS_REGISTER_TEST(ipc_send_sync_timeout);
     JARVIS_REGISTER_TEST(ipc_priority_inversion);
     JARVIS_REGISTER_TEST(ipc_send_self_max_message_size);
