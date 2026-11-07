@@ -18,6 +18,9 @@ end — never walked once") has now been walked once.
    the stream (16 intake posts were engine/operator-filed orders excluded).
    Caveat: the audit re-verdict (real finding — bare-quoted includes in moved
    TUs) landed ~20s AFTER the issue closed. The close beat the NEED.
+  (Workflow order, corrected: audit follows dev implementation, not qe —
+  that step is complete: plan APPROVED at 15:52, implementation re-audit at
+  17:27. What remains open is the re-audit's *finding*, not the audit step.)
 2. **Zero prose-parser bugs: PASS.** No inbox tail scans, no verdict regexes,
    no CTX adjudication anywhere in the herdr path. The failures this pilot
    found were schema gaps (audit tip/ACK grammar), fixed as schema, tested.
@@ -74,7 +77,8 @@ end — never walked once") has now been walked once.
   (global config → branch file is pilot-only), keep legacy rooms on tmux
   until a second pilot walks a room with zero spawn briefs.
 - **Follow-ups from the pilot, in order**: (1) bare-quoted includes in the
-  moved TUs (open audit NEED vs closed #420 — reopen or file a follow-up);
+  moved TUs (audit finding recorded; audit step itself complete per workflow
+  order dev → audit → qe — reopen #420 or file a follow-up for the fix);
   (2) qe test execution on real builds; (3) second staffed room to prove
   lane-level parallelism; (4) close-out automation for the CLOSED derivation
   (currently recorded by hand from the GitHub API).
