@@ -71,9 +71,11 @@ do not) — the seam reads the agent process, exactly like legacy
   GitHub-derived; the engine never originates closure).
 - Era guards: compare **timestamps of structured posts + fetched refs**
   only — all prose gates from `docs/state-machine.md` §8 are dropped.
-- Orders: `filed(oid, ack-by +900s, done-by +1800s)` → ring via `hc send`
-  (max once per cycle) → escalation ladder (§6) whose last element is a
-  typed operator NEED.
+- Orders: `filed(oid)` with no deadlines → ring via `hc send` (max once
+  per cycle) → `acked` on lane ACK (claimed/working) → `blocked` on lane
+  NEED (handed back with a note; worker freed; re-ringable by a DIFFERENT
+  worker) → `retired` on gate. Waiting is a valid state: unclaimed tasks
+  wait indefinitely — no timeouts, no escalation, no parking, no closure.
 - Auditor: instance per demand (`hc run --bg` one-shot/two-turn); verdict
   identity `kind+tip+demand`; teardown after 2 idle cycles; relaunch budget
   3 ⇒ operator NEED; re-audit re-opens the era.
@@ -92,12 +94,28 @@ docs/engine-herdr/spawn-proof.md   # T0 evidence (done)
 tests/herdr_engine/                # ≥300 selftest checks incl. adversarial posts
 ```
 
-## 6. Escalation (T7)
+## 6. Handover (T7, repurposed post-durable-queue)
 
-`nudge → re-ring → recreate (hc kill + fenced respawn) → typed operator
-NEED (owner + reason + evidence)`. No path ends in silence; halt budget
-carries over. `[T0]` recreate re-verified by the §3 identity seam
-contract — `verify_identity` then kill-on-mismatch are already test-proven.
+`nudge → re-ring → re-create (hc kill + rm of the dead terminal)` is a
+MANUAL operator-invoked poke toolkit. It has no terminal rung and the
+engine never fires it automatically: waiting is a valid task state, not
+a violation. Task movement is mechanical, never temporal:
+
+- WAITING (`open`): provisioned, queued, unclaimed. No deadline, no
+  escalation, no expiry. Re-rung whenever a new worker appears; quiet
+  (no action, no noise) while none exists.
+- Claimed (`acked`): a lane ACKed the order; the ring binds the message
+  to one terminal. A dead bound terminal voids the claim (event-driven
+  on `hc get` failure — no counting); the task itself is untouched and
+  simply waits again.
+- BLOCKED (`blocked`): the holding lane posted NEED. The order returns to
+  the queue carrying the handover note; the worker is freed the moment
+  the claim clears and may take other tasks; the engine re-rings the
+  task to a DIFFERENT terminal (the handing-back one is excluded). A
+  lane may reclaim by ACKing again.
+- No other terminal state exists: a task is never parked, closed, or
+  timed out. `verify_identity` then kill-on-mismatch still guards every
+  `[T0]` re-create.
 
 ## 7. Pilot contract (T8)
 
@@ -142,3 +160,19 @@ history. Nothing on `main` changes at any point.
 - **Q4** → two-turn interactive auditor instances by default (T5 as built);
   re-audits use the idle×2 teardown path. Flip to one-shot only if the
   pilot proves churning.
+
+## 11. Operator directive (2026-11-07, post-T9 — durable queue)
+
+- Tasks are durable queue entries: a provisioned task waits until a
+  matching worker claims it — 10 seconds or 10 days. No ack-by/done-by
+  deadlines, no overdue counting, no halt budget, no terminal NEED, no
+  parking, no closure. Waiting is a valid state (WAITING); a held task
+  that needs a different worker is handed back (BLOCKED) and the freed
+  worker may take other tasks — concurrency, not escalation.
+- Rationale (operator): a timeout on an unclaimed task punishes the task
+  for the scheduler having no worker; parking/closing destroys provisioned
+  work. The old rule confused "nobody picked it up yet" with "wedged".
+- What stays: crash-looping worker instances still flag instance-level
+  `operator_needed` (broken worker infra, not task fate — the task itself
+  returns to the queue); identical-NEED live-lock still flags room-level
+  `stalled` (workers actively arguing, not waiting).

@@ -359,9 +359,12 @@ class Transport:
             os.replace(tmp, p)
 
     @classmethod
-    def rfile_order_state(cls, in_room, oid, lane=None, done_by=None,
-                          ack_by=None, demand=""):
-        """Locked order filing: the only room-state writer beside tick()."""
+    def rfile_order_state(cls, in_room, oid, lane=None, demand=""):
+        """Locked order filing: the only room-state writer beside tick().
+
+        Filed orders carry NO deadlines: a task waits on the queue until a
+        worker claims it, however long that takes (durable queue).
+        """
         d = cls._have_room(in_room)
         if not d:
             raise ValueError(f"no room {NHR_BASE}{in_room}")
@@ -374,8 +377,7 @@ class Transport:
             if oid in orders:
                 return orders[oid]
             orders[oid] = {"lane": oid_lane(oid) or "audit", "state": "open",
-                           "filed": "now", "ack_by": ack_by, "done_by": done_by,
-                           "demand": demand}
+                           "filed": "now", "demand": demand}
             cls._save_state(d, st)
             return orders[oid]
 
@@ -440,12 +442,13 @@ class Transport:
                 if entry.get("state") == "acked":
                     rj.violations.append(Violation(f"acks[oid={a}]", "already acknowledged", "one ACK clears one oid"))
                     return rj
-                if entry.get("state") != "open":
-                    rj.violations.append(Violation(f"acks[oid={a}]", f"order is {entry.get('state')}, not open",
-                                                   "ACK only open orders"))
+                if entry.get("state") not in ("open", "blocked"):
+                    rj.violations.append(Violation(f"acks[oid={a}]", f"order is {entry.get('state')}, not claimable",
+                                                   "ACK only open or blocked (handed-back) orders"))
                     return rj
                 entry["state"] = "acked"
                 entry["acked_by"] = {"lane": role, "post_oid": post["oid"], "ts": new_ts}
+                entry.pop("blocked_from", None)  # fresh claim voids the handover exclusion
                 acked += 1
                 st.setdefault("acks_log", []).append({"oid": a, "cleared_by": post["oid"], "ts": new_ts})
     
@@ -466,10 +469,10 @@ class Transport:
             woke = True
         return Posted(body=post, box=box, stream_path=stream, acked=acked, woke=woke)
 
-    def file_order(self, room: int | str, oid: str, lane: str | None = None, done_by: str | None = None,
-                   ack_by: str | None = None, demand: str = "") -> dict[str, Any]:
+    def file_order(self, room: int | str, oid: str, lane: str | None = None,
+                   demand: str = "") -> dict[str, Any]:
         """Engine-side: file an order on the ledger (ring source of truth)."""
-        return self.rfile_order_state(int(room), oid, lane, done_by, ack_by, demand)
+        return self.rfile_order_state(int(room), oid, lane, demand)
 
     # -- views --------------------------------------------------------------
 

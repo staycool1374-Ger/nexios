@@ -414,4 +414,19 @@ class AckGuard(unittest.TestCase):
         r = self.postq(oid="dev:2026-11-07T10:00:01", ts="2026-11-07T10:00:01Z",
                        acks=["dev:2026-11-07T10:00:00"])
         self.assertIsInstance(r, Rejection)
-        self.assertTrue(any("not open" in v.error for v in r.violations))
+        self.assertTrue(any("not claimable" in v.error for v in r.violations))
+
+    def test_91_ack_blocked_reclaims(self):
+        self.t.file_order(9005, "dev:2026-11-07T10:00:00", lane="dev")
+        st = json.load(open(self.d + "/state.json"))
+        st["orders"]["dev:2026-11-07T10:00:00"].update({
+            "state": "blocked", "rung_to": None, "blocked_from": "t-old",
+            "blocked_need": {"oid": "dev:2026-11-07T10:00:05", "summary": "NEED h", "ts": "2026-11-07T10:00:05Z"}})
+        json.dump(st, open(self.d + "/state.json", "w"))
+        r = self.postq(oid="dev:2026-11-07T10:00:06", ts="2026-11-07T10:00:06Z",
+                       acks=["dev:2026-11-07T10:00:00"])
+        self.assertFalse(isinstance(r, Rejection), getattr(r, "violations", None))
+        st = json.load(open(self.d + "/state.json"))
+        o = st["orders"]["dev:2026-11-07T10:00:00"]
+        self.assertEqual(o["state"], "acked")
+        self.assertNotIn("blocked_from", o, "fresh claim voids the handover exclusion")

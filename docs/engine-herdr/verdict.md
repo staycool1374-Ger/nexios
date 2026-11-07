@@ -89,3 +89,21 @@ Unchanged from §8: stop herdr terminals, `rm -rf /tmp/nherdr-*`, keep
 `engine-herdr` as history. Nothing on `main` was ever touched; the pilot
 worktrees are detached and disposable; `pilot/420-colocation` is an ordinary
 branch on origin.
+
+## Addendum (2026-11-07, post-verdict operator directive — durable queue)
+
+History above is unchanged; the rule it records in criterion 4 ("every
+wedge surfaces a typed NEED") is superseded for one case:
+
+- An UNCLAIMED task waiting for a worker is not a wedge and never was —
+  timeouts, overdue counting, the halt budget, and the terminal operator
+  NEED for unclaimed orders are removed. Tasks wait indefinitely
+  (WAITING); a held task needing a different worker is handed back
+  (BLOCKED, worker freed, re-ring excludes the handing-back terminal).
+- The "second staffed room" follow-up (3) gets easier, not harder: room
+  #403's parked RECON demand is already plain queued work — staffing a
+  403-labeled dev lane is now sufficient, no reset or re-filing needed.
+- What the NEED rule still covers: crash-looping worker instances
+  (instance-level flag; the task itself returns to the queue) and
+  live-locked workers (room-level `stalled`; actively arguing, not
+  waiting). Corpus: 170 tests green at the change.

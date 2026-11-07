@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Escalation ladder (T7) — SLAs terminate in typed operator NEEDs.
+"""Worker poke toolkit (T7, repurposed post-durable-queue) — issue #507.
 
-Ladder per violation count: nudge → re-ring → re-create → operator NEED
-(owner + reason + evidence) as the terminal element. When a rung cannot
-run (no herdr / no terminal), it does NOT end silently: the next rung
-fires. The T4 SLA count is the ladder's driving counter and is carried
-over; once a NEED is on file the order state becomes blocked_on_operator
-and the engine takes no further actions until an operator decides.
+Mechanical rungs an OPERATOR may invoke against a live worker: nudge →
+re-ring → re-create (kill + rm the dead terminal). The ladder has NO
+terminal rung anymore: waiting is a valid task state, not a violation,
+so the engine never fires these automatically. `fire()` tries the rungs
+top-down and returns a pending `wait` (never terminal, never mutating
+room state) when no terminal can receive the poke.
 """
 
 from __future__ import annotations
@@ -14,19 +14,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from herdr_engine.fsm import Engine as BaseEngine, RoomRuntime, load_state, now_str, save_state
+from herdr_engine.fsm import RoomRuntime, load_state, now_str
 from herdr_engine.transport import oid_lane
 
-LADDER = ("nudge", "re-ring", "re-create", "operator_need")
-SLA = {"ack_by": 900, "done_by": 1800}
+LADDER = ("nudge", "re-ring", "re-create")
 
 
-def lane_terminal(rt: RoomRuntime, room: int, lane: str | None) -> str | None:
-    """Terminal lookup by get() — mirrors fsm.lane_terminal.
-
-    T8 live finding: `hc ls` payloads are a multiplex summary and carry NO
-    labels; only `hc get` does.
-    """
+def lane_terminal(rt: RoomRuntime, room: int, lane: str | None,
+                  exclude: set | frozenset = frozenset()) -> str | None:
+    """Terminal lookup by get() — mirrors fsm.lane_terminal."""
     if rt.herdr is None or not lane:
         return None
     try:
@@ -34,6 +30,8 @@ def lane_terminal(rt: RoomRuntime, room: int, lane: str | None) -> str | None:
     except Exception:
         return None
     for name in names:
+        if name in exclude:
+            continue
         try:
             full = rt.herdr.get(name)
         except Exception:
@@ -62,7 +60,7 @@ class Rungs:
     def re_ring(self, room, oid, rt: RoomRuntime, lane: str, note: str = "") -> tuple[bool, str | None]:
         name = lane_terminal(rt, room, lane)
         if name and self.herdr is not None:
-            self.herdr.send(name, f"re-ring {oid} — SLA breached" + (f" — {note}" if note else ""))
+            self.herdr.send(name, f"re-ring {oid}" + (f" — {note}" if note else ""))
             return True, name
         return False, None
 
@@ -79,36 +77,28 @@ class Rungs:
             return True, name
         return False, None
 
-    def operator_need(self, room, oid, bound: str, count: int) -> dict[str, Any]:
-        return {
-            "owner": "operator",
-            "reason": f"order {oid} breached {bound} {count}x with the ladder exhausted",
-            "evidence": {"room": room, "oid": oid, "bound": bound, "count": count,
-                         "ts": now_str(self.clock)},
-        }
-
 
 @dataclass
 class Escalation:
     room: int
     oid: str
-    bound: str
-    count: int
-    ts: str
     action: str
     step: int
+    ts: str
     terminal: bool = False
     payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class Escalator:
-    """Ladder driver; attach() wires it as the engine's on_overdue hook."""
+    """Manual poke driver. The engine never calls this on its own: there is
+    no automatic path here from any tick. An operator invokes fire() to poke
+    a live worker; when no terminal can receive it, the answer is an
+    explicit pending wait — not silence, not a NEED, not a state change."""
 
     herdr: Any = None
     dry: bool = False
     clock: Callable[[], str] | None = None
-    need_actions: list[dict[str, Any]] = field(default_factory=list)
     fired: list[Escalation] = field(default_factory=list)
 
     # -- rung selection ------------------------------------------------------
@@ -133,46 +123,23 @@ class Escalator:
         except Exception:
             return ""
 
-    def fire(self, room: int, oid: str, bound: str, count: int,
-             rt: RoomRuntime) -> Escalation:
-        idx = self.rung_for(count)[1]
+    def fire(self, room: int, oid: str, rt: RoomRuntime) -> Escalation:
         rung = Rungs(herdr=self.herdr, dry=self.dry, clock=self.clock)
         lane = oid_lane(oid) or "dev"
         note = self._diagnose(room, lane)
-        while True:
-            act = LADDER[idx]
-            if act == "operator_need":
-                need = rung.operator_need(room, oid, bound, count)
-                need["diagnosis"] = note
-                esc = Escalation(room=room, oid=oid, bound=bound, count=count,
-                                 ts=now_str(self.clock), action=act, step=idx,
-                                 terminal=True, payload=need)
-                break
+        for idx, act in enumerate(LADDER):
             ok, name = getattr(rung, act.replace("-", "_"))(room, oid, rt, lane, note)
             if ok:
-                esc = Escalation(room=room, oid=oid, bound=bound, count=count,
-                                 ts=now_str(self.clock), action=act, step=idx,
+                esc = Escalation(room=room, oid=oid, action=act, step=idx,
+                                 ts=now_str(self.clock),
                                  payload={"sent": True, "lane": lane, "note": note})
                 break
-            idx += 1   # not silent: the broken rung escalates itself
+        else:
+            # No terminal can receive the poke — explicit pending wait.
+            # The task stays exactly where it is (WAITING); nothing about
+            # the room changes, and no human is paged.
+            esc = Escalation(room=room, oid=oid, action="wait", step=len(LADDER),
+                             ts=now_str(self.clock),
+                             payload={"sent": False, "lane": lane, "note": note})
         self.fired.append(esc)
-        if esc.terminal:
-            self.need_actions.append({"room": room, **esc.payload})
-            st = load_state(room)
-            if st:
-                o = st.setdefault("orders", {}).setdefault(oid, {})
-                o["operator"] = esc.payload
-                o["state"] = "blocked_on_operator"
-                if not self.dry:
-                    save_state(room, st)
         return esc
-
-    # -- engine wiring ---------------------------------------------------------
-
-    def attach(self, engine: BaseEngine) -> None:
-        def hook(oid: str, d: dict[str, Any]) -> None:
-            room = d["room"]
-            rt = engine.runtimes.get(room) or RoomRuntime()
-            self.fire(room, oid, d["bound"], d["count"], rt)
-        for rt in engine.runtimes.values():
-            rt.on_overdue = hook

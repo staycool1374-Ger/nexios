@@ -6,9 +6,9 @@
 #   pilot_watch.sh [room] [secs]    same, then every <secs> seconds (default 300)
 #
 # With no room arg, watches every /tmp/nherdr-<digits> room. Each snapshot:
-# phase/state/orders/open orders, lane post counts, stream length, herdr
-# lane + engine terminal states, operator NEEDs (either the T7 `operator`
-# object or the T4 `operator_needed` flag — both count), and stall flags.
+# phase/state/orders/open orders/BLOCKED handovers, stream length, herdr
+# lane + engine terminal states, legacy operator NEED flags (pre-durable-
+# queue rooms only — no new order ever carries one), and stall flags.
 # Used by the T8 pilot (§5.5 comparison record) and reviewed in the T9 memo.
 set -u
 
@@ -20,25 +20,25 @@ elif [ -n "$room_arg" ] && [ "$room_arg" != "--once" ]; then shift || true; fi
 snapshot_room() {
   local ROOM="$1"
   local SNAP=/tmp/nherdr-"$ROOM"/reports/pilot-log.md
-  local ts state phase orders open needs stalled
+  local ts state phase orders open needs stalled blocked
   ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   if [ -f /tmp/nherdr-"$ROOM"/state.json ]; then
     phase=$(python3 -c "import json;print(json.load(open('/tmp/nherdr-$ROOM/state.json')).get('phase'))")
     state=$(python3 -c "import json;print(json.load(open('/tmp/nherdr-$ROOM/state.json')).get('state'))")
     orders=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print(len(d.get('orders',{})))")
     open=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print(sum(1 for o in d.get('orders',{}).values() if o.get('state')=='open'))")
+    blocked=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print(sum(1 for o in d.get('orders',{}).values() if o.get('state')=='blocked'))")
     needs=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print(sum(1 for o in d.get('orders',{}).values() if o.get('operator') or o.get('operator_needed')))")
-    stalled=$(python3 -c "import json;d=json.load(open('/tmp/nherdr-$ROOM/state.json'));print('stalled' if d.get('stalled') else 'ok')")
   else
-    phase=? state=? orders=? open=? needs=? stalled=?
+    phase=? state=? orders=? open=? needs=? stalled=? blocked=?
   fi
   if [ -f "/tmp/nherdr-$ROOM/posts.jsonl" ]; then
     lines=$(wc -l < "/tmp/nherdr-$ROOM/posts.jsonl" | tr -d ' ')
   else
     lines=0
   fi
-  printf '## %s\nroom=%s phase=%s state=%s orders=%s open=%s operator_needs=%s stalled=%s stream_lines=%s\n' \
-    "$ts" "$ROOM" "$phase" "$state" "$orders" "$open" "$needs" "$stalled" "$lines" >> "$SNAP"
+  printf '## %s\nroom=%s phase=%s state=%s orders=%s open=%s blocked=%s operator_needs=%s stalled=%s stream_lines=%s\n' \
+    "$ts" "$ROOM" "$phase" "$state" "$orders" "$open" "$blocked" "$needs" "$stalled" "$lines" >> "$SNAP"
 }
 
 snapshot_all() {

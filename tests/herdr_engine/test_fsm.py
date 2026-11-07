@@ -81,8 +81,8 @@ class Basis(unittest.TestCase):
         frm = over.get("box", str(b["from"])).replace("audit", "auditor")
         return Transport().post(room, frm, b)
 
-    def file_order(self, room: int, oid: str, lane: str, ack_by=None, done_by=None):
-        Transport().file_order(room, oid, lane, done_by=done_by, ack_by=ack_by)
+    def file_order(self, room: int, oid: str, lane: str):
+        Transport().file_order(room, oid, lane)
 
 
 class EngineTest(Basis, unittest.TestCase):
@@ -192,19 +192,15 @@ class EngineTest(Basis, unittest.TestCase):
 
 
 class OrdersTest(Basis, unittest.TestCase):
-    """Ring once-per-cycle, SLA ladder, halt budget carrying over."""
+    """Ring once-per-cycle; the queue is durable (no timeouts, no eviction)."""
 
     def setUp(self):
         CLOCK["i"] = 10
         self.setup_room(self.ROOM)
         self.sim = SimHerdr()
         self.sim.spawn("r-dev", self.ROOM, "dev")
-        self.escal = []
         self.eng = Engine(
-            runtimes={self.ROOM: RoomRuntime(
-                herdr=self.sim,
-                on_overdue=lambda oid, d: self.escal.append((oid, d)),
-                halt_budget=3)},
+            runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
             clock=fake_clock)
 
     def tearDown(self):
@@ -234,10 +230,18 @@ class OrdersTest(Basis, unittest.TestCase):
         self.assertEqual(act.detail["sent"], False)
         self.assertEqual(len(self.sim.sends), 0)
 
-    def test_43_no_lane_terminal_means_no_send(self):
+    def test_43_no_lane_terminal_means_quiet_wait(self):
         self.sim.terms.clear()
         self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
-        self.assertEqual(self.tick().detail["sent"], False)
+        for _ in range(3):
+            act = self.tick()
+            self.assertNotEqual(act.verb, "ring", "waiting is not an event")
+        st = F.load_state(self.ROOM)
+        o = st["orders"]["dev:2026-11-07T09:10:00"]
+        self.assertEqual(o["state"], "open", "task waits on the queue")
+        self.assertIsNone(o.get("rung_to"))
+        self.assertNotIn("overdue_count", o)
+        self.assertNotIn("operator_needed", o)
 
     def test_44_lane_terminal_lookup(self):
         self.sim.spawn("r-qe", self.ROOM, "qe")
@@ -245,27 +249,158 @@ class OrdersTest(Basis, unittest.TestCase):
         self.assertIsNone(Engine.lane_terminal(RoomRuntime(herdr=self.sim), self.ROOM, "audit"))
         self.assertIsNone(Engine.lane_terminal(RoomRuntime(herdr=None), self.ROOM, "dev"))
 
-    def test_45_sla_ladder_carries_budget(self):
-        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev",
-                        ack_by=ts(15), done_by=ts(16))   # clock is ~ts(10)
-        for c in (10, 16, 17, 18):     # 3 successive alarm passes
+    def test_44b_lane_terminal_exclude(self):
+        self.sim.spawn("r-dev-2", self.ROOM, "dev")
+        rt = RoomRuntime(herdr=self.sim)
+        self.assertEqual(Engine.lane_terminal(rt, self.ROOM, "dev", exclude={"r-dev"}), "r-dev-2")
+        self.assertIsNone(Engine.lane_terminal(rt, self.ROOM, "dev",
+                                               exclude={"r-dev", "r-dev-2"}))
+
+    def test_45_waiting_never_expires(self):
+        # Durable queue: 40 ticks with the clock far past any old SLA
+        # window — the unclaimed task stays open, flagged by nothing.
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
+        for c in (10, 30, 90, 200, 400):
             CLOCK["i"] = c
             self.tick()
         st = F.load_state(self.ROOM)
         o = st["orders"]["dev:2026-11-07T09:10:00"]
-        self.assertEqual(o["overdue_count"], 3)
-        self.assertEqual(o["operator_needed"]["on"], "ack_by")
-        self.assertEqual(len(self.escal), 3)
-        # budget is carried over: no further escalations
-        CLOCK["i"] = 19
+        self.assertEqual(o["state"], "open")
+        self.assertNotIn("overdue_count", o)
+        self.assertNotIn("operator_needed", o)
+        self.assertNotIn("operator", o)
+        self.assertNotIn("ack_by", o)
+        self.assertNotIn("done_by", o)
+
+    def test_45b_filed_orders_carry_no_deadlines(self):
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
+        o = F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]
+        self.assertNotIn("ack_by", o)
+        self.assertNotIn("done_by", o)
+
+    def test_45c_dead_claim_voids_and_rerings(self):
+        # The bound terminal is gone: the claim voids (no counting, no
+        # NEED) and the waiting task re-rings to the live worker.
+        self.sim.spawn("r-dev-2", self.ROOM, "dev")
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
         self.tick()
-        self.assertEqual(len(self.escal), 3)
-        self.assertEqual(st["orders"]["dev:2026-11-07T09:10:00"]["overdue_count"], 3)
+        st = F.load_state(self.ROOM)
+        first = st["orders"]["dev:2026-11-07T09:10:00"]["rung_to"]
+        self.assertIn(first, ("r-dev", "r-dev-2"))
+        del self.sim.terms[first]  # worker gone
+        act = self.tick()
+        self.assertEqual(act.verb, "ring")
+        st = F.load_state(self.ROOM)
+        o = st["orders"]["dev:2026-11-07T09:10:00"]
+        self.assertEqual(o["state"], "open", "task itself untouched")
+        self.assertNotEqual(o.get("rung_to"), first)
+        self.assertTrue(o.get("rung_to"), "re-rung to the surviving worker")
+        self.assertNotIn("operator_needed", o)
+
+    def test_45d_live_claim_is_left_alone(self):
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
+        self.tick()  # rung to the live terminal
+        n_sends = len(self.sim.sends)
+        for _ in range(3):
+            act = self.tick()
+            self.assertNotEqual(act.verb, "ring", "claimed work is not re-rung")
+        self.assertEqual(len(self.sim.sends), n_sends)
 
     def test_46_post_demand_not_needed_for_ring(self):
         self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
         act = self.tick()
         self.assertEqual(act.detail["ring"], "dev:2026-11-07T09:10:00")
+
+
+class HandoverTest(Basis, unittest.TestCase):
+    """BLOCKED handover: a lane NEED hands its CLAIMED orders back with a
+    note; the worker is freed the moment the claim clears. Waiting (open)
+    orders are never touched — unclaimed work cannot block."""
+
+    def setUp(self):
+        CLOCK["i"] = 700
+        self._n = 0
+        self.setup_room(self.ROOM)
+        self.sim = SimHerdr()
+        for lane in ("dev", "qe", "audit"):
+            self.sim.spawn(f"t-{self.ROOM}-{lane}", self.ROOM, lane)
+        self.eng = Engine(runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
+                          clock=fake_clock, transport=Transport())
+
+    def tearDown(self):
+        self.drop_room(self.ROOM)
+
+    def claim(self, oid, lane="dev"):
+        return self._lane_post(lane, "NOTE", "taking it", acks=[oid])
+
+    def need(self, lane="dev", summary="NEED handover: blocked on review"):
+        return self._lane_post(lane, "NEED", summary)
+
+    def _lane_post(self, lane, kind, summary, acks=None):
+        # unique increasing timestamps, independent of the engine clock
+        self._n += 1
+        kw = {"oid": f"{lane}:2026-11-07T21:{self._n:02d}:00", "from": lane,
+              "kind": kind, "summary": summary,
+              "ts": f"2026-11-07T21:{self._n:02d}:00Z"}
+        if acks:
+            kw["acks"] = acks
+        return self.post(box=lane, **kw)
+
+    def test_60_need_hands_claimed_order_back(self):
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
+        self.eng.tick(self.ROOM)  # ring to the live terminal
+        worker = F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]["rung_to"]
+        self.assertTrue(worker)
+        self.claim("dev:2026-11-07T09:10:00")
+        self.assertEqual(F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]["state"], "acked")
+        self.need()
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "handover")
+        self.assertEqual(act.detail["handover"], ["dev:2026-11-07T09:10:00"])
+        o = F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]
+        self.assertEqual(o["state"], "blocked")
+        self.assertEqual(o["blocked_from"], worker)
+        self.assertIsNone(o.get("rung_to"), "worker freed the moment the claim cleared")
+        self.assertIn("NEED", o["blocked_need"]["summary"])
+        self.assertEqual(o["handover_count"], 1)
+
+    def test_61_blocked_rerings_to_a_different_worker(self):
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
+        self.eng.tick(self.ROOM)
+        self.claim("dev:2026-11-07T09:10:00")
+        self.need()
+        self.eng.tick(self.ROOM)  # handover
+        # single dev terminal and it is excluded: quiet wait, still blocked
+        act = self.eng.tick(self.ROOM)
+        self.assertNotEqual(act.verb, "ring")
+        self.assertEqual(F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]["state"], "blocked")
+        # a second worker appears: the handed-back task re-rings to it
+        self.sim.spawn("t-dev-2", self.ROOM, "dev")
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "ring")
+        o = F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]
+        self.assertEqual(o.get("rung_to"), "t-dev-2")
+        self.assertEqual(o["state"], "blocked", "re-ring is a new claim, not a state change")
+        self.assertEqual(len(self.sim.sends), 2)
+
+    def test_62_open_orders_cannot_block(self):
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
+        self.eng.tick(self.ROOM)  # rung but never ACKed: still waiting
+        self.need()
+        act = self.eng.tick(self.ROOM)
+        self.assertNotEqual(act.verb, "handover")
+        o = F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]
+        self.assertEqual(o["state"], "open")
+
+    def test_63_stale_need_does_not_hand_back(self):
+        self.file_order(self.ROOM, "dev:2026-11-07T09:10:00", lane="dev")
+        self.eng.tick(self.ROOM)
+        self.need(summary="NEED old blocker")
+        self.claim("dev:2026-11-07T09:10:00")  # claimed AFTER the NEED
+        act = self.eng.tick(self.ROOM)
+        self.assertNotEqual(act.verb, "handover")
+        o = F.load_state(self.ROOM)["orders"]["dev:2026-11-07T09:10:00"]
+        self.assertEqual(o["state"], "acked")
 
 
 class SimFleetTest(Basis, unittest.TestCase):
@@ -348,16 +483,18 @@ class SimFleetTest(Basis, unittest.TestCase):
         self.assertNotEqual(act.verb, "advance")
         self.assertEqual(F.load_state(self.rooms[0])["phase"], "CLOSE-OUT")
 
-    def test_53_status_reports_phases_and_needs(self):
-        self.file_order(self.rooms[0], "dev:2026-11-07T09:10:00", lane="dev",
-                        ack_by=ts(10))  # immediately overdue
+    def test_53_status_reports_phases_and_waiting(self):
+        self.file_order(self.rooms[0], "dev:2026-11-07T09:10:00", lane="dev")
         CLOCK["i"] = 40
-        for _ in range(4):
+        for _ in range(6):
             self.eng.tick(self.rooms[0])
         s = self.eng.status(list(self.rooms))
         self.assertIn("phase=RECON", s)
-        self.assertIn("NEED(ack_by)", s)
+        self.assertIn("open", s)
         self.assertIn("rings=1", s)
+        self.assertIn("rung_to=", s)
+        self.assertNotIn("NEED", s)
+        self.assertNotIn("LEGACY", s)
 
     def test_54_fleet_scan_misses_nothing(self):
         self.assertEqual(sorted(self.eng.fleet()), sorted(self.rooms))
@@ -422,9 +559,12 @@ class CliTest(Basis, unittest.TestCase):
         t.file_order(self.ROOM, "dev:2026-11-07T09:20:00", lane="dev")
         r = self.run_cli("tick", "--rooms", str(self.ROOM), "--interval", "2")
         self.assertEqual(r.returncode, 0, r.stderr)
-        # exactly one ring line (cycle 1 rings, cycle 2 is quiet), then exit
-        self.assertEqual(r.stdout.count("room"), 1)
-        self.assertIn("ring", r.stdout)
+        # no worker carries this room's labels: both cycles wait quietly.
+        # Waiting is not an event, so nothing prints — and the task stays.
+        self.assertEqual(r.stdout.count("room"), 0)
+        self.assertNotIn("ring", r.stdout)
+        st = F.load_state(self.ROOM)
+        self.assertEqual(st["orders"]["dev:2026-11-07T09:20:00"]["state"], "open")
 
 
 
@@ -460,7 +600,8 @@ class DemandTest(Basis, unittest.TestCase):
         devs = [o for o in st2["orders"].values()
                 if o.get("lane") == "dev" and o["state"] == "open"]
         self.assertEqual(len(devs), 1)
-        self.assertTrue(devs[0]["ack_by"] > devs[0].get("filed", "") or True)
+        self.assertNotIn("ack_by", devs[0], "filed tasks carry no deadlines")
+        self.assertNotIn("done_by", devs[0], "filed tasks carry no deadlines")
         self.assertIn("IMPL", st2["demand_filed"])
 
     def test_71_no_refile_while_open(self):

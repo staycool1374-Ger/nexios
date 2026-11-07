@@ -25,7 +25,6 @@ if SCRIPTS not in sys.path:
 from herdr_engine.fsm import Engine, RoomRuntime  # noqa: E402
 from herdr_engine.herdr import Herdr  # noqa: E402
 from herdr_engine.transport import Transport  # noqa: E402
-from herdr_engine.escalate import Escalator  # noqa: E402 (T7 ladder: default attached, never silent)
 
 
 def parse_rooms(spec: str | None) -> list[int]:
@@ -38,12 +37,9 @@ def build_engine(rooms: list[int], dry: bool) -> Engine:
     hc = None
     if not dry:
         hc = Herdr(timeout=10.0)
-    ladder = Escalator(herdr=hc, dry=dry)
-    eng = Engine(runtimes={r: RoomRuntime(herdr=hc, halt_budget=3) for r in rooms},
+    eng = Engine(runtimes={r: RoomRuntime(herdr=hc) for r in rooms},
                  dry_run=dry, transport=None if dry else Transport())
     eng.rooms_arg = rooms  # explicit fleet wins over the namespace scan
-    if not dry:
-        ladder.attach(eng)  # wire the SLA ladder as the on_overdue hook
     return eng
 
 

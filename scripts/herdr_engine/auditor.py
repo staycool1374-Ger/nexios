@@ -110,8 +110,6 @@ class Audit:
         demand: str = "",
         refs: list[str] | None = None,
         cwd: str | None = None,
-        ack_by: str | None = None,
-        done_by: str | None = None,
     ) -> Instance:
         key = identity(room, tip, demand)
         brief = BRIEF_TEMPLATE.format(
@@ -129,7 +127,6 @@ class Audit:
             ins.state = "working"
             if self.transport is not None and demand:
                 self.transport.file_order(room, demand, lane="audit",
-                                          ack_by=ack_by, done_by=done_by,
                                           demand=f"audit insight {key}")
         self.save(room)
         return ins

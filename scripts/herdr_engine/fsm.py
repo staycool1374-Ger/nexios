@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-"""Lane FSM (T4) — phases/gates/rings/SLA in fleet form (issue #507 §5.3).
+"""Lane FSM (T4) — phases/gates/rings/handover in fleet form (issue #507 §5.3).
 
 Gates are decided ONLY from (a) transport posts (schema v1) with their
 timestamps and (b) git-evidence shapes carried in evidence fields. Zero
-prose parsing. Orders are filed(oid, ack-by, done-by), ringed via hc once
-per cycle max, and escalate through the T7 hook when SLAs blow; the halt
-budget carries over. CLOSED is GitHub-derived — the engine never writes it.
+prose parsing.
+
+Orders live on a DURABLE queue: `open` (WAITING for a worker — no
+deadline, no escalation, waits indefinitely) → `acked` (claimed/working;
+a lane ACKed the order on the transport ledger) → `blocked` (a NEED from
+the holding lane handed it back with a note; the worker is freed the
+moment the claim clears and a different worker may re-ring it) →
+`retired` (gate transition). There is no other terminal state: a task is
+never parked, closed, or timed out. Rings fire at most once per cycle;
+a missing worker means quiet waiting, not an event. CLOSED is
+GitHub-derived — the engine never writes it.
 """
 
 from __future__ import annotations
@@ -35,7 +43,16 @@ GATE_REQUIREMENTS = {
     ("VERIFY", "CLOSE-OUT"): "qe READY stating DONE/verified, evidence {diff: covered}, ACKing an open qe demand",
     ("CLOSE-OUT", "CLOSED"): "GitHub-derived closure only (the engine never originates CLOSED)",
 }
-HALT_BUDGET_DEFAULT = 3
+# Order states (durable queue — a task is never parked, closed, or timed
+# out; waiting is a valid state, not a violation).
+#   open    = WAITING for a worker (unclaimed; ring-eligible indefinitely)
+#   acked   = claimed/working (lane ACKed the order on the ledger)
+#   blocked = handed back by the holding lane's NEED (worker freed the moment
+#             the claim cleared; carries the handover note; re-ringable by a
+#             DIFFERENT worker)
+#   retired = done (gate transition)
+ACTIVE = ("open", "acked", "blocked")   # every non-terminal order state
+WAITING = ("open", "blocked")           # ring-eligible: no live claim
 
 
 def now_str(clock: Callable[[], str] | None = None) -> str:
@@ -131,10 +148,8 @@ class Action:
 
 @dataclass
 class RoomRuntime:
-    """Fleet wiring for one room: herdr + hooks (transport is file-backed)."""
+    """Fleet wiring for one room: herdr handle (transport is file-backed)."""
     herdr: Any = None
-    on_overdue: Callable[[str, dict[str, Any]], None] | None = None
-    halt_budget: int = HALT_BUDGET_DEFAULT
 
 
 class Engine:
@@ -193,7 +208,7 @@ class Engine:
         gate_lane = {"audit_approval": "audit", "dev_impl_ready": "dev",
                      "qe_verified": "qe"}.get(name)
         open_oids = {oid for oid, o in (st.get("orders") or {}).items()
-                     if o.get("state") == "open" and o.get("lane") == gate_lane}
+                     if o.get("state") in WAITING and o.get("lane") == gate_lane}
         for p in reversed(posts_since(room, entered)):
             if pred(p):
                 if open_oids and not (set(p.get("acks") or []) & open_oids):
@@ -216,20 +231,24 @@ class Engine:
         if st.get("phase") == "CLOSED":
             return self._record(Action(room, "ok", {"phase": "CLOSED"}))
 
-        # 1) SLA ladder (never ends silently; budget carries over)
-        self._sla_tick(room, st, rt)
-
-        # 2) ring at most one open order this cycle
+        # 1) ring at most one waiting order this cycle (dead claims are
+        # voided first; no worker means quiet waiting — never an event)
         ring = self._ring_tick(room, st, rt)
         if ring is not None:
             return self._record(ring)
 
-        # 3) gates (a ready transition always wins over filing new work)
+        # 2) gates (a ready transition always wins over filing new work)
         gate = self.find_gate(room, st)
         if gate:
             frm, to, post = gate
             act = self._apply_transition(room, st, post.get("oid", ""), to)
             return self._record(act)
+
+        # 3) handover: a lane NEED hands its claimed orders back (BLOCKED,
+        # worker freed); waiting orders are never touched
+        hand = self._handover_tick(room, st, rt)
+        if hand is not None:
+            return self._record(hand)
 
         # 4) stall watch: identical NEEDs x3 with no movement ends the
         # loop with a typed operator NEED instead of another lap
@@ -293,24 +312,20 @@ class Engine:
         lane, text = self.DEMANDS[ph]
         entered = (st.get("entered_ts") or {}).get(ph, "")
         for o in (st.get("orders") or {}).values():
-            if o.get("state") == "open" and o.get("lane") == lane:
-                return None  # working lane already has an open demand
+            if o.get("state") in ACTIVE and o.get("lane") == lane:
+                return None  # working lane already holds a live task
         filed = (st.get("demand_filed") or {}).get(ph)
         if filed and filed.get("entered") == entered:
             return None  # already filed for this phase entry; waiting on evidence
-        import datetime
         ts = now_str(self.clock)
         oid = f"{lane}:{ts[:-1]}"
-        base = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=datetime.timezone.utc)
-        ack_by = (base + datetime.timedelta(seconds=900)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        done_by = (base + datetime.timedelta(seconds=1800)).strftime("%Y-%m-%dT%H:%M:%SZ")
         detail = {"demand": oid, "lane": lane, "phase": ph}
         if self.dry_run or self.transport is None:
             detail["dry"] = True
             return Action(room, "demand-filed", detail)
-        self.transport.file_order(room, oid, lane=lane,
-                                  ack_by=ack_by, done_by=done_by, demand=text)
+        # No deadlines: a filed task waits on the queue until a worker
+        # claims it, however long that takes.
+        self.transport.file_order(room, oid, lane=lane, demand=text)
         # the filing above re-read and saved fresh state; our tick snapshot
         # is now stale, so refresh before marking (else we would clobber it)
         st.clear()
@@ -340,26 +355,16 @@ class Engine:
     def _file_followup(self, room, st, lane: str, text: str, key: str) -> Action:
         ts = now_str(self.clock)
         oid = f"{lane}:{ts[:-1]}"
-        ack_by = (self._plus(ts, 900))
-        done_by = (self._plus(ts, 1800))
         detail = {"demand": oid, "lane": lane, "phase": st.get("phase"), "key": key}
         if self.dry_run or self.transport is None:
             detail["dry"] = True
             return Action(room, "demand-filed", detail)
-        self.transport.file_order(room, oid, lane=lane,
-                                  ack_by=ack_by, done_by=done_by, demand=text)
+        self.transport.file_order(room, oid, lane=lane, demand=text)
         st.clear()
         st.update(load_state(room))
         st.setdefault("demand_filed", {})[key] = {"oid": oid, "entered": ts}
         save_state(room, st)
         return Action(room, "demand-filed", detail)
-
-    @staticmethod
-    def _plus(ts: str, secs: int) -> str:
-        import datetime
-        base = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=datetime.timezone.utc)
-        return (base + datetime.timedelta(seconds=secs)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def _redemand_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> Action | None:
         # Follow-up loop dev <-> audit: an audit NEED sends the room back to
@@ -445,58 +450,97 @@ class Engine:
         return Action(room, "need", {"operator": "operator", "why": "stall-loop",
                                      "evidence": ev, "dry": self.dry_run})
 
-    # -- SLA -----------------------------------------------------------------
+    # -- handover --------------------------------------------------------------
 
-    def _sla_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> list[str]:
-        now = now_str(self.clock)
-        changed = False
-        overdue = []
-        for oid, o in (st.get("orders") or {}).items():
-            # halt budget carries over: at budget, the ladder is terminal and
-            # the T7 operator NEED owns the order, so stop climbing silently
-            if o.get("state") != "open" or o.get("overdue_count", 0) >= rt.halt_budget:
+    def _handover_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> Action | None:
+        """BLOCKED handover: a NEED from a lane hands that lane's claimed
+        (acked) orders back to the queue with a note. The worker is freed
+        the moment the claim clears — a freed worker may take other tasks,
+        and the handed-back task waits for a DIFFERENT worker. Waiting
+        (open) orders are never touched: only work a worker actually held
+        can be handed back, and unclaimed work never blocks."""
+        moved: list[str] = []
+        for lane in ("dev", "qe", "audit"):
+            needs = [p for p in posts(room)
+                     if p.get("from") == lane and self._is_need(p)]
+            if not needs:
                 continue
-            for bound in ("ack_by", "done_by"):
-                limit = o.get(bound)
-                if limit and now > limit:
-                    o["overdue_count"] = o.get("overdue_count", 0) + 1
-                    if o["overdue_count"] >= rt.halt_budget and not o.get("operator_needed"):
-                        o["operator_needed"] = {"on": bound, "ts": now}
-                    if rt.on_overdue:
-                        rt.on_overdue(oid, {"room": room, "bound": bound,
-                                            "count": o["overdue_count"]})
-                    overdue.append(oid)
-                    changed = True
-                    break
-        if changed:
-            save_state(room, st)
-        return overdue
+            need = max(needs, key=lambda p: p.get("ts", ""))
+            for oid, o in (st.get("orders") or {}).items():
+                if o.get("lane") != lane or o.get("state") != "acked":
+                    continue
+                acked_ts = (o.get("acked_by") or {}).get("ts", "")
+                if acked_ts and acked_ts >= (need.get("ts") or ""):
+                    continue  # claimed after (or by) this NEED: not its handover
+                o["state"] = "blocked"
+                o["blocked_from"] = o.pop("rung_to", None)
+                o["blocked_need"] = {"oid": need.get("oid"),
+                                     "summary": (need.get("summary") or "")[:160],
+                                     "ts": need.get("ts")}
+                o["handover_count"] = o.get("handover_count", 0) + 1
+                moved.append(oid)
+        if not moved:
+            return None
+        detail: dict[str, Any] = {"handover": sorted(moved), "state": "blocked"}
+        if self.dry_run:
+            detail["dry"] = True
+            return Action(room, "handover", detail)
+        save_state(room, st)
+        return Action(room, "handover", detail)
 
     # -- ring ----------------------------------------------------------------
 
+    def _terminal_alive(self, rt: RoomRuntime, name: str | None) -> bool:
+        if rt.herdr is None or not name:
+            return False
+        try:
+            rt.herdr.get(name)
+            return True
+        except Exception:
+            return False
+
     def _ring_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> Action | None:
-        for oid, o in (st.get("orders") or {}).items():
-            if o.get("state") != "open" or o.get("ring_count", 0) >= 1:
-                continue
-            now = now_str(self.clock)
-            o["ring_count"] = o.get("ring_count", 0) + 1
-            o["ringed_at"] = now
-            sent = False
-            name = None
-            if not self.dry_run:
-                name = self.lane_terminal(rt, room, o.get("lane"))
-                if name:
-                    o["rung_to"] = name
+        """Ring at most one waiting order per cycle. Ring-eligible = WAITING
+        with no live claim. A dead claim (bound terminal gone) is voided —
+        never counted, never escalated; the task simply waits again. A lane
+        with no live terminal means quiet waiting: no action, no noise.
+        Blocked orders exclude the terminal that handed them back."""
+        orders = st.get("orders") or {}
+        if not self.dry_run:
+            voided = False
+            for o in orders.values():
+                if (o.get("state") in ("open", "blocked", "acked")
+                        and o.get("rung_to")
+                        and not self._terminal_alive(rt, o["rung_to"])):
+                    o["rung_to"] = None
+                    voided = True
+            if voided:
                 save_state(room, st)
-                if name and rt.herdr is not None:
-                    rt.herdr.send(name, f"ring {oid} {o.get('demand', '')}".strip())
-                    sent = True
+        for oid, o in orders.items():
+            if o.get("state") not in WAITING or o.get("rung_to"):
+                continue  # claimed, already-rung, or done: leave it alone
+            if self.dry_run:
+                return Action(room, "ring", {"ring": oid, "to": o.get("lane"),
+                                             "sent": False, "dry": True})
+            excl = {o["blocked_from"]} if o.get("blocked_from") else set()
+            name = self.lane_terminal(rt, room, o.get("lane"), exclude=excl)
+            if name is None:
+                continue  # no worker for this lane right now: wait quietly
+            o["rung_to"] = name
+            o["ring_count"] = o.get("ring_count", 0) + 1
+            o["ringed_at"] = now_str(self.clock)
+            save_state(room, st)
+            sent = False
+            if rt.herdr is not None:
+                rt.herdr.send(name, f"ring {oid} {o.get('demand', '')}".strip())
+                sent = True
             return Action(room, "ring", {"ring": oid, "to": o.get("lane"),
-                                         "sent": sent, "dry": self.dry_run})
+                                        "sent": sent, "dry": self.dry_run})
         return None
 
     @staticmethod
-    def lane_terminal(rt: RoomRuntime, room: int, lane: str | None) -> str | None:
+    def lane_terminal(rt: RoomRuntime, room: int, lane: str | None,
+                      exclude: set | frozenset = frozenset()) -> str | None:
         # T8 live finding: `hc ls` payloads are a multiplex summary and carry
         # NO labels — only `hc get` does. Look the terminals up by name.
         if rt.herdr is None or not lane:
@@ -506,6 +550,8 @@ class Engine:
         except Exception:
             return None
         for name in names:
+            if name in exclude:
+                continue
             try:
                 full = rt.herdr.get(name)
             except Exception:
@@ -557,8 +603,16 @@ class Engine:
                 pass
             for oid, o in sorted((st.get("orders") or {}).items()):
                 line = f"{oid}: {o.get('state')} rings={o.get('ring_count', 0)}"
-                if o.get("operator_needed"):
-                    line += f" NEED({o['operator_needed']['on']})"
+                if o.get("rung_to"):
+                    line += f" rung_to={o['rung_to']}"
+                if o.get("state") == "blocked":
+                    need = o.get("blocked_need") or {}
+                    line += (f" blocked_from={o.get('blocked_from')}"
+                             f" need={need.get('oid')}")
+                if o.get("operator_needed") or o.get("operator"):
+                    # legacy flags (pre-durable-queue rooms); no new order
+                    # ever carries these — waiting is not a violation
+                    line += " LEGACY-NEED"
                 parts.append(line)
             out.append(" ".join(parts))
         return "\n".join(out) or "no rooms in the herdr namespace"
