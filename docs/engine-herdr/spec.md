@@ -123,3 +123,22 @@ history. Nothing on `main` changes at any point.
   open issue (pick at T8 per §5.5) — any preference now?
 - **Q4**: auditor spawn shape (one-shot `hc run --bg` with task vs two-turn)
   — default two-turn unless overridden at T5.
+
+## 10. Adopted decisions (2026-11-07, operator go-ahead — §9 closed)
+
+- **Q1** → keep the screen-shaped gate (§2b) as the only opencode-modal
+  detector for the pilot; the hc-agent bridge/reporter question moves to
+  the T9 verdict memo. Rationale: header-constant matching already proves
+  (T0), no new integration work, degrades to investigation-need not silence.
+- **Q2** → keep the SKIP-degrade for `--full` selftest gates; pin
+  `HC_SELFTEST_MODEL` only in the T8 pilot lane (whichever model has live
+  quota at pilot start).
+- **Q3** → pilot room is **#420** ("Test code colocation", zero comments,
+  no legacy `/tmp/nexios-420` room, no branch). Note: the only
+  `testing`-labelled open room (#474) is disqualified — it has an active
+  legacy VERIFY room, a live `testbed` branch, and unresolved follow-ups
+  (violates §5.5's "never touches legacy rooms"). No open `audit`-labelled
+  room exists.
+- **Q4** → two-turn interactive auditor instances by default (T5 as built);
+  re-audits use the idle×2 teardown path. Flip to one-shot only if the
+  pilot proves churning.
