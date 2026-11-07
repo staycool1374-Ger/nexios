@@ -15,8 +15,8 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 
 from herdr_engine.transport import (  # noqa: E402
-    NHR_BASE, OID_RE, Posted, Rejection, Transport, is_demand_shaped, oid_lane,
-    validate_post,
+    NHR_BASE, OID_POST_RE, OID_RE, Posted, Rejection, Transport, is_demand_shaped,
+    oid_lane, validate_post,
 )
 
 ROOM = 9002
@@ -151,6 +151,27 @@ class V(unittest.TestCase):
     def test_42_acks_target_lane(self):
         self.f(self.wv(base(acks=["first:audit"])), "acks[0]")
 
+    def test_43_audit_token_tip_and_demand_ack_ok(self):
+        b = base(**{"from": "audit", "oid": "audit:2026-11-07T10:00:00",
+                    "evidence": {"tip": "pending-7b8b59a6", "branch": "refs/heads/engine-herdr"},
+                    "acks": ["audit:2026-11-07T09:00:00"]})
+        r = validate_post(b, role="audit")
+        self.assertNotIsInstance(r, Rejection, getattr(r, "render", lambda: "")())
+
+    def test_44_dev_token_tip_stays_rejected(self):
+        r = validate_post(base(evidence={"tip": "pending-7b8b59a6"}), role="dev")
+        self.assertIsInstance(r, Rejection)
+        self.assertTrue(any("hex sha" in v.error for v in r.violations))
+
+    def test_45_audit_garbage_tip_rejected(self):
+        b = base(**{"from": "audit", "oid": "audit:2026-11-07T10:00:00",
+                    "evidence": {"tip": "  x"}})
+        self.assertIsInstance(validate_post(b, role="audit"), Rejection)
+
+    def test_46_dev_cannot_ack_audit_demand(self):
+        self.assertIsInstance(validate_post(base(acks=["audit:2026-11-07T09:00:00"]), role="dev"),
+                              Rejection)
+
     # -- unknown fields ------------------------------------------------------------
     def test_50_unknown_field_rejected(self):
         self.f(self.wv(base(approved_by="engine")), "approved_by")
@@ -266,6 +287,17 @@ class SimRoom(unittest.TestCase):
                                               "acks": ["dev:2026-11-07T09:00:00"]}))
         self.assertIsInstance(r2, Rejection)
         self.assertTrue(any("already acknowledged" in v.error for v in r2.violations))
+
+    def test_7d_audit_demand_ack_clears(self):
+        self.t.file_order(ROOM, "audit:2026-11-07T09:00:00", lane="audit")
+        p = self.t.post(ROOM, "auditor", base(**{
+            "from": "audit", "oid": "audit:2026-11-07T10:00:07",
+            "ts": "2026-11-07T10:00:07Z", "kind": "DECISION", "summary": "APPROVED",
+            "evidence": {"tip": "pending-abc123ef", "branch": "refs/heads/engine-herdr"},
+            "acks": ["audit:2026-11-07T09:00:00"]}))
+        self.assertIsInstance(p, Posted)
+        st = json.load(open(self.d + "/state.json"))
+        self.assertEqual(st["orders"]["audit:2026-11-07T09:00:00"]["state"], "acked")
 
     def test_7a_view_facing_acks(self):
         dev_view = self.t.inbox_view(ROOM, "dev", lines=5)

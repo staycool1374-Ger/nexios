@@ -383,7 +383,8 @@ class CliTest(Basis, unittest.TestCase):
         before = json.dumps(json.load(open(f"{NHR_BASE}{self.ROOM}/state.json")), sort_keys=True)
         r = self.run_cli("tick", "--rooms", str(self.ROOM), "--once", "--dry-run")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("[dry]", r.stdout)
+        # T8 contract: quiet loop — ok actions are the absence of work
+        self.assertEqual(r.stdout.strip(), "")
         after = json.dumps(json.load(open(f"{NHR_BASE}{self.ROOM}/state.json")), sort_keys=True)
         self.assertEqual(before, after, "dry-run must not write")
 
@@ -398,13 +399,19 @@ class CliTest(Basis, unittest.TestCase):
             "v": 1, "oid": "dev:2026-11-07T09:20:00", "from": "dev", "kind": "NOTE",
             "state": "idle", "next": "idle", "ts": ts(20), "room": self.ROOM})
         r = self.run_cli("tick", "--rooms", str(self.ROOM), "--once", "--dry-run")
-        self.assertIn("ok", r.stdout)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), "")
         self.assertEqual(F.load_state(self.ROOM)["phase"], "RECON")
 
     def test_65_termination_paths(self):
+        self.t2x = None
+        t = Transport()
+        t.file_order(self.ROOM, "dev:2026-11-07T09:20:00", lane="dev")
         r = self.run_cli("tick", "--rooms", str(self.ROOM), "--interval", "2")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertGreaterEqual(r.stdout.count("room"), 2)
+        # exactly one ring line (cycle 1 rings, cycle 2 is quiet), then exit
+        self.assertEqual(r.stdout.count("room"), 1)
+        self.assertIn("ring", r.stdout)
 
 
 if __name__ == "__main__":

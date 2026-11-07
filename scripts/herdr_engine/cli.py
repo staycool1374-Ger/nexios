@@ -48,12 +48,20 @@ def engine_fleet(eng: Engine) -> list[int]:
 
 
 def _cycle(eng: Engine) -> int:
-    before = len(eng.actions)
+    # T8 live finding: "ok" is the absence of work, not work — counting it
+    # as progress hot-loops the engine near 100% CPU and floods every
+    # observer. Only non-ok actions count as cycle movement.
+    before_ok = len([a for a in eng.actions if a.verb == "ok"])
+    fresh = []
     for room in engine_fleet(eng):
-        eng.tick(room)
-    for act in eng.actions[before:]:
-        print(("[dry] " if eng.dry_run else "") + act.text())
-    return len(eng.actions) - before
+        act = eng.tick(room)
+        if act is not None and act.verb != "ok":
+            fresh.append(act)
+            print(("[dry] " if eng.dry_run else "") + act.text())
+    # keep the log bounded; cycles print nothing when nothing changed
+    if len(eng.actions) > 200:
+        eng.actions = eng.actions[-50:]
+    return len(fresh)
 
 
 def cmd_tick(args) -> int:

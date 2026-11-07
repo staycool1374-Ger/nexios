@@ -159,8 +159,18 @@ class Posted:
         return False
 
 
-def validate_post(body: Any) -> dict[str, Any] | Rejection:
-    """Schema v1 — returns a canonical post dict or a typed Rejection."""
+TIP_SHA = r"[0-9a-f]{8,64}"
+# Audit verdict tips are demand-scoped tokens ("pending-<hash8>"), not git
+# shas (T8 live finding: the hex-only rule made audit demands un-ACKable).
+TIP_TOKEN = r"[A-Za-z][A-Za-z0-9._-]{0,63}"
+
+
+def validate_post(body: Any, role: str | None = None) -> dict[str, Any] | Rejection:
+    """Schema v1 — returns a canonical post dict or a typed Rejection.
+
+    role (dev|qe|audit): lanes post audit verdicts with demand-scoped tip
+    tokens and audit demand ACKs; every other lane keeps git-sha evidence.
+    """
     rj = Rejection()
 
     def bad(fld: str, err: str, hint: str = "") -> None:
@@ -220,10 +230,11 @@ def validate_post(body: Any) -> dict[str, Any] | Rejection:
     if not isinstance(acks, list):
         bad("acks", "must be a list of order ids")
     else:
+        ack_re = OID_POST_RE if role == "audit" else OID_RE
         for i, a in enumerate(acks):
-            if not isinstance(a, str) or not OID_RE.fullmatch(a):
+            if not isinstance(a, str) or not ack_re.fullmatch(a):
                 bad(f"acks[{i}]", "not a valid order id")
-            elif oid_lane(a) not in ("dev", "qe"):
+            elif role != "audit" and oid_lane(a) not in ("dev", "qe"):
                 bad(f"acks[{i}]", "order ids target dev|qe lanes only")
 
     ev = post.get("evidence", _MISSING)
@@ -237,8 +248,14 @@ def validate_post(body: Any) -> dict[str, Any] | Rejection:
             ):
                 bad("evidence.branch", "must start with refs/heads/ and contain no spaces")
             tip = ev.get("tip", _MISSING)
-            if tip is not _MISSING and (not isinstance(tip, str) or not re.fullmatch(r"[0-9a-f]{8,64}", tip)):
-                bad("evidence.tip", "must be a hex sha (8..64)")
+            if tip is not _MISSING and not isinstance(tip, str):
+                bad("evidence.tip", "must be a string")
+            elif tip is not _MISSING and not re.fullmatch(TIP_SHA, tip):
+                if role == "audit" and re.fullmatch(TIP_TOKEN, tip):
+                    pass  # demand-scoped token identity (kind+tip+demand)
+                else:
+                    lane_tip = "hex sha (8..64)" + (" or demand token (audit only)" if role == "audit" else "")
+                    bad("evidence.tip", f"must be a {lane_tip}")
             diff = ev.get("diff", _MISSING)
             if diff is not _MISSING and diff not in DIFFS:
                 bad("evidence.diff", f"must be one of {'|'.join(DIFFS)}")
@@ -303,6 +320,9 @@ class Transport:
             raise ValueError(f"no room {NHR_BASE}{in_room}")
         with cls._locked(d):
             st = cls._load_state(d)
+            if "phase" not in st:
+                # never seal a torn/empty read into the room ledger (T8 live finding)
+                raise ValueError(f"refusing order filing on unreadable state {d}/state.json")
             orders = st.setdefault("orders", {})
             if oid in orders:
                 return orders[oid]
@@ -326,7 +346,7 @@ class Transport:
         if role is None:
             rj.violations.append(Violation("box", "must be dev|qe|auditor", "closed vocabulary"))
             return rj
-        post = validate_post(body)
+        post = validate_post(body, role=role)
         if isinstance(post, Rejection):
             return post
         if post["from"] != role:
