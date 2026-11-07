@@ -427,9 +427,6 @@ class CliTest(Basis, unittest.TestCase):
         self.assertIn("ring", r.stdout)
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=1)
-
 
 class DemandTest(Basis, unittest.TestCase):
     """Phase-entry demand filing: the engine originates work (T8 live need)."""
@@ -746,3 +743,146 @@ class StallCanonTest(Basis, unittest.TestCase):
                 "room": self.ROOM, "summary": sm})
         act = self.eng.tick(self.ROOM)
         self.assertEqual(act.verb, "need")
+
+
+class ReworkLoopTest(Basis, unittest.TestCase):
+    """Audit NEED -> dev rework -> re-audit until APPROVED (user workflow)."""
+
+    def setUp(self):
+        CLOCK["i"] = 500
+        self.setup_room(self.ROOM)
+        self.sim = SimHerdr()
+        for lane in ("dev", "qe", "audit"):
+            self.sim.spawn(f"t-{self.ROOM}-{lane}", self.ROOM, lane)
+        self.eng = Engine(runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
+                          clock=fake_clock, transport=Transport())
+
+    def tearDown(self):
+        self.drop_room(self.ROOM)
+
+    def post_as(self, box, **kw):
+        b = {"v": 1, "oid": "dev:2026-11-07T10:00:00", "from": "dev", "kind": "NOTE",
+             "state": "idle", "next": "idle", "ts": ts(CLOCK["i"]), "room": self.ROOM}
+        b.update(kw)
+        return Transport().post(self.ROOM, box, b)
+
+    def test_90_audit_need_routes_to_dev(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st.setdefault("entered_ts", {})["IMPL"] = ts(500)
+        F.save_state(self.ROOM, st)
+        self.eng.tick(self.ROOM)  # entry demand first
+        entry = [o for o in F.load_state(self.ROOM)["orders"] if o.startswith("dev:")][0]
+        CLOCK["i"] = 510
+        self.post_as("dev", **{"oid": "dev:2026-11-07T10:05:00", "kind": "NOTE",
+                     "ts": "2026-11-07T10:05:00Z", "summary": "started",
+                     "acks": [entry]})
+        self.eng.tick(self.ROOM)  # ring the entry demand
+        self.post_as("auditor", **{"oid": "audit:2026-11-07T10:00:00", "from": "audit",
+                     "kind": "DECISION", "summary": "NEED rework includes",
+                     "ts": "2026-11-07T10:06:00Z"})
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual(act.verb, "demand-filed")
+        self.assertEqual(act.detail["lane"], "dev")
+        self.assertIn("gaps:audit:2026-11-07T10:00:00", json.dumps(act.detail))
+
+    def test_91_no_dup_on_repeat_tick(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "IMPL"
+        st.setdefault("entered_ts", {})["IMPL"] = ts(500)
+        F.save_state(self.ROOM, st)
+        CLOCK["i"] = 510
+        self.post_as("auditor", **{"oid": "audit:2026-11-07T10:00:00", "from": "audit",
+                     "kind": "DECISION", "summary": "NEED rework includes",
+                     "ts": "2026-11-07T10:00:00Z"})
+        self.eng.tick(self.ROOM)
+        n1 = len(F.load_state(self.ROOM)["orders"])
+        out = self.eng.tick(self.ROOM)
+        self.assertEqual(len(F.load_state(self.ROOM)["orders"]), n1)
+        self.assertNotEqual(out.verb if out else None, "demand-filed")
+
+    def test_92_dev_ready_still_triggers_reverify(self):
+        st = F.load_state(self.ROOM)
+        st["phase"] = "VERIFY"
+        st.setdefault("entered_ts", {})["VERIFY"] = ts(500)
+        F.save_state(self.ROOM, st)
+        CLOCK["i"] = 510
+        self.post_as("dev", **{"oid": "dev:2026-11-07T10:10:00", "kind": "READY",
+                     "summary": "IMPL done",
+                     "evidence": {"branch": "refs/heads/x", "diff": "covered"},
+                     "ts": "2026-11-07T10:10:00Z"})
+        act = self.eng.tick(self.ROOM)
+        self.assertEqual((act.verb, act.detail["lane"]), ("demand-filed", "qe"))
+
+
+class Issue474Backdrop(Basis, unittest.TestCase):
+    """#474 shape end-to-end: qe test stubs -> kernel gaps found ->
+    dev implements -> audit approves implementation -> qe verifies."""
+
+    ROOM = 9006
+
+    def setUp(self):
+        CLOCK["i"] = 600
+        self.setup_room(self.ROOM)
+        self.sim = SimHerdr()
+        for lane in ("dev", "qe", "audit"):
+            self.sim.spawn(f"t-{self.ROOM}-{lane}", self.ROOM, lane)
+        self.eng = Engine(runtimes={self.ROOM: RoomRuntime(herdr=self.sim)},
+                          clock=fake_clock, transport=Transport())
+
+    def tearDown(self):
+        self.drop_room(self.ROOM)
+
+    def post_as(self, box, **kw):
+        b = {"v": 1, "oid": "dev:2026-11-07T10:00:00", "from": "dev", "kind": "NOTE",
+             "state": "idle", "next": "idle", "ts": ts(CLOCK["i"]), "room": self.ROOM}
+        b.update(kw)
+        return Transport().post(self.ROOM, box, b)
+
+    def settle(self, want):
+        for _ in range(6):
+            self.eng.tick(self.ROOM)
+            if F.load_state(self.ROOM)["phase"] == want:
+                return
+        self.fail(f"room never reached {want}: " + json.dumps(F.load_state(self.ROOM)["phase"]))
+
+    def oid(self, lane):
+        return f"{lane}:{ts(CLOCK['i'])[:-1]}"
+
+    def test_95_full_arc(self):
+        # RECON: plan approved (on the clock, so it lands inside the era)
+        CLOCK["i"] = 600
+        self.post_as("auditor", **{"oid": self.oid("audit"), "from": "audit",
+                     "kind": "DECISION", "summary": "APPROVED plan test stubs",
+                     "evidence": {"tip": "a" * 40}})
+        self.settle("IMPL")
+        # IMPL: engine files dev demand (write the 2 test stubs); dev acks by posting
+        self.eng.tick(self.ROOM)
+        d1 = [o for o in F.load_state(self.ROOM)["orders"] if o.startswith("dev:")]
+        self.assertTrue(d1)
+        CLOCK["i"] = 610
+        self.post_as("dev", **{"oid": self.oid("dev"), "kind": "READY",
+                     "summary": "IMPL test stubs written",
+                     "evidence": {"branch": "refs/heads/x", "diff": "covered"},
+                     "acks": [d1[0]]})
+        self.settle("VERIFY")
+        # audit re-verdict: NEED — kernel lacks O_NONBLOCK + write lock
+        CLOCK["i"] = 620
+        NEED_OID = self.oid("audit")
+        self.post_as("auditor", **{"oid": NEED_OID, "from": "audit",
+                     "kind": "DECISION", "summary": "NEED kernel O_NONBLOCK + write lock",
+                     "evidence": {"tip": "b" * 40}})
+        st = F.load_state(self.ROOM)
+        # rework demand must reference the audit NEED (not be a blank order)
+        for _ in range(4):
+            self.eng.tick(self.ROOM)
+            st = F.load_state(self.ROOM)
+            reworks = [o for o, v in st["orders"].items()
+                       if v.get("lane") == "dev" and NEED_OID in json.dumps(v.get("demand", ""))]
+            if reworks:
+                break
+        self.assertTrue(reworks, "audit NEED must file a dev rework demand")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=1)

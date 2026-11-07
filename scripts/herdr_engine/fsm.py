@@ -362,23 +362,31 @@ class Engine:
         return (base + datetime.timedelta(seconds=secs)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def _redemand_tick(self, room, st: dict[str, Any], rt: RoomRuntime) -> Action | None:
-        if st.get("phase") != "VERIFY":
+        # Follow-up loop dev <-> audit: an audit NEED sends the room back to
+        # dev for rework (plan rework in RECON, implementation rework later);
+        # a fresh dev READY re-opens verification. The loop repeats until
+        # audit APPROVED, then qe owns the gate. Timestamps + demand keys
+        # only, never prose.
+        if st.get("phase") not in ("RECON", "IMPL", "VERIFY"):
             return None
         filed = st.get("demand_filed", {})
         # Rule A — re-verify: fresh dev READY newer than the newest qe demand
-        ready = self._newest_post(room, frm="dev", kind="READY")
-        if ready and ready.get("ts", "") > self._newest_demand_ts(st, "qe"):
-            if not any(o.get("state") == "open" and o.get("lane") == "qe"
-                       for o in (st.get("orders") or {}).values()):
-                key = f"reverify:{ready.get('oid')}"
-                if key not in filed:
-                    return self._file_followup(
-                        room, st, "qe",
-                        f"re-verify IMPL evidence {ready.get('oid')}; post READY DONE/verified or NEED with gaps",
-                        key)
-        # Rule B — gap-fix: latest post is a qe NEED and no open dev demand
+        if st.get("phase") == "VERIFY":
+            ready = self._newest_post(room, frm="dev", kind="READY")
+            if ready and ready.get("ts", "") > self._newest_demand_ts(st, "qe"):
+                if not any(o.get("state") == "open" and o.get("lane") == "qe"
+                           for o in (st.get("orders") or {}).values()):
+                    key = f"reverify:{ready.get('oid')}"
+                    if key not in filed:
+                        return self._file_followup(
+                            room, st, "qe",
+                            f"re-verify IMPL evidence {ready.get('oid')}; post READY DONE/verified or NEED with gaps",
+                            key)
+        # Rule B — gap-fix: latest post is a NEED (kind NEED, or a DECISION
+        # whose summary starts with NEED per the verdict convention) and no
+        # open dev demand. The NEED's own oid is the work order reference.
         latest = self._newest_post(room)
-        if (latest and latest.get("kind") == "NEED" and latest.get("from") == "qe"
+        if (latest and self._is_need(latest) and latest.get("from") in ("qe", "audit")
                 and not any(o.get("state") == "open" and o.get("lane") == "dev"
                             for o in (st.get("orders") or {}).values())):
             key = f"gaps:{latest.get('oid')}"
@@ -388,6 +396,20 @@ class Engine:
                     f"address NEED {latest.get('oid')}; see stream; post READY with diff covered",
                     key)
         return None
+
+    @staticmethod
+    def _is_need(p: dict[str, Any]) -> bool:
+        """A NEED is kind NEED, or a DECISION whose summary starts with NEED.
+
+        Audit verdicts share kind=DECISION with approvals; the brief mandates
+        the summary lead with the verdict word, so this is a wire-convention
+        check, not prose parsing.
+        """
+        if p.get("kind") == "NEED":
+            return True
+        if p.get("kind") == "DECISION" and str(p.get("summary", "")).strip().upper().startswith("NEED"):
+            return True
+        return False
 
     @staticmethod
     def _canon(summary: str) -> str:
