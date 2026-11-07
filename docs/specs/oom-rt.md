@@ -66,8 +66,8 @@ Binding rules for every alloc/free site:
   / `if (!l2) return;` / `if (!pdpt) return;` / `if (!pd) return;`).
 
 Verified 2026-08-11 against commit `55fde391` (v0.3.12 milestone definition).
-Regression coverage: testcases-v0.3.10.md (idle-keep guard) and
-ROADMAP_done.md v0.3.10/v0.3.11 entries (OOM guards, G1-G3 of this binding).
+Regression coverage: ROADMAP_done.md v0.3.10/v0.3.11 entries (OOM guards,
+G1-G3 of this binding).
 
 ## 4. WCET / Bounding Contract
 
