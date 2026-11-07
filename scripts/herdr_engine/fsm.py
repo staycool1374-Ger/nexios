@@ -275,15 +275,22 @@ class Engine:
 
     @staticmethod
     def lane_terminal(rt: RoomRuntime, room: int, lane: str | None) -> str | None:
+        # T8 live finding: `hc ls` payloads are a multiplex summary and carry
+        # NO labels — only `hc get` does. Look the terminals up by name.
         if rt.herdr is None or not lane:
             return None
         try:
-            for t in rt.herdr.ls():
-                labels = (t.raw or {}).get("labels") or {}
-                if str(labels.get("room")) == str(room) and labels.get("lane") == lane:
-                    return t.name
+            names = [t.name for t in rt.herdr.ls()]
         except Exception:
             return None
+        for name in names:
+            try:
+                full = rt.herdr.get(name)
+            except Exception:
+                continue
+            labels = (full.raw or {}).get("labels") or {}
+            if str(labels.get("room")) == str(room) and labels.get("lane") == lane:
+                return name
         return None
 
     # -- fleet loop ----------------------------------------------------------

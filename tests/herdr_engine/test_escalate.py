@@ -41,8 +41,13 @@ class SimHerdr:
         self.terms[name] = {"labels": {"room": str(room), "lane": lane}}
 
     def ls(self):
-        return [type("T", (), {"name": n, "raw": {"labels": d["labels"]}})()
+        # multiplex summary: no labels (T8 live shape)
+        return [type("T", (), {"name": n, "raw": {}})()
                 for n, d in self.terms.items()]
+
+    def get(self, name):
+        # labels arrive only through get()
+        return type("T", (), {"name": name, "raw": {"labels": self.terms[name]["labels"]}})()
 
     def send(self, name, text):
         if name not in self.terms:

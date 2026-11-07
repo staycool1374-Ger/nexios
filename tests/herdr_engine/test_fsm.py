@@ -30,11 +30,18 @@ def fake_clock() -> str:
     return ts(CLOCK["i"])
 
 class SimHerdr:
-    """In-memory herdr stand-in: labeled terminals + recorded sends."""
+    """In-memory herdr stand-in: labeled terminals + recorded sends.
+
+    ls() mirrors the real multiplex summary (no labels); labels arrive only
+    through get() — exactly the T8 live shape.
+    """
 
     def __init__(self):
         self.terms: dict[str, dict] = {}
         self.sends: list[tuple[str, str]] = []
+
+    def get(self, name: str):
+        return type("T", (), {"name": name, "raw": {"labels": self.terms[name]["labels"]}})()
 
     def spawn(self, name: str, room: int, lane: str) -> None:
         self.terms[name] = {"labels": {"room": str(room), "lane": lane}}
