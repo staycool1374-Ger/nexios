@@ -1281,10 +1281,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::PMM::init(mem_size, arch::PAGE_SIZE_2M, kend, ram_base);
 #if defined(CONFIG_ARCH_RISCV64)
     // Issue #29: pin the 64KB boot stack (linker .boot_stack_rv at
-    // 0x80E00000) before any allocation can take it — the BSP stays
-    // parked on it until the scheduler starts (same discipline as the
-    // Multiboot2 info reservation below).
-    kernel::PMM::reserve_range(0x80E00000ULL, 0x80F00000ULL);
+    // 0x82000000 — moved up from 0x80E00000 after image growth tripped
+    // the stack_base-2MB bound) before any allocation can take it — the
+    // BSP stays parked on it until the scheduler starts (same discipline
+    // as the Multiboot2 info reservation below).
+    kernel::PMM::reserve_range(0x82000000ULL, 0x82100000ULL);
 #endif
     // Issue #20: size the global memory budget from PMM capacity so the
     // create()-time admission gate (CONFIG_MEMORY_BUDGET, default ON) is

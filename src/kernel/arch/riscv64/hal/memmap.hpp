@@ -9,9 +9,14 @@
 /// @note QEMU virt: RAM starts at 0x80000000. The HHDM RAM window maps
 ///       PA 0x80000000-0x8FFFFFFF as 128 x 2 MiB block leaves under one
 ///       L0 slot (boot.S). Kernel image + initrd + boot reservations
-///       split L0-slot blocks L1[1..5] at boot (#376 harden); L1[6]
-///       (boot stack slack) and L1[7] (boot stack) are boot-reserved —
-///       scratch windows must live at L1[8] and above.
+///       split L0-slot blocks L1[1..5] at boot (#376 harden); L1[15]
+///       (boot stack slack) and L1[16] (boot stack) are boot-reserved —
+///       scratch windows must live at L1[17] and above.
+/// @note Boot stack base (.boot_stack_rv, linker-placed NOLOAD 64 KiB):
+///       0x82000000 (moved up from 0x80E00000 after image growth tripped
+///       the stack_base-2 MiB bound). Canonical consumers: the linker
+///       section address, the boot.S symbol-derived bound, and the
+///       kernel.cpp PMM::reserve_range() pin.
 namespace arch {
 
 /// @brief QEMU virt DRAM base (physical).

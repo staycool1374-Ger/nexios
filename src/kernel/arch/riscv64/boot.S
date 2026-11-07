@@ -37,19 +37,24 @@ _start:
     j 0b
 1:
 
-    /* Issue #29: the fixed 64KB .boot_stack_rv at 0x80E00000 must clear
+    /* Issue #29: the fixed 64KB .boot_stack_rv (linker-placed at
+     * RISCV_BOOT_STACK_BASE, 0x82000000 since the 0x80E00000 site was
+     * outgrown by image growth — kernel_phys_end 0x80C98000 tripped
+     * the old 0x80C00000 bound and fail-stopped every boot) must clear
      * the image + PMM metadata (this ld rejects ASSERT, so fail-stop
      * here instead — before the stack is used, no stack frames,
      * s0/s1 preserved).  The 2MB slack covers PMM metadata for RAM up
      * to ~990MB (8.25B/page); larger RAM configs must move the stack. */
     la t0, kernel_phys_end
-    li t1, 0x80C00000         /* stack base - 2MB metadata slack */
-    /* RV64 LUI sign-extends bit 31, so the li above yields
-     * 0xFFFFFFFF80C00000, not 0x0000000080C00000; the unsigned bltu
-     * below would then be always-taken and the fail-stop dead.
-     * Zero-extend into the true physical domain before comparing. */
-    slli t1, t1, 32
-    srli t1, t1, 32
+    /* Bound derived from the _boot_stack_rv symbol (minus the 2MB
+     * metadata slack) so linker moves never desync the check — the
+     * previous hardcoded 0x80C00000 constant went stale exactly this
+     * way (and its RV64 LUI sign-extension workaround below died with
+     * it: la/sub keep every intermediate in the true physical domain,
+     * the unsigned bltu is exact). */
+    la t1, _boot_stack_rv
+    li t2, 0x200000
+    sub t1, t1, t2
     bltu t0, t1, 10f
     li a0, 33                 /* '!' */
     li a7, 1
