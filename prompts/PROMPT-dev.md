@@ -59,6 +59,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 ### 4. Verification & QEMU Validation
 - Run automated test suites via `bash scripts/run_all_classes.sh <arch> <build>` (or per-class `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>`, `selftest` for CI gate).
 - See AGENTS.md for Circuit Breaker limits.
+- DONE self-containment gate (#477 S1-1): `git add -A` then `git status --porcelain` `??` must be 0 and `git ls-tree -r <tip> --name-only` must cover every `files()` literal in `packaging/meson.build`/`src/meson.build` (repro: `git add -A && git status --porcelain | grep '??'` empty + `git ls-tree -r <tip> --name-only | grep <files-literal>` hit); else re-commit before DONE.
 
 ### Tool & Session Discipline (standing order — violations stall the lane and get the session recreated)
 - ONE tool call per message, all parameters complete. NEVER batch calls; on SchemaError/missing-key, re-issue singly — never loop retries.
@@ -75,22 +76,11 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 - Sync docs (`README.md`, `prompts/ROADMAP.md`).
 - Mirror doc updates into Obsidian via MCP write tools (`mcp__obsidian__write_note`, preserving frontmatter/`[[wikilinks]]`/folder structure) and run `graphify update .` (CLI-only, no MCP equivalent) post-implementation.
 - Regenerate file manifest: `tree -I "build|obj|.git|node_modules" > ~/jarvis/project_structure.txt`.
-## WIRE (mandatory — identical in every lane)
-- ACK means "received" and answers one `[oid]`; nothing more. Pure ACK = receipt only. ACK + status line = receipt + news the engine routes.
-- ACK is receipt; done-by is delivery. An order is not done until its evidence post lands; a pure ACK never closes done-by.
-- No ACK by ack-by = faulty lane; the engine restarts it.
-- Peer requests travel only as READY naming the peer lane; other kinds route nowhere.
-- DONE = READY/DONE + evidence, no oid. Every post ends with STATE/NEXT + CTX%.
-- DONE self-containment gate (#477 S1-1): `git add -A` then `git status --porcelain` `??` must be 0 and `git ls-tree -r <tip> --name-only` must cover every `files()` literal in `packaging/meson.build`/`src/meson.build` (repro: `git add -A && git status --porcelain | grep '??'` empty + `git ls-tree -r <tip> --name-only | grep <files-literal>` hit); else NEED re-commit before DONE.
-- When done (READY/NEED with evidence posted), ring per the PROTOCOL.md wake rule — then idle.
-- After any compaction, re-anchor via ANCHOR.md (runtime dir) before acting.
-
 ## DECISION BRIEF (operator-grade questions - mandatory shape)
-- When blocked on a design choice only the operator can make (API shape, invariant waiver, scope call): keep working every unblocked part, do NOT stall the lane.
-- Post ONE NOTE to your room inbox carrying a standalone line `REQUEST: operator decision <short topic>`, then the brief:
+- When blocked on a design choice only the operator can make (API shape, invariant waiver, scope call): keep working every unblocked part, do NOT stall the lane. Raise it to the operator (GitHub issue comment) with a brief shaped as:
   OPTIONS: every viable option (how it works). Per option: advantages, disadvantages, audit/S1 impact, syscall-number cost, test/verification impact, reversibility.
   RECOMMENDATION: your pick + what it unblocks. NOT VIABLE: ruled-out options + one-line why.
-- The engine relays the brief verbatim to the rooms GitHub issue; the operator answers there with `DECISION: <choice>`, which the engine files back as an order. Never invent the decision; never merge under an undecided question.
+- Never invent the decision; never merge under an undecided question.
 
 ### ResourceTracker (Strict Awareness)
 - See AGENTS.md ResourceTracker section for leak-detection rules.
