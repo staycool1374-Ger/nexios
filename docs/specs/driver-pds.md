@@ -10,7 +10,7 @@ Strangler step a (no flip): userspace driver PDs behind per-role
 | serial | serial-pd.c.elf | Mmio COM1 (io_port) | TX+RX owned (#51 step-c); kernel keeps panic raw_write fallback only |
 | kbd | kbd-pd.c.elf | IRQ 33 + IOPORT 0x60–0x64 (x86) | arch stub off-x86 (decoder stays UART) |
 | rtc | rtc-pd.c.elf | CMOS ports / PL031 / Goldfish (per arch) | no IRQ; feeds timer-srv (#241) |
-| fb | fb-pd.c.elf | device caps only (mode-set/present) | zero IRQ (polled); emulation = #51 |
+| fb | fb-pd.c.elf | SHM text ring + DMA status page + scanout chunks (MMIO or FRAME; § Console PD flip) | zero IRQ (polled); emulation = #51 |
 | block | block-pd.c.elf | MSI/MSI-X + DMA domain + SHM | virtio/AHCI via SDF dispatch |
 | net | net-pd.c.elf | MSI-X/INTID + DMA domain + SHM | RX rings + TX, per-domain DMA |
 
@@ -95,6 +95,47 @@ the PD instead:
 - Reversibility: `CONFIG_SERIAL_TX_SHM` (default 0). OFF = 51c
   behavior (per-char WRITE RPC when `CONFIG_DRIVER_PD_SERIAL`, else
   raw). Zero new syscalls (NOTIFY + `SYS_FRAME_MAP` exist).
+
+## Console PD flip (issue #51 items 2/4)
+
+Kernel→console-PD BIND conveys the scanout in slot-sized chunks (one
+user mapping slot holds 2 MiB; a 1024x768x32 scanout is 3 MiB): row
+index 0 = SHM text ring (`kConsoleRingPages` pages, same v2
+`{len, char[7]}` element wire as the serial TX ring), index 1 =
+DMA_REGION status page (`kConsoleStatusPages` pages, raw counters, no
+ring header), indices 2..N = scanout. Chunk kind follows the backing:
+MMIO chunks (`DRV_OP_BIND`) for true device memory (x86 VGA VRAM),
+FRAME pins (`DRV_OP_BIND_FRAME`) for RAM-backed scanouts
+(virtio-gpu/ramfb — `SYS_MMIO_MAP` refuses RAM, `SYS_FRAME_MAP`
+refuses kernel pages, so the kernel backing is allocated user-owned
+under the knob and the mint fails closed unless the whole span is
+user pages). `Framebuffer::init` always probes (geometry + scanout
+phys feed the row) but every render path is a no-op under
+`device_owned()` — the kernel keeps the probe + a read-only pixel
+oracle, never writes. Bind order BIND→CONSOLE_MODE→MAP_SHM→MAP_STATUS
+is a non-contract (MODE and STATUS each re-publish geometry).
+Fail-closed: no scanout cap (degraded compose) or a truncated row (>
+`kConsoleMaxScanoutChunks`) never binds — a blind console sink is
+refused, the kernel keeps its own path.
+
+Kernel client (`driver_pds`, `CONFIG_DRIVER_PD_FB`): `pd_bind_console`
+(all RPCs idempotent per epoch, changed handle fails closed),
+`console_write` (7 B/element packs, drop-counted backpressure, never
+blocks), `console_status` (HHDM read of the PD-published counters),
+`console_test_hold`/`console_test_ring_phys`/`console_test_pump`
+(test-only: quiesce, producer-resolved phys, one forced bounded pass).
+The channel is warm-bound before the test suite so the one-time
+MMIO/frame page-table pages never land inside a test snapshot.
+
+Proof (`fb_bounded_render`, ON only): 900 bytes render exactly
+(`rendered_cells` == pushed), no pass exceeds `CONSOLE_CELLS_PER_PASS`
+(the PD peeks the element length and leaves over-budget elements
+queued — popping first would drop the element tail), the glyph is
+pixel-visible through the kernel mapping (device-cap proof, not a
+kernel shortcut), and a held drain renders nothing. Degraded builds
+(no backend) assert the bind fails closed. Green x86_64 (MMIO) +
+aarch64 (FRAME); riscv64 blocked by a platform scheduler/timer issue
+(see #51 notes), tracked separately — link-green on all three.
 
 ## Boundaries (no double ownership)
 

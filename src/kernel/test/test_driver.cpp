@@ -39,6 +39,7 @@
 #include <kernel/task/boot_sdf.hpp>
 #include <kernel/driver/driver_pds.hpp>
 #include <kernel/ipc/shm_ring.hpp>
+#include <services/terminal/framebuffer.hpp>
 
 using namespace kernel;
 
@@ -679,6 +680,129 @@ JARVIS_TEST(serial_tx_producer_drop_counter, "PRE: live serial ring | POST: drai
 }
 #endif
 
+#if CONFIG_DRIVER_PD_FB
+// Runmode: kernel
+// Testidea: Console PD renders kernel-fed text into the device-owned
+// scanout under a hard per-pass cell budget (issue #51 items 2/4): the
+// bounded-operation contract is proven exactly (pass_max_cells) and
+// observably (a pixel written by the PD is readable by the kernel).
+// Input: 900 '#' bytes through the text ring + PRESENT pumps; then a
+// quiesced second batch to prove the drain hold is honoured
+// Expect: all bytes rendered, no pass above CONSOLE_CELLS_PER_PASS, the
+// glyph pixels present at cell (0,0), slot (0,0) still '#' (no scroll)
+// and zero rendering while the hold is set; degraded builds (no fb
+// backend) must fail the bind closed instead of rendering
+// Depends: Framebuffer backend, SDF FB row (SHM + DMA_REGION + scanout
+// chunks: MMIO for device memory, FRAME pins for RAM-backed scanouts),
+// console PD (fb-pd.c.elf), HHDM alias
+JARVIS_TEST(fb_bounded_render, "PRE: console unbound | POST: drained") {
+    const bool bound = kernel::driver_pds::pd_bind_console();
+    if (!service::Framebuffer::available()) {
+        // Degraded contract: no backend, no scanout cap, bind must fail
+        // closed (never a half-bound console). The explicit return is
+        // load-bearing: JARVIS_TEST_PASS records but does not return.
+        JARVIS_ASSERT_FMT(!bound, "bind must fail without a backend");
+        JARVIS_TEST_PASS();
+        return;
+    }
+    JARVIS_ASSERT_FMT(bound, "pd_bind_console failed with fb available");
+    kernel::driver_pds::ConsoleStatus st{};
+    JARVIS_ASSERT(kernel::driver_pds::console_status(st));
+    JARVIS_ASSERT_FMT(st.scanout_mapped == 1, "scanout not mapped");
+    JARVIS_ASSERT_FMT(st.ring_mapped == 1, "ring not mapped");
+    JARVIS_ASSERT_FMT(st.cols > 0 && st.rows > 0, "grid %lux%lu", st.cols,
+                      st.rows);
+    const uint64_t cells_before = st.rendered_cells;
+
+    constexpr uint64_t kChars = 900;
+    char text[kChars];
+    for (uint64_t i = 0; i < kChars; ++i) {
+        text[i] = '#';
+    }
+    const uint64_t accepted =
+        kernel::driver_pds::console_write(text, kChars);
+    JARVIS_ASSERT_FMT(accepted == kChars, "accepted %lu want %lu", accepted,
+                      kChars);
+    uint64_t guard = 64;
+    do {
+        JARVIS_ASSERT(kernel::driver_pds::console_test_pump());
+        JARVIS_ASSERT(kernel::driver_pds::console_status(st));
+    } while (cells_before + kChars > st.rendered_cells && --guard != 0);
+    if (st.rendered_cells != cells_before + kChars) {
+        // Mismatch diagnostic (fires only on failure): the PD consumed
+        // the tail (tail == head) but under-counted iff the pass budget
+        // crosses an element boundary — see console_drain's peek rule.
+
+        const uint64_t rphys = kernel::driver_pds::console_test_ring_phys();
+        auto *rhdr = reinterpret_cast<kernel::shm::SharedRingHeader *>(
+            arch::HHDM_OFFSET + rphys);
+        Logger::info("[console] render mismatch: %lu want=%lu head=%lu tail=%lu "
+                     "cap=%lu esz=%lu",
+                     (unsigned long)st.rendered_cells,
+                     (unsigned long)(cells_before + kChars),
+                     (unsigned long)__atomic_load_n(&rhdr->head,
+                                                    __ATOMIC_RELAXED),
+                     (unsigned long)__atomic_load_n(&rhdr->tail,
+                                                    __ATOMIC_RELAXED),
+                     (unsigned long)rhdr->capacity,
+                     (unsigned long)rhdr->element_size);
+    }
+    JARVIS_ASSERT_FMT(st.rendered_cells == cells_before + kChars,
+                      "rendered %lu want %lu", st.rendered_cells,
+                      cells_before + kChars);
+    JARVIS_ASSERT_FMT(st.pass_max_cells > 0 &&
+                          st.pass_max_cells <= kernel::driver_pds::kConsoleCellsPerPass,
+                      "pass_max %lu bound %lu", st.pass_max_cells,
+                      kernel::driver_pds::kConsoleCellsPerPass);
+    JARVIS_ASSERT_FMT(st.passes >= 2, "passes %lu want >= 2", st.passes);
+
+    // Pixel oracle: the PD mapped the scanout separately from the kernel,
+    // so a glyph visible through the kernel's mapping proves the device
+    // cap (not a kernel-side shortcut) produced the pixels.
+    uint32_t fg_px = 0;
+    uint32_t bg_px = 0;
+    for (uint32_t y = 0; y < 16; ++y) {
+        for (uint32_t x = 0; x < 8; ++x) {
+            if (service::Framebuffer::get_pixel(x, y) == 0x00C8C8C8) {
+                ++fg_px;
+            } else {
+                ++bg_px;
+            }
+        }
+    }
+    JARVIS_ASSERT_FMT(fg_px > 0 && bg_px > 0, "glyph fg=%lu bg=%lu", fg_px,
+                      bg_px);
+
+    // Quiesce: while held the PD must not consume the ring at all.
+    JARVIS_ASSERT(kernel::driver_pds::console_test_hold(true));
+    const uint64_t held_before = st.rendered_cells;
+    const uint64_t held_accepted =
+        kernel::driver_pds::console_write(text, kChars);
+    JARVIS_ASSERT_FMT(held_accepted == kChars, "held accepted %lu",
+                      held_accepted);
+    for (uint64_t i = 0; i < 4; ++i) {
+        JARVIS_ASSERT(kernel::driver_pds::console_test_pump());
+    }
+    JARVIS_ASSERT(kernel::driver_pds::console_status(st));
+    JARVIS_ASSERT_FMT(st.rendered_cells == held_before,
+                      "held drain moved %lu -> %lu", held_before,
+                      st.rendered_cells);
+    // Post-hold: the 900 chars queued while held must all render —
+    // the quiesce hook delays, never loses. Releasing re-arms the drain;
+    // one bounded guard loop proves the exact backlog drains.
+    JARVIS_ASSERT(kernel::driver_pds::console_test_hold(false));
+    guard = 64;
+    do {
+        JARVIS_ASSERT(kernel::driver_pds::console_test_pump());
+        JARVIS_ASSERT(kernel::driver_pds::console_status(st));
+    } while (held_before + kChars > st.rendered_cells && --guard != 0);
+    JARVIS_ASSERT_FMT(st.rendered_cells == held_before + kChars,
+                      "post-hold rendered %lu want %lu", st.rendered_cells,
+                      held_before + kChars);
+    JARVIS_TEST_PASS();
+}
+#endif
+
 // Runmode: kernel
 // Testidea: SHM TX ring wraparound (issue #51 QE): interleave pushes and
 // pops across several capacity crossings so head/tail grow monotonically
@@ -797,6 +921,9 @@ void register_driver_tests() {
     JARVIS_REGISTER_TEST(serial_tx_sdf_row_shape);
     JARVIS_REGISTER_TEST(serial_tx_sdf_compose_shm);
     JARVIS_REGISTER_TEST(serial_tx_producer_drop_counter);
+#endif
+#if CONFIG_DRIVER_PD_FB
+    JARVIS_REGISTER_TEST(fb_bounded_render);
 #endif
     Logger::info("Registering driver tests");
     JARVIS_REGISTER_TEST(driver_registry_find);

@@ -102,6 +102,7 @@
 #include <logger.hpp>
 #include <test.hpp>
 #include <kernel/task/taskdefs.hpp>
+#include <kernel/driver/driver_pds.hpp>
 #include <kernel/test/test_config.hpp>
 #include <string.hpp>
 #include <constants.hpp>
@@ -636,6 +637,14 @@ void init_task_main() {
                              (unsigned)kernel::test::Registry::count(),
                              (unsigned)kernel::test::Registry::class_count());
         kernel::test::set_class_auto_shutdown(true);
+#if CONFIG_DRIVER_PD_FB
+        // Issue #51: establish the console channel before the first test
+        // snapshot. The first SYS_MMIO_MAP of the scanout chunks grows the
+        // PD's page tables (one-time PMM delta); binding it here keeps
+        // per-test ResourceTracker deltas at zero. Best-effort — a dead
+        // PD just means the tests take the degraded path.
+        (void)kernel::driver_pds::pd_bind_console();
+#endif
         kernel::test::run_registered(0);
 #else
         kernel::test::set_class_auto_shutdown(false);
@@ -1488,11 +1497,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::PMM::mark_init_done();
     boot_mark(kernel::BootStage::MEMORY_INIT);
 
-#if !CONFIG_DRIVER_PD_FB
-    // Issue #48: with the fb-device PD live, the PD owns mode-set/present;
-    // the kernel skips its own init (Terminal degrades to serial-only).
+    // Issue #48/#51: the probe always runs — with the fb-device PD live
+    // the kernel skips every render path (Framebuffer::device_owned) but
+    // still needs the geometry + scanout phys to mint the PD's scanout
+    // caps (MmioCap or FRAME pins, per backing).
     service::Framebuffer::init();
-#endif
     service::Terminal::init();
     if (service::Terminal::instance()) {
         service::Terminal::show_splash();

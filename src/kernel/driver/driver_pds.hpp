@@ -67,6 +67,34 @@ enum class DrvOp : uint8_t {
     MODE_SET = 4,
     PRESENT = 5,
     MAP_SHM = 6,
+    MAP_STATUS = 7,
+    CONSOLE_MODE = 8,
+    BIND_FRAME = 9,
+};
+
+/// @brief Per-pass render budget enforced by the console PD (mirrors
+///        userspace/driver_pd.h CONSOLE_CELLS_PER_PASS).
+inline constexpr uint64_t kConsoleCellsPerPass = 320;
+
+/// @brief Console PD render counters (issue #51): mirrors
+///        userspace/driver_pd.h `struct console_status` byte-for-byte.
+///        The kernel reads the PD-published page through the HHDM alias.
+struct ConsoleStatus {
+    uint64_t rendered_cells;
+    uint64_t pass_max_cells;
+    uint64_t passes;
+    uint64_t rejected;
+    uint64_t dropped_full;
+    uint64_t mode_w;
+    uint64_t mode_h;
+    uint64_t pitch;
+    uint64_t bpp;
+    uint64_t cols;
+    uint64_t rows;
+    uint64_t cursor_row;
+    uint64_t scanout_mapped;
+    uint64_t status_mapped;
+    uint64_t ring_mapped;
 };
 
 /// @brief Empty→nonempty TX-ring notify value (issue #51 step-c-prime):
@@ -144,6 +172,40 @@ bool serial_tx_test_hold(bool hold);
 ///        producer's epoch-pinned cache).
 /// @return ring phys or 0.
 uint64_t serial_tx_test_phys();
+#endif
+
+#if CONFIG_DRIVER_PD_FB
+/// @brief Bind the console PD (issue #51): BIND conveys the scanout
+///        MmioCap, CONSOLE_MODE the live geometry, MAP_SHM the text ring
+///        (row index 0) and MAP_STATUS the counter page (row index 1).
+///        Idempotent per epoch; fail-closed false when the role is dead,
+///        the row lacks the caps, or the PD answers a typed error.
+/// @return true when the console channel is live.
+[[nodiscard]] bool pd_bind_console();
+/// @brief Push console text into the PD ring: packs 7 bytes per 8 B
+///        element and drops (counted) past a full ring — never blocks.
+///        Requires a successful pd_bind_console() for this epoch.
+/// @param data Text bytes.
+/// @param len  Byte count.
+/// @return Bytes accepted (<= len); 0 when no live channel.
+uint64_t console_write(const char *data, uint64_t len);
+/// @brief Copy the PD-published render counters (HHDM alias read).
+/// @param out Receives the counters.
+/// @return true when the status page is mapped (channel live).
+bool console_status(ConsoleStatus &out);
+/// @brief Quiesce hook for exact bounded-render tests (mirrors the serial
+///        hook): nonzero holds the PD drain, zero releases it.
+/// @param hold Nonzero holds.
+/// @return true when the hold word was written.
+bool console_test_hold(bool hold);
+/// @brief Console ring phys actually bound by the client (0 unusable).
+/// @return Ring physical base or 0.
+uint64_t console_test_ring_phys();
+/// @brief Force one PD loop pass (PRESENT RPC): the PD drains the ring
+///        before serving a request, so a successful reply means at least
+///        one bounded render pass ran. Test-only pacing primitive.
+/// @return true when the PD acknowledged.
+bool console_test_pump();
 #endif
 
 } // namespace driver_pds

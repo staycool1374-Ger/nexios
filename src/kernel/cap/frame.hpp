@@ -34,10 +34,21 @@ class FrameCap : public KernelObject {
     uint64_t phys = 0;
     size_t count = 0;
     bool is_user = false;
+    /// @brief False for pins over foreign-lifetime memory (issue #51:
+    ///        the fb scanout backing outlives every PD epoch).  A
+    ///        non-owning pin still revokes user mappings on dispose
+    ///        (the dead PD loses access) but never returns the frames
+    ///        to the PMM — only the backing owner frees them.
+    bool owns_frames = true;
 
     /// @brief Allocates a FrameCap from the MemPool and pool-marks it.
     ///        Returns nullptr on failure.
     static FrameCap *create(uint64_t phys, size_t count, bool is_user);
+    /// @brief Non-owning pin over foreign-lifetime user frames (issue
+    ///        #51 console PD scanout grant).  dispose() tears down the
+    ///        user mappings but leaves the frames alone.
+    /// @return The pin or nullptr on allocation failure.
+    static FrameCap *create_pinned(uint64_t phys, size_t count);
 
     /// @brief Final teardown: returns every wrapped frame to the PMM and the
     ///        block to the MemPool.  Also retroactively removes this cap's

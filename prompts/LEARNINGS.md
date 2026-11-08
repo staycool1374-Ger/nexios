@@ -1763,3 +1763,33 @@
 - **Learned:** `CNode::install` takes the slot's own reference (`acquire`), so every successful install must drop the creator ref — `mint_one` (SDF compose) was the only in-tree call site that didn't, leaking one ref per composed cap. The cap survived task teardown with refcount 1, `FrameCap::dispose` never ran, and 4 user frames leaked per compose (convicted by exact tracker delta +4 PMM/+2 Cap/+2 MemPool, every other `install` site carries the release with a comment).
 - **Adapted:** unconditional `obj->release()` after `install` in `boot_sdf.cpp` (all failure legs leave the creator ref held); spec'd the discipline in `driver-pds.md`. Audit new `install` call sites for the paired release.
 - **Style re-face:** refcount producers come in pairs (acquire/release) — a bare install with no matching release in the same function is the defect shape, grep for it.
+
+### #51 — JARVIS_TEST_PASS records but does not return (explicit return is load-bearing)
+- **Learned:** `JARVIS_TEST_PASS()` is `Registry::record_success()` only — no `return`. A degraded-branch early-exit written as `JARVIS_TEST_PASS(); }` falls through into the live-path asserts below and fails a test that should pass (convicted live on rv64: `avail=0, bound=0` correct, then FAIL at the live `bound` assert). Every other call site places it last, which masked the semantics until the first mid-function use.
+- **Adapted:** `return;` immediately after `JARVIS_TEST_PASS()` in `fb_bounded_render`'s degraded branch, with a comment stating the macro semantics. Audit any future mid-function PASS the same way.
+- **Style re-face:** a macro named PASS that does not stop the test is a fall-through trap — the return belongs next to the macro, not in tribal knowledge.
+
+### #51 — user MMIO slots are 2 MiB: chunk any scanout grant (static_assert the mirror)
+- **Learned:** `MmioUserMap::map` refuses any cap larger than `CONFIG_USER_MMIO_REGION_SIZE` (2 MiB); a 1024x768x32 scanout is 3 MiB, so a single scanout MmioCap fails BIND with -EIO even though compose+mint all succeeded. The failure surfaces only at bind time on the target (x86 bind log `BIND st=65531`).
+- **Adapted:** SDF FB row emits consecutive 2 MiB chunks (indices 2..N, MMIO or FRAME per backing) + kernel `kConsoleMmioChunk`/`kConsoleFrameChunk` with `static_assert(... == 0x200000ULL)` mirroring `CONSOLE_MMIO_CHUNK`/`CONSOLE_FRAME_CHUNK` in `driver_pd.h`. PD resolves per-byte (`chunk = off / CHUNK`), so no pixel straddles a boundary.
+- **Style re-face:** a fixed-granularity map primitive plus a bigger device window means chunk-at-mint with a compile-time mirror assert — never a runtime-sized single cap.
+
+### #51 — pass budgets must peek before popping (pop-then-break drops element tails)
+- **Learned:** the naive bounded drain (pop, then break mid-element at the budget) silently discards the rest of the crossing element: 900 bytes rendered 896 (exactly the 2+2 tail bytes of the two budget-crossing elements; head==tail==1032 proved full consumption with under-count). The loss is invisible without exact producer accounting + a pixel oracle.
+- **Adapted:** `ring_peek_len()` (SPSC-safe: producer only appends) + `if (n > budget_left) break` before popping; torn-element mismatch fails closed. Same discipline applies to any future budgeted consumer of the SHM ring.
+- **Style re-face:** budgets are enforced before consumption, never after — a break after a pop is a drop, and drops must be counted (backpressure) or never happen (peek).
+
+### #51 — console probe vs ownership: always probe, gate only the writes
+- **Learned:** skipping `Framebuffer::init()` under the flip knob starves the SDF row of scanout phys (no MMIO/FRAME specs → blind row → bind correctly refuses, kernel keeps its path). The probe (geometry + phys for cap minting) and ownership (who writes pixels) are different concerns; gating init conflated them.
+- **Adapted:** init always runs; `Framebuffer::device_owned()` gates every render path (`put_pixel/clear/fill_rect/draw_char/present/invalidate`), `Terminal::init` degrades to serial-only, the kernel keeps a read-only `get_pixel` oracle. The degraded bind contract (`!available → !bound`) is asserted in-test on both sides.
+- **Style re-face:** describe-then-gate: a device PD needs the kernel's probe for cap minting even when the kernel must never touch the device — probe unconditionally, fence the writes.
+
+### #51 — FrameCap dispose frees: foreign-lifetime backing needs a non-owning pin
+- **Learned:** `FrameCap::dispose()` unconditionally frees its frames — correct for ring/status windows (fresh frames per compose), fatal for a scanout backing that outlives every PD epoch (PD death would free the live scanout the device is still programmed to). The FRAME cap kind existed but had owning semantics.
+- **Adapted:** `FrameCap::create_pinned()` (`owns_frames=false`): dispose still runs the revocation closures (dead PD loses mappings — fail closed) but skips the free loop; `mint_one` FRAME fails closed unless the whole span is user pages (wrapping kernel RAM would hand the PD supervisor memory).
+- **Style re-face:** capability lifetime must match backing lifetime — fresh frames own, foreign frames pin, and the mint validates the ownership the mapping path requires (user pages for SYS_FRAME_MAP, never kernel).
+
+### #51 — rv64 follow-up: first timed PD RPC exposes a platform scheduler/timer hang (filed separately)
+- **Learned:** on rv64+ON, the first PRESENT round-trip never completes: PD spins in the recv fallback poll (RUNNING, kernel reschedule loop), init ends up `blocked_in_recv` without `reply_wait` (a receive attributed to the wrong TCB — H2 current_task-staleness shape), all queues empty, ticks stall as a consequence (hart spins in-trap with SIE masked, so no timer ISR). x86_64 (MMIO) + aarch64 (FRAME) prove the full render path green; rv64 builds+links green but cannot run it. Bisects: serial-only knobs fine, no-fb fine, no-scanout-chunks fine; user-page backing + init + chunks triggers it. The hang is in timer-dependent IPC wakeups, not in PD render logic (bind's 5 RPCs + MODE clear + 900-byte write all complete, ticks advance through them).
+- **Adapted:** filed as the rv64 leg blocker with GDB evidence (task states, queue counts, frozen `ticks_`, H2-residual-hang shape per `scheduler_switch.cpp`); x86/aa64 proof stands as the items-2/4 evidence. `fb_bounded_render` degraded branch covers no-backend rv64.
+- **Style re-face:** a hang with empty queues + a spinning poller + a stalled tick counter is a wakeup/scheduler defect, not a protocol defect — bisect by knob (serial-only, no-fb, no-chunks) before touching the protocol; GDB task-state + queue-count + tick-counter reads are the load-bearing evidence.

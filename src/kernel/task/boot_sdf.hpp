@@ -88,6 +88,26 @@ enum class PdRole : uint8_t {
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
 inline constexpr uint64_t kMaxCapsPerRole = 6;
 
+/// @brief Console PD scanout chunking (issue #51): a full scanout
+///        (pitch*height, e.g. 3 MiB at 1024x768x32) rides as several
+///        consecutive caps because one user mapping slot holds 2 MiB.
+///        MMIO chunks (true device memory) size to the MMIO window,
+///        FRAME chunks (RAM-backed scanouts) to the frame window.
+///        Mirrors userspace/driver_pd.h CONSOLE_MMIO_CHUNK /
+///        CONSOLE_FRAME_CHUNK.
+inline constexpr uint64_t kConsoleMmioChunk = CONFIG_USER_MMIO_REGION_SIZE;
+inline constexpr uint64_t kConsoleFrameChunk = CONFIG_USER_SHM_REGION_SIZE;
+/// @brief Max scanout chunks a row can carry (indices 2..kMaxCapsPerRole).
+inline constexpr uint64_t kConsoleMaxScanoutChunks = kMaxCapsPerRole - 2;
+static_assert(kConsoleMmioChunk == 0x200000ULL,
+              "userspace/driver_pd.h CONSOLE_MMIO_CHUNK mirrors this value");
+static_assert(kConsoleFrameChunk == 0x200000ULL,
+              "userspace/driver_pd.h CONSOLE_FRAME_CHUNK mirrors this "
+              "value");
+static_assert(kConsoleMaxScanoutChunks == 4,
+              "userspace/driver_pd.h CONSOLE_MAX_SCANOUT_CHUNKS mirrors "
+              "this");
+
 /// @brief Number of PdRole entries (issue #47 step-b1): role tables are
 /// sized by this, not by a hardcoded 6 (roles ≥ 6 share the compose
 /// path but previously skipped slot persistence).
@@ -105,6 +125,14 @@ inline constexpr uint64_t kSerialTxRingElemSize = 8;
 /// 1536 elements ≈ 10 KiB of console text per drain — deep enough for a
 /// boot flood, small enough to waste nothing when idle.
 inline constexpr uint64_t kSerialTxRingPages = 4;
+
+/// @brief Console PD text-ring pages (issue #51 console flip). Same wire
+/// and element shape as the serial TX ring; 4 pages keeps the same
+/// flooded-boot budget for the framebuffer console path.
+inline constexpr uint64_t kConsoleRingPages = 4;
+/// @brief Console PD status page count (render counters the kernel test
+/// reads directly through the HHDM alias; raw window, no header).
+inline constexpr uint64_t kConsoleStatusPages = 1;
 
 /// @brief Static row: exactly-declared cap set for @p role.
 /// @param out Filled with the row (untouched on unknown role).

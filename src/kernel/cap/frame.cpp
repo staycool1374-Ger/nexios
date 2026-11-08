@@ -42,6 +42,21 @@ FrameCap *FrameCap::create(uint64_t phys, size_t count, bool is_user) {
     frame->phys = phys;
     frame->count = count;
     frame->is_user = is_user;
+    frame->owns_frames = true;
+    kernel::test::ResourceTracker::instance().track_cap_object_add();
+    return frame;
+}
+
+FrameCap *FrameCap::create_pinned(uint64_t phys, size_t count) {
+    auto *frame = static_cast<FrameCap *>(MemPool::alloc(sizeof(FrameCap)));
+    if (!frame)
+        return nullptr;
+    new (frame) FrameCap;
+    frame->mark_pool_backed();
+    frame->phys = phys;
+    frame->count = count;
+    frame->is_user = true;
+    frame->owns_frames = false;
     kernel::test::ResourceTracker::instance().track_cap_object_add();
     return frame;
 }
@@ -57,8 +72,13 @@ void FrameCap::dispose() noexcept {
     // pager-mapped page backed by this cap must be unmapped + unpinned before
     // the frames are freed.
     ipc::PagerRegistry::invalidate_cap(this);
-    for (size_t i = 0; i < count; ++i)
-        PMM::free_page(phys + i * arch::PAGE_SIZE);
+    // Issue #51: a pinned scanout grant wraps boot-lifetime backing — the
+    // dead PD loses its mappings above, but the frames stay put (the
+    // device is still programmed to them; the next epoch re-wraps).
+    if (owns_frames) {
+        for (size_t i = 0; i < count; ++i)
+            PMM::free_page(phys + i * arch::PAGE_SIZE);
+    }
     kernel::test::ResourceTracker::instance().track_cap_object_remove();
     MemPool::free(this);
 }

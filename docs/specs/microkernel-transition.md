@@ -195,6 +195,17 @@ generation-tagged stored pointers). Enforced at these points:
     (branch `fix/47-block-srv-b1`: SDF `DMA_REGION` + `kPdRoleCount`,
     BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
     read+write, `block_srv_live` class + host digest oracle).
+    Status 2026-11 (in progress): #51 console-PD substrate (main):
+    SDF FB row (SHM ring + DMA status page + slot-chunked scanout —
+    MMIO or FRAME pins per backing), `fb-pd.c` console PD (bounded
+    per-pass render, peek-before-pop budget rule, status counters),
+    kernel client + `fb_bounded_render` proof (exact counts, pixel
+    oracle, quiesce). Green x86_64 + aarch64; all three arches
+    build+link; riscv64 runtime blocked by a scheduler/timer
+    platform issue (first timed PD RPC hangs; tracked separately).
+    Kernel keeps probe-only init + read-only pixel oracle; the
+    in-kernel Terminal/shell removal (item 1) and shell↔console IPC
+    (item 3) remain.
 Per server, in order: timer → log → procfs → term/fb → drivers → block →
 VFS backends → process management → memory manager. Each step:
 (a) server PD + Kconfig shim default OFF; (b) loopback/parity tests
