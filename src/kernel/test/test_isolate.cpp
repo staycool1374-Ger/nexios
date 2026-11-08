@@ -58,6 +58,9 @@
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/debug_bind.hpp>
+#if CONFIG_BLOCK_SRV
+#include <kernel/driver/block_srv.hpp>
+#endif
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/cap/msix.hpp>
 #include <kernel/cap/wdog.hpp>
@@ -1875,6 +1878,17 @@ void snapshot_restore(const char *test_name) {
             Logger::raw_write("\n");
         }
     }
+
+    // Issue #47 step-b1: the block-srv PD is a live user task whose
+    // .bss/.data/heap rewind to the pre-bind baseline on every restore,
+    // while the kernel-side bind cache (epoch, geometry, window phys)
+    // persists. Without an epoch move the next transfer would address
+    // a virgin PD. Bumping here forces a clean rebind (CAP_GET re-maps
+    // the still-valid composed caps, BIND re-probes) — the same path
+    // as a supervisor restart.
+#if CONFIG_BLOCK_SRV
+    kernel::block_srv::block_srv_bump_epoch();
+#endif
 
     // Belt-and-suspenders: ensure interrupts enabled before returning to
     // test code.  Nested IrqGuards inside reload_daemon_tasks can disrupt

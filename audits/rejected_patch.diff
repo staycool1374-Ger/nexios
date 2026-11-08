@@ -1,12 +1,126 @@
-diff --git a/tools/agents/coordinator/AGENTS.md b/tools/agents/coordinator/AGENTS.md
---- a/tools/agents/coordinator/AGENTS.md
-+++ b/tools/agents/coordinator/AGENTS.md
-@@ -21,7 +21,7 @@ Role: own workflow transitions. You never write, build, or test kernel code —
- `up` with no issue creates **no runtime**: no `/tmp/nexios-<n>/`, no inboxes, no `state.json`, and dev/qe were launched with no brief. They are waiting for your ring. Never invent a `/tmp/nexios-*` path.
-
- 1. **Get the anchor.** The operator's first message names an issue number, or an idea. If it is an idea, ask which issue anchors it — you do not create issues and never guess a number.
--2. **Materialise the runtime:** `scripts/agent_up.sh setup <n>` (idempotent, the ONLY creator). Do not re-run `up`/`workers`: the sessions are already live and relaunch is refused; delivery is by ring.
-+2. **Materialise the runtime:** `scripts/agent_up.sh setup <n>` (idempotent, the ONLY creator of a full runtime — inbox/state/prompts/PROTOCOL; `comms-test` keeps its own notes/ scratch outside setup). Do not re-run `up`/`workers`: the sessions are already live and relaunch is refused; delivery is by ring.
- 3. **Write both briefs** with your write tool (never bash redirection): `/tmp/nexios-<n>/prompts/dev.txt` and `qe.txt` = the operator's words verbatim + issue number + the role prompt path (`{repo}/prompts/PROMPT-dev.md` / `PROMPT-testdev.md`) + the branch. Never copy doctrine into a brief.
- 4. **Ring only after the brief exists:** `scripts/agent_up.sh msg nexios-dev "inbox: brief ready — read /tmp/nexios-<n>/prompts/dev.txt"` (same for qe). One line, pointer only.
- 5. **Then record** `scripts/agent_up.sh state <n> phase=... pending=...`.
+diff --git a/src/kernel/driver/block_srv.cpp b/src/kernel/driver/block_srv.cpp
+--- a/src/kernel/driver/block_srv.cpp
++++ b/src/kernel/driver/block_srv.cpp
+@@ -209,7 +209,13 @@
+ void clear_bound() {
+-    g_bound_epoch = 0;
+-    g_backend = BlkBackend::NONE;
+-    g_sector_count = 0;
+-    g_data_phys = 0;
+-    g_data_pages = 0;
++    // SIL3 audit #47 step-b1: §11.6 all-or-nothing atomics. The bound
++    // cache is read atomically by the accessors, so every store here
++    // is atomic (SMP tasks may bind concurrently; values are
++    // idempotent but plain/atomic mixing is UB).
++    __atomic_store_n(&g_bound_epoch, 0U, __ATOMIC_RELAXED);
++    __atomic_store_n(reinterpret_cast<uint8_t *>(&g_backend),
++                     static_cast<uint8_t>(BlkBackend::NONE),
++                     __ATOMIC_RELAXED);
++    __atomic_store_n(&g_sector_count, 0ULL, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_phys, 0ULL, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_pages, 0ULL, __ATOMIC_RELAXED);
+ }
+@@ -331,10 +335,15 @@
+             return false;
+         }
+     }
+-    g_backend = backend;
+-    g_sector_count = (backend == BlkBackend::NONE) ? 0 : sectors;
+-    g_data_phys = data_phys;
+-    g_data_pages = data_pages;
+-    g_bound_epoch = block_srv_epoch();
++    // SIL3 audit #47 step-b1: §11.6 atomic stores pair with the atomic
++    // loads in the accessors, ensure_bound() and transfer_sector().
++    __atomic_store_n(reinterpret_cast<uint8_t *>(&g_backend),
++                     static_cast<uint8_t>(backend), __ATOMIC_RELAXED);
++    __atomic_store_n(&g_sector_count,
++                     (backend == BlkBackend::NONE) ? 0ULL : sectors,
++                     __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_phys, data_phys, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_pages, data_pages, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_bound_epoch, block_srv_epoch(), __ATOMIC_RELAXED);
+     return true;
+ }
+@@ -361,10 +370,24 @@
+ bool ensure_bound() {
+-    if (g_bound_epoch == block_srv_epoch()) {
+-        return g_backend != BlkBackend::NONE && g_sector_count != 0;
+-    }
+-    clear_bound();
+-    if (!block_srv_bind()) {
+-        return false;
+-    }
+-    return g_backend != BlkBackend::NONE && g_sector_count != 0;
++    // SIL3 audit #47 step-b1: §11.6 atomic loads pair with the atomic
++    // stores in clear_bound()/block_srv_bind().
++    const uint32_t bound_epoch =
++        __atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED);
++    const uint8_t bound_backend = __atomic_load_n(
++        reinterpret_cast<uint8_t *>(&g_backend), __ATOMIC_RELAXED);
++    const uint64_t bound_sectors =
++        __atomic_load_n(&g_sector_count, __ATOMIC_RELAXED);
++    if (bound_epoch == block_srv_epoch()) {
++        return bound_backend != static_cast<uint8_t>(BlkBackend::NONE) &&
++               bound_sectors != 0;
++    }
++    clear_bound();
++    if (!block_srv_bind()) {
++        return false;
++    }
++    const uint8_t rebound_backend = __atomic_load_n(
++        reinterpret_cast<uint8_t *>(&g_backend), __ATOMIC_RELAXED);
++    const uint64_t rebound_sectors =
++        __atomic_load_n(&g_sector_count, __ATOMIC_RELAXED);
++    return rebound_backend != static_cast<uint8_t>(BlkBackend::NONE) &&
++           rebound_sectors != 0;
+ }
+@@ -379,6 +401,10 @@
+     if (!ensure_bound()) {
+         return -38; // -ENOSYS: PD unavailable or degraded
+     }
+-    if (lba >= g_sector_count) {
++    // SIL3 audit #47 step-b1: §11.6 — the OOB bound is stored
++    // atomically, so load it atomically.
++    const uint64_t oob_sectors =
++        __atomic_load_n(&g_sector_count, __ATOMIC_RELAXED);
++    if (lba >= oob_sectors) {
+         return -22; // -EINVAL: out of range
+     }
+@@ -387,5 +411,8 @@
+     if (__atomic_test_and_set(&g_claim, __ATOMIC_ACQUIRE) != 0) {
+         return -11; // -EAGAIN: one in-flight RPC only, fail fast
+     }
+-    auto *win = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + g_data_phys +
++    // SIL3 audit #47 step-b1: §11.6 — window phys is stored atomically.
++    const uint64_t window_phys =
++        __atomic_load_n(&g_data_phys, __ATOMIC_RELAXED);
++    auto *win = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + window_phys +
+                                             kBlockDataOffset);
+ diff --git a/src/kernel/task/boot_sdf.cpp b/src/kernel/task/boot_sdf.cpp
+--- a/src/kernel/task/boot_sdf.cpp
++++ b/src/kernel/task/boot_sdf.cpp
+@@ -561,12 +561,17 @@
+         g_role_slot_count[role_idx] = count;
+         // Publish the TX-ring backing store (issue #51 step-c-prime):
+         // exactly one SHM spec per row, recorded only on full success.
+-        for (uint64_t i = 0; i < count; ++i) {
+-            if (specs[i].kind == CapKind::SHM) {
+-                g_shm_tx_phys[role_idx] = g_last_shm_phys;
+-                g_shm_tx_pages[role_idx] = g_last_shm_pages;
+-                break;
+-            }
+-        }
++        // SIL3 audit #47 step-b1: g_shm_tx_* hold 6 entries (roles ≥ 6
++        // never carry SHM) while slot/frame tables span kPdRoleCount —
++        // keep the publish inside the 6-entry bound.
++        if (role_idx < 6) {
++            for (uint64_t i = 0; i < count; ++i) {
++                if (specs[i].kind == CapKind::SHM) {
++                    g_shm_tx_phys[role_idx] = g_last_shm_phys;
++                    g_shm_tx_pages[role_idx] = g_last_shm_pages;
++                    break;
++                }
++            }
++        }
+     }
+     return true;

@@ -1,0 +1,3 @@
+[submodule "statemachine"]
+	path = statemachine
+	url = https://github.com/staycool1374-Ger/nexios-engine.git
