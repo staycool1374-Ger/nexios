@@ -65,7 +65,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // task
     {"task_core",             7,    7,       7      },  // TCB cleanup, page tables, clone with real user parents
     {"task_lifecycle",        9,    0,       0      },  // exit, zombie, reparent
-    {"task_fpu",              0,    7,       7      },  // FPU context switch/clone/user isolation (off-x86 only)
+    {"task_fpu",              0,    8,       8      },  // FPU context switch/clone/user isolation (off-x86 only)
     {"task_init",             5,    0,       0      },  // init task exists, reparent, reaper notify/IPC wake
     {"task_tcb_log",          1,    0,       0      },  // TCB write-log tracer
     {"fpu_invariants",        5,    0,       0      },  // FPU/SIMD context invariants
@@ -104,6 +104,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_shm",               7,    0,       0      },  // cap-gated shared-memory rings
     {"cap_death",             9,    0,       0      },  // async task-death notifications
     {"cap_pager",             15,   0,       0      },  // external pager protocol
+    {"cap_broker",             6,   6,       6      },  // broker policy stubs (issue #240 step-a)
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath
     {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics
     {"vfs_procfs",             9,   0,       0      },  // procfs nodes
@@ -301,7 +302,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_syscall",        85,   0,       0      },  // syscall_*, debug_syscall, tls
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
-    {"capability",          149,  0,       0      },  // cap_* excl. iommu_live
+    {"capability",          161,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker)
     {"proc_elf",            131,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM)
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
     {"libc_stdio",            5,   0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (x86_64 only)
@@ -312,7 +313,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cross_boundary",        3,    0,       0      },  // ring3 vfsd/iocd chains + keyboard delivery (x86_64 only)
     {"storage",             167,  0,       0      },  // vfs_* + initrd_parser + ramdisk + fat32 pins + readdir overlay
     {"servers",             66,   66,      66     },  // servers_* + services_framework
-    {"drivers",             107,   62,      62     },  // drivers_* + virtio_blk_req + ahci_deep + net
+    {"drivers",             111,   66,      66     },  // drivers_* + virtio_blk_req + ahci_deep + net + #51 shm-tx ring x2
     {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
     {"smp_multicpu",        21,   3,       3      },  // smp_bringup + smp_sched (x86) + tlb_shootdown E2E (2-CPU)

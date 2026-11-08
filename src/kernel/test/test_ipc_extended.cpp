@@ -33,6 +33,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/test_isolate.hpp>
@@ -97,15 +98,167 @@ JARVIS_TEST(ipc_send_data_size_zero, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+namespace {
+
+/// @brief Fill a task's queue to capacity so real senders block on it.
+void fill_receiver_queue(TaskControlBlock &dst) {
+    for (size_t idx = 0; idx < IPC_MAX_QUEUE_MSG; ++idx) {
+        kernel::Message fill{};
+        fill.sender_id = 0;
+        fill.type = 99;
+        fill.priority = 0;
+        fill.data_size = 0;
+        dst.msg_queue.push(fill);
+    }
+}
+
+/// @brief Register a task BLOCKED without dispatching it, so the harness
+///        can deterministically observe blocked senders before releasing it.
+void hold_receiver(TaskControlBlock &dst) {
+    dst.state = TaskState::BLOCKED;
+    Scheduler::register_task(dst);
+}
+
+/// @brief Spin until @p task blocks, bounded by @p deadline ticks.
+/// @return True when the task reached BLOCKED in time.
+bool await_blocked(TaskControlBlock *task, uint64_t deadline) {
+    while (task->state != TaskState::BLOCKED &&
+           arch::Timer::ticks() < deadline) {
+        arch::pause();
+    }
+    return task->state == TaskState::BLOCKED;
+}
+
+/// @brief Context for a blocking sender (captureless lambdas only).
+struct SendCtx {
+    uint64_t peer_id_;
+    uint64_t out_;
+    uint32_t mark_;
+};
+
+/// @brief Results observed by the FIFO/mid-removal test.
+uint64_t g_fifo_first_result = 99;
+uint64_t g_fifo_middle_result = 99;
+uint64_t g_fifo_last_result = 99;
+
+/// @brief Blocking send entry shared by the three FIFO senders.
+void fifo_sender_entry() {
+    auto *self = Scheduler::current_task();
+    auto *ctx = reinterpret_cast<SendCtx *>(self->user_data);
+    kernel::Message msg{};
+    msg.sender_id = self->id;
+    msg.type = ctx->mark_;
+    msg.priority = 0;
+    msg.data_size = 0;
+    bool ok = IPC::send(ctx->peer_id_, msg);
+    __atomic_store_n(reinterpret_cast<uint64_t *>(ctx->out_),
+                     ok ? 1 : 0, __ATOMIC_RELEASE);
+}
+
+/// @brief Dispatch a prio-12 FIXED sender blocked on @p recv_id.
+TaskControlBlock *spawn_fifo_sender(uint64_t recv_id, uint32_t mark,
+                                    uint64_t &out) {
+    static SendCtx first_ctx{};
+    static SendCtx middle_ctx{};
+    static SendCtx last_ctx{};
+    SendCtx *ctx = &first_ctx;
+    if (mark == 2) {
+        ctx = &middle_ctx;
+    } else if (mark == 3) {
+        ctx = &last_ctx;
+    }
+    ctx->peer_id_ = recv_id;
+    ctx->out_ = reinterpret_cast<uint64_t>(&out);
+    ctx->mark_ = mark;
+    auto *sender =
+        TaskControlBlock::create(fifo_sender_entry, 12, 10);
+    if (sender == nullptr) {
+        return nullptr;
+    }
+    if (!Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED)) {
+        return nullptr;
+    }
+    sender->user_data = ctx;
+    Scheduler::add_task(*sender);
+    Scheduler::reschedule();
+    return sender;
+}
+
+} // namespace
+
 // Runmode: kernel
-// Testidea: Verifies blocked sender removed from middle of list (not just
-// head/tail).
-// Input: Block multiple senders, unblock middle one
-// Expect: Correct sender unblocked, list intact
-// Depends: kernel::ipc
+// Testidea: Three equal-priority senders block in FIFO order; the MIDDLE
+// one dies and the teardown path detaches exactly it (head/tail repair);
+// the survivors then wake oldest-first. Equal priorities keep list order
+// identical to block order (block_sender inserts by priority).
+// Input: BLOCKED receiver with a full queue; dispatch A, B, C (prio 12)
+// sequentially to BLOCKED; terminate B; drain the queue; wake twice.
+// Expect: list is A->B->C with tail C; after B's death the list is
+// A->C with tail C and A/C still BLOCKED; B's result stays unset;
+// wake 1 completes A, wake 2 completes C; list ends empty.
+// Depends: kernel::IPC block/wake_sender, task teardown detach,
+// Scheduler dispatch/join. NOTE: wake_sender pops the head by design;
+// mid-list removal happens only via the death path (and the
+// interrupts-disabled rollback); there is no unblock-middle API.
 JARVIS_TEST(ipc_queue_remove_from_mid, "PRE: none | POST: none") {
-    // STUB: IPC only wakes head of blocked senders list (FIFO)
-    // No API to remove arbitrary sender from middle
+    // Pseudocode: fake BLOCKED receiver + full queue; block A, B, C in
+    // order (bounded spins); assert FIFO list; terminate B, drain, assert
+    // A->C; drain receiver queue; wake A (completes), wake C (completes);
+    // assert empty list; terminate receiver; drain.
+    auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
+    JARVIS_ASSERT(receiver != nullptr);
+    fill_receiver_queue(*receiver);
+    hold_receiver(*receiver);
+    const uint64_t recv_id = receiver->id;
+
+    g_fifo_first_result = 99;
+    g_fifo_middle_result = 99;
+    g_fifo_last_result = 99;
+    auto *first = spawn_fifo_sender(recv_id, 1, g_fifo_first_result);
+    JARVIS_ASSERT(first != nullptr);
+    JARVIS_ASSERT(await_blocked(first, arch::Timer::ticks() + 500));
+    auto *middle = spawn_fifo_sender(recv_id, 2, g_fifo_middle_result);
+    JARVIS_ASSERT(middle != nullptr);
+    JARVIS_ASSERT(await_blocked(middle, arch::Timer::ticks() + 500));
+    auto *last = spawn_fifo_sender(recv_id, 3, g_fifo_last_result);
+    JARVIS_ASSERT(last != nullptr);
+    JARVIS_ASSERT(await_blocked(last, arch::Timer::ticks() + 500));
+
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == first);
+    JARVIS_ASSERT(first->blocked_next == middle);
+    JARVIS_ASSERT(middle->blocked_next == last);
+    JARVIS_ASSERT(last->blocked_next == nullptr);
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == last);
+
+    kernel::test::terminate_if_live(middle);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == first);
+    JARVIS_ASSERT(first->blocked_next == last);
+    JARVIS_ASSERT(last->blocked_next == nullptr);
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == last);
+    JARVIS_ASSERT(first->state == TaskState::BLOCKED);
+    JARVIS_ASSERT(last->state == TaskState::BLOCKED);
+    JARVIS_ASSERT_EQ(99ULL, g_fifo_middle_result);
+
+    kernel::Message drain{};
+    while (receiver->msg_queue.pop(drain)) {
+    }
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(first);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_first_result);
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(last);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_last_result);
+
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == nullptr);
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == nullptr);
+
+    kernel::test::terminate_if_live(receiver);
+    Scheduler::drain_zombie_list();
     JARVIS_TEST_PASS();
 }
 
@@ -143,13 +296,215 @@ JARVIS_TEST(ipc_multiple_blocked_senders_wake_one, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Verifies synchronous send with timeout expires.
-// Input: Send with timeout, no receiver
-// Expect: Returns timeout error after duration
-// Depends: kernel::ipc
+// Testidea: Issue #475 literal walk — three senders block FIFO; THREE
+// wake cycles complete them in block order (not LIFO) with no survivor
+// woken by an earlier cycle.
+// Input: BLOCKED receiver with a full queue; dispatch A/B/C (prio 12)
+// sequentially to BLOCKED; drain; wake 3x with reschedule + join between.
+// Expect: list A->B->C with tail C; cycle k completes sender k (results
+// 1,2,3) and leaves later senders untouched (99) until their cycle;
+// list ends empty with tail/null.
+// Depends: kernel::IPC block/wake_sender, Scheduler dispatch/join.
+// NOTE: spawn_fifo_sender reuses the static SendCtx trio of
+// ipc_queue_remove_from_mid — tests run serially, ctx->out_ is rebound
+// per call, so sharing is safe.
+JARVIS_TEST(ipc_fifo_wake_order_three, "PRE: none | POST: none") {
+    auto *receiver = TaskControlBlock::create([]() {}, 11, 10);
+    JARVIS_ASSERT(receiver != nullptr);
+    fill_receiver_queue(*receiver);
+    hold_receiver(*receiver);
+    const uint64_t recv_id = receiver->id;
+
+    g_fifo_first_result = 99;
+    g_fifo_middle_result = 99;
+    g_fifo_last_result = 99;
+    auto *first = spawn_fifo_sender(recv_id, 1, g_fifo_first_result);
+    JARVIS_ASSERT(first != nullptr);
+    JARVIS_ASSERT(await_blocked(first, arch::Timer::ticks() + 500));
+    auto *middle = spawn_fifo_sender(recv_id, 2, g_fifo_middle_result);
+    JARVIS_ASSERT(middle != nullptr);
+    JARVIS_ASSERT(await_blocked(middle, arch::Timer::ticks() + 500));
+    auto *last = spawn_fifo_sender(recv_id, 3, g_fifo_last_result);
+    JARVIS_ASSERT(last != nullptr);
+    JARVIS_ASSERT(await_blocked(last, arch::Timer::ticks() + 500));
+
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == first);
+    JARVIS_ASSERT(first->blocked_next == middle);
+    JARVIS_ASSERT(middle->blocked_next == last);
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == last);
+
+    kernel::Message drain{};
+    while (receiver->msg_queue.pop(drain)) {
+    }
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(first);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_first_result);
+    JARVIS_ASSERT(g_fifo_middle_result == 99);
+    JARVIS_ASSERT(g_fifo_last_result == 99);
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(middle);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_middle_result);
+    JARVIS_ASSERT(g_fifo_last_result == 99);
+
+    IPC::wake_sender(receiver->msg_queue, *receiver);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(last);
+    JARVIS_ASSERT_EQ(1ULL, g_fifo_last_result);
+
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_head == nullptr);
+    JARVIS_ASSERT(receiver->msg_queue.blocked_senders_tail == nullptr);
+
+    kernel::test::terminate_if_live(receiver);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+namespace {
+
+/// @brief Never-replying destination: registered BLOCKED, never
+///        dispatched, so a bounded wait always expires (no reply path).
+TaskControlBlock *g_bounded_peer = nullptr;
+
+/// @brief Bounded-wait outcome observed inside the sender task.
+bool g_bounded_timed_out = false;
+uint64_t g_bounded_elapsed = 0;
+bool g_bounded_reply_wait_clean = false;
+bool g_bounded_timed_out_flag_clean = false;
+
+/// @brief Successful bounded round-trip outcome.
+bool g_bounded_ok = false;
+
+/// @brief Expiry entry: bounded wait against the never-replier.
+void bounded_expiry_entry() {
+    auto *self = Scheduler::current_task();
+    kernel::Message msg{};
+    msg.sender_id = self ? self->id : 0;
+    msg.type = 501;
+    msg.priority = 0;
+    msg.data_size = 0;
+    kernel::Message reply{};
+    const uint64_t start = arch::Timer::ticks();
+    const bool ok = IPC::send_sync_bounded(g_bounded_peer->id, msg, reply, 5);
+    const uint64_t elapsed = arch::Timer::ticks() - start;
+    g_bounded_timed_out = !ok;
+    g_bounded_elapsed = elapsed;
+    g_bounded_reply_wait_clean = (self->reply_wait == false);
+    g_bounded_timed_out_flag_clean = (self->recv_timed_out == false);
+}
+
+/// @brief Live replier entry for the bounded success path.
+void bounded_replier_entry() {
+    auto *self = Scheduler::current_task();
+    for (int spin = 0; spin < 100000; ++spin) {
+        kernel::Message inbound{};
+        if (IPC::recv(inbound) && inbound.type == 502) {
+            kernel::Message reply{};
+            reply.sender_id = self ? self->id : 0;
+            reply.type = 503;
+            reply.priority = 0;
+            reply.data_size = 0;
+            (void)IPC::send(inbound.sender_id, reply);
+            return;
+        }
+    }
+}
+
+/// @brief Bounded sender entry for the success path (large budget).
+void bounded_success_entry() {
+    auto *self = Scheduler::current_task();
+    auto *peer = reinterpret_cast<TaskControlBlock *>(self->user_data);
+    kernel::Message msg{};
+    msg.sender_id = self ? self->id : 0;
+    msg.type = 502;
+    msg.priority = 0;
+    msg.data_size = 0;
+    kernel::Message reply{};
+    g_bounded_ok =
+        IPC::send_sync_bounded(peer->id, msg, reply, 500) &&
+        reply.type == 503;
+}
+
+} // namespace
+
+// Runmode: kernel
+// Testidea: send_sync_bounded expires against a never-replying peer
+// (returns false after the tick budget with clean wait flags), and the
+// same bounded primitive succeeds against a live replier with a large
+// budget. The lower tick bound is intentionally loose (>= 1): the wheel
+// arms at now_ns + budget and slot quantization fires early (observed 3
+// ticks for a budget of 5), so exact-tick equality is not asserted — the
+// load-bearing facts are that the call blocked (no instant false, which
+// would mean arm-fail or dest-death) and returned false via the expiry
+// path (dest verified alive throughout). NOTE: timeout 0 means
+// "forever" (unbounded, like send_sync) by design, so the issue's
+// timeout-0-immediate case is not driven — blocking forever cannot be
+// asserted without hanging.
+// Input: Fake BLOCKED peer (never dispatched); dispatched sender with
+// budget 5 ticks; then live replier + sender with budget 500 ticks.
+// Expect: expiry false with elapsed in [1, 5005) and both flags clean;
+// success path true with reply type 503; cleanup before asserts.
+// Depends: IPC::send_sync_bounded, TimerWheel expiry, Scheduler.
 JARVIS_TEST(ipc_send_sync_timeout, "PRE: none | POST: none") {
-    // STUB: IPC::send_sync has no timeout parameter
-    // Implementation always blocks indefinitely
+    // Pseudocode: hold a never-dispatched peer; run the expiry sender and
+    // join; terminate the peer and drain FIRST; then assert false + tick
+    // window + clean flags (cleanup-before-assert so a failure cannot
+    // leak the peer). Then live replier + success sender, join both,
+    // assert true; drain.
+    auto *peer = TaskControlBlock::create([]() {}, 11, 10);
+    JARVIS_ASSERT(peer != nullptr);
+    peer->state = TaskState::BLOCKED;
+    Scheduler::register_task(*peer);
+    g_bounded_peer = peer;
+    g_bounded_timed_out = false;
+    g_bounded_elapsed = 0;
+    g_bounded_reply_wait_clean = false;
+    g_bounded_timed_out_flag_clean = false;
+
+    auto *expiry = TaskControlBlock::create(bounded_expiry_entry, 12, 10);
+    JARVIS_ASSERT(expiry != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*expiry, SchedPolicy::FIXED));
+    Scheduler::add_task(*expiry);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(expiry);
+
+    g_bounded_peer = nullptr;
+    // Issue #475: after expiry the sender must be gone from the peer's
+    // blocked list (interrupts-disabled rollback, ipc.cpp
+    // unblock_sender_rollback), not just flag-clean.
+    JARVIS_ASSERT_FMT(peer->msg_queue.blocked_senders_head == nullptr,
+                      "sender still on peer blocked list after expiry");
+    JARVIS_ASSERT_FMT(peer->msg_queue.blocked_senders_tail == nullptr,
+                      "sender tail still on peer blocked list after expiry");
+    kernel::test::terminate_if_live(peer);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(g_bounded_timed_out, "bounded wait did not expire");
+    JARVIS_ASSERT_FMT(g_bounded_elapsed >= 1,
+                      "instant false (arm/death, not timeout): %lu ticks",
+                      g_bounded_elapsed);
+    JARVIS_ASSERT_FMT(g_bounded_elapsed < 5005,
+                      "expiry hung: %lu ticks", g_bounded_elapsed);
+    JARVIS_ASSERT_FMT(g_bounded_reply_wait_clean, "reply_wait left set");
+    JARVIS_ASSERT_FMT(g_bounded_timed_out_flag_clean, "timed_out left set");
+
+    g_bounded_ok = false;
+    auto *replier = TaskControlBlock::create(bounded_replier_entry, 11, 10);
+    JARVIS_ASSERT(replier != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*replier, SchedPolicy::FIXED));
+    Scheduler::add_task(*replier);
+    auto *sender = TaskControlBlock::create(bounded_success_entry, 12, 10);
+    JARVIS_ASSERT(sender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
+    sender->user_data = replier;
+    Scheduler::add_task(*sender);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(sender);
+    kernel::test::wait_for_termination_safe(replier);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(g_bounded_ok, "bounded success path failed");
     JARVIS_TEST_PASS();
 }
 
@@ -660,6 +1015,7 @@ void register_ipc_extended_tests() {
     JARVIS_REGISTER_TEST(ipc_send_data_size_zero);
     JARVIS_REGISTER_TEST(ipc_queue_remove_from_mid);
     JARVIS_REGISTER_TEST(ipc_multiple_blocked_senders_wake_one);
+    JARVIS_REGISTER_TEST(ipc_fifo_wake_order_three);
     JARVIS_REGISTER_TEST(ipc_send_sync_timeout);
     JARVIS_REGISTER_TEST(ipc_priority_inversion);
     JARVIS_REGISTER_TEST(ipc_send_self_max_message_size);

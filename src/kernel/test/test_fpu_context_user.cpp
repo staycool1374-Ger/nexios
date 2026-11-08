@@ -84,6 +84,9 @@ constexpr uint64_t kOffRounds = 0x38; // bit r set after round r verified
 constexpr uint64_t kOffDone = 0x40;   // kDoneMagic written before SYS_EXIT
 constexpr uint64_t kOffIndex = 0x48;  // task index (diagnostics)
 constexpr uint64_t kOffAlive = 0x50;  // kAliveMagic once regs are set
+constexpr uint64_t kOffForkRet = 0x58; // fork() return value (parent: child pid)
+constexpr uint64_t kOffWaitStatus = 0x60; // waitpid status out (child exit)
+constexpr uint64_t kOffWaitRet = 0x68; // waitpid return (child pid)
 constexpr uint64_t kOffRecv = 0x100;  // 16-byte RECEIVE scratch
 
 struct FpuUserWorker {
@@ -142,6 +145,21 @@ constexpr uint32_t A64_MOVK_D0D0 = 0xF2BA1A05U;     // movk x5,#0xD0D0,lsl#16
 constexpr uint32_t A64_B_SELF = 0x14000000U;        // b . (safety net)
 static_assert(A64_MOV_X0_X21 == 0xAA1503E0U, "mov x0,x21 (Rd=x0, not x1)");
 
+// T3 fork helpers: CBNZ (branch-if-nonzero to parent) + ADD (imm12).
+// CBNZ X0, +words: offset = (target-PC)/4 in imm19.
+constexpr uint32_t a64_cbnz(uint32_t rt, uint32_t words) {
+    return 0xB5000000U | ((words & 0x7FFFFU) << 5) | (rt & 0x1FU);
+}
+static_assert(a64_cbnz(0, 1) == 0xB5000020U, "cbnz x0,+1");
+// ADD Xd,Xn,#imm12 (no shift): 0x91 | imm12<<10 | rn<<5 | rd.
+constexpr uint32_t a64_add(uint32_t rd, uint32_t rn, uint32_t imm12) {
+    return 0x91000000U | ((imm12 & 0xFFFU) << 10) | ((rn & 0x1FU) << 5) |
+           (rd & 0x1FU);
+}
+static_assert(a64_add(1, 19, 0x60) == 0x91018261U, "add x1,x19,#0x60");
+constexpr uint32_t A64_MOV_X2_0 = 0xD2800002U;      // mov x2,#0
+constexpr uint32_t A64_MOV_X8_WAITPID = 0xD28002C8U; // mov x8,#22 WAITPID;
+
 #else // CONFIG_ARCH_RISCV64
 
 // Word builders (field-constructed, verified via static_assert).
@@ -183,7 +201,21 @@ constexpr uint32_t RV_ADDIW_D0D0 = 0x0D02829BU;    // addiw t0,t0,208
 constexpr uint32_t RV_SLLI_16 = 0x01029293U;      // slli t0,t0,16
 constexpr uint32_t RV_LUI_F = 0x0000F337U;        // lui t1,0xf
 constexpr uint32_t RV_ADDIW_F00D = 0x00D3031BU;   // addiw t1,t1,13
-constexpr uint32_t RV_OR_T0 = 0x0062E2B3U;        // or t0,t0,t1
+constexpr uint32_t RV_OR_T0 = 0x0062E2B3U;       // or t0,t0,t1
+
+// T3 fork helper: BNE rs1,rs2,off (B-type, off in bytes, even, ±4 KiB).
+// funct3=001, opcode 0x63.
+constexpr uint32_t rv_bne(uint32_t rs1, uint32_t rs2, int32_t off) {
+    uint32_t u = static_cast<uint32_t>(off);
+    uint32_t imm12 = (u >> 12) & 0x1U;
+    uint32_t imm10_5 = (u >> 5) & 0x3FU;
+    uint32_t imm4_1 = (u >> 1) & 0xFU;
+    uint32_t imm11 = (u >> 11) & 0x1U;
+    return (imm12 << 31) | (imm10_5 << 25) | ((rs2 & 0x1FU) << 20) |
+           ((rs1 & 0x1FU) << 15) | (0x1U << 12) | (imm4_1 << 8) |
+           (imm11 << 7) | 0x63U;
+}
+static_assert(rv_bne(10, 0, 8) == 0x00051463U, "bne a0,zero,+8");
 
 #endif
 
@@ -294,6 +326,174 @@ inline size_t emit_worker_stub(uint32_t *code) {
     return n;
 }
 
+// T3 fork stub: parent sets FP, blocks once (harness wake snapshots
+// fpu_state via a real switch-out), resumes, SYS_FORKs. Child
+// (ret==0) verifies f0/Q0 lanes against the parent pattern and exits
+// with the mismatch mask; parent WAITPIDs the child into
+// kOffWaitStatus, records the wait return, and exits 0. COW gives
+// each side a private data page after fork, so the harness reads the
+// parent's page (wait status/ret, done, fail==0) while the child's
+// exit code arrives via the reaped status.
+inline size_t emit_fork_stub(uint32_t *code) {
+    size_t n = 0;
+#if defined(CONFIG_ARCH_AARCH64)
+    code[n++] = A64_STR_XZR_38; // rounds = 0 (unused, keeps layout familiar)
+    code[n++] = A64_STR_XZR_40; // done = 0
+    code[n++] = A64_MOV_X21_XZR; // fail acc = 0
+    {
+        const uint32_t lo[3] = {0, 8, 0x10};
+        const uint32_t hi[3] = {0x18, 0x20, 0x28};
+        const uint32_t setd[3] = {A64_FMOV_D0_X1, A64_FMOV_D1_X1,
+                                  A64_FMOV_D2_X1};
+        const uint32_t sethi[3] = {A64_MOV_V0D1_X1, A64_MOV_V1D1_X1,
+                                   A64_MOV_V2D1_X1};
+        for (int l = 0; l < 3; ++l) {
+            code[n++] = a64_ldr_uoff(1, 19, lo[l]);
+            code[n++] = setd[l];
+            code[n++] = a64_ldr_uoff(1, 19, hi[l]);
+            code[n++] = sethi[l];
+        }
+    }
+    code[n++] = a64_movz(5, (uint32_t)kAliveMagic);
+    code[n++] = a64_str_uoff(5, 19, (uint32_t)kOffAlive);
+    // Block once: single RECEIVE so the harness wake snapshots FP state.
+    code[n++] = A64_MOV_X0_0;
+    code[n++] = A64_ADD_X1_X19;
+    code[n++] = A64_MOV_X2_16;
+    code[n++] = A64_MOV_X3_0;
+    code[n++] = A64_MOV_X8_RCV;
+    code[n++] = A64_SVC;
+    // SYS_FORK (21). Return in x0: 0 = child, else child pid.
+    code[n++] = a64_movz(8, 21);
+    code[n++] = A64_SVC;
+    code[n++] = a64_str_uoff(0, 19, (uint32_t)kOffForkRet);
+    const size_t branch_idx = n;
+    code[n++] = 0; // patched below: cbnz x0,parent
+    // ---- child path (falls through when x0 == 0) ----
+    {
+        const uint32_t ldr[6] = {a64_ldr_uoff(1, 19, 0),
+                                 a64_ldr_uoff(1, 19, 0x18),
+                                 a64_ldr_uoff(1, 19, 8),
+                                 a64_ldr_uoff(1, 19, 0x20),
+                                 a64_ldr_uoff(1, 19, 0x10),
+                                 a64_ldr_uoff(1, 19, 0x28)};
+        const uint32_t get[6] = {A64_FMOV_X2_D0, A64_UMOV_X2_V0,
+                                 A64_FMOV_X2_D1, A64_UMOV_X2_V1,
+                                 A64_FMOV_X2_D2, A64_UMOV_X2_V2};
+        for (int l = 0; l < 6; ++l) {
+            code[n++] = ldr[l];
+            code[n++] = get[l];
+            code[n++] = A64_EOR;
+            code[n++] = A64_ORR_ACC;
+        }
+    }
+    code[n++] = a64_str_uoff(21, 19, (uint32_t)kOffFail);
+    code[n++] = A64_MOVZ_F00D;
+    code[n++] = A64_MOVK_D0D0;
+    code[n++] = a64_str_uoff(5, 19, (uint32_t)kOffDone);
+    code[n++] = A64_MOV_X0_X21; // exit code = mismatch mask
+    code[n++] = A64_MOV_X8_EXIT;
+    code[n++] = A64_SVC;
+    code[n++] = A64_B_SELF;
+    // ---- parent path ----
+    {
+        const size_t parent_label = n;
+        code[branch_idx] = a64_cbnz(
+            0, static_cast<uint32_t>(parent_label - branch_idx));
+        code[n++] = a64_add(1, 19, (uint32_t)kOffWaitStatus); // x1 = &status
+        code[n++] = A64_MOV_X2_0;      // wstatus options arg = 0
+        code[n++] = A64_MOV_X3_0;      // unused
+        code[n++] = A64_MOV_X8_WAITPID; // x8 = 22 WAITPID
+        code[n++] = A64_SVC;
+        code[n++] = a64_str_uoff(0, 19, (uint32_t)kOffWaitRet);
+        code[n++] = A64_MOVZ_F00D;
+        code[n++] = A64_MOVK_D0D0;
+        code[n++] = a64_str_uoff(5, 19, (uint32_t)kOffDone);
+        code[n++] = A64_MOV_X0_0; // parent exits 0; child health via status
+        code[n++] = A64_MOV_X8_EXIT;
+        code[n++] = A64_SVC;
+        code[n++] = A64_B_SELF;
+    }
+#else
+    code[n++] = rv_sd(18, 0, (uint32_t)kOffRounds);
+    code[n++] = rv_sd(18, 0, (uint32_t)kOffDone);
+    code[n++] = RV_LI_S4_0; // fail acc = 0
+    {
+        const uint32_t off[3] = {0, 8, 16};
+        const uint32_t setd[3] = {RV_FMV_D_X_F0, RV_FMV_D_X_F1,
+                                  RV_FMV_D_X_F2};
+        for (int l = 0; l < 3; ++l) {
+            code[n++] = rv_ld(5, 18, off[l]);
+            code[n++] = setd[l];
+        }
+    }
+    code[n++] = rv_addi(5, (uint32_t)kAliveMagic);
+    code[n++] = rv_sd(18, 5, (uint32_t)kOffAlive);
+    // Block once: single RECEIVE.
+    code[n++] = rv_addi(10, 0); // li a0,0
+    code[n++] = RV_ADDI_A1;
+    code[n++] = rv_addi(12, 16); // li a2,16
+    code[n++] = rv_addi(13, 0);  // li a3,0
+    code[n++] = rv_addi(17, 2);  // li a7,2 RECEIVE
+    code[n++] = RV_ECALL;
+    // SYS_FORK (21). Return in a0: 0 = child, else child pid.
+    code[n++] = rv_addi(17, 21); // li a7,21 FORK
+    code[n++] = RV_ECALL;
+    code[n++] = rv_sd(18, 10, (uint32_t)kOffForkRet);
+    const size_t branch_idx = n;
+    code[n++] = 0; // patched below: bne a0,zero,parent
+    // ---- child path (falls through when a0 == 0) ----
+    {
+        const uint32_t get[3] = {RV_FMV_X_D_T1_F0, RV_FMV_X_D_T1_F1,
+                                 RV_FMV_X_D_T1_F2};
+        const uint32_t off[3] = {0, 8, 16};
+        for (int l = 0; l < 3; ++l) {
+            code[n++] = get[l];
+            code[n++] = rv_ld(7, 18, off[l]);
+            code[n++] = RV_XOR;
+            code[n++] = RV_OR_ACC;
+        }
+    }
+    code[n++] = rv_sd(18, 20, (uint32_t)kOffFail);
+    code[n++] = RV_LUI_D;
+    code[n++] = RV_ADDIW_D0D0;
+    code[n++] = RV_SLLI_16;
+    code[n++] = RV_LUI_F;
+    code[n++] = RV_ADDIW_F00D;
+    code[n++] = RV_OR_T0;
+    code[n++] = rv_sd(18, 5, (uint32_t)kOffDone);
+    code[n++] = RV_MV_A0_S4;    // exit code = mismatch mask
+    code[n++] = rv_addi(17, 6); // li a7,6 EXIT
+    code[n++] = RV_ECALL;
+    code[n++] = RV_J_SELF;
+    // ---- parent path ----
+    {
+        const size_t parent_label = n;
+        const int32_t off = static_cast<int32_t>((parent_label - branch_idx) *
+                                                 sizeof(uint32_t));
+        code[branch_idx] = rv_bne(10, 0, off); // bne a0,zero,parent
+        code[n++] = rv_addi(11, (uint32_t)kOffWaitStatus); // a1 = &status
+        code[n++] = rv_addi(12, 0);  // li a2,0 options
+        code[n++] = rv_addi(13, 0);  // li a3,0
+        code[n++] = rv_addi(17, 22); // li a7,22 WAITPID
+        code[n++] = RV_ECALL;
+        code[n++] = rv_sd(18, 10, (uint32_t)kOffWaitRet);
+        code[n++] = RV_LUI_D;
+        code[n++] = RV_ADDIW_D0D0;
+        code[n++] = RV_SLLI_16;
+        code[n++] = RV_LUI_F;
+        code[n++] = RV_ADDIW_F00D;
+        code[n++] = RV_OR_T0;
+        code[n++] = rv_sd(18, 5, (uint32_t)kOffDone);
+        code[n++] = rv_addi(10, 0); // li a0,0 parent exits 0
+        code[n++] = rv_addi(17, 6); // li a7,6 EXIT
+        code[n++] = RV_ECALL;
+        code[n++] = RV_J_SELF;
+    }
+#endif
+    return n;
+}
+
 /// @brief Spawn one FP worker: real create_user task, private code+data
 /// pages. Seeds data/base registers + entry point in BOTH the kstack trap
 /// frame and the TaskContext (identical values — whichever source the arch
@@ -358,6 +558,82 @@ bool fpu_user_spawn(FpuUserWorker &w, uint32_t idx) {
     w.tcb->context.elr_el1 = kUserCodeVa;
 #else
     // kstack trap frame (syscall_entry.S: s2@136, s3@144, SEPC@248).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *frame = reinterpret_cast<uint64_t *>(w.tcb->context.sp);
+    frame[17] = kUserDataVa;
+    frame[31] = kUserCodeVa;
+    w.tcb->context.s2 = kUserDataVa;
+    w.tcb->context.sepc = kUserCodeVa;
+    w.tcb->context.sstatus = (1ULL << 8) | (3ULL << 13); // SPIE + FS=11
+#endif
+    if (!Scheduler::set_sched_policy(*w.tcb, SchedPolicy::FIXED))
+        return false;
+    {
+        arch::IrqGuard g;
+        Scheduler::add_task(*w.tcb);
+    }
+    return true;
+}
+
+/// @brief Spawn the T3 fork worker: same fixture as fpu_user_spawn but
+/// with the fork stub (parent sets FP, blocks once, forks; child
+/// verifies; parent waitpids). Seeding/mapping/frame setup identical.
+bool fpu_fork_spawn(FpuUserWorker &w, uint32_t idx) {
+    w.tcb = TaskControlBlock::create_user(test::forever_entry, kUserPrio, 10,
+                                          kUserStackBytes);
+    if (w.tcb == nullptr)
+        return false;
+    w.code_phys = PMM::alloc_user_page();
+    w.data_phys = PMM::alloc_user_page();
+    if (w.code_phys == 0 || w.data_phys == 0) {
+        if (w.code_phys != 0)
+            PMM::free_page(w.code_phys);
+        if (w.data_phys != 0)
+            PMM::free_page(w.data_phys);
+        w.tcb->cleanup();
+        delete w.tcb;
+        w.tcb = nullptr;
+        return false;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *code = reinterpret_cast<uint32_t *>(arch::HHDM_OFFSET + w.code_phys);
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *data = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + w.data_phys);
+    const size_t nwords = emit_fork_stub(code);
+    (void)nwords;
+    for (size_t i = 0; i < 512; ++i)
+        data[i] = 0;
+    data[kOffLo / 8 + 0] = fpu_lane_pattern(10 + idx);
+    data[kOffLo / 8 + 1] = fpu_lane_pattern(20 + idx);
+    data[kOffLo / 8 + 2] = fpu_lane_pattern(30 + idx);
+#if defined(CONFIG_ARCH_AARCH64)
+    data[kOffHi / 8 + 0] = ~fpu_lane_pattern(10 + idx);
+    data[kOffHi / 8 + 1] = ~fpu_lane_pattern(20 + idx);
+    data[kOffHi / 8 + 2] = ~fpu_lane_pattern(30 + idx);
+#endif
+    data[kOffIndex / 8] = idx;
+
+    VMM::map_page_in_pml4(kUserCodeVa, w.code_phys, true, true,
+                          w.tcb->get_page_table());
+    VMM::map_page_in_pml4(kUserDataVa, w.data_phys, true, false,
+                          w.tcb->get_page_table());
+    if (VMM::virt_to_phys_in_pml4(kUserCodeVa, w.tcb->get_page_table()) !=
+        w.code_phys) {
+        return false;
+    }
+    if (VMM::virt_to_phys_in_pml4(kUserDataVa, w.tcb->get_page_table()) !=
+        w.data_phys) {
+        return false;
+    }
+
+#if defined(CONFIG_ARCH_AARCH64)
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *frame = reinterpret_cast<uint64_t *>(w.tcb->context.sp_el0);
+    frame[19] = kUserDataVa;
+    frame[32] = kUserCodeVa;
+    w.tcb->context.x[19] = kUserDataVa;
+    w.tcb->context.elr_el1 = kUserCodeVa;
+#else
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *frame = reinterpret_cast<uint64_t *>(w.tcb->context.sp);
     frame[17] = kUserDataVa;
@@ -659,10 +935,89 @@ JARVIS_TEST(fpu_ctx_user_interleave_isolation, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: T3 fork inheritance (issue #403): one create_user parent sets
+// FP, blocks once (real switch-out snapshots fpu_state), resumes,
+// SYS_FORKs; the child (ret==0) verifies f0/Q0 lanes against the parent
+// pattern and exits with the mismatch mask; the parent WAITPIDs the
+// child into kOffWaitStatus and exits 0. COW deep-copy gives each side
+// a private data page, so the harness reads the parent page.
+// Input: One fpu_fork_spawn worker (prio 20, FIXED), pattern page;
+// harness wakes once, joins to TERMINATED.
+// Expect: parent exit 0, waitpid ret == fork ret (child pid),
+// wait status == 0 (child exit 0), done magic, parent fpu_used,
+// gen >= 1 (eager switch + clone flush).
+// Depends: create_user, map user leaves, eager switch, SYS_FORK (clone
+// FP flush), SYS_WAITPID/wake_waiting_parent, SYS_EXIT, drain.
+JARVIS_TEST(fpu_ctx_user_fork_inherits, "PRE: none | POST: none") {
+    const uint64_t free_before = PMM::free_pages_ref();
+
+    FpuUserWorker w{};
+    bool spawned = fpu_fork_spawn(w, 0);
+    JARVIS_ASSERT(spawned);
+    Scheduler::reschedule();
+
+    // Phase A: parent set FP and blocked once in RECEIVE.
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *data = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + w.data_phys);
+    bool alive_ok = wait_until([&] { return data[kOffAlive / 8] == kAliveMagic; },
+                               kJoinBudgetTicks);
+    bool blocked_ok = wait_until(
+        [&] { return w.tcb->state == TaskState::BLOCKED; }, kJoinBudgetTicks);
+
+    // Phase B: single wake — parent resumes, forks, waitpids, exits.
+    bool woke_ok = false;
+    if (alive_ok && blocked_ok) {
+        Message msg{};
+        msg.sender_id = 0;
+        msg.type = 0xF9;
+        msg.priority = 0;
+        msg.data_size = 0;
+        woke_ok = IPC::send(w.tcb->id, msg);
+    }
+
+    // Phase C: observe parent BEFORE teardown (drain frees the TCB).
+    // The child was reaped by the parent waitpid, so its health arrives
+    // via the status word, not via a live TCB.
+    bool exited_ok = false;
+    if (woke_ok) {
+        exited_ok = wait_until(
+            [&] { return w.tcb->state == TaskState::TERMINATED; },
+            kJoinBudgetTicks);
+    }
+    const uint64_t exit_code = w.tcb->exit_code;
+    const bool reached_exit = (data[kOffDone / 8] == kDoneMagic);
+    const uint64_t fork_ret = data[kOffForkRet / 8];
+    const uint64_t wait_ret = data[kOffWaitRet / 8];
+    const uint64_t wait_status = data[kOffWaitStatus / 8];
+    const uint64_t fail_bits = data[kOffFail / 8];
+    const bool fpu_used = w.tcb->fpu_used;
+    const uint32_t gen = w.tcb->fpu_state_gen;
+
+    bool teardown_ok = true;
+    fpu_user_teardown(&w, 1, &reached_exit, free_before, teardown_ok);
+
+    JARVIS_ASSERT(alive_ok);
+    JARVIS_ASSERT(blocked_ok);
+    JARVIS_ASSERT(woke_ok);
+    JARVIS_ASSERT(exited_ok);
+    JARVIS_ASSERT(reached_exit);
+    JARVIS_ASSERT_EQ(0ULL, exit_code);
+    JARVIS_ASSERT(fork_ret != 0);
+    JARVIS_ASSERT_EQ(fork_ret, wait_ret);
+    JARVIS_ASSERT_EQ(0ULL, wait_status);
+    JARVIS_ASSERT_EQ(0ULL, fail_bits);
+    JARVIS_ASSERT(fpu_used);
+    JARVIS_ASSERT(gen >= 1U);
+    JARVIS_ASSERT(teardown_ok);
+    JARVIS_TEST_PASS();
+}
+
 void register_fpu_context_user_tests() {
     Logger::info("Registering FPU user-task tests");
     JARVIS_REGISTER_TEST(fpu_ctx_user_single_task_persists);
     JARVIS_REGISTER_TEST(fpu_ctx_user_interleave_isolation);
+    JARVIS_REGISTER_TEST(fpu_ctx_user_fork_inherits);
 }
 
 #endif // CONFIG_ARCH_AARCH64 || CONFIG_ARCH_RISCV64
