@@ -764,6 +764,11 @@ bool PMM::is_user_page(uint64_t phys_addr) {
     return owner_test(index);
 }
 
+bool PMM::is_managed_page(uint64_t phys_addr) {
+    uint64_t index = phys_addr / arch::PAGE_SIZE;
+    return index >= window_base_page_ && index < window_end_page_;
+}
+
 /// @brief Marks a physical page range as allocated KERNEL-owned.  Used for
 /// boot-time data (GRUB's Multiboot2 info) that must never be handed to an
 /// allocator — a larger kernel can shift GRUB's info placement into the PMM

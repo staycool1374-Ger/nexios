@@ -136,8 +136,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"pml4_sync",            5,    0,       0      },  // PML4 sync (part stubs)
     {"drivers_virtio_blk_req", 13,   0,       0      },  // virtio-blk request path + completion/ISR contracts
     {"drivers_ahci_deep",      10,   0,       0      },  // AHCI protocol + completion/ISR contracts
-    {"ahci_live",              5,   0,       0      },  // real AHCI path on q35 variant (not in all)
-    {"initrd_parser",          9,   0,       0      },  // cpio parser
+    {"ahci_live",              5,    0,       0      },  // real AHCI path on q35 variant (not in all)
+    {"block_srv_live",         4,    4,       4      },  // block-srv PD live path, CONFIG_BLOCK_SRV=1 (issue #47 step-b1)
+    {"initrd_parser",          9,    0,       0      },  // cpio parser
 
     // ipc
     {"ipc_core",             23,    0,       0      },  // queue, priority, notify, event group, sync roundtrip
@@ -383,6 +384,7 @@ inline void validate_all_consistency() {
     };
     static constexpr const char *k_specials[] = {
         "ahci_live", "iommu_live", "task_fpu", "task_tcb_log",
+        "block_srv_live",
         nullptr,
     };
     size_t sum_covered = 0;

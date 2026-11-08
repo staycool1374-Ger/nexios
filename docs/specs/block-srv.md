@@ -8,11 +8,27 @@ kernel probing stays (gated off only when the PD owns the device).
 ## Wire
 
 48 B `BlockRpc` (`kernel/driver/block_srv.hpp`, mirrors `TimerRpc`):
-op/flags/epoch/owner id+gen/lba/arg/handle/status-op/status. Ops:
-BIND, GEOMETRY, READ_BLOCK, WRITE_BLOCK, FLUSH, DMA_MAP, DMA_UNMAP,
-LOOPBACK, INJECT_MID_TRANSFER. Server answers BIND + LOOPBACK
-(fixed 512 B pattern); DMA_MAP with a zero handle fails closed
-(`-EACCES` shape); everything else returns a typed `-ENOSYS` pre-flip.
+op/flags/rsvd/epoch/owner id+gen/lba/arg/handle/status-op/status/aux.
+Ops: BIND, GEOMETRY, READ_BLOCK, WRITE_BLOCK, FLUSH, DMA_MAP,
+DMA_UNMAP, LOOPBACK, INJECT_MID_TRANSFER, CAP_GET (9).
+
+Step-b1 order: CAP_GET rounds first (kernel→PD carries index +
+encoded handle + phys + size per row cap; the PD maps and echoes),
+BIND last (flags = row cap count; the PD probes with every cap
+present and answers backend + geometry: status_op = backend,
+arg = sector size, aux = sector count, or the probe stage 1..6
+when backend NONE). The phys is the EXACT window base (virtio
+slots stride 0x200 inside a page): the cap spans whole pages from
+the aligned base and the PD probes at va + (phys & 0xFFF).
+READ/WRITE carry the
+request sequence in arg; the single in-flight claim fails fast
+(-EAGAIN), a restart race reports -EAGAIN once, mismatches -EIO.
+Data moves through the 4-page shared window at `kBlockDataOffset`
+(virtio queue area in page 0, header at `kBlockHdrOffset`, status
+at `kBlockStatusOffset`); kernel release/acquire fences pair with
+the PD's reply barrier. LOOPBACK keeps the fixed 512 B pattern;
+DMA_MAP with a zero handle fails closed (`-EACCES` shape);
+FLUSH is a no-op success (writes are direct, no write-back cache).
 
 ## Lifecycle
 
@@ -28,8 +44,19 @@ dropped with a bounded re-wait, never consumed.
 No `IoMmuDmaCap` ⇒ typed deny on any DMA op; domains disjoint per
 SDF row; domain destroy cascades (unmap + fence in-flight, gen-tagged
 handles). Legacy ATA PIO stays a non-DMA path — never a bypass.
-The SDF row carries at most 6 page-aligned MMIO CapSpecs + one DMA
-domain; capture runs pre-IrqGuard via `capture_block_topology()`.
+The SDF row carries at most 6 page-aligned CapSpecs + one DMA domain
+grant; capture runs pre-IrqGuard via `capture_block_topology()`.
+
+## Step-b1 backends (issue #47, live)
+
+x86_64: ATA PIO over I/O-port caps (primary 0x1F0 + secondary 0x170,
+IDENTIFY across master/slave, LBA28 READ/WRITE + FLUSH CACHE).
+aarch64/riscv64: virtio-blk over MMIO, legacy v1 interface on QEMU
+`virt` (VERSION reads 1 — accepted like the kernel finder; modern
+v2 also accepted). Legacy queue is one contiguous chunk in shared
+pages 2–3 (desc + avail + 4 KiB-aligned used ring, PFN path, no
+Ready bit); pages 0–1 stay the data/header/status window at the
+fixed `kBlock*Offset` contract. Bounded used-ring poll, no IRQ.
 
 ## Pre-flip status
 
