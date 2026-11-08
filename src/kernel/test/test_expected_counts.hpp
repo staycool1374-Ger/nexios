@@ -79,7 +79,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // process
     {"process_lifecycle",    16,   16,      16     },  // process lifecycle, child table, clone with real user parents
     {"process_elf",           9,    0,       0      },  // ELF validation, segments
-    {"elf_loader",            25,   25,      25     },  // chunked background loader: success/errors/cancel/authenticity/decay/fork
+    {"elf_loader",            29,   29,      29     },  // chunked background loader + #455 initarray (measured x86+aa64; rv64 same group)
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit, brk

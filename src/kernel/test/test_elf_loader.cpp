@@ -291,6 +291,50 @@ JARVIS_TEST(loader_cap_smoke_fail_closed,
                       (unsigned long)code);
     JARVIS_TEST_PASS();
 }
+
+// Runmode: kernel
+// Testidea: #455 item 3 init_array standing gate. The initarray probe
+//        (userspace/initarray-probe.c) arms two .init_array constructors
+//        plus a working-errno check and exits with the failure count:
+//        crt0 must run both ctors exactly once before main with errno
+//        usable (TLS_SET precedes the walk).
+// Input: request_load("/bin/initarray-probe.c.elf"), dispatch at prio 11,
+//        join to TERMINATED via wait_for_termination_safe.
+// Expect: TERMINATED with exit_code 0 (any ctor/errno miss returns > 0).
+// Depends: ElfLoader initrd-path load, crt0 init_array walk, errno TLS.
+JARVIS_TEST(loader_initarray_ctors_run_once,
+            "PRE: vfsd, iocd | POST: none") {
+    elf::ElfLoader::reset();
+    JARVIS_ASSERT_FMT(
+        elf::ElfLoader::request_load("/bin/initarray-probe.c.elf") ==
+            elf::LoadResult::OK,
+        "initarray request_load failed");
+    elf::ElfLoader::wait_loader_idle();
+    TaskControlBlock *t = elf::ElfLoader::take_completed();
+    JARVIS_ASSERT_FMT(t != nullptr && t->get_page_table() != 0 &&
+                          t->is_user_,
+                      "initarray take_completed failed");
+    // Prio 11: the harness idles; lower-priority waitees starve
+    // (every driven test uses >= 11). Set before add_task.
+    t->priority = 11;
+    t->base_priority = 11;
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*t);
+    }
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    bool exited = (t->state == TaskState::TERMINATED);
+    uint64_t code = t->exit_code;
+    if (TaskControlBlock::is_valid(t) &&
+        (t->state != TaskState::TERMINATED || t->exit_code == 0))
+        Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_FMT(exited, "initarray task did not terminate");
+    JARVIS_ASSERT_FMT(code == 0, "initarray probe failed check %lu",
+                      (unsigned long)code);
+    JARVIS_TEST_PASS();
+}
 // Runmode: kernel
 // Testidea: #431 forged-mismatch fail-closed standing gate. Forge the
 // entry ABI check (expect-major 1 -> 2) in a copy of the initrd hey
@@ -1603,5 +1647,6 @@ void register_elf_loader_tests() {
     JARVIS_REGISTER_TEST(rerun_bss_only_data_canary); // #271 live-E2E BSS-only
     JARVIS_REGISTER_TEST(loader_stub_roundtrip_generated_stubs); // #171 P2
     JARVIS_REGISTER_TEST(loader_cap_smoke_fail_closed); // #171 P3
+    JARVIS_REGISTER_TEST(loader_initarray_ctors_run_once); // #455 item 3
     JARVIS_REGISTER_TEST(loader_stub_mismatch_fail_closed); // #431 forged-mismatch fail-closed
 }
