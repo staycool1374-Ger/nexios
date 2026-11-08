@@ -215,8 +215,16 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
     const cap::CapRights rights =
         cap::CapRights::READ | cap::CapRights::WRITE;
     const int slot = space->install(obj, type, rights, gen_out);
+    // install() acquired the slot's own reference: drop the creator ref
+    // so task teardown (CNode::dispose -> slot release) is the last
+    // release and runs dispose() deterministically.  Without this the
+    // composed cap survives its task with refcount 1 — FrameCaps pin
+    // their user frames forever (issue #51 QE finding: +4 PMM/+2 Cap/
+    // +2 MemPool in serial_tx_sdf_compose_shm ON).  All failure legs of
+    // install() leave the creator ref held, so the release is
+    // unconditional; matches every other install() call site.
+    obj->release();
     if (slot < 0) {
-        obj->release();
         return -1;
     }
     return slot;

@@ -307,6 +307,31 @@ bool serial_tx_write(const char *data, uint64_t len) {
 uint64_t serial_tx_dropped() {
     return __atomic_load_n(&g_tx_dropped, __ATOMIC_RELAXED);
 }
+
+bool serial_tx_test_hold(bool hold) {
+    if (!serial_tx_resolve()) {
+        return false;
+    }
+    auto *hdr = reinterpret_cast<shm::SharedRingHeader *>(kernel::HHDM_OFFSET +
+                                                           g_tx_phys);
+    if (!shm::shm_ring_valid(hdr)) {
+        return false;
+    }
+    __atomic_store_n(&hdr->drain_hold, hold ? 1ULL : 0ULL, __ATOMIC_RELEASE);
+    return true;
+}
+
+uint64_t serial_tx_test_phys() {
+    if (!serial_tx_resolve()) {
+        return 0;
+    }
+    auto *hdr = reinterpret_cast<shm::SharedRingHeader *>(kernel::HHDM_OFFSET +
+                                                           g_tx_phys);
+    if (!shm::shm_ring_valid(hdr)) {
+        return 0;
+    }
+    return g_tx_phys;
+}
 #endif // CONFIG_SERIAL_TX_SHM
 
 } // namespace driver_pds

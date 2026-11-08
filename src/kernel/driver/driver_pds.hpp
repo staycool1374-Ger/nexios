@@ -128,6 +128,22 @@ void pd_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
 bool serial_tx_write(const char *data, uint64_t len);
 /// @brief Lifetime dropped-byte counter (backpressure evidence).
 uint64_t serial_tx_dropped();
+/// @brief Quiesce hook for exact producer tests (issue #51 QE finding):
+///        sets/clears the live ring's drain_hold word so the PD skips
+///        pops while held — drop accounting is then exact.  Fail-closed
+///        false when no live ring (same resolve as the write path).
+///        Test-only: never called on the print path.
+/// @param hold nonzero holds the drain, zero releases it.
+/// @return true when the hold word was written.
+bool serial_tx_test_hold(bool hold);
+/// @brief Producer-resolved ring phys (issue #51): the phys backing the
+///        last successful serial_tx_resolve, 0 when unusable.  Test-only:
+///        lets exact tests address the SAME ring the producer writes,
+///        even when the SDF record moved (e.g. an in-test compose on a
+///        fixture task republishes the record without touching the
+///        producer's epoch-pinned cache).
+/// @return ring phys or 0.
+uint64_t serial_tx_test_phys();
 #endif
 
 } // namespace driver_pds

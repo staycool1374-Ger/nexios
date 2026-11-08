@@ -37,6 +37,7 @@
 #include <kernel/arch/serial.hpp>
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/task/boot_sdf.hpp>
+#include <kernel/driver/driver_pds.hpp>
 #include <kernel/ipc/shm_ring.hpp>
 
 using namespace kernel;
@@ -595,6 +596,90 @@ JARVIS_TEST(serial_tx_sdf_compose_shm, "PRE: none | POST: none") {
 #endif
 
 // Runmode: kernel
+// Testidea: SHM TX producer drop accounting (issue #51 QE finding #1):
+// quiesce the PD drain via the drain_hold hook, fill the live ring
+// through serial_tx_write, prove the drop counter advances by exactly
+// the overfill in bytes, then pop the test bytes back out (consumer-
+// side discard while held — no console garbage) and release the hold
+// BEFORE any accounting assert (a held drain across a failure would
+// wedge the console for every later test).
+// Input: hold=1; fill (free + 8 elems) + 16 extra elems in 7 B writes;
+// pop-all discard; hold=0.
+// Expect: dropped delta over the extra phase == 112 B exactly;
+// pop-all drains n_elem; ring valid before and after.
+// Depends: live composed SERIAL ring (ON TX_SHM build), shm_ring
+// protocol, HHDM alias, kernel-quiet test window (same assumption as
+// the klog exact-count tests — no other task prints mid-test).
+#if CONFIG_SERIAL_TX_SHM
+JARVIS_TEST(serial_tx_producer_drop_counter, "PRE: live serial ring | POST: drained") {
+    // Address the producer's ring (not the SDF record): an in-test
+    // compose on a fixture task republishes the record without moving
+    // the producer's epoch-pinned cache, so the record may point at a
+    // dead fixture's ring while the producer still writes the live one.
+    bool live = kernel::driver_pds::serial_tx_test_hold(true);
+    const uint64_t phys = kernel::driver_pds::serial_tx_test_phys();
+    const uint64_t pages = kernel::sdf::kSerialTxRingPages;
+    auto *hdr = reinterpret_cast<kernel::shm::SharedRingHeader *>(
+        arch::HHDM_OFFSET + phys);
+    live = live && phys != 0 && kernel::shm::shm_ring_valid(hdr);
+    if (!live) {
+        kernel::driver_pds::serial_tx_test_hold(false);
+        JARVIS_ASSERT_FMT(false, "no live serial TX ring");
+    }
+    uint64_t raw = (pages - 1) * arch::PAGE_SIZE;
+    uint64_t cap = 1;
+    while (cap * 2 <= raw) {
+        cap *= 2;
+    }
+    const uint64_t esz = kernel::sdf::kSerialTxRingElemSize;
+    const uint64_t n_elem = cap / esz;
+    const uint64_t head = __atomic_load_n(&hdr->head, __ATOMIC_RELAXED);
+    const uint64_t tail = __atomic_load_n(&hdr->tail, __ATOMIC_ACQUIRE);
+    const uint64_t used = head - tail;
+    const uint64_t free_bytes = cap - used;
+    uint8_t one[7] = {7, 1, 2, 3, 4, 5, 6};
+    const uint64_t fill_elems = free_bytes / esz + 8;
+    for (uint64_t i = 0; i < fill_elems; ++i) {
+        one[1] = static_cast<uint8_t>(i & 0xFF);
+        if (!kernel::driver_pds::serial_tx_write(
+                reinterpret_cast<const char *>(one), 7)) {
+            kernel::driver_pds::serial_tx_test_hold(false);
+            JARVIS_ASSERT_FMT(false, "fill write %lu failed", i);
+        }
+    }
+    const uint64_t dropped_before = kernel::driver_pds::serial_tx_dropped();
+    constexpr uint64_t kExtraElems = 16;
+    for (uint64_t i = 0; i < kExtraElems; ++i) {
+        one[1] = static_cast<uint8_t>((i + 64) & 0xFF);
+        if (!kernel::driver_pds::serial_tx_write(
+                reinterpret_cast<const char *>(one), 7)) {
+            kernel::driver_pds::serial_tx_test_hold(false);
+            JARVIS_ASSERT_FMT(false, "extra write %lu failed", i);
+        }
+    }
+    const uint64_t dropped_after = kernel::driver_pds::serial_tx_dropped();
+    uint8_t elem[kernel::sdf::kSerialTxRingElemSize] = {};
+    uint8_t *data_base = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET +
+                                                      phys +
+                                                      arch::PAGE_SIZE);
+    uint64_t popped = 0;
+    while (kernel::shm::shm_ring_pop(hdr, data_base, elem)) {
+        ++popped;
+    }
+    const bool hold_released =
+        kernel::driver_pds::serial_tx_test_hold(false);
+    JARVIS_ASSERT_FMT(hold_released, "hold release failed");
+    JARVIS_ASSERT_FMT(dropped_after - dropped_before == kExtraElems * 7,
+                      "drops %lu want %lu",
+                      dropped_after - dropped_before, kExtraElems * 7);
+    JARVIS_ASSERT_FMT(popped == n_elem, "popped %lu want %lu", popped,
+                      n_elem);
+    JARVIS_ASSERT(kernel::shm::shm_ring_valid(hdr));
+    JARVIS_TEST_PASS();
+}
+#endif
+
+// Runmode: kernel
 // Testidea: SHM TX ring wraparound (issue #51 QE): interleave pushes and
 // pops across several capacity crossings so head/tail grow monotonically
 // past capacity while the (idx*esz)&(cap-1) mask wraps; every popped
@@ -711,6 +796,7 @@ void register_driver_tests() {
 #if CONFIG_SERIAL_TX_SHM
     JARVIS_REGISTER_TEST(serial_tx_sdf_row_shape);
     JARVIS_REGISTER_TEST(serial_tx_sdf_compose_shm);
+    JARVIS_REGISTER_TEST(serial_tx_producer_drop_counter);
 #endif
     Logger::info("Registering driver tests");
     JARVIS_REGISTER_TEST(driver_registry_find);
