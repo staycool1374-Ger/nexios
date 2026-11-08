@@ -1,144 +1,2254 @@
-diff --git a/userspace/block-pd.c b/userspace/block-pd.c
-index 15c10f08a..b47ba82a4 100644
---- a/userspace/block-pd.c
-+++ b/userspace/block-pd.c
-@@ -39,7 +39,10 @@ int main(void) {
-             rep.status = (uint16_t)(uint16_t)-38;
-             break;
-         }
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
+diff --git a/docs/specs/block-srv.md b/docs/specs/block-srv.md
+index 7091ba785..cb095d8c4 100644
+--- a/docs/specs/block-srv.md
++++ b/docs/specs/block-srv.md
+@@ -8,11 +8,27 @@ kernel probing stays (gated off only when the PD owns the device).
+ ## Wire
+ 
+ 48 B `BlockRpc` (`kernel/driver/block_srv.hpp`, mirrors `TimerRpc`):
+-op/flags/epoch/owner id+gen/lba/arg/handle/status-op/status. Ops:
+-BIND, GEOMETRY, READ_BLOCK, WRITE_BLOCK, FLUSH, DMA_MAP, DMA_UNMAP,
+-LOOPBACK, INJECT_MID_TRANSFER. Server answers BIND + LOOPBACK
+-(fixed 512 B pattern); DMA_MAP with a zero handle fails closed
+-(`-EACCES` shape); everything else returns a typed `-ENOSYS` pre-flip.
++op/flags/rsvd/epoch/owner id+gen/lba/arg/handle/status-op/status/aux.
++Ops: BIND, GEOMETRY, READ_BLOCK, WRITE_BLOCK, FLUSH, DMA_MAP,
++DMA_UNMAP, LOOPBACK, INJECT_MID_TRANSFER, CAP_GET (9).
++
++Step-b1 order: CAP_GET rounds first (kernel→PD carries index +
++encoded handle + phys + size per row cap; the PD maps and echoes),
++BIND last (flags = row cap count; the PD probes with every cap
++present and answers backend + geometry: status_op = backend,
++arg = sector size, aux = sector count, or the probe stage 1..6
++when backend NONE). The phys is the EXACT window base (virtio
++slots stride 0x200 inside a page): the cap spans whole pages from
++the aligned base and the PD probes at va + (phys & 0xFFF).
++READ/WRITE carry the
++request sequence in arg; the single in-flight claim fails fast
++(-EAGAIN), a restart race reports -EAGAIN once, mismatches -EIO.
++Data moves through the 4-page shared window at `kBlockDataOffset`
++(virtio queue area in page 0, header at `kBlockHdrOffset`, status
++at `kBlockStatusOffset`); kernel release/acquire fences pair with
++the PD's reply barrier. LOOPBACK keeps the fixed 512 B pattern;
++DMA_MAP with a zero handle fails closed (`-EACCES` shape);
++FLUSH is a no-op success (writes are direct, no write-back cache).
+ 
+ ## Lifecycle
+ 
+@@ -28,8 +44,19 @@ dropped with a bounded re-wait, never consumed.
+ No `IoMmuDmaCap` ⇒ typed deny on any DMA op; domains disjoint per
+ SDF row; domain destroy cascades (unmap + fence in-flight, gen-tagged
+ handles). Legacy ATA PIO stays a non-DMA path — never a bypass.
+-The SDF row carries at most 6 page-aligned MMIO CapSpecs + one DMA
+-domain; capture runs pre-IrqGuard via `capture_block_topology()`.
++The SDF row carries at most 6 page-aligned CapSpecs + one DMA domain
++grant; capture runs pre-IrqGuard via `capture_block_topology()`.
++
++## Step-b1 backends (issue #47, live)
++
++x86_64: ATA PIO over I/O-port caps (primary 0x1F0 + secondary 0x170,
++IDENTIFY across master/slave, LBA28 READ/WRITE + FLUSH CACHE).
++aarch64/riscv64: virtio-blk over MMIO, legacy v1 interface on QEMU
++`virt` (VERSION reads 1 — accepted like the kernel finder; modern
++v2 also accepted). Legacy queue is one contiguous chunk in shared
++pages 2–3 (desc + avail + 4 KiB-aligned used ring, PFN path, no
++Ready bit); pages 0–1 stay the data/header/status window at the
++fixed `kBlock*Offset` contract. Bounded used-ring poll, no IRQ.
+ 
+ ## Pre-flip status
+ 
+diff --git a/docs/specs/driver-pds.md b/docs/specs/driver-pds.md
+index 7a0303bed..352ae7a89 100644
+--- a/docs/specs/driver-pds.md
++++ b/docs/specs/driver-pds.md
+@@ -89,10 +89,21 @@ the PD instead:
+ 
+ - `VFS_SRV` (vfs-srv PD): zero-cap row by design (no ambient authority).
+   Composes empty; the PD talks to clients over its endpoint only.
+-- `BLOCK_SRV` (block-srv PD): captured PCI/virtio MMIO CapSpecs (page
+-  aligned, ≤6) + optional DMA domain (only when an IOMMU was probed at
+-  capture). Degraded (no controller/IOMMU) composes empty with a logged
+-  warning — allowed, never silent. See `docs/specs/block-srv.md`.
++- `BLOCK_SRV` (block-srv PD, issue #47 step-b1): static arch-switched
++  row + one 4-page shared window (`CapKind::DMA_REGION`, raw sector/
++  queue area, kernel HHDM alias). x86_64: two IO-port caps
++  (0x1F0/0x170 × 8 ports, exact ranges — never page-widened, the
++  grant ledger stays least-privilege). aarch64/riscv64: first captured
++  virtio transport window + 4-page window. Window phys is conveyed
++  EXACT (virtio slots stride 0x200 inside a page): the cap covers
++  whole pages from the aligned base and the PD applies the
++  intra-page offset itself (mapping an aligned truncation made the
++  PD probe the wrong slot — device 0 instead of blk). No IRQ cap in
++  b1 (polled completion; IRQ delegation is step-b2).
++  Degraded off-x86 (transport window without a frame is never
++  composed) starts capless with a logged warning — allowed, never
++  silent. Slot/frame persistence covers all roles (`kPdRoleCount`).
++  See `docs/specs/block-srv.md`.
+ - Single device owner: `CONFIG_DRIVER_PD_BLOCK` and `CONFIG_BLOCK_SRV`
+   are mutually exclusive (hard build error); kernel probing is gated
+   off only by exactly one of them; #47 owns this table's block row
+diff --git a/docs/specs/microkernel-transition.md b/docs/specs/microkernel-transition.md
+index 1e43a4451..4a4cccd2d 100644
+--- a/docs/specs/microkernel-transition.md
++++ b/docs/specs/microkernel-transition.md
+@@ -185,12 +185,16 @@ generation-tagged stored pointers). Enforced at these points:
+    record kernel text budget + §3 38-entry target at approval. Land #76
+    (80..83, now `sys_unimplemented`) as server-RPC stubs **before** the
+    timer-srv flip.
+-   Status 2026-11 (landed since draft): timer-srv PD + spec/loopback
+-   (`timer-srv.c`, `CONFIG_TIMER_SRV`); #47 step-a VFS+block strangler
+-   merged (`d1b44d849`, no flip); #51 serial SHM-ring TX merged
+-   (`960b27673`, ring-first, fallback preserved). Open per §7 gates:
+-   parity → fault drill → SIL 3 audit → flip → delete-after-gate, per
+-   server in the order below.
++    Status 2026-11 (landed since draft): timer-srv PD + spec/loopback
++    (`timer-srv.c`, `CONFIG_TIMER_SRV`); #47 step-a VFS+block strangler
++    merged (`d1b44d849`, no flip); #51 serial SHM-ring TX merged
++    (`960b27673`, ring-first, fallback preserved). Open per §7 gates:
++    parity → fault drill → SIL 3 audit → flip → delete-after-gate, per
++    server in the order below.
++    Status 2026-11 (in progress): #47 step-b1 block-srv live path
++    (branch `fix/47-block-srv-b1`: SDF `DMA_REGION` + `kPdRoleCount`,
++    BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
++    read+write, `block_srv_live` class + host digest oracle).
+ Per server, in order: timer → log → procfs → term/fb → drivers → block →
+ VFS backends → process management → memory manager. Each step:
+ (a) server PD + Kconfig shim default OFF; (b) loopback/parity tests
+diff --git a/src/kernel/driver/block_srv.cpp b/src/kernel/driver/block_srv.cpp
+index 72dc62dbe..6ee9ffb20 100644
+--- a/src/kernel/driver/block_srv.cpp
++++ b/src/kernel/driver/block_srv.cpp
+@@ -10,8 +10,12 @@
+  */
+ 
+ #include <kernel/ipc/ipc.hpp>
++#include <kernel/task/boot_sdf.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
++#include <kernel/cap/cap.hpp>
++#include <kernel/cap/cap_types.hpp>
++#include <kernel/memory/address.hpp>
+ 
+ namespace kernel {
+ namespace block_srv {
+@@ -32,6 +36,19 @@ uint64_t g_tombstone_count = 0;
+ /// Fail-closed `-EAGAIN` past this; never parks a kernel task forever.
+ constexpr uint64_t kRpcGuardTicks = 5000;
+ 
++// Bound device state (issue #47 step-b1): cached at bind, valid only
++// when g_bound_epoch == block_srv_epoch(). Degraded binds (no backend)
++// still latch the epoch so reads fail fast instead of rebinding.
++uint32_t g_bound_epoch = 0;
++BlkBackend g_backend = BlkBackend::NONE;
++uint64_t g_sector_count = 0;
++uint64_t g_data_phys = 0;
++uint64_t g_data_pages = 0;
++// Single in-flight RPC claim: fail-fast (-EAGAIN), never spun on, so
++// there is no lock-order edge and no spin-across-reschedule (§11.1).
++uint8_t g_claim = 0;
++uint64_t g_seq = 0;
++
+ } // namespace
+ 
+ void set_block_srv_pid(uint64_t pid) {
+@@ -128,7 +145,7 @@ int64_t block_srv_fault_loopback() {
+     if (!block_srv_rpc(req, reply)) {
+         return -38; // -ENOSYS: server unavailable pre-flip
      }
-     return 0;
+-    return reply.status;
++    return static_cast<int64_t>(static_cast<int16_t>(reply.status));
  }
+ 
+ int64_t block_srv_fault_nodomain() {
+@@ -146,7 +163,314 @@ int64_t block_srv_fault_nodomain() {
+     if (!block_srv_rpc(req, reply)) {
+         return -38; // -ENOSYS: server unavailable pre-flip
+     }
+-    return reply.status;
++    return static_cast<int64_t>(static_cast<int16_t>(reply.status));
++}
++
++namespace {
++
++// Fill the identity envelope shared by every RPC.
++void fill_identity(BlockRpc &req) {
++    auto *cur = Scheduler::current_task();
++    req.owner_id = static_cast<uint32_t>(cur->id);
++    req.owner_gen = cur->generation;
++    req.epoch = block_srv_epoch();
++}
++
++// Encode one row cap for conveyance, cross-checked against the SDF
++// record (slot, gen, phys/size). Fail-closed: any mismatch returns 0.
++uint64_t encode_row_handle(TaskControlBlock &srv, uint64_t idx,
++                           const sdf::CapSpec &spec) {
++    int slot = -1;
++    uint32_t gen = 0;
++    if (!sdf::sdf_role_cap(sdf::PdRole::BLOCK_SRV, idx, slot, gen)) {
++        return 0;
++    }
++    auto *space = srv.get_cspace();
++    if (space == nullptr) {
++        return 0;
++    }
++    const uint64_t handle =
++        cap::encode_user_handle(space->cspace_id, slot, gen);
++    if (handle == static_cast<uint64_t>(-1)) {
++        return 0;
++    }
++    if (spec.kind == sdf::CapKind::DMA_REGION) {
++        uint64_t phys = 0;
++        uint64_t pages = 0;
++        if (!sdf::sdf_role_frame(sdf::PdRole::BLOCK_SRV, idx, phys,
++                                 pages) ||
++            phys == 0 || pages == 0) {
++            return 0;
++        }
++    }
++    return handle;
++}
++
++void clear_bound() {
++    // SIL3 audit #47 step-b1: §11.6 all-or-nothing atomics. The bound
++    // cache is read atomically by the accessors, so every store here
++    // is atomic (SMP tasks may bind concurrently; values are
++    // idempotent but plain/atomic mixing is UB).
++    __atomic_store_n(&g_bound_epoch, 0U, __ATOMIC_RELAXED);
++    __atomic_store_n(reinterpret_cast<uint8_t *>(&g_backend),
++                     static_cast<uint8_t>(BlkBackend::NONE),
++                     __ATOMIC_RELAXED);
++    __atomic_store_n(&g_sector_count, 0ULL, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_phys, 0ULL, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_pages, 0ULL, __ATOMIC_RELAXED);
++}
++
++} // namespace
++
++bool block_srv_bind() {
++    const uint64_t pid = get_block_srv_pid();
++    if (pid == 0 || !block_srv_alive()) {
++        return false;
++    }
++    auto *srv = Scheduler::find_task(pid);
++    if (srv == nullptr) {
++        return false;
++    }
++    auto *cur = Scheduler::current_task();
++    if (cur == nullptr) {
++        return false;
++    }
++    sdf::CapSpec specs[sdf::kMaxCapsPerRole] = {};
++    const uint64_t count = sdf::sdf_row(sdf::PdRole::BLOCK_SRV, specs);
++    if (count > sdf::kMaxCapsPerRole) {
++        return false;
++    }
++    // CAP_GET rounds convey one cap each (index order): the PD maps and
++    // echoes. BIND goes last so the PD probes with every cap present.
++    // DMA_REGION rows carry addr=0 by design (fresh frames per compose);
++    // the real window phys/pages come from the SDF frame record.
++    for (uint64_t i = 0; i < count; ++i) {
++        const uint64_t handle = encode_row_handle(*srv, i, specs[i]);
++        if (handle == 0) {
++            return false;
++        }
++        uint64_t cap_phys = specs[i].addr;
++        uint64_t cap_size = specs[i].size;
++        if (specs[i].kind == sdf::CapKind::DMA_REGION) {
++            if (!sdf::sdf_role_frame(sdf::PdRole::BLOCK_SRV, i, cap_phys,
++                                     cap_size) ||
++                cap_phys == 0 || cap_size < kBlockRegionPages) {
++                return false;
++            }
++            cap_size *= arch::PAGE_SIZE;
++        }
++        BlockRpc get{};
++        get.op = static_cast<uint8_t>(BlockSrvOp::CAP_GET);
++        fill_identity(get);
++        get.flags = static_cast<uint8_t>(count);
++        get.handle = static_cast<uint32_t>(i);
++        get.arg = handle;
++        get.lba = cap_phys;
++        get.aux = cap_size;
++        get.rsvd = static_cast<uint16_t>(specs[i].io_port);
++        get.status_op = static_cast<uint16_t>(specs[i].kind);
++        BlockRpc got{};
++        if (!block_srv_rpc(get, got)) {
++            clear_bound();
++            return false;
++        }
++        if (got.op != get.op || got.epoch != get.epoch ||
++            got.owner_id != get.owner_id ||
++            got.owner_gen != get.owner_gen || got.handle != get.handle ||
++            got.arg != get.arg ||
++            got.status_op != static_cast<uint16_t>(specs[i].kind) ||
++            got.status != 0) {
++            clear_bound();
++            return false;
++        }
++    }
++    // BIND carries no cap (flags = row cap count); the PD probes the
++    // mapped caps and answers backend + geometry.
++    BlockRpc req{};
++    req.op = static_cast<uint8_t>(BlockSrvOp::BIND);
++    fill_identity(req);
++    req.flags = static_cast<uint8_t>(count);
++    BlockRpc reply{};
++    if (!block_srv_rpc(req, reply)) {
++        return false;
++    }
++    if (reply.op != req.op || reply.epoch != req.epoch ||
++        reply.owner_id != req.owner_id ||
++        reply.owner_gen != req.owner_gen) {
++        return false;
++    }
++    if (reply.status != 0) {
++        return false;
++    }
++    const auto backend = static_cast<BlkBackend>(reply.status_op);
++    if (backend != BlkBackend::NONE && backend != BlkBackend::ATA_PIO &&
++        backend != BlkBackend::VIRTIO_MMIO) {
++        return false;
++    }
++    if (reply.flags != count) {
++        return false;
++    }
++    const uint64_t sectors = reply.aux;
++    const uint64_t sector_size = reply.arg;
++    if (backend != BlkBackend::NONE &&
++        (sectors == 0 || sector_size != kBlockSectorSize)) {
++        return false;
++    }
++    // Resolve the shared data window (exactly one DMA_REGION per row).
++    uint64_t data_phys = 0;
++    uint64_t data_pages = 0;
++    if (count > 0) {
++        bool found = false;
++        for (uint64_t i = 0; i < count; ++i) {
++            if (specs[i].kind == sdf::CapKind::DMA_REGION) {
++                if (!sdf::sdf_role_frame(sdf::PdRole::BLOCK_SRV, i,
++                                         data_phys, data_pages) ||
++                    data_phys == 0 || data_pages < kBlockRegionPages) {
++                    clear_bound();
++                    return false;
++                }
++                found = true;
++            }
++        }
++        if (!found) {
++            clear_bound();
++            return false;
++        }
++    }
++    // SIL3 audit #47 step-b1: §11.6 atomic stores pair with the atomic
++    // loads in the accessors, ensure_bound() and transfer_sector().
++    __atomic_store_n(reinterpret_cast<uint8_t *>(&g_backend),
++                     static_cast<uint8_t>(backend), __ATOMIC_RELAXED);
++    __atomic_store_n(&g_sector_count,
++                     (backend == BlkBackend::NONE) ? 0ULL : sectors,
++                     __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_phys, data_phys, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_pages, data_pages, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_bound_epoch, block_srv_epoch(), __ATOMIC_RELAXED);
++    return true;
++}
++
++uint64_t block_srv_sector_count() {
++    return __atomic_load_n(&g_sector_count, __ATOMIC_RELAXED);
++}
++
++uint64_t block_srv_sector_size() {
++    if (__atomic_load_n(&g_sector_count, __ATOMIC_RELAXED) == 0) {
++        return 0;
++    }
++    return kBlockSectorSize;
++}
++
++BlkBackend block_srv_backend() {
++    return static_cast<BlkBackend>(
++        __atomic_load_n(reinterpret_cast<uint8_t *>(&g_backend),
++                        __ATOMIC_RELAXED));
++}
++
++namespace {
++
++bool ensure_bound() {
++    // SIL3 audit #47 step-b1: §11.6 atomic loads pair with the atomic
++    // stores in clear_bound()/block_srv_bind().
++    const uint32_t bound_epoch =
++        __atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED);
++    const uint8_t bound_backend = __atomic_load_n(
++        reinterpret_cast<uint8_t *>(&g_backend), __ATOMIC_RELAXED);
++    const uint64_t bound_sectors =
++        __atomic_load_n(&g_sector_count, __ATOMIC_RELAXED);
++    if (bound_epoch == block_srv_epoch()) {
++        return bound_backend != static_cast<uint8_t>(BlkBackend::NONE) &&
++               bound_sectors != 0;
++    }
++    clear_bound();
++    if (!block_srv_bind()) {
++        return false;
++    }
++    const uint8_t rebound_backend = __atomic_load_n(
++        reinterpret_cast<uint8_t *>(&g_backend), __ATOMIC_RELAXED);
++    const uint64_t rebound_sectors =
++        __atomic_load_n(&g_sector_count, __ATOMIC_RELAXED);
++    return rebound_backend != static_cast<uint8_t>(BlkBackend::NONE) &&
++           rebound_sectors != 0;
++}
++
++// One transfer through the shared window. Write path pre-copies into
++// the frame under a release fence; read path copies out under an
++// acquire fence after a validated reply.
++int64_t transfer_sector(bool is_write, uint64_t lba,
++                        const uint8_t *write_src, uint8_t *read_dst) {
++    if (!ensure_bound()) {
++        return -38; // -ENOSYS: PD unavailable or degraded
++    }
++    // SIL3 audit #47 step-b1: §11.6 — the OOB bound is stored
++    // atomically, so load it atomically.
++    const uint64_t oob_sectors =
++        __atomic_load_n(&g_sector_count, __ATOMIC_RELAXED);
++    if (lba >= oob_sectors) {
++        return -22; // -EINVAL: out of range
++    }
++    if ((is_write && write_src == nullptr) ||
++        (!is_write && read_dst == nullptr)) {
++        return -22; // -EINVAL: null window
++    }
++    if (__atomic_test_and_set(&g_claim, __ATOMIC_ACQUIRE) != 0) {
++        return -11; // -EAGAIN: one in-flight RPC only, fail fast
++    }
++    // SIL3 audit #47 step-b1: §11.6 — window phys is stored atomically.
++    const uint64_t window_phys =
++        __atomic_load_n(&g_data_phys, __ATOMIC_RELAXED);
++    auto *win = reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + window_phys +
++                                            kBlockDataOffset);
++    if (!is_write) {
++        __builtin_memset(win, 0, kBlockSectorSize);
++    } else {
++        __builtin_memcpy(win, write_src, kBlockSectorSize);
++    }
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    const uint64_t seq =
++        __atomic_fetch_add(&g_seq, 1ULL, __ATOMIC_RELAXED) + 1ULL;
++    BlockRpc req{};
++    req.op = static_cast<uint8_t>(is_write ? BlockSrvOp::WRITE_BLOCK
++                                           : BlockSrvOp::READ_BLOCK);
++    fill_identity(req);
++    req.lba = lba;
++    req.arg = seq;
++    BlockRpc reply{};
++    const bool rpc_ok = block_srv_rpc(req, reply);
++    __atomic_thread_fence(__ATOMIC_ACQUIRE);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    if (!rpc_ok) {
++        return -5; // -EIO: transport/timeout, fail closed
++    }
++    if (reply.epoch != req.epoch) {
++        // Restart raced the RPC: drop the stale reply, force a rebind
++        // on the next call, report once (-EAGAIN, never retried here).
++        clear_bound();
++        return -11;
++    }
++    if (reply.op != req.op || reply.owner_id != req.owner_id ||
++        reply.owner_gen != req.owner_gen || reply.arg != seq ||
++        reply.status_op != req.op) {
++        return -5; // -EIO: mismatched/stale reply, never consumed
++    }
++    const int16_t code = static_cast<int16_t>(reply.status);
++    if (code != 0) {
++        return static_cast<int64_t>(code);
++    }
++    if (!is_write) {
++        __builtin_memcpy(read_dst, win, kBlockSectorSize);
++    }
++    return 0;
++}
++
++} // namespace
++
++int64_t block_srv_read_sector(uint64_t lba, uint8_t *buffer) {
++    return transfer_sector(false, lba, nullptr, buffer);
++}
++
++int64_t block_srv_write_sector(uint64_t lba, const uint8_t *buffer) {
++    return transfer_sector(true, lba, buffer, nullptr);
+ }
+ 
+ } // namespace block_srv
+diff --git a/src/kernel/driver/block_srv.hpp b/src/kernel/driver/block_srv.hpp
+index 7ec397672..64fb903ba 100644
+--- a/src/kernel/driver/block_srv.hpp
++++ b/src/kernel/driver/block_srv.hpp
+@@ -46,25 +46,54 @@ enum class BlockSrvOp : uint8_t {
+     DMA_UNMAP = 6,     ///< unmap a DMA window
+     LOOPBACK = 7,      ///< loopback diagnostic (no hardware)
+     INJECT_MID_TRANSFER = 8, ///< one-shot mid-transfer fault drill
++    CAP_GET = 9,       ///< per-index cap conveyance (issue #47 step-b1):
++                       ///< kernel→PD carries index i + handle + phys +
++                       ///< size; PD maps and echoes. CAP_GET rounds run
++                       ///< first (index order); BIND goes last so the PD
++                       ///< probes with every cap present.
++};
++
++/// @brief PD backend selected at BIND (issue #47 step-b1).
++enum class BlkBackend : uint8_t {
++    NONE = 0,       ///< no backend (loopback/diagnostic only)
++    ATA_PIO = 1,    ///< x86_64 ATA PIO over I/O-port caps
++    VIRTIO_MMIO = 2,///< aarch64/riscv64 virtio-blk over MMIO (v2)
+ };
+ 
+ /// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
+ struct BlockRpc {
+     uint8_t op;         ///< BlockSrvOp
+-    uint8_t flags;      ///< bit0: DEGRADED (no backend, loopback only)
+-    uint16_t rsvd;      ///< reserved (zero)
++    uint8_t flags;      ///< BIND/CAP_GET req: row cap count; BIND reply:
++                        ///< row cap count echoed; bit0: DEGRADED
++    uint16_t rsvd;      ///< CAP_GET req: io_port (0/1); else zero
+     uint32_t epoch;     ///< proxy epoch (server purges on increase)
+     uint32_t owner_id;  ///< requesting task id
+     uint32_t owner_gen; ///< requesting task generation
+-    uint64_t lba;       ///< logical block address
+-    uint64_t arg;       ///< op argument (DMA handle, pattern seed)
+-    uint32_t handle;    ///< DMA/transfer handle (gen-tagged by server)
+-    uint16_t status_op; ///< echoed op for mismatch detection
++    uint64_t lba;       ///< logical block address / CAP_GET req: phys base
++    uint64_t arg;       ///< op argument / CAP_GET req: encoded cap handle;
++                        ///< READ/WRITE: request sequence; GEOM reply: size
++    uint32_t handle;    ///< DMA/transfer handle / CAP_GET: row index
++    uint16_t status_op; ///< echoed op / BIND reply: backend / CAP reply:
++                        ///< kind echoed
+     uint16_t status;    ///< reply: negated errno (0 = ok)
++    uint64_t aux;       ///< CAP_GET req: cap byte size; BIND reply:
++                        ///< sector count, or the PD probe stage
++                        ///< (1..6) when backend NONE (diagnostic).
+ };
+ 
+-static_assert(sizeof(BlockRpc) <= 48,
+-              "BlockRpc must fit the 48 B fast IPC payload");
++static_assert(sizeof(BlockRpc) == 48,
++              "BlockRpc must be exactly the 48 B fast IPC payload");
++
++/// @brief Shared data window layout (issue #47 step-b1): one 4-page
++/// DMA_REGION frame shared kernel↔PD. Page 0 holds the virtio queue
++/// area; the sector payload, request header, and status byte live at
++/// fixed offsets. The PD mirrors these constants (userspace/block-srv.c).
++inline constexpr uint64_t kBlockRegionPages = 4;
++inline constexpr uint64_t kBlockQueueBytes = 0x1000;
++inline constexpr uint64_t kBlockDataOffset = 0x1000;
++inline constexpr uint64_t kBlockHdrOffset = 0x1200;
++inline constexpr uint64_t kBlockStatusOffset = 0x1300;
++inline constexpr uint64_t kBlockSectorSize = 512;
+ 
+ /// @brief Maximum transfer unit the loopback path moves per call (bytes).
+ inline constexpr uint64_t kBlockLoopbackBytes = 512;
+@@ -96,6 +125,30 @@ int64_t block_srv_fault_loopback();
+ /// @return -EACCES-shaped typed error when the server honors it.
+ int64_t block_srv_fault_nodomain();
+ 
++/// @brief Bind the PD (issue #47 step-b1): BIND + per-index CAP_GET
++/// rounds with SDF cross-check (count, order, kind, encoded handle,
++/// phys/size). Caches backend, geometry, and the data-window phys.
++/// @return true when bound at the current epoch (rebinds on change).
++bool block_srv_bind();
++
++/// @brief Cached sector count from the last bind (0 when unbound).
++uint64_t block_srv_sector_count();
++/// @brief Cached sector size in bytes (512 when bound, 0 unbound).
++uint64_t block_srv_sector_size();
++/// @brief Backend selected by the PD at bind (NONE when unbound).
++BlkBackend block_srv_backend();
++
++/// @brief Read one 512 B sector through the PD (issue #47 step-b1).
++/// @param lba Sector index; @p buffer receives 512 B on success.
++/// @return 0 on success, negative errno otherwise (-ENOSYS unbound,
++/// -EINVAL OOB, -EIO transport/mismatch, -EAGAIN epoch raced once).
++int64_t block_srv_read_sector(uint64_t lba, uint8_t *buffer);
++
++/// @brief Write one 512 B sector through the PD (issue #47 step-b1).
++/// @param lba Sector index; @p buffer supplies 512 B.
++/// @return 0 on success, negative errno otherwise (same as read).
++int64_t block_srv_write_sector(uint64_t lba, const uint8_t *buffer);
++
+ #endif // CONFIG_BLOCK_SRV
+ 
+ } // namespace kernel::block_srv
+diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
+index d78bef61d..8ebc3fe1b 100644
+--- a/src/kernel/memory/pmm.cpp
++++ b/src/kernel/memory/pmm.cpp
+@@ -764,6 +764,11 @@ bool PMM::is_user_page(uint64_t phys_addr) {
+     return owner_test(index);
+ }
+ 
++bool PMM::is_managed_page(uint64_t phys_addr) {
++    uint64_t index = phys_addr / arch::PAGE_SIZE;
++    return index >= window_base_page_ && index < window_end_page_;
++}
++
+ /// @brief Marks a physical page range as allocated KERNEL-owned.  Used for
+ /// boot-time data (GRUB's Multiboot2 info) that must never be handed to an
+ /// allocator — a larger kernel can shift GRUB's info placement into the PMM
+diff --git a/src/kernel/memory/pmm.hpp b/src/kernel/memory/pmm.hpp
+index 60cf383f2..3adabb274 100644
+--- a/src/kernel/memory/pmm.hpp
++++ b/src/kernel/memory/pmm.hpp
+@@ -170,6 +170,13 @@ class PMM {
+ 
+     /// @brief Returns true if the page was allocated as USER ownership.
+     static bool is_user_page(uint64_t phys_addr);
++    /// @brief Returns true if the page lies in the managed allocatable
++    /// window (issue #47 step-b1): device MMIO below the RAM base is
++    /// NOT managed even when numerically below total_memory (virt
++    /// places RAM at 0x40000000, devices near 0x0a000000).
++    /// @param phys_addr Physical address to check.
++    /// @return true when allocatable-window owned (RAM, user or kernel).
++    static bool is_managed_page(uint64_t phys_addr);
+     /// @brief Returns true if the page was allocated as USER ownership with
+     /// error code.
+     /// @param phys_addr Physical address to check.
+diff --git a/src/kernel/memory/vmm_map.cpp b/src/kernel/memory/vmm_map.cpp
+index 6a827b51a..63e885edb 100644
+--- a/src/kernel/memory/vmm_map.cpp
++++ b/src/kernel/memory/vmm_map.cpp
+@@ -86,7 +86,13 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+ 
+-    if (user && phys_addr < PMM::total_memory())
++    // Privilege-escalation backstop (issue #47 step-b1): never map
++    // managed KERNEL RAM user-accessible. Managed = inside the PMM
++    // allocatable window; device MMIO outside it (e.g. virtio near
++    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
++    // RAM, and must stay mappable. The old `phys < total_memory`
++    // shape assumed RAM starts at 0 (x86-only truth).
++    if (user && PMM::is_managed_page(phys_addr))
+         ENSURE(PMM::is_user_page(phys_addr) &&
+                "map_page: KERNEL page mapped as user-accessible");
+ 
+@@ -143,7 +149,13 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+ 
+-    if (user && phys_addr < PMM::total_memory())
++    // Privilege-escalation backstop (issue #47 step-b1): never map
++    // managed KERNEL RAM user-accessible. Managed = inside the PMM
++    // allocatable window; device MMIO outside it (e.g. virtio near
++    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
++    // RAM, and must stay mappable. The old `phys < total_memory`
++    // shape assumed RAM starts at 0 (x86-only truth).
++    if (user && PMM::is_managed_page(phys_addr))
+         ENSURE(PMM::is_user_page(phys_addr) &&
+                "map_page: KERNEL page mapped as user-accessible");
+ 
+@@ -186,7 +198,13 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+ 
+-    if (user && phys_addr < PMM::total_memory())
++    // Privilege-escalation backstop (issue #47 step-b1): never map
++    // managed KERNEL RAM user-accessible. Managed = inside the PMM
++    // allocatable window; device MMIO outside it (e.g. virtio near
++    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
++    // RAM, and must stay mappable. The old `phys < total_memory`
++    // shape assumed RAM starts at 0 (x86-only truth).
++    if (user && PMM::is_managed_page(phys_addr))
+         ENSURE(PMM::is_user_page(phys_addr) &&
+                "map_page_in_pml4: KERNEL page mapped as user-accessible");
+ 
+@@ -239,7 +257,13 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
+         return errors::VMM_ERR_PAGE_ALLOC;
+     }
+ 
+-    if (user && phys_addr < PMM::total_memory())
++    // Privilege-escalation backstop (issue #47 step-b1): never map
++    // managed KERNEL RAM user-accessible. Managed = inside the PMM
++    // allocatable window; device MMIO outside it (e.g. virtio near
++    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
++    // RAM, and must stay mappable. The old `phys < total_memory`
++    // shape assumed RAM starts at 0 (x86-only truth).
++    if (user && PMM::is_managed_page(phys_addr))
+         ENSURE(PMM::is_user_page(phys_addr) &&
+                "map_page_in_pml4: KERNEL page mapped as user-accessible");
+ 
+diff --git a/src/kernel/task/boot_sdf.cpp b/src/kernel/task/boot_sdf.cpp
+index 81933a6b6..bce942c8f 100644
+--- a/src/kernel/task/boot_sdf.cpp
++++ b/src/kernel/task/boot_sdf.cpp
+@@ -37,12 +37,23 @@ bool g_block_dma = false;
+ // inherited), read by the kernel TX producer. Roles ≥ 6 never carry SHM.
+ uint64_t g_shm_tx_phys[6] = {};
+ uint64_t g_shm_tx_pages[6] = {};
++// Composed DMA_REGION window records (issue #47 step-b1): (phys, pages)
++// per role+index, published only after the whole row composes; cleared
++// on any (re)compose start of that role.
++uint64_t g_role_frame_phys[kPdRoleCount][kMaxCapsPerRole] = {};
++uint64_t g_role_frame_pages[kPdRoleCount][kMaxCapsPerRole] = {};
+ // Last SHM mint record: mint_one stages (phys, pages) here; sdf_compose
+ // copies them into the role cells only after the whole row composes
+ // (all-or-nothing — a failed row leaves the role cells cleared, and the
+ // producer fail-closes to the raw path).
+ uint64_t g_last_shm_phys = 0;
+ uint64_t g_last_shm_pages = 0;
++// Last DMA_REGION mint record (issue #47 step-b1): same staging contract
++// as SHM, but no ring header is initialised (raw sector/queue window).
++// sdf_compose snapshots these per index right after each successful
++// mint_one, so rows with one DMA_REGION window publish it on success.
++uint64_t g_last_dma_phys = 0;
++uint64_t g_last_dma_pages = 0;
+ 
+ /// @brief Mint one CapSpec into the task CSpace (all-or-nothing caller).
+ /// @return slot index or -1. Created caps are disposed by the caller on
+@@ -70,7 +81,33 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
+         const arch::PciBarType bar_type =
+             (spec.io_port != 0) ? arch::PciBarType::IO
+                                 : arch::PciBarType::MEMORY_32;
+-        auto *cap = cap::MmioCap::create(spec.addr, spec.size, bar_type);
++        if (spec.io_port != 0) {
++            // IO ports are not memory-mapped (grant ledger only), so
++            // the exact range is kept: widening to whole pages would
++            // widen the grant bound (least-privilege regression).
++            auto *cap = cap::MmioCap::create(spec.addr, spec.size,
++                                             bar_type);
++            if (cap == nullptr) {
++                return -1;
++            }
++            obj = cap;
++            type = cap::CapType::Mmio;
++            break;
++        }
++        // Window may start mid-page (issue #47 step-b1: virtio slots
++        // stride 0x200); the map primitive needs whole pages, so the
++        // cap covers [align_down(addr), align_up(addr+size)) and the
++        // PD applies the intra-page offset (addr & 0xFFF) itself.
++        const uint64_t mask = static_cast<uint64_t>(arch::PAGE_SIZE) - 1;
++        const uint64_t base = spec.addr & ~mask;
++        if (spec.size == 0 || spec.addr + spec.size < spec.addr) {
++            return -1;
++        }
++        const uint64_t end = (spec.addr + spec.size + mask) & ~mask;
++        if (end <= base) {
++            return -1;
++        }
++        auto *cap = cap::MmioCap::create(base, end - base, bar_type);
+         if (cap == nullptr) {
+             return -1;
+         }
+@@ -141,6 +178,35 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
+         type = cap::CapType::Frame;
+         break;
+     }
++    case CapKind::DMA_REGION: {
++        // Shared data window (issue #47 step-b1): fresh user frames
++        // pinned in a FrameCap, installed in the PD CSpace; the kernel
++        // side uses the HHDM alias. Raw window — no ring header.
++        if (spec.size == 0) {
++            return -1;
++        }
++        const size_t pages =
++            (spec.size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
++        if (pages == 0) {
++            return -1;
++        }
++        const uint64_t phys = PMM::alloc_user_contiguous(pages);
++        if (phys == 0) {
++            return -1;
++        }
++        auto *cap = cap::FrameCap::create(phys, pages, true);
++        if (cap == nullptr) {
++            for (size_t i = 0; i < pages; ++i) {
++                PMM::free_page(phys + i * arch::PAGE_SIZE);
++            }
++            return -1;
++        }
++        g_last_dma_phys = phys;
++        g_last_dma_pages = pages;
++        obj = cap;
++        type = cap::CapType::Frame;
++        break;
++    }
+     case CapKind::MSIX:
+         // Reserved row (MSI-X entry claim): wired when the first PD needs
+         // it; never silently mapped to another kind.
+@@ -181,6 +247,20 @@ bool sdf_shm_tx_phys(PdRole role, uint64_t &phys_out, uint64_t &pages_out) {
+     return phys_out != 0;
+ }
+ 
++bool sdf_role_frame(PdRole role, uint64_t idx, uint64_t &phys_out,
++                    uint64_t &pages_out) {
++    const uint64_t role_idx = static_cast<uint64_t>(role);
++    if (role_idx >= kPdRoleCount || idx >= kMaxCapsPerRole) {
++        return false;
++    }
++    if (g_role_frame_pages[role_idx][idx] == 0) {
++        return false;
++    }
++    phys_out = g_role_frame_phys[role_idx][idx];
++    pages_out = g_role_frame_pages[role_idx][idx];
++    return phys_out != 0;
++}
++
+ uint64_t sdf_row(PdRole role, CapSpec *out) {
+     if (out == nullptr) {
+         return 0;
+@@ -257,18 +337,42 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
+         // clients over its endpoint only.
+         return 0;
+     case PdRole::BLOCK_SRV: {
+-        // Captured block topology (planner S2): MMIO specs recorded by
+-        // capture_block_topology() + an optional DMA domain grant when an
+-        // IOMMU was probed at capture time. Degraded (no controller/IOMMU)
+-        // composes zero caps — allowed explicitly, logged by the caller.
++        // Block-storage server row (issue #47 step-b1): one static
++        // arch-switched shape + one shared data window. No IRQ cap in
++        // b1 (polled completion; IRQ delegation is step-b2).
++        // x86_64: ATA PIO command blocks (primary 0x1F0 + secondary
++        // 0x170, 8 ports each, IO-type) + 4-page shared window.
++        // aarch64/riscv64: first captured virtio transport window
++        // (page-aligned by capture_block_topology) + 4-page window.
++        // Degraded (no controller captured off-x86) composes zero caps
++        // — allowed explicitly, logged by the caller.
+         uint64_t n = 0;
+-        for (uint64_t i = 0; i < g_block_mmio_count && n < kMaxCapsPerRole;
+-             ++i) {
+-            out[n++] = g_block_mmio[i];
++#if defined(CONFIG_ARCH_X86_64)
++        if (n < kMaxCapsPerRole) {
++            out[n++] =
++                CapSpec{CapKind::MMIO, 0x1F0, 8, 0, 1};
+         }
+-        if (g_block_dma && n < kMaxCapsPerRole) {
+-            out[n++] = CapSpec{CapKind::DMA, 0, 0, 0, 0};
++        if (n < kMaxCapsPerRole) {
++            out[n++] =
++                CapSpec{CapKind::MMIO, 0x170, 8, 0, 1};
+         }
++#else
++        if (g_block_mmio_count > 0 && n < kMaxCapsPerRole) {
++            out[n++] = g_block_mmio[0];
++        }
++#endif
++        // Shared sector/queue window: 4 pages (see block_srv.hpp
++        // kBlockRegionPages; the PD mirrors the constants).
++        if (n < kMaxCapsPerRole) {
++            out[n++] = CapSpec{CapKind::DMA_REGION, 0,
++                               4 * arch::PAGE_SIZE, 0, 0};
++        }
++#if !defined(CONFIG_ARCH_X86_64)
++        if (n == 1) {
++            // Only the window, no transport: degraded, compose capless.
++            return 0;
++        }
++#endif
+         return n;
+     }
+     case PdRole::TERM_SRV:
+@@ -330,15 +434,11 @@ bool capture_block_topology() {
+         if (n >= kMaxCapsPerRole || phys == 0 || size == 0) {
+             return;
+         }
+-        const uint64_t base = phys & ~(static_cast<uint64_t>(arch::PAGE_SIZE) - 1);
+-        const uint64_t end = phys + size;
+-        const uint64_t aligned_end =
+-            (end + arch::PAGE_SIZE - 1) & ~(static_cast<uint64_t>(arch::PAGE_SIZE) - 1);
+-        if (aligned_end <= base) {
+-            return;
+-        }
++        // Store the EXACT window (issue #47 step-b1): alignment to
++        // whole pages happens at mint time; the row keeps the true
++        // base so the PD can apply the intra-page offset.
+         g_block_mmio[n++] =
+-            CapSpec{CapKind::MMIO, base, aligned_end - base, 0, 0};
++            CapSpec{CapKind::MMIO, phys, size, 0, 0};
+     };
+ #if defined(CONFIG_ARCH_X86_64)
+     // AHCI HBA: class 0x01/subclass 0x06, BAR5 = ABAR.
+@@ -374,13 +474,13 @@ bool capture_block_topology() {
+ // undiscoverable). Written at boot compose + restart rebind, read by the
+ // serial TX client. Boot-time only content; test snapshot/restore rewinds
+ // MemPool but never recomposes PDs, so no stale-slot path exists.
+-int g_role_slots[6][kMaxCapsPerRole] = {};
+-uint32_t g_role_gens[6][kMaxCapsPerRole] = {};
+-uint64_t g_role_slot_count[6] = {};
++int g_role_slots[kPdRoleCount][kMaxCapsPerRole] = {};
++uint32_t g_role_gens[kPdRoleCount][kMaxCapsPerRole] = {};
++uint64_t g_role_slot_count[kPdRoleCount] = {};
+ 
+ bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen) {
+     const uint64_t role_idx = static_cast<uint64_t>(role);
+-    if (role_idx >= 6 || idx >= kMaxCapsPerRole) {
++    if (role_idx >= kPdRoleCount || idx >= kMaxCapsPerRole) {
+         return false;
+     }
+     if (idx >= g_role_slot_count[role_idx]) {
+@@ -421,8 +521,18 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
+         g_shm_tx_phys[role_idx0] = 0;
+         g_shm_tx_pages[role_idx0] = 0;
+     }
++    if (role_idx0 < kPdRoleCount) {
++        for (uint64_t i = 0; i < kMaxCapsPerRole; ++i) {
++            g_role_frame_phys[role_idx0][i] = 0;
++            g_role_frame_pages[role_idx0][i] = 0;
++        }
++    }
+     g_last_shm_phys = 0;
+     g_last_shm_pages = 0;
++    g_last_dma_phys = 0;
++    g_last_dma_pages = 0;
++    uint64_t dma_phys[kMaxCapsPerRole] = {};
++    uint64_t dma_pages[kMaxCapsPerRole] = {};
+     for (uint64_t i = 0; i < count; ++i) {
+         const int slot = mint_one(task, specs[i], &gens[i]);
+         if (slot < 0) {
+@@ -430,26 +540,37 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
+             return false;
+         }
+         slots[i] = slot;
++        if (specs[i].kind == CapKind::DMA_REGION) {
++            dma_phys[i] = g_last_dma_phys;
++            dma_pages[i] = g_last_dma_pages;
++        }
+     }
+     // Persist the composed (slot, gen) pairs for kernel→PD BIND handle
+-    // conveyance (issue #51 step-c). Roles ≥ 6 (VFS_SRV and later) share
+-    // the driver_pds pid table but not the slot table — serial TX only
+-    // needs roles 0..5, so out-of-range roles skip persistence (their PDs
+-    // never receive handles; fail-closed at sdf_role_cap).
++    // conveyance (issue #51 step-c, extended to all roles by #47
++    // step-b1: BLOCK_SRV at index 7 needs persistence for its CAP_GET
++    // rounds). Serial TX only needs roles 0..5, but persistence is
++    // uniform now — no per-role exception.
+     const uint64_t role_idx = static_cast<uint64_t>(role);
+-    if (role_idx < 6) {
++    if (role_idx < kPdRoleCount) {
+         for (uint64_t i = 0; i < count; ++i) {
+             g_role_slots[role_idx][i] = slots[i];
+             g_role_gens[role_idx][i] = gens[i];
++            g_role_frame_phys[role_idx][i] = dma_phys[i];
++            g_role_frame_pages[role_idx][i] = dma_pages[i];
+         }
+         g_role_slot_count[role_idx] = count;
+         // Publish the TX-ring backing store (issue #51 step-c-prime):
+         // exactly one SHM spec per row, recorded only on full success.
+-        for (uint64_t i = 0; i < count; ++i) {
+-            if (specs[i].kind == CapKind::SHM) {
+-                g_shm_tx_phys[role_idx] = g_last_shm_phys;
+-                g_shm_tx_pages[role_idx] = g_last_shm_pages;
+-                break;
++        // SIL3 audit #47 step-b1: g_shm_tx_* hold 6 entries (roles ≥ 6
++        // never carry SHM) while slot/frame tables span kPdRoleCount —
++        // keep the publish inside the 6-entry bound.
++        if (role_idx < 6) {
++            for (uint64_t i = 0; i < count; ++i) {
++                if (specs[i].kind == CapKind::SHM) {
++                    g_shm_tx_phys[role_idx] = g_last_shm_phys;
++                    g_shm_tx_pages[role_idx] = g_last_shm_pages;
++                    break;
++                }
+             }
+         }
+     }
+diff --git a/src/kernel/task/boot_sdf.hpp b/src/kernel/task/boot_sdf.hpp
+index b5031e528..fbcc63a27 100644
+--- a/src/kernel/task/boot_sdf.hpp
++++ b/src/kernel/task/boot_sdf.hpp
+@@ -47,13 +47,20 @@ enum class CapKind : uint8_t {
+     SHM = 5,    ///< TX-ring channel endpoint (issue #51 step-c-prime:
+                 ///< fresh user frames + FrameCap pin, installed in the PD
+                 ///< CSpace; kernel producer uses the HHDM alias).
++    DMA_REGION = 6, ///< Shared data window (issue #47 step-b1): fresh
++                ///< user frames + FrameCap pin in the PD CSpace; the
++                ///< kernel side uses the HHDM alias. Unlike SHM, no
++                ///< ring header is initialised (raw sector window).
+ };
+ 
+ /// @brief One mint instruction inside a role row.
+ struct CapSpec {
+     CapKind kind;
+-    uint64_t addr;   ///< MMIO phys base / FRAME phys base (0 if n/a).
+-    uint64_t size;   ///< MMIO/FAME size (0 if n/a).
++    uint64_t addr;   ///< MMIO exact window phys (mapping aligns the base
++                     ///< down internally; the PD applies the intra-page
++                     ///< offset) / FRAME phys (page-aligned) / 0 if n/a.
++    uint64_t size;   ///< MMIO/FAME exact byte size (mapping rounds the
++                     ///< span up to whole pages) / 0 if n/a.
+     uint32_t vector; ///< IRQ vector / MSI-X entry (0 if n/a).
+     uint32_t io_port;///< 1 = IO-port MmioCap, 0 = memory MmioCap.
+ };
+@@ -81,6 +88,12 @@ enum class PdRole : uint8_t {
+ /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
+ inline constexpr uint64_t kMaxCapsPerRole = 6;
+ 
++/// @brief Number of PdRole entries (issue #47 step-b1): role tables are
++/// sized by this, not by a hardcoded 6 (roles ≥ 6 share the compose
++/// path but previously skipped slot persistence).
++inline constexpr uint64_t kPdRoleCount =
++    static_cast<uint64_t>(PdRole::PROCFS_SRV) + 1;
++
+ /// @brief TX-ring element size in bytes (issue #51 step-c-prime).
+ /// Fixed 8: {uint8 len, char data[7]}. Multiple of 8 per the SPSC
+ /// protocol (shm_ring_init requires element_size % 8 == 0). Shared with
+@@ -111,6 +124,14 @@ bool sdf_compose(TaskControlBlock &task, PdRole role);
+ /// false when the role carries no SHM spec (knob off / compose failed).
+ bool sdf_shm_tx_phys(PdRole role, uint64_t &phys_out, uint64_t &pages_out);
+ 
++/// @brief Read back the SDF-composed DMA_REGION window for @p role
++/// (issue #47 step-b1): the DMA_REGION mint's (phys, pages), written
++/// only after the whole row composes; cleared on any (re)compose start.
++/// @return true with *phys_out/*pages_out filled on a live record,
++/// false when the role carries no DMA_REGION spec.
++bool sdf_role_frame(PdRole role, uint64_t idx, uint64_t &phys_out,
++                    uint64_t &pages_out);
++
+ /// @brief Re-derive a PD's caps after disposal (restart path): dispose is
+ /// owned by the caller (cap revoke/drain first); this re-mints the row.
+ /// Never inherits a domain, vector, or mapping — always fresh mints.
+diff --git a/src/kernel/test/test_block_srv.cpp b/src/kernel/test/test_block_srv.cpp
+new file mode 100644
+index 000000000..a5fdc213f
+--- /dev/null
++++ b/src/kernel/test/test_block_srv.cpp
+@@ -0,0 +1,165 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_block_srv.cpp
++/// @brief Block-srv PD live tests (issue #47, strangler step-b1).
++/// ON-build only (CONFIG_BLOCK_SRV=1): BIND/CAP_GET against the real
++/// userspace PD, sector read/write through the shared window, digest
++/// parity, OOB fail-closed. OFF build registers vacuous passes so the
++/// default aggregates stay green.
++
++#include <test.hpp>
++#include <logger.hpp>
++
++using namespace kernel;
++
++#if CONFIG_BLOCK_SRV
++#include <kernel/driver/block_srv.hpp>
++#include <string.hpp>
++#endif
++
++// Runmode: kernel
++// Testidea: PD binds with arch-correct backend and sane geometry.
++// Input: block_srv_bind() against the live block-srv PD.
++// Expect: backend ATA_PIO (x86_64) or VIRTIO_MMIO, 512 B sectors, >0.
++// Depends: block_srv_bind, SDF BLOCK_SRV row, PD CAP_GET/BIND handlers
++JARVIS_TEST(block_srv_bind_geometry, "PRE: block-srv PD live | POST: bound") {
++#if CONFIG_BLOCK_SRV
++    JARVIS_ASSERT(block_srv::block_srv_bind());
++#if defined(CONFIG_ARCH_X86_64)
++    JARVIS_ASSERT(block_srv::block_srv_backend() ==
++                  block_srv::BlkBackend::ATA_PIO);
++#else
++    JARVIS_ASSERT(block_srv::block_srv_backend() ==
++                  block_srv::BlkBackend::VIRTIO_MMIO);
++#endif
++    JARVIS_ASSERT(block_srv::block_srv_sector_size() == 512);
++    JARVIS_ASSERT(block_srv::block_srv_sector_count() > 0);
++    JARVIS_TEST_PASS();
++#else
++    JARVIS_TEST_PASS();
++#endif
++}
++
++// Runmode: kernel
++// Testidea: LBA 0 through the PD is the FAT32 boot sector.
++// Input: block_srv_read_sector(0).
++// Expect: jump byte + FAT32 tag + 0x55AA signature.
++// Depends: block_srv_read_sector, PD READ_BLOCK, shared window
++JARVIS_TEST(block_srv_read_lba0, "PRE: bound | POST: none") {
++#if CONFIG_BLOCK_SRV
++    // The packaged image is MBR-partitioned (type 0x0C at LBA 2048):
++    // LBA 0 carries the MBR, LBA 2048 the FAT32 boot sector.
++    uint8_t buf[512] = {};
++    JARVIS_ASSERT(block_srv::block_srv_read_sector(0, buf) == 0);
++    JARVIS_ASSERT(buf[510] == 0x55 && buf[511] == 0xAA);
++    JARVIS_ASSERT(buf[450] == 0x0C || buf[450] == 0x0B);
++    uint32_t start = static_cast<uint32_t>(buf[454]) |
++                     (static_cast<uint32_t>(buf[455]) << 8) |
++                     (static_cast<uint32_t>(buf[456]) << 16) |
++                     (static_cast<uint32_t>(buf[457]) << 24);
++    JARVIS_ASSERT(start != 0);
++    JARVIS_ASSERT(block_srv::block_srv_read_sector(start, buf) == 0);
++    JARVIS_ASSERT(buf[0] == 0xEB || buf[0] == 0xE9);
++    JARVIS_ASSERT(memcmp(&buf[82], "FAT32   ", 8) == 0);
++    JARVIS_ASSERT(buf[510] == 0x55 && buf[511] == 0xAA);
++    JARVIS_TEST_PASS();
++#else
++    JARVIS_TEST_PASS();
++#endif
++}
++
++// Runmode: kernel
++// Testidea: Repeated reads are stable; digest feeds the host oracle.
++// Input: Two reads of LBA 0..15, FNV-1a over both.
++// Expect: Identical digests; S BLK digest line printed.
++// Depends: block_srv_read_sector, PD determinism
++JARVIS_TEST(block_srv_read_image_digest, "PRE: bound | POST: none") {
++#if CONFIG_BLOCK_SRV
++    // FNV-1a 64 (host parity oracle mirrors this exact fold).
++    auto fnv1a = [](const uint8_t *data, uint64_t len,
++                    uint64_t hash) -> uint64_t {
++        for (uint64_t i = 0; i < len; ++i) {
++            hash ^= static_cast<uint64_t>(data[i]);
++            hash *= 1099511628211ULL;
++        }
++        return hash;
++    };
++    uint8_t buf[512] = {};
++    uint64_t first = 14695981039346656037ULL;
++    for (uint64_t lba = 0; lba < 16; ++lba) {
++        JARVIS_ASSERT(block_srv::block_srv_read_sector(lba, buf) == 0);
++        first = fnv1a(buf, sizeof(buf), first);
++    }
++    uint64_t second = 14695981039346656037ULL;
++    for (uint64_t lba = 0; lba < 16; ++lba) {
++        JARVIS_ASSERT(block_srv::block_srv_read_sector(lba, buf) == 0);
++        second = fnv1a(buf, sizeof(buf), second);
++    }
++    JARVIS_ASSERT(first == second);
++    JARVIS_ASSERT(first != 14695981039346656037ULL);
++    Logger::info("S BLK digest=%lx", first);
++    JARVIS_TEST_PASS();
++#else
++    JARVIS_TEST_PASS();
++#endif
++}
++
++// Runmode: kernel
++// Testidea: Scratch write round-trips; OOB/guards fail closed.
++// Input: Save last sector; write pattern; read back; restore; OOB ops.
++// Expect: Round-trip + restore verified; OOB/-EACCES typed errors.
++// Depends: block_srv_write_sector, PD WRITE_BLOCK, DMA_MAP deny
++JARVIS_TEST(block_srv_write_roundtrip_guards, "PRE: bound | POST: restored") {
++#if CONFIG_BLOCK_SRV
++    const uint64_t sectors = block_srv::block_srv_sector_count();
++    JARVIS_ASSERT(sectors > 16);
++    const uint64_t scratch = sectors - 1;
++    uint8_t orig[512] = {};
++    uint8_t readback[512] = {};
++    uint8_t pattern[512] = {};
++    for (uint64_t i = 0; i < sizeof(pattern); ++i) {
++        pattern[i] = static_cast<uint8_t>(0x5A ^ (i & 0xFF));
++    }
++    // Save the scratch sector, write the pattern, verify, restore.
++    JARVIS_ASSERT(block_srv::block_srv_read_sector(scratch, orig) == 0);
++    JARVIS_ASSERT(block_srv::block_srv_write_sector(scratch, pattern) == 0);
++    JARVIS_ASSERT(block_srv::block_srv_read_sector(scratch, readback) == 0);
++    JARVIS_ASSERT(memcmp(pattern, readback, sizeof(pattern)) == 0);
++    JARVIS_ASSERT(block_srv::block_srv_write_sector(scratch, orig) == 0);
++    JARVIS_ASSERT(block_srv::block_srv_read_sector(scratch, readback) == 0);
++    JARVIS_ASSERT(memcmp(orig, readback, sizeof(orig)) == 0);
++    // OOB and guard rails fail closed with typed errors.
++    JARVIS_ASSERT(block_srv::block_srv_read_sector(sectors, readback) ==
++                  -22);
++    JARVIS_ASSERT(block_srv::block_srv_write_sector(sectors, pattern) ==
++                  -22);
++    JARVIS_ASSERT(block_srv::block_srv_fault_nodomain() == -13);
++    JARVIS_TEST_PASS();
++#else
++    JARVIS_TEST_PASS();
++#endif
++}
++
++void register_block_srv_tests() {
++    Logger::info("Registering Block Server live tests");
++    JARVIS_REGISTER_TEST(block_srv_bind_geometry);
++    JARVIS_REGISTER_TEST(block_srv_read_lba0);
++    JARVIS_REGISTER_TEST(block_srv_read_image_digest);
++    JARVIS_REGISTER_TEST(block_srv_write_roundtrip_guards);
++}
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 53f9cf183..136734b21 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -136,8 +136,9 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"pml4_sync",            5,    0,       0      },  // PML4 sync (part stubs)
+     {"drivers_virtio_blk_req", 13,   0,       0      },  // virtio-blk request path + completion/ISR contracts
+     {"drivers_ahci_deep",      10,   0,       0      },  // AHCI protocol + completion/ISR contracts
+-    {"ahci_live",              5,   0,       0      },  // real AHCI path on q35 variant (not in all)
+-    {"initrd_parser",          9,   0,       0      },  // cpio parser
++    {"ahci_live",              5,    0,       0      },  // real AHCI path on q35 variant (not in all)
++    {"block_srv_live",         4,    4,       4      },  // block-srv PD live path, CONFIG_BLOCK_SRV=1 (issue #47 step-b1)
++    {"initrd_parser",          9,    0,       0      },  // cpio parser
+ 
+     // ipc
+     {"ipc_core",             23,    0,       0      },  // queue, priority, notify, event group, sync roundtrip
+@@ -383,6 +384,7 @@ inline void validate_all_consistency() {
+     };
+     static constexpr const char *k_specials[] = {
+         "ahci_live", "iommu_live", "task_fpu", "task_tcb_log",
++        "block_srv_live",
+         nullptr,
+     };
+     size_t sum_covered = 0;
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 3cce06edb..5060a3d9c 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -58,6 +58,9 @@
+ #include <kernel/ipc/death_notify.hpp>
+ #include <kernel/debug/debug_stop.hpp>
+ #include <kernel/debug/debug_bind.hpp>
++#if CONFIG_BLOCK_SRV
++#include <kernel/driver/block_srv.hpp>
++#endif
+ #include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/cap/msix.hpp>
+ #include <kernel/cap/wdog.hpp>
+@@ -1876,6 +1879,17 @@ void snapshot_restore(const char *test_name) {
+         }
+     }
+ 
++    // Issue #47 step-b1: the block-srv PD is a live user task whose
++    // .bss/.data/heap rewind to the pre-bind baseline on every restore,
++    // while the kernel-side bind cache (epoch, geometry, window phys)
++    // persists. Without an epoch move the next transfer would address
++    // a virgin PD. Bumping here forces a clean rebind (CAP_GET re-maps
++    // the still-valid composed caps, BIND re-probes) — the same path
++    // as a supervisor restart.
++#if CONFIG_BLOCK_SRV
++    kernel::block_srv::block_srv_bump_epoch();
++#endif
++
+     // Belt-and-suspenders: ensure interrupts enabled before returning to
+     // test code.  Nested IrqGuards inside reload_daemon_tasks can disrupt
+     // the outer guard's saved IF flag when task kernel stacks are restored.
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 6ffee6b2a..5c2dbf30b 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -117,6 +117,7 @@ void register_iommu_live_tests();
+ void register_waitpid_tests();
+ void register_buffer_pool_tests();
+ void register_block_device_tests();
++void register_block_srv_tests();
+ void register_fat32_tests();
+ void register_vfs_fat32_tests();
+ void register_ipc_blocking_tests();
+@@ -575,6 +576,7 @@ static void run_pml4_sync_group() { register_pml4_sync_tests(); }
+ static void run_tlb_shootdown_group() { register_tlb_shootdown_tests(); }
+ static void run_drivers_core_group() { register_driver_tests(); }
+ static void run_drivers_block_group() { register_block_device_tests(); }
++static void run_block_srv_live_group() { register_block_srv_tests(); }
+ static void run_drivers_pci_group() { register_pci_tests(); }
+ static void run_drivers_virtio_group() { register_virtio_tests(); }
+ static void run_drivers_dma_group() { register_dma_tests(); }
+@@ -954,6 +956,12 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+     // -- drivers: device driver framework and controllers --
+     {"drivers_core", []() { run_drivers_core_group(); }},
+     {"drivers_block", []() { run_drivers_block_group(); }},
++
++    // -- block_srv_live: block-srv PD live path (issue #47 step-b1) --
++    //    NOT part of any aggregate — requires the CONFIG_BLOCK_SRV=1
++    //    build plus the live block-srv PD (BIND/CAP_GET + shared window).
++    //    Scripted runs use a dedicated -Dconfig_defs builddir.
++    {"block_srv_live", []() { run_block_srv_live_group(); }},
+     {"drivers_pci", []() { run_drivers_pci_group(); }},
+     {"drivers_virtio", []() { run_drivers_virtio_group(); }},
+     {"drivers_dma", []() { run_drivers_dma_group(); }},
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index e1c7033af..242ae2949 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -55,6 +55,7 @@ __attribute__((weak)) void register_buffer_pool_tests() {}
+ __attribute__((weak)) void register_ipc_blocking_tests() {}
+ __attribute__((weak)) void register_ipc_timeout_tests() {}
+ __attribute__((weak)) void register_vfsd_authorization_tests() {}
++__attribute__((weak)) void register_block_srv_tests() {}
+ __attribute__((weak)) void register_textutils_tests() {}
+ __attribute__((weak)) void register_irq_guard_tests() {}
+ __attribute__((weak)) void register_shell_redirect_tests() {}
+diff --git a/tools/block-srv-parity.sh b/tools/block-srv-parity.sh
+new file mode 100644
+index 000000000..455ca5f97
+--- /dev/null
++++ b/tools/block-srv-parity.sh
+@@ -0,0 +1,55 @@
++#!/bin/bash
++# Block-srv parity oracle (issue #47, step-b1).
++# Compares the host FNV-1a digest over the first 16 FAT32 sectors with
++# the `S BLK digest=` line printed by block_srv_read_image_digest.
++#
++# Usage: tools/block-srv-parity.sh <arch> <builddir>
++#   <arch>     x86_64 | aarch64 | riscv64
++#   <builddir> Meson builddir configured with
++#              -Dconfig_defs=-DCONFIG_BLOCK_SRV=1
++#              (e.g. build/meson-x86_64-b1)
++set -u
++
++ARCH="${1:?usage: block-srv-parity.sh <arch> <builddir>}"
++BUILDDIR="${2:?usage: block-srv-parity.sh <arch> <builddir>}"
++IMG="$BUILDDIR/packaging/fat32.img"
++OUTDIR="build/block-srv-parity/$(date -u +%Y%m%dT%H%M%SZ)-$ARCH"
++mkdir -p "$OUTDIR"
++
++EXPECTED=$(python3 - "$IMG" <<'EOF'
++import sys
++path = sys.argv[1]
++with open(path, "rb") as f:
++    data = f.read(16 * 512)
++if len(data) < 16 * 512:
++    sys.exit("short image: %d bytes" % len(data))
++h = 14695981039346656037
++for b in data:
++    h ^= b
++    h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
++print("0x%x" % h)
++EOF
++)
++echo "$EXPECTED" > "$OUTDIR/expected.txt"
++echo "expected: $EXPECTED"
++
++CAPTURE="$OUTDIR/qemu.log"
++python3 tools/meson/qemu_test.py --arch "$ARCH" --build debug \
++    --builddir "$BUILDDIR" --class block_srv_live > "$CAPTURE" 2>&1
++RC=$?
++tail -n 30 "$CAPTURE"
++
++GOT=$(grep -o 'S BLK digest=0x[0-9a-fA-F]*' "$CAPTURE" | tail -n 1 | cut -d= -f2)
++GOT_LOWER=$(echo "$GOT" | tr 'A-F' 'a-f')
++EXP_LOWER=$(echo "$EXPECTED" | tr 'A-F' 'a-f')
++echo "$GOT" > "$OUTDIR/captured.txt"
++if [ -z "$GOT" ]; then
++    echo "VERDICT: MISSING (no S BLK digest line; qemu rc=$RC)" | tee "$OUTDIR/verdict.txt"
++    exit 1
++fi
++if [ "$GOT_LOWER" = "$EXP_LOWER" ]; then
++    echo "VERDICT: MATCH ($GOT)" | tee "$OUTDIR/verdict.txt"
++    exit 0
++fi
++echo "VERDICT: MISMATCH expected=$EXPECTED got=$GOT" | tee "$OUTDIR/verdict.txt"
++exit 1
 diff --git a/userspace/block-srv.c b/userspace/block-srv.c
-index 32cb2dc73..bab06254d 100644
+index bab06254d..85c2580e2 100644
 --- a/userspace/block-srv.c
 +++ b/userspace/block-srv.c
-@@ -90,7 +90,10 @@ int main(void) {
+@@ -1,7 +1,20 @@
++/* Block-storage server PD (issue #47, strangler step-b1).
++ *
++ * Real block I/O behind CONFIG_BLOCK_SRV: ATA PIO on x86_64 (I/O-port
++ * caps) and virtio-blk over MMIO v2 on aarch64/riscv64 (MMIO + shared
++ * frame caps). Polled completion; IRQ delegation is step-b2.
++ *
++ * Wire: 48 B BlockRpc, mirrors kernel/driver/block_srv.hpp (op, flags,
++ * rsvd, epoch, owner id+gen, lba, arg, handle, status_op, status, aux).
++ * Order: CAP_GET rounds first (PD maps each cap, echoes), BIND last
++ * (PD probes with every cap present, answers backend + geometry).
++ * Shared 4-page window layout mirrors kBlock*Offset (data 0x1000,
++ * header 0x1200, status 0x1300; page 0 is the virtio queue area).
++ * Replies go to req.owner_id (send_sync_bounded waits on the
++ * requester's own queue; PID 1 is a dead letter).
++ */
+ #include <stddef.h>
+ #include <stdint.h>
+-#include <stdio.h>
+-#include <unistd.h>
+ #include <string.h>
+ #include <syscall.h>
+ #include <ipc.h>
+@@ -19,8 +32,23 @@ typedef enum {
+     BLK_OP_DMA_UNMAP = 6,
+     BLK_OP_LOOPBACK = 7,
+     BLK_OP_INJECT_MID_TRANSFER = 8,
++    BLK_OP_CAP_GET = 9,
+ } block_srv_op_t;
+ 
++/* Cap kinds (mirror kernel SDF CapKind). */
++#define BLK_CAP_IRQ 0
++#define BLK_CAP_MSIX 1
++#define BLK_CAP_MMIO 2
++#define BLK_CAP_DMA 3
++#define BLK_CAP_FRAME 4
++#define BLK_CAP_SHM 5
++#define BLK_CAP_DMA_REGION 6
++
++/* Backends (mirror kernel BlkBackend). */
++#define BLK_BACKEND_NONE 0
++#define BLK_BACKEND_ATA_PIO 1
++#define BLK_BACKEND_VIRTIO_MMIO 2
++
+ struct BlockRpc {
+     uint8_t op;
+     uint8_t flags;
+@@ -33,18 +61,738 @@ struct BlockRpc {
+     uint32_t handle;
+     uint16_t status_op;
+     uint16_t status;
++    uint64_t aux;
+ };
+ 
+ static void blk_assert_shape(void) {
+-    char check[sizeof(struct BlockRpc) <= 48 ? 1 : -1];
++    char check[sizeof(struct BlockRpc) == 48 ? 1 : -1];
+     (void)check;
+ }
+ 
++/* Shared window layout (mirror kernel kBlock*Offset). */
++#define BLK_REGION_PAGES 4
++#define BLK_DATA_OFF 0x1000UL
++#define BLK_HDR_OFF 0x1200UL
++#define BLK_STATUS_OFF 0x1300UL
++#define BLK_QDESC_OFF 0x0000UL
++#define BLK_QAVAIL_OFF 0x0400UL
++#define BLK_QUSED_OFF 0x0800UL
++#define BLK_SECTOR 512UL
++#define BLK_QSIZE 64
++
++/* Linux errno shapes carried in status (negated). */
++#define BLK_EIO 5
++#define BLK_EINVAL 22
++#define BLK_ENOSYS 38
++#define BLK_EACCES 13
++
++#define BLK_MAX_CAPS 6
++
++struct blk_cap {
++    int mapped;
++    uint8_t kind;
++    unsigned long handle;
++    unsigned long phys;
++    unsigned long size;
++    unsigned long va;
++};
++
++static struct blk_cap g_caps[BLK_MAX_CAPS];
++static unsigned g_mapped_count = 0;
++static uint32_t g_epoch = 0;
++static uint8_t g_backend = BLK_BACKEND_NONE;
++static uint64_t g_sectors = 0;
++static int g_probed = 0;
++static int g_inject_once = 0;
++
++/* x86_64 ATA state (valid when g_backend == ATA_PIO). */
++static unsigned g_ata_base = 0;
++static unsigned char g_ata_drive = 0;
++/* virtio state (valid when g_backend == VIRTIO_MMIO). */
++static unsigned long g_mmio_va = 0;
++static unsigned long g_frame_va = 0;
++static unsigned long g_frame_phys = 0;
++static int g_virtio_ready = 0;
++static int g_virtio_legacy = 0;
++static unsigned long g_q_desc_va = 0;
++static unsigned long g_q_avail_va = 0;
++static unsigned long g_q_used_va = 0;
++static unsigned g_virtio_qsize = 0;
++static unsigned g_virtio_avail_idx = 0;
++static unsigned g_virtio_last_used = 0;
++
++#if defined(__x86_64__)
++static inline void blk_outb(unsigned short port, unsigned char v) {
++    __asm__ volatile("outb %0,%1" ::"a"(v), "Nd"(port));
++}
++
++static inline unsigned char blk_inb(unsigned short port) {
++    unsigned char r;
++    __asm__ volatile("inb %1,%0" : "=a"(r) : "Nd"(port));
++    return r;
++}
++
++static inline unsigned short blk_inw(unsigned short port) {
++    unsigned short r;
++    __asm__ volatile("inw %1,%0" : "=a"(r) : "Nd"(port));
++    return r;
++}
++
++static inline void blk_outw(unsigned short port, unsigned short v) {
++    __asm__ volatile("outw %0,%1" ::"a"(v), "Nd"(port));
++}
++#endif
++
++static void blk_unmap_all(void) {
++    for (unsigned i = 0; i < BLK_MAX_CAPS; ++i) {
++        if (!g_caps[i].mapped)
++            continue;
++        if (g_caps[i].kind == BLK_CAP_MMIO ||
++            g_caps[i].kind == BLK_CAP_DMA_REGION) {
++            if (g_caps[i].va != 0) {
++                unsigned long unmap = (g_caps[i].kind == BLK_CAP_MMIO)
++                                          ? SYS_MMIO_UNMAP
++                                          : SYS_FRAME_UNMAP;
++                __syscall5(unmap, (long)g_caps[i].va, 0, 0, 0);
++                g_caps[i].va = 0;
++            }
++        }
++        /* I/O-port grants persist per task (ledger); re-grant is
++         * skipped by the granted-port record, so nothing to undo. */
++        g_caps[i].mapped = 0;
++    }
++    g_mapped_count = 0;
++    g_probed = 0;
++    g_backend = BLK_BACKEND_NONE;
++    g_sectors = 0;
++    g_mmio_va = 0;
++    g_frame_va = 0;
++    g_frame_phys = 0;
++    g_virtio_ready = 0;
++    g_inject_once = 0;
++}
++
++static void blk_purge_on_epoch(uint32_t epoch) {
++    if (g_epoch != epoch) {
++        blk_unmap_all();
++        g_epoch = epoch;
++    }
++}
++
++static uint16_t blk_neg(uint16_t code) {
++    return (uint16_t)(uint16_t)(0 - code);
++}
++
++/* Map one conveyed cap. Returns 0 on success, negated errno else.
++ * Same-handle re-conveyance is idempotent (a retried bind after a
++ * mid-bind transport failure must not wedge the PD); a changed
++ * handle unmaps the stale slot first so no VA mapping leaks. */
++static int blk_map_cap(unsigned idx, uint8_t kind, unsigned long handle,
++                       unsigned long phys, unsigned long size,
++                       unsigned io_port) {
++    if (idx >= BLK_MAX_CAPS || handle == 0 || handle == (unsigned long)-1)
++        return -BLK_EINVAL;
++    if (g_caps[idx].mapped) {
++        if (g_caps[idx].handle == handle && g_caps[idx].kind == kind &&
++            g_caps[idx].phys == phys && g_caps[idx].size == size)
++            return 0;
++        if (g_caps[idx].kind == BLK_CAP_MMIO ||
++            g_caps[idx].kind == BLK_CAP_DMA_REGION) {
++            if (g_caps[idx].va != 0) {
++                unsigned long unmap = (g_caps[idx].kind == BLK_CAP_MMIO)
++                                          ? SYS_MMIO_UNMAP
++                                          : SYS_FRAME_UNMAP;
++                __syscall5(unmap, (long)g_caps[idx].va, 0, 0, 0);
++                g_caps[idx].va = 0;
++            }
++        }
++        /* I/O-port grants persist per task ledger; the grant-once
++         * record below skips re-granting. */
++        g_caps[idx].mapped = 0;
++        g_mapped_count--;
++    }
++    if (kind == BLK_CAP_MMIO && io_port) {
++#if defined(__x86_64__)
++        /* I/O-port delegation (TSS bitmap grant, once per port base). */
++        static unsigned long g_granted[BLK_MAX_CAPS];
++        for (unsigned i = 0; i < BLK_MAX_CAPS; ++i) {
++            if (g_granted[i] == phys)
++                goto granted;
++        }
++        if (__syscall5(SYS_IOPORT_GRANT, (long)handle, (long)phys,
++                       (long)size, 0) != 0)
++            return -BLK_EIO;
++        for (unsigned i = 0; i < BLK_MAX_CAPS; ++i) {
++            if (g_granted[i] == 0) {
++                g_granted[i] = phys;
++                break;
++            }
++        }
++    granted:
++        g_caps[idx].mapped = 1;
++        g_caps[idx].kind = kind;
++        g_caps[idx].handle = handle;
++        g_caps[idx].phys = phys;
++        g_caps[idx].size = size;
++        g_caps[idx].va = 0;
++        g_mapped_count++;
++        return 0;
++#else
++        (void)handle;
++        (void)phys;
++        (void)size;
++        return -BLK_ENOSYS;
++#endif
++    }
++    if (kind == BLK_CAP_MMIO) {
++        long va = __syscall5(SYS_MMIO_MAP, (long)handle, 0, 0, 0);
++        if (va <= 0)
++            return -BLK_EIO;
++        g_caps[idx].mapped = 1;
++        g_caps[idx].kind = kind;
++        g_caps[idx].handle = handle;
++        g_caps[idx].phys = phys;
++        g_caps[idx].size = size;
++        g_caps[idx].va = (unsigned long)va;
++        g_mapped_count++;
++        return 0;
++    }
++    if (kind == BLK_CAP_DMA_REGION) {
++        long va = __syscall5(SYS_FRAME_MAP, (long)handle, 0, 0, 0);
++        if (va <= 0)
++            return -BLK_EIO;
++        g_caps[idx].mapped = 1;
++        g_caps[idx].kind = kind;
++        g_caps[idx].handle = handle;
++        g_caps[idx].phys = phys;
++        g_caps[idx].size = size;
++        g_caps[idx].va = (unsigned long)va;
++        g_mapped_count++;
++        return 0;
++    }
++    return -BLK_ENOSYS;
++}
++
++#if defined(__x86_64__)
++#define ATA_SR_BSY 0x80
++#define ATA_SR_DRQ 0x08
++#define ATA_SR_ERR 0x01
++#define ATA_CMD_IDENTIFY 0xEC
++#define ATA_CMD_READ 0x20
++#define ATA_CMD_WRITE 0x30
++#define ATA_CMD_FLUSH 0xE7
++#define ATA_POLL_N 100000
++
++static int ata_wait_bsy(unsigned base) {
++    for (unsigned i = 0; i < ATA_POLL_N; ++i) {
++        if (!(blk_inb((unsigned short)(base + 7)) & ATA_SR_BSY))
++            return 0;
++    }
++    return -1;
++}
++
++static int ata_wait_drq(unsigned base) {
++    for (unsigned i = 0; i < ATA_POLL_N; ++i) {
++        unsigned char s = blk_inb((unsigned short)(base + 7));
++        if (s & ATA_SR_BSY)
++            continue;
++        if (s & ATA_SR_ERR)
++            return -1;
++        if (s & ATA_SR_DRQ)
++            return 0;
++    }
++    return -1;
++}
++
++static int ata_identify(unsigned base, unsigned char drive,
++                        uint64_t *sectors_out) {
++    blk_outb((unsigned short)(base + 6), (unsigned char)drive);
++    blk_outb((unsigned short)(base + 2), 0);
++    blk_outb((unsigned short)(base + 3), 0);
++    blk_outb((unsigned short)(base + 4), 0);
++    blk_outb((unsigned short)(base + 5), 0);
++    blk_outb((unsigned short)(base + 7), ATA_CMD_IDENTIFY);
++    unsigned char status = blk_inb((unsigned short)(base + 7));
++    if (status == 0 || status == 0xFF)
++        return -1;
++    if (ata_wait_bsy(base))
++        return -1;
++    status = blk_inb((unsigned short)(base + 7));
++    if (status & ATA_SR_ERR)
++        return -1;
++    if (ata_wait_drq(base))
++        return -1;
++    uint16_t buf[256];
++    for (int i = 0; i < 256; ++i)
++        buf[i] = blk_inw((unsigned short)base);
++    if (buf[0] & (1u << 15))
++        return -1;
++    uint64_t sectors =
++        ((uint64_t)buf[61] << 16) | (uint64_t)buf[60];
++    if (sectors == 0)
++        return -1;
++    *sectors_out = sectors;
++    return 0;
++}
++
++static int ata_read_sector(unsigned base, unsigned char drive, uint64_t lba,
++                           unsigned char *dst) {
++    if (ata_wait_bsy(base))
++        return -1;
++    blk_outb((unsigned short)(base + 6),
++             (unsigned char)(drive | ((lba >> 24) & 0x0F)));
++    blk_outb((unsigned short)(base + 2), 1);
++    blk_outb((unsigned short)(base + 3), (unsigned char)(lba & 0xFF));
++    blk_outb((unsigned short)(base + 4),
++             (unsigned char)((lba >> 8) & 0xFF));
++    blk_outb((unsigned short)(base + 5),
++             (unsigned char)((lba >> 16) & 0xFF));
++    blk_outb((unsigned short)(base + 7), ATA_CMD_READ);
++    if (ata_wait_drq(base))
++        return -1;
++    for (int i = 0; i < 256; ++i) {
++        unsigned short w = blk_inw((unsigned short)base);
++        dst[i * 2] = (unsigned char)(w & 0xFF);
++        dst[i * 2 + 1] = (unsigned char)((w >> 8) & 0xFF);
++    }
++    return 0;
++}
++
++static int ata_write_sector(unsigned base, unsigned char drive, uint64_t lba,
++                            const unsigned char *src) {
++    if (ata_wait_bsy(base))
++        return -1;
++    blk_outb((unsigned short)(base + 6),
++             (unsigned char)(drive | ((lba >> 24) & 0x0F)));
++    blk_outb((unsigned short)(base + 2), 1);
++    blk_outb((unsigned short)(base + 3), (unsigned char)(lba & 0xFF));
++    blk_outb((unsigned short)(base + 4),
++             (unsigned char)((lba >> 8) & 0xFF));
++    blk_outb((unsigned short)(base + 5),
++             (unsigned char)((lba >> 16) & 0xFF));
++    blk_outb((unsigned short)(base + 7), ATA_CMD_WRITE);
++    if (ata_wait_drq(base))
++        return -1;
++    for (int i = 0; i < 256; ++i) {
++        unsigned short w =
++            (unsigned short)src[i * 2] |
++            (unsigned short)((unsigned short)src[i * 2 + 1] << 8);
++        blk_outw((unsigned short)base, w);
++    }
++    blk_outb((unsigned short)(base + 7), ATA_CMD_FLUSH);
++    if (ata_wait_bsy(base))
++        return -1;
++    return 0;
++}
++#endif
++
++/* ---- virtio-blk over MMIO v2 (aarch64/riscv64) ---- */
++#define VIRTIO_MAGIC_OFF 0x000
++#define VIRTIO_VER_OFF 0x004
++#define VIRTIO_DEVID_OFF 0x008
++#define VIRTIO_FEAT_OFF 0x010
++#define VIRTIO_FEATSEL_OFF 0x014
++#define VIRTIO_DRVFEAT_OFF 0x020
++#define VIRTIO_DRVFEATSEL_OFF 0x024
++#define VIRTIO_QSEL_OFF 0x030
++#define VIRTIO_QNUMMAX_OFF 0x034
++#define VIRTIO_QNUM_OFF 0x038
++#define VIRTIO_GUEST_PAGE_SIZE_OFF 0x028
++#define VIRTIO_QALIGN_OFF 0x03C
++#define VIRTIO_QPFN_OFF 0x040
++#define VIRTIO_QREADY_OFF 0x044
++#define VIRTIO_QNOTIFY_OFF 0x050
++#define VIRTIO_STATUS_OFF 0x070
++#define VIRTIO_QDESCLO_OFF 0x080
++#define VIRTIO_QDESCHI_OFF 0x084
++#define VIRTIO_QDRVLO_OFF 0x090
++#define VIRTIO_QDRVHI_OFF 0x094
++#define VIRTIO_QDEVLO_OFF 0x0A0
++#define VIRTIO_QDEVHI_OFF 0x0A4
++#define VIRTIO_CONFIG_OFF 0x100
++#define VIRTIO_MAGIC_VAL 0x74726976
++#define VIRTIO_BLK_ID 2
++#define VIRTIO_ST_ACK 1
++#define VIRTIO_ST_DRIVER 2
++#define VIRTIO_ST_FEAT_OK 8
++#define VIRTIO_ST_DRV_OK 4
++#define VIRTIO_BLK_T_IN 0
++#define VIRTIO_BLK_T_OUT 1
++#define VIRTIO_DESC_F_NEXT 1
++#define VIRTIO_DESC_F_WRITE 2
++#define VIRTIO_POLL_N 1000000
++
++struct virtq_desc {
++    uint64_t addr;
++    uint32_t len;
++    uint16_t flags;
++    uint16_t next;
++} __attribute__((packed));
++
++struct virtq_avail {
++    uint16_t flags;
++    uint16_t idx;
++    uint16_t ring[];
++} __attribute__((packed));
++
++struct virtq_used_elem {
++    uint32_t id;
++    uint32_t len;
++} __attribute__((packed));
++
++struct virtq_used {
++    uint16_t flags;
++    uint16_t idx;
++    struct virtq_used_elem ring[];
++} __attribute__((packed));
++
++struct virtio_blk_req {
++    uint32_t type;
++    uint32_t reserved;
++    uint64_t sector;
++} __attribute__((packed));
++
++static uint32_t vmmio_read32(unsigned long base, unsigned long off) {
++    volatile uint32_t *p =
++        (volatile uint32_t *)(base + off);
++    return *p;
++}
++
++static void vmmio_write32(unsigned long base, unsigned long off,
++                          uint32_t v) {
++    volatile uint32_t *p =
++        (volatile uint32_t *)(base + off);
++    *p = v;
++}
++
++/* Returns 0 on success with *sectors_out and g_virtio_legacy set
++ * (0 = modern v2, 1 = legacy v1, like the kernel finder). */
++static int virtio_probe(unsigned long mmio_va, uint64_t *sectors_out) {
++    if (vmmio_read32(mmio_va, VIRTIO_MAGIC_OFF) != VIRTIO_MAGIC_VAL)
++        return 2;
++    uint32_t ver = vmmio_read32(mmio_va, VIRTIO_VER_OFF);
++    if (ver != 2 && ver != 1)
++        return 3;
++    uint32_t devid = vmmio_read32(mmio_va, VIRTIO_DEVID_OFF);
++    if (devid != VIRTIO_BLK_ID)
++        return 0x100 + (int)(devid & 0xFF); /* diag: actual id */
++    g_virtio_legacy = (ver == 1) ? 1 : 0;
++    vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, 0);
++    for (unsigned i = 0; i < 100; ++i) {
++        if (vmmio_read32(mmio_va, VIRTIO_STATUS_OFF) == 0)
++            break;
++    }
++    uint32_t s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
++    vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_ACK);
++    s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
++    vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_DRIVER);
++    if (!g_virtio_legacy) {
++        /* Modern: negotiate VERSION_1 (bit 32, high word). */
++        vmmio_write32(mmio_va, VIRTIO_FEATSEL_OFF, 0);
++        (void)vmmio_read32(mmio_va, VIRTIO_FEAT_OFF);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEATSEL_OFF, 0);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEAT_OFF, 0);
++        vmmio_write32(mmio_va, VIRTIO_FEATSEL_OFF, 1);
++        uint32_t dev_hi = vmmio_read32(mmio_va, VIRTIO_FEAT_OFF);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEATSEL_OFF, 1);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEAT_OFF,
++                      (dev_hi & 1u) ? 1u : 0u);
++        if (!(dev_hi & 1u))
++            return -1;
++    } else {
++        /* Legacy v1: no VERSION_1 bit; accept the device as-is. */
++        vmmio_write32(mmio_va, VIRTIO_FEATSEL_OFF, 0);
++        (void)vmmio_read32(mmio_va, VIRTIO_FEAT_OFF);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEATSEL_OFF, 0);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEAT_OFF, 0);
++        vmmio_write32(mmio_va, VIRTIO_FEATSEL_OFF, 1);
++        (void)vmmio_read32(mmio_va, VIRTIO_FEAT_OFF);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEATSEL_OFF, 1);
++        vmmio_write32(mmio_va, VIRTIO_DRVFEAT_OFF, 0);
++    }
++    s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
++    vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_FEAT_OK);
++    s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
++    if (!(s & VIRTIO_ST_FEAT_OK))
++        return 5;
++    uint32_t lo = vmmio_read32(mmio_va, VIRTIO_CONFIG_OFF);
++    uint32_t hi = vmmio_read32(mmio_va, VIRTIO_CONFIG_OFF + 4);
++    uint64_t sectors = ((uint64_t)hi << 32) | lo;
++    if (sectors == 0)
++        return 6;
++    *sectors_out = sectors;
++    return 0;
++}
++
++/* Legacy v1 chunk geometry (mirrors the kernel
++ * virtio_legacy_used_off): desc at chunk+0, avail right after,
++ * used at the next 4 KiB boundary. */
++#define BLK_LEGACY_CHUNK_OFF 0x2000UL
++#define BLK_LEGACY_ALIGN 0x1000UL
++
++static unsigned long blk_legacy_used_off(unsigned qsize) {
++    unsigned long end =
++        (unsigned long)qsize * 16 + 6 + (unsigned long)qsize * 2;
++    return (end + BLK_LEGACY_ALIGN - 1) & ~(BLK_LEGACY_ALIGN - 1);
++}
++
++static int virtio_setup_queue(unsigned long mmio_va, unsigned long phys,
++                              unsigned qsize) {
++    vmmio_write32(mmio_va, VIRTIO_QSEL_OFF, 0);
++    if (!g_virtio_legacy) {
++        uint32_t max = vmmio_read32(mmio_va, VIRTIO_QNUMMAX_OFF);
++        if (max == 0)
++            return -1;
++        if (qsize > max)
++            qsize = max;
++        if (qsize > BLK_QSIZE)
++            qsize = BLK_QSIZE;
++        /* Fresh rings: PMM frames are not zeroed; the device reads
++         * desc/avail/used unsynchronized, so publish clean state. */
++        for (unsigned long i = 0; i < 0x1000UL; ++i)
++            ((unsigned char *)g_frame_va)[i] = 0;
++        g_virtio_last_used = 0;
++        g_virtio_avail_idx = 0;
++        g_virtio_qsize = qsize;
++        g_q_desc_va = g_frame_va + BLK_QDESC_OFF;
++        g_q_avail_va = g_frame_va + BLK_QAVAIL_OFF;
++        g_q_used_va = g_frame_va + BLK_QUSED_OFF;
++        vmmio_write32(mmio_va, VIRTIO_QNUM_OFF, qsize);
++        vmmio_write32(mmio_va, VIRTIO_QDESCLO_OFF,
++                      (uint32_t)(phys + BLK_QDESC_OFF));
++        vmmio_write32(mmio_va, VIRTIO_QDESCHI_OFF,
++                      (uint32_t)((phys + BLK_QDESC_OFF) >> 32));
++        vmmio_write32(mmio_va, VIRTIO_QDRVLO_OFF,
++                      (uint32_t)(phys + BLK_QAVAIL_OFF));
++        vmmio_write32(mmio_va, VIRTIO_QDRVHI_OFF,
++                      (uint32_t)((phys + BLK_QAVAIL_OFF) >> 32));
++        vmmio_write32(mmio_va, VIRTIO_QDEVLO_OFF,
++                      (uint32_t)(phys + BLK_QUSED_OFF));
++        vmmio_write32(mmio_va, VIRTIO_QDEVHI_OFF,
++                      (uint32_t)((phys + BLK_QUSED_OFF) >> 32));
++        vmmio_write32(mmio_va, VIRTIO_QREADY_OFF, 1);
++        uint32_t s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
++        vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_DRV_OK);
++        return 0;
++    }
++    /* Legacy v1: one contiguous chunk in pages 2-3 (pages 0-1 stay
++     * the data/header/status window). PFN path, no Ready bit. */
++    vmmio_write32(mmio_va, VIRTIO_GUEST_PAGE_SIZE_OFF, 4096);
++    uint32_t max = vmmio_read32(mmio_va, VIRTIO_QNUMMAX_OFF);
++    if (max == 0)
++        return -1;
++    if (qsize > max)
++        qsize = max;
++    if (qsize > BLK_QSIZE)
++        qsize = BLK_QSIZE;
++    unsigned long used_off = blk_legacy_used_off(qsize);
++    unsigned long used_size = 8 + (unsigned long)qsize * 8;
++    if (used_off + used_size > 2 * BLK_LEGACY_ALIGN)
++        return -1;
++    unsigned long chunk_va = g_frame_va + BLK_LEGACY_CHUNK_OFF;
++    unsigned long chunk_phys = phys + BLK_LEGACY_CHUNK_OFF;
++    if ((chunk_phys % BLK_LEGACY_ALIGN) != 0)
++        return -1;
++    /* Fresh rings (see modern path): publish clean state. */
++    for (unsigned long i = 0; i < 2 * BLK_LEGACY_ALIGN; ++i)
++        ((unsigned char *)chunk_va)[i] = 0;
++    g_virtio_last_used = 0;
++    g_virtio_avail_idx = 0;
++    g_virtio_qsize = qsize;
++    g_q_desc_va = chunk_va;
++    g_q_avail_va = chunk_va + (unsigned long)qsize * 16;
++    g_q_used_va = chunk_va + used_off;
++    vmmio_write32(mmio_va, VIRTIO_QNUM_OFF, qsize);
++    vmmio_write32(mmio_va, VIRTIO_QALIGN_OFF,
++                  (uint32_t)BLK_LEGACY_ALIGN);
++    vmmio_write32(mmio_va, VIRTIO_QPFN_OFF,
++                  (uint32_t)(chunk_phys / BLK_LEGACY_ALIGN));
++    uint32_t s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
++    vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_DRV_OK);
++    return 0;
++}
++
++static int virtio_transfer(int is_write, uint64_t lba) {
++    unsigned long mmio = g_mmio_va;
++    unsigned long fva = g_frame_va;
++    unsigned long phys = g_frame_phys;
++    unsigned qsize = g_virtio_qsize;
++    if (mmio == 0 || fva == 0 || qsize == 0)
++        return -1;
++    if (!g_virtio_ready) {
++        if (virtio_setup_queue(mmio, phys,
++                               qsize > BLK_QSIZE ? BLK_QSIZE : qsize))
++            return -1;
++        g_virtio_ready = 1;
++    }
++    if (g_q_desc_va == 0 || g_q_avail_va == 0 || g_q_used_va == 0)
++        return -1;
++    struct virtq_desc *desc = (struct virtq_desc *)g_q_desc_va;
++    struct virtq_avail *avail = (struct virtq_avail *)g_q_avail_va;
++    struct virtq_used *used = (struct virtq_used *)g_q_used_va;
++    struct virtio_blk_req *hdr =
++        (struct virtio_blk_req *)(fva + BLK_HDR_OFF);
++    unsigned char *data = (unsigned char *)(fva + BLK_DATA_OFF);
++    volatile unsigned char *status =
++        (volatile unsigned char *)(fva + BLK_STATUS_OFF);
++    (void)data;
++    unsigned long hdr_phys = phys + BLK_HDR_OFF;
++    unsigned long data_phys = phys + BLK_DATA_OFF;
++    unsigned long status_phys = phys + BLK_STATUS_OFF;
++    hdr->type = is_write ? (uint32_t)VIRTIO_BLK_T_OUT
++                         : (uint32_t)VIRTIO_BLK_T_IN;
++    hdr->reserved = 0;
++    hdr->sector = lba;
++    *status = 0xFF;
++    desc[0].addr = hdr_phys;
++    desc[0].len = 16;
++    desc[0].flags = VIRTIO_DESC_F_NEXT;
++    desc[0].next = 1;
++    desc[1].addr = data_phys;
++    desc[1].len = BLK_SECTOR;
++    desc[1].flags = is_write ? VIRTIO_DESC_F_NEXT
++                             : (VIRTIO_DESC_F_NEXT | VIRTIO_DESC_F_WRITE);
++    desc[1].next = 2;
++    desc[2].addr = status_phys;
++    desc[2].len = 1;
++    desc[2].flags = VIRTIO_DESC_F_WRITE;
++    desc[2].next = 0;
++    __asm__ volatile("" ::: "memory");
++    unsigned last = g_virtio_last_used;
++    avail->ring[avail->idx % qsize] = 0;
++    __asm__ volatile("" ::: "memory");
++    avail->idx = (uint16_t)(avail->idx + 1);
++    g_virtio_avail_idx = avail->idx;
++    __asm__ volatile("" ::: "memory");
++    vmmio_write32(mmio, VIRTIO_QNOTIFY_OFF, 0);
++    unsigned n = 0;
++    while (used->idx == (uint16_t)last) {
++        if (++n >= VIRTIO_POLL_N)
++            return -1;
++    }
++    g_virtio_last_used = used->idx;
++    if (used->ring[last % qsize].id != 0)
++        return -1;
++    if (*status != 0)
++        return -1;
++    return 0;
++}
++
++/* Probe with all caps mapped (BIND time). Sets g_backend/g_sectors.
++ * g_probe_stage records the first failing step for the degraded BIND
++ * reply (spec: BIND aux carries sectors, or the stage when NONE). */
++static int g_probe_stage = 0;
++static void blk_probe(void) {
++    g_probed = 1;
++    g_backend = BLK_BACKEND_NONE;
++    g_sectors = 0;
++    g_probe_stage = 0;
++#if defined(__x86_64__)
++    for (unsigned i = 0; i < BLK_MAX_CAPS; ++i) {
++        if (!g_caps[i].mapped || g_caps[i].kind != BLK_CAP_MMIO)
++            continue;
++        unsigned base = (unsigned)g_caps[i].phys;
++        static const unsigned char drives[2] = { 0xE0, 0xF0 };
++        for (unsigned d = 0; d < 2; ++d) {
++            uint64_t sectors = 0;
++            if (ata_identify(base, drives[d], &sectors) == 0) {
++                g_ata_base = base;
++                g_ata_drive = drives[d];
++                g_backend = BLK_BACKEND_ATA_PIO;
++                g_sectors = sectors;
++                return;
++            }
++        }
++    }
++#else
++    for (unsigned i = 0; i < BLK_MAX_CAPS; ++i) {
++        if (!g_caps[i].mapped || g_caps[i].kind != BLK_CAP_MMIO ||
++            g_caps[i].va == 0)
++            continue;
++            /* Intra-page offset (issue #47 step-b1): the SDF cap
++             * covers whole pages from the aligned base; the true
++             * window starts at phys (conveyed exact), so registers
++             * live at va + (phys & 0xFFF). */
++            unsigned long reg_va =
++                g_caps[i].va + (g_caps[i].phys & 0xFFFUL);
++            uint64_t sectors = 0;
++            int pr = virtio_probe(reg_va, &sectors);
++            if (pr == 0) {
++                g_mmio_va = reg_va;
++                g_backend = BLK_BACKEND_VIRTIO_MMIO;
++                g_sectors = sectors;
++                g_virtio_qsize = BLK_QSIZE;
++                for (unsigned j = 0; j < BLK_MAX_CAPS; ++j) {
++                    if (g_caps[j].mapped &&
++                        g_caps[j].kind == BLK_CAP_DMA_REGION &&
++                        g_caps[j].va != 0) {
++                        g_frame_va = g_caps[j].va;
++                        g_frame_phys = g_caps[j].phys;
++                    }
++                }
++                return;
++            }
++            g_probe_stage = pr;
++        }
++    if (g_probe_stage == 0)
++        g_probe_stage = 1; /* no MMIO cap to probe */
++#endif
++}
++
++static int blk_do_read(uint64_t lba) {
++    if (g_backend == BLK_BACKEND_NONE || g_sectors == 0)
++        return -BLK_EIO;
++    if (lba >= g_sectors)
++        return -BLK_EINVAL;
++#if defined(__x86_64__)
++    if (g_backend == BLK_BACKEND_ATA_PIO) {
++        unsigned char *dst =
++            (unsigned char *)(g_frame_va + BLK_DATA_OFF);
++        if (g_frame_va == 0)
++            return -BLK_EIO;
++        if (ata_read_sector(g_ata_base, g_ata_drive, lba, dst))
++            return -BLK_EIO;
++        return 0;
++    }
++#else
++    if (g_backend == BLK_BACKEND_VIRTIO_MMIO) {
++        if (virtio_transfer(0, lba))
++            return -BLK_EIO;
++        return 0;
++    }
++#endif
++    return -BLK_ENOSYS;
++}
++
++static int blk_do_write(uint64_t lba) {
++    if (g_backend == BLK_BACKEND_NONE || g_sectors == 0)
++        return -BLK_EIO;
++    if (lba >= g_sectors)
++        return -BLK_EINVAL;
++#if defined(__x86_64__)
++    if (g_backend == BLK_BACKEND_ATA_PIO) {
++        unsigned char *src =
++            (unsigned char *)(g_frame_va + BLK_DATA_OFF);
++        if (g_frame_va == 0)
++            return -BLK_EIO;
++        if (ata_write_sector(g_ata_base, g_ata_drive, lba, src))
++            return -BLK_EIO;
++        return 0;
++    }
++#else
++    if (g_backend == BLK_BACKEND_VIRTIO_MMIO) {
++        if (virtio_transfer(1, lba))
++            return -BLK_EIO;
++        return 0;
++    }
++#endif
++    return -BLK_ENOSYS;
++}
++
+ static unsigned char g_loopback[512];
+ 
+ int main(void) {
+     blk_assert_shape();
+-    (void)getpid();
+     for (unsigned i = 0; i < sizeof(g_loopback); ++i)
+         g_loopback[i] = (unsigned char)(i & 0xFF);
+     ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
+@@ -53,13 +801,16 @@ int main(void) {
+     for (;;) {
+         int rc = ipc_recv(rbuf, sizeof(rbuf));
+         if (rc < 0)
+-            continue; // fail-closed: no reply on transport error
++            continue;
+         struct BlockRpc req;
+         memset(&req, 0, sizeof(req));
+-        unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
++        unsigned long copy =
++            sizeof(req) < 48 ? sizeof(req) : 48;
+         memcpy(&req, rbuf, copy);
+         if ((unsigned long)rc != req.op)
+-            continue; // torn/stale payload: kernel type must match body op (audit S3)
++            continue;
++
++        blk_purge_on_epoch(req.epoch);
+ 
+         struct BlockRpc rep;
+         memset(&rep, 0, sizeof(rep));
+@@ -70,29 +821,93 @@ int main(void) {
+         rep.status_op = (uint16_t)req.op;
+ 
+         switch (req.op) {
++        case BLK_OP_CAP_GET: {
++            unsigned idx = req.handle;
++            int r = blk_map_cap(idx, (uint8_t)req.status_op, req.arg,
++                                req.lba, req.aux, req.rsvd);
++            /* Publish the shared window: the frame can arrive on any
++             * CAP_GET round; transfers and virtio queue setup consume
++             * g_frame_va/_phys. Fresh frames drop queue readiness. */
++            if (r == 0 && idx < BLK_MAX_CAPS &&
++                g_caps[idx].kind == BLK_CAP_DMA_REGION) {
++                g_frame_va = g_caps[idx].va;
++                g_frame_phys = g_caps[idx].phys;
++                g_virtio_ready = 0;
++            }
++            rep.handle = req.handle;
++            rep.arg = req.arg;
++            rep.status_op = req.status_op;
++            rep.status = r == 0 ? 0 : blk_neg((uint16_t)-r);
++            break;
++        }
+         case BLK_OP_BIND:
++        case BLK_OP_GEOMETRY: {
++            if (req.op == BLK_OP_BIND && !g_probed)
++                blk_probe();
++            rep.status_op = (uint16_t)g_backend;
++            rep.flags = req.flags;
++            rep.lba = 0;
++            rep.arg = BLK_SECTOR;
++            /* Degraded: aux carries the probe stage (spec §wire),
++             * sectors when bound. */
++            rep.aux = (g_backend == BLK_BACKEND_NONE)
++                          ? (uint64_t)g_probe_stage
++                          : g_sectors;
++            rep.status =
++                (g_backend == BLK_BACKEND_NONE && g_sectors != 0)
++                    ? blk_neg(BLK_EIO)
++                    : 0;
++            break;
++        }
++        case BLK_OP_READ_BLOCK: {
++            int r;
++            if (g_inject_once) {
++                g_inject_once = 0;
++                r = -BLK_EIO;
++            } else {
++                r = blk_do_read(req.lba);
++            }
++            rep.lba = req.lba;
++            rep.arg = req.arg;
++            rep.status = r == 0 ? 0 : blk_neg((uint16_t)-r);
++            break;
++        }
++        case BLK_OP_WRITE_BLOCK: {
++            int r;
++            if (g_inject_once) {
++                g_inject_once = 0;
++                r = -BLK_EIO;
++            } else {
++                r = blk_do_write(req.lba);
++            }
++            rep.lba = req.lba;
++            rep.arg = req.arg;
++            rep.status = r == 0 ? 0 : blk_neg((uint16_t)-r);
++            break;
++        }
++        case BLK_OP_FLUSH:
++            /* No write-back cache: writes are direct. */
+             rep.status = 0;
+             break;
+         case BLK_OP_LOOPBACK:
+             rep.status = (g_loopback[0] == 0x00 &&
+                           g_loopback[511] == (unsigned char)0xFF)
+                              ? 0
+-                             : (uint16_t)(uint16_t)-5;
++                             : blk_neg(BLK_EIO);
+             break;
+         case BLK_OP_DMA_MAP:
+-            /* Zero/invalid handles fail closed (-EACCES shape). */
+-            rep.status = (req.handle == 0) ? (uint16_t)(uint16_t)-13
+-                                           : (uint16_t)(uint16_t)-38;
++            rep.status = (req.handle == 0) ? blk_neg(BLK_EACCES)
++                                           : blk_neg(BLK_ENOSYS);
++            break;
++        case BLK_OP_INJECT_MID_TRANSFER:
++            g_inject_once = 1;
++            rep.status = 0;
+             break;
+         default:
+-            /* Step-a diagnostic shape: no hardware yet. */
+-            rep.status = (uint16_t)(uint16_t)-38;
++            rep.status = blk_neg(BLK_ENOSYS);
              break;
          }
  
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
+-        // Reply to the requester (owner_id carried in the RPC body):
+-        // send_sync_bounded waits on the REQUESTER's own queue, so a
+-        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
+         ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
      }
      return 0;
- }
-diff --git a/userspace/fb-pd.c b/userspace/fb-pd.c
-index 1be9972bb..3987f5c4c 100644
---- a/userspace/fb-pd.c
-+++ b/userspace/fb-pd.c
-@@ -39,7 +39,10 @@ int main(void) {
-             rep.status = (uint16_t)(uint16_t)-38;
-             break;
-         }
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
- }
-diff --git a/userspace/kbd-pd.c b/userspace/kbd-pd.c
-index 038af87c8..b4d7d8370 100644
---- a/userspace/kbd-pd.c
-+++ b/userspace/kbd-pd.c
-@@ -39,7 +39,10 @@ int main(void) {
-             rep.status = (uint16_t)(uint16_t)-38;
-             break;
-         }
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
- }
-diff --git a/userspace/net-pd.c b/userspace/net-pd.c
-index c37ddf45e..7f52fdbf2 100644
---- a/userspace/net-pd.c
-+++ b/userspace/net-pd.c
-@@ -39,7 +39,10 @@ int main(void) {
-             rep.status = (uint16_t)(uint16_t)-38;
-             break;
-         }
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
- }
-diff --git a/userspace/rtc-pd.c b/userspace/rtc-pd.c
-index de6871ff3..a7fed22cb 100644
---- a/userspace/rtc-pd.c
-+++ b/userspace/rtc-pd.c
-@@ -39,7 +39,10 @@ int main(void) {
-             rep.status = (uint16_t)(uint16_t)-38;
-             break;
-         }
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
- }
-diff --git a/userspace/serial-pd.c b/userspace/serial-pd.c
-index 887ddc815..90de74a97 100644
---- a/userspace/serial-pd.c
-+++ b/userspace/serial-pd.c
-@@ -39,7 +39,10 @@ int main(void) {
-             rep.status = (uint16_t)(uint16_t)-38;
-             break;
-         }
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
- }
-diff --git a/userspace/timer-srv.c b/userspace/timer-srv.c
-index e2dd651a3..9ce97e65b 100644
---- a/userspace/timer-srv.c
-+++ b/userspace/timer-srv.c
-@@ -139,7 +139,10 @@ int main(void) {
-             break;
-         }
- 
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
- }
-diff --git a/userspace/vfs-srv.c b/userspace/vfs-srv.c
-index ae246e348..ecba714c1 100644
---- a/userspace/vfs-srv.c
-+++ b/userspace/vfs-srv.c
-@@ -86,7 +86,10 @@ int main(void) {
-             break;
-         }
- 
--        ipc_send(1, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-+        // Reply to the requester (owner_id carried in the RPC body):
-+        // send_sync_bounded waits on the REQUESTER's own queue, so a
-+        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
- }
