@@ -117,6 +117,7 @@ void register_iommu_live_tests();
 void register_waitpid_tests();
 void register_buffer_pool_tests();
 void register_block_device_tests();
+void register_block_srv_tests();
 void register_fat32_tests();
 void register_vfs_fat32_tests();
 void register_ipc_blocking_tests();
@@ -575,6 +576,7 @@ static void run_pml4_sync_group() { register_pml4_sync_tests(); }
 static void run_tlb_shootdown_group() { register_tlb_shootdown_tests(); }
 static void run_drivers_core_group() { register_driver_tests(); }
 static void run_drivers_block_group() { register_block_device_tests(); }
+static void run_block_srv_live_group() { register_block_srv_tests(); }
 static void run_drivers_pci_group() { register_pci_tests(); }
 static void run_drivers_virtio_group() { register_virtio_tests(); }
 static void run_drivers_dma_group() { register_dma_tests(); }
@@ -954,6 +956,12 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // -- drivers: device driver framework and controllers --
     {"drivers_core", []() { run_drivers_core_group(); }},
     {"drivers_block", []() { run_drivers_block_group(); }},
+
+    // -- block_srv_live: block-srv PD live path (issue #47 step-b1) --
+    //    NOT part of any aggregate — requires the CONFIG_BLOCK_SRV=1
+    //    build plus the live block-srv PD (BIND/CAP_GET + shared window).
+    //    Scripted runs use a dedicated -Dconfig_defs builddir.
+    {"block_srv_live", []() { run_block_srv_live_group(); }},
     {"drivers_pci", []() { run_drivers_pci_group(); }},
     {"drivers_virtio", []() { run_drivers_virtio_group(); }},
     {"drivers_dma", []() { run_drivers_dma_group(); }},

@@ -37,12 +37,23 @@ bool g_block_dma = false;
 // inherited), read by the kernel TX producer. Roles ≥ 6 never carry SHM.
 uint64_t g_shm_tx_phys[6] = {};
 uint64_t g_shm_tx_pages[6] = {};
+// Composed DMA_REGION window records (issue #47 step-b1): (phys, pages)
+// per role+index, published only after the whole row composes; cleared
+// on any (re)compose start of that role.
+uint64_t g_role_frame_phys[kPdRoleCount][kMaxCapsPerRole] = {};
+uint64_t g_role_frame_pages[kPdRoleCount][kMaxCapsPerRole] = {};
 // Last SHM mint record: mint_one stages (phys, pages) here; sdf_compose
 // copies them into the role cells only after the whole row composes
 // (all-or-nothing — a failed row leaves the role cells cleared, and the
 // producer fail-closes to the raw path).
 uint64_t g_last_shm_phys = 0;
 uint64_t g_last_shm_pages = 0;
+// Last DMA_REGION mint record (issue #47 step-b1): same staging contract
+// as SHM, but no ring header is initialised (raw sector/queue window).
+// sdf_compose snapshots these per index right after each successful
+// mint_one, so rows with one DMA_REGION window publish it on success.
+uint64_t g_last_dma_phys = 0;
+uint64_t g_last_dma_pages = 0;
 
 /// @brief Mint one CapSpec into the task CSpace (all-or-nothing caller).
 /// @return slot index or -1. Created caps are disposed by the caller on
@@ -70,7 +81,33 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
         const arch::PciBarType bar_type =
             (spec.io_port != 0) ? arch::PciBarType::IO
                                 : arch::PciBarType::MEMORY_32;
-        auto *cap = cap::MmioCap::create(spec.addr, spec.size, bar_type);
+        if (spec.io_port != 0) {
+            // IO ports are not memory-mapped (grant ledger only), so
+            // the exact range is kept: widening to whole pages would
+            // widen the grant bound (least-privilege regression).
+            auto *cap = cap::MmioCap::create(spec.addr, spec.size,
+                                             bar_type);
+            if (cap == nullptr) {
+                return -1;
+            }
+            obj = cap;
+            type = cap::CapType::Mmio;
+            break;
+        }
+        // Window may start mid-page (issue #47 step-b1: virtio slots
+        // stride 0x200); the map primitive needs whole pages, so the
+        // cap covers [align_down(addr), align_up(addr+size)) and the
+        // PD applies the intra-page offset (addr & 0xFFF) itself.
+        const uint64_t mask = static_cast<uint64_t>(arch::PAGE_SIZE) - 1;
+        const uint64_t base = spec.addr & ~mask;
+        if (spec.size == 0 || spec.addr + spec.size < spec.addr) {
+            return -1;
+        }
+        const uint64_t end = (spec.addr + spec.size + mask) & ~mask;
+        if (end <= base) {
+            return -1;
+        }
+        auto *cap = cap::MmioCap::create(base, end - base, bar_type);
         if (cap == nullptr) {
             return -1;
         }
@@ -141,6 +178,35 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
         type = cap::CapType::Frame;
         break;
     }
+    case CapKind::DMA_REGION: {
+        // Shared data window (issue #47 step-b1): fresh user frames
+        // pinned in a FrameCap, installed in the PD CSpace; the kernel
+        // side uses the HHDM alias. Raw window — no ring header.
+        if (spec.size == 0) {
+            return -1;
+        }
+        const size_t pages =
+            (spec.size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
+        if (pages == 0) {
+            return -1;
+        }
+        const uint64_t phys = PMM::alloc_user_contiguous(pages);
+        if (phys == 0) {
+            return -1;
+        }
+        auto *cap = cap::FrameCap::create(phys, pages, true);
+        if (cap == nullptr) {
+            for (size_t i = 0; i < pages; ++i) {
+                PMM::free_page(phys + i * arch::PAGE_SIZE);
+            }
+            return -1;
+        }
+        g_last_dma_phys = phys;
+        g_last_dma_pages = pages;
+        obj = cap;
+        type = cap::CapType::Frame;
+        break;
+    }
     case CapKind::MSIX:
         // Reserved row (MSI-X entry claim): wired when the first PD needs
         // it; never silently mapped to another kind.
@@ -178,6 +244,20 @@ bool sdf_shm_tx_phys(PdRole role, uint64_t &phys_out, uint64_t &pages_out) {
     }
     phys_out = g_shm_tx_phys[role_idx];
     pages_out = g_shm_tx_pages[role_idx];
+    return phys_out != 0;
+}
+
+bool sdf_role_frame(PdRole role, uint64_t idx, uint64_t &phys_out,
+                    uint64_t &pages_out) {
+    const uint64_t role_idx = static_cast<uint64_t>(role);
+    if (role_idx >= kPdRoleCount || idx >= kMaxCapsPerRole) {
+        return false;
+    }
+    if (g_role_frame_pages[role_idx][idx] == 0) {
+        return false;
+    }
+    phys_out = g_role_frame_phys[role_idx][idx];
+    pages_out = g_role_frame_pages[role_idx][idx];
     return phys_out != 0;
 }
 
@@ -257,18 +337,42 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // clients over its endpoint only.
         return 0;
     case PdRole::BLOCK_SRV: {
-        // Captured block topology (planner S2): MMIO specs recorded by
-        // capture_block_topology() + an optional DMA domain grant when an
-        // IOMMU was probed at capture time. Degraded (no controller/IOMMU)
-        // composes zero caps — allowed explicitly, logged by the caller.
+        // Block-storage server row (issue #47 step-b1): one static
+        // arch-switched shape + one shared data window. No IRQ cap in
+        // b1 (polled completion; IRQ delegation is step-b2).
+        // x86_64: ATA PIO command blocks (primary 0x1F0 + secondary
+        // 0x170, 8 ports each, IO-type) + 4-page shared window.
+        // aarch64/riscv64: first captured virtio transport window
+        // (page-aligned by capture_block_topology) + 4-page window.
+        // Degraded (no controller captured off-x86) composes zero caps
+        // — allowed explicitly, logged by the caller.
         uint64_t n = 0;
-        for (uint64_t i = 0; i < g_block_mmio_count && n < kMaxCapsPerRole;
-             ++i) {
-            out[n++] = g_block_mmio[i];
+#if defined(CONFIG_ARCH_X86_64)
+        if (n < kMaxCapsPerRole) {
+            out[n++] =
+                CapSpec{CapKind::MMIO, 0x1F0, 8, 0, 1};
         }
-        if (g_block_dma && n < kMaxCapsPerRole) {
-            out[n++] = CapSpec{CapKind::DMA, 0, 0, 0, 0};
+        if (n < kMaxCapsPerRole) {
+            out[n++] =
+                CapSpec{CapKind::MMIO, 0x170, 8, 0, 1};
         }
+#else
+        if (g_block_mmio_count > 0 && n < kMaxCapsPerRole) {
+            out[n++] = g_block_mmio[0];
+        }
+#endif
+        // Shared sector/queue window: 4 pages (see block_srv.hpp
+        // kBlockRegionPages; the PD mirrors the constants).
+        if (n < kMaxCapsPerRole) {
+            out[n++] = CapSpec{CapKind::DMA_REGION, 0,
+                               4 * arch::PAGE_SIZE, 0, 0};
+        }
+#if !defined(CONFIG_ARCH_X86_64)
+        if (n == 1) {
+            // Only the window, no transport: degraded, compose capless.
+            return 0;
+        }
+#endif
         return n;
     }
     case PdRole::TERM_SRV:
@@ -330,15 +434,11 @@ bool capture_block_topology() {
         if (n >= kMaxCapsPerRole || phys == 0 || size == 0) {
             return;
         }
-        const uint64_t base = phys & ~(static_cast<uint64_t>(arch::PAGE_SIZE) - 1);
-        const uint64_t end = phys + size;
-        const uint64_t aligned_end =
-            (end + arch::PAGE_SIZE - 1) & ~(static_cast<uint64_t>(arch::PAGE_SIZE) - 1);
-        if (aligned_end <= base) {
-            return;
-        }
+        // Store the EXACT window (issue #47 step-b1): alignment to
+        // whole pages happens at mint time; the row keeps the true
+        // base so the PD can apply the intra-page offset.
         g_block_mmio[n++] =
-            CapSpec{CapKind::MMIO, base, aligned_end - base, 0, 0};
+            CapSpec{CapKind::MMIO, phys, size, 0, 0};
     };
 #if defined(CONFIG_ARCH_X86_64)
     // AHCI HBA: class 0x01/subclass 0x06, BAR5 = ABAR.
@@ -374,13 +474,13 @@ bool capture_block_topology() {
 // undiscoverable). Written at boot compose + restart rebind, read by the
 // serial TX client. Boot-time only content; test snapshot/restore rewinds
 // MemPool but never recomposes PDs, so no stale-slot path exists.
-int g_role_slots[6][kMaxCapsPerRole] = {};
-uint32_t g_role_gens[6][kMaxCapsPerRole] = {};
-uint64_t g_role_slot_count[6] = {};
+int g_role_slots[kPdRoleCount][kMaxCapsPerRole] = {};
+uint32_t g_role_gens[kPdRoleCount][kMaxCapsPerRole] = {};
+uint64_t g_role_slot_count[kPdRoleCount] = {};
 
 bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen) {
     const uint64_t role_idx = static_cast<uint64_t>(role);
-    if (role_idx >= 6 || idx >= kMaxCapsPerRole) {
+    if (role_idx >= kPdRoleCount || idx >= kMaxCapsPerRole) {
         return false;
     }
     if (idx >= g_role_slot_count[role_idx]) {
@@ -421,8 +521,18 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
         g_shm_tx_phys[role_idx0] = 0;
         g_shm_tx_pages[role_idx0] = 0;
     }
+    if (role_idx0 < kPdRoleCount) {
+        for (uint64_t i = 0; i < kMaxCapsPerRole; ++i) {
+            g_role_frame_phys[role_idx0][i] = 0;
+            g_role_frame_pages[role_idx0][i] = 0;
+        }
+    }
     g_last_shm_phys = 0;
     g_last_shm_pages = 0;
+    g_last_dma_phys = 0;
+    g_last_dma_pages = 0;
+    uint64_t dma_phys[kMaxCapsPerRole] = {};
+    uint64_t dma_pages[kMaxCapsPerRole] = {};
     for (uint64_t i = 0; i < count; ++i) {
         const int slot = mint_one(task, specs[i], &gens[i]);
         if (slot < 0) {
@@ -430,26 +540,37 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
             return false;
         }
         slots[i] = slot;
+        if (specs[i].kind == CapKind::DMA_REGION) {
+            dma_phys[i] = g_last_dma_phys;
+            dma_pages[i] = g_last_dma_pages;
+        }
     }
     // Persist the composed (slot, gen) pairs for kernel→PD BIND handle
-    // conveyance (issue #51 step-c). Roles ≥ 6 (VFS_SRV and later) share
-    // the driver_pds pid table but not the slot table — serial TX only
-    // needs roles 0..5, so out-of-range roles skip persistence (their PDs
-    // never receive handles; fail-closed at sdf_role_cap).
+    // conveyance (issue #51 step-c, extended to all roles by #47
+    // step-b1: BLOCK_SRV at index 7 needs persistence for its CAP_GET
+    // rounds). Serial TX only needs roles 0..5, but persistence is
+    // uniform now — no per-role exception.
     const uint64_t role_idx = static_cast<uint64_t>(role);
-    if (role_idx < 6) {
+    if (role_idx < kPdRoleCount) {
         for (uint64_t i = 0; i < count; ++i) {
             g_role_slots[role_idx][i] = slots[i];
             g_role_gens[role_idx][i] = gens[i];
+            g_role_frame_phys[role_idx][i] = dma_phys[i];
+            g_role_frame_pages[role_idx][i] = dma_pages[i];
         }
         g_role_slot_count[role_idx] = count;
         // Publish the TX-ring backing store (issue #51 step-c-prime):
         // exactly one SHM spec per row, recorded only on full success.
-        for (uint64_t i = 0; i < count; ++i) {
-            if (specs[i].kind == CapKind::SHM) {
-                g_shm_tx_phys[role_idx] = g_last_shm_phys;
-                g_shm_tx_pages[role_idx] = g_last_shm_pages;
-                break;
+        // SIL3 audit #47 step-b1: g_shm_tx_* hold 6 entries (roles ≥ 6
+        // never carry SHM) while slot/frame tables span kPdRoleCount —
+        // keep the publish inside the 6-entry bound.
+        if (role_idx < 6) {
+            for (uint64_t i = 0; i < count; ++i) {
+                if (specs[i].kind == CapKind::SHM) {
+                    g_shm_tx_phys[role_idx] = g_last_shm_phys;
+                    g_shm_tx_pages[role_idx] = g_last_shm_pages;
+                    break;
+                }
             }
         }
     }

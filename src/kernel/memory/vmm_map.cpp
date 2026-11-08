@@ -86,7 +86,13 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
         return errors::VMM_ERR_PAGE_ALLOC;
     }
 
-    if (user && phys_addr < PMM::total_memory())
+    // Privilege-escalation backstop (issue #47 step-b1): never map
+    // managed KERNEL RAM user-accessible. Managed = inside the PMM
+    // allocatable window; device MMIO outside it (e.g. virtio near
+    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
+    // RAM, and must stay mappable. The old `phys < total_memory`
+    // shape assumed RAM starts at 0 (x86-only truth).
+    if (user && PMM::is_managed_page(phys_addr))
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page: KERNEL page mapped as user-accessible");
 
@@ -143,7 +149,13 @@ errors::VmmError VMM::map_page_try(uint64_t virt_addr, uint64_t phys_addr,
         return errors::VMM_ERR_PAGE_ALLOC;
     }
 
-    if (user && phys_addr < PMM::total_memory())
+    // Privilege-escalation backstop (issue #47 step-b1): never map
+    // managed KERNEL RAM user-accessible. Managed = inside the PMM
+    // allocatable window; device MMIO outside it (e.g. virtio near
+    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
+    // RAM, and must stay mappable. The old `phys < total_memory`
+    // shape assumed RAM starts at 0 (x86-only truth).
+    if (user && PMM::is_managed_page(phys_addr))
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page: KERNEL page mapped as user-accessible");
 
@@ -186,7 +198,13 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
         return errors::VMM_ERR_PAGE_ALLOC;
     }
 
-    if (user && phys_addr < PMM::total_memory())
+    // Privilege-escalation backstop (issue #47 step-b1): never map
+    // managed KERNEL RAM user-accessible. Managed = inside the PMM
+    // allocatable window; device MMIO outside it (e.g. virtio near
+    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
+    // RAM, and must stay mappable. The old `phys < total_memory`
+    // shape assumed RAM starts at 0 (x86-only truth).
+    if (user && PMM::is_managed_page(phys_addr))
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page_in_pml4: KERNEL page mapped as user-accessible");
 
@@ -239,7 +257,13 @@ errors::VmmError VMM::map_page_in_pml4_try(uint64_t virt_addr,
         return errors::VMM_ERR_PAGE_ALLOC;
     }
 
-    if (user && phys_addr < PMM::total_memory())
+    // Privilege-escalation backstop (issue #47 step-b1): never map
+    // managed KERNEL RAM user-accessible. Managed = inside the PMM
+    // allocatable window; device MMIO outside it (e.g. virtio near
+    // 0x0a000000 while RAM starts at 0x40000000) is cap-gated, not
+    // RAM, and must stay mappable. The old `phys < total_memory`
+    // shape assumed RAM starts at 0 (x86-only truth).
+    if (user && PMM::is_managed_page(phys_addr))
         ENSURE(PMM::is_user_page(phys_addr) &&
                "map_page_in_pml4: KERNEL page mapped as user-accessible");
 

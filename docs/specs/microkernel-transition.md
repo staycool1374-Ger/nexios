@@ -185,12 +185,16 @@ generation-tagged stored pointers). Enforced at these points:
    record kernel text budget + §3 38-entry target at approval. Land #76
    (80..83, now `sys_unimplemented`) as server-RPC stubs **before** the
    timer-srv flip.
-   Status 2026-11 (landed since draft): timer-srv PD + spec/loopback
-   (`timer-srv.c`, `CONFIG_TIMER_SRV`); #47 step-a VFS+block strangler
-   merged (`d1b44d849`, no flip); #51 serial SHM-ring TX merged
-   (`960b27673`, ring-first, fallback preserved). Open per §7 gates:
-   parity → fault drill → SIL 3 audit → flip → delete-after-gate, per
-   server in the order below.
+    Status 2026-11 (landed since draft): timer-srv PD + spec/loopback
+    (`timer-srv.c`, `CONFIG_TIMER_SRV`); #47 step-a VFS+block strangler
+    merged (`d1b44d849`, no flip); #51 serial SHM-ring TX merged
+    (`960b27673`, ring-first, fallback preserved). Open per §7 gates:
+    parity → fault drill → SIL 3 audit → flip → delete-after-gate, per
+    server in the order below.
+    Status 2026-11 (in progress): #47 step-b1 block-srv live path
+    (branch `fix/47-block-srv-b1`: SDF `DMA_REGION` + `kPdRoleCount`,
+    BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
+    read+write, `block_srv_live` class + host digest oracle).
 Per server, in order: timer → log → procfs → term/fb → drivers → block →
 VFS backends → process management → memory manager. Each step:
 (a) server PD + Kconfig shim default OFF; (b) loopback/parity tests

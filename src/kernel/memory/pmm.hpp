@@ -170,6 +170,13 @@ class PMM {
 
     /// @brief Returns true if the page was allocated as USER ownership.
     static bool is_user_page(uint64_t phys_addr);
+    /// @brief Returns true if the page lies in the managed allocatable
+    /// window (issue #47 step-b1): device MMIO below the RAM base is
+    /// NOT managed even when numerically below total_memory (virt
+    /// places RAM at 0x40000000, devices near 0x0a000000).
+    /// @param phys_addr Physical address to check.
+    /// @return true when allocatable-window owned (RAM, user or kernel).
+    static bool is_managed_page(uint64_t phys_addr);
     /// @brief Returns true if the page was allocated as USER ownership with
     /// error code.
     /// @param phys_addr Physical address to check.

@@ -47,13 +47,20 @@ enum class CapKind : uint8_t {
     SHM = 5,    ///< TX-ring channel endpoint (issue #51 step-c-prime:
                 ///< fresh user frames + FrameCap pin, installed in the PD
                 ///< CSpace; kernel producer uses the HHDM alias).
+    DMA_REGION = 6, ///< Shared data window (issue #47 step-b1): fresh
+                ///< user frames + FrameCap pin in the PD CSpace; the
+                ///< kernel side uses the HHDM alias. Unlike SHM, no
+                ///< ring header is initialised (raw sector window).
 };
 
 /// @brief One mint instruction inside a role row.
 struct CapSpec {
     CapKind kind;
-    uint64_t addr;   ///< MMIO phys base / FRAME phys base (0 if n/a).
-    uint64_t size;   ///< MMIO/FAME size (0 if n/a).
+    uint64_t addr;   ///< MMIO exact window phys (mapping aligns the base
+                     ///< down internally; the PD applies the intra-page
+                     ///< offset) / FRAME phys (page-aligned) / 0 if n/a.
+    uint64_t size;   ///< MMIO/FAME exact byte size (mapping rounds the
+                     ///< span up to whole pages) / 0 if n/a.
     uint32_t vector; ///< IRQ vector / MSI-X entry (0 if n/a).
     uint32_t io_port;///< 1 = IO-port MmioCap, 0 = memory MmioCap.
 };
@@ -80,6 +87,12 @@ enum class PdRole : uint8_t {
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
 inline constexpr uint64_t kMaxCapsPerRole = 6;
+
+/// @brief Number of PdRole entries (issue #47 step-b1): role tables are
+/// sized by this, not by a hardcoded 6 (roles ≥ 6 share the compose
+/// path but previously skipped slot persistence).
+inline constexpr uint64_t kPdRoleCount =
+    static_cast<uint64_t>(PdRole::PROCFS_SRV) + 1;
 
 /// @brief TX-ring element size in bytes (issue #51 step-c-prime).
 /// Fixed 8: {uint8 len, char data[7]}. Multiple of 8 per the SPSC
@@ -110,6 +123,14 @@ bool sdf_compose(TaskControlBlock &task, PdRole role);
 /// @return true with *phys_out/*pages_out filled on a live ring record,
 /// false when the role carries no SHM spec (knob off / compose failed).
 bool sdf_shm_tx_phys(PdRole role, uint64_t &phys_out, uint64_t &pages_out);
+
+/// @brief Read back the SDF-composed DMA_REGION window for @p role
+/// (issue #47 step-b1): the DMA_REGION mint's (phys, pages), written
+/// only after the whole row composes; cleared on any (re)compose start.
+/// @return true with *phys_out/*pages_out filled on a live record,
+/// false when the role carries no DMA_REGION spec.
+bool sdf_role_frame(PdRole role, uint64_t idx, uint64_t &phys_out,
+                    uint64_t &pages_out);
 
 /// @brief Re-derive a PD's caps after disposal (restart path): dispose is
 /// owned by the caller (cap revoke/drain first); this re-mints the row.
