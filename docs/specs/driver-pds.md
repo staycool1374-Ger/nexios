@@ -70,7 +70,25 @@ the PD instead:
   round — no duplication, order preserved). 1-tick recv poll when the
   ring is mapped (bounded drain latency for RPCs and TX), block-forever
   before MAP (zero idle overhead). The NOTIFY is a latency
-  optimization; the poll is the liveness backstop.
+  optimization; the poll is the liveness backstop. The drain loop
+  skips entirely while the header `drain_hold` word is nonzero
+  (kernel test quiesce hook — see below).
+- Quiesce hook (QE finding #51, exact producer tests): `SharedRingHeader`
+  carries a third cache line `drain_hold` (v2 wire, zero = drain).
+  `serial_tx_test_hold(bool)` sets/clears it on the producer-resolved
+  live ring; `serial_tx_test_phys()` exposes the producer's phys so
+  tests address the same ring the producer writes (the SDF record may
+  move under an in-test fixture compose). The PD honors the hold in
+  its drain loop; `shm_ring_push/pop` primitives are hold-agnostic.
+  Test discipline: hold → measure → pop-all discard (no console
+  garbage) → release BEFORE asserting (a held drain across a failure
+  wedges the console for every later test).
+- Refcount discipline (QE finding #51, `mint_one` leak): `CNode::install`
+  takes the slot's own reference — every call site must drop the
+  creator ref after a successful install (and on every failure leg),
+  or the cap survives its task and pins user frames past teardown
+  (+Cap/+MemPool/+PMM leak, convicted by `serial_tx_sdf_compose_shm`
+  ON: +4 PMM/+2 Cap/+2 MemPool).
 - Epochs: PD restart bumps `pd_epoch`; the producer re-resolves phys
   per epoch, BIND+MAP re-run once per epoch. Panic/ISR keep the raw
   path (`Logger::raw_write` bypasses Terminal entirely).

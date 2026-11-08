@@ -61,8 +61,10 @@ a privilege hole).  `MAX_SYSCALL` 63 → 66.
 
 - `SharedRingHeader` lives at the **start of page 0** of the `FrameCap`:
   magic (`0x4E455852494E47`), version, `capacity`, `element_size`, plus
-  cache-line-aligned (`alignas(64)`) `head` (producer-write-only) and `tail`
-  (consumer-write-only).
+  cache-line-aligned (`alignas(64)`) `head` (producer-write-only), `tail`
+  (consumer-write-only), and `drain_hold` (v2; written only by the
+  kernel test quiesce hook, read only by the consumer before draining —
+  nonzero skips pops; zero = drain, the v1-compatible default).
 - Data lives in pages 1..N-1.  Ring capacity = `(frame_count - 1) * PAGE_SIZE`
   rounded down to a power of two (so the wrap mask works).
 - `shm_ring_init` is called once by the producer before either side uses the

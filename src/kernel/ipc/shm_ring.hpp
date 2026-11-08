@@ -36,8 +36,9 @@ namespace kernel::shm {
 /// @brief Magic identifying a valid shared ring header (0x4E4558 'NEX' +
 ///        0x52494E47 'RING').
 constexpr uint64_t SHM_RING_MAGIC = 0x4E455852494E47ULL;
-/// @brief Protocol version.
-constexpr uint64_t SHM_RING_VERSION = 1;
+/// @brief Protocol version.  v2 adds drain_hold (issue #51 QE quiesce
+///        hook); v1 readers ignore the trailing word (zero = drain).
+constexpr uint64_t SHM_RING_VERSION = 2;
 
 /// @brief Shared ring header — lives at the start of page 0 of the frame cap.
 ///        The head (producer-write-only) and tail (consumer-write-only) are
@@ -57,6 +58,14 @@ struct alignas(64) SharedRingHeader {
     alignas(64) uint64_t head = 0;
     /// @brief Consumer index (bytes).  Written only by the consumer.
     alignas(64) uint64_t tail = 0;
+    /// @brief Drain hold (bytes, nonzero = held).  Written only by the
+    ///        kernel test quiesce hook, read only by the consumer before
+    ///        draining: while held the consumer skips pops, so producer
+    ///        drop accounting is exact (issue #51 step-c-prime QE finding).
+    ///        Owned by neither SPSC side; benign races (set vs drain
+    ///        check) resolve to at most one extra drained/passed batch.
+    ///        Zero on init = drain (v1 wire-compatible default).
+    alignas(64) uint64_t drain_hold = 0;
 };
 
 /// @brief Initialises a shared ring header at @p header (must be the start of
@@ -84,6 +93,7 @@ inline void shm_ring_init(SharedRingHeader *header, uint64_t frame_count,
     __atomic_store_n(&header->element_size, element_size, __ATOMIC_RELEASE);
     __atomic_store_n(&header->head, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&header->tail, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&header->drain_hold, 0, __ATOMIC_RELEASE);
 }
 
 /// @brief Whether @p header points at an initialised ring.

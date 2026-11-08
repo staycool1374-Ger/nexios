@@ -53,10 +53,11 @@ static inline int drv_recv(void *buf, unsigned long max_size,
 /* Serial TX SHM ring (issue #51 step-c-prime, mirrors the kernel
  * SharedRingHeader layout byte-for-byte — see src/kernel/ipc/shm_ring.hpp;
  * keep in sync: magic/version/capacity/element_size + 64 B-aligned
- * head/tail. Element: {uint8 len, char data[7]}. */
+ * head/tail + 64 B-aligned drain_hold (v2 quiesce hook). Element:
+ * {uint8 len, char data[7]}. */
 #define SERIAL_TX_RING_ESZ 8
 #define SERIAL_TX_RING_MAGIC 0x4E455852494E47UL
-#define SERIAL_TX_RING_VERSION 1
+#define SERIAL_TX_RING_VERSION 2
 #define SERIAL_TX_NOTIFY 0x5458
 
 #endif
