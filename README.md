@@ -51,7 +51,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 ## Diagram of actual implementation
 
-<img src="diagram.png" alt="Diagram of actual implementation"/>
+<img src="diagram.svg" alt="Diagram of actual implementation"/>
 
 ---
 
@@ -90,10 +90,6 @@ Additionally, the NexIOS shell includes the tools needed to measure your applica
 </p>
 <p align="center">
   <em>NexIOS demo — real-time kernel for safety (click to watch on YouTube)</em>
-</p>
-
-<p align="center">
-  <img src="docs/nexios-architecture.png" alt="NexIOS kernel architecture" width="820"/>
 </p>
 
 ---
