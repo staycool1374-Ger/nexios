@@ -134,6 +134,15 @@ Scheduler::terminate_err(TaskControlBlock &task,
     auto *next = edf_peek_valid_own();
     if (next == nullptr)
         next = rq_own().peek_highest();
+    // Issue #513: empty-runq self-termination must not park current on
+    // the corpse.  When nothing else is runnable (peek null, or only the
+    // exiting task itself), fall back to the own CPU's idle — mirroring
+    // switch_away_from_terminating — so the deferred switch always has a
+    // live target and the trap epilogue never srets back into TERMINATED
+    // code (the trampoline hlt would otherwise park the hart with
+    // whatever SIE the exiting task happened to hold).
+    if (next == nullptr || next == &task)
+        next = own_idle();
     if (next && next != &task) {
         switch_to_task(&task, *next, nullptr);
     }

@@ -508,6 +508,14 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
             cur->reply_wait = false;
             if (was_blocked) {
                 cur->remaining_ticks = cur->period_ticks;
+                // Issue #513: the wait loop below ends each sleep with
+                // cli(); a task that blocked at least once would otherwise
+                // return to task context with SIE=0 — every later hlt
+                // (including the trampoline park after entry-return) then
+                // sleeps through all wakeups.  Restore the task-context
+                // norm (IRQ on) on every slow-path exit.  Fast paths
+                // (was_blocked == false) never touched SIE: preserve it.
+                arch::sti();
             }
             return true;
         }
@@ -518,6 +526,7 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
             cur->reply_wait = false;
             if (was_blocked) {
                 cur->remaining_ticks = cur->period_ticks;
+                arch::sti(); // Issue #513: restore IRQ-on (see above).
             }
             return false;
         }
@@ -536,6 +545,15 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
             IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone cur=", cur->id,
                             "dest=", dest_id, "q=", cur->msg_queue.count,
                             "x=", 0u);
+            // Wait is over: never return with a stale BLOCKED marking or a
+            // latched reply channel — the caller resumes running now, and a
+            // leftover BLOCKED/reply_wait would mislead the next scheduler
+            // decision (issue #513 follow-up: stale wait-state livelock).
+            cur->reply_wait = false;
+            cur->state = TaskState::RUNNING;
+            if (was_blocked) {
+                arch::sti(); // Issue #513: restore IRQ-on (see above).
+            }
             return false;
         }
 
@@ -544,14 +562,17 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
         Scheduler::dequeue_ready(*cur);
         was_blocked = true;
         Scheduler::reschedule();
-        // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern.
-        if (cur->is_user_) {
-            arch::sti();
-            arch::hlt();
-            arch::cli();
-        } else {
-            arch::hlt();
-        }
+        // Issue #513 (face A/C hang): the wait yields UNCONDITIONALLY.
+        // A kernel task reaching this loop with SIE=0 (inherited IRQ-off
+        // window) would sleep through every wakeup source with a bare
+        // hlt: no timer IRQ fires, the TimerWheel deadline can never
+        // expire, and the bounded wait below degrades to an unexitable
+        // wedge.  Trap/IPC entry owns the IRQ state (SIE=0, no locks
+        // held), so sti is safe for both flavors (idempotent when SIE
+        // is already 1).  Mirrors the sys_receive/sys_recv_fast fix.
+        arch::sti();
+        arch::hlt();
+        arch::cli();
         // Resume (reply arrival or spurious non-matching wake): re-check
         // for the matching reply at the top; otherwise re-block.
     }
@@ -584,6 +605,7 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
             }
             if (was_blocked) {
                 cur->remaining_ticks = cur->period_ticks;
+                arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
             }
             return true;
         }
@@ -591,6 +613,11 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
             cur->reply_wait = false;
             cur->recv_timed_out = false;
             recv_wait_cancel(*cur);
+            // Wait over: caller resumes running (see above).
+            cur->state = TaskState::RUNNING;
+            if (was_blocked) {
+                arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
+            }
             return false; // bounded expiry: fail-closed, no silent success
         }
         auto *dest = Scheduler::find_task(dest_id);
@@ -601,6 +628,12 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
             if (armed_here) {
                 recv_wait_cancel(*cur);
             }
+            // Wait is over (see above): clear the channel, restore RUNNING.
+            cur->reply_wait = false;
+            cur->state = TaskState::RUNNING;
+            if (was_blocked) {
+                arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
+            }
             return false;
         }
         cur->reply_wait = true;
@@ -608,13 +641,11 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
         Scheduler::dequeue_ready(*cur);
         was_blocked = true;
         Scheduler::reschedule();
-        if (cur->is_user_) {
-            arch::sti();
-            arch::hlt();
-            arch::cli();
-        } else {
-            arch::hlt();
-        }
+        // Issue #513 (face A/C hang): unconditional yield (see send_sync
+        // above — same SIE=0 wedge through the bounded wait below).
+        arch::sti();
+        arch::hlt();
+        arch::cli();
     }
 }
 

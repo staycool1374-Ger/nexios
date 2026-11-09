@@ -223,6 +223,29 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
     }
 
     set_current_ptr(&task);
+    // Issue #513 follow-up: keep the trap-entry kstack slot consistent with
+    // the newly published current.  Owner-resolution can publish a current
+    // whose U-traps would otherwise land on a stale kstack (a user PD trap
+    // processed under a stale init slot wedges in sys_receive's kernel-task
+    // path).  Only when no deferred arm is in flight — then the slot belongs
+    // to the arm, not to current — and never for a live boot-stack RSP
+    // (H2 boot-stack runners keep the existing slot discipline).
+    {
+        arch::IrqGuard iguard{};
+        if (__atomic_load_n(&Scheduler::SwSlots::next_task_id(),
+                            __ATOMIC_RELAXED) == UINT64_MAX &&
+            __atomic_load_n(&Scheduler::SwSlots::save_rsp_to(),
+                            __ATOMIC_RELAXED) == nullptr &&
+            task.kernel_stack != nullptr && task.kernel_stack_top != 0 &&
+            !is_boot_stack_rsp(current_sp())) {
+            __atomic_store_n(
+                &Scheduler::SwSlots::load_kstack_base(),
+                reinterpret_cast<uint64_t>(task.kernel_stack),
+                __ATOMIC_RELEASE);
+            __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(),
+                             task.kernel_stack_top, __ATOMIC_RELEASE);
+        }
+    }
 }
 
 /// @brief Restore scheduler state after a deferred-switch arm is cleared
@@ -261,7 +284,7 @@ void restore_preempted_current(TaskControlBlock *current,
                 // trace() takes one uint64; format the id into a small buffer.
                 char buf[24];
                 int p = 0;
-                kernel::debug::fmt_u64(buf, p, armed_target_id);
+                p = kernel::debug::fmt_u64(buf, p, armed_target_id);
                 buf[p] = 0;
                 kernel::debug::trace(buf);
             }

@@ -204,6 +204,14 @@ _task_trampoline(void (*entry)()) {
     auto *self = Scheduler::current_task();
     if (self)
         Scheduler::terminate(*self, 0);
+    // Issue #513: a parked corpse must never blackout the hart.  The
+    // self-termination above normally switches away (terminate_err arms
+    // idle on empty runq), but if this park is ever reached with SIE=0
+    // (inherited IRQ-off window — the sti/hlt/cli wait pattern leaves
+    // SIE=0), a bare hlt would sleep through all wakeups with no timer
+    // to rescue it.  Enable first: ticks keep flowing and the next tick
+    // schedules away from this dead task.
+    arch::sti();
     for (;;)
         arch::hlt();
 }

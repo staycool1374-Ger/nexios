@@ -116,6 +116,10 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
             if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
+                // Wait is over: restore RUNNING (the trapper resumes running;
+                // a stale BLOCKED marking would mislead the next scheduler
+                // decision — issue #513 follow-up).
+                cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
         }
@@ -272,6 +276,8 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 // arrival would then spuriously wake this task (#208 recurs).
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
+                // Wait is over: restore RUNNING (see sys_receive above).
+                cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
             if (cur->get_sporadic_server()) {
@@ -302,11 +308,15 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             if (!cur->msg_queue.is_empty()) {
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
+                // Wait is over: restore RUNNING (see sys_receive above).
+                cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
             if (__atomic_load_n(&cur->recv_timed_out, __ATOMIC_ACQUIRE)) {
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
+                // Wait is over: restore RUNNING (see sys_receive above).
+                cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
         }
