@@ -97,11 +97,16 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
             Scheduler::reschedule();
             // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait
             // pattern; key on is_user_ (every task now owns a PML4).
-            if (cur->is_user_) {
-                arch::sti();
-                arch::hlt();
-                arch::cli();
-            }
+            // Issue #513: the wait yields UNCONDITIONALLY.  A kernel-task
+            // TCB reaching this loop (e.g. a user trap processed under a
+            // stale current_task()) would otherwise spin with SIE=0 and
+            // no wake source: no trap can fire, ticks freeze, the wheel
+            // timeout can never expire — an unexitable wedge.  Trap entry
+            // owns the IRQ state (SIE=0, no locks held), so sti is safe
+            // for both flavors (idempotent when SIE is already 1).
+            arch::sti();
+            arch::hlt();
+            arch::cli();
             // Resume: recheck the inbox FIRST (delivery beats timeout),
             // then the timeout flag; otherwise re-block on the live arm.
             if (IPC::recv(msg)) {
@@ -281,13 +286,13 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             was_blocked = true;
             Scheduler::dequeue_ready(*cur);
             Scheduler::reschedule();
-            if (cur->is_user_) {
-                arch::sti();
-                arch::hlt();
-                arch::cli();
-            } else {
-                arch::hlt();
-            }
+            // Issue #513: yield unconditionally (see sys_receive above).
+            // The old bare-hlt else-branch slept forever when entered
+            // with SIE=0 (trap entry state); sti first so the timer tick
+            // that drives the wheel timeout can always fire.
+            arch::sti();
+            arch::hlt();
+            arch::cli();
             // Resume: recheck the inbox FIRST (delivery beats timeout),
             // then the oversized/timeout exits; otherwise re-block.
             if (cur->msg_queue.pop_clamped(msg, clamp)) {

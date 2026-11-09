@@ -5760,3 +5760,10 @@ SUMMARY: total=24 ok=24 fail=0 ARCH=x86_64
 2026-11-08 16:39:17 memory_vmm PASSED: 18 FAILED: 0 TIME: 1166ms
 2026-11-08 17:03:19 drivers PASSED: 111 FAILED: 0 TIME: 7493ms
 2026-11-09 00:28:41 drivers PASSED: 111 FAILED: 0 TIME: 7426ms
+2026-11-09 11:11:53 configuration_build PASSED: 8 FAILED: 0 TIME: 231ms
+2026-11-09 11:12:09 task_fpu PASSED: 8 FAILED: 0 TIME: 293ms
+2026-11-09 11:12:17 arch_riscv64 PASSED: 31 FAILED: 0 TIME: 936ms
+2026-11-09 11:22:30 drivers-fbpd-rv64 PASSED: 0 FAILED: 0 TIME: 600s STATUS: TIMEOUT (host-side 600s cap; guest hung at fb_bounded_render PRESENT, no SUMMARY)
+2026-11-09 12:18:57 drivers PASSED: 115 FAILED: 0 TIME: 29348ms
+2026-11-09 12:19:17 drivers PASSED: 70 FAILED: 0 TIME: 11007ms
+2026-11-09 12:45:00 drivers-fbpd-rv64 POSTFIX-B PASSED: 0 FAILED: 0 TIME: 600s STATUS: TIMEOUT (SIE=0 spin fixed, ticks flow; PD dies page-fault, init waits forever — see #513)
