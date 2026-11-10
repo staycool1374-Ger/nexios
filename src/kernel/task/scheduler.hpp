@@ -1067,7 +1067,9 @@ struct SwSlots {
     // (b) no-arm/no-switch transitions republish current via
     // republish_entry_kstack() (publish-if-user, else leave untouched):
     // set_current, set_current_task, set_current_index,
-    // cancel_pending_switch, restore_preempted_current, exec_into_current.
+    // cancel_pending_switch, restore_preempted_current, exec_into_current,
+    // reap_current_recovery (scheduler_lifecycle.cpp:698, corrupt-current
+    // fallback; no-op when the recovered current is a kernel task).
     // Arm publish sites (switch_to_task, switch_away_from_terminating)
     // deliberately do NOT publish it on rv64/aa64: an arm names the
     // future, but traps before the apply belong to the still-running
