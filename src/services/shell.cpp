@@ -3323,7 +3323,9 @@ void Shell::cmd_selftest(int argc, const char** argv) {
         __atomic_store_n(&kernel::Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
         __atomic_store_n(&kernel::Scheduler::SwSlots::next_task_id(), (uint64_t)0, __ATOMIC_RELEASE);
         __atomic_store_n(&kernel::Scheduler::SwSlots::save_rsp_to(), (uint64_t*)nullptr, __ATOMIC_RELEASE);
-        __atomic_store_n(&kernel::isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
+        // Issue #514: do NOT zero isr_nesting_own here (same as
+        // restore_state: depth counts outstanding trap frames, and a
+        // zero between entry-inc and exit-dec corrupts the balance).
         }
     }
     if (self_task) {

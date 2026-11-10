@@ -696,6 +696,9 @@ void Scheduler::reap_orphans() noexcept {
         if (current_task() &&
             current_task()->magic != TaskControlBlock::TCB_MAGIC) {
             set_current_ptr(all_tasks_.first_ptr());
+            // Issue #513 M1: reap-recovery republishes current (writer
+            // table; no-op when the recovered current is a kernel task).
+            republish_entry_kstack(7); // site: reap-recovery
         }
     }
 

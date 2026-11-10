@@ -179,7 +179,11 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
     // trap time (validate_trap_frame).
     __atomic_store_n(&scheduler_switch_generation[0], (uint64_t)0,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
+    // Issue #514: do NOT zero isr_nesting_own here. Depth counts
+    // outstanding trap frames (blocked daemon syscalls/hlts); a teardown
+    // zero between a frame's entry-inc and its exit-dec corrupts the
+    // balance (each later completion decs a slammed-0 toward -1). Depth
+    // is self-consistent live state, never stale per-test state.
     // Issue #242: breaker observation is policy-runtime — a restored test
     // must not inherit the previous test's watch window.
     reset_starvation_breaker();
