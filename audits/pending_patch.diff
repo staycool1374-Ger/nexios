@@ -1,0 +1,65 @@
+diff --git a/audits/report-2026-11-10T23-16-14Z-47-stepb2.md b/audits/report-2026-11-10T23-16-14Z-47-stepb2.md
+new file mode 100644
+index 000000000..5037c0445
+--- /dev/null
++++ b/audits/report-2026-11-10T23-16-14Z-47-stepb2.md
+@@ -0,0 +1,59 @@
++# SIL 3 Audit — Issue #47 step-b2: PD-owned block-device completion IRQs
++
++- Scope: `audits/pending_patch.diff` vs `main`, worktree `/Users/arnold/jarvis`
++  (29 files + test-history; SDF CapSpec pci_bdf/msix_entry + kMaxCapsPerRole 6→8,
++  IRQ WAIT_ACK delivery, TCB irq_wait_* + wheel timeout + tick-apply + cleanup,
++  sys_irq_wait timeout/unmask/sti, x86 IOAPIC RMW + save/restore, GIC ICFGR level
++  arm, PLIC no-mask, block_srv INJECT_IRQ_SKIP + BlockIrqStats, userspace backends,
++  4 cap_irq + 4 block_srv_live tests, docs, parity IRQSTATS, riscv64
++  `-msmall-data-limit=0`).
++- Method: static diff review of all 29 files; lock-scope check of
++  `isr_entry` (slot lock held across `mask_on_delivery`, verified
++  `src/kernel/irq_delivery.cpp` isr body); `arch::sti()` precedent confirmed in
++  `src/kernel/ipc/ipc.cpp` (issue #513 pattern, 8 sites); `CONFIG_TICK_HZ=1000`
++  confirmed; style gate re-run read-only (`Files scanned: 533, Errors: 0`).
++- Gates (from `test-history.txt` tail + prompt matrix): OFF x86_64 cap_irq 17/17,
++  notify 7/7, msix 13/13, ipc_timeout 7/7, ioapic 5/5, drivers 111/111,
++  storage 167/167; OFF aa64/rv64 cap_irq 15/15, notify 6/6, drivers 66/66;
++  ON x86_64+aa64+rv64 block_srv_live 8/8; parity MATCH + IRQSTATS reported
++  (non-gating, exit-0 on MATCH preserved). All observed green in history.
++- Known deviations from planner accepted as-convicted: WAIT re-arm stays failing
++  (matrix-test contract, only WAIT_ACK idempotent); AHCI MSI conveyance-only;
++  1000-tick bound (TCG/AIO first-touch latency); PLIC no-mask on delivery
++  (edge loss); PD stale-ISR drain + validate-retry. Each is documented
++  in-code and matches the observed green runs.
++
++## FINDINGS
++
++- [S3] `docs/specs/block-srv.md:66` — spec says "bounded wait (100 ticks,
++  `BLK_IRQ_WAIT_TICKS`)" but `userspace/block-srv.c:105` defines
++  `BLK_IRQ_WAIT_TICKS 1000UL`. Doc/code factor-of-10 mismatch; code + tests
++  agree on 1000, so doc is stale.
++- [S3] `userspace/block-srv.c:98` — comment claims "1000 ticks (1 s at
++  100 Hz)", but `CONFIG_TICK_HZ` is 1000 (`src/kernel/nexios_config.h:71`),
++  so the rate figure is wrong (the 1 s duration is correct at 1000 Hz).
++  Comment-only.
++- [S3] `src/kernel/irq_delivery.cpp:382-388` vs `:184` — arm programs the
++  LEVEL bit unconditionally when the APIC is on, but save/restore is gated
++  on `ioapic_unmasked_here` (was-masked). An already-unmasked line keeps
++  level programming after release. Theoretical only: the SDF row never
++  conveys an unmasked line (init masks 2–15; block vectors 46/47 + virtio
++  SPIs are masked at arm), and the GIC path (`:416` set / `:200` restore)
++  restores unconditionally — no storm or hang path exists today.
++- [S3] `src/kernel/irq_delivery.cpp:411-417` — GIC ICFGR 2-bit field RMW
++  runs under the per-slot lock, but one ICFGR word covers 16 INTIDs, so two
++  concurrent arms in the same word could clobber each other's trigger
++  field. Theoretical only: PD compose is boot-serialized and the row
++  carries a single IRQ cap; no concurrent-arm path exists today.
++
++No S1/S2 findings. Safety-critical paths verified sound: slot-reuse
++generation guards (recipient/waiter/irq_wait gen); ISR holds the slot lock
++for mask-on-delivery; wheel callback sets only the flag with the tick
++applying the wake under `scheduler_lock_`; teardown + drain cancel arms;
++bounded wait fails closed (full wheel, zero HZ, NOTIFY refused, timeout →
++poll fallback); completions never inferred from the IRQ alone (ATA BSY/ERR,
++virtio used-ring + status byte, stale-retry bounded at 2 waits); WAIT_ACK
++force-mask on release/drain prevents level storms; MSIX never armed in b2;
++AHCI_MSI gated on BLOCK_SRV; raw-64-bit mode validation before narrowing.
++
++DECISION: APPROVED
