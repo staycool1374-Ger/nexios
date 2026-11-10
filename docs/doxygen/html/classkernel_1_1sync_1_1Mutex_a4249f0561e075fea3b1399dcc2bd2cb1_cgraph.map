@@ -1,9 +1,0 @@
-<map id="kernel::sync::Mutex::lock" name="kernel::sync::Mutex::lock">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,39,142,81"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="190,5,320,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="141,45,177,41,172,42,143,50"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1Scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch." alt="" coords="190,72,320,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="142,70,177,78,171,79,142,75"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1Scheduler.html#a852663edfb9d43d51ca280727c2295a3" title="Selects the next task to run according to RM policy." alt="" coords="368,72,498,115"/>
-<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="321,91,355,93,349,93,321,96"/>
-</map>

@@ -1,3 +1,0 @@
-<map id="arch::GDT" name="arch::GDT">
-<area shape="rect" id="Node000001" title="Manages the Global Descriptor Table and TSS." alt="" coords="5,5,112,117"/>
-</map>

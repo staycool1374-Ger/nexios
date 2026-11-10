@@ -1,7 +1,0 @@
-<map id="kernel::VMM::free_user_pages" name="kernel::VMM::free_user_pages">
-<area shape="rect" id="Node000001" title="Frees all user&#45;space pages and page tables from a user PML4. Used during exec() to clean up the old a..." alt="" coords="5,23,163,65"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1PMM.html#a0daaa2d1b36579ff9c0eb60caddee59d" title="Frees a page regardless of ownership." alt="" coords="221,5,381,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="163,32,208,29,203,30,164,37"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1PMM.html#a25790262d20157b6e9919d423937e52d" title="Returns true if the page was allocated as USER ownership." alt="" coords="211,56,391,83"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="163,51,198,57,192,57,163,56"/>
-</map>

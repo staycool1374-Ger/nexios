@@ -1,9 +1,0 @@
-<map id="kernel::Logger::warn" name="kernel::Logger::warn">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,31,145,57"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Logger.html#a12794441edd7245c8a81bfe5b9a6dd14" title=" " alt="" coords="193,31,336,57"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="145,41,180,44,175,44,146,47"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1Logger.html#ad2aea07eb751fad2fb738fe4123c7e7b" title=" " alt="" coords="384,5,548,32"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="336,32,371,31,366,31,337,38"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1Logger.html#ae7f9fd488685463ec9810c40d6f907c7" title=" " alt="" coords="384,56,548,83"/>
-<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="337,50,371,57,366,57,336,56"/>
-</map>

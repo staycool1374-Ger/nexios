@@ -1,7 +1,0 @@
-<map id="kernel::vfs::create_pipe" name="kernel::vfs::create_pipe">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,47,163,73"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="229,5,359,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="162,45,216,38,211,40,164,50"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1sync_1_1Semaphore.html#a40efc024fad57141f0c9d9c7c69d0b63" title=" " alt="" coords="211,72,377,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="163,70,198,77,192,78,163,75"/>
-</map>

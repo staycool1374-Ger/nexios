@@ -1,5 +1,0 @@
-<map id="kernel::MemPool::init" name="kernel::MemPool::init">
-<area shape="rect" id="Node000001" title="Initialises all pool classes from pre&#45;allocated memory." alt="" coords="5,5,150,32"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1PMM.html#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership)." alt="" coords="198,5,363,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="150,16,185,19,179,19,150,21"/>
-</map>

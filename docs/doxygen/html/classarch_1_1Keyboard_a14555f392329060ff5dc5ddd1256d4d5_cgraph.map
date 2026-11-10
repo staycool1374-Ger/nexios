@@ -1,5 +1,0 @@
-<map id="arch::Keyboard::handle_irq" name="arch::Keyboard::handle_irq">
-<area shape="rect" id="Node000001" title="Handles the keyboard IRQ (reads scancode from port)." alt="" coords="5,5,182,32"/>
-<area shape="rect" id="Node000002" href="$namespacearch.html#addead5fdd04206009d38bb2eb805dc0c" title="Reads a byte from an I/O port." alt="" coords="230,5,301,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="182,16,217,19,211,19,182,21"/>
-</map>

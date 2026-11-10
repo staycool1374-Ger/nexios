@@ -1,5 +1,0 @@
-<map id="arch::Timer::set_frequency" name="arch::Timer::set_frequency">
-<area shape="rect" id="Node000001" title="Changes the PIT frequency at runtime." alt="" coords="5,5,183,32"/>
-<area shape="rect" id="Node000002" href="$namespacearch.html#ab1e7d8f3b867b1b2a37b796b1c749c0a" title="Writes a byte to an I/O port." alt="" coords="231,5,310,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="183,16,218,19,212,19,183,21"/>
-</map>

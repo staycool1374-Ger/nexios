@@ -1,5 +1,0 @@
-<map id="src/kernel/arch/gdt.hpp" name="src/kernel/arch/gdt.hpp">
-<area shape="rect" id="Node000001" title="Global Descriptor Table and Task State Segment definitions." alt="" coords="5,5,160,32"/>
-<area shape="rect" id="Node000002" href="$types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="43,80,122,107"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="84,31,85,65,80,64,81,35"/>
-</map>

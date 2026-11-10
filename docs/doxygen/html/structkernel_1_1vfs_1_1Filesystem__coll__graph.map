@@ -1,8 +1,0 @@
-<map id="kernel::vfs::Filesystem" name="kernel::vfs::Filesystem">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,307,149,376"/>
-<area shape="rect" id="Node000002" href="$structkernel_1_1vfs_1_1Vnode.html" title=" " alt="" coords="112,5,229,160"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="111,153,97,185,83,238,78,290,73,289,78,237,92,183,113,148"/>
-<area shape="rect" id="Node000003" href="$structkernel_1_1vfs_1_1VnodeOps.html" title=" " alt="" coords="179,232,320,451"/>
-<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="162,157,170,207,175,223,170,223,165,209,160,162"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="236,232,224,185,223,178,224,173,229,183,241,233"/>
-</map>

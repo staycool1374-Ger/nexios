@@ -1,7 +1,0 @@
-<map id="kernel::IPC::receive" name="kernel::IPC::receive">
-<area shape="rect" id="Node000001" title="Receives a message from a source task (non&#45;blocking)." alt="" coords="5,31,143,57"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1IPC.html#ac9a8226a332035941168102983aaa207" title="Finds a mailbox by owner task ID." alt="" coords="191,5,359,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="142,33,177,31,172,32,144,38"/>
-<area shape="rect" id="Node000003" href="$string_8hpp.html#ae74ab5750db5e6b0ebcda0e772d50235" title="Copies memory from source to destination." alt="" coords="239,56,310,83"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="143,50,226,62,221,64,143,55"/>
-</map>

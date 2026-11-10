@@ -1,7 +1,0 @@
-<map id="kernel::Scheduler::reap_orphans" name="kernel::Scheduler::reap_orphans">
-<area shape="rect" id="Node000001" title="Reaps orphan TERMINATED tasks (no parent to WAITPID them)." alt="" coords="5,39,136,81"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="184,5,314,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="135,45,171,41,166,43,137,50"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1Scheduler.html#a1445f0cd0e4b2dd34dd661ea543c28ff" title="Removes a task from the scheduler&#39;s run queue." alt="" coords="184,72,314,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="136,70,171,78,166,79,136,75"/>
-</map>

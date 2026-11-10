@@ -1,3 +1,0 @@
-<map id="kernel::PMM" name="kernel::PMM">
-<area shape="rect" id="Node000001" title="Physical memory manager using a bitmap to track free 4 KiB pages." alt="" coords="5,5,166,267"/>
-</map>

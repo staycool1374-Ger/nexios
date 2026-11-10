@@ -1,5 +1,0 @@
-<map id="service::Shell::init" name="service::Shell::init">
-<area shape="rect" id="Node000001" title="Initialises the shell and registers built&#45;in commands." alt="" coords="5,13,131,40"/>
-<area shape="rect" id="Node000002" href="$classservice_1_1Shell.html#a7affcd5b709dc4b81499f9b3156dd254" title="Registers a new shell command." alt="" coords="179,5,330,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="131,24,166,26,160,27,131,29"/>
-</map>
