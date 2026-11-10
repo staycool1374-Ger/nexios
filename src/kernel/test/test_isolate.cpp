@@ -907,7 +907,6 @@ void snapshot_restore(const char *test_name) {
     __atomic_store_n(&::kernel::Scheduler::SwSlots::next_task_id(), UINT64_MAX, __ATOMIC_RELEASE);
     __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), (uint64_t *)nullptr,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);
 
     // Drain zombie list before ResourceTracker check and MemPool restore.
     // Zombies from termininate()->release_zombie() during the test are freed
