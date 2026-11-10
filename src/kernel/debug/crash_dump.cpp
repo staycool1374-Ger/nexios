@@ -131,6 +131,8 @@ void first_chance_emit(const FirstChanceFrame &frame) noexcept {
     }
     if (frame.cause == FirstChanceCause::STACK_OVERFLOW)
         emit_str(" [STACK-OVERFLOW]");
+    if (frame.cause == FirstChanceCause::TRAP_OWNER)
+        emit_str(" [TRAP-OWNER]");
     emit_str(" vec=");
     emit_hex(frame.vector);
     emit_str(" err=");

@@ -443,11 +443,23 @@ abort_switch:
     sd   zero, 0(t0)
     beqz t1, 8f
     sd   t1, OFF_TP(sp)
-8:  # Decrement nesting depth
+8:  # Decrement nesting depth (saturating at zero, issue #513: a single
+    # unbalanced decrement pinned depth at -1, making every later exit
+    # take the depth-0 skip and wedging the deferred switch forever (silent
+    # stall: harness stranded, rescue cycling, arm never applied). A
+    # saturated counter self-heals on the next trap (at most one apply is
+    # skipped); saturations are counted in g_depth_sat for audit.
     la t0, isr_nesting_depth
     ld t1, 0(t0)
+    beqz t1, 80f
     addi t1, t1, -1
     sd t1, 0(t0)
+    j 81f
+80: la t0, g_depth_sat
+    ld t1, 0(t0)
+    addi t1, t1, 1
+    sd t1, 0(t0)
+81:
 
     # Restore CSRs
     ld t0, OFF_SSTAT(sp)
@@ -513,7 +525,21 @@ abort_switch:
     # U-path: x2 IS sp, so sp is user_sp from here on — never recompute
     # the frame base from sp again (that faulted: user_sp-296 is not the
     # frame). x6 still holds the base: load t1 directly, then sret.
-    ld x6, OFF_T1(x6)
+    # Balance the entry inc (issue #513: this verbatim resume skipped the
+    # shared tail dec, leaking +1 per uaccess-recovery fault). Saturating
+    # (see 8:) so a pre-existing imbalance cannot drive depth negative.
+    # t0/t2 are dead here (only x6/x2 are live restores on this path).
+    la t0, isr_nesting_depth
+    ld t2, 0(t0)
+    beqz t2, 82f
+    addi t2, t2, -1
+    sd t2, 0(t0)
+    j 83f
+82: la t0, g_depth_sat
+    ld t2, 0(t0)
+    addi t2, t2, 1
+    sd t2, 0(t0)
+83: ld x6, OFF_T1(x6)
     sret
 .Ltrap_park:
     # Issue #513: fault disposition is switch-or-park with no arm

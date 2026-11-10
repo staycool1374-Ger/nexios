@@ -592,13 +592,12 @@ class Scheduler {
     static void set_current(TaskControlBlock &task) noexcept;
     /// @brief Republish the trap-entry kstack slot for the current task
     ///        (issue #513 M1 writer-table closure). Publishes current's
-    ///        (base, top) when current is a user task whose live RSP is
-    ///        inside its own kstack; otherwise publishes (0, 0) "invalid"
-    ///        so the next U-trap parks fail-closed (2.10) instead of
-    ///        saving onto a stale stack. No-op while a deferred-switch
-    ///        arm is in flight (slots belong to the arm). Single-writer
-    ///        (own hart), IRQ-guarded internally; never locks, never scans.
-    static void republish_entry_kstack() noexcept;
+    ///        (base, top) when current is a user task with a valid kstack;
+    ///        otherwise leaves the slot untouched (a live spinning user
+    ///        task keeps its slot). Single-writer (own hart), IRQ-guarded
+    ///        internally; never locks, never scans.
+    /// @param site Call-site tag for diagnostics.
+    static void republish_entry_kstack(uint64_t site) noexcept;
 
     /// @brief Charge @p pages to the current task's memory budget.
     /// Returns false if charging would exceed the task's budget cap.
@@ -1062,15 +1061,21 @@ class Scheduler {
     }
 struct SwSlots {
     // Writer table (issue #513 M1 closure; mirrors #369 T4 do-not-move):
-    // every load_kstack_base/top writer is either
-    // (a) an ARM publish (switch_to_task, switch_away_from_terminating) —
-    //     publishes next unconditionally, or
-    // (b) a NO-ARM/REPAIR publish — goes through
-    //     republish_entry_kstack() (publish-if-user-else-invalidate):
-    //     set_current, set_current_task, cancel_pending_switch,
-    //     restore_preempted_current, restore_state (BSP), exec_into_current.
-    // No other site may write these slots. Never publish a non-current
-    // task's pair, never publish while an arm is in flight.
+    // the trap-entry slot is trap-consumed, so it is published ONLY at
+    // actual resumption: (a) the apply path republishes next via
+    // on_context_switch -> set_current_task -> republish_entry_kstack;
+    // (b) no-arm/no-switch transitions republish current via
+    // republish_entry_kstack() (publish-if-user, else leave untouched):
+    // set_current, set_current_task, set_current_index,
+    // cancel_pending_switch, restore_preempted_current, exec_into_current.
+    // Arm publish sites (switch_to_task, switch_away_from_terminating)
+    // deliberately do NOT publish it on rv64/aa64: an arm names the
+    // future, but traps before the apply belong to the still-running
+    // current task (the rv64/aa64 entries save via the slot).
+    // x86_64 EXCEPTION: the x86 entry never saves via the slots but the
+    // isr_stubs apply-time RSP-owner check reads them before the
+    // republish, so the x86 arm sites DO publish next's pair (no M1
+    // window on x86).
     static uint64_t this_cpu() {
         return arch::cpu_index();
     }

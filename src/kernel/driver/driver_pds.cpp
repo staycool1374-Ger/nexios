@@ -19,7 +19,10 @@ namespace kernel {
 namespace driver_pds {
 namespace {
 
-uint64_t g_role_pids[6] = {};
+/// @brief Number of PD roles tracked in g_role_pids (the first N roles;
+///        roles at/after this index report pid 0 / fail closed).
+inline constexpr uint64_t kMaxTrackedPdRoles = 6;
+uint64_t g_role_pids[kMaxTrackedPdRoles] = {};
 uint32_t g_epoch = 1;
 
 struct Tombstone {
@@ -27,7 +30,9 @@ struct Tombstone {
     uint32_t owner_gen;
 };
 
-Tombstone g_tombstones[16] = {};
+/// @brief Tombstone table capacity (dead-owner records per epoch).
+inline constexpr uint64_t kMaxTombstones = 16;
+Tombstone g_tombstones[kMaxTombstones] = {};
 uint64_t g_tombstone_count = 0;
 
 uint64_t role_index(sdf::PdRole role) {
@@ -38,14 +43,14 @@ uint64_t role_index(sdf::PdRole role) {
 
 void set_pd_pid(sdf::PdRole role, uint64_t pid) {
     const uint64_t idx = role_index(role);
-    if (idx < 6) {
+    if (idx < kMaxTrackedPdRoles) {
         __atomic_store_n(&g_role_pids[idx], pid, __ATOMIC_RELAXED);
     }
 }
 
 uint64_t get_pd_pid(sdf::PdRole role) {
     const uint64_t idx = role_index(role);
-    if (idx >= 6) {
+    if (idx >= kMaxTrackedPdRoles) {
         return 0;
     }
     return __atomic_load_n(&g_role_pids[idx], __ATOMIC_RELAXED);
@@ -81,7 +86,7 @@ void pd_on_restart(sdf::PdRole role, uint64_t pid) {
 void pd_note_dead_owner(uint32_t owner_id, uint32_t owner_gen) {
     uint64_t count =
         __atomic_load_n(&g_tombstone_count, __ATOMIC_RELAXED);
-    if (count >= 16) {
+    if (count >= kMaxTombstones) {
         return; // bounded residual drop (documented, ≤ table size)
     }
     g_tombstones[count].owner_id = owner_id;

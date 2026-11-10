@@ -867,7 +867,7 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // Issue #513 M1: an in-place kernel→user exec leaves the trap-entry
     // kstack slot naming the old image's stack (or nothing). Republish
     // for the (unchanged) TCB now that it is a user task again.
-    kernel::Scheduler::republish_entry_kstack();
+    kernel::Scheduler::republish_entry_kstack(5); // site: exec
 #if defined(CONFIG_ARCH_X86_64)
     // x86 twin: the syscall entry takes its kernel stack from TSS.RSP0,
     // published at switch_to_task — rebind it here for the same reason.

@@ -143,28 +143,38 @@ struct SchedTrapOwner {
 [[nodiscard]] bool validate_syscall_frame(const TaskControlBlock *cur,
                                           const uint64_t *regs) noexcept;
 
+/// @brief Trip disposition (issue #513 2.11): PROCEED means the faulting
+///        task was repaired into current and the caller must continue the
+///        normal path (kill for faults, dispatch for syscalls); PARK means
+///        no live task could be attributed — the caller must switch-or-park
+///        with no arm (the Item-1 epilogue gate parks instead of resuming).
+enum class TrapOwnerDisposition : uint8_t { PROCEED = 0, PARK = 1 };
+
 /// @brief Test hook consulted on a trap-attribution trip (issue #513,
 ///        same shape as stack_overflow_hook). Weak default returns false.
 ///        A strong test override returns true after latching: the trip
-///        then takes the release path (attribute + terminate, no halt)
-///        so tests can assert the outcome instead of halting.
+///        then takes the release path without halting, so tests can
+///        assert the outcome instead of halting.
 bool trap_owner_hook(uint64_t expected_id, uint64_t trapped_id,
                      uint64_t site) noexcept;
 
 /// @brief Latch a trap-attribution trip and apply the disposition
-///        (issue #513 2.11). Latches expected/trapped/site in FaultState,
-///        consults trap_owner_hook, then: DEBUG builds halt via
-///        first_chance_halt (TRAP_OWNER, raw serial — no Logger) unless
-///        the hook fired; release builds (and hook-fired DEBUG) repair
-///        the attribution (set_current_task(trapped)) and return trapped
-///        so the caller kills the right task. Returns nullptr when no
-///        live task resolves: the caller must switch-or-park with no arm
-///        (the Item-1 epilogue gate parks instead of resuming).
+///        (issue #513 2.11). Latches expected/trapped/site/frame-owner/
+///        slot-top/live-root in FaultState, consults trap_owner_hook,
+///        then: hook-true → repair + PROCEED; benign shape (frame owned
+///        by the resolved task AND live root matches its tagged root —
+///        only the published current label lagged) → repair + PROCEED
+///        (no halt: proceeding is exact, and halting would wedge green
+///        runs on a self-healing shape); otherwise DEBUG builds halt via
+///        first_chance_halt (TRAP_OWNER, raw serial — no Logger), release
+///        builds repair-if-possible else PARK. Repair = set_current_task
+///        (trapped) so the caller kills/dispatches the right task; the
+///        armed switch-away (fault paths) uses the discard save target.
 ///        Never resumes the faulting frame itself.
-TaskControlBlock *trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
-                                  uint64_t scause, uint64_t stval,
-                                  uint64_t frame_base,
-                                  uint64_t site) noexcept;
+TrapOwnerDisposition trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
+                                     uint64_t scause, uint64_t stval,
+                                     uint64_t frame_base,
+                                     uint64_t site) noexcept;
 
 #if defined(CONFIG_ARCH_X86_64)
 /// @brief Validate an iret-frame candidate (audit-scheduler-tasks LOW: the

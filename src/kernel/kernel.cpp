@@ -2529,25 +2529,24 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
 #if defined(CONFIG_ARCH_X86_64)
             // Issue #513 2.11: validate the attribution BEFORE any
             // kill/signal decision (mirrors the rv64/aarch64 trap hooks).
-            // A frame owned by another task's stack means the published
-            // current is stale — delivering the signal to it would murder
-            // an innocent task. Repair current to the faulting task and
-            // fall through: verbose/pager/debugger/delivery below then run
-            // against the right task. Unresolved: drop the fault (never
-            // resume the frame, never blame current).
+            // On PARK no live task could be attributed: drop the fault
+            // instead of resuming the frame or blaming current.
+            // Otherwise the trip repaired current to the faulting task
+            // and the kill/delivery below runs against the right task.
             {
                 const auto owner =
                     kernel::sched_verify::validate_trap_frame(
                         reinterpret_cast<uint64_t>(regs), "x86-fault");
                 if (owner.foreign || owner.unresolved) {
-                    auto *trapped = kernel::sched_verify::trap_owner_trip(
-                        owner, rip, vector, read_cr2(),
-                        reinterpret_cast<uint64_t>(regs),
-                        kernel::gs::TRAP_OWNER_SITE_X86_FAULT);
-                    if (trapped == nullptr) {
+                    using kernel::sched_verify::TrapOwnerDisposition;
+                    if (kernel::sched_verify::trap_owner_trip(
+                            owner, rip, vector, read_cr2(),
+                            reinterpret_cast<uint64_t>(regs),
+                            kernel::gs::TRAP_OWNER_SITE_X86_FAULT) ==
+                        TrapOwnerDisposition::PARK) {
                         return;
                     }
-                    t = trapped;
+                    t = kernel::Scheduler::current_task();
                 }
             }
 #endif
@@ -2767,18 +2766,21 @@ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
     // Issue #513 3.1: frame-consistency choke point. Every IPC handler's
     // syscall_task() keys off the published current — dispatching on a
     // misattributed current silently misbooks waits, queues and sender
-    // ids (the face-B shape). Fail closed instead of dispatching.
+    // ids (the face-B shape). On PARK fail closed; otherwise re-read the
+    // (possibly repaired) current and validate it before dispatching.
     {
-        auto *cur0 = kernel::Scheduler::current_task();
         const auto own = kernel::sched_verify::validate_trap_frame(
             reinterpret_cast<uint64_t>(regs), "syscall");
         if (own.foreign || own.unresolved) {
-            auto *trapped = kernel::sched_verify::trap_owner_trip(
-                own, 0, number, 0, reinterpret_cast<uint64_t>(regs),
-                kernel::gs::TRAP_OWNER_SITE_SYSCALL);
-            (void)trapped;
-            return static_cast<uint64_t>(kernel::errors::SYS_ERR_GENERIC_FAIL);
+            using kernel::sched_verify::TrapOwnerDisposition;
+            if (kernel::sched_verify::trap_owner_trip(
+                    own, 0, number, 0, reinterpret_cast<uint64_t>(regs),
+                    kernel::gs::TRAP_OWNER_SITE_SYSCALL) ==
+                TrapOwnerDisposition::PARK) {
+                return static_cast<uint64_t>(kernel::errors::SYS_ERR_GENERIC_FAIL);
+            }
         }
+        auto *cur0 = kernel::Scheduler::current_task();
         if (!kernel::sched_verify::validate_syscall_frame(cur0, regs)) {
             return static_cast<uint64_t>(kernel::errors::SYS_ERR_GENERIC_FAIL);
         }

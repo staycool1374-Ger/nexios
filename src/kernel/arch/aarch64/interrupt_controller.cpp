@@ -344,24 +344,27 @@ extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
         return 0;
     }
     // Issue #513 2.11: validate the attribution BEFORE any kill decision
-    // (mirrors riscv64_exception_dispatch). A frame owned by another
-    // task's stack with a mismatched live root means the published
-    // current is stale — killing it would murder an innocent task.
+    // (mirrors riscv64_exception_dispatch). On PARK no live task could
+    // be attributed: return 1 with no arm and the epilogue parks instead
+    // of resuming. Otherwise the trip repaired current to the faulting
+    // task: kill it here with the discard save target and return 1.
     {
         const auto owner = kernel::sched_verify::validate_trap_frame(
             reinterpret_cast<uint64_t>(frame), "aa64-el0");
         if (owner.foreign || owner.unresolved) {
-            auto *trapped = kernel::sched_verify::trap_owner_trip(
-                owner, elr, esr, far, reinterpret_cast<uint64_t>(frame),
-                kernel::gs::TRAP_OWNER_SITE_AA64_EL0);
-            if (trapped != nullptr) {
-                trapped->state = kernel::TaskState::TERMINATED;
-                trapped->exit_code = static_cast<uint64_t>(
-                    -static_cast<int64_t>(kernel::Signal::SIGSEGV));
-                kernel::Scheduler::wake_waiting_parent(*trapped);
-                kernel::Scheduler::switch_away_from_terminating_discard(
-                    *trapped);
+            using kernel::sched_verify::TrapOwnerDisposition;
+            if (kernel::sched_verify::trap_owner_trip(
+                    owner, elr, esr, far, reinterpret_cast<uint64_t>(frame),
+                    kernel::gs::TRAP_OWNER_SITE_AA64_EL0) ==
+                TrapOwnerDisposition::PARK) {
+                return 1;
             }
+            auto *t = kernel::Scheduler::current_task();
+            t->state = kernel::TaskState::TERMINATED;
+            t->exit_code = static_cast<uint64_t>(
+                -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+            kernel::Scheduler::wake_waiting_parent(*t);
+            kernel::Scheduler::switch_away_from_terminating_discard(*t);
             return 1;
         }
     }

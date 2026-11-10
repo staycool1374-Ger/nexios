@@ -171,14 +171,12 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
     __atomic_store_n(&scheduler_save_rsp_to[0], (uint64_t *)nullptr,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&scheduler_need_resched[0], false, __ATOMIC_RELEASE);
-    // Issue #513 V1: the BSP kstack slots survive every test teardown.
-    // Zero them here — the re-identified current republishes via
-    // set_current_task (M1 writer table). Until then the slot reads
-    // "invalid", never the previous test's stack.
-    __atomic_store_n(&scheduler_load_kstack_base[0], (uint64_t)0,
-                     __ATOMIC_RELEASE);
-    __atomic_store_n(&scheduler_load_kstack_top[0], (uint64_t)0,
-                     __ATOMIC_RELEASE);
+    // Issue #513: deliberately LEAVE load_kstack_base/top untouched here.
+    // Zeroing them strands a live user task that resumes without an
+    // intervening switch_to_task (its next trap would park on slot==0).
+    // The slots name the last-dispatched user task, which republish paths
+    // and dispatch publishes keep current; misattribution is policed at
+    // trap time (validate_trap_frame).
     __atomic_store_n(&scheduler_switch_generation[0], (uint64_t)0,
                      __ATOMIC_RELEASE);
     __atomic_store_n(&isr_nesting_own(), (uint64_t)0, __ATOMIC_RELEASE);

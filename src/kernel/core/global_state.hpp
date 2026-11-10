@@ -193,6 +193,9 @@ struct TrapOwnerTrip {
     uint64_t trapped_id;  ///< resolved faulting task (0 when unresolved)
     uint64_t site;        ///< caller site code (1=rv64-u, 2=aa64-el0,
                           ///< 3=x86-fault, 4=syscall-entry)
+    uint64_t frame_owner_id; ///< task owning the frame address (0 if none)
+    uint64_t slot_top;       ///< load_kstack_top value at trip time
+    uint64_t live_root;      ///< live page-table root at trip time
 };
 
 /// @brief Trip site codes for note_trap_owner_trip().
@@ -203,9 +206,10 @@ inline constexpr uint64_t TRAP_OWNER_SITE_SYSCALL = 4;
 
 /// @brief Reference to the trap-owner trip latch (read-only for tests).
 TrapOwnerTrip &trap_owner_trip() noexcept;
-/// @brief Latch a trip: bump count, record expected/trapped/site.
+/// @brief Latch a trip: bump count, record expected/trapped/site/owner.
 void note_trap_owner_trip(uint64_t expected_id, uint64_t trapped_id,
-                          uint64_t site) noexcept;
+                          uint64_t site, uint64_t frame_owner_id,
+                          uint64_t slot_top, uint64_t live_root) noexcept;
 /// @brief Trip count (QE seam: must stay 0 on green runs).
 uint64_t trap_owner_trip_count() noexcept;
 

@@ -331,25 +331,58 @@ __attribute__((weak)) bool trap_owner_hook(uint64_t expected_id,
     return false;
 }
 
-TaskControlBlock *trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
-                                  uint64_t scause, uint64_t stval,
-                                  uint64_t frame_base,
-                                  uint64_t site) noexcept {
+TrapOwnerDisposition trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
+                                              uint64_t scause, uint64_t stval,
+                                              uint64_t frame_base,
+                                              uint64_t site) noexcept {
     auto *cur = kernel::Scheduler::current_task();
     const uint64_t expected =
         (cur != nullptr && cur->magic == TaskControlBlock::TCB_MAGIC)
             ? cur->id
             : 0;
-    const uint64_t trapped_id =
+    const bool trapped_valid =
         (o.trapped != nullptr &&
-         o.trapped->magic == TaskControlBlock::TCB_MAGIC)
-            ? o.trapped->id
+         o.trapped->magic == TaskControlBlock::TCB_MAGIC);
+    const uint64_t trapped_id = trapped_valid ? o.trapped->id : 0;
+    const uint64_t frame_owner_id =
+        (o.frame_owner != nullptr &&
+         o.frame_owner->magic == TaskControlBlock::TCB_MAGIC)
+            ? o.frame_owner->id
             : 0;
-    kernel::gs::note_trap_owner_trip(expected, trapped_id, site);
+    const uint64_t live = live_root_tagged();
+    const uint64_t slot_top = __atomic_load_n(
+        &kernel::Scheduler::SwSlots::load_kstack_top(), __ATOMIC_RELAXED);
+    kernel::gs::note_trap_owner_trip(expected, trapped_id, site, frame_owner_id,
+                                     slot_top, live);
+    // Repair helper: repoint current at the faulting task so the caller
+    // kills/dispatches the right TCB. Refuses dead tasks (a second fault
+    // on an already-TERMINATED task must not resurrect it — PARK).
+    auto repair = [&]() -> TrapOwnerDisposition {
+        if (!trapped_valid || !o.trapped->is_user_ ||
+            o.trapped->state == kernel::TaskState::TERMINATED) {
+            return TrapOwnerDisposition::PARK;
+        }
+        kernel::Scheduler::set_current_task(o.trapped);
+        return TrapOwnerDisposition::PROCEED;
+    };
     if (trap_owner_hook(expected, trapped_id, site)) {
-        // Test latched the trip: take the release path without halting.
-    } else {
+        return repair();
+    }
+    // Benign shape: the frame sits on the resolved task's own stack AND
+    // the live root is its tagged root — only the published current
+    // label lagged (stale-current no-switch resume). Repairing makes the
+    // state exact, so proceed in every build; halting here would wedge
+    // green runs on a self-healing shape. The latch still records it.
+    const bool root_matches =
+        trapped_valid && o.trapped->is_user_ &&
+        o.trapped->get_page_table() != 0 &&
+        live == arch::context_id_tag(o.trapped->get_page_table(),
+                                     o.trapped->context_id());
+    if (trapped_valid && o.frame_owner == o.trapped && root_matches) {
+        return repair();
+    }
 #if defined(CONFIG_DEBUG)
+    {
         kernel::debug::FirstChanceFrame frame{};
 #if defined(CONFIG_ARCH_X86_64)
         frame.arch = kernel::debug::FirstChanceArch::X86_64;
@@ -364,26 +397,14 @@ TaskControlBlock *trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
         frame.addr = stval;
         frame.pc = sepc;
         frame.sp = frame_base;
-        frame.pgtbl0 = live_root_tagged();
+        frame.pgtbl0 = live;
         frame.pgtbl1 = 0;
         kernel::debug::first_chance_halt(frame);
         // Production crash_halt never returns; the test seam may. Fall
         // through to the release repair below if it does.
+    }
 #endif
-    }
-    if (o.trapped != nullptr &&
-        o.trapped->magic == TaskControlBlock::TCB_MAGIC &&
-        o.trapped->is_user_ &&
-        o.trapped->state != kernel::TaskState::TERMINATED) {
-        // Repair the attribution so the fault path kills the task whose
-        // address space actually faulted — never the stale current.
-        // set_current_task republishes placement and invalidates the
-        // trap-entry slot (live RSP is the victim's frame area); the
-        // armed switch-away below publishes the next target's pair.
-        kernel::Scheduler::set_current_task(o.trapped);
-        return o.trapped;
-    }
-    return nullptr;
+    return repair();
 }
 
 } // namespace sched_verify
