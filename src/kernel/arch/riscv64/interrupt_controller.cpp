@@ -9,6 +9,8 @@
 #include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/task/scheduler_integrity.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/crash_dump.hpp>
 #include <kernel/arch/irq_guard.hpp>
@@ -278,6 +280,34 @@ extern "C" uint64_t riscv64_exception_dispatch(uint64_t *frame,
         return 0;
     }
     if ((sstatus & (1ULL << 8)) == 0) {
+        // Issue #513 2.11: validate the attribution BEFORE any kill
+        // decision. A frame owned by another task's stack (or no task)
+        // with a mismatched live root means the published current is
+        // stale — killing it would murder an innocent task (the face-A
+        // signature: harness killed for the PD's frame).
+        const auto owner = kernel::sched_verify::validate_trap_frame(
+            reinterpret_cast<uint64_t>(frame), "rv64-u");
+        if (owner.foreign || owner.unresolved) {
+            auto *trapped = kernel::sched_verify::trap_owner_trip(
+                owner, frame[31], frame[33], frame[34],
+                reinterpret_cast<uint64_t>(frame),
+                kernel::gs::TRAP_OWNER_SITE_RV64_U);
+            if (trapped != nullptr) {
+                // Repaired: kill the task whose address space actually
+                // faulted, with the discard save target (the live RSP
+                // belongs to the victim's stack). The armed switch-away
+                // applies at the epilogue; disposition is switch-or-park.
+                trapped->state = kernel::TaskState::TERMINATED;
+                trapped->exit_code = static_cast<uint64_t>(
+                    -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+                kernel::Scheduler::wake_waiting_parent(*trapped);
+                kernel::Scheduler::switch_away_from_terminating_discard(
+                    *trapped);
+            }
+            // Unresolved (or repaired): never resume this frame. The
+            // epilogue gate parks when the (repaired) arm is absent.
+            return 1;
+        }
         return riscv64_u_fault_handler(frame);
     }
     handle_kernel_exception(frame[31], frame[33], frame[34], frame[1]);

@@ -192,6 +192,25 @@ void reset_canary_trip() noexcept {
     g_canary_trip = CanaryTrip{};
 }
 
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+TrapOwnerTrip g_trap_owner_trip{};
+
+TrapOwnerTrip &trap_owner_trip() noexcept {
+    return g_trap_owner_trip;
+}
+
+void note_trap_owner_trip(uint64_t expected_id, uint64_t trapped_id,
+                          uint64_t site) noexcept {
+    g_trap_owner_trip.expected_id = expected_id;
+    g_trap_owner_trip.trapped_id = trapped_id;
+    g_trap_owner_trip.site = site;
+    ++g_trap_owner_trip.count;
+}
+
+uint64_t trap_owner_trip_count() noexcept {
+    return __atomic_load_n(&g_trap_owner_trip.count, __ATOMIC_RELAXED);
+}
+
 uint64_t &user_access_recover_ip() noexcept {
     return g_user_access_recover_ip;
 }

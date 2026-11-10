@@ -68,8 +68,11 @@ const char *arch_name(FirstChanceArch a) {
 }
 
 const char *cause_name(FirstChanceCause c) {
-    return (c == FirstChanceCause::STACK_OVERFLOW) ? "STACK-OVERFLOW"
-                                                  : "CPU-EXCEPTION";
+    if (c == FirstChanceCause::STACK_OVERFLOW)
+        return "STACK-OVERFLOW";
+    if (c == FirstChanceCause::TRAP_OWNER)
+        return "TRAP-OWNER";
+    return "CPU-EXCEPTION";
 }
 
 } // namespace

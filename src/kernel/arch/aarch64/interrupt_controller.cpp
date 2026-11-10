@@ -7,6 +7,8 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/scheduler_integrity.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/task/idle_monitor.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/crash_dump.hpp>
@@ -340,6 +342,28 @@ extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
         kernel::g_user_access_recover_ip = 0;
         frame[EL0_FRAME_ELR_SLOT] = recover;
         return 0;
+    }
+    // Issue #513 2.11: validate the attribution BEFORE any kill decision
+    // (mirrors riscv64_exception_dispatch). A frame owned by another
+    // task's stack with a mismatched live root means the published
+    // current is stale — killing it would murder an innocent task.
+    {
+        const auto owner = kernel::sched_verify::validate_trap_frame(
+            reinterpret_cast<uint64_t>(frame), "aa64-el0");
+        if (owner.foreign || owner.unresolved) {
+            auto *trapped = kernel::sched_verify::trap_owner_trip(
+                owner, elr, esr, far, reinterpret_cast<uint64_t>(frame),
+                kernel::gs::TRAP_OWNER_SITE_AA64_EL0);
+            if (trapped != nullptr) {
+                trapped->state = kernel::TaskState::TERMINATED;
+                trapped->exit_code = static_cast<uint64_t>(
+                    -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+                kernel::Scheduler::wake_waiting_parent(*trapped);
+                kernel::Scheduler::switch_away_from_terminating_discard(
+                    *trapped);
+            }
+            return 1;
+        }
     }
     kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
     if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&

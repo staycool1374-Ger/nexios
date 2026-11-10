@@ -56,6 +56,17 @@ using sched_switch::current_sp;
 using sched_switch::IRET_CS_IDX;
 using sched_switch::IRET_RFLAGS_IDX;
 using sched_switch::IRET_RIP_IDX;
+
+namespace {
+// Issue #513 2.9: discard save area for foreign-frame terminations. When
+// the faulting frame lives on a victim task's stack (misattributed trap),
+// the epilogue's `mov [save], rsp` must not land in the terminated task's
+// context.sp — that would publish a victim-stack address as the dead
+// task's resume point (consumed by the RSP-owner scan and wake paths).
+// Single-writer per hart (trap-entry fault path only); consumed once.
+uint64_t s_discard_rsp[CONFIG_MAX_CPUS] = {};
+bool s_discard_armed[CONFIG_MAX_CPUS] = {};
+} // namespace
 using sched_switch::IRET_RSP_IDX;
 using sched_switch::IRET_SS_IDX;
 using sched_switch::H2_EV_ARM;
@@ -890,6 +901,20 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     }
 }
 
+/// @brief Discard-frame variant of switch_away_from_terminating (issue #513
+///        2.9). Arms the discard save target, then delegates: the armed
+///        switch is identical except the epilogue's save lands in the
+///        per-hart discard word. Caller must hold no scheduler lock (same
+///        contract as the plain variant); trap-IRQ-masked is sufficient.
+void Scheduler::switch_away_from_terminating_discard(
+    TaskControlBlock &exiting) noexcept {
+    const uint64_t cpu = Scheduler::sched_cpu();
+    if (cpu < static_cast<uint64_t>(CONFIG_MAX_CPUS)) {
+        s_discard_armed[cpu] = true;
+    }
+    switch_away_from_terminating(exiting);
+}
+
 void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept {
 
     ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
@@ -1024,8 +1049,19 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
             __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
         __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(),
-                         &task_stack_ptr(&exiting), __ATOMIC_RELEASE);
+        // Issue #513 2.9: a foreign-frame termination saves into the
+        // discard area instead of the exiting task's context — the live
+        // RSP belongs to a victim stack and must never be published as
+        // the dead task's resume point (INV-CTX-RSP).
+        const uint64_t cpu = Scheduler::sched_cpu();
+        uint64_t *save_target = &task_stack_ptr(&exiting);
+        if (cpu < static_cast<uint64_t>(CONFIG_MAX_CPUS) &&
+            s_discard_armed[cpu]) {
+            save_target = &s_discard_rsp[cpu];
+            s_discard_armed[cpu] = false;
+        }
+        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), save_target,
+                         __ATOMIC_RELEASE);
         // Issue #221: terminate-driven arms force-apply (see SwSlots doc).
         __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
                          __ATOMIC_RELEASE);

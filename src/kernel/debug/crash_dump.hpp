@@ -32,8 +32,15 @@ namespace debug {
 /// @brief Architecture that produced the first-chance frame.
 enum class FirstChanceArch : uint8_t { X86_64 = 0, AARCH64 = 1, RISCV64 = 2 };
 
-/// @brief First-chance cause: unrecoverable CPU exception or stack overflow.
-enum class FirstChanceCause : uint8_t { CPU_EXCEPTION = 0, STACK_OVERFLOW = 1 };
+/// @brief First-chance cause: unrecoverable CPU exception, stack overflow,
+///        or trap-attribution trip (issue #513: frame owner != published
+///        current — the M1 misattribution shape). TRAP_OWNER is appended
+///        last so existing numeric values are stable.
+enum class FirstChanceCause : uint8_t {
+    CPU_EXCEPTION = 0,
+    STACK_OVERFLOW = 1,
+    TRAP_OWNER = 2
+};
 
 /// @brief Arch-neutral first-chance frame. Field slots are reused per arch:
 ///        x86_64: addr=CR2, pc=RIP, sp=RSP, pgtbl0=CR3, pgtbl1=unused,

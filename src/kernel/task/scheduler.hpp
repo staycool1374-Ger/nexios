@@ -618,6 +618,13 @@ class Scheduler {
     ///        ISR epilogue applies the switch.  Caller must hold no scheduler
     ///        lock; this takes scheduler_lock_ internally.
     static void switch_away_from_terminating(TaskControlBlock &exiting) noexcept;
+    /// @brief Discard-frame variant of switch_away_from_terminating
+    ///        (issue #513 2.9). Identical arm, except the epilogue's save
+    ///        lands in a per-hart discard word instead of the exiting
+    ///        task's context — for foreign-frame kills where the live RSP
+    ///        belongs to a victim stack (INV-CTX-RSP). Caller: trap-entry
+    ///        attribution repair only.
+    static void switch_away_from_terminating_discard(TaskControlBlock &exiting) noexcept;
     /// @brief Allocate a unique task ID from the ID table.
     /// @return A new task ID, or TASK_INVALID if the table is full.
     [[nodiscard]] static uint64_t alloc_id() noexcept;

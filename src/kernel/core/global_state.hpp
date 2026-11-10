@@ -181,6 +181,35 @@ void reset_canary_trip() noexcept;
 uint64_t &user_access_recover_ip() noexcept;
 
 // ---------------------------------------------------------------------------
+// Trap-owner trip latch (issue #513, M1 attribution validation)
+// ---------------------------------------------------------------------------
+
+/// @brief Trap-attribution trip record. Latched when validate_trap_frame()
+///        reports foreign/unresolved (frame owner != published current).
+///        Single writer (trap-entry fault path, IRQ-masked) — no lock.
+struct TrapOwnerTrip {
+    uint64_t count;
+    uint64_t expected_id; ///< published current at trip time (may be dead)
+    uint64_t trapped_id;  ///< resolved faulting task (0 when unresolved)
+    uint64_t site;        ///< caller site code (1=rv64-u, 2=aa64-el0,
+                          ///< 3=x86-fault, 4=syscall-entry)
+};
+
+/// @brief Trip site codes for note_trap_owner_trip().
+inline constexpr uint64_t TRAP_OWNER_SITE_RV64_U = 1;
+inline constexpr uint64_t TRAP_OWNER_SITE_AA64_EL0 = 2;
+inline constexpr uint64_t TRAP_OWNER_SITE_X86_FAULT = 3;
+inline constexpr uint64_t TRAP_OWNER_SITE_SYSCALL = 4;
+
+/// @brief Reference to the trap-owner trip latch (read-only for tests).
+TrapOwnerTrip &trap_owner_trip() noexcept;
+/// @brief Latch a trip: bump count, record expected/trapped/site.
+void note_trap_owner_trip(uint64_t expected_id, uint64_t trapped_id,
+                          uint64_t site) noexcept;
+/// @brief Trip count (QE seam: must stay 0 on green runs).
+uint64_t trap_owner_trip_count() noexcept;
+
+// ---------------------------------------------------------------------------
 // TestState — single-threaded test harness
 // ---------------------------------------------------------------------------
 
