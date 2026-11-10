@@ -50,7 +50,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex + semaphore
 
     // scheduler
-    {"scheduler_core",       21,    21,      21     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker
+    {"scheduler_core",       23,    23,      23     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2
     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server policy
@@ -296,7 +296,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // measured `dump-counts` output; 0 disables validation.
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
     {"core_sync",           93,   0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api
-    {"core_sched",          112,  0,       0      },  // scheduler_*
+    {"core_sched",          114,  0,       0      },  // scheduler_* + #513 slot-safety x2
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         124,  0,       0      },  // memory_* incl. NX/W^X pins
     {"core_syscall",        85,   0,       0      },  // syscall_*, debug_syscall, tls

@@ -40,6 +40,7 @@ void register_lib_tests();
 void register_memory_tests();
 void register_ipc_tests();
 void register_scheduler_tests();
+void register_sched_slot_safety_tests(); // issue #513 QE
 void register_task_tests();
 void register_driver_tests();
 void register_vfs_tests();
@@ -364,7 +365,10 @@ static void run_synchronization_pi_donation_group() {
 static void run_synchronization_err_api_group() {
     register_sync_err_api_tests();
 }
-static void run_scheduler_core_group() { register_scheduler_tests(); }
+static void run_scheduler_core_group() {
+    register_scheduler_tests();
+    register_sched_slot_safety_tests(); // issue #513 QE
+}
 static void run_scheduler_o1_group() { register_o1_scheduler_tests(); }
 static void run_scheduler_atomic_group() {
     register_atomic_context_switch_tests();
