@@ -51,6 +51,9 @@ enum class BlockSrvOp : uint8_t {
                        ///< size; PD maps and echoes. CAP_GET rounds run
                        ///< first (index order); BIND goes last so the PD
                        ///< probes with every cap present.
+    INJECT_IRQ_SKIP = 10, ///< one-shot IRQ-skip fault drill (issue #47
+                       ///< step-b2): the PD's next completion bypasses the
+                       ///< IRQ wait and takes the bounded poll path.
 };
 
 /// @brief PD backend selected at BIND (issue #47 step-b1).
@@ -98,6 +101,29 @@ inline constexpr uint64_t kBlockSectorSize = 512;
 /// @brief Maximum transfer unit the loopback path moves per call (bytes).
 inline constexpr uint64_t kBlockLoopbackBytes = 512;
 
+/// @brief IRQ completion statistics window (issue #47 step-b2): the PD
+/// publishes wait/completion/timeout/fallback counters here with
+/// release-ordered stores; the kernel test reads them through the HHDM
+/// alias. Offset 0x1400 sits in page 1 clear of data (0x1000),
+/// header (0x1200) and status (0x1300). The PD mirrors this layout
+/// (userspace/block-srv.c).
+inline constexpr uint64_t kBlockIrqStatsOffset = 0x1400;
+inline constexpr uint64_t kBlockIrqStatsMagic = 0x424C4B4952515354ULL;
+inline constexpr uint64_t kBlockIrqStatsVersion = 1;
+
+/// @brief PD-published IRQ completion counters (raw window, no header).
+struct BlockIrqStats {
+    uint64_t magic;    ///< kBlockIrqStatsMagic when published
+    uint64_t version;  ///< kBlockIrqStatsVersion
+    uint64_t irq_waits;        ///< sys_irq_wait entries taken
+    uint64_t irq_completions;  ///< completions via IRQ wake
+    uint64_t irq_timeouts;     ///< waits that expired (poll fallback)
+    uint64_t poll_fallbacks;   ///< completions via bounded poll
+};
+
+static_assert(sizeof(BlockIrqStats) == 48,
+              "BlockIrqStats must fit the stats window");
+
 /// @brief Record the PID of the block-srv daemon task.
 void set_block_srv_pid(uint64_t pid);
 /// @brief Get the recorded block-srv PID (0 when unset).
@@ -124,6 +150,15 @@ int64_t block_srv_fault_loopback();
 /// @brief DMA-map probe: DMA_MAP with a zero handle must fail closed.
 /// @return -EACCES-shaped typed error when the server honors it.
 int64_t block_srv_fault_nodomain();
+
+/// @brief IRQ-skip drill: INJECT_IRQ_SKIP arms the PD's one-shot poll
+/// fallback for the next completion (issue #47 step-b2).
+/// @return 0 when the server accepted the drill, negative errno otherwise.
+int64_t block_srv_fault_irq_skip();
+
+/// @brief Read the PD-published IRQ statistics window (issue #47 step-b2).
+/// @return true with *out filled when bound and the magic validates.
+[[nodiscard]] bool block_srv_irq_stats(BlockIrqStats &out);
 
 /// @brief Bind the PD (issue #47 step-b1): BIND + per-index CAP_GET
 /// rounds with SDF cross-check (count, order, kind, encoded handle,

@@ -40,6 +40,11 @@
 #include <kernel/arch/hal/interrupt_controller.hpp>
 #include <kernel/arch/hal/irq_vectors.hpp>
 #include <kernel/arch/hal/idt.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/apic.hpp>
+#endif
+#include <kernel/arch/timer.hpp>
+#include <kernel/time/timer_wheel.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include "test_sched_helpers.hpp"
 #include "task_ptr.hpp"
@@ -70,6 +75,54 @@ uint64_t g_wait_ret = 0;
 volatile bool g_armed = false;
 volatile bool g_inject_done = false;
 uint64_t g_reg_ret = 0;
+
+/// @brief Configurable waiter (issue #47 step-b2): registers with
+/// g_wait_cfg_mode and waits with g_wait_cfg_timeout ticks (0 = infinite).
+/// When g_wait_gate is true, spins until g_inject_done (pending-immediate
+/// ordering, mirrors irq_waiter_entry).
+uint64_t g_wait_cfg_mode = 0;
+uint64_t g_wait_cfg_timeout = 0;
+volatile bool g_wait_gate = false;
+
+void irq_waiter_entry_cfg() {
+    auto *cur = Scheduler::current_task();
+    cur->ensure_cspace();
+    cap::CNode *cs = cur->get_cspace();
+    auto *irq = cap::IrqCap::create(kTestVector);
+    if (!irq) {
+        g_wait_ret = 99;
+        Scheduler::terminate(*cur, 0);
+        return;
+    }
+    int s = cs->install(irq, cap::CapType::Irq,
+                        cap::CapRights::WRITE | cap::CapRights::READ);
+    if (s < 0) {
+        irq->release();
+        g_wait_ret = 98;
+        Scheduler::terminate(*cur, 0);
+        return;
+    }
+    irq->release();
+    uint64_t h = cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
+                                    cs->slot_gen(static_cast<uint32_t>(s)));
+    g_reg_ret = Syscall::handle(static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER),
+                                h, g_wait_cfg_mode, 0, 0, nullptr);
+    g_armed = true;
+    if (g_reg_ret != 0) {
+        g_wait_ret = 97;
+        Scheduler::terminate(*cur, 0);
+        return;
+    }
+    if (g_wait_gate) {
+        // Pending-immediate ordering gate (mirrors irq_waiter_entry).
+        while (!g_inject_done)
+            arch::pause();
+    }
+    g_wait_ret =
+        Syscall::handle(static_cast<uint64_t>(SyscallNumber::IRQ_WAIT), h,
+                        g_wait_cfg_timeout, 0, 0, nullptr);
+    Scheduler::terminate(*cur, 0);
+}
 
 /// @brief Busy-wait that yields to the scheduler exactly like
 ///        wait_for_termination_safe: re-arms scheduler_need_resched and
@@ -711,9 +764,45 @@ JARVIS_TEST(irq_wait_task_died_drain, "PRE: none | POST: none") {
 // Input: full cycle on vector 40 with PIC mask snapshot/restore
 // Expect: mask == snapshot; occupied_count == baseline; RT == baseline
 // Depends: kernel::arch::ArchInterruptController, kernel::IrqDelivery
+// Runmode: kernel
+// Testidea: Arming a PIC slot also unmasks the I/O APIC entry (the live
+//           path when the APIC is enabled); release restores the mask.
+//           x86_64 only — no I/O APIC off-arch.
+// Input: arm mode 0 on vector 40, check entry, release, check again
+// Expect: unmasked while armed iff the APIC is on; masked after release
+//         (unless the kernel left it unmasked); table back to baseline
+// Depends: arch::APIC::ioapic_masked, IrqDelivery::arm/release
 #if defined(CONFIG_ARCH_X86_64)
-JARVIS_TEST(irq_delivery_ack_pic_state, "PRE: none | POST: none") {
+JARVIS_TEST(irq_delivery_ack_ioapic_state, "PRE: none | POST: none") {
     auto &rt = kernel::test::ResourceTracker::instance();
+    kernel::test::ResourceCounters before{};
+    rt.capture(before);
+    size_t base_occ = IrqDelivery::occupied_count();
+
+    auto *irq = cap::IrqCap::create(kTestVector);
+    JARVIS_ASSERT(irq != nullptr);
+    JARVIS_ASSERT(IrqDelivery::arm(static_cast<int16_t>(irq->reg_idx_), *irq,
+                                   irq->vector, *Scheduler::current_task()));
+    const uint8_t line = static_cast<uint8_t>(kTestVector - 32U);
+    if (arch::APIC::is_enabled()) {
+        JARVIS_ASSERT(!arch::APIC::ioapic_masked(line));
+    }
+
+    irq->release(); // dispose → disarm + re-mask
+
+    if (arch::APIC::is_enabled()) {
+        JARVIS_ASSERT(arch::APIC::ioapic_masked(line));
+    }
+    JARVIS_ASSERT_EQ(base_occ, IrqDelivery::occupied_count());
+    kernel::test::ResourceCounters after{};
+    rt.capture(after);
+    JARVIS_ASSERT_EQ(before.cap_objects, after.cap_objects);
+    JARVIS_TEST_PASS();
+}
+#endif // CONFIG_ARCH_X86_64
+
+#if defined(CONFIG_ARCH_X86_64)
+JARVIS_TEST(irq_delivery_ack_pic_state, "PRE: none | POST: none") {    auto &rt = kernel::test::ResourceTracker::instance();
     kernel::test::ResourceCounters before{};
     rt.capture(before);
     arch::IrqState pic = arch::ArchInterruptController::snapshot();
@@ -740,6 +829,150 @@ JARVIS_TEST(irq_delivery_ack_pic_state, "PRE: none | POST: none") {
 }
 #endif // CONFIG_ARCH_X86_64
 
+// Runmode: kernel
+// Testidea: WAIT_ACK re-register by the same owner is idempotent; a mode
+//           change on the armed slot is rejected.
+// Input: register mode 2 twice, then mode 0, all from one fixture task
+// Expect: 0, 0, GENERIC_FAIL; table empty at teardown
+// Depends: IrqDelivery::arm idempotent WAIT_ACK path, Syscall dispatch
+JARVIS_TEST(irq_wait_ack_idempotent_reregister, "PRE: none | POST: none") {
+    static uint64_t r_first = 0;
+    static uint64_t r_second = 0;
+    static uint64_t r_mode_change = 0;
+    r_first = 0;
+    r_second = 0;
+    r_mode_change = 0;
+    auto *t = run_irq_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        auto *irq = cap::IrqCap::create(kTestVector);
+        if (!irq) {
+            Scheduler::terminate(*cur, 0);
+            return;
+        }
+        int s = cs->install(irq, cap::CapType::Irq,
+                            cap::CapRights::WRITE | cap::CapRights::READ);
+        if (s < 0) {
+            irq->release();
+            Scheduler::terminate(*cur, 0);
+            return;
+        }
+        irq->release();
+        uint64_t h = cap::encode_handle(cs->cspace_id,
+                                        static_cast<uint32_t>(s),
+                                        cs->slot_gen(static_cast<uint32_t>(s)));
+        auto reg = [](uint64_t handle, uint64_t mode) {
+            return Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER), handle,
+                mode, 0, 0, nullptr);
+        };
+        r_first = reg(h, 2);
+        r_second = reg(h, 2);
+        r_mode_change = reg(h, 0);
+        Scheduler::terminate(*cur, 0);
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, r_first);
+    JARVIS_ASSERT_EQ(0ULL, r_second);
+    // SYS_ERR_GENERIC_FAIL is the all-ones ABI failure (issue #257 H6).
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), r_mode_change);
+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), IrqDelivery::occupied_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: A WAIT_ACK waiter with a short timeout wakes on expiry with
+//           GENERIC_FAIL (poll fallback), never stranded BLOCKED.
+// Input: waiter task registers mode 2, waits with timeout 2, no inject
+// Expect: wait returns GENERIC_FAIL; wheel arm dead; table drains clean
+// Depends: wait_timeout_arm, scheduler_tick IRQ-wait apply, resume path
+JARVIS_TEST(irq_wait_ack_timeout_fires, "PRE: none | POST: none") {
+    g_wait_ret = 0;
+    g_reg_ret = 0;
+    g_armed = false;
+    g_inject_done = false;
+    g_wait_gate = false;
+    g_wait_cfg_mode = 2;
+    g_wait_cfg_timeout = 2;
+
+    auto *t = TaskControlBlock::create([]() { irq_waiter_entry_cfg(); }, 11,
+                                      10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_EQ(0ULL, g_reg_ret);
+    // SYS_ERR_GENERIC_FAIL is the all-ones ABI failure (issue #257 H6).
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_wait_ret);
+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), IrqDelivery::occupied_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: An IRQ that lands before the timeout cancels the wheel arm and
+//           delivers the vector (timeout path never fires afterwards).
+// Input: waiter blocks mode 2 with a long timeout; harness injects
+// Expect: vector returned; no live wheel arm on the waiter
+// Depends: isr_entry WAIT_ACK accounting, wait_timeout_cancel
+JARVIS_TEST(irq_wait_ack_irq_cancels_timeout, "PRE: none | POST: none") {
+    g_wait_ret = 0;
+    g_reg_ret = 0;
+    g_armed = false;
+    g_inject_done = false;
+    g_wait_gate = false;
+    g_wait_cfg_mode = 2;
+    g_wait_cfg_timeout = 100000;
+
+    auto *t = TaskControlBlock::create([]() { irq_waiter_entry_cfg(); }, 11,
+                                      10);
+    JARVIS_ASSERT(t != nullptr);
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+
+    yield_wait_until([]() { return g_armed; });
+    yield_wait_until([&]() { return waiter_is(t); });
+    JARVIS_ASSERT(IrqDelivery::isr_entry(kTestVector));
+
+    kernel::test::wait_for_termination_safe(t);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(kTestVector), g_wait_ret);
+    JARVIS_ASSERT(
+        !time::TimerWheel::is_live(t->irq_wait_handle));
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(static_cast<size_t>(0), IrqDelivery::occupied_count());
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: A wheel fire for a recycled generation is a no-op (stale-fire
+//           discipline mirrors recv_timeout_stale_fire_noop).
+// Input: snapshot_reset, forge armed+timed_out on self with gen+1, on_tick
+// Expect: flag untouched by the fire; live_count stays 0
+// Depends: IrqDelivery::wait_timeout_fire generation guard
+JARVIS_TEST(irq_wait_ack_stale_fire_noop, "PRE: none | POST: none") {
+    time::TimerWheel::snapshot_reset();
+    auto *self = Scheduler::current_task();
+    const uint32_t real_gen = self->generation;
+    self->irq_wait_armed = true;
+    self->irq_wait_timed_out = false;
+    self->irq_wait_gen = real_gen + 1;
+    time::TimerWheel::Handle handle{};
+    const uint64_t now_ns = arch::Timer::ns_monotonic();
+    JARVIS_ASSERT(time::TimerWheel::arm(0, now_ns + 1000000ULL,
+                                        IrqDelivery::wait_timeout_fire, self,
+                                        &handle));
+    self->irq_wait_handle = handle;
+    JARVIS_ASSERT(time::TimerWheel::on_tick(now_ns + 2000000ULL, 0));
+    JARVIS_ASSERT_EQ((uint64_t)0, time::TimerWheel::live_count(0));
+    JARVIS_ASSERT(!self->irq_wait_timed_out);
+    self->irq_wait_armed = false;
+    self->irq_wait_gen = real_gen;
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Registers all IRQ-cap / user-space delivery test cases (issue #2).
 void register_cap_irq_tests() {
     JARVIS_REGISTER_TEST(irq_cap_create_fields);
@@ -753,6 +986,13 @@ void register_cap_irq_tests() {
     JARVIS_REGISTER_TEST(irq_wait_blocking_wakeup);
     JARVIS_REGISTER_TEST(irq_wait_revoked_mid_wait);
     JARVIS_REGISTER_TEST(irq_wait_task_died_drain);
+    JARVIS_REGISTER_TEST(irq_wait_ack_idempotent_reregister);
+    JARVIS_REGISTER_TEST(irq_wait_ack_timeout_fires);
+    JARVIS_REGISTER_TEST(irq_wait_ack_irq_cancels_timeout);
+    JARVIS_REGISTER_TEST(irq_wait_ack_stale_fire_noop);
+#if defined(CONFIG_ARCH_X86_64)
+    JARVIS_REGISTER_TEST(irq_delivery_ack_ioapic_state);
+#endif
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(irq_delivery_ack_pic_state);
 #endif

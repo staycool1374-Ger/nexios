@@ -56,6 +56,7 @@ typedef unsigned long nexios_cap_t;
 /// @brief IRQ delivery modes (mirror kernel IrqDeliveryMode).
 #define NEXIOS_IRQ_WAIT 0UL
 #define NEXIOS_IRQ_NOTIFY 1UL
+#define NEXIOS_IRQ_WAIT_ACK 2UL
 
 /// @brief Grant src into the CNode addressed by dst.
 /// @return new opaque handle, or -1 with errno set.
@@ -89,6 +90,12 @@ long nexios_cap_irq_register(nexios_cap_t cap, unsigned long mode);
 /// @brief Block until the IRQ behind cap fires (WAIT mode only).
 /// @return firing vector, or -1 with errno set.
 long nexios_cap_irq_wait(nexios_cap_t cap);
+
+/// @brief Block until the IRQ behind cap fires, bounded by timeout_ticks
+/// (issue #47 step-b2; 0 = infinite). WAIT/WAIT_ACK modes only.
+/// @return firing vector, or -1 with errno set (expiry also reads -1 —
+/// the driver falls back to a bounded device poll).
+long nexios_cap_irq_wait_timeout(nexios_cap_t cap, unsigned long ticks);
 
 /// @brief Program one frame mapping into the DMA domain.
 /// @return 0, or -1 with errno set.

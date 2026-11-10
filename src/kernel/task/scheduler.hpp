@@ -766,6 +766,14 @@ class Scheduler {
         /// outlive the wait it belonged to.
         bool recv_timeout_armed;
         bool recv_timed_out;
+        /// @brief Bounded-IRQ-wait slot (issue #47 step-b2): flags rewind
+        /// with the snapshot (always to false — captured pre-arm at suite
+        /// setup). The wheel handle/generation are deliberately NOT
+        /// captured: no arm survives rewind (wheel snapshot_reset disarms
+        /// everything and flags read false), so no stale handle can
+        /// outlive the wait it belonged to.
+        bool irq_wait_armed;
+        bool irq_wait_timed_out;
         /// @brief Bounded-nanosleep slot (issue #76): flags rewind with
         ///        the snapshot (always to false — captured pre-arm at
         ///        suite setup). The wheel handle/generation are

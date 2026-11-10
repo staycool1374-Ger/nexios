@@ -330,7 +330,10 @@ struct TaskControlBlock {
            recv_timeout_armed(false),
           recv_timed_out(false),
           recv_timeout_handle{0, 0, time::TimerWheel::kInvalidGeneration},
-          recv_timeout_gen(0), sleep_armed(false), sleep_expired(false),
+           recv_timeout_gen(0), irq_wait_armed(false),
+           irq_wait_timed_out(false),
+           irq_wait_handle{0, 0, time::TimerWheel::kInvalidGeneration},
+           irq_wait_gen(0), sleep_armed(false), sleep_expired(false),
           sleep_handle{0, 0, time::TimerWheel::kInvalidGeneration},
           sleep_gen(0), sleep_expiry_ns(0), sporadic_server(nullptr), cspace_(nullptr),
            iopb_slot_(IOPB_SLOT_NONE),
@@ -787,6 +790,19 @@ struct TaskControlBlock {
 
     /// @brief TCB generation snapshot at arm time (ABA guard on reuse).
     uint32_t recv_timeout_gen;
+
+    /// @brief Bounded IRQ wait armed on the wheel (issue #47 step-b2).
+    /// Zero-compatible (false): memset sites need no sentinel.
+    bool irq_wait_armed;
+
+    /// @brief Set by the wheel callback when the IRQ wait budget expires.
+    bool irq_wait_timed_out;
+
+    /// @brief Wheel receipt for the armed IRQ wait (gen 0 = invalid).
+    time::TimerWheel::Handle irq_wait_handle;
+
+    /// @brief TCB generation snapshot at IRQ-wait arm time (ABA guard).
+    uint32_t irq_wait_gen;
 
     /// @brief Bounded nanosleep armed on the wheel (issue #76).
     bool sleep_armed;

@@ -13,6 +13,18 @@
 # exactly (-I order matters: sysroot must precede src/libc for picolibc
 # targets so the sysroot errno.h wins over the in-tree one).
 cc_usr_flags = cc_base_flags + cc_arch_flags + cc_build_flags
+# Issue #47 step-b2 (riscv64): GP-relative small data breaks the
+# loader's W^X gate.  A 64-bit literal (e.g. an 8-byte magic) lands in
+# .sdata PROGBITS, and the default riscv link merges text+rodata+sdata
+# into one RWE PT_LOAD — validate_segment() rejects W+X and the PD
+# never loads ("failed to create task").  ramdiskd (sbss-only) links
+# clean R E + RW, which is how the defect hid until block-srv grew an
+# 8-byte .sdata literal.  -msmall-data-limit=0 keeps all small data in
+# .data/.bss (literals pool into .rodata), so the link stays split.
+# Scoped to the userspace link commands below (not the kernel build).
+if arch == 'riscv64'
+  cc_usr_flags += ['-msmall-data-limit=0']
+endif
 libc_includes = ['-I', meson.project_source_root() / 'src' / 'libc']
 crt0_path = meson.project_build_root() / 'src' / 'crt0.o'
 

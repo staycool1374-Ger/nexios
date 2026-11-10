@@ -153,10 +153,12 @@ void irq_notify_waiter_entry(bool wait_for_inject) {
 } // namespace
 
 // Runmode: kernel
-// Testidea: An IrqCap armed with an unknown delivery mode fails closed: the
-//           register returns -1 and the slot is never armed.
-// Input: sys_irq_register(arg1=2) over a valid WRITE IrqCap
-// Expect: ret -1; delivery slot unarmed; table returns to baseline
+// Testidea: Only unknown delivery modes fail closed: mode 2 (WAIT_ACK,
+//           issue #47 step-b2) registers like WAIT, while out-of-range
+//           modes are rejected and never arm the slot.
+// Input: sys_irq_register(arg1=2, 0xFF, 0x101) over a valid WRITE IrqCap
+// Expect: mode 2 ret 0 with the slot armed in WAIT_ACK mode;
+//         0xFF/0x101 ret -1; table returns to baseline
 // Depends: kernel::Syscall, kernel::IrqDelivery
 JARVIS_TEST(irq_notify_mode_validation, "PRE: none | POST: none") {
     g_reg_ret = 0;
@@ -185,7 +187,9 @@ JARVIS_TEST(irq_notify_mode_validation, "PRE: none | POST: none") {
             uint64_t h =
                 cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(s),
                                    cs->slot_gen(static_cast<uint32_t>(s)));
-            // Unknown mode 2 — must be rejected, never armed.
+            // Mode 2 is WAIT_ACK (issue #47 step-b2) — accepted; 0xFF
+            // and 0x101 are out of range and must be rejected, never
+            // armed.
             uint64_t bad = static_cast<uint64_t>(-1);
             uint64_t r1 = Syscall::handle(
                 static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER), h, 2, 0,
@@ -196,11 +200,13 @@ JARVIS_TEST(irq_notify_mode_validation, "PRE: none | POST: none") {
             uint64_t r3 = Syscall::handle(
                 static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER), h, 0x101,
                 0, 0, nullptr);
-            JARVIS_ASSERT_EQ(bad, r1);
+            JARVIS_ASSERT_EQ(0ULL, r1);
             JARVIS_ASSERT_EQ(bad, r2);
             JARVIS_ASSERT_EQ(bad, r3);
             auto *reg = IrqDelivery::find(kTestVector);
-            JARVIS_ASSERT(reg == nullptr || !reg->armed);
+            JARVIS_ASSERT(reg != nullptr && reg->armed &&
+                          reg->delivery_mode ==
+                              IrqDeliveryMode::WAIT_ACK);
             cs->remove(static_cast<uint32_t>(s));
             irq->release();
             Scheduler::terminate(*cur, 0);

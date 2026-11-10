@@ -156,10 +156,120 @@ JARVIS_TEST(block_srv_write_roundtrip_guards, "PRE: bound | POST: restored") {
 #endif
 }
 
+// Runmode: kernel
+// Testidea: After bind the PD armed its completion IRQ (or provably runs
+//           poll-only when the row carries no IRQ cap).
+// Input: bind + read the PD-published IRQ stats window.
+// Expect: stats magic/version valid; waits+completions > 0 when an IRQ
+//         cap was conveyed, else zero (degraded poll path).
+// Depends: block_srv_bind, block_srv_irq_stats, PD blk_stats_publish
+JARVIS_TEST(block_srv_irq_registered, "PRE: bound | POST: none") {
+#if CONFIG_BLOCK_SRV
+    JARVIS_ASSERT(block_srv::block_srv_bind());
+    block_srv::BlockIrqStats stats{};
+    JARVIS_ASSERT(block_srv::block_srv_irq_stats(stats));
+    JARVIS_ASSERT_EQ(block_srv::kBlockIrqStatsMagic, stats.magic);
+    JARVIS_ASSERT_EQ(block_srv::kBlockIrqStatsVersion, stats.version);
+    // A successful IRQ wait proves the IRQ cap round-tripped; a pure
+    // poll row (no IRQ cap conveyed) must show zero waits.
+    uint8_t buf[512] = {};
+    JARVIS_ASSERT(block_srv::block_srv_read_sector(0, buf) == 0);
+    JARVIS_ASSERT(block_srv::block_srv_irq_stats(stats));
+    if (stats.irq_waits > 0) {
+        JARVIS_ASSERT(stats.irq_completions > 0);
+        JARVIS_ASSERT_EQ(0ULL, stats.irq_timeouts);
+    }
+    JARVIS_TEST_PASS();
+#else
+    JARVIS_TEST_PASS();
+#endif
+}
+
+// Runmode: kernel
+// Testidea: Sector reads complete via the IRQ path with valid data.
+// Input: read LBA 0..3, then re-read the stats window.
+// Expect: waits >= 4, completions == waits, timeouts == 0, data valid.
+// Depends: PD blk_wait_completion, kernel WAIT_ACK delivery
+JARVIS_TEST(block_srv_irq_completion, "PRE: bound+IRQ | POST: none") {
+#if CONFIG_BLOCK_SRV
+    JARVIS_ASSERT(block_srv::block_srv_bind());
+    uint8_t buf[512] = {};
+    for (uint64_t lba = 0; lba < 4; ++lba) {
+        JARVIS_ASSERT(block_srv::block_srv_read_sector(lba, buf) == 0);
+    }
+    // Re-read LBA 0 for the signature check (LBA 1..3 carry arbitrary
+    // image content; only the MBR + partition boot sector are probed).
+    JARVIS_ASSERT(block_srv::block_srv_read_sector(0, buf) == 0);
+    JARVIS_ASSERT(buf[510] == 0x55 && buf[511] == 0xAA);
+    block_srv::BlockIrqStats stats{};
+    JARVIS_ASSERT(block_srv::block_srv_irq_stats(stats));
+    Logger::info("S BLK irq=%lu/%lu/%lu/%lu", stats.irq_waits,
+                 stats.irq_completions, stats.irq_timeouts,
+                 stats.poll_fallbacks);
+    JARVIS_ASSERT(stats.irq_waits >= 4);
+    JARVIS_ASSERT_EQ(stats.irq_waits, stats.irq_completions);
+    JARVIS_ASSERT_EQ(0ULL, stats.irq_timeouts);
+    JARVIS_TEST_PASS();
+#else
+    JARVIS_TEST_PASS();
+#endif
+}
+
+// Runmode: kernel
+// Testidea: INJECT_IRQ_SKIP forces the poll fallback for one completion.
+// Input: fault drill, then read; re-read stats.
+// Expect: poll_fallbacks >= 1 and the data still valid.
+// Depends: block_srv_fault_irq_skip, PD g_inject_irq_skip_once
+JARVIS_TEST(block_srv_irq_skip_fallback, "PRE: bound+IRQ | POST: none") {
+#if CONFIG_BLOCK_SRV
+    JARVIS_ASSERT(block_srv::block_srv_bind());
+    JARVIS_ASSERT(block_srv::block_srv_fault_irq_skip() == 0);
+    uint8_t buf[512] = {};
+    JARVIS_ASSERT(block_srv::block_srv_read_sector(0, buf) == 0);
+    JARVIS_ASSERT(buf[510] == 0x55 && buf[511] == 0xAA);
+    block_srv::BlockIrqStats stats{};
+    JARVIS_ASSERT(block_srv::block_srv_irq_stats(stats));
+    JARVIS_ASSERT(stats.poll_fallbacks >= 1);
+    JARVIS_TEST_PASS();
+#else
+    JARVIS_TEST_PASS();
+#endif
+}
+
+// Runmode: kernel
+// Testidea: Epoch bump purges the PD; rebind re-arms the IRQ path.
+// Input: block_srv_bump_epoch, bind, transfer, read stats.
+// Expect: transfer succeeds; waits advance past the pre-bump count.
+// Depends: block_srv_bump_epoch, PD epoch purge + re-arm
+JARVIS_TEST(block_srv_irq_rebind_epoch, "PRE: bound+IRQ | POST: rebound") {
+#if CONFIG_BLOCK_SRV
+    JARVIS_ASSERT(block_srv::block_srv_bind());
+    block_srv::block_srv_bump_epoch();
+    // Rebind replays CAP_GET (stats window republished, counters reset)
+    // + BIND (probe re-arms the IRQ). The next transfer must complete
+    // via a fresh IRQ wait, proving the re-arm.
+    JARVIS_ASSERT(block_srv::block_srv_bind());
+    uint8_t buf[512] = {};
+    JARVIS_ASSERT(block_srv::block_srv_read_sector(0, buf) == 0);
+    JARVIS_ASSERT(buf[510] == 0x55 && buf[511] == 0xAA);
+    block_srv::BlockIrqStats after{};
+    JARVIS_ASSERT(block_srv::block_srv_irq_stats(after));
+    JARVIS_ASSERT(after.irq_waits >= 1);
+    JARVIS_ASSERT_EQ(after.irq_waits, after.irq_completions);
+    JARVIS_TEST_PASS();
+#else
+    JARVIS_TEST_PASS();
+#endif
+}
+
 void register_block_srv_tests() {
     Logger::info("Registering Block Server live tests");
     JARVIS_REGISTER_TEST(block_srv_bind_geometry);
     JARVIS_REGISTER_TEST(block_srv_read_lba0);
     JARVIS_REGISTER_TEST(block_srv_read_image_digest);
     JARVIS_REGISTER_TEST(block_srv_write_roundtrip_guards);
+    JARVIS_REGISTER_TEST(block_srv_irq_registered);
+    JARVIS_REGISTER_TEST(block_srv_irq_completion);
+    JARVIS_REGISTER_TEST(block_srv_irq_skip_fallback);
+    JARVIS_REGISTER_TEST(block_srv_irq_rebind_epoch);
 }

@@ -166,6 +166,44 @@ int64_t block_srv_fault_nodomain() {
     return static_cast<int64_t>(static_cast<int16_t>(reply.status));
 }
 
+int64_t block_srv_fault_irq_skip() {
+    BlockRpc req{};
+    req.op = static_cast<uint8_t>(BlockSrvOp::INJECT_IRQ_SKIP);
+    auto *cur = Scheduler::current_task();
+    if (cur == nullptr) {
+        return -38; // -ENOSYS: no task context, fail closed
+    }
+    req.owner_id = static_cast<uint32_t>(cur->id);
+    req.owner_gen = cur->generation;
+    req.epoch = block_srv_epoch();
+    BlockRpc reply{};
+    if (!block_srv_rpc(req, reply)) {
+        return -38; // -ENOSYS: server unavailable pre-flip
+    }
+    return static_cast<int64_t>(static_cast<int16_t>(reply.status));
+}
+
+bool block_srv_irq_stats(BlockIrqStats &out) {
+    // SIL3 audit #47 step-b2: §11.6 — window phys is stored atomically.
+    const uint64_t window_phys =
+        __atomic_load_n(&g_data_phys, __ATOMIC_RELAXED);
+    if (window_phys == 0) {
+        return false;
+    }
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+    const auto *stats = reinterpret_cast<const BlockIrqStats *>(
+        arch::HHDM_OFFSET + window_phys + kBlockIrqStatsOffset);
+    BlockIrqStats local{};
+    __builtin_memcpy(&local, stats, sizeof(local));
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+    if (local.magic != kBlockIrqStatsMagic ||
+        local.version != kBlockIrqStatsVersion) {
+        return false;
+    }
+    out = local;
+    return true;
+}
+
 namespace {
 
 // Fill the identity envelope shared by every RPC.

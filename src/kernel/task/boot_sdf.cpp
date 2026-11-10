@@ -12,10 +12,12 @@
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/mmio.hpp>
 #include <kernel/cap/irq.hpp>
+#include <kernel/cap/msix.hpp>
 #include <kernel/cap/iommu.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/arch/pci.hpp>
 #include <kernel/arch/virtio.hpp>
+#include <kernel/arch/hal/irq_vectors.hpp>
 #include <kernel/iommu/iommu.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/address.hpp>
@@ -31,6 +33,15 @@ namespace {
 CapSpec g_block_mmio[kMaxCapsPerRole] = {};
 uint64_t g_block_mmio_count = 0;
 bool g_block_dma = false;
+// Captured block IRQ (issue #47 step-b2): the transport IRQ for the
+// first captured window — GIC INTID / PLIC source off-x86 (doubles as
+// the delivery vector), x86 ATA uses fixed IRQ 14/15 instead.
+uint64_t g_block_irq_vector = 0;
+uint64_t g_block_irq_phys = 0;
+// Captured AHCI BDF (issue #47 step-b2): valid when an AHCI HBA was
+// found; the MSIX row variant conveys (bdf, entry 0).
+uint32_t g_block_ahci_bdf = 0;
+bool g_block_ahci_valid = false;
 
 // TX-ring backing store (issue #51 step-c-prime): per-role ring phys +
 // page count for the SDF-composed SHM channel. Written by the SHM mint
@@ -222,10 +233,24 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
         type = cap::CapType::Frame;
         break;
     }
-    case CapKind::MSIX:
-        // Reserved row (MSI-X entry claim): wired when the first PD needs
-        // it; never silently mapped to another kind.
-        return -1;
+    case CapKind::MSIX: {
+        // MSI-X entry claim (issue #47 step-b2): the PD owns the vector
+        // via this cap; arm() unmasks the table entry, revoke/dispose
+        // re-masks it.  BDF arrives packed (bus<<16 | device<<8 |
+        // function); the entry index rides spec.vector.
+        const arch::PciBdf bdf{
+            static_cast<uint8_t>((spec.pci_bdf >> 16) & 0xFF),
+            static_cast<uint8_t>((spec.pci_bdf >> 8) & 0xFF),
+            static_cast<uint8_t>(spec.pci_bdf & 0xFF)};
+        auto *cap = cap::MsixCap::create(
+            bdf, static_cast<uint16_t>(spec.msix_entry));
+        if (cap == nullptr) {
+            return -1;
+        }
+        obj = cap;
+        type = cap::CapType::Msix;
+        break;
+    }
     }
     const cap::CapRights rights =
         cap::CapRights::READ | cap::CapRights::WRITE;
@@ -398,17 +423,51 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // clients over its endpoint only.
         return 0;
     case PdRole::BLOCK_SRV: {
-        // Block-storage server row (issue #47 step-b1): one static
-        // arch-switched shape + one shared data window. No IRQ cap in
-        // b1 (polled completion; IRQ delegation is step-b2).
+        // Block-storage server row (issue #47 step-b2): static
+        // arch-switched shape + shared data window + IRQ caps (polled
+        // completion stays as the fallback; IRQ delegation rides
+        // WAIT_ACK delivery).
         // x86_64: ATA PIO command blocks (primary 0x1F0 + secondary
-        // 0x170, 8 ports each, IO-type) + 4-page shared window.
+        // 0x170, 8 ports each, IO-type) + control blocks (0x3F6/0x376,
+        // 1 port each, for the nIEN device-control write) + IRQ caps
+        // (IRQ14 → vector 46 for primary, IRQ15 → vector 47 for
+        // secondary; addr carries the command-block base so the PD
+        // matches the IRQ to the channel) + 4-page shared window.
+        // AHCI MSI variant (CONFIG_BLOCK_SRV_AHCI_MSI=1, HBA captured):
+        // ABAR window + MSIX (bdf, entry 0) + shared window; conveyance
+        // only — no live AHCI backend in b2 (config default 0).
         // aarch64/riscv64: first captured virtio transport window
-        // (page-aligned by capture_block_topology) + 4-page window.
+        // (page-aligned by capture_block_topology) + IRQ cap (addr =
+        // transport phys, vector = captured GIC INTID / PLIC source) +
+        // 4-page window.
         // Degraded (no controller captured off-x86) composes zero caps
         // — allowed explicitly, logged by the caller.
         uint64_t n = 0;
 #if defined(CONFIG_ARCH_X86_64)
+#if CONFIG_BLOCK_SRV_AHCI_MSI
+        if (g_block_ahci_valid && n + 3 <= kMaxCapsPerRole) {
+            out[n++] = CapSpec{CapKind::MMIO, 0, 0, 0, 0};
+            out[n++] = CapSpec{CapKind::MSIX, 0, 0, 0, 0};
+            // Patch the captured window + BDF in below (transport slot
+            // 0 doubles as the ABAR record when the HBA was captured).
+            out[n - 2].addr = g_block_mmio_count > 0
+                                  ? g_block_mmio[0].addr
+                                  : 0;
+            out[n - 2].size = g_block_mmio_count > 0
+                                  ? g_block_mmio[0].size
+                                  : 0;
+            out[n - 1].pci_bdf = g_block_ahci_bdf;
+            out[n - 1].msix_entry = 0;
+            if (out[n - 2].addr != 0) {
+                if (n < kMaxCapsPerRole) {
+                    out[n++] = CapSpec{CapKind::DMA_REGION, 0,
+                                       4 * arch::PAGE_SIZE, 0, 0};
+                }
+                return n;
+            }
+            n = 0;
+        }
+#endif
         if (n < kMaxCapsPerRole) {
             out[n++] =
                 CapSpec{CapKind::MMIO, 0x1F0, 8, 0, 1};
@@ -417,9 +476,32 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
             out[n++] =
                 CapSpec{CapKind::MMIO, 0x170, 8, 0, 1};
         }
+        if (n < kMaxCapsPerRole) {
+            out[n++] =
+                CapSpec{CapKind::MMIO, 0x3F6, 1, 0, 1};
+        }
+        if (n < kMaxCapsPerRole) {
+            out[n++] =
+                CapSpec{CapKind::MMIO, 0x376, 1, 0, 1};
+        }
+        if (n < kMaxCapsPerRole) {
+            out[n++] = CapSpec{CapKind::IRQ, 0x1F0, 0, 46, 0};
+        }
+        if (n < kMaxCapsPerRole) {
+            out[n++] = CapSpec{CapKind::IRQ, 0x170, 0, 47, 0};
+        }
 #else
         if (g_block_mmio_count > 0 && n < kMaxCapsPerRole) {
             out[n++] = g_block_mmio[0];
+        }
+        if (g_block_irq_vector != 0 && n < kMaxCapsPerRole) {
+            const uint32_t irq_vec =
+                static_cast<uint32_t>(g_block_irq_vector);
+            if (arch::irq_cap_vector_valid(
+                    static_cast<uint16_t>(irq_vec))) {
+                out[n++] = CapSpec{CapKind::IRQ, g_block_irq_phys, 0,
+                                   irq_vec, 0};
+            }
         }
 #endif
         // Shared sector/queue window: 4 pages (see block_srv.hpp
@@ -487,6 +569,10 @@ bool sdf_policy_only(PdRole role) {
 bool capture_block_topology() {
     g_block_mmio_count = 0;
     g_block_dma = false;
+    g_block_irq_vector = 0;
+    g_block_irq_phys = 0;
+    g_block_ahci_bdf = 0;
+    g_block_ahci_valid = false;
     for (uint64_t i = 0; i < kMaxCapsPerRole; ++i) {
         g_block_mmio[i] = CapSpec{CapKind::MMIO, 0, 0, 0, 0};
     }
@@ -511,6 +597,12 @@ bool capture_block_topology() {
         if (info.bar_count > 5) {
             push_mmio(info.bars[5].address, info.bars[5].size);
         }
+        // Record the BDF for the MSIX row variant (issue #47 step-b2).
+        g_block_ahci_bdf =
+            (static_cast<uint32_t>(info.bdf.bus) << 16) |
+            (static_cast<uint32_t>(info.bdf.device) << 8) |
+            static_cast<uint32_t>(info.bdf.function);
+        g_block_ahci_valid = true;
     }
 #endif
     // Virtio-blk transport window (any arch with a finder).
@@ -522,6 +614,12 @@ bool capture_block_topology() {
                                      transport)) {
             push_mmio(transport.common_cfg.phys_addr,
                       transport.common_cfg.length);
+            // Record the transport IRQ for the IRQ row cap (issue #47
+            // step-b2): GIC INTID / PLIC source, the delivery vector.
+            if (transport.mmio_irq != 0) {
+                g_block_irq_vector = transport.mmio_irq;
+                g_block_irq_phys = transport.common_cfg.phys_addr;
+            }
         }
     }
     g_block_mmio_count = n;
@@ -571,7 +669,7 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
         // (planner S2); anything else is a fail-closed compose failure.
         return sdf_zero_caps_allowed(role);
     }
-    int slots[kMaxCapsPerRole] = {-1, -1, -1, -1, -1, -1};
+    int slots[kMaxCapsPerRole] = {-1, -1, -1, -1, -1, -1, -1, -1};
     uint32_t gens[kMaxCapsPerRole] = {};
     // Fail-closed TX-ring record (issue #51 step-c-prime): a fresh compose
     // clears the role cells first; they are rewritten only after the whole

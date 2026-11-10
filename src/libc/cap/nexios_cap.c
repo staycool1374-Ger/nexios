@@ -65,6 +65,10 @@ long nexios_cap_irq_wait(nexios_cap_t cap) {
     return nexios_sys_irq_wait((long)cap, 0, 0, 0);
 }
 
+long nexios_cap_irq_wait_timeout(nexios_cap_t cap, unsigned long ticks) {
+    return nexios_sys_irq_wait((long)cap, (long)ticks, 0, 0);
+}
+
 long nexios_cap_iommu_map(nexios_cap_t dma, nexios_cap_t frame) {
     return nexios_sys_iommu_map((long)dma, (long)frame, 0, 0);
 }

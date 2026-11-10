@@ -63,6 +63,9 @@ struct CapSpec {
                      ///< span up to whole pages) / 0 if n/a.
     uint32_t vector; ///< IRQ vector / MSI-X entry (0 if n/a).
     uint32_t io_port;///< 1 = IO-port MmioCap, 0 = memory MmioCap.
+    uint32_t pci_bdf = 0; ///< Packed PCI BDF for MSIX caps (issue #47
+                     ///< step-b2): bus<<16 | device<<8 | function.
+    uint32_t msix_entry = 0; ///< MSI-X table entry index for MSIX caps.
 };
 
 /// @brief Driver PD roles (one SDF row each; VFS_SRV/BLOCK_SRV are
@@ -86,7 +89,7 @@ enum class PdRole : uint8_t {
 };
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
-inline constexpr uint64_t kMaxCapsPerRole = 6;
+inline constexpr uint64_t kMaxCapsPerRole = CONFIG_DRIVER_PD_MAX_CAPS;
 
 /// @brief Console PD scanout chunking (issue #51): a full scanout
 ///        (pitch*height, e.g. 3 MiB at 1024x768x32) rides as several
@@ -97,8 +100,10 @@ inline constexpr uint64_t kMaxCapsPerRole = 6;
 ///        CONSOLE_FRAME_CHUNK.
 inline constexpr uint64_t kConsoleMmioChunk = CONFIG_USER_MMIO_REGION_SIZE;
 inline constexpr uint64_t kConsoleFrameChunk = CONFIG_USER_SHM_REGION_SIZE;
-/// @brief Max scanout chunks a row can carry (indices 2..kMaxCapsPerRole).
-inline constexpr uint64_t kConsoleMaxScanoutChunks = kMaxCapsPerRole - 2;
+/// @brief Max scanout chunks a row can carry (issue #47 step-b2: pinned
+///        at 4 — the row grew to 8 slots for IRQ caps, but the console
+///        scanout layout stays at indices 2..5 to match userspace).
+inline constexpr uint64_t kConsoleMaxScanoutChunks = 4;
 static_assert(kConsoleMmioChunk == 0x200000ULL,
               "userspace/driver_pd.h CONSOLE_MMIO_CHUNK mirrors this value");
 static_assert(kConsoleFrameChunk == 0x200000ULL,

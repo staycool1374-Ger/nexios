@@ -96,7 +96,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator, sub-range carve, child split
     {"cap_mmio",              20,   0,       0      },  // MMIO caps, I/O delegation, revocation closure
     {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry
-    {"cap_irq",               12,   11,      11     },  // IRQ caps, user-space delivery (x86-only ACK off-x86)
+    {"cap_irq",               17,   15,      15     },  // IRQ caps, user-space delivery (x86-only ACKs off-x86; +4 WAIT_ACK b2 +1 IOAPIC b2)
     {"cap_irq_notify",        7,   6,       6      },  // IRQ to IPC Notify bridge (x86-only 7th off-x86)
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery
     {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection
@@ -138,7 +138,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers_virtio_blk_req", 13,   0,       0      },  // virtio-blk request path + completion/ISR contracts
     {"drivers_ahci_deep",      10,   0,       0      },  // AHCI protocol + completion/ISR contracts
     {"ahci_live",              5,    0,       0      },  // real AHCI path on q35 variant (not in all)
-    {"block_srv_live",         4,    4,       4      },  // block-srv PD live path, CONFIG_BLOCK_SRV=1 (issue #47 step-b1)
+    {"block_srv_live",         8,    8,       8      },  // block-srv PD live path, CONFIG_BLOCK_SRV=1 (issue #47 step-b1; +4 IRQ b2)
     {"initrd_parser",          9,    0,       0      },  // cpio parser
 
     // ipc

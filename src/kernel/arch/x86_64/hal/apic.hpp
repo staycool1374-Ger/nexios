@@ -122,7 +122,28 @@ public:
     /// @brief Mask or unmask a legacy IRQ in the I/O APIC.
     /// @param irq  Legacy IRQ number (0-15).
     /// @param mask true = mask, false = unmask.
+    /// Read-modify-write: only the mask bit changes, vector/dest/
+    /// trigger/polarity programmed by firmware or init are preserved
+    /// (issue #47 step-b2 — a full rewrite would force edge-triggered
+    /// delivery and lose level-held device IRQs asserted across the
+    /// masked window).
     static void mask_irq(uint8_t irq, bool mask);
+
+    /// @brief Raw low dword of the legacy IRQ's I/O APIC redirection
+    /// entry (issue #47 step-b2: save/restore for PD-owned delivery).
+    /// @return entry value, or 0 when the APIC is off or @p irq is out
+    ///         of range.
+    static uint32_t ioapic_entry(uint8_t irq);
+
+    /// @brief Raw low-dword write of the legacy IRQ's I/O APIC entry
+    /// (issue #47 step-b2; no-op when the APIC is off or out of range).
+    static void ioapic_write_entry(uint8_t irq, uint32_t low);
+
+    /// @brief True when the legacy IRQ's I/O APIC entry is masked
+    /// (issue #47 step-b2: was-masked tracking for PD-owned delivery).
+    /// False when the APIC is off (PIC mode needs no IOAPIC tracking)
+    /// or @p irq is out of range.
+    static bool ioapic_masked(uint8_t irq);
 
     // Issue #26: moved 64 -> 0xE0 so the tick sits above every TPR class
     // (class 0xE > TPR_CLASS_MAX 0xD0 — unmaskable, INV-TPR5).

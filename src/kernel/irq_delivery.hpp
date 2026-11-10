@@ -48,8 +48,14 @@ class MsixCap;
 /// arm() time under the slot lock; immutable for the arm lifetime.
 enum class IrqDeliveryMode : uint8_t {
     WAIT = 0,  ///< blocking sys_irq_wait delivery (issue #2, default)
-    NOTIFY = 1 ///< capability-backed IPC notification to the recipient's
-               ///< Notify (issue #7) — no pending/waiter bookkeeping
+    NOTIFY = 1, ///< capability-backed IPC notification to the recipient's
+                ///< Notify (issue #7) — no pending/waiter bookkeeping
+    WAIT_ACK = 2 ///< blocking sys_irq_wait with line/entry mask-on-delivery
+                 ///< (issue #47 step-b2): the ISR masks the line (PIC/
+                 ///< PLATFORM) or MSI-X entry on delivery; the next
+                 ///< sys_irq_wait entry unmasks after the driver ACKed the
+                 ///< device.  Prevents level-triggered storms between the
+                 ///< IRQ and the device ACK for PD-owned devices.
 };
 
 /// @brief Source kind of a claimed delivery slot (issue #10).  The PIC
@@ -77,6 +83,22 @@ struct IrqRegistration {
     bool armed = false;        ///< vector unmasked + delivering to recipient
     bool line_was_masked = true; ///< PIC mask state of this line before arm
     IrqDeliveryMode delivery_mode = IrqDeliveryMode::WAIT; ///< arm-time mode
+    /// @brief x86_64 only: the arm unmasked the I/O APIC entry (issue #47
+    /// step-b2 — the APIC init masks entries 2-15, so PIC delivery
+    /// needs the IOAPIC unmasked too, not just the PIC line). Release
+    /// and drain re-mask only lines the kernel left masked.
+    bool ioapic_unmasked_here = false;
+    /// @brief x86_64 only: the arm programmed the entry level-triggered.
+    /// Cleared on release/drain independently of the mask bit (an
+    /// already-unmasked line keeps level programming until released).
+    bool ioapic_leveled = false;
+    /// @brief aarch64 only: saved 2-bit ICFGR trigger field for the armed
+    /// INTID (issue #47 step-b2). The arm programs level-triggered
+    /// delivery (an edge asserted during the masked window between the
+    /// device IRQ and the next wait entry is lost; level re-samples on
+    /// unmask); release/drain restores the saved field.
+    uint8_t gic_saved_trigger = 0;
+    bool gic_trigger_saved = false;
     KernelObject *owner = nullptr; ///< the cap that claimed this slot
     TaskControlBlock *recipient = nullptr; ///< task armed to receive
     uint64_t recipient_gen = 0;            ///< TCB generation at arm time
@@ -111,8 +133,10 @@ class IrqDelivery {
 
     /// @brief Arms delivery of @p owner's vector to @p recipient (unmasks the
     ///        PIC line for PIC slots, unmasks the MSI-X table entry for MSIX
-    ///        slots).  Fails if the vector is already armed, claimed by a
-    ///        threaded-IRQ handler, or the slot no longer belongs to @p owner
+    ///        slots).  Fails if the vector is already armed (except an
+    ///        identical WAIT_ACK re-arm, which is a no-op success for PD
+    ///        rebind flows — issue #47 step-b2), claimed by a threaded-IRQ
+    ///        handler, or the slot no longer belongs to @p owner
     ///        (slot-reuse safety: the ownership + arming decision is ONE atomic
     ///        critical section — issue #2).
     /// @param reg_idx Slot index from claim_slot().
@@ -131,9 +155,11 @@ class IrqDelivery {
 
     /// @brief ISR entry — called from handle_interrupt_c.  Scans for an armed
     ///        slot, EOI-acks the controller, and dispatches per delivery_mode:
-    ///        WAIT records a pending IRQ and wakes a blocked waiter; NOTIFY
-    ///        signals the recipient's Notify with the vector value (no
-    ///        pending/waiter bookkeeping — coalescing: last vector wins).
+    ///        WAIT/WAIT_ACK records a pending IRQ and wakes a blocked waiter
+    ///        (WAIT_ACK additionally masks the line/entry until the next
+    ///        sys_irq_wait entry, issue #47 step-b2); NOTIFY signals the
+    ///        recipient's Notify with the vector value (no pending/waiter
+    ///        bookkeeping — coalescing: last vector wins).
     /// @return true if the vector was consumed by an IrqCap registration (the
     ///         caller must NOT continue to the generic handler path).
     static bool isr_entry(uint8_t vector);
@@ -153,6 +179,32 @@ class IrqDelivery {
     ///        from TaskControlBlock::cleanup() so a dying task can never leave
     ///        a dangling recipient/waiter in the delivery table.
     static void drain_task(TaskControlBlock &tcb);
+
+    /// @brief Arms a bounded wheel timeout for an IRQ wait (issue #47
+    ///        step-b2; mirrors IPC::recv_wait_arm ns math).  The wheel
+    ///        callback only sets task.irq_wait_timed_out; the wake is applied
+    ///        in scheduler_tick under the held scheduler_lock_.  timeout 0 =
+    ///        infinite (no arm).  Returns false when the wheel is full.
+    static bool wait_timeout_arm(TaskControlBlock &task,
+                                 uint64_t timeout_ticks);
+
+    /// @brief Cancels a pending IRQ-wait wheel arm (idempotent).
+    static void wait_timeout_cancel(TaskControlBlock &task);
+
+    /// @brief Wheel callback for a bounded IRQ wait (issue #47 step-b2).
+    /// Lock-free by contract (runs under scheduler_lock_ in on_tick):
+    /// only sets the task's irq_wait_timed_out flag after the
+    /// generation/armed guards (stale fires are no-ops). Public for the
+    /// stale-fire regression test (mirrors IPC::recv_timeout_fire).
+    static void wait_timeout_fire(void *context) noexcept;
+
+    /// @brief Unmasks the slot's line/entry for a WAIT_ACK wait entry
+    ///        (issue #47 step-b2): the driver ACKed the device before
+    ///        waiting again, so delivery may resume.  Caller holds the slot
+    ///        lock AND the arch unmask discipline (IrqGuard-before-lock
+    ///        off-x86, lock-only on x86 — same as arm()).  No-op unless the
+    ///        slot is armed in WAIT_ACK mode.
+    static void unmask_for_wait(IrqRegistration &slot);
 
     /// @brief Number of occupied slots (debug/leak audit helper).
     static size_t occupied_count();
