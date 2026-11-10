@@ -87,12 +87,12 @@ void Scheduler::cancel_pending_switch() noexcept {
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::next_task_id(), UINT64_MAX,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(), (uint64_t)0,
-                     __ATOMIC_RELEASE);
-    __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), (uint64_t)0,
-                     __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
                      __ATOMIC_RELEASE);
+    // Issue #513 V2: the continuing task keeps a valid slot instead of a
+    // zeroed one — the next U-trap on this hart must not park for a
+    // cleared arm. Republish for whoever is current now (writer table).
+    republish_entry_kstack();
     uint64_t gen =
         __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
     __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
@@ -150,7 +150,46 @@ void Scheduler::set_current_task(TaskControlBlock *t) noexcept {
         __atomic_store_n(&t->running_on_cpu, Scheduler::sched_cpu(),
                          __ATOMIC_RELEASE);
         set_current_ptr(t);
+        // Issue #513 M1: a bare current publish leaves the trap-entry
+        // kstack slot naming whoever ran before. Republish for the new
+        // current (no-op while an arm is in flight).
+        republish_entry_kstack();
     }
+}
+
+/// @brief Republish the trap-entry kstack slot for the current task
+///        (issue #513 M1 writer-table closure). See scheduler.hpp.
+///        Only the no-arm case publishes: with an arm in flight the slots
+///        belong to the arm's target, and touching them here would steer
+///        the pending apply onto the wrong stack.
+void Scheduler::republish_entry_kstack() noexcept {
+    if (__atomic_load_n(&Scheduler::SwSlots::next_task_id(),
+                        __ATOMIC_RELAXED) != UINT64_MAX ||
+        __atomic_load_n(&Scheduler::SwSlots::save_rsp_to(),
+                        __ATOMIC_RELAXED) != nullptr) {
+        return;
+    }
+    arch::IrqGuard iguard{};
+    auto *c = current_task();
+    if (c && c->magic == TaskControlBlock::TCB_MAGIC && c->is_user_ &&
+        c->kernel_stack != nullptr && c->kernel_stack_top != 0) {
+        uint64_t base = reinterpret_cast<uint64_t>(c->kernel_stack);
+        uint64_t sp = current_sp();
+        if (sp >= base && sp < c->kernel_stack_top) {
+            __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(), base,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(),
+                             c->kernel_stack_top, __ATOMIC_RELEASE);
+            return;
+        }
+    }
+    // Not a user task running on its own stack (kernel task, boot-stack
+    // runner, or corrupt RSP): mark the slot invalid so the next U-trap
+    // parks fail-closed instead of saving onto a stale stack.
+    __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(), (uint64_t)0,
+                     __ATOMIC_RELEASE);
+    __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), (uint64_t)0,
+                     __ATOMIC_RELEASE);
 }
 
 void Scheduler::set_current(TaskControlBlock &task) noexcept {
@@ -224,26 +263,17 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
 
     set_current_ptr(&task);
     // Issue #513 follow-up: keep the trap-entry kstack slot consistent with
-    // the newly published current.  Owner-resolution can publish a current
-    // whose U-traps would otherwise land on a stale kstack (a user PD trap
-    // processed under a stale init slot wedges in sys_receive's kernel-task
-    // path).  Only when no deferred arm is in flight — then the slot belongs
-    // to the arm, not to current — and never for a live boot-stack RSP
-    // (H2 boot-stack runners keep the existing slot discipline).
+    // the newly published current (writer-table: no-arm republish path).
+    // Only when no deferred arm is in flight — then the slot belongs
+    // to the arm, not to current (republish_entry_kstack enforces the
+    // same guard internally; the explicit check here documents the
+    // ownership rule at the call site).
     {
-        arch::IrqGuard iguard{};
         if (__atomic_load_n(&Scheduler::SwSlots::next_task_id(),
                             __ATOMIC_RELAXED) == UINT64_MAX &&
             __atomic_load_n(&Scheduler::SwSlots::save_rsp_to(),
-                            __ATOMIC_RELAXED) == nullptr &&
-            task.kernel_stack != nullptr && task.kernel_stack_top != 0 &&
-            !is_boot_stack_rsp(current_sp())) {
-            __atomic_store_n(
-                &Scheduler::SwSlots::load_kstack_base(),
-                reinterpret_cast<uint64_t>(task.kernel_stack),
-                __ATOMIC_RELEASE);
-            __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(),
-                             task.kernel_stack_top, __ATOMIC_RELEASE);
+                            __ATOMIC_RELAXED) == nullptr) {
+            republish_entry_kstack();
         }
     }
 }
@@ -303,6 +333,10 @@ void restore_preempted_current(TaskControlBlock *current,
             Scheduler::set_task_ready(*target);
         }
     }
+    // Issue #513: the H2-RESTORE path changed who runs without publishing
+    // slots. Republish for the restored current (writer table; no-op while
+    // an arm is in flight).
+    Scheduler::republish_entry_kstack();
 }
 
 // ---------------------------------------------------------------------------

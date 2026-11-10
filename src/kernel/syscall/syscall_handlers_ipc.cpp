@@ -73,6 +73,11 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     auto *cur = syscall_task();
     if (!cur)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    // Issue #513 INV-NO-BLOCK-DEAD: a non-RUNNING task (notably a
+    // TERMINATED one resurrected by the fault-path fall-through) must
+    // never enter an IPC wait — blocking it requeues a zombie.
+    if (cur->state != TaskState::RUNNING)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     bool ok = false;
     bool was_blocked = false;
     if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
@@ -178,6 +183,10 @@ uint64_t Syscall::sys_send_sync(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     auto *cur = syscall_task();
     if (!cur)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    // Issue #513 INV-NO-BLOCK-DEAD: a TERMINATED task must never block
+    // in a send wait (resurrection vector, mirrors sys_receive).
+    if (cur->state != TaskState::RUNNING)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     msg.sender_id = cur->id;
     msg.type = type;
     msg.data_size = data_size;
@@ -258,6 +267,10 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             : static_cast<uint32_t>(IPC_FAST_PAYLOAD_BYTES);
     auto *cur = syscall_task();
     if (!cur)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    // Issue #513 INV-NO-BLOCK-DEAD: a TERMINATED task must never block
+    // in a fast receive (resurrection vector, mirrors sys_receive).
+    if (cur->state != TaskState::RUNNING)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     Message msg{};
     bool ok = false;

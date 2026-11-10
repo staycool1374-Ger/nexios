@@ -590,6 +590,15 @@ class Scheduler {
     /// @brief Sets the current running task.
     /// @param task Reference to the task to set as current.
     static void set_current(TaskControlBlock &task) noexcept;
+    /// @brief Republish the trap-entry kstack slot for the current task
+    ///        (issue #513 M1 writer-table closure). Publishes current's
+    ///        (base, top) when current is a user task whose live RSP is
+    ///        inside its own kstack; otherwise publishes (0, 0) "invalid"
+    ///        so the next U-trap parks fail-closed (2.10) instead of
+    ///        saving onto a stale stack. No-op while a deferred-switch
+    ///        arm is in flight (slots belong to the arm). Single-writer
+    ///        (own hart), IRQ-guarded internally; never locks, never scans.
+    static void republish_entry_kstack() noexcept;
 
     /// @brief Charge @p pages to the current task's memory budget.
     /// Returns false if charging would exceed the task's budget cap.
@@ -1045,6 +1054,16 @@ class Scheduler {
         return __atomic_load_n(&sched_quiesce_depth_, __ATOMIC_RELAXED);
     }
 struct SwSlots {
+    // Writer table (issue #513 M1 closure; mirrors #369 T4 do-not-move):
+    // every load_kstack_base/top writer is either
+    // (a) an ARM publish (switch_to_task, switch_away_from_terminating) —
+    //     publishes next unconditionally, or
+    // (b) a NO-ARM/REPAIR publish — goes through
+    //     republish_entry_kstack() (publish-if-user-else-invalidate):
+    //     set_current, set_current_task, cancel_pending_switch,
+    //     restore_preempted_current, restore_state (BSP), exec_into_current.
+    // No other site may write these slots. Never publish a non-current
+    // task's pair, never publish while an arm is in flight.
     static uint64_t this_cpu() {
         return arch::cpu_index();
     }
