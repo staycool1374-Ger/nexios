@@ -525,21 +525,7 @@ abort_switch:
     # U-path: x2 IS sp, so sp is user_sp from here on — never recompute
     # the frame base from sp again (that faulted: user_sp-296 is not the
     # frame). x6 still holds the base: load t1 directly, then sret.
-    # Balance the entry inc (issue #513: this verbatim resume skipped the
-    # shared tail dec, leaking +1 per uaccess-recovery fault). Saturating
-    # (see 8:) so a pre-existing imbalance cannot drive depth negative.
-    # t0/t2 are dead here (only x6/x2 are live restores on this path).
-    la t0, isr_nesting_depth
-    ld t2, 0(t0)
-    beqz t2, 82f
-    addi t2, t2, -1
-    sd t2, 0(t0)
-    j 83f
-82: la t0, g_depth_sat
-    ld t2, 0(t0)
-    addi t2, t2, 1
-    sd t2, 0(t0)
-83: ld x6, OFF_T1(x6)
+    ld x6, OFF_T1(x6)
     sret
 .Ltrap_park:
     # Issue #513: fault disposition is switch-or-park with no arm
