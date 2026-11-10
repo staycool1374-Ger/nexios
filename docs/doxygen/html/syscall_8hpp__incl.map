@@ -1,5 +1,0 @@
-<map id="src/kernel/syscall/syscall.hpp" name="src/kernel/syscall/syscall.hpp">
-<area shape="rect" id="Node000001" title="System call interface and dispatcher." alt="" coords="5,5,129,48"/>
-<area shape="rect" id="Node000002" href="$types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="28,96,106,123"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="69,47,70,81,64,79,65,51"/>
-</map>

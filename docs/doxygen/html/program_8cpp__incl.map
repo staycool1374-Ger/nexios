@@ -1,7 +1,0 @@
-<map id="src/services/program.cpp" name="src/services/program.cpp">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,5,174,32"/>
-<area shape="rect" id="Node000002" href="$program_8hpp.html" title="Registry of installable user&#45;space programs." alt="" coords="16,80,163,107"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="91,30,92,65,87,64,88,35"/>
-<area shape="rect" id="Node000003" href="$types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="50,155,129,181"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="91,105,92,140,87,138,88,109"/>
-</map>

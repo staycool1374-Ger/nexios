@@ -1,9 +1,0 @@
-<map id="kernel::Scheduler::on_tick" name="kernel::Scheduler::on_tick">
-<area shape="rect" id="Node000001" title="Called on each timer tick; updates scheduling state." alt="" coords="5,39,136,81"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Scheduler.html#a0d595ec39367db2ce160fb1d72c23fab" title="Reaps orphan TERMINATED tasks (no parent to WAITPID them)." alt="" coords="184,39,314,81"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="136,57,170,59,165,61,137,63"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="362,5,492,48"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="314,45,349,41,344,42,315,50"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1Scheduler.html#a1445f0cd0e4b2dd34dd661ea543c28ff" title="Removes a task from the scheduler&#39;s run queue." alt="" coords="362,72,492,115"/>
-<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="315,70,349,78,344,78,314,75"/>
-</map>

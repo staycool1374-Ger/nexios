@@ -137,7 +137,10 @@ bool serial_tx_try_putchar(char c) {
 Terminal* Terminal::instance_ = nullptr;
 
 void Terminal::init() {
-    if (!Framebuffer::available()) return;
+    // Issue #51: with the fb-device PD live the kernel keeps only the
+    // device probe (geometry + scanout phys for the SDF cap) — no text
+    // grid, no writes. Terminal degrades to serial-only.
+    if (!Framebuffer::available() || Framebuffer::device_owned()) return;
 
     Framebuffer::clear(0);
     instance_ = new Terminal{};

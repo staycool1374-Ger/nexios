@@ -1,7 +1,0 @@
-<map id="src/kernel/vfs/devfs.hpp" name="src/kernel/vfs/devfs.hpp">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,5,167,32"/>
-<area shape="rect" id="Node000002" href="$vfs_8hpp.html" title=" " alt="" coords="23,80,149,107"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="87,30,89,65,83,64,85,35"/>
-<area shape="rect" id="Node000003" href="$types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="47,155,125,181"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="88,105,89,140,83,138,84,109"/>
-</map>

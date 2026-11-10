@@ -1,6 +1,0 @@
-var structservice_1_1ProgramRegistry_1_1Program =
-[
-    [ "description", "structservice_1_1ProgramRegistry_1_1Program.html#ac7834b42b8d0ff72eaba58259fe6a9d4", null ],
-    [ "entry", "structservice_1_1ProgramRegistry_1_1Program.html#ab28711d90ac14b8534fc16b46be1cf19", null ],
-    [ "name", "structservice_1_1ProgramRegistry_1_1Program.html#a47854a298a5b3981083c830e78614d27", null ]
-];

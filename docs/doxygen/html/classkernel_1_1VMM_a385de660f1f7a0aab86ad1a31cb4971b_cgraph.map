@@ -1,5 +1,0 @@
-<map id="kernel::VMM::clone_kernel_pml4" name="kernel::VMM::clone_kernel_pml4">
-<area shape="rect" id="Node000001" title="Creates a fresh PML4: zeroes user entries (0&#45;255), copies kernel entries (256&#45;511)...." alt="" coords="5,5,140,48"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1PMM.html#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership)." alt="" coords="188,13,353,40"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="140,24,174,26,169,27,140,29"/>
-</map>

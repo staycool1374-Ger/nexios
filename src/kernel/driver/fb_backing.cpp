@@ -54,7 +54,18 @@ bool backing_init(uint32_t width, uint32_t height) {
     if (pages == 0 || pages > FB_MAX_PAGES) {
         return false;
     }
+#if CONFIG_DRIVER_PD_FB
+    // Issue #51: the backing doubles as the console PD's scanout grant
+    // (SDF FRAME pins wrapped over this exact range).  User ownership is
+    // the capability-correct form — SYS_FRAME_MAP refuses kernel pages,
+    // and a MmioCap cannot express RAM.  The kernel never writes the
+    // backing under this knob (Framebuffer::device_owned gates every
+    // render path; only HHDM reads remain), so ownership changes no
+    // kernel behavior.
+    uint64_t phys = PMM::alloc_user_contiguous(pages);
+#else
     uint64_t phys = PMM::alloc_contiguous(pages);
+#endif
     if (!phys) {
         return false;
     }

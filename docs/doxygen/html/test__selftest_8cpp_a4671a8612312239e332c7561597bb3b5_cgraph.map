@@ -1,9 +1,0 @@
-<map id="JARVIS_TEST" name="JARVIS_TEST">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,80,116,107"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1sync_1_1EventGroup.html#a45672fb17cacc00d7544da1a3736707a" title=" " alt="" coords="164,5,333,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="99,77,174,52,170,56,102,82"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1sync_1_1EventGroup.html#ab712cb3c095eef9d9df777c573d7d4ab" title=" " alt="" coords="164,72,333,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="115,91,151,92,146,94,117,96"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1sync_1_1EventGroup.html#aab32781e6d0879be5947049ef1a39d0a" title=" " alt="" coords="164,139,333,181"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="101,105,174,132,170,134,100,110"/>
-</map>

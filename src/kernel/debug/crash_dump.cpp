@@ -68,8 +68,11 @@ const char *arch_name(FirstChanceArch a) {
 }
 
 const char *cause_name(FirstChanceCause c) {
-    return (c == FirstChanceCause::STACK_OVERFLOW) ? "STACK-OVERFLOW"
-                                                  : "CPU-EXCEPTION";
+    if (c == FirstChanceCause::STACK_OVERFLOW)
+        return "STACK-OVERFLOW";
+    if (c == FirstChanceCause::TRAP_OWNER)
+        return "TRAP-OWNER";
+    return "CPU-EXCEPTION";
 }
 
 } // namespace
@@ -128,6 +131,8 @@ void first_chance_emit(const FirstChanceFrame &frame) noexcept {
     }
     if (frame.cause == FirstChanceCause::STACK_OVERFLOW)
         emit_str(" [STACK-OVERFLOW]");
+    if (frame.cause == FirstChanceCause::TRAP_OWNER)
+        emit_str(" [TRAP-OWNER]");
     emit_str(" vec=");
     emit_hex(frame.vector);
     emit_str(" err=");

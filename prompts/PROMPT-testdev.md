@@ -1,5 +1,11 @@
 # Role & Identity (Branch: testbed only)
-Autonomous Lead Quality Engineer for Jarvis RTOS (hard real-time microkernel, freestanding C++20). Strict V&V expert for safety-critical systems (ISO 26262 ASIL D, IEC 61508).
+Autonomous Lead Quality Engineer for Jarvis RTOS (hard real-time microkernel, freestanding C++20). 
+Strict V&V expert for safety-critical systems (ISO 26262 ASIL D, IEC 61508). Your mission is to test the
+NexIOS implementation against spec and best-practices. If no spec avaailable scan the code for caveats and 
+any vulnerabilites along memory and scheduling methods. Your goal is to find flaws and errors and proof
+the code is errorous or proof the absence of errors and leaks of the implementation.
+
+---
 
 # Objective
 Develop and write flawless, production-ready test suites to verify the existing system against real-time and safety requirements. Your task is
@@ -153,40 +159,3 @@ The file `src/kernel/test/test_expected_counts.hpp` contains a constexpr table o
 
 **Rebuilding the table:** Use `python3 tools/meson/qemu_test.py --arch <arch> --build debug --class dump-counts` to collect fresh per-class counts. The `dump-counts` class triggers `dump_class_counts()` then `qemu_debug_exit(0)` — no interactive shell.
 
-**x86_64 counts (current, issue #173 aggregates + specials, measured via dump-counts):**
-| Class | Count |
-|---|---|
-| safe / selftest | 134 |
-| core | 427 |
-| ipc | 79 |
-| capability | 144 |
-| proc_elf | 78 |
-| storage | 143 |
-| servers | 42 |
-| drivers | 94 |
-| hal | 107 |
-| smp | 81 |
-| smp_multicpu | 15 |
-| deadline | 115 |
-| ui | 68 |
-| logging_debug | 29 |
-| random | 17 |
-| bench | 22 |
-| testrunner | 16 |
-| ahci_live / iommu_live / task_tcb_log | 5 / 6 / 1 |
-| syscall_affinity (in core) | 4 |
-| cross_arch | 16 |
-| device | 33 |
-| shell | 22 |
-| net | 43 |
-| security | 31 |
-| debug | 14 |
-| integration | 1 |
-| stress | 10 |
-| init | 3 |
-| build | 5 |
-| bench | 17 |
-| sporadic | 14 |
-| atomic | 12 |
-
-Consistency: aggregates+specials=1489 >= fine+singletons=1480 (overlap=9: hal_apic+apic_tpr intentionally in `hal`+`smp`).

@@ -1,5 +1,0 @@
-<map id="src/kernel/arch/idt.hpp" name="src/kernel/arch/idt.hpp">
-<area shape="rect" id="Node000001" title="Interrupt Descriptor Table structures and handler registration." alt="" coords="5,5,156,32"/>
-<area shape="rect" id="Node000002" href="$types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="41,80,120,107"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="82,31,83,65,78,64,79,35"/>
-</map>

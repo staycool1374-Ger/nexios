@@ -37,6 +37,9 @@ namespace service {
 
 FramebufferInfo Framebuffer::info_ = {};
 bool Framebuffer::initialized_ = false;
+uint64_t Framebuffer::scanout_phys_ = 0;
+uint64_t Framebuffer::scanout_bytes_ = 0;
+bool Framebuffer::scanout_ram_backed_ = false;
 #if !defined(CONFIG_ARCH_X86_64)
 // One-shot gap line (issue #357): boot path only, pre-scheduler.
 static bool gap_logged = false;
@@ -61,7 +64,7 @@ const char *Framebuffer::backend_name() {
 
 void Framebuffer::present() {
 #if !defined(CONFIG_ARCH_X86_64)
-    if (!initialized_ || dirty_y1_ <= dirty_y0_)
+    if (!initialized_ || device_owned() || dirty_y1_ <= dirty_y0_)
         return;
     // Only virtio-gpu needs host presentation (multiboot2/ramfb scanouts
     // are directly visible memory). Slice B keeps this arm first.
@@ -76,6 +79,8 @@ void Framebuffer::present() {
 
 void Framebuffer::invalidate() {
 #if !defined(CONFIG_ARCH_X86_64)
+    if (device_owned())
+        return;
     dirty_y0_ = 0;
     dirty_y1_ = info_.height;
 #endif
@@ -135,6 +140,11 @@ bool Framebuffer::init() {
     }
 
     info_.addr = arch::HHDM_OFFSET + info_.addr;
+    // SDF device-cap minting needs the PHYSICAL scanout base (info_.addr
+    // above is the HHDM alias). Captured before the translation.
+    scanout_phys_ = tag->addr;
+    scanout_bytes_ = static_cast<uint64_t>(tag->pitch) * tag->height;
+    scanout_ram_backed_ = false; /* VGA VRAM: true device MMIO */
 
     initialized_ = true;
     clear(0x000000);
@@ -160,6 +170,15 @@ bool Framebuffer::init() {
             info_.bpp = 32;
             backend_name_ = "virtio-gpu";
             backend_kind_ = kernel::gpu::FbBackend::VirtioGpu;
+            {
+                uint64_t phys0 = 0;
+                if (kernel::fb::backing_phys(0, phys0)) {
+                    scanout_phys_ = phys0;
+                    scanout_bytes_ =
+                        static_cast<uint64_t>(info_.pitch) * info_.height;
+                    scanout_ram_backed_ = true; /* guest RAM: FRAME pins */
+                }
+            }
             initialized_ = true;
             init_result = true;
             invalidate();
@@ -192,6 +211,15 @@ bool Framebuffer::init() {
             info_.bpp = 32;
             backend_name_ = "ramfb";
             backend_kind_ = kernel::gpu::FbBackend::Ramfb;
+            {
+                uint64_t phys0 = 0;
+                if (kernel::fb::backing_phys(0, phys0)) {
+                    scanout_phys_ = phys0;
+                    scanout_bytes_ =
+                        static_cast<uint64_t>(info_.pitch) * info_.height;
+                    scanout_ram_backed_ = true; /* guest RAM: FRAME pins */
+                }
+            }
             initialized_ = true;
             init_result = true;
             invalidate();
@@ -224,7 +252,7 @@ bool Framebuffer::init() {
 }
 
 void Framebuffer::clear(uint32_t color) {
-    if (!initialized_) return;
+    if (!initialized_ || device_owned()) return;
 
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto* fb = reinterpret_cast<uint8_t*>(static_cast<uint64_t>(info_.addr));
@@ -245,7 +273,9 @@ void Framebuffer::clear(uint32_t color) {
 }
 
 void Framebuffer::draw_pixel(uint32_t x, uint32_t y, uint32_t color) {
-    if (!initialized_ || x >= info_.width || y >= info_.height) return;
+    if (!initialized_ || device_owned() || x >= info_.width ||
+        y >= info_.height)
+        return;
     put_pixel(x, y, color);
 }
 
@@ -253,6 +283,7 @@ void Framebuffer::draw_pixel(uint32_t x, uint32_t y, uint32_t color) {
 void Framebuffer::fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color)
 // NOLINTEND(bugprone-easily-swappable-parameters)
 {
+    if (device_owned()) return;
     for (uint32_t dy = 0; dy < h; ++dy) {
         for (uint32_t dx = 0; dx < w; ++dx) {
             draw_pixel(x + dx, y + dy, color);
@@ -264,7 +295,7 @@ void Framebuffer::fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint
 void Framebuffer::draw_char(uint32_t x, uint32_t y, char c, uint32_t fg, uint32_t bg)
 // NOLINTEND(bugprone-easily-swappable-parameters)
 {
-    if (!initialized_) return;
+    if (!initialized_ || device_owned()) return;
     if (c < 32 || c > 126) c = ' ';
 
     size_t char_index = static_cast<size_t>(c - 32);
@@ -281,6 +312,7 @@ void Framebuffer::draw_char(uint32_t x, uint32_t y, char c, uint32_t fg, uint32_
 void Framebuffer::put_pixel(uint32_t x, uint32_t y, uint32_t color)
 // NOLINTEND(bugprone-easily-swappable-parameters)
 {
+    if (device_owned()) return;
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto* fb = reinterpret_cast<uint8_t*>(static_cast<uint64_t>(info_.addr));
     uint32_t bpp_bytes = info_.bpp / 8;

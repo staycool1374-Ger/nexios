@@ -1,8 +1,0 @@
-<map id="kernel::vfs::MemInfoVnode" name="kernel::vfs::MemInfoVnode">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,296,173,387"/>
-<area shape="rect" id="Node000002" href="$structkernel_1_1vfs_1_1Vnode.html" title=" " alt="" coords="124,5,241,160"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="137,157,128,185,112,233,101,280,96,278,107,231,123,183,135,162"/>
-<area shape="rect" id="Node000003" href="$structkernel_1_1vfs_1_1VnodeOps.html" title=" " alt="" coords="198,232,338,451"/>
-<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="174,157,182,207,193,236,187,235,177,209,172,162"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="250,232,236,185,235,178,236,173,241,183,255,233"/>
-</map>

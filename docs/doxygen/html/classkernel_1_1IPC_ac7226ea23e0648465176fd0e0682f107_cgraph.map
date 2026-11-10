@@ -1,7 +1,0 @@
-<map id="kernel::IPC::recv" name="kernel::IPC::recv">
-<area shape="rect" id="Node000001" title="Receives a message from the calling task&#39;s own queue." alt="" coords="5,43,126,69"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="195,5,325,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="125,44,182,38,177,40,126,50"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1IPC.html#af87e41b699ef9a8b801b1a8b2453314d" title="Wakes the oldest blocked sender and restores owner priority." alt="" coords="174,72,346,99"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="126,62,161,70,156,70,126,68"/>
-</map>

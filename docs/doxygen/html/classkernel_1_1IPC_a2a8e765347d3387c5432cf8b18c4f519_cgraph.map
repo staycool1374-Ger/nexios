@@ -1,7 +1,0 @@
-<map id="kernel::IPC::send" name="kernel::IPC::send">
-<area shape="rect" id="Node000001" title="Sends an asynchronous message to a destination task." alt="" coords="5,31,129,57"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1IPC.html#ac9a8226a332035941168102983aaa207" title="Finds a mailbox by owner task ID." alt="" coords="177,5,345,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="128,33,164,31,159,32,129,39"/>
-<area shape="rect" id="Node000003" href="$string_8hpp.html#ae74ab5750db5e6b0ebcda0e772d50235" title="Copies memory from source to destination." alt="" coords="225,56,296,83"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="129,49,212,62,207,64,129,55"/>
-</map>

@@ -18,6 +18,7 @@
 
 #include <kernel/kernel.hpp>
 #include <kernel/core/global_state.hpp>
+#include <kernel/task/scheduler_integrity.hpp>
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/idt.hpp>
 #include <kernel/arch/timer.hpp>
@@ -102,6 +103,7 @@
 #include <logger.hpp>
 #include <test.hpp>
 #include <kernel/task/taskdefs.hpp>
+#include <kernel/driver/driver_pds.hpp>
 #include <kernel/test/test_config.hpp>
 #include <string.hpp>
 #include <constants.hpp>
@@ -636,6 +638,14 @@ void init_task_main() {
                              (unsigned)kernel::test::Registry::count(),
                              (unsigned)kernel::test::Registry::class_count());
         kernel::test::set_class_auto_shutdown(true);
+#if CONFIG_DRIVER_PD_FB
+        // Issue #51: establish the console channel before the first test
+        // snapshot. The first SYS_MMIO_MAP of the scanout chunks grows the
+        // PD's page tables (one-time PMM delta); binding it here keeps
+        // per-test ResourceTracker deltas at zero. Best-effort — a dead
+        // PD just means the tests take the degraded path.
+        (void)kernel::driver_pds::pd_bind_console();
+#endif
         kernel::test::run_registered(0);
 #else
         kernel::test::set_class_auto_shutdown(false);
@@ -1488,11 +1498,11 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     kernel::PMM::mark_init_done();
     boot_mark(kernel::BootStage::MEMORY_INIT);
 
-#if !CONFIG_DRIVER_PD_FB
-    // Issue #48: with the fb-device PD live, the PD owns mode-set/present;
-    // the kernel skips its own init (Terminal degrades to serial-only).
+    // Issue #48/#51: the probe always runs — with the fb-device PD live
+    // the kernel skips every render path (Framebuffer::device_owned) but
+    // still needs the geometry + scanout phys to mint the PD's scanout
+    // caps (MmioCap or FRAME pins, per backing).
     service::Framebuffer::init();
-#endif
     service::Terminal::init();
     if (service::Terminal::instance()) {
         service::Terminal::show_splash();
@@ -2516,6 +2526,30 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         bool from_user =
             (cs == arch::SEG_USER_CODE || cs == arch::SEG_USER_DATA);
         if (from_user && t) {
+#if defined(CONFIG_ARCH_X86_64)
+            // Issue #513 2.11: validate the attribution BEFORE any
+            // kill/signal decision (mirrors the rv64/aarch64 trap hooks).
+            // On PARK no live task could be attributed: drop the fault
+            // instead of resuming the frame or blaming current.
+            // Otherwise the trip repaired current to the faulting task
+            // and the kill/delivery below runs against the right task.
+            {
+                const auto owner =
+                    kernel::sched_verify::validate_trap_frame(
+                        reinterpret_cast<uint64_t>(regs), "x86-fault");
+                if (owner.foreign || owner.unresolved) {
+                    using kernel::sched_verify::TrapOwnerDisposition;
+                    if (kernel::sched_verify::trap_owner_trip(
+                            owner, rip, vector, read_cr2(),
+                            reinterpret_cast<uint64_t>(regs),
+                            kernel::gs::TRAP_OWNER_SITE_X86_FAULT) ==
+                        TrapOwnerDisposition::PARK) {
+                        return;
+                    }
+                    t = kernel::Scheduler::current_task();
+                }
+            }
+#endif
             auto mapping = kernel::exception_to_signal(vector);
             uint64_t sig = static_cast<uint64_t>(mapping.signal);
 #ifdef CONFIG_USER_FAULT_VERBOSE
@@ -2729,6 +2763,28 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
 extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
                                     uint64_t arg1, uint64_t arg2, uint64_t arg3,
                                     uint64_t *regs) {
+    // Issue #513 3.1: frame-consistency choke point. Every IPC handler's
+    // syscall_task() keys off the published current — dispatching on a
+    // misattributed current silently misbooks waits, queues and sender
+    // ids (the face-B shape). On PARK fail closed; otherwise re-read the
+    // (possibly repaired) current and validate it before dispatching.
+    {
+        const auto own = kernel::sched_verify::validate_trap_frame(
+            reinterpret_cast<uint64_t>(regs), "syscall");
+        if (own.foreign || own.unresolved) {
+            using kernel::sched_verify::TrapOwnerDisposition;
+            if (kernel::sched_verify::trap_owner_trip(
+                    own, 0, number, 0, reinterpret_cast<uint64_t>(regs),
+                    kernel::gs::TRAP_OWNER_SITE_SYSCALL) ==
+                TrapOwnerDisposition::PARK) {
+                return static_cast<uint64_t>(kernel::errors::SYS_ERR_GENERIC_FAIL);
+            }
+        }
+        auto *cur0 = kernel::Scheduler::current_task();
+        if (!kernel::sched_verify::validate_syscall_frame(cur0, regs)) {
+            return static_cast<uint64_t>(kernel::errors::SYS_ERR_GENERIC_FAIL);
+        }
+    }
     uint64_t ret =
         kernel::Syscall::handle(number, arg0, arg1, arg2, arg3, regs);
 #if defined(CONFIG_ARCH_AARCH64)

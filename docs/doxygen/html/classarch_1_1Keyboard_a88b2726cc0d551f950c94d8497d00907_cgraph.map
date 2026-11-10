@@ -1,8 +1,0 @@
-<map id="arch::Keyboard::init" name="arch::Keyboard::init">
-<area shape="rect" id="Node000001" title="Initialises the PS/2 keyboard controller." alt="" coords="5,31,140,57"/>
-<area shape="rect" id="Node000002" href="$namespacearch.html#a6f8baf3132cf31d6a3859a67315a7c79" title="Short I/O delay (write to unused port 0x80)." alt="" coords="188,5,283,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="139,31,175,28,169,29,140,36"/>
-<area shape="rect" id="Node000003" href="$namespacearch.html#ab1e7d8f3b867b1b2a37b796b1c749c0a" title="Writes a byte to an I/O port." alt="" coords="331,31,410,57"/>
-<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="140,41,316,41,315,47,140,47"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="284,25,318,34,313,34,283,30"/>
-</map>

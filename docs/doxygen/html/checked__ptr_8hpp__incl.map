@@ -1,8 +1,0 @@
-<map id="src/kernel/memory/checked_ptr.hpp" name="src/kernel/memory/checked_ptr.hpp">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,5,188,48"/>
-<area shape="rect" id="Node000002" href="$types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="57,171,136,197"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="92,46,88,84,87,122,92,156,87,155,82,123,83,83,90,51"/>
-<area shape="rect" id="Node000003" href="$string_8hpp.html" title="Memory and string utility functions (extern &quot;C&quot; for ABI compat)." alt="" coords="96,96,174,123"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="107,46,125,82,120,82,106,51"/>
-<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="131,122,112,159,108,155,126,125"/>
-</map>

@@ -7,6 +7,8 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/scheduler_integrity.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/task/idle_monitor.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/crash_dump.hpp>
@@ -340,6 +342,31 @@ extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
         kernel::g_user_access_recover_ip = 0;
         frame[EL0_FRAME_ELR_SLOT] = recover;
         return 0;
+    }
+    // Issue #513 2.11: validate the attribution BEFORE any kill decision
+    // (mirrors riscv64_exception_dispatch). On PARK no live task could
+    // be attributed: return 1 with no arm and the epilogue parks instead
+    // of resuming. Otherwise the trip repaired current to the faulting
+    // task: kill it here with the discard save target and return 1.
+    {
+        const auto owner = kernel::sched_verify::validate_trap_frame(
+            reinterpret_cast<uint64_t>(frame), "aa64-el0");
+        if (owner.foreign || owner.unresolved) {
+            using kernel::sched_verify::TrapOwnerDisposition;
+            if (kernel::sched_verify::trap_owner_trip(
+                    owner, elr, esr, far, reinterpret_cast<uint64_t>(frame),
+                    kernel::gs::TRAP_OWNER_SITE_AA64_EL0) ==
+                TrapOwnerDisposition::PARK) {
+                return 1;
+            }
+            auto *t = kernel::Scheduler::current_task();
+            t->state = kernel::TaskState::TERMINATED;
+            t->exit_code = static_cast<uint64_t>(
+                -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+            kernel::Scheduler::wake_waiting_parent(*t);
+            kernel::Scheduler::switch_away_from_terminating_discard(*t);
+            return 1;
+        }
     }
     kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
     if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&

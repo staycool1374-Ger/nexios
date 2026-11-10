@@ -1,9 +1,0 @@
-<map id="kernel::DriverRegistry::register_driver" name="kernel::DriverRegistry::register_driver">
-<area shape="rect" id="Node000001" title="Registers a driver module." alt="" coords="5,27,154,69"/>
-<area shape="rect" id="Node000002" href="$stdlib_8c.html#a55e99c539cf7723ec15e856b7e0a8cee" title=" " alt="" coords="255,5,297,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="153,34,242,23,237,25,155,40"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1DriverRegistry.html#aaf688abe29167ffa1bb2b8dda1824bd4" title="Initialises the driver registry." alt="" coords="202,56,350,99"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="154,56,189,64,183,64,154,62"/>
-<area shape="rect" id="Node000003" href="$unistd_8c.html#abc96bd69b58b2deaddb484478d911c1b" title=" " alt="" coords="398,5,447,32"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="297,16,385,18,380,19,297,21"/>
-</map>

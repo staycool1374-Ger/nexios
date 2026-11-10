@@ -1,5 +1,0 @@
-<map id="service::Framebuffer::fill_rect" name="service::Framebuffer::fill_rect">
-<area shape="rect" id="Node000001" title="Fills a rectangle with a solid color." alt="" coords="5,5,147,48"/>
-<area shape="rect" id="Node000002" href="$classservice_1_1Framebuffer.html#a08aab0bfe314bf858cb3e6355d773c55" title="Draws a single pixel at the given coordinates." alt="" coords="195,5,336,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="147,24,182,26,177,27,147,29"/>
-</map>

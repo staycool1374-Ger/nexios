@@ -1,8 +1,0 @@
-<map id="service::Terminal::write" name="service::Terminal::write">
-<area shape="rect" id="Node000001" title="Writes a null&#45;terminated string to the terminal." alt="" coords="5,29,134,72"/>
-<area shape="rect" id="Node000002" href="$classservice_1_1Terminal.html#a2cdeef541005d6fe951835a03107ee48" title="Writes a single character to the terminal." alt="" coords="182,29,310,72"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="134,48,169,50,163,51,134,53"/>
-<area shape="poly" id="edge3_Node000002_Node000002" title=" " alt="" coords="212,27,210,19,216,10,228,5,246,3,265,5,278,14,273,13,263,10,246,8,229,10,220,14,216,20,217,30"/>
-<area shape="rect" id="Node000003" href="$classservice_1_1Framebuffer.html#a2eb3d827aa6446d0f95621283041fcb7" title="Renders a character using the bitmap font." alt="" coords="358,29,499,72"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="310,48,345,51,340,51,310,53"/>
-</map>

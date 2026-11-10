@@ -33,6 +33,7 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/gdt.hpp>
 #include <kernel/arch/msr.hpp>
 #include <kernel/arch/page_table.hpp>
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_PCID
@@ -863,6 +864,15 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     tcb->canary_installed = 0;
     tcb->swap_page_table(new_pml4);
     tcb->is_user_ = true;
+    // Issue #513 M1: an in-place kernel→user exec leaves the trap-entry
+    // kstack slot naming the old image's stack (or nothing). Republish
+    // for the (unchanged) TCB now that it is a user task again.
+    kernel::Scheduler::republish_entry_kstack(5); // site: exec
+#if defined(CONFIG_ARCH_X86_64)
+    // x86 twin: the syscall entry takes its kernel stack from TSS.RSP0,
+    // published at switch_to_task — rebind it here for the same reason.
+    arch::GDT::set_tss_rsp0(tcb->kernel_stack_top);
+#endif
     // Issue #74: exec reuses the live TCB — the old image's TLS base must not
     // survive into the new image. Reset the field and clear the live register
     // (the new image calls TLS_SET itself per the §13 crt0 contract).

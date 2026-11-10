@@ -1,7 +1,0 @@
-<map id="kernel::Scheduler::init" name="kernel::Scheduler::init">
-<area shape="rect" id="Node000001" title="Initialises the scheduler and creates the idle task." alt="" coords="5,13,153,40"/>
-<area shape="rect" id="Node000002" href="$structkernel_1_1TaskControlBlock.html#a82a06cb63bdaa30a038a40e5632fbe9d" title="Creates a new kernel task with the given entry and scheduling parameters." alt="" coords="201,5,368,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="153,24,188,26,182,27,153,29"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1PMM.html#a604f2d4587e26dd794e13a22d2213615" title="Allocates a contiguous block of pages (KERNEL ownership)." alt="" coords="416,5,546,48"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="369,24,403,27,398,27,369,29"/>
-</map>

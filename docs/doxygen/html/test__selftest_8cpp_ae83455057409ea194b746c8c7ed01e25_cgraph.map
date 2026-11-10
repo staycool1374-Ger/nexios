@@ -1,9 +1,0 @@
-<map id="JARVIS_TEST" name="JARVIS_TEST">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,80,116,107"/>
-<area shape="rect" id="Node000002" href="$structkernel_1_1vfs_1_1FdTable.html#ad3ac2531da920e48b0b7ba804a72ab9c" title=" " alt="" coords="177,5,313,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="99,77,171,52,168,56,101,82"/>
-<area shape="rect" id="Node000003" href="$structkernel_1_1vfs_1_1FdTable.html#ae3784b0a2703dbc97dc08fd745118967" title=" " alt="" coords="177,72,313,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="115,91,164,92,159,94,116,96"/>
-<area shape="rect" id="Node000004" href="$structkernel_1_1vfs_1_1FdTable.html#aea6504fdafcdee9fbbe9293d26631ccd" title=" " alt="" coords="164,139,326,165"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="104,105,164,124,187,133,182,133,163,129,104,110"/>
-</map>

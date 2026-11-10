@@ -1,8 +1,0 @@
-<map id="kernel::vfs::DevEntry" name="kernel::vfs::DevEntry">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,307,140,376"/>
-<area shape="rect" id="Node000002" href="$structkernel_1_1vfs_1_1Vnode.html" title=" " alt="" coords="96,5,212,160"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="95,146,76,185,69,211,66,238,67,290,62,290,61,238,64,210,71,183,97,141"/>
-<area shape="rect" id="Node000003" href="$structkernel_1_1vfs_1_1VnodeOps.html" title=" " alt="" coords="166,232,307,451"/>
-<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="145,157,153,207,162,231,156,231,148,209,144,162"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="221,232,207,185,206,178,207,173,213,183,226,233"/>
-</map>

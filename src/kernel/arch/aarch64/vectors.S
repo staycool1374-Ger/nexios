@@ -199,7 +199,11 @@ el0_sync:
     mov     x1, sp             // carry &stash (original x1 is in the stash)
     adrp    x0, scheduler_load_kstack_top
     ldr     x0, [x0, #:lo12:scheduler_load_kstack_top]
-    cbz     x0, 2f
+    // Issue #513: an invalid (zeroed) slot means no task published a
+    // stack for this hart — save_all would push 288 B of kernel frame
+    // onto the USER stack. Park instead; mirrors the rv64 .Ltrap_park
+    // gate (an invalid slot is never a legitimate dispatch).
+    cbz     x0, .Lel0_nostack
     mov     sp, x0             // switch to the task's own kernel stack
     ldp     x0, x1, [x1]       // fetch user x0/x1 from the old-stack stash
     stp     x0, x1, [sp, #-16]! // re-stash on the working stack
@@ -232,6 +236,12 @@ el0_sync:
     b       irq_context_switch_common
 .Lel0_fault_park:
     b       .Lel0_fault_park
+.Lel0_nostack:
+    // No valid kstack slot: park IRQ-masked (DAIF) until reset.
+    msr     daifset, #0xf
+.Lel0_nostack_loop:
+    wfi
+    b       .Lel0_nostack_loop
 .Lel0_resume:
     restore_all
     eret

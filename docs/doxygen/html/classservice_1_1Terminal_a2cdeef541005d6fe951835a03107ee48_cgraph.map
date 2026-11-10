@@ -1,6 +1,0 @@
-<map id="service::Terminal::putchar" name="service::Terminal::putchar">
-<area shape="rect" id="Node000001" title="Writes a single character to the terminal." alt="" coords="5,29,134,72"/>
-<area shape="poly" id="edge2_Node000001_Node000001" title=" " alt="" coords="34,28,33,19,39,10,51,5,70,3,89,5,103,13,97,14,88,10,69,8,53,10,42,14,38,21,39,29"/>
-<area shape="rect" id="Node000002" href="$classservice_1_1Framebuffer.html#a2eb3d827aa6446d0f95621283041fcb7" title="Renders a character using the bitmap font." alt="" coords="182,29,323,72"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="134,48,169,50,164,51,134,53"/>
-</map>

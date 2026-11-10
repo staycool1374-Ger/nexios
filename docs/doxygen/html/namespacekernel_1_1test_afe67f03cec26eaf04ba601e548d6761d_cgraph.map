@@ -1,9 +1,0 @@
-<map id="kernel::test::print_report" name="kernel::test::print_report">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,72,125,115"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1test_1_1Registry.html#a67e0bf935731e851c5130bab1b6c1861" title=" " alt="" coords="173,5,316,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="123,69,173,52,169,55,125,74"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1test_1_1Registry.html#ad30c0be8d7ba6161c038aa562c3ac885" title=" " alt="" coords="173,72,316,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="125,91,159,92,155,94,126,96"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1Logger.html#ad4ae5d24650cf692a9d70d545eaa1867" title=" " alt="" coords="178,139,310,181"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="124,113,174,132,168,133,124,118"/>
-</map>

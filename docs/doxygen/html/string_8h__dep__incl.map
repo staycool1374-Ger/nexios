@@ -1,7 +1,0 @@
-<map id="src/libc/string.h" name="src/libc/string.h">
-<area shape="rect" id="Node000001" title=" " alt="" coords="69,5,179,32"/>
-<area shape="rect" id="Node000002" href="$stdio_8c.html" title=" " alt="" coords="5,80,112,107"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="105,43,72,82,68,78,100,44"/>
-<area shape="rect" id="Node000003" href="$string_8c.html" title=" " alt="" coords="135,80,246,107"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="147,41,182,80,176,79,145,46"/>
-</map>

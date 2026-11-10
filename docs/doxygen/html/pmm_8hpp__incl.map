@@ -1,8 +1,0 @@
-<map id="src/kernel/memory/pmm.hpp" name="src/kernel/memory/pmm.hpp">
-<area shape="rect" id="Node000001" title="Physical Memory Manager — bitmap&#45;based page allocator with owner tracking." alt="" coords="5,5,193,32"/>
-<area shape="rect" id="Node000002" href="$types_8hpp.html" title="Fundamental type definitions for the kernel (no standard library)." alt="" coords="60,155,138,181"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="95,30,85,66,82,86,83,106,91,140,86,139,78,107,77,86,80,65,92,35"/>
-<area shape="rect" id="Node000003" href="$constants_8hpp.html" title="Central hardware and memory&#45;layout constants (no magic numbers)." alt="" coords="93,80,196,107"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="108,30,131,66,126,67,106,35"/>
-<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="139,106,117,143,113,139,134,109"/>
-</map>

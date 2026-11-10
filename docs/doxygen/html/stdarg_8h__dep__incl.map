@@ -1,8 +1,0 @@
-<map id="src/libc/stdarg.h" name="src/libc/stdarg.h">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,5,120,32"/>
-<area shape="rect" id="Node000002" href="$stdio_8c.html" title=" " alt="" coords="9,155,116,181"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="52,44,45,80,44,100,48,120,59,154,54,154,43,122,39,101,40,80,51,49"/>
-<area shape="rect" id="Node000003" href="$stdio_8h.html" title=" " alt="" coords="55,80,161,107"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="79,43,103,79,97,80,78,48"/>
-<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="94,119,72,156,68,153,89,121"/>
-</map>

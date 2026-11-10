@@ -1,9 +1,0 @@
-<map id="kernel::sync::Notify::wait" name="kernel::sync::Notify::wait">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,39,141,81"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Scheduler.html#ac094d7e0ec9c48c58637e36fce587be2" title="Returns the currently running task." alt="" coords="189,5,319,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="140,45,176,41,171,42,142,50"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1Scheduler.html#ac92ab8abdaaf924f98d66fd5f8ab2a50" title="Forces a reschedule — selects the next task and sets up context switch." alt="" coords="189,72,319,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="141,70,176,78,171,79,141,75"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1Scheduler.html#a852663edfb9d43d51ca280727c2295a3" title="Selects the next task to run according to RM policy." alt="" coords="367,72,497,115"/>
-<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="320,91,354,93,348,93,320,96"/>
-</map>

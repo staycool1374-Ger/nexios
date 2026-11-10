@@ -93,6 +93,12 @@ uint64_t scheduler_lock_depth[CONFIG_MAX_CPUS] = {};
 uint64_t isr_nesting_depth = 0;
 uint64_t irq_entry_tsc = 0;
 #endif
+// Issue #513: saturating-depth event counter (rv64 trap tail + verbatim
+// resume). Counts traps that found isr_nesting_depth already zero and
+// skipped the decrement instead of driving it to -1 (which wedged the
+// deferred-switch gate). Cold in steady state; nonzero proves the
+// self-heal engaged.
+uint64_t g_depth_sat = 0;
 uint64_t scheduler_corruption_count = 0;
 uint64_t deadline_detection_integrity = 0;
 // Tracks which task's FPU state is currently in the registers, single-core
@@ -190,6 +196,29 @@ void set_canary_trip(uint64_t task_id, uint8_t segment, uint64_t rip) noexcept {
 
 void reset_canary_trip() noexcept {
     g_canary_trip = CanaryTrip{};
+}
+
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+TrapOwnerTrip g_trap_owner_trip{};
+
+TrapOwnerTrip &trap_owner_trip() noexcept {
+    return g_trap_owner_trip;
+}
+
+void note_trap_owner_trip(uint64_t expected_id, uint64_t trapped_id,
+                          uint64_t site, uint64_t frame_owner_id,
+                          uint64_t slot_top, uint64_t live_root) noexcept {
+    g_trap_owner_trip.expected_id = expected_id;
+    g_trap_owner_trip.trapped_id = trapped_id;
+    g_trap_owner_trip.site = site;
+    g_trap_owner_trip.frame_owner_id = frame_owner_id;
+    g_trap_owner_trip.slot_top = slot_top;
+    g_trap_owner_trip.live_root = live_root;
+    ++g_trap_owner_trip.count;
+}
+
+uint64_t trap_owner_trip_count() noexcept {
+    return __atomic_load_n(&g_trap_owner_trip.count, __ATOMIC_RELAXED);
 }
 
 uint64_t &user_access_recover_ip() noexcept {

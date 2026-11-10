@@ -1,7 +1,0 @@
-<map id="puts" name="puts">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,31,52,57"/>
-<area shape="rect" id="Node000002" href="$string_8hpp.html#aa383452fe445bfae989358c9d7d96f4f" title="Returns the length of a null&#45;terminated string." alt="" coords="100,5,153,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="51,36,87,28,83,31,53,41"/>
-<area shape="rect" id="Node000003" href="$unistd_8c.html#abb39b21888372e95ad3e5c59b166f5c8" title=" " alt="" coords="102,56,151,83"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="52,47,89,58,84,60,52,53"/>
-</map>

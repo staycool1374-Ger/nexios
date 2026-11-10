@@ -1,9 +1,0 @@
-<map id="JARVIS_TEST" name="JARVIS_TEST">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,80,116,107"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1IPC.html#a0676ca1545023931d99deecedc3fdffe" title="Creates a mailbox for a given owner task." alt="" coords="182,5,314,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="99,77,173,52,170,56,102,82"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1IPC.html#adcf89033ac19ffd18fc0def99b8f1aaf" title="Destroys the mailbox owned by a task." alt="" coords="179,72,317,115"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="116,91,165,92,161,94,117,96"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1IPC.html#ac9a8226a332035941168102983aaa207" title="Finds a mailbox by owner task ID." alt="" coords="164,139,332,165"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="104,105,164,124,189,134,183,134,163,129,104,110"/>
-</map>

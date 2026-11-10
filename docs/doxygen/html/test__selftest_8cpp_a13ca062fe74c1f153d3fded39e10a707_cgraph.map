@@ -1,7 +1,0 @@
-<map id="JARVIS_TEST" name="JARVIS_TEST">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,35,116,61"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1PMM.html#a00cdda7e7ef634b49f0486ccd1ff7956" title=" " alt="" coords="164,5,343,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="116,37,151,34,146,36,117,42"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1PMM.html#a19ab9f1e2a4a123040d8a9d1e539318b" title=" " alt="" coords="189,56,318,99"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="116,54,176,64,171,66,116,59"/>
-</map>

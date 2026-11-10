@@ -20,6 +20,7 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/address.hpp>
 #include <kernel/ipc/shm_ring.hpp>
+#include <services/terminal/framebuffer.hpp>
 
 namespace kernel {
 namespace sdf {
@@ -125,10 +126,24 @@ int mint_one(TaskControlBlock &task, const CapSpec &spec, uint32_t *gen_out) {
         break;
     }
     case CapKind::FRAME: {
+        // Non-owning pin over foreign-lifetime RAM (issue #51 console PD
+        // scanout grant): the backing outlives every PD epoch, so the cap
+        // must never free the frames (FrameCap::create_pinned) — PD death
+        // still revokes the PD's mappings via the dispose closure.
+        // Fail-closed unless the whole span is user pages (a MmioCap is
+        // the only correct wrapper for true device MMIO; wrapping kernel
+        // RAM would hand the PD supervisor memory).
         const size_t pages =
             (spec.size + arch::PAGE_SIZE - 1) / arch::PAGE_SIZE;
-        auto *cap =
-            cap::FrameCap::create(spec.addr, pages, true);
+        if (spec.addr == 0 || pages == 0) {
+            return -1;
+        }
+        for (size_t i = 0; i < pages; ++i) {
+            if (!PMM::is_user_page(spec.addr + i * arch::PAGE_SIZE)) {
+                return -1;
+            }
+        }
+        auto *cap = cap::FrameCap::create_pinned(spec.addr, pages);
         if (cap == nullptr) {
             return -1;
         }
@@ -327,12 +342,50 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         return 0;
 #endif
     }
-    case PdRole::FB:
-        // Device caps only (planner S4): scanout RAM as frames, control
-        // registers per backend. Emulation policy stays #51 term-srv;
-        // zero IRQ by design (fb is polled). Concrete BARs are dispatched
-        // per backend at compose time — the row shape is declared here.
-        return 0;
+    case PdRole::FB: {
+        // Console PD row (issue #51): #48 owns the device cap, #51 the
+        // emulation policy. Fixed indices so the client never guesses:
+        //   0 = SHM text ring (kernel → console PD, element {len, char[7]})
+        //   1 = DMA_REGION status page (PD render counters, raw window)
+        //   2..N = scanout, split into slot-sized chunks (a 1024x768x32
+        //          scanout is 3 MiB; a user MMIO/frame slot holds 2 MiB).
+        //          MMIO chunks for true device memory (x86 VGA VRAM),
+        //          FRAME pins for RAM-backed scanouts (virtio-gpu/ramfb —
+        //          SYS_MMIO_MAP refuses RAM, SYS_FRAME_MAP refuses
+        //          kernel pages, so the kind follows the backing).
+        // Degraded compose (no framebuffer backend) yields the two
+        // channel caps only — the client then refuses to bind (a blind
+        // console sink is never bound); the kernel keeps its own path.
+        uint64_t n = 0;
+        out[n++] = CapSpec{CapKind::SHM, 0,
+                           kConsoleRingPages * arch::PAGE_SIZE, 0, 0};
+        out[n++] = CapSpec{CapKind::DMA_REGION, 0,
+                           kConsoleStatusPages * arch::PAGE_SIZE, 0, 0};
+        const uint64_t phys = service::Framebuffer::scanout_phys();
+        const uint64_t bytes = service::Framebuffer::scanout_bytes();
+        if (phys != 0 && bytes != 0) {
+            const bool ram = service::Framebuffer::scanout_ram_backed();
+            const uint64_t chunk =
+                ram ? kConsoleFrameChunk : kConsoleMmioChunk;
+            uint64_t chunks = (bytes + chunk - 1) / chunk;
+            if (chunks > kConsoleMaxScanoutChunks) {
+                // More chunks than the row can carry would hand the PD a
+                // truncated scanout: fail closed (no device cap) instead
+                // of binding a console that paints half a frame.
+                return n;
+            }
+            const CapKind kind = ram ? CapKind::FRAME : CapKind::MMIO;
+            for (uint64_t i = 0; i < chunks && n < kMaxCapsPerRole; ++i) {
+                const uint64_t off = i * chunk;
+                uint64_t size = bytes - off;
+                if (size > chunk) {
+                    size = chunk;
+                }
+                out[n++] = CapSpec{kind, phys + off, size, 0, 0};
+            }
+        }
+        return n;
+    }
     case PdRole::BLOCK:
     case PdRole::NET:
         // Rows dispatch on live PCI/virtio topology at compose time

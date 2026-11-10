@@ -1,7 +1,0 @@
-<map id="JARVIS_TEST" name="JARVIS_TEST">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,31,116,57"/>
-<area shape="rect" id="Node000002" href="$structkernel_1_1Version.html#ac8b5bac12d2bfd0b7fcb454b6b610a8d" title=" " alt="" coords="164,5,312,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="116,34,151,31,146,32,117,39"/>
-<area shape="rect" id="Node000003" href="$string_8hpp.html#aa383452fe445bfae989358c9d7d96f4f" title="Returns the length of a null&#45;terminated string." alt="" coords="211,56,264,83"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="116,49,198,62,193,64,116,55"/>
-</map>

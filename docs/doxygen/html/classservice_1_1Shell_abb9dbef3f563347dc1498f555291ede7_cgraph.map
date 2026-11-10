@@ -1,7 +1,0 @@
-<map id="service::Shell::execute" name="service::Shell::execute">
-<area shape="rect" id="Node000001" title="Parses and executes a command string." alt="" coords="5,13,160,40"/>
-<area shape="rect" id="Node000002" href="$classservice_1_1Shell.html#abbdab9c5aa85165ac9c4b2644829e712" title="Initialises the shell and registers built&#45;in commands." alt="" coords="208,13,333,40"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="160,24,195,26,190,27,160,29"/>
-<area shape="rect" id="Node000003" href="$classservice_1_1Shell.html#a7affcd5b709dc4b81499f9b3156dd254" title="Registers a new shell command." alt="" coords="381,5,532,48"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="333,24,368,27,363,27,333,29"/>
-</map>

@@ -1,9 +1,0 @@
-<map id="JARVIS_TEST" name="JARVIS_TEST">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,56,116,83"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1PMM.html#acd322564470938305549042daa42732d" title="Allocates a single 4 KiB page (KERNEL ownership)." alt="" coords="171,5,336,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="113,53,187,35,183,38,115,58"/>
-<area shape="rect" id="Node000003" href="$classkernel_1_1PMM.html#a00cdda7e7ef634b49f0486ccd1ff7956" title=" " alt="" coords="164,56,343,83"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="116,67,150,68,145,70,117,72"/>
-<area shape="rect" id="Node000004" href="$classkernel_1_1PMM.html#a0daaa2d1b36579ff9c0eb60caddee59d" title="Frees a page regardless of ownership." alt="" coords="173,107,334,133"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="115,81,187,101,182,103,114,86"/>
-</map>

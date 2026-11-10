@@ -1,7 +1,0 @@
-<map id="strdup" name="strdup">
-<area shape="rect" id="Node000001" title=" " alt="" coords="5,31,63,57"/>
-<area shape="rect" id="Node000002" href="$stdlib_8c.html#a9c36d0fe3ec4675cbffdc9b52f5fb399" title=" " alt="" coords="111,5,170,32"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="62,35,97,28,93,31,64,40"/>
-<area shape="rect" id="Node000003" href="$string_8c.html#aa383452fe445bfae989358c9d7d96f4f" title="Returns the length of a null&#45;terminated string." alt="" coords="114,56,167,83"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="63,48,101,58,96,60,63,53"/>
-</map>

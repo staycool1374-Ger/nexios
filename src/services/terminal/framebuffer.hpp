@@ -78,8 +78,23 @@ public:
     static const FramebufferInfo& info() { return info_; }
 
     /// @brief Returns whether the framebuffer was successfully initialised.
+    ///        With CONFIG_DRIVER_PD_FB the kernel still probes the device
+    ///        (geometry + scanout phys for the SDF device cap) but does not
+    ///        own it — see device_owned().
     /// @return True if available.
     static bool available() { return initialized_; }
+    /// @brief True when the framebuffer device is owned by a userspace PD
+    ///        (issue #51): the kernel keeps the probe for cap minting and
+    ///        the read-only pixel oracle, but every render path is a no-op
+    ///        — writes belong to the PD alone.
+    /// @return True when the PD owns presentation.
+    static bool device_owned() {
+#if CONFIG_DRIVER_PD_FB
+        return true;
+#else
+        return false;
+#endif
+    }
     /// @brief Backend name (issue #394: runtime-selected, was
     /// compile-time-only in #357). "multiboot2" on x86_64; on other arches
     /// the init chain selects "virtio-gpu" then "ramfb", else "none".
@@ -98,10 +113,33 @@ public:
     /// @return 0x000000 when unavailable or out of bounds.
     static uint32_t get_pixel(uint32_t x, uint32_t y);
 
+    /// @brief Physical base of the scanout, for SDF device-cap minting
+    /// (issue #51 console PD: #48 owns the device cap, #51 the emulation).
+    /// x86: VGA VRAM (true device MMIO → MmioCap). virtio-gpu/ramfb:
+    /// PMM-backed guest RAM (→ FRAME pins over user frames).
+    /// x86_64 is the multiboot2 tag address; aarch64/riscv64 is the
+    /// PMM-backed guest-RAM backing page 0. Zero when unavailable.
+    /// @return Scanout physical base address, or 0.
+    static uint64_t scanout_phys() { return scanout_phys_; }
+    /// @brief Scanout span in bytes (pitch * height), page-rounded up by
+    /// the caller when minting the cap. Zero when unavailable.
+    /// @return Scanout byte span, or 0.
+    static uint64_t scanout_bytes() { return scanout_bytes_; }
+    /// @brief True when the scanout is PMM-backed guest RAM (issue #51:
+    ///        virtio-gpu/ramfb) rather than true device MMIO (x86 VGA).
+    ///        The SDF row mints FRAME pins for RAM, MmioCaps for MMIO —
+    ///        SYS_FRAME_MAP refuses kernel pages and SYS_MMIO_MAP
+    ///        refuses RAM, so the distinction is load-bearing.
+    /// @return True for RAM-backed scanouts.
+    static bool scanout_ram_backed() { return scanout_ram_backed_; }
+
 private:
     // NOLINTBEGIN(bugprone-dynamic-static-initializers)
     static FramebufferInfo info_;
     static bool initialized_;
+    static uint64_t scanout_phys_;
+    static uint64_t scanout_bytes_;
+    static bool scanout_ram_backed_;
     // NOLINTEND(bugprone-dynamic-static-initializers)
 
     /// @brief Writes a pixel value directly to the framebuffer memory.

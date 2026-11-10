@@ -590,6 +590,14 @@ class Scheduler {
     /// @brief Sets the current running task.
     /// @param task Reference to the task to set as current.
     static void set_current(TaskControlBlock &task) noexcept;
+    /// @brief Republish the trap-entry kstack slot for the current task
+    ///        (issue #513 M1 writer-table closure). Publishes current's
+    ///        (base, top) when current is a user task with a valid kstack;
+    ///        otherwise leaves the slot untouched (a live spinning user
+    ///        task keeps its slot). Single-writer (own hart), IRQ-guarded
+    ///        internally; never locks, never scans.
+    /// @param site Call-site tag for diagnostics.
+    static void republish_entry_kstack(uint64_t site) noexcept;
 
     /// @brief Charge @p pages to the current task's memory budget.
     /// Returns false if charging would exceed the task's budget cap.
@@ -609,6 +617,13 @@ class Scheduler {
     ///        ISR epilogue applies the switch.  Caller must hold no scheduler
     ///        lock; this takes scheduler_lock_ internally.
     static void switch_away_from_terminating(TaskControlBlock &exiting) noexcept;
+    /// @brief Discard-frame variant of switch_away_from_terminating
+    ///        (issue #513 2.9). Identical arm, except the epilogue's save
+    ///        lands in a per-hart discard word instead of the exiting
+    ///        task's context — for foreign-frame kills where the live RSP
+    ///        belongs to a victim stack (INV-CTX-RSP). Caller: trap-entry
+    ///        attribution repair only.
+    static void switch_away_from_terminating_discard(TaskControlBlock &exiting) noexcept;
     /// @brief Allocate a unique task ID from the ID table.
     /// @return A new task ID, or TASK_INVALID if the table is full.
     [[nodiscard]] static uint64_t alloc_id() noexcept;
@@ -1045,6 +1060,22 @@ class Scheduler {
         return __atomic_load_n(&sched_quiesce_depth_, __ATOMIC_RELAXED);
     }
 struct SwSlots {
+    // Writer table (issue #513 M1 closure; mirrors #369 T4 do-not-move):
+    // the trap-entry slot is trap-consumed, so it is published ONLY at
+    // actual resumption: (a) the apply path republishes next via
+    // on_context_switch -> set_current_task -> republish_entry_kstack;
+    // (b) no-arm/no-switch transitions republish current via
+    // republish_entry_kstack() (publish-if-user, else leave untouched):
+    // set_current, set_current_task, set_current_index,
+    // cancel_pending_switch, restore_preempted_current, exec_into_current.
+    // Arm publish sites (switch_to_task, switch_away_from_terminating)
+    // deliberately do NOT publish it on rv64/aa64: an arm names the
+    // future, but traps before the apply belong to the still-running
+    // current task (the rv64/aa64 entries save via the slot).
+    // x86_64 EXCEPTION: the x86 entry never saves via the slots but the
+    // isr_stubs apply-time RSP-owner check reads them before the
+    // republish, so the x86 arm sites DO publish next's pair (no M1
+    // window on x86).
     static uint64_t this_cpu() {
         return arch::cpu_index();
     }

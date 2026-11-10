@@ -1,5 +1,0 @@
-<map id="kernel::IPC::queue" name="kernel::IPC::queue">
-<area shape="rect" id="Node000001" title="Returns the message queue for a given task ID." alt="" coords="5,13,136,40"/>
-<area shape="rect" id="Node000002" href="$classkernel_1_1Scheduler.html#adbf15b7eb697f6c14bcf76c438895b18" title="Finds a task by its ID (hash table, O(1) amortized)." alt="" coords="184,5,314,48"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="136,24,170,26,165,27,136,29"/>
-</map>

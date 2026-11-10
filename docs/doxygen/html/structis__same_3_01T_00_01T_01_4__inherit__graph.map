@@ -1,7 +1,0 @@
-<map id="is_same&lt; T, T &gt;" name="is_same&lt; T, T &gt;">
-<area shape="rect" id="Node000001" title="Compile&#45;time type equality check (true case)." alt="" coords="82,160,188,229"/>
-<area shape="rect" id="Node000002" href="$structintegral__constant.html" title=" " alt="" coords="5,5,123,112"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="100,123,120,160,115,160,98,128"/>
-<area shape="rect" id="Node000003" href="$structintegral__constant.html" title=" " alt="" coords="147,5,264,112"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="173,124,154,162,150,158,169,127"/>
-</map>

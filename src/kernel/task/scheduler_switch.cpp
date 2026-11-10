@@ -56,6 +56,17 @@ using sched_switch::current_sp;
 using sched_switch::IRET_CS_IDX;
 using sched_switch::IRET_RFLAGS_IDX;
 using sched_switch::IRET_RIP_IDX;
+
+namespace {
+// Issue #513 2.9: discard save area for foreign-frame terminations. When
+// the faulting frame lives on a victim task's stack (misattributed trap),
+// the epilogue's `mov [save], rsp` must not land in the terminated task's
+// context.sp — that would publish a victim-stack address as the dead
+// task's resume point (consumed by the RSP-owner scan and wake paths).
+// Single-writer per hart (trap-entry fault path only); consumed once.
+uint64_t s_discard_rsp[CONFIG_MAX_CPUS] = {};
+bool s_discard_armed[CONFIG_MAX_CPUS] = {};
+} // namespace
 using sched_switch::IRET_RSP_IDX;
 using sched_switch::IRET_SS_IDX;
 using sched_switch::H2_EV_ARM;
@@ -87,12 +98,12 @@ void Scheduler::cancel_pending_switch() noexcept {
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::next_task_id(), UINT64_MAX,
                      __ATOMIC_RELEASE);
-    __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(), (uint64_t)0,
-                     __ATOMIC_RELEASE);
-    __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), (uint64_t)0,
-                     __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)0,
                      __ATOMIC_RELEASE);
+    // Issue #513 V2: the continuing task keeps a valid slot instead of a
+    // zeroed one — the next U-trap on this hart must not park for a
+    // cleared arm. Republish for whoever is current now (writer table).
+    republish_entry_kstack(3); // site: cancel
     uint64_t gen =
         __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
     __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
@@ -139,6 +150,12 @@ void Scheduler::set_current_index(uint64_t idx) noexcept {
     for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
         if (i++ == idx) {
             set_current_ptr(t);
+            // Issue #513: snapshot/test restores repoint current without
+            // dispatching. A user task re-identified here may resume via
+            // the no-switch path (next == current), which publishes
+            // nothing — publish its pair now so its next U-trap does not
+            // land on a stale slot. Kernel current leaves the slot alone.
+            republish_entry_kstack(6);
             return;
         }
     }
@@ -150,6 +167,40 @@ void Scheduler::set_current_task(TaskControlBlock *t) noexcept {
         __atomic_store_n(&t->running_on_cpu, Scheduler::sched_cpu(),
                          __ATOMIC_RELEASE);
         set_current_ptr(t);
+        // Issue #513 M1: a bare current publish leaves the trap-entry
+        // kstack slot naming whoever ran before. Republish for the new
+        // current (no-op while an arm is in flight).
+        republish_entry_kstack(1); // site: set_current_task
+    }
+}
+
+/// @brief Republish the trap-entry kstack slot for the current task
+///        (issue #513 M1 writer-table closure). See scheduler.hpp.
+///        Only the no-arm case publishes: with an arm in flight the slots
+///        belong to the arm's target, and touching them here would steer
+///        the pending apply onto the wrong stack.
+void Scheduler::republish_entry_kstack(uint64_t site) noexcept {
+    (void)site;
+    // No arm-guard: arms no longer publish load_kstack_* (see the arm
+    // publish sites), so there is no arm-owned slot state to protect.
+    // Publishing current unconditionally (when user) is safe: an
+    // in-flight arm republishes next at apply time.
+    arch::IrqGuard iguard{};
+    auto *c = current_task();
+    // Publish current's pair when current is a user task with a valid
+    // kstack. Deliberately NO live-RSP check and NO invalidation: the
+    // live RSP belongs to the caller (harness setup, tick, drop-arm),
+    // not necessarily to current, and zeroing here strands a live
+    // user task whose next trap then parks on slot==0 (issue #513
+    // face-I stall). A stale-but-plausible slot is policed at trap time
+    // instead (validate_trap_frame trips instead of corrupting).
+    if (c && c->magic == TaskControlBlock::TCB_MAGIC && c->is_user_ &&
+        c->kernel_stack != nullptr && c->kernel_stack_top != 0) {
+        __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(),
+                         reinterpret_cast<uint64_t>(c->kernel_stack),
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(),
+                         c->kernel_stack_top, __ATOMIC_RELEASE);
     }
 }
 
@@ -223,6 +274,11 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
     }
 
     set_current_ptr(&task);
+    // Issue #513: republish the trap-entry slot for the newly published
+    // current (writer table). Unconditional: arms no longer publish the
+    // slot, so there is no arm-owned state to protect; this keeps a
+    // no-switch resume covered.
+    republish_entry_kstack(2);
 }
 
 /// @brief Restore scheduler state after a deferred-switch arm is cleared
@@ -261,7 +317,7 @@ void restore_preempted_current(TaskControlBlock *current,
                 // trace() takes one uint64; format the id into a small buffer.
                 char buf[24];
                 int p = 0;
-                kernel::debug::fmt_u64(buf, p, armed_target_id);
+                p = kernel::debug::fmt_u64(buf, p, armed_target_id);
                 buf[p] = 0;
                 kernel::debug::trace(buf);
             }
@@ -280,6 +336,10 @@ void restore_preempted_current(TaskControlBlock *current,
             Scheduler::set_task_ready(*target);
         }
     }
+    // Issue #513: the H2-RESTORE path changed who runs without publishing
+    // slots. Republish for the restored current (writer table; no-op while
+    // an arm is in flight).
+    Scheduler::republish_entry_kstack(4); // site: restore
 }
 
 // ---------------------------------------------------------------------------
@@ -649,11 +709,28 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     kernel::dispatch_step(kernel::SchedDispatchSteps::FrameGuard); // #347
     __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), task_stack_ptr(&next),
                      __ATOMIC_RELEASE);
+    // Issue #513: the trap-entry kstack slot is NOT published here on
+    // rv64/aa64. load_rsp_from/cr3/tls are consumed only at apply time
+    // (the epilogue or its validator), but the rv64/aa64 kstack slot is
+    // consumed by EVERY U-trap — publishing next's pair at arm time
+    // leaves a window (arm published, switch not yet applied) in which
+    // the still-running current task traps onto the WRONG stack. The
+    // slot is published at actual resumption instead: the apply path
+    // republishes for next via on_context_switch -> set_current_task ->
+    // republish_entry_kstack.
+#if defined(CONFIG_ARCH_X86_64)
+    // x86 exception: the x86_64 entry never saves via these slots
+    // (hardware IST/TSS), but the isr_stubs apply-time RSP-owner check
+    // reads them BEFORE on_context_switch republishes. Publish next's
+    // pair at arm time so the check sees the arm's target. No M1 window
+    // on x86: a pre-apply U-trap of the still-running current task does
+    // not consume the slots for saving.
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(),
                      reinterpret_cast<uint64_t>(next.kernel_stack),
                      __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next.kernel_stack_top,
                      __ATOMIC_RELEASE);
+#endif
     if (next.get_page_table()) {
         // Issue #352: publish tagged (ID 0 = raw phys, full flush).
         // x86_64 tags PCID, aarch64/riscv64 tag ASID; untagged arches
@@ -833,6 +910,20 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
     }
 }
 
+/// @brief Discard-frame variant of switch_away_from_terminating (issue #513
+///        2.9). Arms the discard save target, then delegates: the armed
+///        switch is identical except the epilogue's save lands in the
+///        per-hart discard word. Caller must hold no scheduler lock (same
+///        contract as the plain variant); trap-IRQ-masked is sufficient.
+void Scheduler::switch_away_from_terminating_discard(
+    TaskControlBlock &exiting) noexcept {
+    const uint64_t cpu = Scheduler::sched_cpu();
+    if (cpu < static_cast<uint64_t>(CONFIG_MAX_CPUS)) {
+        s_discard_armed[cpu] = true;
+    }
+    switch_away_from_terminating(exiting);
+}
+
 void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept {
 
     ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
@@ -912,13 +1003,20 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
             return;
 
         // Publish the deferred switch globals (load side only under lock).
+        // Issue #513: load_kstack_base/top are deliberately NOT published
+        // here on rv64/aa64 (see switch_to_task above) — the trap-entry
+        // slot always names the last actually-running task until the
+        // apply path republishes for next. x86 excepted (apply-time
+        // RSP-owner check reads the slots before the republish).
         __atomic_store_n(&Scheduler::SwSlots::load_rsp_from(), task_stack_ptr(next),
                          __ATOMIC_RELEASE);
+#if defined(CONFIG_ARCH_X86_64)
         __atomic_store_n(&Scheduler::SwSlots::load_kstack_base(),
                          reinterpret_cast<uint64_t>(next->kernel_stack),
                          __ATOMIC_RELEASE);
         __atomic_store_n(&Scheduler::SwSlots::load_kstack_top(), next->kernel_stack_top,
                          __ATOMIC_RELEASE);
+#endif
         if (next->get_page_table()) {
             // Issue #352: tagged publish (same contract as above).
             uint64_t cr3_value = arch::context_id_tag(
@@ -967,8 +1065,19 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
             __atomic_load_n(&Scheduler::SwSlots::generation(), __ATOMIC_RELAXED);
         __atomic_store_n(&Scheduler::SwSlots::generation(), gen + 1,
                          __ATOMIC_RELEASE);
-        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(),
-                         &task_stack_ptr(&exiting), __ATOMIC_RELEASE);
+        // Issue #513 2.9: a foreign-frame termination saves into the
+        // discard area instead of the exiting task's context — the live
+        // RSP belongs to a victim stack and must never be published as
+        // the dead task's resume point (INV-CTX-RSP).
+        const uint64_t cpu = Scheduler::sched_cpu();
+        uint64_t *save_target = &task_stack_ptr(&exiting);
+        if (cpu < static_cast<uint64_t>(CONFIG_MAX_CPUS) &&
+            s_discard_armed[cpu]) {
+            save_target = &s_discard_rsp[cpu];
+            s_discard_armed[cpu] = false;
+        }
+        __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), save_target,
+                         __ATOMIC_RELEASE);
         // Issue #221: terminate-driven arms force-apply (see SwSlots doc).
         __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
                          __ATOMIC_RELEASE);
