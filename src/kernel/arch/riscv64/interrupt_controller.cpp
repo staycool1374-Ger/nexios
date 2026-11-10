@@ -192,7 +192,13 @@ static uint64_t g_last_u_sepc = 0;
 ///        no live user task to kill.
 /// @param frame Trap save area (OFF_* layout: SEPC=idx31, SCAUSE=idx33,
 ///        STVAL=idx34).
-extern "C" void riscv64_u_fault_handler(uint64_t *frame) {
+/// @return Disposition for the asm epilogue (issue #513): 0 = resume this
+///        frame (sepc rewritten by the caller), 1 = switch-or-park (never
+///        resume this frame). Both the debugger-park path and the terminate
+///        path return 1: neither rewrites frame[31], and both arm a
+///        switch-away whose apply the epilogue performs (or parks when no
+///        arm exists). Resuming a faulting frame here re-traps unconditionally.
+extern "C" uint64_t riscv64_u_fault_handler(uint64_t *frame) {
     uint64_t sepc = frame[31];
     uint64_t scause = frame[33];
     uint64_t stval = frame[34];
@@ -222,7 +228,10 @@ extern "C" void riscv64_u_fault_handler(uint64_t *frame) {
             }
             if (kernel::debug::debug_route_fault(*t, stop_kind, scause,
                                                  stop_addr)) {
-                return;
+                // Debugger parked the target and armed the switch-away:
+                // the faulting sepc is untouched, so the epilogue must
+                // apply the arm (or park), never resume this frame.
+                return 1;
             }
         }
         t->state = kernel::TaskState::TERMINATED;
@@ -230,11 +239,14 @@ extern "C" void riscv64_u_fault_handler(uint64_t *frame) {
             -static_cast<int64_t>(kernel::Signal::SIGSEGV));
         kernel::Scheduler::wake_waiting_parent(*t);
         kernel::Scheduler::switch_away_from_terminating(*t);
-        return;
+        return 1;
     }
     for (;;) {
         arch::pause();
     }
+    // Unreachable: the loop above spins IRQ-masked until reset. Return the
+    // switch-or-park disposition so the epilogue gate parks if ever reached.
+    return 1;
 }
 
 /// @brief Post-mortem readback of the last latched U-mode fault (tests).
@@ -247,22 +259,31 @@ extern "C" uint64_t riscv64_last_u_sepc() { return g_last_u_sepc; }
 ///        panic path (kernel bug).
 /// @param frame Trap save area base (sp).
 /// @param sstatus Live sstatus (SPP bit 8 discriminates).
-extern "C" void riscv64_exception_dispatch(uint64_t *frame, uint64_t sstatus) {
+/// @return Disposition for the asm epilogue (issue #513): 0 = resume this
+///        frame (only the uaccess-recovery branch, which rewrites
+///        frame[31] itself — the epilogue must sret verbatim: no sepc
+///        bump, no syscall), 1 = switch-or-park (fault handled, never
+///        resume the faulting frame).
+extern "C" uint64_t riscv64_exception_dispatch(uint64_t *frame,
+                                               uint64_t sstatus) {
     // Fault recovery for safe_copy_from/to_user (mirrors x86
     // kernel.cpp:1669): while a guarded copy runs, ANY fault redirects
     // SEPC to the recovery label so the copy returns false instead of
     // panicking (S-mode) or terminating (U-mode) the task. Checked first:
-    // copies execute in S-mode task context.
+    // copies execute in S-mode task context. frame[31] carries the
+    // recovery address on return, so the epilogue resumes it verbatim.
     if (kernel::g_user_access_recover_ip != 0) {
         frame[31] = kernel::g_user_access_recover_ip; // OFF_SEPC slot
         kernel::g_user_access_recover_ip = 0;
-        return;
+        return 0;
     }
     if ((sstatus & (1ULL << 8)) == 0) {
-        riscv64_u_fault_handler(frame);
-        return;
+        return riscv64_u_fault_handler(frame);
     }
     handle_kernel_exception(frame[31], frame[33], frame[34], frame[1]);
+    // handle_kernel_exception halts (first-chance dump + park); the
+    // switch-or-park disposition satisfies the contract if ever reached.
+    return 1;
 }
 
 } // namespace arch

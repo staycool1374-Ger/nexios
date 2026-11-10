@@ -90,6 +90,10 @@ syscall_entry:
     mv t0, x2                # t0=user_sp (parked; x2 dies at sp reload)
     la sp, scheduler_load_kstack_top
     ld sp, 0(sp)             # sp=kstack top (user sp safe in t0)
+    # Issue #513: an invalid (zeroed) slot means no task published a
+    # stack for this hart — saving the frame would corrupt whatever
+    # lives at -SAVE_SIZE. Park instead of writing through a null slot.
+    beqz sp, .Ltrap_park
     addi sp, sp, -SAVE_SIZE
     # Park user-t0 via swap (csrrw): t1 = user-t0, sscratch = user-t1.
     # A plain csrr here would clobber user-t1 (x6) before its save.
@@ -179,9 +183,21 @@ syscall_entry:
     beq t0, t1, 6f
     # Other exceptions: SPP-gated dispatch (issue #206 M2) — U-mode faults
     # terminate the task, S-mode faults panic. Pass frame + sstatus.
+    # Disposition in a0 (issue #513): 0 = resume this frame (uaccess
+    # recovery rewrote OFF_SEPC itself — sret verbatim at 5f, no sepc
+    # bump, no syscall), 1 = switch-or-park. A non-ECALL exception must
+    # NEVER fall through into 6f: that ran a full syscall on fault-time
+    # registers, advanced sepc past the fault, and sret back into it —
+    # the unbounded +4 fault storm. With no arm published there is no
+    # switch to apply, so park instead of sret into a suspect frame.
     mv a0, sp
     csrr a1, sstatus
     call riscv64_exception_dispatch
+    beqz a0, 5f
+    la t0, scheduler_save_rsp_to
+    ld t0, 0(t0)
+    beqz t0, .Ltrap_park
+    j 5f
 
 6:  # Syscall (ECALL): syscall_handler(num, a0, a1, a2, a3, regs)
     # §2 ABI (issue #185; docs/specs/syscall-abi-picolibc.md): number rides
@@ -499,6 +515,16 @@ abort_switch:
     # frame). x6 still holds the base: load t1 directly, then sret.
     ld x6, OFF_T1(x6)
     sret
+.Ltrap_park:
+    # Issue #513: fault disposition is switch-or-park with no arm
+    # published (terminated with no live target, or debugger park that
+    # never armed). sret into the faulting frame would re-trap
+    # unconditionally, so park IRQ-masked until reset. Mirrors the
+    # aarch64 .Lel0_fault_park loop.
+    csrci sstatus, 2
+.Ltrap_park_loop:
+    wfi
+    j .Ltrap_park_loop
 40:
     # S-path: x2 (hence sp) untouched, so the sp recompute is valid here.
     addi x6, sp, -SAVE_SIZE
