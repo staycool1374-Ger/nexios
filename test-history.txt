@@ -6165,3 +6165,7 @@ SUMMARY: total=2 ok=2 fail=0 ARCH=riscv64
 2026-11-11 18:03:30 core_sync PASSED: 93 FAILED: 0 TIME: 6450ms
 2026-11-11 18:07:04 core_basic PASSED: 98 FAILED: 0 TIME: 6470ms
 2026-11-11 18:07:21 core_sync PASSED: 93 FAILED: 0 TIME: 6416ms
+
+SUMMARY: total=0 ok=0 fail=0 ARCH=aarch64
+
+SUMMARY: total=0 ok=0 fail=0 ARCH=riscv64
