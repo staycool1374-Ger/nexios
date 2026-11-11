@@ -40,6 +40,7 @@ using namespace kernel;
 
 #if defined(CONFIG_ARCH_AARCH64)
 
+#if CONFIG_DEBUG && CONFIG_STACK_OVERFLOW_HOOK
 namespace {
 
 // Native ELF machine for synthetic headers (mirrors test_elf_loader.cpp).
@@ -179,6 +180,7 @@ void spin_probe(TaskControlBlock *t, int bound = 20000) {
 }
 
 } // namespace
+#endif // CONFIG_DEBUG && CONFIG_STACK_OVERFLOW_HOOK
 
 extern uint64_t stack_overflow_hook_latched_task();
 extern uint64_t stack_overflow_hook_latched_va();
