@@ -404,22 +404,65 @@ JARVIS_TEST(pipe_ring_wrap_byte_order, "PRE: vfsd, iocd | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: Two dispatched writer tasks each write a 1 KiB distinct
-// pattern through one shared pipe end, run sequentially (first joined
-// before the second starts), then the harness reads 2 KiB back in
-// order. Sequential dispatch keeps the test deterministic: pipe_write
-// carries no lock, so genuinely overlapping writers could lose bytes
-// (a follow-up kernel change, out of scope for this QE lane); the
-// multi-task dispatch + join + ordered read is what this test pins.
-// Input: Harness creates pipe, dispatches writer A (0xAA x 1024) and
-// joins, dispatches writer B (0xBB x 1024) and joins, reads 2048.
-// Expect: each writer reports 1024; read returns 2048 with the first
-// half all 0xAA and the second half all 0xBB; no deadlock.
-// Depends: kernel::vfs::Pipe, Scheduler dispatch + join, fd_table
+// Testidea: Issue #474 O_NONBLOCK contract at the ops layer: an end
+// opened with O_NONBLOCK fails closed with -EAGAIN (-11) instead of
+// parking — empty read with a live writer, and write to a full pipe.
+// NOTE (audit): -11 is observable ONLY here — sys_read/sys_write
+// collapse negatives, and there is no fcntl, so open-time-only.
+// Input: Create pipe; open read end O_NONBLOCK, read empty (live
+// writer); fill 4096; open write end O_NONBLOCK, write 1 byte.
+// Expect: both return -11; no hang; default blocking shape untouched.
+// Depends: pipe_open O_NONBLOCK, pipe_read/write -EAGAIN paths
+JARVIS_TEST(pipe_o_nonblock_eagain, "PRE: vfsd, iocd | POST: none") {
+    int fds[2] = {-1, -1};
+    JARVIS_ASSERT_EQ(0, vfs::create_pipe(fds));
+    auto *task = Scheduler::current_task();
+    JARVIS_ASSERT(task != nullptr);
+    auto *rnode = task->fd_table.get(fds[0])->vnode;
+    auto *wnode = task->fd_table.get(fds[1])->vnode;
+    JARVIS_ASSERT(rnode != nullptr);
+    JARVIS_ASSERT(wnode != nullptr);
+
+    // Read end non-blocking: empty pipe + live writer fails closed.
+    JARVIS_ASSERT_EQ(0, rnode->ops->open(
+                            *rnode, static_cast<uint64_t>(
+                                        vfs::O_NONBLOCK)));
+    uint8_t probe = 0xAA;
+    JARVIS_ASSERT_EQ(-11, rnode->ops->read(*rnode, &probe, sizeof(probe),
+                                           0));
+
+    // Write end non-blocking: full pipe fails closed.
+    JARVIS_ASSERT_EQ(0, wnode->ops->open(
+                            *wnode, static_cast<uint64_t>(
+                                        vfs::O_NONBLOCK)));
+    uint8_t fill[4096];
+    memset(fill, 0x5A, sizeof(fill));
+    JARVIS_ASSERT_EQ(4096LL, wnode->ops->write(*wnode, fill,
+                                               sizeof(fill), 0));
+    uint8_t extra = 0x5A;
+    JARVIS_ASSERT_EQ(-11, wnode->ops->write(*wnode, &extra,
+                                            sizeof(extra), 0));
+
+    task->fd_table.free(fds[0]);
+    task->fd_table.free(fds[1]);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Two writer tasks dispatched CONCURRENTLY (no sequential pin)
+// each push a 1 KiB distinct pattern through one shared pipe end; the
+// write-side mutex makes each write atomic, so the 2 KiB drain is two
+// contiguous uniform runs in either order (no torn bytes).
+// Input: Harness creates pipe, dispatches A (0xAA) + B (0xBB) together,
+// joins both, reads 2048.
+// Expect: each writer reports 1024; drain is 1024-run AA + 1024-run BB
+// in either order; no deadlock.
+// Depends: pipe_write mutex exclusion, Scheduler dispatch + join
 JARVIS_TEST(pipe_multiple_writers_no_interleaving,
             "PRE: vfsd, iocd | POST: none") {
-    // Pseudocode: harness creates pipe, stashes wnode; dispatch A, join;
-    // dispatch B, join; read 2048 in harness; assert halves; free fds.
+    // Pseudocode: harness creates pipe, stashes wnode; dispatch A and B
+    // together; join both; read 2048 in harness; assert two uniform
+    // runs (either order); free fds.
     int fds[2] = {-1, -1};
     JARVIS_ASSERT_EQ(0, vfs::create_pipe(fds));
     auto *task = Scheduler::current_task();
@@ -444,13 +487,6 @@ JARVIS_TEST(pipe_multiple_writers_no_interleaving,
         },
         11, 10);
     JARVIS_ASSERT(first != nullptr);
-    Scheduler::add_task(*first);
-    Scheduler::reschedule();
-    kernel::test::wait_for_termination_safe(first);
-    kernel::test::terminate_if_live(first);
-    Scheduler::drain_zombie_list();
-    JARVIS_ASSERT_EQ(1024LL, g_first_written);
-
     auto *second = TaskControlBlock::create(
         []() {
             uint8_t block[1024];
@@ -464,11 +500,18 @@ JARVIS_TEST(pipe_multiple_writers_no_interleaving,
         },
         11, 10);
     JARVIS_ASSERT(second != nullptr);
+    // Concurrent dispatch: both writers live before either joins. Each
+    // 1 KiB write fits the empty 4 KiB ring, so neither blocks and the
+    // mutex serializes the two copies (UP proves outcome).
+    Scheduler::add_task(*first);
     Scheduler::add_task(*second);
     Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(first);
     kernel::test::wait_for_termination_safe(second);
+    kernel::test::terminate_if_live(first);
     kernel::test::terminate_if_live(second);
     Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(1024LL, g_first_written);
     JARVIS_ASSERT_EQ(1024LL, g_second_written);
 
     uint8_t both[2048];
@@ -476,11 +519,26 @@ JARVIS_TEST(pipe_multiple_writers_no_interleaving,
     int64_t nread =
         rnode->ops->read(*rnode, both, sizeof(both), 0);
     JARVIS_ASSERT_EQ(2048LL, nread);
+    // Either order, but each half must be one uniform run (write
+    // atomicity: no torn bytes inside a single write).
+    bool aa_first = true;
     for (size_t idx = 0; idx < 1024; ++idx) {
-        JARVIS_ASSERT_EQ(0xAA, both[idx]);
+        if (both[idx] != 0xAA) {
+            aa_first = false;
+            break;
+        }
     }
-    for (size_t idx = 1024; idx < 2048; ++idx) {
-        JARVIS_ASSERT_EQ(0xBB, both[idx]);
+    if (aa_first) {
+        for (size_t idx = 1024; idx < 2048; ++idx) {
+            JARVIS_ASSERT_EQ(0xBB, both[idx]);
+        }
+    } else {
+        for (size_t idx = 0; idx < 1024; ++idx) {
+            JARVIS_ASSERT_EQ(0xBB, both[idx]);
+        }
+        for (size_t idx = 1024; idx < 2048; ++idx) {
+            JARVIS_ASSERT_EQ(0xAA, both[idx]);
+        }
     }
 
     g_pipe_writer = nullptr;
@@ -499,5 +557,6 @@ void register_pipe_tests() {
     JARVIS_REGISTER_TEST(pipe_read_block_woken_by_writer);
     JARVIS_REGISTER_TEST(pipe_read_returns_buffered_after_writer_close);
     JARVIS_REGISTER_TEST(pipe_ring_wrap_byte_order);
+    JARVIS_REGISTER_TEST(pipe_o_nonblock_eagain);
     JARVIS_REGISTER_TEST(pipe_multiple_writers_no_interleaving);
 }
