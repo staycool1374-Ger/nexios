@@ -1,9 +1,8 @@
 # Build System Operator How-To (issue #170)
 
-Dual-system period: **Make stays authoritative** until the Phase 9 cutover
-gate (`tools/check-parity.py --require-all` + recorded 3-arch full gates).
-This doc covers the Meson side. Requirements live in
-`docs/specs/build-system.md`; status in `docs/specs/build-system-parity.tsv`.
+Cutover complete: Meson is the only build system (the frozen Make build
+was deleted; no parity ledger, no dual period). Requirements history
+lives in `docs/specs/build-system.md`.
 
 ## Prerequisites
 
@@ -42,7 +41,7 @@ test-config, blobs).
 ## Test
 
 ```sh
-meson test -C build/meson-<arch> --suite host          # parity + host tests
+meson test -C build/meson-<arch> --suite host          # host tests
 meson test -C build/meson-<arch> --suite x86_64-debug  # QEMU suites (26 classes)
 meson test -C build/meson-<arch> 'qemu/x86_64/debug/<class>'  # one class
 python3 tools/meson/qemu_test.py --arch A --build B --class C [--no-history]

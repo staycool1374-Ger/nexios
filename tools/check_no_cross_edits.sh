@@ -37,7 +37,7 @@
 #   qe role:  changes under src/** EXCEPT src/kernel/test/** and
 #             src/test/** fail.
 #
-# Exit-code contract (mirrors check_no_make_refs.sh):
+# Exit-code contract:
 #   0  clean   — prints `check_no_cross_edits: clean`
 #   1  violation — prints `CROSS-ROLE EDITS:` plus offending paths
 #   2  usage/environment error (unknown role, not a git repo, self-test fail)
