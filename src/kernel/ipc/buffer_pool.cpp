@@ -60,6 +60,12 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     constexpr uint64_t PAGE_PRESENT = 1ULL << 0;
 
 #if defined(CONFIG_ARCH_RISCV64)
+    // Sv39 PTE address codec (issue #206): entries carry PPN<<10, so the
+    // x86-domain raw `& ~0xFFF` mask decodes every child-table address
+    // wrong (e.g. link 0x21BCC001 decodes to 0x21BCC000 instead of phys
+    // 0x86F30000, faulting the walk in unmapped HHDM).  Always decode
+    // PTEs via sv39_pte_phys(); the root below is a raw phys, so
+    // PAGE_TABLE_ADDR_MASK still applies to it.
     constexpr uint64_t L0_SHIFT = 30;
     constexpr uint64_t L1_SHIFT = 21;
     constexpr uint64_t L2_SHIFT = 12;
@@ -74,7 +80,7 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     if (!(l0[l0_idx] & PAGE_PRESENT))
         return;
     auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (l0[l0_idx] & ~0xFFFULL));
+                                             VMM::sv39_pte_phys(l0[l0_idx]));
     size_t l1_idx = (virt_addr >> L1_SHIFT) & 0x1FF;
     if (!(l1[l1_idx] & PAGE_PRESENT))
         return;
@@ -83,7 +89,8 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
         return;
     } // 2MB block
     auto *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
-                                            (l1[l1_idx] & ~0xFFFULL));
+                                             VMM::sv39_pte_phys(
+                                                 l1[l1_idx]));
     size_t l2_idx = (virt_addr >> L2_SHIFT) & 0x1FF;
     l2[l2_idx] = 0;
 #else
