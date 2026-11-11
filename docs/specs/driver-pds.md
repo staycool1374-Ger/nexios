@@ -148,17 +148,22 @@ aarch64 (FRAME); riscv64 blocked by a platform scheduler/timer issue
 
 - `VFS_SRV` (vfs-srv PD): zero-cap row by design (no ambient authority).
   Composes empty; the PD talks to clients over its endpoint only.
-- `BLOCK_SRV` (block-srv PD, issue #47 step-b1): static arch-switched
-  row + one 4-page shared window (`CapKind::DMA_REGION`, raw sector/
-  queue area, kernel HHDM alias). x86_64: two IO-port caps
+- `BLOCK_SRV` (block-srv PD, issue #47 step-b1/b2): static
+  arch-switched row + one 4-page shared window (`CapKind::DMA_REGION`,
+  raw sector/queue area, kernel HHDM alias) + IRQ caps (step-b2:
+  WAIT_ACK delivery, mask-on-delivery, bounded wait + poll fallback;
+  stats window at offset 0x1400). x86_64: two IO-port caps
   (0x1F0/0x170 × 8 ports, exact ranges — never page-widened, the
-  grant ledger stays least-privilege). aarch64/riscv64: first captured
-  virtio transport window + 4-page window. Window phys is conveyed
+  grant ledger stays least-privilege) + control blocks (0x3F6/0x376,
+  nIEN writes: masked during probe, enabled after arming) + IRQ caps
+  (IRQ14→46, IRQ15→47, phys names the channel). aarch64/riscv64:
+  first captured virtio transport window + IRQ cap (transport phys,
+  captured INTID/source) + 4-page window. Window phys is conveyed
   EXACT (virtio slots stride 0x200 inside a page): the cap covers
   whole pages from the aligned base and the PD applies the
   intra-page offset itself (mapping an aligned truncation made the
-  PD probe the wrong slot — device 0 instead of blk). No IRQ cap in
-  b1 (polled completion; IRQ delegation is step-b2).
+  PD probe the wrong slot — device 0 instead of blk). AHCI MSI is
+  conveyance-only (`CONFIG_BLOCK_SRV_AHCI_MSI`, default 0).
   Degraded off-x86 (transport window without a frame is never
   composed) starts capless with a logged warning — allowed, never
   silent. Slot/frame persistence covers all roles (`kPdRoleCount`).

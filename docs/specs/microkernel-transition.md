@@ -191,10 +191,15 @@ generation-tagged stored pointers). Enforced at these points:
     (`960b27673`, ring-first, fallback preserved). Open per §7 gates:
     parity → fault drill → SIL 3 audit → flip → delete-after-gate, per
     server in the order below.
-    Status 2026-11 (in progress): #47 step-b1 block-srv live path
-    (branch `fix/47-block-srv-b1`: SDF `DMA_REGION` + `kPdRoleCount`,
+    Status 2026-11 (landed): #47 step-b1 block-srv live path
+    (merged `fc4a5e0e8`: SDF `DMA_REGION` + `kPdRoleCount`,
     BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
     read+write, `block_srv_live` class + host digest oracle).
+    Status 2026-11 (in progress): #47 step-b2 block-srv IRQ
+    delegation (main): WAIT_ACK delivery + bounded wait + poll
+    fallback, SDF IRQ caps (ATA IRQ14/15, virtio transport IRQ,
+    AHCI MSI conveyance-only), PD stats window, +4 tests per class
+    (`cap_irq` 16/15/15, `block_srv_live` 8/8/8).
     Status 2026-11 (in progress): #51 console-PD substrate (main):
     SDF FB row (SHM ring + DMA status page + slot-chunked scanout —
     MMIO or FRAME pins per backing), `fb-pd.c` console PD (bounded

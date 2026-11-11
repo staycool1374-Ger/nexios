@@ -2600,6 +2600,15 @@ void TaskControlBlock::complete_teardown() noexcept {
         time::TimerWheel::cancel(recv_timeout_handle);
     }
 
+    // Cancel a wheel-armed bounded IRQ wait (issue #47 step-b2): same
+    // stale-fire reasoning as the receive cancel above.  The delivery
+    // table drain (drain_task, called after cleanup) clears the waiter
+    // registration; the arm must die here with the TCB.
+    if (__atomic_load_n(&irq_wait_armed, __ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&irq_wait_armed, false, __ATOMIC_RELEASE);
+        time::TimerWheel::cancel(irq_wait_handle);
+    }
+
     // Drain POSIX sleep/timer/timerfd ownership (issue #76): disarm a live
     // nanosleep, free owned timer/timerfd slots, and clear waiter
     // registrations held by this task. Same lock position as the recv

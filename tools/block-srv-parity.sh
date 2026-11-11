@@ -49,6 +49,15 @@ if [ -z "$GOT" ]; then
 fi
 if [ "$GOT_LOWER" = "$EXP_LOWER" ]; then
     echo "VERDICT: MATCH ($GOT)" | tee "$OUTDIR/verdict.txt"
+fi
+# Issue #47 step-b2: report (never gate on) the PD-published IRQ stats.
+IRQ_LINE=$(grep -o 'S BLK irq=[0-9]*/[0-9]*/[0-9]*/[0-9]*' "$CAPTURE" | tail -n 1)
+if [ -n "$IRQ_LINE" ]; then
+    echo "IRQSTATS: $IRQ_LINE" | tee -a "$OUTDIR/verdict.txt"
+else
+    echo "IRQSTATS: absent (poll-only row or pre-b2 PD)" | tee -a "$OUTDIR/verdict.txt"
+fi
+if [ "$GOT_LOWER" = "$EXP_LOWER" ]; then
     exit 0
 fi
 echo "VERDICT: MISMATCH expected=$EXPECTED got=$GOT" | tee "$OUTDIR/verdict.txt"

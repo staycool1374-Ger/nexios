@@ -61,6 +61,11 @@ static void ioapic_wr(uint32_t sel, uint32_t v) {
     *ioapic_ptr(0x10) = v;
 }
 
+static uint32_t ioapic_rd(uint32_t sel) {
+    *ioapic_ptr(0x00) = sel;
+    return *ioapic_ptr(0x10);
+}
+
 static void ioapic_redirect(uint8_t irq, uint8_t vector, bool masked) {
     uint32_t entry = vector;
     if (masked) entry |= IOAPIC_MASKED_BIT;
@@ -150,11 +155,37 @@ void APIC::eoi() {
 }
 
 void APIC::mask_irq(uint8_t irq, bool mask) {
-    if (!enabled_ || irq >= 16) return;
-    uint32_t entry = 32 + irq;
-    if (mask) entry |= IOAPIC_MASKED_BIT;
-    arch::ioapic_wr(IOAPIC_REDIR_BASE + irq * 2,     entry);
-    arch::ioapic_wr(IOAPIC_REDIR_BASE + irq * 2 + 1, 0);
+    if (!enabled_ || irq >= 16)
+        return;
+    // Read-modify-write: flip only the mask bit, preserving the
+    // vector/dest/trigger/polarity (issue #47 step-b2).
+    uint32_t entry = arch::ioapic_rd(IOAPIC_REDIR_BASE + irq * 2);
+    if (mask)
+        entry |= IOAPIC_MASKED_BIT;
+    else
+        entry &= ~IOAPIC_MASKED_BIT;
+    arch::ioapic_wr(IOAPIC_REDIR_BASE + irq * 2, entry);
+}
+
+uint32_t APIC::ioapic_entry(uint8_t irq) {
+    if (!enabled_ || irq >= 16)
+        return 0;
+    return arch::ioapic_rd(IOAPIC_REDIR_BASE + irq * 2);
+}
+
+void APIC::ioapic_write_entry(uint8_t irq, uint32_t low) {
+    if (!enabled_ || irq >= 16)
+        return;
+    arch::ioapic_wr(IOAPIC_REDIR_BASE + irq * 2, low);
+}
+
+bool APIC::ioapic_masked(uint8_t irq) {
+    // No IOAPIC tracking when the APIC is off (PIC mode) or out of
+    // range: report unmasked so callers take no IOAPIC action.
+    if (!enabled_ || irq >= 16)
+        return false;
+    return (arch::ioapic_rd(IOAPIC_REDIR_BASE + irq * 2) &
+            IOAPIC_MASKED_BIT) != 0;
 }
 
 // ─── APIC timer ───────────────────────────────────────────────────────────

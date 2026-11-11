@@ -116,6 +116,8 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             t->alarm_armed = saved[j].alarm_armed;
             t->recv_timeout_armed = saved[j].recv_timeout_armed;
             t->recv_timed_out = saved[j].recv_timed_out;
+            t->irq_wait_armed = saved[j].irq_wait_armed;
+            t->irq_wait_timed_out = saved[j].irq_wait_timed_out;
             t->sleep_armed = saved[j].sleep_armed;
             t->sleep_expired = saved[j].sleep_expired;
             t->wdog_armed = saved[j].wdog_armed;
@@ -211,6 +213,8 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].alarm_armed = t->alarm_armed;
         out[idx].recv_timeout_armed = t->recv_timeout_armed;
         out[idx].recv_timed_out = t->recv_timed_out;
+        out[idx].irq_wait_armed = t->irq_wait_armed;
+        out[idx].irq_wait_timed_out = t->irq_wait_timed_out;
         out[idx].sleep_armed = t->sleep_armed;
         out[idx].sleep_expired = t->sleep_expired;
         out[idx].wdog_armed = t->wdog_armed;

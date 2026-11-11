@@ -21,9 +21,13 @@
 /// capability-gated user-space IRQ delivery.  sys_irq_register arms the
 /// current task as the recipient of the IrqCap's vector; arg1 selects the
 /// delivery mode (0 = WAIT — blocking sys_irq_wait, 1 = NOTIFY — IPC
-/// notification on the task's Notify, issue #7).  sys_irq_wait blocks until
-/// the IRQ fires (or returns immediately when one is pending); it refuses
-/// slots armed in NOTIFY mode (the driver must use sys_notify_wait instead).
+/// notification on the task's Notify, issue #7, 2 = WAIT_ACK — blocking
+/// wait with mask-on-delivery for PD-owned devices, issue #47 step-b2).
+/// sys_irq_wait blocks until the IRQ fires (or returns immediately when one
+/// is pending); arg1 bounds the wait in ticks (0 = infinite) — on expiry
+/// it returns GENERIC_FAIL and the driver falls back to a bounded device
+/// poll.  It refuses slots armed in NOTIFY mode (the driver must use
+/// sys_notify_wait instead).
 /// All dereferences through a capability slot validated by cap::lookup.  Both
 /// returns are -1 on any validation failure (reachable states, never ENSURE).
 /// Off-x86_64 the same machinery delivers GIC/PLIC platform lines via
@@ -39,6 +43,7 @@
 #include <kernel/cap/msix.hpp>
 #include <kernel/irq_delivery.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 
 namespace kernel {
 
@@ -110,13 +115,16 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 
-    // arg1 = delivery mode (issue #7): 0 = WAIT (blocking sys_irq_wait),
-    // 1 = NOTIFY (IPC notification on the task's Notify).  arm() validates
-    // the mode under the slot lock and rejects unknown values (fail closed).
+    // arg1 = delivery mode (issue #7, extended issue #47 step-b2):
+    // 0 = WAIT (blocking sys_irq_wait), 1 = NOTIFY (IPC notification),
+    // 2 = WAIT_ACK (blocking wait with line/entry mask-on-delivery for
+    // PD-owned devices).  arm() validates the mode under the slot lock
+    // and rejects unknown values (fail closed).
     // Validate the RAW 64-bit arg1 BEFORE the narrowing cast to uint8_t: an
-    // out-of-range value whose low byte wraps to 0 or 1 (e.g. 0x101 -> NOTIFY,
-    // 0x100 -> WAIT) would otherwise defeat arm()'s fail-closed rejection.
-    if (arg1 != 0ULL && arg1 != 1ULL) {
+    // out-of-range value whose low byte wraps to 0, 1 or 2 (e.g. 0x101 ->
+    // NOTIFY, 0x100 -> WAIT) would otherwise defeat arm()'s fail-closed
+    // rejection.
+    if (arg1 != 0ULL && arg1 != 1ULL && arg1 != 2ULL) {
         obj->release();
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
@@ -139,8 +147,8 @@ uint64_t Syscall::sys_irq_register(uint64_t cap_handle, uint64_t arg1,
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
-uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
-                               uint64_t, uint64_t *) {
+uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t timeout_ticks,
+                               uint64_t, uint64_t, uint64_t *) {
     cap::CNode *src = current_cspace();
     if (!src)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
@@ -165,6 +173,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
         obj->release();
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
+    (void)reg_idx;
 
     // Blocked wait (Semaphore::wait() pattern): consume a pending IRQ if one
     // is already recorded, else register as the slot's waiter ONCE under the
@@ -173,7 +182,27 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     // (or revoke/dispose) calls set_task_ready, restoring us to READY.  We
     // never re-register in a loop — that would hold the slot lock in a tight
     // spin and starve the waking peer (priority-inversion livelock).
+    //
+    // Issue #47 step-b2: WAIT_ACK slots are accepted like WAIT (NOTIFY is
+    // still refused — its delivery path bypasses pending/waiter entirely).
+    // On a WAIT_ACK entry the line/entry is unmasked: the driver ACKed the
+    // device before waiting again (mask-on-delivery in the ISR keeps a
+    // level-triggered source from storming between delivery and ACK).
+    // timeout_ticks bounds the wait (0 = infinite); on expiry the waiter
+    // wakes with GENERIC_FAIL and falls back to the bounded device poll.
+#if !defined(CONFIG_ARCH_X86_64)
+    // Unmask discipline mirrors arm() (issue #354): IrqGuard BEFORE the
+    // slot lock off-x86 so this line's ISR cannot spin on the lock on the
+    // same CPU.  x86 keeps lock-only (ISRs run with interrupts disabled).
+    // SCOPED to the entry critical section: the guard must drop before
+    // the BLOCKED spin below — a live guard across the spin keeps
+    // interrupts disabled, starving the timer ISR that applies the
+    // deferred switch (hard hang at the first true blocking wait).
+#endif
     {
+#if !defined(CONFIG_ARCH_X86_64)
+        arch::IrqGuard irq_guard{};
+#endif
         SpinLockGuard<sync::SpinLock> guard(r->lock_);
         // Slot-reuse safety: re-validate under the lock that the slot still
         // carries THIS cap's vector, owner AND recipient before touching
@@ -184,16 +213,24 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
         // pending/waiter entirely (issue #7), so a WAIT would never wake.
         if (!r->occupied || r->vector != vector || r->owner != obj ||
             r->recipient != t ||
-            r->delivery_mode != IrqDeliveryMode::WAIT) {
+            r->delivery_mode == IrqDeliveryMode::NOTIFY) {
             obj->release();
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
+        IrqDelivery::unmask_for_wait(*r);
         if (r->pending > 0 && r->armed) {
             --r->pending;
             obj->release();
             return static_cast<uint64_t>(vector);
         }
         if (!r->armed) {
+            obj->release();
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+        }
+        // Bounded wait: arm the wheel BEFORE blocking (fail closed — a
+        // full wheel never parks the waiter).
+        if (timeout_ticks != 0 &&
+            !IrqDelivery::wait_timeout_arm(*t, timeout_ticks)) {
             obj->release();
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
@@ -207,7 +244,19 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
 
     // Spin-wait (mirrors IPC::send / Semaphore::wait).  reschedule() is
     // deferred: the task physically continues until the timer ISR applies the
-    // switch.  If interrupts are off the ISR cannot fire — roll back.
+    // switch.
+    // Issue #47 step-b2 (+ #513 IRQ discipline): trap entry owns the
+    // IRQ-off state (DAIF set / IF clear, no locks held here), and a
+    // BLOCKED spin with interrupts masked sleeps through every wakeup —
+    // including the timer tick that applies the deferred switch and the
+    // wheel expiry.  Without this, every userspace wait that finds no
+    // pending IRQ rolls back spuriously (the PD can then only consume
+    // already-arrived IRQs, never block for fresh ones).  Unmask before
+    // spinning: safe with the slot lock dropped and the task dequeued
+    // (an IRQ landing in the window wakes via the registered waiter).
+    // The interrupts-disabled branch below stays as the fail-safe for
+    // genuinely-IRQ-off kernel callers.  Mirrors IPC send_sync.
+    arch::sti();
     if (arch::interrupts_enabled()) {
         while (t->state == TaskState::BLOCKED) {
             arch::pause();
@@ -219,6 +268,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
             r->waiter = nullptr;
             r->waiter_gen = 0;
         }
+        IrqDelivery::wait_timeout_cancel(*t);
         t->state = TaskState::RUNNING;
         Scheduler::enqueue_ready(*t);
         obj->release();
@@ -233,15 +283,36 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
     // nor clear another task's waiter registration (that would leave the
     // foreign waiter BLOCKED forever — a lost wakeup).  Only our own waiter
     // entry is cleared.
+    // Bounded expiry (issue #47 step-b2): the tick applied the timeout wake
+    // (irq_wait_timed_out set, no pending recorded).  Cancel the arm, clear
+    // the flag, and return GENERIC_FAIL — the driver falls back to the
+    // bounded device poll (a later IRQ still records pending for the next
+    // wait entry, so no delivery is lost).
     // Fail-closed default: stays GENERIC_FAIL unless a pending IRQ for OUR
     // vector is consumed below (issue #2 slot-reuse re-validation).
     uint64_t result =
         static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     {
         SpinLockGuard<sync::SpinLock> guard(r->lock_);
-        if (r->occupied && r->vector == vector && r->owner == obj &&
-            r->recipient == t &&
-            r->delivery_mode == IrqDeliveryMode::WAIT) {
+        bool mine = r->occupied && r->vector == vector && r->owner == obj &&
+                    r->recipient == t &&
+                    r->delivery_mode != IrqDeliveryMode::NOTIFY;
+        if (mine && __atomic_load_n(&t->irq_wait_timed_out,
+                                    __ATOMIC_ACQUIRE)) {
+            __atomic_store_n(&t->irq_wait_timed_out, false,
+                             __ATOMIC_RELEASE);
+            IrqDelivery::wait_timeout_cancel(*t);
+            if (r->waiter == t) {
+                r->waiter = nullptr;
+                r->waiter_gen = 0;
+            }
+            // A timeout that arrived alongside a genuine pending IRQ still
+            // consumes it: the device DID fire, so report the vector.
+            if (r->pending > 0 && r->armed) {
+                --r->pending;
+                result = static_cast<uint64_t>(vector);
+            }
+        } else if (mine) {
             if (r->pending > 0 && r->armed) {
                 --r->pending;
                 result = static_cast<uint64_t>(vector);
@@ -250,6 +321,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t, uint64_t,
                 r->waiter = nullptr;
                 r->waiter_gen = 0;
             }
+            IrqDelivery::wait_timeout_cancel(*t);
         }
     }
     obj->release();

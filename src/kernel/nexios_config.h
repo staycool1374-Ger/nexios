@@ -669,9 +669,11 @@
 #endif
 
 /// Maximum caps minted per driver PD in one SDF compose (issue #48).
-/// Bounds the all-or-nothing install chain. Default: 6.
+/// Bounds the all-or-nothing install chain. Default: 8 (issue #47
+/// step-b2: the BLOCK_SRV row carries IRQ caps alongside the transport
+/// window + shared window).
 #ifndef CONFIG_DRIVER_PD_MAX_CAPS
-#define CONFIG_DRIVER_PD_MAX_CAPS 6
+#define CONFIG_DRIVER_PD_MAX_CAPS 8
 #endif
 
 /// Maximum number of concurrent per-task I/O-port bitmap (IOPB) slots
@@ -1369,6 +1371,15 @@ extern "C" void panic(const char *msg);
 #if CONFIG_BLOCK_SRV != 0 && CONFIG_BLOCK_SRV != 1
 #error "CONFIG_BLOCK_SRV must be 0 or 1 (default 0)"
 #endif
+#ifndef CONFIG_BLOCK_SRV_AHCI_MSI
+#define CONFIG_BLOCK_SRV_AHCI_MSI 0
+#endif
+#if CONFIG_BLOCK_SRV_AHCI_MSI != 0 && CONFIG_BLOCK_SRV_AHCI_MSI != 1
+#error "CONFIG_BLOCK_SRV_AHCI_MSI must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_BLOCK_SRV_AHCI_MSI && !CONFIG_BLOCK_SRV
+#error "CONFIG_BLOCK_SRV_AHCI_MSI requires CONFIG_BLOCK_SRV=1"
+#endif
 #if CONFIG_TERM_SRV != 0 && CONFIG_TERM_SRV != 1
 #error "CONFIG_TERM_SRV must be 0 or 1 (default 0)"
 #endif
@@ -1504,7 +1515,7 @@ extern "C" void panic(const char *msg);
 #error "CONFIG_DRIVER_PD_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif
 #if CONFIG_DRIVER_PD_MAX_CAPS < 1
-#error "CONFIG_DRIVER_PD_MAX_CAPS must be >= 1 (default 6)"
+#error "CONFIG_DRIVER_PD_MAX_CAPS must be >= 1 (default 8)"
 #endif
 // Issue #48 (VERIFY NEED step-a blocker 1): block/net SDF rows land with
 // S5/S6 (PCI/virtio discovery binds). Enabling these knobs before the

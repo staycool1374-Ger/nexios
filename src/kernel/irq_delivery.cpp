@@ -38,9 +38,14 @@
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/irq_thread.hpp>
+#include <kernel/time/timer_wheel.hpp>
+#include <kernel/arch/hal/timer.hpp>
 
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/apic.hpp>
+#endif
+#if defined(CONFIG_ARCH_AARCH64)
+#include <kernel/arch/aarch64/hal/gic.hpp>
 #endif
 
 namespace kernel {
@@ -96,6 +101,125 @@ static void restore_line_mask(IrqRegistration &r, bool force_mask) {
     if (force_mask || r.line_was_masked) {
         arch::ArchInterruptController::mask(r.vector);
     }
+#endif
+}
+
+/// @brief Masks the slot's line/entry on WAIT_ACK delivery (issue #47
+///        step-b2): the line stays masked until the driver's next
+///        sys_irq_wait entry unmasks it after ACKing the device.  Prevents a
+///        level-triggered storm between the IRQ and the device ACK.  Caller
+///        holds the slot lock.  Kind-gated like restore_line_mask.
+static void mask_on_delivery(IrqRegistration &r) {
+    if (r.kind == IrqSlotKind::MSIX) {
+        auto *msix = static_cast<cap::MsixCap *>(r.owner);
+        if (msix)
+            msix->set_entry_masked(true);
+        return;
+    }
+#if defined(CONFIG_ARCH_X86_64)
+    if (r.kind != IrqSlotKind::PIC)
+        return;
+    uint8_t irq_line = static_cast<uint8_t>(r.vector - 32U);
+    arch::ArchInterruptController::mask(irq_line);
+    // Issue #47 step-b2: on an APIC-enabled kernel the I/O APIC entry
+    // is the live delivery path — mask it too, or a level-triggered
+    // source storms between delivery and the device ACK.
+    if (arch::APIC::is_enabled())
+        arch::APIC::mask_irq(irq_line, true);
+#else
+    if (r.kind != IrqSlotKind::PLATFORM)
+        return;
+#if defined(CONFIG_ARCH_AARCH64)
+    // GIC (level-triggered by arm, issue #47 step-b2): mask on delivery
+    // so a held line cannot re-trap the CPU in a storm between delivery
+    // and the driver's device ACK. The next wait entry unmasks.
+    arch::ArchInterruptController::mask(r.vector);
+#else
+    // PLIC (edge semantics, no per-source trigger programming): do NOT
+    // mask on delivery. An edge asserted during a masked window is lost
+    // forever (no re-sample on unmask), and the block driver issues its
+    // command BEFORE entering the wait — a fast synchronous completion
+    // lands exactly in that window (convicted: first transfer after
+    // (re)bind timed out deterministically, 8/8 green without the mask).
+    // Storm protection stays with the storm limiter (masks + logs).
+    (void)r;
+#endif
+#endif
+}
+
+/// @brief Unmask twin of mask_on_delivery for the WAIT_ACK wait entry
+///        (issue #47 step-b2).  Caller holds the slot lock and the arch
+///        unmask discipline (IrqGuard-before-lock off-x86, lock-only x86).
+void IrqDelivery::unmask_for_wait(IrqRegistration &r) {
+    if (!r.armed || r.delivery_mode != IrqDeliveryMode::WAIT_ACK)
+        return;
+    if (r.kind == IrqSlotKind::MSIX) {
+        auto *msix = static_cast<cap::MsixCap *>(r.owner);
+        if (msix)
+            msix->set_entry_masked(false);
+        return;
+    }
+#if defined(CONFIG_ARCH_X86_64)
+    if (r.kind != IrqSlotKind::PIC)
+        return;
+    uint8_t irq_line = static_cast<uint8_t>(r.vector - 32U);
+    arch::ArchInterruptController::unmask(irq_line);
+    // Issue #47 step-b2: the I/O APIC entry is the live path — unmask
+    // it alongside the PIC line now that the driver ACKed the device.
+    if (arch::APIC::is_enabled())
+        arch::APIC::mask_irq(irq_line, false);
+#else
+    if (r.kind != IrqSlotKind::PLATFORM)
+        return;
+    arch::ArchInterruptController::unmask(r.vector);
+#endif
+}
+
+// I/O APIC redirection low-dword bits owned by the delivery table
+// (issue #47 step-b2; mirrors apic.cpp to avoid depending on the HAL's
+// private constants).
+static constexpr uint32_t kIoapicLevelBit = 0x00008000U;
+static constexpr uint32_t kIoapicMaskedBit = 0x00010000U;
+
+/// @brief Restores the saved I/O APIC entry when this slot reprogrammed
+///        it at arm (issue #47 step-b2). Caller holds the slot lock.
+///        x86_64 PIC-kind only. The LEVEL bit this slot programmed is
+///        always cleared (it is ours unconditionally); the mask bit is
+///        restored to the pre-arm state so lines the kernel left
+///        unmasked (IRQ0/1) — and their firmware trigger mode — survive.
+static void restore_ioapic_mask(IrqRegistration &r) {
+#if defined(CONFIG_ARCH_X86_64)
+    if (r.kind == IrqSlotKind::PIC && r.ioapic_leveled) {
+        const uint8_t irq_line = static_cast<uint8_t>(r.vector - 32U);
+        uint32_t entry = arch::APIC::ioapic_entry(irq_line);
+        entry &= ~kIoapicLevelBit;
+        if (r.ioapic_unmasked_here)
+            entry |= kIoapicMaskedBit;
+        arch::APIC::ioapic_write_entry(irq_line, entry);
+        r.ioapic_unmasked_here = false;
+        r.ioapic_leveled = false;
+    }
+#else
+    (void)r;
+#endif
+}
+
+/// @brief Restores the saved ICFGR trigger field when the arm
+/// reprogrammed it (issue #47 step-b2). Caller holds the slot lock.
+/// aarch64 PLATFORM-kind only.
+static void restore_gic_trigger(IrqRegistration &r) {
+#if defined(CONFIG_ARCH_AARCH64)
+    if (r.kind == IrqSlotKind::PLATFORM && r.gic_trigger_saved) {
+        volatile uint32_t *w =
+            arch::gicd_reg(arch::gicd_icfgr_word(r.vector));
+        const uint32_t shift = arch::gicd_icfgr_shift(r.vector);
+        *w = (*w & ~(0x3U << shift)) |
+             ((static_cast<uint32_t>(r.gic_saved_trigger) & 0x3U) << shift);
+        r.gic_trigger_saved = false;
+        r.gic_saved_trigger = 0;
+    }
+#else
+    (void)r;
 #endif
 }
 
@@ -171,10 +295,14 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
 #else
             r.kind = IrqSlotKind::PLATFORM;
 #endif
-            r.occupied = true;
-            r.armed = false;
-            r.line_was_masked = true;
-            r.delivery_mode = IrqDeliveryMode::WAIT;
+    r.occupied = true;
+    r.armed = false;
+    r.line_was_masked = true;
+    r.delivery_mode = IrqDeliveryMode::WAIT;
+    r.ioapic_unmasked_here = false;
+    r.ioapic_leveled = false;
+    r.gic_saved_trigger = 0;
+    r.gic_trigger_saved = false;
             r.owner = nullptr;
             r.recipient = nullptr;
             r.recipient_gen = 0;
@@ -218,12 +346,23 @@ bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
     // vector.  The slot_belongs_to->arm check and the arming decision must be
     // one atomic critical section (issue #2, cross-vector hijack).
     SpinLockGuard<sync::SpinLock> guard(r->lock_);
-    if (!r->occupied || r->armed || r->owner != &owner || r->vector != vector)
+    if (!r->occupied || r->owner != &owner || r->vector != vector)
         return false;
+    // Idempotent re-arm (issue #47 step-b2, WAIT_ACK only): the same
+    // owner re-arming the same vector for the same recipient in WAIT_ACK
+    // mode is a no-op success (PD rebind/epoch flows re-arm without a
+    // release cycle). WAIT keeps its proven fail-on-rearm contract
+    // (issue #2 matrix test); anything else on an armed slot fails.
+    if (r->armed) {
+        return delivery_mode == IrqDeliveryMode::WAIT_ACK &&
+               r->delivery_mode == IrqDeliveryMode::WAIT_ACK &&
+               r->recipient == &recipient;
+    }
     // Unknown delivery mode fails closed (issue #7): a mode must never be
     // stored that the ISR cannot dispatch on.
     if (delivery_mode != IrqDeliveryMode::WAIT &&
-        delivery_mode != IrqDeliveryMode::NOTIFY)
+        delivery_mode != IrqDeliveryMode::NOTIFY &&
+        delivery_mode != IrqDeliveryMode::WAIT_ACK)
         return false;
     r->delivery_mode = delivery_mode;
     r->recipient = &recipient;
@@ -241,6 +380,25 @@ bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
         uint16_t m = (irq_line < 8) ? cur.pic1_mask : cur.pic2_mask;
         r->line_was_masked = (m & bit) != 0;
         arch::ArchInterruptController::unmask(irq_line);
+        // Issue #47 step-b2: PIC delivery on an APIC-enabled kernel also
+        // needs the I/O APIC entry unmasked (init masks entries 2-15;
+        // the LAPIC never sees a masked entry however open the PIC is).
+        // Program LEVEL-triggered delivery: the device holds the line
+        // asserted until the driver ACKs it, and the PD issues the
+        // command BEFORE entering the wait — an edge asserted during
+        // the still-masked window would be lost, while level
+        // re-samples on unmask (lossless). Only the two owned bits
+        // change; the vector/dest/polarity are preserved in place, so
+        // release clears exactly what arm set.
+        if (arch::APIC::is_enabled()) {
+            const uint32_t saved = arch::APIC::ioapic_entry(irq_line);
+            r->ioapic_unmasked_here =
+                (saved & kIoapicMaskedBit) != 0;
+            r->ioapic_leveled = true;
+            arch::APIC::ioapic_write_entry(
+                irq_line,
+                (saved & ~kIoapicMaskedBit) | kIoapicLevelBit);
+        }
     } else {
         // MSI-X: unmask the table entry so the vector can deliver to the
         // recipient (issue #10).  The owner is the MsixCap that programmed
@@ -254,6 +412,29 @@ bool IrqDelivery::arm(int16_t reg_idx, KernelObject &owner, uint8_t vector,
     // kind here is a state violation — fail closed.
     if (r->kind != IrqSlotKind::PLATFORM)
         return false;
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #47 step-b2: program level-triggered delivery for the
+    // PD-owned line (save the firmware field first). The GIC init
+    // programs virtio SPIs edge-high, but an edge asserted during the
+    // masked window between the device IRQ and the next wait entry is
+    // lost (proven: 1 completion then timeouts); level re-samples on
+    // unmask because the driver ACKs the device before waiting again.
+    // NOTE (audit S3): one ICFGR word covers 16 INTIDs, so this RMW
+    // races a concurrent arm in the same word — accepted because PD
+    // arms are single-threaded by construction (boot-time compose + one
+    // rebind path per PD task; no concurrent arm path exists). A second
+    // concurrent armer would need a global IRQ-table lock (new lock
+    // order); revisit if arming ever leaves task context.
+    // Runs before unmask() so its dsb orders both writes.
+    {
+        volatile uint32_t *w =
+            arch::gicd_reg(arch::gicd_icfgr_word(r->vector));
+        const uint32_t shift = arch::gicd_icfgr_shift(r->vector);
+        r->gic_saved_trigger = static_cast<uint8_t>((*w >> shift) & 0x3U);
+        r->gic_trigger_saved = true;
+        *w = (*w & ~(0x3U << shift));
+    }
+#endif
     r->line_was_masked =
         !arch::ArchInterruptController::line_enabled(r->vector);
     arch::ArchInterruptController::unmask(r->vector);
@@ -280,8 +461,18 @@ bool IrqDelivery::isr_entry(uint8_t vector) {
         return false;
 
     // Record the pending IRQ first — never lost even with no waiter.
-    if (r->delivery_mode == IrqDeliveryMode::WAIT) {
+    // WAIT_ACK (issue #47 step-b2) shares the WAIT accounting, then masks
+    // the line/entry on level-triggered transports (x86 PIC/IOAPIC, GIC):
+    // a level-held line must not re-fire between this delivery and the
+    // driver's device ACK (which happens before the next sys_irq_wait
+    // entry unmasks). PLIC (edge semantics) deliberately does NOT mask:
+    // an edge asserted during a masked window is lost forever, and the
+    // block driver issues its command BEFORE entering the wait.
+    if (r->delivery_mode == IrqDeliveryMode::WAIT ||
+        r->delivery_mode == IrqDeliveryMode::WAIT_ACK) {
         ++r->pending;
+        if (r->delivery_mode == IrqDeliveryMode::WAIT_ACK)
+            mask_on_delivery(*r);
 
         // Wake a blocked sys_irq_wait waiter (Notify discipline: reject dead /
         // recycled TCBs).
@@ -343,14 +534,22 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
         return false;
 
     // Disarm and restore the prior mask state: re-mask the MSI-X table entry
-    // (issue #10, kind-gated) or restore the PIC line mask.
+    // (issue #10, kind-gated) or restore the PIC line mask.  WAIT_ACK slots
+    // (issue #47 step-b2) force-mask: the line was masked on delivery and
+    // the dead/gone recipient will never ACK the device, so restoring the
+    // pre-arm (possibly unmasked) state would leave a level-triggered line
+    // storming with no consumer.
     if (r->armed) {
         r->armed = false;
         if (r->kind == IrqSlotKind::MSIX) {
             auto *msix = static_cast<cap::MsixCap *>(r->owner);
             msix->set_entry_masked(true);
         }
-        restore_line_mask(*r, false);
+        restore_line_mask(*r, r->delivery_mode == IrqDeliveryMode::WAIT_ACK);
+        // I/O APIC lifetime restore (issue #47 step-b2).
+        restore_ioapic_mask(*r);
+        // GIC trigger restore (issue #47 step-b2).
+        restore_gic_trigger(*r);
     }
 
     // Wakers own the wakeup (CODING_STYLE §12.3): never leave the driver
@@ -421,13 +620,25 @@ void IrqDelivery::drain_task(TaskControlBlock &tcb) {
                 auto *msix = static_cast<cap::MsixCap *>(r.owner);
                 msix->set_entry_masked(true);
             }
-            restore_line_mask(r, false);
+            // WAIT_ACK force-mask (issue #47 step-b2): same storm
+            // reasoning as release_slot_idx — the drained recipient will
+            // never ACK the device.
+            bool force = r.delivery_mode == IrqDeliveryMode::WAIT_ACK;
+            restore_line_mask(r, force);
+            // I/O APIC lifetime restore (issue #47 step-b2).
+            restore_ioapic_mask(r);
+            // GIC trigger restore (issue #47 step-b2).
+            restore_gic_trigger(r);
         }
         r.recipient = nullptr;
         r.recipient_gen = 0;
         r.owner = nullptr;
         // A waiter that died is already TERMINATED/REAPED — no wake needed;
         // a waiter that is the drained task must not be fed to the scheduler.
+        // Cancel its wheel arm so no stale expiry outlives the drain
+        // (issue #47 step-b2).
+        if (r.waiter)
+            wait_timeout_cancel(*r.waiter);
         r.waiter = nullptr;
         r.waiter_gen = 0;
         r.pending = 0;
@@ -443,6 +654,68 @@ size_t IrqDelivery::occupied_count() {
             ++n;
     }
     return n;
+}
+
+/// @brief Wheel callback for a bounded IRQ wait (issue #47 step-b2).
+/// Lock-free by contract (runs under scheduler_lock_ in on_tick): only
+/// sets the flag; the wake is applied in scheduler_tick.  Stale fires
+/// (recycled TCB, cancelled arm) are no-ops.
+void IrqDelivery::wait_timeout_fire(void *context) noexcept {
+    auto *task = static_cast<TaskControlBlock *>(context);
+    if (!TaskControlBlock::is_valid(task))
+        return;
+    if (task->generation != task->irq_wait_gen)
+        return;
+    if (!__atomic_load_n(&task->irq_wait_armed, __ATOMIC_ACQUIRE))
+        return;
+    __atomic_store_n(&task->irq_wait_timed_out, true, __ATOMIC_RELEASE);
+}
+
+bool IrqDelivery::wait_timeout_arm(TaskControlBlock &task,
+                                   uint64_t timeout_ticks) {
+    // Consume any stale expiry from a previous wait first (mirrors
+    // IPC::recv_wait_arm: the resume path only sets this flag).
+    __atomic_store_n(&task.irq_wait_timed_out, false, __ATOMIC_RELEASE);
+    if (timeout_ticks == 0)
+        return true;
+    if (CONFIG_TICK_HZ == 0)
+        return false;
+    // Ticks to ns without 64-bit overflow (decompose around 1e9).
+    const uint64_t whole = timeout_ticks / CONFIG_TICK_HZ;
+    const uint64_t part = timeout_ticks % CONFIG_TICK_HZ;
+    uint64_t budget_ns = 0;
+    if (whole >= 0xFFFFFFFFFFFFFFFFULL / 1000000000ULL) {
+        budget_ns = 0xFFFFFFFFFFFFFFFFULL;
+    } else {
+        budget_ns =
+            whole * 1000000000ULL + (part * 1000000000ULL) / CONFIG_TICK_HZ;
+    }
+    if (budget_ns == 0)
+        budget_ns = 1;
+    const uint64_t now_ns = arch::Timer::ns_monotonic();
+    // Saturating add: absurd budgets clamp to never-expire instead of
+    // wrapping into an immediate deadline.
+    uint64_t expiry_ns = now_ns + budget_ns;
+    if (expiry_ns < now_ns)
+        expiry_ns = 0xFFFFFFFFFFFFFFFFULL;
+    task.irq_wait_gen = task.generation;
+    // Defensive cancel-first: never overwrite a live arm.
+    if (__atomic_load_n(&task.irq_wait_armed, __ATOMIC_ACQUIRE))
+        wait_timeout_cancel(task);
+    if (!time::TimerWheel::arm(0, expiry_ns, wait_timeout_fire, &task,
+                               &task.irq_wait_handle)) {
+        __atomic_store_n(&task.irq_wait_armed, false, __ATOMIC_RELEASE);
+        return false;
+    }
+    __atomic_store_n(&task.irq_wait_armed, true, __ATOMIC_RELEASE);
+    return true;
+}
+
+void IrqDelivery::wait_timeout_cancel(TaskControlBlock &task) {
+    if (__atomic_load_n(&task.irq_wait_armed, __ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&task.irq_wait_armed, false, __ATOMIC_RELEASE);
+        time::TimerWheel::cancel(task.irq_wait_handle);
+    }
 }
 
 } // namespace kernel

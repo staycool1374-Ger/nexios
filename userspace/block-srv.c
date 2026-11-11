@@ -1,15 +1,18 @@
-/* Block-storage server PD (issue #47, strangler step-b1).
+/* Block-storage server PD (issue #47, strangler step-b2).
  *
  * Real block I/O behind CONFIG_BLOCK_SRV: ATA PIO on x86_64 (I/O-port
  * caps) and virtio-blk over MMIO v2 on aarch64/riscv64 (MMIO + shared
- * frame caps). Polled completion; IRQ delegation is step-b2.
+ * frame caps). Completion via PD-owned IRQs (WAIT_ACK delivery with
+ * mask-on-delivery + bounded wait); the bounded device poll stays as
+ * the fail-closed fallback (timeout, revoke, or INJECT_IRQ_SKIP).
  *
  * Wire: 48 B BlockRpc, mirrors kernel/driver/block_srv.hpp (op, flags,
  * rsvd, epoch, owner id+gen, lba, arg, handle, status_op, status, aux).
  * Order: CAP_GET rounds first (PD maps each cap, echoes), BIND last
  * (PD probes with every cap present, answers backend + geometry).
  * Shared 4-page window layout mirrors kBlock*Offset (data 0x1000,
- * header 0x1200, status 0x1300; page 0 is the virtio queue area).
+ * header 0x1200, status 0x1300, IRQ stats 0x1400; page 0 is the virtio
+ * queue area).
  * Replies go to req.owner_id (send_sync_bounded waits on the
  * requester's own queue; PID 1 is a dead letter).
  */
@@ -18,6 +21,7 @@
 #include <string.h>
 #include <syscall.h>
 #include <ipc.h>
+#include <cap/nexios_cap.h>
 
 #define MSG_DAEMON_READY 0xF0000001
 #define MSG_TYPE_REPLY 0xF0000002
@@ -33,6 +37,7 @@ typedef enum {
     BLK_OP_LOOPBACK = 7,
     BLK_OP_INJECT_MID_TRANSFER = 8,
     BLK_OP_CAP_GET = 9,
+    BLK_OP_INJECT_IRQ_SKIP = 10,
 } block_srv_op_t;
 
 /* Cap kinds (mirror kernel SDF CapKind). */
@@ -86,7 +91,28 @@ static void blk_assert_shape(void) {
 #define BLK_ENOSYS 38
 #define BLK_EACCES 13
 
-#define BLK_MAX_CAPS 6
+#define BLK_MAX_CAPS 8
+#define BLK_IRQ_STATS_OFF 0x1400UL
+#define BLK_IRQ_STATS_MAGIC 0x424C4B4952515354UL
+#define BLK_IRQ_STATS_VERSION 1UL
+/* Bounded IRQ wait (issue #47 step-b2): 1000 ticks (1 s at the 1000 Hz
+ * CONFIG_TICK_HZ). Normal completions arrive in microseconds; the bound
+ * only fires on genuine device silence or TCG/AIO first-touch latency
+ * spikes (convicted: first transfer after (re)probe can exceed 100 ticks
+ * under TCG while the IRQ still arrives late and is absorbed as a
+ * stale pending by the next wait). The contract stays bounded and
+ * fail-safe: expiry falls back to the bounded device poll. */
+#define BLK_IRQ_WAIT_TICKS 1000UL
+#define BLK_IRQ_MODE_WAIT_ACK 2UL
+
+struct blk_irq_stats {
+    unsigned long magic;
+    unsigned long version;
+    unsigned long irq_waits;
+    unsigned long irq_completions;
+    unsigned long irq_timeouts;
+    unsigned long poll_fallbacks;
+};
 
 struct blk_cap {
     int mapped;
@@ -104,6 +130,12 @@ static uint8_t g_backend = BLK_BACKEND_NONE;
 static uint64_t g_sectors = 0;
 static int g_probed = 0;
 static int g_inject_once = 0;
+static int g_inject_irq_skip_once = 0;
+
+/* PD-owned completion IRQ (issue #47 step-b2): handle + device phys the
+ * cap was conveyed with. Zero handle = pure poll path. */
+static unsigned long g_irq_handle = 0;
+static unsigned long g_irq_phys = 0;
 
 /* x86_64 ATA state (valid when g_backend == ATA_PIO). */
 static unsigned g_ata_base = 0;
@@ -170,6 +202,9 @@ static void blk_unmap_all(void) {
     g_frame_phys = 0;
     g_virtio_ready = 0;
     g_inject_once = 0;
+    g_inject_irq_skip_once = 0;
+    g_irq_handle = 0;
+    g_irq_phys = 0;
 }
 
 static void blk_purge_on_epoch(uint32_t epoch) {
@@ -181,6 +216,117 @@ static void blk_purge_on_epoch(uint32_t epoch) {
 
 static uint16_t blk_neg(uint16_t code) {
     return (uint16_t)(uint16_t)(0 - code);
+}
+
+/* IRQ completion statistics (mirror kernel BlockIrqStats; issue #47
+ * step-b2). Published in the shared window at BLK_IRQ_STATS_OFF with
+ * release-ordered stores; the kernel test reads them through its HHDM
+ * alias. No-ops until the DMA window is mapped. */
+static struct blk_irq_stats *blk_stats_ptr(void) {
+    if (g_frame_va == 0)
+        return 0;
+    return (struct blk_irq_stats *)(g_frame_va + BLK_IRQ_STATS_OFF);
+}
+
+static void blk_stats_publish(void) {
+    struct blk_irq_stats *s = blk_stats_ptr();
+    if (!s)
+        return;
+    s->irq_waits = 0;
+    s->irq_completions = 0;
+    s->irq_timeouts = 0;
+    s->poll_fallbacks = 0;
+    __asm__ volatile("" ::: "memory");
+    s->version = BLK_IRQ_STATS_VERSION;
+    __asm__ volatile("" ::: "memory");
+    s->magic = BLK_IRQ_STATS_MAGIC;
+}
+
+static void blk_stats_bump(int which) {
+    struct blk_irq_stats *s = blk_stats_ptr();
+    unsigned long *c;
+    if (!s || s->magic != BLK_IRQ_STATS_MAGIC)
+        return;
+    switch (which) {
+    case 0:
+        c = &s->irq_waits;
+        break;
+    case 1:
+        c = &s->irq_completions;
+        break;
+    case 2:
+        c = &s->irq_timeouts;
+        break;
+    default:
+        c = &s->poll_fallbacks;
+        break;
+    }
+    __asm__ volatile("" ::: "memory");
+    *c = *c + 1;
+    __asm__ volatile("" ::: "memory");
+}
+
+#define BLK_STAT_WAITS 0
+#define BLK_STAT_COMPLETIONS 1
+#define BLK_STAT_TIMEOUTS 2
+#define BLK_STAT_FALLBACKS 3
+
+/* Bounded completion wait (issue #47 step-b2): when a PD-owned IRQ is
+ * armed, wait up to BLK_IRQ_WAIT_TICKS for the completion IRQ, then
+ * validate it through is_ok (device-state confirmation — never infer
+ * success from the IRQ alone). A consumed-but-unconfirmed IRQ drained
+ * a stale pending from an earlier phase (e.g. a WRITE's data-ready
+ * IRQ consumed by the completion wait): wait once more for the real
+ * completion. A first-wait timeout means silence (the device never
+ * fired): poll immediately, no retry. Returns 0 when is_ok passed
+ * (a completion is recorded), 1 when the caller must take the bounded
+ * poll (a fallback is recorded here). One WAITS bump per transfer so
+ * waits line up with completions in the stats window. */
+static void blk_completion_ok(void);
+static void blk_completion_poll_fallback(void);
+
+static int blk_wait_once(int *consumed) {
+    long r = nexios_cap_irq_wait_timeout(g_irq_handle, BLK_IRQ_WAIT_TICKS);
+    if (r < 0) {
+        blk_stats_bump(BLK_STAT_TIMEOUTS);
+        *consumed = 0;
+        return -1;
+    }
+    *consumed = 1;
+    return 0;
+}
+
+static int blk_wait_validated(int (*is_ok)(void)) {
+    if (g_irq_handle == 0 || g_inject_irq_skip_once) {
+        if (g_inject_irq_skip_once)
+            g_inject_irq_skip_once = 0;
+        blk_stats_bump(BLK_STAT_FALLBACKS);
+        return 1;
+    }
+    blk_stats_bump(BLK_STAT_WAITS);
+    int consumed = 0;
+    if (blk_wait_once(&consumed) == 0 && is_ok() == 0) {
+        blk_completion_ok();
+        return 0;
+    }
+    if (consumed) {
+        /* Stale pending drained but device not done — the real
+         * completion IRQ is in flight; wait for it once. */
+        if (blk_wait_once(&consumed) == 0 && is_ok() == 0) {
+            blk_completion_ok();
+            return 0;
+        }
+    }
+    blk_stats_bump(BLK_STAT_FALLBACKS);
+    return 1;
+}
+
+static void blk_completion_ok(void) {
+    blk_stats_bump(BLK_STAT_COMPLETIONS);
+}
+
+static void blk_completion_poll_fallback(void) {
+    blk_stats_bump(BLK_STAT_FALLBACKS);
 }
 
 /* Map one conveyed cap. Returns 0 on success, negated errno else.
@@ -270,6 +416,21 @@ static int blk_map_cap(unsigned idx, uint8_t kind, unsigned long handle,
         g_mapped_count++;
         return 0;
     }
+    if (kind == BLK_CAP_IRQ || kind == BLK_CAP_MSIX) {
+        /* IRQ/MSIX caps convey the delivery vector (issue #47 step-b2):
+         * no mapping — the handle is armed via irq_register and waited
+         * on via irq_wait. Same-handle re-map is a no-op (idempotent
+         * kernel arm). MSIX is conveyance-only in b2 (no AHCI backend
+         * yet); the handle is stored so a later backend can arm it. */
+        g_caps[idx].mapped = 1;
+        g_caps[idx].kind = kind;
+        g_caps[idx].handle = handle;
+        g_caps[idx].phys = phys;
+        g_caps[idx].size = size;
+        g_caps[idx].va = 0;
+        g_mapped_count++;
+        return 0;
+    }
     return -BLK_ENOSYS;
 }
 
@@ -282,6 +443,8 @@ static int blk_map_cap(unsigned idx, uint8_t kind, unsigned long handle,
 #define ATA_CMD_WRITE 0x30
 #define ATA_CMD_FLUSH 0xE7
 #define ATA_POLL_N 100000
+#define ATA_DEVCTL_OFF 0x206
+#define ATA_DEVCTL_NIEN 0x02
 
 static int ata_wait_bsy(unsigned base) {
     for (unsigned i = 0; i < ATA_POLL_N; ++i) {
@@ -302,6 +465,35 @@ static int ata_wait_drq(unsigned base) {
             return 0;
     }
     return -1;
+}
+
+/* Device-control (nIEN) access (issue #47 step-b2): the control block
+ * rides its own IO-port cap (primary 0x3F6, secondary 0x376 =
+ * command base + 0x206). Touch it only when the grant is present —
+ * an ungranted outb faults the PD. */
+static int ata_ctrl_granted(unsigned base) {
+    unsigned long ctrl = (unsigned long)base + ATA_DEVCTL_OFF;
+    for (unsigned i = 0; i < BLK_MAX_CAPS; ++i) {
+        if (g_caps[i].mapped && g_caps[i].kind == BLK_CAP_MMIO &&
+            g_caps[i].phys == ctrl)
+            return 1;
+    }
+    return 0;
+}
+
+static void ata_set_nien(unsigned base, int nien) {
+    if (!ata_ctrl_granted(base))
+        return;
+    blk_outb((unsigned short)(base + ATA_DEVCTL_OFF),
+             (unsigned char)(nien ? ATA_DEVCTL_NIEN : 0x00));
+}
+
+/* Device-state confirmation for an IRQ wake (issue #47 step-b2):
+ * the transfer is complete when the device is out of BSY with no
+ * error latched. Reads the selected channel's status (g_ata_base). */
+static int ata_completion_ok(void) {
+    unsigned char s = blk_inb((unsigned short)(g_ata_base + 7));
+    return ((s & (ATA_SR_BSY | ATA_SR_ERR)) == 0) ? 0 : -1;
 }
 
 static int ata_identify(unsigned base, unsigned char drive,
@@ -348,6 +540,12 @@ static int ata_read_sector(unsigned base, unsigned char drive, uint64_t lba,
     blk_outb((unsigned short)(base + 5),
              (unsigned char)((lba >> 16) & 0xFF));
     blk_outb((unsigned short)(base + 7), ATA_CMD_READ);
+    /* Completion (issue #47 step-b2): the READ IRQ fires with the data
+     * block (DRQ). blk_wait_validated confirms the device is out of
+     * BSY/ERR (stale-pending retry inside); the data phase below stays
+     * a bounded DRQ poll either way. Never report success from the IRQ
+     * alone — status + data decide. */
+    blk_wait_validated(ata_completion_ok);
     if (ata_wait_drq(base))
         return -1;
     for (int i = 0; i < 256; ++i) {
@@ -380,6 +578,12 @@ static int ata_write_sector(unsigned base, unsigned char drive, uint64_t lba,
         blk_outw((unsigned short)base, w);
     }
     blk_outb((unsigned short)(base + 7), ATA_CMD_FLUSH);
+    /* Completion (issue #47 step-b2): the WRITE IRQ fires at command
+     * completion (BSY clear). blk_wait_validated confirms BSY clear
+     * and no ERR (stale-pending retry inside); otherwise the bounded
+     * BSY poll below decides. Never report success from the IRQ alone. */
+    if (blk_wait_validated(ata_completion_ok) == 0)
+        return 0;
     if (ata_wait_bsy(base))
         return -1;
     return 0;
@@ -402,6 +606,10 @@ static int ata_write_sector(unsigned base, unsigned char drive, uint64_t lba,
 #define VIRTIO_QPFN_OFF 0x040
 #define VIRTIO_QREADY_OFF 0x044
 #define VIRTIO_QNOTIFY_OFF 0x050
+#define VIRTIO_ISR_OFF 0x060
+#define VIRTIO_ISR_ACK_OFF 0x064
+#define VIRTIO_ISR_USED_BIT 0x01
+#define VIRTIO_ISR_CONFIG_BIT 0x02
 #define VIRTIO_STATUS_OFF 0x070
 #define VIRTIO_QDESCLO_OFF 0x080
 #define VIRTIO_QDESCHI_OFF 0x084
@@ -536,6 +744,16 @@ static unsigned long blk_legacy_used_off(unsigned qsize) {
     return (end + BLK_LEGACY_ALIGN - 1) & ~(BLK_LEGACY_ALIGN - 1);
 }
 
+/* Clear any latched virtio ISR bits before the first IRQ wait
+ * (issue #47 step-b2): a stale used/config bit would deliver an
+ * immediate (spurious) IRQ on the first unmask. Same registers on
+ * legacy v1 and modern v2. */
+static void virtio_ack_stale_isr(unsigned long mmio_va) {
+    (void)vmmio_read32(mmio_va, VIRTIO_ISR_OFF);
+    vmmio_write32(mmio_va, VIRTIO_ISR_ACK_OFF,
+                  VIRTIO_ISR_USED_BIT | VIRTIO_ISR_CONFIG_BIT);
+}
+
 static int virtio_setup_queue(unsigned long mmio_va, unsigned long phys,
                               unsigned qsize) {
     vmmio_write32(mmio_va, VIRTIO_QSEL_OFF, 0);
@@ -573,6 +791,7 @@ static int virtio_setup_queue(unsigned long mmio_va, unsigned long phys,
         vmmio_write32(mmio_va, VIRTIO_QREADY_OFF, 1);
         uint32_t s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
         vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_DRV_OK);
+        virtio_ack_stale_isr(mmio_va);
         return 0;
     }
     /* Legacy v1: one contiguous chunk in pages 2-3 (pages 0-1 stay
@@ -605,10 +824,32 @@ static int virtio_setup_queue(unsigned long mmio_va, unsigned long phys,
     vmmio_write32(mmio_va, VIRTIO_QNUM_OFF, qsize);
     vmmio_write32(mmio_va, VIRTIO_QALIGN_OFF,
                   (uint32_t)BLK_LEGACY_ALIGN);
-    vmmio_write32(mmio_va, VIRTIO_QPFN_OFF,
-                  (uint32_t)(chunk_phys / BLK_LEGACY_ALIGN));
-    uint32_t s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
-    vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_DRV_OK);
+        vmmio_write32(mmio_va, VIRTIO_QPFN_OFF,
+                      (uint32_t)(chunk_phys / BLK_LEGACY_ALIGN));
+        uint32_t s = vmmio_read32(mmio_va, VIRTIO_STATUS_OFF);
+        vmmio_write32(mmio_va, VIRTIO_STATUS_OFF, s | VIRTIO_ST_DRV_OK);
+        virtio_ack_stale_isr(mmio_va);
+        return 0;
+    }
+
+/* Device-state confirmation for a virtio IRQ wake (issue #47 step-b2):
+ * the used ring must have advanced past the submitted descriptor with
+ * our id and a zero status byte. g_virtio_wait_last latches the
+ * pre-submit used index (set before QNOTIFY). */
+static unsigned g_virtio_wait_last = 0;
+
+static int virtio_completion_ok(void) {
+    struct virtq_used *used = (struct virtq_used *)g_q_used_va;
+    volatile unsigned char *status =
+        (volatile unsigned char *)(g_frame_va + BLK_STATUS_OFF);
+    if (g_q_used_va == 0 || g_frame_va == 0 || g_virtio_qsize == 0)
+        return -1;
+    if (used->idx == (uint16_t)g_virtio_wait_last)
+        return -1;
+    if (used->ring[g_virtio_wait_last % g_virtio_qsize].id != 0)
+        return -1;
+    if (*status != 0)
+        return -1;
     return 0;
 }
 
@@ -627,6 +868,15 @@ static int virtio_transfer(int is_write, uint64_t lba) {
     }
     if (g_q_desc_va == 0 || g_q_avail_va == 0 || g_q_used_va == 0)
         return -1;
+    /* Stale-latch drain (issue #47 step-b2): a held ISR bit from an
+     * earlier transfer (e.g. one that completed via the poll fallback
+     * without ACKing) would be consumed as a stale IRQ by the wait
+     * below and fail validation, stranding the real completion with
+     * no fresh edge. ACK before submitting so every IRQ observed past
+     * this point belongs to this transfer. Mirrors the setup-time ACK;
+     * single-threaded PD, no concurrent completer. */
+    vmmio_write32(mmio, VIRTIO_ISR_ACK_OFF,
+                  VIRTIO_ISR_USED_BIT | VIRTIO_ISR_CONFIG_BIT);
     struct virtq_desc *desc = (struct virtq_desc *)g_q_desc_va;
     struct virtq_avail *avail = (struct virtq_avail *)g_q_avail_va;
     struct virtq_used *used = (struct virtq_used *)g_q_used_va;
@@ -664,7 +914,36 @@ static int virtio_transfer(int is_write, uint64_t lba) {
     avail->idx = (uint16_t)(avail->idx + 1);
     g_virtio_avail_idx = avail->idx;
     __asm__ volatile("" ::: "memory");
+    g_virtio_wait_last = last;
     vmmio_write32(mmio, VIRTIO_QNOTIFY_OFF, 0);
+    /* Fast path (issue #47 step-b2): the ISR latch may already show a
+     * posted completion — the device can finish during the notify
+     * itself, while the GIC/PLIC entry is still masked from the
+     * previous delivery (a masked-window edge is never re-signalled).
+     * The used-ring advance disambiguates a fresh completion from a
+     * stale latch (last_used tracks every observed completion, IRQ
+     * or polled path alike): only a real advance counts, otherwise
+     * fall through to the bounded wait. Bumping WAITS keeps the
+     * waits/completions stats aligned (a zero-block wait). */
+    if ((vmmio_read32(mmio, VIRTIO_ISR_OFF) & VIRTIO_ISR_USED_BIT) != 0 &&
+        virtio_completion_ok() == 0) {
+        vmmio_write32(mmio, VIRTIO_ISR_ACK_OFF,
+                      VIRTIO_ISR_USED_BIT);
+        g_virtio_last_used = used->idx;
+        blk_stats_bump(BLK_STAT_WAITS);
+        blk_completion_ok();
+        return 0;
+    }
+    /* Completion (issue #47 step-b2): blk_wait_validated confirms the
+     * used-ring advance + id + zero status (stale-pending retry
+     * inside). On success clear the ISR latch so the level line
+     * deasserts. Otherwise take the bounded poll below. */
+    if (blk_wait_validated(virtio_completion_ok) == 0) {
+        vmmio_write32(mmio, VIRTIO_ISR_ACK_OFF,
+                      VIRTIO_ISR_USED_BIT);
+        g_virtio_last_used = used->idx;
+        return 0;
+    }
     unsigned n = 0;
     while (used->idx == (uint16_t)last) {
         if (++n >= VIRTIO_POLL_N)
@@ -676,6 +955,35 @@ static int virtio_transfer(int is_write, uint64_t lba) {
     if (*status != 0)
         return -1;
     return 0;
+}
+
+/* Select and arm the PD-owned IRQ for a device phys (issue #47
+ * step-b2): match the IRQ/MSIX cap whose conveyed phys names this
+ * device, register WAIT_ACK delivery, and latch the handle. MSIX is
+ * conveyance-only in b2 (no AHCI backend yet) — stored, never armed.
+ * No match or a failed register leaves the handle clear (pure poll). */
+static void blk_arm_irq_for(unsigned long phys) {
+    g_irq_handle = 0;
+    g_irq_phys = 0;
+    if (phys == 0)
+        return;
+    for (unsigned i = 0; i < BLK_MAX_CAPS; ++i) {
+        if (!g_caps[i].mapped)
+            continue;
+        if (g_caps[i].kind != BLK_CAP_IRQ &&
+            g_caps[i].kind != BLK_CAP_MSIX)
+            continue;
+        if (g_caps[i].phys != phys)
+            continue;
+        if (g_caps[i].kind == BLK_CAP_MSIX)
+            return;
+        if (nexios_cap_irq_register(g_caps[i].handle,
+                                    BLK_IRQ_MODE_WAIT_ACK) != 0)
+            return;
+        g_irq_handle = g_caps[i].handle;
+        g_irq_phys = phys;
+        return;
+    }
 }
 
 /* Probe with all caps mapped (BIND time). Sets g_backend/g_sectors.
@@ -692,6 +1000,9 @@ static void blk_probe(void) {
         if (!g_caps[i].mapped || g_caps[i].kind != BLK_CAP_MMIO)
             continue;
         unsigned base = (unsigned)g_caps[i].phys;
+        /* Poll-only probe: mask device IRQs until the channel is
+         * selected and its IRQ is armed (no stray IRQs pre-arm). */
+        ata_set_nien(base, 1);
         static const unsigned char drives[2] = { 0xE0, 0xF0 };
         for (unsigned d = 0; d < 2; ++d) {
             uint64_t sectors = 0;
@@ -700,6 +1011,9 @@ static void blk_probe(void) {
                 g_ata_drive = drives[d];
                 g_backend = BLK_BACKEND_ATA_PIO;
                 g_sectors = sectors;
+                blk_arm_irq_for(base);
+                if (g_irq_handle != 0)
+                    ata_set_nien(base, 0);
                 return;
             }
         }
@@ -729,6 +1043,13 @@ static void blk_probe(void) {
                         g_frame_va = g_caps[j].va;
                         g_frame_phys = g_caps[j].phys;
                     }
+                }
+                blk_arm_irq_for(g_caps[i].phys);
+                if (g_irq_handle != 0) {
+                    /* Stale latch from before the arm would deliver
+                     * an immediate spurious IRQ: clear it now (the
+                     * queue setup ACKs again before the first wait). */
+                    virtio_ack_stale_isr(reg_va);
                 }
                 return;
             }
@@ -827,12 +1148,14 @@ int main(void) {
                                 req.lba, req.aux, req.rsvd);
             /* Publish the shared window: the frame can arrive on any
              * CAP_GET round; transfers and virtio queue setup consume
-             * g_frame_va/_phys. Fresh frames drop queue readiness. */
+             * g_frame_va/_phys. Fresh frames drop queue readiness.
+             * (Re)publishing the IRQ stats header rides the window. */
             if (r == 0 && idx < BLK_MAX_CAPS &&
                 g_caps[idx].kind == BLK_CAP_DMA_REGION) {
                 g_frame_va = g_caps[idx].va;
                 g_frame_phys = g_caps[idx].phys;
                 g_virtio_ready = 0;
+                blk_stats_publish();
             }
             rep.handle = req.handle;
             rep.arg = req.arg;
@@ -901,6 +1224,10 @@ int main(void) {
             break;
         case BLK_OP_INJECT_MID_TRANSFER:
             g_inject_once = 1;
+            rep.status = 0;
+            break;
+        case BLK_OP_INJECT_IRQ_SKIP:
+            g_inject_irq_skip_once = 1;
             rep.status = 0;
             break;
         default:

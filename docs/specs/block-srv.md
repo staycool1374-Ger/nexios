@@ -10,7 +10,8 @@ kernel probing stays (gated off only when the PD owns the device).
 48 B `BlockRpc` (`kernel/driver/block_srv.hpp`, mirrors `TimerRpc`):
 op/flags/rsvd/epoch/owner id+gen/lba/arg/handle/status-op/status/aux.
 Ops: BIND, GEOMETRY, READ_BLOCK, WRITE_BLOCK, FLUSH, DMA_MAP,
-DMA_UNMAP, LOOPBACK, INJECT_MID_TRANSFER, CAP_GET (9).
+DMA_UNMAP, LOOPBACK, INJECT_MID_TRANSFER, CAP_GET (9),
+INJECT_IRQ_SKIP (10, one-shot poll-fallback drill).
 
 Step-b1 order: CAP_GET rounds first (kernel→PD carries index +
 encoded handle + phys + size per row cap; the PD maps and echoes),
@@ -57,6 +58,45 @@ v2 also accepted). Legacy queue is one contiguous chunk in shared
 pages 2–3 (desc + avail + 4 KiB-aligned used ring, PFN path, no
 Ready bit); pages 0–1 stay the data/header/status window at the
 fixed `kBlock*Offset` contract. Bounded used-ring poll, no IRQ.
+
+## Step-b2 IRQ delegation (issue #47, live)
+
+Completion IRQs owned by the PD via WAIT_ACK delivery
+(mask-on-delivery in the ISR; the next wait entry unmasks after the
+driver ACKed the device) + bounded wait (1000 ticks, `BLK_IRQ_WAIT_TICKS`).
+Timeout/revoke/skip falls back to the bounded device poll — never
+report success from the IRQ alone (device state validates every
+completion: ATA BSY/ERR + data, virtio used-ring advance + status).
+
+SDF row (b2): x86_64 adds control blocks (0x3F6/0x376, nIEN writes)
++ IRQ caps (IRQ14→vector 46 primary, IRQ15→vector 47 secondary;
+phys names the channel). The PD masks device IRQs (nIEN=1) during
+probe and enables (nIEN=0) only after arming. Off-x86 adds one IRQ
+cap (addr = transport phys, vector = captured GIC INTID / PLIC
+source). AHCI MSI is conveyance-only (`CONFIG_BLOCK_SRV_AHCI_MSI`,
+default 0; no live AHCI backend in b2).
+
+Stats window at `kBlockIrqStatsOffset` (0x1400): magic/version +
+waits/completions/timeouts/fallbacks, release-ordered PD stores,
+read by the kernel test through the HHDM alias.
+
+x86_64 routing note: APIC init masks IOAPIC entries 2-15 and the
+LAPIC LINT0 virtual-wire path, so PIC delivery alone never reaches
+the CPU — arm unmasks the I/O APIC entry too (was-masked tracked,
+restored on release/drain) and programs level-triggered delivery
+(saved entry restored on release). Level (not edge): the PD issues
+the command BEFORE entering the wait, so the device can assert
+while the entry is still masked from the previous delivery — an
+edge would be lost, level re-samples on unmask. GDB-convicted
+during b2 (46 vector-224-only ISR hits + HMP IRQ14 counts with
+zero table deliveries before the fix; 5/5/0/0 stats after).
+aarch64 note: same edge-loss shape on the GIC (init programs the
+virtio SPIs edge-high) — the arm programs the PD-owned INTID
+level-triggered (2-bit ICFGR field saved/restored per slot).
+PD waits unmask (sti) before blocking per the #513 IRQ discipline —
+trap entry owns the IRQ-off state (DAIF set), and a BLOCKED spin
+with interrupts masked sleeps through every wakeup (convicted via
+an entry-IF census: 73/73 waits rolled back before the fix).
 
 ## Pre-flip status
 

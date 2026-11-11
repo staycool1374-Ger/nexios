@@ -476,6 +476,38 @@ void Scheduler::on_tick() noexcept {
                              __ATOMIC_RELEASE);
         }
 
+        // Issue #47 step-b2: bounded-IRQ-wait timeout apply.  Same contract
+        // as the #18 block above (wheel callbacks only set the flag; the
+        // wake applies here under the held scheduler_lock_; level-triggered
+        // re-apply; never clobber RUNNING).  The woken waiter observes the
+        // timeout in sys_irq_wait's resume path and falls back to the
+        // bounded device poll.
+        for (auto *task = all_tasks_.first_ptr(); task;
+             task = all_tasks_.next_ptr(task)) {
+            if (task->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (!__atomic_load_n(&task->irq_wait_armed,
+                                 __ATOMIC_ACQUIRE) ||
+                !__atomic_load_n(&task->irq_wait_timed_out,
+                                 __ATOMIC_ACQUIRE))
+                continue;
+            if (task->generation != task->irq_wait_gen)
+                continue;
+            if (queue_target(*task) != sched_cpu())
+                continue;
+            if (task->state == TaskState::BLOCKED) {
+                task->state = TaskState::READY;
+            } else if (task->state == TaskState::READY) {
+                if (task->in_ready_queue_)
+                    continue;
+            } else {
+                continue;
+            }
+            enqueue_ready(*task);
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+        }
+
         // Issue #76: bounded-nanosleep apply + timerfd waiter wakes. Wheel
         // callbacks only set sleep_expired / waiter_done; the wakes are
         // applied here under the already-held scheduler_lock_ (same
