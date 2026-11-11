@@ -49,6 +49,18 @@ def find_gdb(arch):
 
 def ensure_nolto_builddir(arch, build):
     """Configure (once) and build the NO_LTO twin builddir."""
+    if build == "release":
+        # Release links without LTO by design, so the release builddir IS
+        # the no-LTO tree. Returning the debug twin here would silently
+        # surveil the wrong binary (debug path instead of release).
+        builddir = Path("build/meson-%s-release" % arch).resolve()
+        if not (builddir / "build.ninja").exists():
+            subprocess.run(
+                ["meson", "setup", str(builddir), "--cross-file",
+                 "cross/%s-elf.txt" % arch, "-Darch=%s" % arch,
+                 "-Dbuildtype=release", "-Db_lto=false"],
+                cwd=str(HERE.parent.parent), check=True)
+        return builddir
     builddir = Path("build/meson-%s-nolto" % arch).resolve()
     if not (builddir / "build.ninja").exists():
         subprocess.run(
