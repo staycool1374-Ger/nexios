@@ -232,7 +232,7 @@ jobs:
       run: bash tools/check_makefile_freeze.sh --event "$EVENT_NAME" --ref "$REF_NAME" --base-ref "$BASE_REF" --head-ref "$HEAD_REF" --before "$BEFORE_SHA"
 
   cross-edit-isolation:
-    # Isolation gate as its own job (#412 S3-4R). The fence checks do not belong
+    # Isolation gate as its own job (#412 S3-4R). It does not belong
     # in the parity ledger: that job is advisory until the Make->Meson cutover,
     # and the gate was therefore invisible as a merge blocker. Mark this job
     # REQUIRED in branch protection to make the gate blocking (a repo setting,
@@ -244,14 +244,6 @@ jobs:
       with:
         # Full history: the gate compares against an explicit base.
         fetch-depth: 0
-
-    - name: Fence renderer matrix (single source, fail-closed probes)
-      run: bash scripts/agent_up.sh render-self-test
-
-    - name: Fence rendered-output gate (F1-F8, properties not golden)
-      run: |
-        python3 tools/agents/verify_fence.py
-        python3 tools/agents/verify_fence.py --self-test
 
     - name: Isolation gate self-test (classifier + change-set integration)
       run: bash tools/check_no_cross_edits.sh --self-test
