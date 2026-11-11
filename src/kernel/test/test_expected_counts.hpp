@@ -139,6 +139,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers_ahci_deep",      10,   0,       0      },  // AHCI protocol + completion/ISR contracts
     {"ahci_live",              5,    0,       0      },  // real AHCI path on q35 variant (not in all)
     {"block_srv_live",         8,    8,       8      },  // block-srv PD live path, CONFIG_BLOCK_SRV=1 (issue #47 step-b1; +4 IRQ b2)
+    {"vfs_srv_live",           14,   14,      14     },  // vfs-srv PD live path, CONFIG_VFS_SRV=1 (issue #47 step-b3)
     {"initrd_parser",          9,    0,       0      },  // cpio parser
 
     // ipc
@@ -385,7 +386,7 @@ inline void validate_all_consistency() {
     };
     static constexpr const char *k_specials[] = {
         "ahci_live", "iommu_live", "task_fpu", "task_tcb_log",
-        "block_srv_live",
+        "block_srv_live", "vfs_srv_live",
         nullptr,
     };
     size_t sum_covered = 0;

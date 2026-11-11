@@ -56,6 +56,7 @@ __attribute__((weak)) void register_ipc_blocking_tests() {}
 __attribute__((weak)) void register_ipc_timeout_tests() {}
 __attribute__((weak)) void register_vfsd_authorization_tests() {}
 __attribute__((weak)) void register_block_srv_tests() {}
+__attribute__((weak)) void register_vfs_srv_tests() {}
 __attribute__((weak)) void register_textutils_tests() {}
 __attribute__((weak)) void register_irq_guard_tests() {}
 __attribute__((weak)) void register_shell_redirect_tests() {}
