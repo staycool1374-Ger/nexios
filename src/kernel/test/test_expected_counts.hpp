@@ -149,7 +149,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ipc_extended",          13,   0,       0      },  // size limits, removal, wake gates, quiescence, reply
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
     {"ipc_robustness",        11,   0,       0      },  // malformed, wraparound, concurrent, cleanup, matching
-    {"ipc_pipe",              6,    0,       0      },  // kernel pipe object
+    {"ipc_pipe",              10,   0,       0      },  // kernel pipe object (9 + O_NONBLOCK canary, issue #474)
 
     // vfs
     {"vfs_core",             25,   0,       0      },  // fdtable, resolve, mount, mkdir, unlink, borrow guards, /bin
