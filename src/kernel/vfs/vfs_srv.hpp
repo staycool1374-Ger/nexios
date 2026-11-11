@@ -19,7 +19,7 @@
  */
 
 /// @file vfs_srv.hpp
-/// @brief VFS server proxy (issue #47, strangler step a).
+/// @brief VFS server proxy (issue #47, strangler step a → step b3).
 ///        Kernel-side contract for the userspace vfs-srv PD: 48 B wire
 ///        RPC, PID cell, epoch/liveness, tombstone drain, and the sys_*
 ///        proxy entry points. Everything here is declaration-only;
@@ -27,6 +27,14 @@
 ///        so the OFF build (`CONFIG_VFS_SRV=0`, shipped default) is
 ///        byte-identical to the pre-#47 tree. Authorize stays kernel-side:
 ///        this proxy is diagnostic/parity only until the flip.
+///        Step b3 (VFS backends live path): BIND/CAP_GET + per-op raw-byte
+///        staging. Split of duties — the kernel stages RAW backend bytes
+///        (cpio image slices, FAT sectors, ramdisk extents) into the
+///        shared window; the PD parses (cpio index/dir walk, BPB/dir
+///        entries, dirents) and owns namespace, handles and policy.
+///        Bind-time full-image prefetch is impossible (initrd ≈ 2.3 MiB
+///        >> window), so staging is per-op, not per-bind. No POSIX
+///        routing in b3 (authorize + fd-table stay kernel-side).
 
 #include <types.hpp>
 #include <kernel/nexios_config.h>
@@ -36,17 +44,65 @@ namespace kernel::vfs_srv {
 #if CONFIG_VFS_SRV
 
 /// @brief Wire ops carried in VfsRpc::op (server dispatch switch).
+///        Ops 0..8 are the frozen step-a ABI; 9..19 are step b3.
 enum class VfsSrvOp : uint8_t {
     BIND = 0,          ///< server announce / capability handshake
-    INITRD = 1,        ///< initrd backend probe
-    FAT32 = 2,         ///< fat32 backend probe
-    TMPFS = 3,         ///< tmpfs backend probe
-    DEVFS = 4,         ///< devfs backend probe
-    PIPE = 5,          ///< pipe backend probe
-    RAMDISK = 6,       ///< ramdisk_fs backend probe
+    INITRD = 1,        ///< initrd backend probe (diagnostic pre-b3)
+    FAT32 = 2,         ///< fat32 backend probe (diagnostic pre-b3)
+    TMPFS = 3,         ///< tmpfs backend probe (diagnostic pre-b3)
+    DEVFS = 4,         ///< devfs backend probe (diagnostic pre-b3)
+    PIPE = 5,          ///< pipe backend probe (diagnostic pre-b3)
+    RAMDISK = 6,       ///< ramdisk_fs backend probe (diagnostic pre-b3)
     PROCFS_RENDER = 7, ///< procfs render probe (renders stay in-kernel)
     INJECT_CORRUPT = 8,///< one-shot corrupt-backend drill (diagnostic)
+    CAP_GET = 9,       ///< convey one row cap (index order, BIND goes last)
+    OPEN = 10,         ///< open path in backend → handle (ino = handle)
+    CLOSE = 11,        ///< close handle (double-close is a typed error)
+    READ = 12,         ///< read staged bytes via handle (offset/size)
+    WRITE = 13,        ///< write PD-owned store via handle (offset/size)
+    STAT = 14,         ///< stat path → size/mode in offset/size fields
+    READDIR = 15,      ///< readdir path → one name per call (ino = next)
+    CREATE = 16,       ///< create file in PD-owned store
+    UNLINK = 17,       ///< unlink path in PD-owned store (typed errors)
+    BACKEND_STATUS = 18, ///< publish magic/version/ops/bytes/faults
+    INJECT_BACKEND_FAULT = 19, ///< one-shot -EIO on next op of a backend
 };
+
+/// @brief Backends served by vfs-srv (step b3).
+enum class VfsBackend : uint8_t {
+    INITRD = 0,
+    FAT32 = 1,
+    TMPFS = 2,
+    DEVFS = 3,
+    PIPE = 4,
+    RAMDISK = 5,
+    PROCFS = 6,
+    COUNT = 7,
+};
+
+/// @brief Shared-window layout (step b3, single DMA_REGION row cap).
+///        4 pages: 12 KiB data (staged raw bytes in / PD bytes out),
+///        64 B name slot, header echo, stats. Offsets are PD-visible.
+constexpr uint64_t kVfsRegionPages = 4;
+constexpr uint64_t kVfsDataOffset = 0x000;
+constexpr uint64_t kVfsDataSize = 0x3000;
+constexpr uint64_t kVfsNameOffset = 0x3000;
+constexpr uint64_t kVfsMaxName = 64;
+constexpr uint64_t kVfsHdrOffset = 0x3080;
+constexpr uint64_t kVfsStatsOffset = 0x30C0;
+
+/// @brief Backend status block published by the PD (≤ 48 B, magic-gated).
+struct VfsBackendStatus {
+    uint64_t magic;    ///< kVfsBackendStatusMagic
+    uint32_t version;  ///< kVfsBackendStatusVersion
+    uint32_t ops;      ///< served ops since bind/epoch
+    uint64_t bytes;    ///< served bytes since bind/epoch
+    uint32_t faults;   ///< injected faults served since bind/epoch
+    uint32_t rsvd;     ///< reserved (zero)
+};
+
+constexpr uint64_t kVfsBackendStatusMagic = 0x5646535354415453ULL;
+constexpr uint32_t kVfsBackendStatusVersion = 1;
 
 /// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
 struct VfsRpc {
@@ -89,6 +145,55 @@ void vfs_srv_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
 /// @brief One-shot corrupt-backend drill (INJECT_CORRUPT probe).
 /// @return 0 on posted drill, -ENOSYS when the server is unavailable.
 int64_t vfs_srv_fault_corrupt();
+
+/// @brief Bind the server: CAP_GET rounds (index order) then BIND last.
+/// Caches the backend mask + window phys/pages; rebinds on epoch change.
+/// @return true with the cache valid, false fail-closed (nothing held).
+bool vfs_srv_bind();
+
+/// @brief Backend availability mask from the last bind (bit per VfsBackend).
+uint8_t vfs_srv_backend_mask();
+
+/// @brief True when the backend bit is set in the bound mask.
+bool vfs_srv_backend_available(VfsBackend backend);
+
+/// @brief Open a path in a backend; the PD-owned handle returns in handle.
+/// @return 0 on success, negated errno fail-closed (claim never held).
+int64_t vfs_srv_open(VfsBackend backend, const char *path, uint64_t flags,
+                     uint64_t &handle);
+
+/// @brief Close a PD-owned handle (double-close is a typed error).
+int64_t vfs_srv_close(uint64_t handle);
+
+/// @brief Read up to size bytes at offset via handle into out.
+/// @return bytes staged, 0 at EOF, negated errno on failure.
+int64_t vfs_srv_read(uint64_t handle, uint64_t offset, uint8_t *out,
+                     uint64_t size);
+
+/// @brief Write size bytes at offset via handle (PD-owned stores only).
+int64_t vfs_srv_write(uint64_t handle, uint64_t offset, const uint8_t *in,
+                      uint64_t size);
+
+/// @brief Stat a path: size returns in st_size, mode in st_mode.
+int64_t vfs_srv_stat(VfsBackend backend, const char *path,
+                     uint64_t &st_size, uint64_t &st_mode);
+
+/// @brief Read one dir entry per call; next_ino chains, name_out ≤ 63+NUL.
+/// @return 0 with an entry, 1 at end of dir, negated errno on failure.
+int64_t vfs_srv_readdir(VfsBackend backend, const char *path,
+                        uint64_t &next_ino, char *name_out);
+
+/// @brief Create a file in a PD-owned store (TMPFS/PIPE).
+int64_t vfs_srv_create(VfsBackend backend, const char *path, uint64_t mode);
+
+/// @brief Unlink a path in a PD-owned store (typed errors, no silent ok).
+int64_t vfs_srv_unlink(VfsBackend backend, const char *path);
+
+/// @brief Read the PD-published backend status (magic/version-gated).
+bool vfs_srv_backend_status(VfsBackend backend, VfsBackendStatus &out);
+
+/// @brief One-shot -EIO on the next op of the selected backend.
+int64_t vfs_srv_fault_backend(VfsBackend backend);
 
 #endif // CONFIG_VFS_SRV
 

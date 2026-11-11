@@ -1,65 +1,2989 @@
-diff --git a/audits/report-2026-11-10T23-16-14Z-47-stepb2.md b/audits/report-2026-11-10T23-16-14Z-47-stepb2.md
-new file mode 100644
-index 000000000..5037c0445
+diff --git a/docs/specs/driver-pds.md b/docs/specs/driver-pds.md
+index d09bbf6ed..8f87357dc 100644
+--- a/docs/specs/driver-pds.md
++++ b/docs/specs/driver-pds.md
+@@ -146,8 +146,14 @@ aarch64 (FRAME); riscv64 blocked by a platform scheduler/timer issue
+ 
+ ## VFS/block rows (#47, issue #47 PDs share this SDF)
+ 
+-- `VFS_SRV` (vfs-srv PD): zero-cap row by design (no ambient authority).
+-  Composes empty; the PD talks to clients over its endpoint only.
++- `VFS_SRV` (vfs-srv PD, issue #47 step-b3): one 4-page shared window
++  (`CapKind::DMA_REGION`, raw backend bytes in / parsed results out,
++  kernel HHDM alias) + `FRAME` initrd pin is NOT conveyed (images live
++  in kernel pages, rejected by the FRAME mint; D5 mandates a private
++  copy — the kernel stages per-op instead). No device caps
++  (MMIO/IRQ/DMA-device), so `sdf_policy_only` still holds; the compose
++  gate rejects device kinds for policy roles. Composes with the window
++  only; the PD talks to clients over its endpoint.
+ - `BLOCK_SRV` (block-srv PD, issue #47 step-b1/b2): static
+   arch-switched row + one 4-page shared window (`CapKind::DMA_REGION`,
+   raw sector/queue area, kernel HHDM alias) + IRQ caps (step-b2:
+diff --git a/docs/specs/microkernel-transition.md b/docs/specs/microkernel-transition.md
+index 6993c92e4..ff8df5f44 100644
+--- a/docs/specs/microkernel-transition.md
++++ b/docs/specs/microkernel-transition.md
+@@ -195,11 +195,16 @@ generation-tagged stored pointers). Enforced at these points:
+     (merged `fc4a5e0e8`: SDF `DMA_REGION` + `kPdRoleCount`,
+     BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
+     read+write, `block_srv_live` class + host digest oracle).
+-    Status 2026-11 (in progress): #47 step-b2 block-srv IRQ
++    Status 2026-11 (landed): #47 step-b2 block-srv IRQ
+     delegation (main): WAIT_ACK delivery + bounded wait + poll
+     fallback, SDF IRQ caps (ATA IRQ14/15, virtio transport IRQ,
+     AHCI MSI conveyance-only), PD stats window, +4 tests per class
+     (`cap_irq` 16/15/15, `block_srv_live` 8/8/8).
++    Status 2026-11 (landed): #47 step-b3 vfs-srv backends live path
++    (main): BIND/CAP_GET + per-op raw-byte staging (cpio index/FAT
++    sectors/ramdisk blocks cached per epoch; PD parses + owns
++    namespace/handles/policy), 7 backends, `vfs_srv_live` 14/14/14
++    x3 arches; tests land via testbed (D8a), kernel+PD+docs on main.
+     Status 2026-11 (in progress): #51 console-PD substrate (main):
+     SDF FB row (SHM ring + DMA status page + slot-chunked scanout —
+     MMIO or FRAME pins per backing), `fb-pd.c` console PD (bounded
+diff --git a/docs/specs/vfs-srv.md b/docs/specs/vfs-srv.md
+index cb0bde634..5d708982b 100644
+--- a/docs/specs/vfs-srv.md
++++ b/docs/specs/vfs-srv.md
+@@ -1,38 +1,91 @@
+-# vfs-srv — VFS Server PD Contract (issue #47, strangler step a)
++# vfs-srv — VFS Server PD Contract (issue #47, strangler step-b3)
+ 
+-Userspace VFS server behind `CONFIG_VFS_SRV` (default 0). Step-a scope:
+-PD task + SDF row + Kconfig OFF shim + loopback/parity + fault drill.
+-No flip: authorize stays kernel-side (`syscall_handlers_fs.cpp`,
+-`vfs.cpp`, `vfsd.c` untouched).
++Userspace VFS server behind `CONFIG_VFS_SRV` (default 0). Step-a scope
++(PD task + SDF row + Kconfig OFF shim + loopback/parity + fault drill)
++is superseded by step-b3: live backend serving for all seven backends
++(INITRD/FAT32/TMPFS/DEVFS/PIPE/RAMDISK/PROCFS). No flip: authorize
++stays kernel-side (`syscall_handlers_fs.cpp`, `vfs.cpp`, `vfsd.c`
++untouched); the kernel VFS path stays authoritative, the PD shadows it.
+ 
+ ## Wire
+ 
+ 48 B `VfsRpc` (`kernel/vfs/vfs_srv.hpp`, mirrors `TimerRpc`): op/flags/
+-epoch/owner id+gen/ino/offset/size/status-op/status. Ops: BIND,
+-INITRD/FAT32/TMPFS/DEVFS/PIPE/RAMDISK/PROCFS_RENDER (probe only),
+-INJECT_CORRUPT (one-shot drill). Server answers BIND; every other op
+-returns a typed error pre-flip (`-ENOSYS`, corrupt probe `-EIO`).
++rsvd/epoch/owner id+gen/ino/offset/size/status-op/status. Ops 0..8 are
++the frozen step-a ABI (BIND, backend probes, INJECT_CORRUPT drill).
++Step-b3 adds 9..19: CAP_GET, OPEN, CLOSE, READ, WRITE, STAT, READDIR,
++CREATE, UNLINK, BACKEND_STATUS, INJECT_BACKEND_FAULT.
++
++CAP_GET/BIND mirror the block-srv shape with a 48 B packing difference:
++kind rides `flags`, the encoded row handle rides `size`, phys/size go
++in `ino`/`offset`, the row index in `status_op`. BIND goes last
++(`offset` = row cap count); the PD answers the backend mask in `size`
++(one bit per backend, INITRD=0 .. PROCFS=6).
++
++OPEN returns a PD-owned handle packed as `backend << 56 | base`. For
++image-backed backends the low 56 bits are `(locator24 << 32 | size32)`
++— the raw image locator (cpio byte offset / FAT start cluster /
++ramdisk start block / proc file index) plus the file size, which the
++kernel uses to clamp reads (EOF shape). Locators stay under 2^24
++(16 MiB images; b3 test images are ~2 MiB — larger images fail closed
++at OPEN with `-EINVAL`). TMPFS/PIPE handles are table slots into the
++PD-owned stores (generation-tagged; stale handles fail typed, never
++silently succeed).
++
++## Split of duties
++
++The kernel stages RAW backend bytes into the shared 4-page window
++(`kVfsRegionPages`, data at `kVfsDataOffset`, name slot at
++`kVfsNameOffset`, stats at `kVfsStatsOffset`); the PD parses and owns
++namespace, handles and policy:
++- INITRD: kernel builds a compact cpio index (name/data_off/size/mode,
++  ≤128 entries) once per epoch into .bss and stages it per op; the PD
++  resolves paths and packs image offsets.
++- FAT32: kernel stages BPB + root-dir cluster; the PD parses geometry +
++  dirents and packs (start_cluster, size); data reads are kernel-walked
++  chains the PD length-checks.
++- RAMDISK: kernel stages super + full dir region; the PD parses extents
++  and packs (start_block, size); data reads are kernel-staged spans.
++- TMPFS/PIPE: PD-owned bounded stores (8×4 KiB files, 4×1 KiB rings);
++  no staging, behavioral parity only.
++- DEVFS: static metadata table; data ops are `-ENOSYS` (device authority
++  stays kernel-side — D3).
++- PROCFS: kernel renders via its own VnodeOps into the window; the PD
++  validates format + digest (D6 validator, never renders).
++
++Per-op staging (not bind-time): the 2.3 MiB initrd image cannot fit a
++16 KiB window. The cpio index is cached kernel-side per epoch; the
++PD keeps no cross-op image state except its open-handle table (cleared
++on epoch bump). Single RPC per op; the kernel clamps reads to
++`min(size, file_size - offset)` so short final chunks terminate the
++digest loop deterministically.
+ 
+ ## Lifecycle
+ 
+ PID cell + epoch + tombstone ring (same shape as timer-srv):
+ `on_restart` stores the PID and bumps the epoch; the server purges
+-all state on epoch change. Teardown appends (owner id, gen) to a
+-bounded (16) lock-free ring; the next RPC piggybacks CANCEL_OWNERS.
+-Replies validate (server, epoch, owner id+gen, op echo); mismatch is
+-dropped with a bounded re-wait, never consumed.
++its open-handle table on epoch change. Replies validate (server,
++epoch, owner id+gen); mismatch is dropped, never consumed. A dead PD
++is restarted by the supervisor; the next op rebinds (CAP_GET re-maps
++the fresh window — the PD always unmaps + remaps on convey, never
++trusts a stale VA; a null window fails closed with `-ENOSYS`, never
++faults). `sdf_policy_only` still holds: the VFS_SRV row carries only a
++memory DMA_REGION window (no MMIO/IRQ/DMA-device caps); the compose
++gate rejects device kinds for policy roles.
+ 
+ ## Bounded wait
+ 
+ `IPC::send_sync_bounded` with `kRpcGuardTicks` (5000). Expiry returns
+-`-EAGAIN`; never a silent success, never a held block. No IRQ window
+-widening vs `send_sync`.
++`-EAGAIN`; never a silent success, never a held block. Single in-flight
++claim per proxy (fail-fast `-EAGAIN`, no spin across reschedule).
+ 
+ ## Pre-flip status
+ 
+-80-83-style VFS RPC numbers do not exist yet; all POSIX VFS traffic
+-still runs the in-kernel path. The flip (real backend serving,
+-fd-table handoff design, revoke cascade) is a later step with the
+-§7 gate (audit + test-full debug AND release + delta-0). OFF
+-(default) keeps the in-kernel registry: `storage` 167/167 + `vfs_*`
+-+ `proc_elf` + shell E2E oracles bit-identical.
++`src/kernel/vfs/` stays compiled (no removal); `vfs_srv_live`
++14/14/14 on x86_64/aarch64/riscv64 ON builds
++(`vfs_srv_bind_backends`, `vfs_srv_cap_rounds`, initrd stat/read,
++tmpfs roundtrip/guards, devfs nodes, pipe roundtrip/bounded, fat32
++geometry/read, ramdisk extent, procfs digest, fault/epoch/restart),
++host FNV-1a digests match per backend. OFF (default) keeps the
++in-kernel paths: `storage` 167/167 ×3 arches. `test_vfs_srv.cpp` and
++its registry wiring land via the testbed lane (D8a); only the kernel
++proxy + PD + docs ship on main.
+diff --git a/src/kernel/task/boot_sdf.cpp b/src/kernel/task/boot_sdf.cpp
+index 0d8a56120..789a22e90 100644
+--- a/src/kernel/task/boot_sdf.cpp
++++ b/src/kernel/task/boot_sdf.cpp
+@@ -23,6 +23,7 @@
+ #include <kernel/memory/address.hpp>
+ #include <kernel/ipc/shm_ring.hpp>
+ #include <services/terminal/framebuffer.hpp>
++#include <kernel/vfs/vfs_srv.hpp>
+ 
+ namespace kernel {
+ namespace sdf {
+@@ -417,11 +418,24 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
+         // (planner S5/S6); the shape (MSI-X/INTID + DMA + SHM) is declared
+         // in docs/specs/driver-pds.md. No static row yet.
+         return 0;
+-    case PdRole::VFS_SRV:
+-        // No ambient authority: the vfs-srv row IS the empty set (planner
+-        // SDF rules). Compose succeeds with zero caps; the PD talks to
+-        // clients over its endpoint only.
+-        return 0;
++    case PdRole::VFS_SRV: {
++        // VFS backend server row (issue #47 step-b3): exactly one
++        // DMA_REGION shared window (kVfsRegionPages). No FRAME cap:
++        // the initrd image lives in kernel pages, which the FRAME mint
++        // rejects (PMM::is_user_page gate), and D5 mandates a private
++        // copy anyway — so the kernel stages raw backend bytes into the
++        // window per op and the PD parses. The row carries no device
++        // caps (MMIO/IRQ/DMA-device), so sdf_policy_only still holds.
++        uint64_t n = 0;
++        if (n + 1 > kMaxCapsPerRole) {
++            return 0;
++        }
++        out[n++] = CapSpec{CapKind::DMA_REGION, 0,
++                           kernel::vfs_srv::kVfsRegionPages *
++                               arch::PAGE_SIZE,
++                           0, 0};
++        return n;
++    }
+     case PdRole::BLOCK_SRV: {
+         // Block-storage server row (issue #47 step-b2): static
+         // arch-switched shape + shared data window + IRQ caps (polled
+@@ -661,8 +675,17 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
+     }
+     if (sdf_policy_only(role) && count != 0) {
+         // Structural no-double-ownership (issues #47/#51): a policy-only
+-        // row must never carry device caps. Fail closed, never compose.
+-        return false;
++        // row must never carry DEVICE caps (IRQ/MSIX/MMIO/DMA). Memory
++        // caps (FRAME/SHM/DMA_REGION — fresh user frames, no device
++        // authority) are allowed: VFS_SRV carries its data window this
++        // way (issue #47 step-b3). Fail closed, never compose.
++        for (uint64_t i = 0; i < count; ++i) {
++            const auto kind = specs[i].kind;
++            if (kind == CapKind::IRQ || kind == CapKind::MSIX ||
++                kind == CapKind::MMIO || kind == CapKind::DMA) {
++                return false;
++            }
++        }
+     }
+     if (count == 0) {
+         // Zero-cap rows compose empty only on the explicit allowlist
+diff --git a/src/kernel/task/boot_sdf.hpp b/src/kernel/task/boot_sdf.hpp
+index 86ffb9c6f..1782fa4ef 100644
+--- a/src/kernel/task/boot_sdf.hpp
++++ b/src/kernel/task/boot_sdf.hpp
+@@ -187,11 +187,13 @@ bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen);
+ bool pd_owns_device(PdRole role);
+ 
+ /// @brief Structural policy-only predicate (issues #47/#51): true only
+-/// for roles whose SDF row MUST stay empty (no device caps ever —
+-/// VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/PROCFS_SRV
+-/// policy PDs). Used by compose to
+-/// reject any non-empty row for these roles, and by #48's SDF boundary
+-/// test to prove the emulation side holds no device caps.
++/// for roles whose SDF row MUST NOT carry device caps (IRQ/MSIX/MMIO/
++/// DMA) — VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/
++/// PROCFS_SRV policy PDs. Memory caps (FRAME/SHM/DMA_REGION — fresh
++/// user frames, no device authority) are allowed: VFS_SRV carries its
++/// step-b3 data window this way. Used by compose to reject device-cap
++/// rows for these roles, and by #48's SDF boundary test to prove the
++/// emulation side holds no device caps.
+ /// @return True for VFS_SRV, TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON,
+ /// PROCFS_SRV; false otherwise.
+ bool sdf_policy_only(PdRole role);
+@@ -203,8 +205,9 @@ bool sdf_policy_only(PdRole role);
+ bool capture_block_topology();
+ 
+ /// @brief True when @p role may compose with zero caps (explicit
+-/// allowlist): VFS_SRV always (no ambient authority — the row IS the
+-/// empty set); degraded BLOCK_SRV when no controller/IOMMU was captured
++/// allowlist): VFS_SRV always (no ambient authority — the row is its
++/// memory-only data window; a zero-cap compose still starts the PD
++/// endpoint-only); degraded BLOCK_SRV when no controller/IOMMU was captured
+ /// (logged at the call site; never a silent start).
+ bool sdf_zero_caps_allowed(PdRole role);
+ 
+diff --git a/src/kernel/vfs/ramdisk_fs.cpp b/src/kernel/vfs/ramdisk_fs.cpp
+index 73f5aa827..b1af64302 100644
+--- a/src/kernel/vfs/ramdisk_fs.cpp
++++ b/src/kernel/vfs/ramdisk_fs.cpp
+@@ -879,6 +879,25 @@ bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
+     return true;
+ }
+ 
++/// @brief Transport seam for the vfs-srv PD (issue #47 step b3): read raw
++/// 512 B blocks into @p out. Mechanical transport only — no entry lookup,
++/// no CRC check; the PD validates extents against its parsed dir region.
++/// Never under rd_lock (does block IPC).
++bool ramdisk_fs_read_blocks(uint64_t start_block, uint64_t count,
++                            uint8_t *out) {
++    if (out == nullptr || count == 0 ||
++        count > (0x3000 / RD_BLOCK_SIZE)) {
++        return false;
++    }
++    for (uint64_t i = 0; i < count; ++i) {
++        if (rd_block_op_retry(start_block + i, out + i * RD_BLOCK_SIZE,
++                              false) < 0) {
++            return false;
++        }
++    }
++    return true;
++}
++
+ int ramdisk_fs_try_mount() {
+     // Grant check FIRST: an already-mounted store with a dead/cleared
+     // grant must report failure (fail-closed degraded), not success.
+diff --git a/src/kernel/vfs/ramdisk_fs.hpp b/src/kernel/vfs/ramdisk_fs.hpp
+index 47026a786..f6d4ab15d 100644
+--- a/src/kernel/vfs/ramdisk_fs.hpp
++++ b/src/kernel/vfs/ramdisk_fs.hpp
+@@ -55,6 +55,16 @@ int ramdisk_fs_verify_all();
+ bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
+                        uint64_t &block_count, uint32_t &crc);
+ 
++/// @brief Transport seam for the vfs-srv PD (issue #47 step b3): read raw
++/// 512 B blocks into @p out (count bounded by the 12 KiB staging window).
++/// Mechanical transport only — no lookup, no CRC; the PD validates.
++/// @param out must hold at least `count * 512` bytes (all in-tree
++/// callers stage into the fixed 12 KiB window: super+dir = 11 blocks,
++/// data spans caller-chunked to fit).
++/// @return true on full transfer, false on any block IPC failure.
++bool ramdisk_fs_read_blocks(uint64_t start_block, uint64_t count,
++                            uint8_t *out);
++
+ extern Filesystem ramdisk_fs;
+ 
+ } // namespace vfs
+diff --git a/src/kernel/vfs/vfs.cpp b/src/kernel/vfs/vfs.cpp
+index 23d91d43b..75a063bec 100644
+--- a/src/kernel/vfs/vfs.cpp
++++ b/src/kernel/vfs/vfs.cpp
+@@ -537,6 +537,11 @@ void reset_and_remount() {
+     // boot and tests never block on it; absence just means /mnt/ramdisk
+     // does not resolve).
+     ramdisk_fs_try_mount();
++    // Re-mount the live FAT32 partition (issue #47 step-b3): boot mounts
++    // it at /mnt, but the snapshot rewind drops it (like every mount)
++    // and only the mounts below are restored. Without this, no test
++    // can resolve through /mnt. Fail-closed when the drive is absent.
++    mount_fat32("/mnt");
+ }
+ 
+ /// @brief Find a mounted filesystem by name.
+diff --git a/src/kernel/vfs/vfs_srv.cpp b/src/kernel/vfs/vfs_srv.cpp
+index 39b2d18ae..6e5b9461b 100644
+--- a/src/kernel/vfs/vfs_srv.cpp
++++ b/src/kernel/vfs/vfs_srv.cpp
+@@ -8,8 +8,28 @@
+  * default) yields an empty TU (no symbols), so the link is
+  * byte-identical to the pre-#47 tree. Authorize stays kernel-side: this
+  * proxy is diagnostic/parity only until the flip.
++ *
++ * Step b3 split of duties: the kernel stages RAW backend bytes (cpio
++ * image slices, FAT sectors, ramdisk blocks) into the shared window;
++ * the PD parses and owns namespace, handles and policy. POSIX routing
++ * stays kernel-side (no sys_* flip in b3).
+  */
+ 
++#include <kernel/ipc/ipc.hpp>
++#include <kernel/task/boot_sdf.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/cap/cap.hpp>
++#include <kernel/cap/cap_types.hpp>
++#include <kernel/memory/address.hpp>
++#include <kernel/core/global_state.hpp>
++#include <kernel/vfs/fat32.hpp>
++#include <kernel/vfs/ramdisk_fs.hpp>
++#include <kernel/ramdisk/ramdiskd.hpp>
++
++extern "C" uint8_t _binary_initrd_cpio_start[];
++extern "C" uint8_t _binary_initrd_cpio_end[];
++
+ #include <kernel/ipc/ipc.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
+@@ -131,6 +151,1116 @@ int64_t vfs_srv_fault_corrupt() {
+     return reply.status;
+ }
+ 
++namespace {
++
++// Bound cache (issue #47 step-b3, block_srv_bind precedent): cached at
++// bind, valid only when g_bound_epoch == vfs_srv_epoch(). Every field is
++// atomic-only (SMP tasks may bind concurrently; values are idempotent
++// but plain/atomic mixing is UB — step-b1 audit S2).
++uint32_t g_bound_epoch = 0;
++uint8_t g_backend_mask = 0;
++uint64_t g_data_phys = 0;
++uint64_t g_data_pages = 0;
++// Single in-flight RPC claim: fail-fast (-EAGAIN), never spun on, so
++// there is no lock-order edge and no spin-across-reschedule (§11.1).
++uint8_t g_claim = 0;
++
++void clear_bound() {
++    __atomic_store_n(&g_bound_epoch, 0U, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_backend_mask, 0, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_phys, 0ULL, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_pages, 0ULL, __ATOMIC_RELAXED);
++}
++
++void fill_identity(VfsRpc &req) {
++    auto *cur = Scheduler::current_task();
++    req.owner_id = static_cast<uint32_t>(cur->id);
++    req.owner_gen = cur->generation;
++    req.epoch = vfs_srv_epoch();
++}
++
++// Encode one row cap for conveyance, cross-checked against the SDF
++// record (slot, gen, phys/size). Fail-closed: any mismatch returns 0.
++uint64_t encode_row_handle(TaskControlBlock &srv, uint64_t idx,
++                           const sdf::CapSpec &spec) {
++    int slot = -1;
++    uint32_t gen = 0;
++    if (!sdf::sdf_role_cap(sdf::PdRole::VFS_SRV, idx, slot, gen)) {
++        return 0;
++    }
++    auto *space = srv.get_cspace();
++    if (space == nullptr) {
++        return 0;
++    }
++    const uint64_t handle =
++        cap::encode_user_handle(space->cspace_id, slot, gen);
++    if (handle == static_cast<uint64_t>(-1)) {
++        return 0;
++    }
++    if (spec.kind == sdf::CapKind::DMA_REGION) {
++        uint64_t phys = 0;
++        uint64_t pages = 0;
++        if (!sdf::sdf_role_frame(sdf::PdRole::VFS_SRV, idx, phys,
++                                 pages) ||
++            phys == 0 || pages == 0) {
++            return 0;
++        }
++    }
++    return handle;
++}
++
++// Window accessors. The claim must be held; copies are plain memcpy
++// pairs fenced with acquire/release (UP-only; no spinlock and no
++// IrqGuard is taken — nothing here may sleep, and the claim is never
++// held across a blocking RPC, so no guard would add safety).
++uint8_t *window_base() {
++    const uint64_t phys =
++        __atomic_load_n(&g_data_phys, __ATOMIC_RELAXED);
++    if (phys == 0) {
++        return nullptr;
++    }
++    return reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
++}
++
++// Stage a NUL-terminated path into the name slot (kernel → PD).
++// Rejects over-long names before touching the window.
++bool stage_name(const char *path) {
++    if (path == nullptr) {
++        return false;
++    }
++    uint64_t len = 0;
++    while (len < kVfsMaxName && path[len] != '\0') {
++        ++len;
++    }
++    if (len >= kVfsMaxName) {
++        return false;
++    }
++    auto *win = window_base();
++    if (win == nullptr) {
++        return false;
++    }
++    __builtin_memcpy(win + kVfsNameOffset, path, len + 1);
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return true;
++}
++
++// Copy caller bytes into the data region (kernel → PD, WRITE path).
++bool stage_bytes_in(const uint8_t *in, uint64_t size) {
++    if (size > kVfsDataSize) {
++        return false;
++    }
++    auto *win = window_base();
++    if (win == nullptr || (size != 0 && in == nullptr)) {
++        return false;
++    }
++    if (size != 0) {
++        __builtin_memcpy(win + kVfsDataOffset, in, size);
++    }
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return true;
++}
++
++// Copy staged bytes out of the data region (PD → kernel, READ path).
++bool fetch_bytes_out(uint8_t *out, uint64_t size) {
++    if (size > kVfsDataSize) {
++        return false;
++    }
++    auto *win = window_base();
++    if (win == nullptr || (size != 0 && out == nullptr)) {
++        return false;
++    }
++    __atomic_thread_fence(__ATOMIC_ACQUIRE);
++    if (size != 0) {
++        __builtin_memcpy(out, win + kVfsDataOffset, size);
++    }
++    return true;
++}
++
++// Fetch the PD-written dirent name from the data region (READDIR path).
++bool fetch_name_out(char *name_out) {
++    auto *win = window_base();
++    if (win == nullptr || name_out == nullptr) {
++        return false;
++    }
++    __atomic_thread_fence(__ATOMIC_ACQUIRE);
++    uint64_t len = 0;
++    while (len < kVfsMaxName - 1 && win[kVfsDataOffset + len] != '\0') {
++        ++len;
++    }
++    if (win[kVfsDataOffset + len] != '\0') {
++        return false;
++    }
++    __builtin_memcpy(name_out, win + kVfsDataOffset, len + 1);
++    return true;
++}
++
++// Raw-byte staging (step b3 split of duties): copy backend image bytes
++// into the data region. Initrd slices come from the linked image;
++// FAT32 slices are raw device sectors past the partition base.
++bool stage_initrd(uint64_t img_off, uint64_t size) {
++    const uint64_t img_size = static_cast<uint64_t>(
++        _binary_initrd_cpio_end - _binary_initrd_cpio_start);
++    if (size > kVfsDataSize || img_off > img_size ||
++        size > img_size - img_off) {
++        return false;
++    }
++    auto *win = window_base();
++    if (win == nullptr) {
++        return false;
++    }
++    __builtin_memcpy(win + kVfsDataOffset,
++                     _binary_initrd_cpio_start + img_off, size);
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return true;
++}
++
++// Single RPC with the claim held. Thin wrapper: identity envelope is
++// filled by the caller, reply validated by vfs_srv_rpc.
++bool rpc_once(VfsRpc &req, VfsRpc &reply) {
++    fill_identity(req);
++    return vfs_srv_rpc(req, reply);
++}
++
++} // namespace
++
++bool vfs_srv_bind() {
++    const uint64_t pid = get_vfs_srv_pid();
++    if (pid == 0 || !vfs_srv_alive()) {
++        return false;
++    }
++    auto *srv = Scheduler::find_task(pid);
++    if (srv == nullptr) {
++        return false;
++    }
++    auto *cur = Scheduler::current_task();
++    if (cur == nullptr) {
++        return false;
++    }
++    sdf::CapSpec specs[sdf::kMaxCapsPerRole] = {};
++    const uint64_t count = sdf::sdf_row(sdf::PdRole::VFS_SRV, specs);
++    if (count > sdf::kMaxCapsPerRole) {
++        return false;
++    }
++    // CAP_GET rounds convey one cap each (index order): the PD maps and
++    // echoes. BIND goes last so the PD probes with every cap present.
++    // Restore tolerance: a snapshot rewind can stale the composed slots
++    // (encode fails) while the PD survives. Retry once via a fresh
++    // re-compose (re-mints the window + slots), then re-convey.
++    for (uint64_t attempt = 0; ; ++attempt) {
++        bool ok = true;
++        for (uint64_t i = 0; i < count && ok; ++i) {
++            const uint64_t handle = encode_row_handle(*srv, i, specs[i]);
++            if (handle == 0) {
++                ok = false;
++                break;
++            }
++            uint64_t cap_phys = specs[i].addr;
++            uint64_t cap_size = specs[i].size;
++            if (specs[i].kind == sdf::CapKind::DMA_REGION) {
++                // sdf_role_frame returns (phys, pages); the size gate
++                // is in bytes (block_srv_bind precedent).
++                if (!sdf::sdf_role_frame(sdf::PdRole::VFS_SRV, i,
++                                         cap_phys, cap_size) ||
++                    cap_phys == 0) {
++                    return false;
++                }
++                cap_size *= arch::PAGE_SIZE;
++                if (cap_size < kVfsRegionPages * arch::PAGE_SIZE) {
++                    return false;
++                }
++            }
++            VfsRpc get{};
++            get.op = static_cast<uint8_t>(VfsSrvOp::CAP_GET);
++            get.owner_id = static_cast<uint32_t>(cur->id);
++            get.owner_gen = cur->generation;
++            get.epoch = vfs_srv_epoch();
++            get.ino = cap_phys;
++            get.offset = cap_size;
++            // 48 B budget: kind rides flags, the encoded row handle
++            // rides size (the PD needs the handle for SYS_FRAME_MAP;
++            // phys/size alone do not resolve a CSpace slot).
++            get.size = handle;
++            get.flags = static_cast<uint8_t>(specs[i].kind);
++            get.status_op = static_cast<uint16_t>(i);
++            VfsRpc got{};
++            if (!vfs_srv_rpc(get, got)) {
++                clear_bound();
++                return false;
++            }
++            if (got.op != get.op || got.epoch != get.epoch ||
++                got.owner_id != get.owner_id ||
++                got.owner_gen != get.owner_gen ||
++                got.ino != get.ino || got.offset != get.offset ||
++                got.size != get.size || got.flags != get.flags ||
++                got.status_op != get.status_op || got.status != 0) {
++                clear_bound();
++                return false;
++            }
++        }
++        if (ok) {
++            break;
++        }
++        // Stale compose: re-mint once, then re-convey. A second stale
++        // round is a real defect, not restore skew — fail closed.
++        if (attempt > 0 || !sdf::sdf_rebind(*srv, sdf::PdRole::VFS_SRV)) {
++            clear_bound();
++            return false;
++        }
++    }
++    VfsRpc req{};
++    req.op = static_cast<uint8_t>(VfsSrvOp::BIND);
++    req.owner_id = static_cast<uint32_t>(cur->id);
++    req.owner_gen = cur->generation;
++    req.epoch = vfs_srv_epoch();
++    req.offset = count;
++    VfsRpc reply{};
++    if (!vfs_srv_rpc(req, reply)) {
++        return false;
++    }
++    if (reply.op != req.op || reply.epoch != req.epoch ||
++        reply.owner_id != req.owner_id ||
++        reply.owner_gen != req.owner_gen) {
++        return false;
++    }
++    if (reply.status != 0 || reply.offset != count) {
++        return false;
++    }
++    // Resolve the shared data window (exactly one DMA_REGION per row).
++    uint64_t data_phys = 0;
++    uint64_t data_pages = 0;
++    for (uint64_t i = 0; i < count; ++i) {
++        if (specs[i].kind == sdf::CapKind::DMA_REGION) {
++            if (data_phys != 0) {
++                return false; // two windows: row malformed
++            }
++            if (!sdf::sdf_role_frame(sdf::PdRole::VFS_SRV, i, data_phys,
++                                     data_pages)) {
++                return false;
++            }
++        }
++    }
++    if (data_phys == 0) {
++        return false;
++    }
++    // Live-topology mask (step b3 degraded path): the PD reports what
++    // it implements; the kernel clears backends with no live backing
++    // (FAT32 needs a mounted partition, RAMDISK a live daemon).
++    uint8_t live = static_cast<uint8_t>(reply.size & 0x7FU);
++    if (kernel::gs::get_fat32_partition() == nullptr) {
++        live &= static_cast<uint8_t>(
++            ~(1U << static_cast<uint8_t>(VfsBackend::FAT32)));
++    }
++    if (kernel::ramdiskd::get_ramdiskd_pid() == 0) {
++        live &= static_cast<uint8_t>(
++            ~(1U << static_cast<uint8_t>(VfsBackend::RAMDISK)));
++    }
++    __atomic_store_n(&g_data_phys, data_phys, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_data_pages, data_pages, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_backend_mask, live, __ATOMIC_RELAXED);
++    __atomic_store_n(&g_bound_epoch, vfs_srv_epoch(), __ATOMIC_RELAXED);
++    return true;
++}
++
++uint8_t vfs_srv_backend_mask() {
++    if (__atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED) !=
++        vfs_srv_epoch()) {
++        return 0;
++    }
++    return __atomic_load_n(&g_backend_mask, __ATOMIC_RELAXED);
++}
++
++bool vfs_srv_backend_available(VfsBackend backend) {
++    const uint8_t bit = static_cast<uint8_t>(1U << static_cast<uint8_t>(backend));
++    return (vfs_srv_backend_mask() & bit) != 0;
++}
++
++// Claim guard: try-claim, fail-fast -EAGAIN, release on every exit.
++namespace {
++
++bool claim_or_busy(int64_t &busy) {
++    if (__atomic_test_and_set(&g_claim, __ATOMIC_ACQUIRE) != 0) {
++        busy = -11; // -EAGAIN: one in-flight RPC, never spun on
++        return false;
++    }
++    busy = 0;
++    return true;
++}
++
++bool bound_or_rebind() {
++    if (__atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED) ==
++        vfs_srv_epoch()) {
++        return true;
++    }
++    clear_bound();
++    return vfs_srv_bind();
++}
++
++} // namespace
++
++// Directory-region staging (step b3): the kernel ships the metadata
++// bytes the PD parses. All spans are window-bounded and fail-closed.
++
++// Compact cpio index record (PD parses this, never the raw image).
++struct CpioIndexEntry {
++    char name[48];
++    uint32_t data_off;
++    uint32_t size;
++    uint32_t mode;
++};
++
++// Cached cpio index (step b3 performance): walking the ~2.3 MiB image
++// per op costs seconds under TCG and trips the 5000-tick RPC bound.
++// Build once per epoch into .bss (not a pooled resource — no tracker
++// entry; snapshot rewind simply triggers a lazy rebuild).
++namespace {
++constexpr uint64_t kCpioIndexCap = 128;
++CpioIndexEntry g_cpio_index[kCpioIndexCap] = {};
++uint64_t g_cpio_index_count = 0;
++uint32_t g_cpio_index_epoch = 0;
++bool g_cpio_index_truncated = false;
++} // namespace
++
++// Build the compact index of the linked initrd image into the .bss
++// cache (one walk per epoch; see g_cpio_index_* above). Returns the
++// entry count, or -1 when the image is malformed or the table
++// overflows (fail-closed, PD sees no index).
++int64_t build_cpio_cache() {
++    const uint8_t *img = _binary_initrd_cpio_start;
++    const uint64_t img_size = static_cast<uint64_t>(
++        _binary_initrd_cpio_end - _binary_initrd_cpio_start);
++    constexpr uint64_t kMaxEntries = 128;
++    constexpr uint64_t kHdrLen = 110; // "070701" + 13x8 hex
++    auto *table = g_cpio_index;
++    const uint64_t cap = kMaxEntries;
++    uint64_t off = 0;
++    uint64_t count = 0;
++    while (true) {
++        if (off + kHdrLen > img_size) {
++            return -1;
++        }
++        // Freestanding-safe magic compare (no memcmp libcall on rv64).
++        if (img[off + 0] != '0' || img[off + 1] != '7' ||
++            img[off + 2] != '0' || img[off + 3] != '7' ||
++            img[off + 4] != '0' || img[off + 5] != '1') {
++            return -1;
++        }
++        // Parse the 13 hex fields (namesize @ field 11, filesize @ 6,
++        // mode @ 1). Bounded: fixed offsets, no scanning.
++        auto hex8 = [&](uint64_t at, uint32_t &out) {
++            uint32_t v = 0;
++            for (uint64_t i = 0; i < 8; ++i) {
++                const uint8_t c = img[off + at + i];
++                uint32_t d = 0;
++                if (c >= '0' && c <= '9') {
++                    d = static_cast<uint32_t>(c - '0');
++                } else if (c >= 'a' && c <= 'f') {
++                    d = static_cast<uint32_t>(c - 'a' + 10);
++                } else if (c >= 'A' && c <= 'F') {
++                    d = static_cast<uint32_t>(c - 'A' + 10);
++                } else {
++                    return false;
++                }
++                v = (v << 4) | d;
++            }
++            out = v;
++            return true;
++        };
++        uint32_t mode = 0;
++        uint32_t filesize = 0;
++        uint32_t namesize = 0;
++        if (!hex8(6 + 8, mode) || !hex8(6 + 6 * 8, filesize) ||
++            !hex8(6 + 11 * 8, namesize)) {
++            return -1;
++        }
++        const uint64_t name_off = off + kHdrLen;
++        if (namesize == 0 || namesize > 64 ||
++            name_off + namesize > img_size) {
++            return -1;
++        }
++        const uint64_t data_off =
++            (name_off + namesize + 3) & ~static_cast<uint64_t>(3);
++        if (data_off > img_size || filesize > img_size - data_off) {
++            return -1;
++        }
++        char name[64] = {};
++        __builtin_memcpy(name, img + name_off,
++                         namesize < 64 ? namesize : 64);
++        // Freestanding-safe trailer compare (no memcmp libcall).
++        static const char kTrailer[10] = {'T', 'R', 'A', 'I', 'L', 'E',
++                                          'R', '!', '!', '!'};
++        bool is_trailer = true;
++        for (uint64_t i = 0; i < 10; ++i) {
++            if (name[i] != kTrailer[i]) {
++                is_trailer = false;
++                break;
++            }
++        }
++        if (is_trailer) {
++            break;
++        }
++        if (count >= cap) {
++            return -1;
++        }
++        __builtin_memset(table[count].name, 0,
++                         sizeof(table[count].name));
++        uint64_t nl = 0;
++        while (nl + 1 < sizeof(table[count].name) && name[nl] != '\0') {
++            table[count].name[nl] = name[nl];
++            ++nl;
++        }
++        table[count].data_off = static_cast<uint32_t>(data_off);
++        table[count].size = filesize;
++        table[count].mode = mode;
++        ++count;
++        off = (data_off + filesize + 3) & ~static_cast<uint64_t>(3);
++        if (off >= img_size) {
++            return -1;
++        }
++    }
++    g_cpio_index_count = count;
++    g_cpio_index_truncated = false;
++    g_cpio_index_epoch = vfs_srv_epoch();
++    return static_cast<int64_t>(count);
++}
++
++// Stage the cached cpio index into the data region (fast memcpy; the
++// walk happens once per epoch in build_cpio_cache).
++bool stage_cpio_index() {
++    if (g_cpio_index_epoch != vfs_srv_epoch() || g_cpio_index_truncated) {
++        g_cpio_index_count = 0;
++        g_cpio_index_truncated = false;
++        if (build_cpio_cache() < 0) {
++            g_cpio_index_truncated = true;
++            return false;
++        }
++    }
++    auto *win = window_base();
++    if (win == nullptr || g_cpio_index_count == 0) {
++        return false;
++    }
++    const uint64_t bytes =
++        g_cpio_index_count * sizeof(CpioIndexEntry);
++    if (bytes > kVfsDataSize) {
++        return false;
++    }
++    __builtin_memcpy(win + kVfsDataOffset, g_cpio_index, bytes);
++    // Zero the tail so the PD's empty-name scan terminates even if a
++    // previous op left a longer table staged.
++    __builtin_memset(win + kVfsDataOffset + bytes, 0,
++                     kVfsDataSize - bytes);
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return true;
++}
++
++// Stage BPB + first root-dir cluster for FAT32 (PD parses both).
++bool stage_fat32_dir() {
++    constexpr uint64_t kSector = 512;
++    auto *part = kernel::gs::get_fat32_partition();
++    if (part == nullptr) {
++        return false;
++    }
++    if (!part->bpb().valid) {
++        return false;
++    }
++    auto *win = window_base();
++    if (win == nullptr) {
++        return false;
++    }
++    const uint64_t base = part->partition_lba();
++    if (!part->device().read_sector(base, win + kVfsDataOffset)) {
++        return false;
++    }
++    const uint64_t cluster_lba =
++        part->cluster_to_lba(part->bpb().root_cluster);
++    const uint64_t cluster_bytes =
++        static_cast<uint64_t>(part->bpb().sectors_per_cluster) * kSector;
++    if (kSector + cluster_bytes > kVfsDataSize) {
++        return false;
++    }
++    const uint64_t nsec = cluster_bytes / kSector;
++    for (uint64_t i = 0; i < nsec; ++i) {
++        if (!part->device().read_sector(
++                cluster_lba + i,
++                win + kVfsDataOffset + kSector + i * kSector)) {
++            return false;
++        }
++    }
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return true;
++}
++
++// Stage one FAT32 cluster chain as contiguous bytes (mechanical walk;
++// the PD validates the staged length against its parsed dirent).
++bool stage_fat32_chain(uint32_t start_cluster, uint64_t file_size,
++                        uint64_t skip, uint64_t want) {
++    constexpr uint64_t kSector = 512;
++    auto *part = kernel::gs::get_fat32_partition();
++    if (part == nullptr || !part->bpb().valid || want > kVfsDataSize ||
++        skip > file_size || want > file_size - skip) {
++        return false;
++    }
++    auto *win = window_base();
++    if (win == nullptr) {
++        return false;
++    }
++    const uint64_t cluster_bytes =
++        static_cast<uint64_t>(part->bpb().sectors_per_cluster) * kSector;
++    uint32_t cluster = start_cluster;
++    uint64_t file_off = 0;
++    uint64_t staged = 0;
++    uint8_t *dst = win + kVfsDataOffset;
++    uint64_t trips = 0;
++    while (staged < want) {
++        if (++trips > 64 || kernel::fat32::Fat32Partition::is_eof(cluster)) {
++            return false;
++        }
++        const uint64_t cluster_lba = part->cluster_to_lba(cluster);
++        const uint64_t nsec = cluster_bytes / kSector;
++        for (uint64_t i = 0; i < nsec && staged < want; ++i) {
++            uint8_t sec[kSector];
++            if (!part->device().read_sector(cluster_lba + i, sec)) {
++                return false;
++            }
++            for (uint64_t b = 0; b < kSector && staged < want; ++b) {
++                if (file_off >= skip) {
++                    dst[staged++] = sec[b];
++                }
++                ++file_off;
++                if (file_off >= file_size) {
++                    break;
++                }
++            }
++        }
++        if (file_off >= file_size) {
++            break;
++        }
++        uint32_t next = 0;
++        if (!part->read_fat_entry(cluster, next)) {
++            return false;
++        }
++        cluster = next;
++    }
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return staged == want;
++}
++
++// Stage a ramdisk byte span contiguously at the data region head,
++// chunked so no single block read overruns the window (alignment
++// overhang can push span+pad past 24 blocks for a 12 KiB read).
++bool stage_ramdisk_span(uint64_t start_block, uint64_t file_size,
++                        uint64_t offset, uint64_t size) {
++    auto *win = window_base();
++    if (win == nullptr || offset > file_size ||
++        size > file_size - offset || size > kVfsDataSize) {
++        return false;
++    }
++    uint64_t done = 0;
++    uint64_t trips = 0;
++    uint8_t sec[512];
++    while (done < size) {
++        if (++trips > 32) {
++            return false; // bounded: 12 KiB needs ≤ 25 blocks
++        }
++        const uint64_t cur = offset + done;
++        const uint64_t blk = start_block + cur / 512;
++        const uint64_t blk_off = cur % 512;
++        if (!kernel::vfs::ramdisk_fs_read_blocks(blk, 1, sec)) {
++            return false;
++        }
++        uint64_t take = 512 - blk_off;
++        if (take > size - done) {
++            take = size - done;
++        }
++        __builtin_memcpy(win + kVfsDataOffset + done, sec + blk_off,
++                         take);
++        done += take;
++    }
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return done == size;
++}
++bool stage_ramdisk_dir() {
++    auto *win = window_base();
++    if (win == nullptr) {
++        return false;
++    }
++    // Superblock (block 0) + full dir region (blocks 1..10); the PD
++    // parses entries. 11 x 512 B = 5632 B, fits the data region.
++    for (uint64_t b = 0; b <= 10; ++b) {
++        if (!kernel::vfs::ramdisk_fs_read_blocks(
++                b, 1, win + kVfsDataOffset + b * 512)) {
++            return false;
++        }
++    }
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return true;
++}
++
++bool stage_procfs_path(const char *path) {
++    auto *win = window_base();
++    if (win == nullptr || path == nullptr || path[0] == '\0') {
++        return false;
++    }
++    kernel::vfs::Vnode *vn = kernel::vfs::resolve(path);
++    if (vn == nullptr || vn->ops == nullptr ||
++        vn->ops->read == nullptr) {
++        if (vn != nullptr) {
++            kernel::vfs::release(vn);
++        }
++        return false;
++    }
++    const int64_t got =
++        vn->ops->read(*vn, win + kVfsDataOffset, kVfsDataSize, 0);
++    kernel::vfs::release(vn);
++    if (got < 0 || static_cast<uint64_t>(got) > kVfsDataSize) {
++        return false;
++    }
++    __atomic_thread_fence(__ATOMIC_RELEASE);
++    return true;
++}
++
++// Stage a /proc file render via the in-kernel procfs (D6 validator:
++// the kernel renders through its own VnodeOps; the PD validates format
++// + digest, never renders). Two entry points sharing one helper:
++// - OPEN/STAT/READDIR: path comes from the name slot (staged under the
++//   same claim, so no cross-op race).
++// - READ: the locator base carries the shared-table index
++//   (VFS_PROC_* — must match userspace/vfs-srv.c), no name slot use.
++// fd-table untouched: resolve + ops->read directly, release after.
++bool stage_procfs(uint64_t idx) {
++    static const char *const kProcFiles[] = {"/proc/meminfo",
++                                             "/proc/stat"};
++    if (idx >= 2) {
++        return false;
++    }
++    return stage_procfs_path(kProcFiles[idx]);
++}
++
++// Stage the directory region for an OPEN/STAT/READDIR path op. Returns
++// false when the backend needs no staging (PD-owned stores) — the
++// caller treats that as "proceed without staging".
++bool stage_dir_region(VfsBackend backend) {
++    switch (backend) {
++    case VfsBackend::INITRD:
++        return stage_cpio_index();
++    case VfsBackend::FAT32:
++        return stage_fat32_dir();
++    case VfsBackend::RAMDISK:
++        return stage_ramdisk_dir();
++    case VfsBackend::TMPFS:
++    case VfsBackend::DEVFS:
++    case VfsBackend::PIPE:
++        return true; // PD-owned/static: nothing to stage
++    case VfsBackend::PROCFS: {
++        // Render by name-slot path (same claim, no race); the PD
++        // matches the path against its VFS_PROC_* table for the
++        // READ-time index.
++        auto *win = window_base();
++        if (win == nullptr) {
++            return false;
++        }
++        __atomic_thread_fence(__ATOMIC_ACQUIRE);
++        char path[kVfsMaxName];
++        uint64_t len = 0;
++        while (len < kVfsMaxName - 1 &&
++               win[kVfsNameOffset + len] != '\0') {
++            path[len] = static_cast<char>(win[kVfsNameOffset + len]);
++            ++len;
++        }
++        path[len] = '\0';
++        return len != 0 && stage_procfs_path(path);
++    }
++    case VfsBackend::COUNT:
++        break;
++    }
++    return false;
++}
++
++int64_t vfs_srv_open(VfsBackend backend, const char *path, uint64_t flags,
++                     uint64_t &handle) {
++    handle = 0;
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind() || !stage_name(path) ||
++            !stage_dir_region(backend)) {
++            rc = -38;
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::OPEN);
++        req.offset = static_cast<uint64_t>(backend);
++        req.size = flags;
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            rc = -38;
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++        if (rc == 0) {
++            handle = reply.ino;
++        }
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++int64_t vfs_srv_close(uint64_t handle) {
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind()) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::CLOSE);
++        req.ino = handle;
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++// Locator convention (step b3): for image-backed backends the PD passes
++// the raw locator back in ino/offset — initrd image byte offset in ino,
++// FAT32 start cluster in ino (file size in the PD handle, re-passed via
++// size hi/lo? no: size carries the read length; the PD validates the
++// range against its open-handle table and fails closed on overrun).
++// The kernel bounds every stage against the image/device size.
++int64_t vfs_srv_read(uint64_t handle, uint64_t offset, uint8_t *out,
++                     uint64_t size) {
++    if (size == 0) {
++        return 0; // POSIX: zero-length reads succeed with no bytes
++    }
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind() || out == nullptr ||
++            size > kVfsDataSize) {
++            break;
++        }
++        const uint64_t locator = handle;
++        // The locator kind rides the top byte (PD-assigned at OPEN).
++        // Direct-handle layout (PD packs, kernel decodes): low 56 bits
++        // = (locator24 << 32 | size32); the size caps reads (EOF clamp).
++        // PD-owned stores (tmpfs/pipe) use table slots instead.
++        const auto backend =
++            static_cast<VfsBackend>((locator >> 56) & 0x7FU);
++        const uint64_t base = locator & 0x00FFFFFFFFFFFFFFULL;
++        // Clamp the request to the file size carried in the handle
++        // (image-backed backends); PD-owned stores serve whole windows.
++        uint64_t want = size;
++        if (backend == VfsBackend::INITRD ||
++            backend == VfsBackend::FAT32 ||
++            backend == VfsBackend::RAMDISK) {
++            const uint64_t file_size = base & 0xFFFFFFFFULL;
++            if (offset >= file_size) {
++                rc = 0; // EOF: zero-length read, no staging, no RPC
++                break;
++            }
++            if (want > file_size - offset) {
++                want = file_size - offset;
++            }
++        }
++        if (want == 0 || want > kVfsDataSize) {
++            rc = (want == 0) ? 0 : -38;
++            break;
++        }
++        bool staged = false;
++        if (backend == VfsBackend::INITRD) {
++            const uint64_t data_off = (base >> 32) & 0xFFFFFFULL;
++            staged = stage_initrd(data_off + offset, want);
++        } else if (backend == VfsBackend::FAT32) {
++            // Base packs (start_cluster << 32 | file_size); the skip
++            // is the read offset. Chain walk is mechanical transport;
++            // the PD validates the staged length at serve.
++            const uint32_t start_cluster =
++                static_cast<uint32_t>((base >> 32) & 0xFFFFFFULL);
++            const uint64_t file_size = base & 0xFFFFFFFFULL;
++            staged = stage_fat32_chain(start_cluster, file_size, offset,
++                                       want);
++        } else if (backend == VfsBackend::RAMDISK) {
++            // Base packs (start_block << 32 | file_size).
++            const uint64_t start_block = (base >> 32) & 0xFFFFFFULL;
++            const uint64_t file_size = base & 0xFFFFFFFFULL;
++            staged = stage_ramdisk_span(start_block, file_size, offset,
++                                        want);
++        } else if (backend == VfsBackend::PROCFS) {
++            staged = stage_procfs(base);
++        } else {
++            // PD-owned stores serve from their own arenas (WRITE-path
++            // mirror): stage nothing, let the PD fill the window.
++            staged = true;
++        }
++        if (!staged) {
++            rc = -5; // -EIO: staging failed, fail closed
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::READ);
++        req.ino = locator;
++        req.offset = offset;
++        req.size = want;
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++        if (rc < 0) {
++            break;
++        }
++        const uint64_t got = reply.size;
++        if (got > want) {
++            rc = -5;
++            break;
++        }
++        if (!fetch_bytes_out(out, got)) {
++            rc = -5;
++            break;
++        }
++        rc = static_cast<int64_t>(got);
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++int64_t vfs_srv_write(uint64_t handle, uint64_t offset, const uint8_t *in,
++                      uint64_t size) {
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind() || !stage_bytes_in(in, size)) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::WRITE);
++        req.ino = handle;
++        req.offset = offset;
++        req.size = size;
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++        if (rc == 0) {
++            // POSIX write semantics: return the validated byte count.
++            if (reply.size > size) {
++                rc = -5; // PD echoes more than staged: fail closed
++            } else {
++                rc = static_cast<int64_t>(reply.size);
++            }
++        }
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++int64_t vfs_srv_stat(VfsBackend backend, const char *path,
++                     uint64_t &st_size, uint64_t &st_mode) {
++    st_size = 0;
++    st_mode = 0;
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind() || !stage_name(path) ||
++            !stage_dir_region(backend)) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::STAT);
++        req.offset = static_cast<uint64_t>(backend);
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++        if (rc == 0) {
++            st_size = reply.offset;
++            st_mode = reply.size;
++        }
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++int64_t vfs_srv_readdir(VfsBackend backend, const char *path,
++                        uint64_t &next_ino, char *name_out) {
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind() || !stage_name(path) ||
++            !stage_dir_region(backend)) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::READDIR);
++        req.offset = static_cast<uint64_t>(backend);
++        req.ino = next_ino;
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++        if (rc == 0) {
++            // 0 = entry (name in data region, next ino echoed),
++            // 1 = end of dir.
++            if (reply.size == 1) {
++                rc = 1;
++                break;
++            }
++            if (name_out == nullptr || !fetch_name_out(name_out)) {
++                rc = -5;
++                break;
++            }
++            next_ino = reply.ino;
++        }
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++int64_t vfs_srv_create(VfsBackend backend, const char *path,
++                       uint64_t mode) {
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind() || !stage_name(path)) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::CREATE);
++        req.offset = static_cast<uint64_t>(backend);
++        req.size = mode;
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++int64_t vfs_srv_unlink(VfsBackend backend, const char *path) {
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind() || !stage_name(path)) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::UNLINK);
++        req.offset = static_cast<uint64_t>(backend);
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
++bool vfs_srv_backend_status(VfsBackend backend, VfsBackendStatus &out) {
++    __builtin_memset(&out, 0, sizeof(out));
++    if (__atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED) !=
++        vfs_srv_epoch()) {
++        return false;
++    }
++    // Publish the request first (PD fills the stats slot), then read
++    // the slot with magic/version validation (block_srv_irq_stats
++    // shape). Claim serializes against concurrent op windows.
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return false;
++    }
++    bool ok = false;
++    do {
++        if (!bound_or_rebind()) {
++            break;
++        }
++        // Re-load the window phys after bind: a re-compose mints a
++        // fresh window, and a stale HHDM read would only pass on
++        // magic-gated luck (SIL3 audit #47 step-b3 S3).
++        const uint64_t phys =
++            __atomic_load_n(&g_data_phys, __ATOMIC_RELAXED);
++        if (phys == 0) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::BACKEND_STATUS);
++        req.offset = static_cast<uint64_t>(backend);
++        VfsRpc reply{};
++        if (!rpc_once(req, reply) || reply.status != 0) {
++            break;
++        }
++        __atomic_thread_fence(__ATOMIC_ACQUIRE);
++        const auto *slot = reinterpret_cast<const VfsBackendStatus *>(
++            arch::HHDM_OFFSET + phys + kVfsStatsOffset);
++        VfsBackendStatus local{};
++        __builtin_memcpy(&local, slot, sizeof(local));
++        __atomic_thread_fence(__ATOMIC_ACQUIRE);
++        if (local.magic != kVfsBackendStatusMagic ||
++            local.version != kVfsBackendStatusVersion) {
++            break;
++        }
++        out = local;
++        ok = true;
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return ok;
++}
++
++int64_t vfs_srv_fault_backend(VfsBackend backend) {
++    int64_t busy = 0;
++    if (!claim_or_busy(busy)) {
++        return busy;
++    }
++    int64_t rc = -38;
++    do {
++        if (!bound_or_rebind()) {
++            break;
++        }
++        VfsRpc req{};
++        req.op = static_cast<uint8_t>(VfsSrvOp::INJECT_BACKEND_FAULT);
++        req.offset = static_cast<uint64_t>(backend);
++        VfsRpc reply{};
++        if (!rpc_once(req, reply)) {
++            break;
++        }
++        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
++    } while (false);
++    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
++    return rc;
++}
++
+ } // namespace vfs_srv
+ } // namespace kernel
+ 
+diff --git a/src/kernel/vfs/vfs_srv.hpp b/src/kernel/vfs/vfs_srv.hpp
+index ca6f119eb..c85a602d4 100644
+--- a/src/kernel/vfs/vfs_srv.hpp
++++ b/src/kernel/vfs/vfs_srv.hpp
+@@ -19,7 +19,7 @@
+  */
+ 
+ /// @file vfs_srv.hpp
+-/// @brief VFS server proxy (issue #47, strangler step a).
++/// @brief VFS server proxy (issue #47, strangler step a → step b3).
+ ///        Kernel-side contract for the userspace vfs-srv PD: 48 B wire
+ ///        RPC, PID cell, epoch/liveness, tombstone drain, and the sys_*
+ ///        proxy entry points. Everything here is declaration-only;
+@@ -27,6 +27,14 @@
+ ///        so the OFF build (`CONFIG_VFS_SRV=0`, shipped default) is
+ ///        byte-identical to the pre-#47 tree. Authorize stays kernel-side:
+ ///        this proxy is diagnostic/parity only until the flip.
++///        Step b3 (VFS backends live path): BIND/CAP_GET + per-op raw-byte
++///        staging. Split of duties — the kernel stages RAW backend bytes
++///        (cpio image slices, FAT sectors, ramdisk extents) into the
++///        shared window; the PD parses (cpio index/dir walk, BPB/dir
++///        entries, dirents) and owns namespace, handles and policy.
++///        Bind-time full-image prefetch is impossible (initrd ≈ 2.3 MiB
++///        >> window), so staging is per-op, not per-bind. No POSIX
++///        routing in b3 (authorize + fd-table stay kernel-side).
+ 
+ #include <types.hpp>
+ #include <kernel/nexios_config.h>
+@@ -36,18 +44,66 @@ namespace kernel::vfs_srv {
+ #if CONFIG_VFS_SRV
+ 
+ /// @brief Wire ops carried in VfsRpc::op (server dispatch switch).
++///        Ops 0..8 are the frozen step-a ABI; 9..19 are step b3.
+ enum class VfsSrvOp : uint8_t {
+     BIND = 0,          ///< server announce / capability handshake
+-    INITRD = 1,        ///< initrd backend probe
+-    FAT32 = 2,         ///< fat32 backend probe
+-    TMPFS = 3,         ///< tmpfs backend probe
+-    DEVFS = 4,         ///< devfs backend probe
+-    PIPE = 5,          ///< pipe backend probe
+-    RAMDISK = 6,       ///< ramdisk_fs backend probe
++    INITRD = 1,        ///< initrd backend probe (diagnostic pre-b3)
++    FAT32 = 2,         ///< fat32 backend probe (diagnostic pre-b3)
++    TMPFS = 3,         ///< tmpfs backend probe (diagnostic pre-b3)
++    DEVFS = 4,         ///< devfs backend probe (diagnostic pre-b3)
++    PIPE = 5,          ///< pipe backend probe (diagnostic pre-b3)
++    RAMDISK = 6,       ///< ramdisk_fs backend probe (diagnostic pre-b3)
+     PROCFS_RENDER = 7, ///< procfs render probe (renders stay in-kernel)
+     INJECT_CORRUPT = 8,///< one-shot corrupt-backend drill (diagnostic)
++    CAP_GET = 9,       ///< convey one row cap (index order, BIND goes last)
++    OPEN = 10,         ///< open path in backend → handle (ino = handle)
++    CLOSE = 11,        ///< close handle (double-close is a typed error)
++    READ = 12,         ///< read staged bytes via handle (offset/size)
++    WRITE = 13,        ///< write PD-owned store via handle (offset/size)
++    STAT = 14,         ///< stat path → size/mode in offset/size fields
++    READDIR = 15,      ///< readdir path → one name per call (ino = next)
++    CREATE = 16,       ///< create file in PD-owned store
++    UNLINK = 17,       ///< unlink path in PD-owned store (typed errors)
++    BACKEND_STATUS = 18, ///< publish magic/version/ops/bytes/faults
++    INJECT_BACKEND_FAULT = 19, ///< one-shot -EIO on next op of a backend
+ };
+ 
++/// @brief Backends served by vfs-srv (step b3).
++enum class VfsBackend : uint8_t {
++    INITRD = 0,
++    FAT32 = 1,
++    TMPFS = 2,
++    DEVFS = 3,
++    PIPE = 4,
++    RAMDISK = 5,
++    PROCFS = 6,
++    COUNT = 7,
++};
++
++/// @brief Shared-window layout (step b3, single DMA_REGION row cap).
++///        4 pages: 12 KiB data (staged raw bytes in / PD bytes out),
++///        64 B name slot, header echo, stats. Offsets are PD-visible.
++constexpr uint64_t kVfsRegionPages = 4;
++constexpr uint64_t kVfsDataOffset = 0x000;
++constexpr uint64_t kVfsDataSize = 0x3000;
++constexpr uint64_t kVfsNameOffset = 0x3000;
++constexpr uint64_t kVfsMaxName = 64;
++constexpr uint64_t kVfsHdrOffset = 0x3080;
++constexpr uint64_t kVfsStatsOffset = 0x30C0;
++
++/// @brief Backend status block published by the PD (≤ 48 B, magic-gated).
++struct VfsBackendStatus {
++    uint64_t magic;    ///< kVfsBackendStatusMagic
++    uint32_t version;  ///< kVfsBackendStatusVersion
++    uint32_t ops;      ///< served ops since bind/epoch
++    uint64_t bytes;    ///< served bytes since bind/epoch
++    uint32_t faults;   ///< injected faults served since bind/epoch
++    uint32_t rsvd;     ///< reserved (zero)
++};
++
++constexpr uint64_t kVfsBackendStatusMagic = 0x5646535354415453ULL;
++constexpr uint32_t kVfsBackendStatusVersion = 1;
++
+ /// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
+ struct VfsRpc {
+     uint8_t op;         ///< VfsSrvOp
+@@ -90,6 +146,55 @@ void vfs_srv_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
+ /// @return 0 on posted drill, -ENOSYS when the server is unavailable.
+ int64_t vfs_srv_fault_corrupt();
+ 
++/// @brief Bind the server: CAP_GET rounds (index order) then BIND last.
++/// Caches the backend mask + window phys/pages; rebinds on epoch change.
++/// @return true with the cache valid, false fail-closed (nothing held).
++bool vfs_srv_bind();
++
++/// @brief Backend availability mask from the last bind (bit per VfsBackend).
++uint8_t vfs_srv_backend_mask();
++
++/// @brief True when the backend bit is set in the bound mask.
++bool vfs_srv_backend_available(VfsBackend backend);
++
++/// @brief Open a path in a backend; the PD-owned handle returns in handle.
++/// @return 0 on success, negated errno fail-closed (claim never held).
++int64_t vfs_srv_open(VfsBackend backend, const char *path, uint64_t flags,
++                     uint64_t &handle);
++
++/// @brief Close a PD-owned handle (double-close is a typed error).
++int64_t vfs_srv_close(uint64_t handle);
++
++/// @brief Read up to size bytes at offset via handle into out.
++/// @return bytes staged, 0 at EOF, negated errno on failure.
++int64_t vfs_srv_read(uint64_t handle, uint64_t offset, uint8_t *out,
++                     uint64_t size);
++
++/// @brief Write size bytes at offset via handle (PD-owned stores only).
++int64_t vfs_srv_write(uint64_t handle, uint64_t offset, const uint8_t *in,
++                      uint64_t size);
++
++/// @brief Stat a path: size returns in st_size, mode in st_mode.
++int64_t vfs_srv_stat(VfsBackend backend, const char *path,
++                     uint64_t &st_size, uint64_t &st_mode);
++
++/// @brief Read one dir entry per call; next_ino chains, name_out ≤ 63+NUL.
++/// @return 0 with an entry, 1 at end of dir, negated errno on failure.
++int64_t vfs_srv_readdir(VfsBackend backend, const char *path,
++                        uint64_t &next_ino, char *name_out);
++
++/// @brief Create a file in a PD-owned store (TMPFS/PIPE).
++int64_t vfs_srv_create(VfsBackend backend, const char *path, uint64_t mode);
++
++/// @brief Unlink a path in a PD-owned store (typed errors, no silent ok).
++int64_t vfs_srv_unlink(VfsBackend backend, const char *path);
++
++/// @brief Read the PD-published backend status (magic/version-gated).
++bool vfs_srv_backend_status(VfsBackend backend, VfsBackendStatus &out);
++
++/// @brief One-shot -EIO on the next op of the selected backend.
++int64_t vfs_srv_fault_backend(VfsBackend backend);
++
+ #endif // CONFIG_VFS_SRV
+ 
+ } // namespace kernel::vfs_srv
+diff --git a/test-history.txt b/test-history.txt
+index 8a84ab7ab..c91c635fc 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -5966,3 +5966,52 @@ SUMMARY: total=24 ok=24 fail=0 ARCH=x86_64
+ 2026-11-11 07:14:31 block_srv_live PASSED: 8 FAILED: 0 TIME: 528ms
+ 2026-11-11 08:10:55 scheduler_core PASSED: 23 FAILED: 0 TIME: 1994ms
+ 2026-11-11 08:10:55 scheduler_core PASSED: 23 FAILED: 0 TIME: 1994ms
++2026-11-11 08:54:19 storage PASSED: 167 FAILED: 0 TIME: 37254ms
++2026-11-11 08:54:19 storage PASSED: 167 FAILED: 0 TIME: 37254ms
++2026-11-11 09:00:36 vfs_srv_live PASSED: 0 FAILED: 14 TIME: 2987ms
++2026-11-11 09:06:39 vfs_srv_live PASSED: 0 FAILED: 14 TIME: 3027ms
++2026-11-11 09:09:27 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
++2026-11-11 09:15:37 vfs_srv_live PASSED: 0 FAILED: 14 TIME: 3137ms
++2026-11-11 09:22:32 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54500ms
++2026-11-11 09:26:37 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54461ms
++2026-11-11 09:29:05 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54433ms
++2026-11-11 09:34:01 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 49297ms
++2026-11-11 09:36:16 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54539ms
++2026-11-11 09:39:04 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54473ms
++2026-11-11 09:41:10 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54477ms
++2026-11-11 09:42:31 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54564ms
++2026-11-11 10:00:36 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54386ms
++2026-11-11 10:10:35 vfs_srv_live PASSED: 4 FAILED: 10 TIME: 5049ms
++2026-11-11 10:12:55 vfs_srv_live PASSED: 4 FAILED: 10 TIME: 2038ms
++2026-11-11 10:16:56 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5195ms
++2026-11-11 10:18:46 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5174ms
++2026-11-11 10:23:26 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5177ms
++2026-11-11 10:25:43 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5273ms
++2026-11-11 10:30:03 vfs_srv_live PASSED: 7 FAILED: 7 TIME: 5157ms
++2026-11-11 10:31:19 vfs_srv_live PASSED: 10 FAILED: 4 TIME: 5149ms
++2026-11-11 10:34:03 vfs_srv_live PASSED: 11 FAILED: 3 TIME: 5184ms
++2026-11-11 10:39:09 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6286ms
++2026-11-11 10:41:10 drivers PASSED: 111 FAILED: 0 TIME: 7578ms
++2026-11-11 10:41:59 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6363ms
++2026-11-11 10:43:22 vfs PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
++2026-11-11 10:44:08 storage PASSED: 167 FAILED: 0 TIME: 37948ms
++2026-11-11 10:46:14 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6310ms
++2026-11-11 10:48:27 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6267ms
++2026-11-11 10:50:25 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6304ms
++2026-11-11 10:54:32 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4365ms
++2026-11-11 10:55:38 storage PASSED: 167 FAILED: 0 TIME: 37133ms
++2026-11-11 10:59:55 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6435ms
++2026-11-11 11:00:59 storage PASSED: 167 FAILED: 0 TIME: 36629ms
++2026-11-11 11:01:44 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 3961ms
++2026-11-11 11:04:23 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4154ms
++2026-11-11 11:05:05 storage PASSED: 167 FAILED: 0 TIME: 25282ms
++2026-11-11 11:05:41 storage PASSED: 167 FAILED: 0 TIME: 25122ms
++2026-11-11 11:09:42 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6306ms
++2026-11-11 11:10:18 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6372ms
++2026-11-11 11:10:32 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4171ms
++2026-11-11 11:10:51 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4162ms
++2026-11-11 11:12:34 storage PASSED: 167 FAILED: 0 TIME: 37526ms
++2026-11-11 11:19:30 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
++2026-11-11 11:20:21 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
++2026-11-11 11:22:47 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6369ms
++2026-11-11 11:27:30 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: TIMEOUT
+diff --git a/tools/vfs-srv-parity.sh b/tools/vfs-srv-parity.sh
+new file mode 100755
+index 000000000..baa0afe64
 --- /dev/null
-+++ b/audits/report-2026-11-10T23-16-14Z-47-stepb2.md
-@@ -0,0 +1,59 @@
-+# SIL 3 Audit — Issue #47 step-b2: PD-owned block-device completion IRQs
++++ b/tools/vfs-srv-parity.sh
+@@ -0,0 +1,162 @@
++#!/bin/bash
++# vfs-srv parity oracle (issue #47, step-b3).
++# Compares host FNV-1a digests over served file bytes with the
++# `S VFS <name> digest=` lines printed by the vfs_srv_live class:
++#   initrd  /hey.c.elf   — extracted from the linked initrd.cpio
++#   fat32   /HELLO.TXT   — parsed out of the FAT32 test image
++#   fat32m  /MULTI.TXT   — multi-cluster chain walk, same image
++#   ramdisk vfs-srv-probe — deterministic test pattern (600 B)
++# procfs has no static oracle (dynamic content); presence of its
++# digest line plus the in-harness equality check is the gate there.
++#
++# Usage: tools/vfs-srv-parity.sh <arch> <builddir>
++#   <arch>     x86_64 | aarch64 | riscv64
++#   <builddir> Meson builddir configured with
++#              -Dconfig_defs=-DCONFIG_VFS_SRV=1
++#              (e.g. build/meson-x86_64-v1)
++set -u
 +
-+- Scope: `audits/pending_patch.diff` vs `main`, worktree `/Users/arnold/jarvis`
-+  (29 files + test-history; SDF CapSpec pci_bdf/msix_entry + kMaxCapsPerRole 6→8,
-+  IRQ WAIT_ACK delivery, TCB irq_wait_* + wheel timeout + tick-apply + cleanup,
-+  sys_irq_wait timeout/unmask/sti, x86 IOAPIC RMW + save/restore, GIC ICFGR level
-+  arm, PLIC no-mask, block_srv INJECT_IRQ_SKIP + BlockIrqStats, userspace backends,
-+  4 cap_irq + 4 block_srv_live tests, docs, parity IRQSTATS, riscv64
-+  `-msmall-data-limit=0`).
-+- Method: static diff review of all 29 files; lock-scope check of
-+  `isr_entry` (slot lock held across `mask_on_delivery`, verified
-+  `src/kernel/irq_delivery.cpp` isr body); `arch::sti()` precedent confirmed in
-+  `src/kernel/ipc/ipc.cpp` (issue #513 pattern, 8 sites); `CONFIG_TICK_HZ=1000`
-+  confirmed; style gate re-run read-only (`Files scanned: 533, Errors: 0`).
-+- Gates (from `test-history.txt` tail + prompt matrix): OFF x86_64 cap_irq 17/17,
-+  notify 7/7, msix 13/13, ipc_timeout 7/7, ioapic 5/5, drivers 111/111,
-+  storage 167/167; OFF aa64/rv64 cap_irq 15/15, notify 6/6, drivers 66/66;
-+  ON x86_64+aa64+rv64 block_srv_live 8/8; parity MATCH + IRQSTATS reported
-+  (non-gating, exit-0 on MATCH preserved). All observed green in history.
-+- Known deviations from planner accepted as-convicted: WAIT re-arm stays failing
-+  (matrix-test contract, only WAIT_ACK idempotent); AHCI MSI conveyance-only;
-+  1000-tick bound (TCG/AIO first-touch latency); PLIC no-mask on delivery
-+  (edge loss); PD stale-ISR drain + validate-retry. Each is documented
-+  in-code and matches the observed green runs.
++ARCH="${1:?usage: vfs-srv-parity.sh <arch> <builddir>}"
++BUILDDIR="${2:?usage: vfs-srv-parity.sh <arch> <builddir>}"
++INITRD="$BUILDDIR/packaging/initrd.cpio"
++FATIMG="$BUILDDIR/packaging/fat32.img"
++OUTDIR="build/vfs-srv-parity/$(date -u +%Y%m%dT%H%M%SZ)-$ARCH"
++mkdir -p "$OUTDIR"
 +
-+## FINDINGS
++python3 - "$INITRD" "$FATIMG" "$OUTDIR" <<'EOF'
++import sys, struct
 +
-+- [S3] `docs/specs/block-srv.md:66` — spec says "bounded wait (100 ticks,
-+  `BLK_IRQ_WAIT_TICKS`)" but `userspace/block-srv.c:105` defines
-+  `BLK_IRQ_WAIT_TICKS 1000UL`. Doc/code factor-of-10 mismatch; code + tests
-+  agree on 1000, so doc is stale.
-+- [S3] `userspace/block-srv.c:98` — comment claims "1000 ticks (1 s at
-+  100 Hz)", but `CONFIG_TICK_HZ` is 1000 (`src/kernel/nexios_config.h:71`),
-+  so the rate figure is wrong (the 1 s duration is correct at 1000 Hz).
-+  Comment-only.
-+- [S3] `src/kernel/irq_delivery.cpp:382-388` vs `:184` — arm programs the
-+  LEVEL bit unconditionally when the APIC is on, but save/restore is gated
-+  on `ioapic_unmasked_here` (was-masked). An already-unmasked line keeps
-+  level programming after release. Theoretical only: the SDF row never
-+  conveys an unmasked line (init masks 2–15; block vectors 46/47 + virtio
-+  SPIs are masked at arm), and the GIC path (`:416` set / `:200` restore)
-+  restores unconditionally — no storm or hang path exists today.
-+- [S3] `src/kernel/irq_delivery.cpp:411-417` — GIC ICFGR 2-bit field RMW
-+  runs under the per-slot lock, but one ICFGR word covers 16 INTIDs, so two
-+  concurrent arms in the same word could clobber each other's trigger
-+  field. Theoretical only: PD compose is boot-serialized and the row
-+  carries a single IRQ cap; no concurrent-arm path exists today.
++initrd_path, fat_path, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
 +
-+No S1/S2 findings. Safety-critical paths verified sound: slot-reuse
-+generation guards (recipient/waiter/irq_wait gen); ISR holds the slot lock
-+for mask-on-delivery; wheel callback sets only the flag with the tick
-+applying the wake under `scheduler_lock_`; teardown + drain cancel arms;
-+bounded wait fails closed (full wheel, zero HZ, NOTIFY refused, timeout →
-+poll fallback); completions never inferred from the IRQ alone (ATA BSY/ERR,
-+virtio used-ring + status byte, stale-retry bounded at 2 waits); WAIT_ACK
-+force-mask on release/drain prevents level storms; MSIX never armed in b2;
-+AHCI_MSI gated on BLOCK_SRV; raw-64-bit mode validation before narrowing.
++def fnv1a(data):
++    h = 14695981039346656037
++    for b in data:
++        h ^= b
++        h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
++    return h
 +
-+DECISION: APPROVED
++# --- initrd: walk newc headers, find ./hey.c.elf ---
++img = open(initrd_path, "rb").read()
++off = 0
++initrd_digest = None
++initrd_size = 0
++while True:
++    assert img[off:off+6] == b"070701", "bad cpio magic at %d" % off
++    f = [int(img[off+6+i*8:off+14+i*8], 16) for i in range(13)]
++    mode, filesize, namesize = f[1], f[6], f[11]
++    name_off = off + 110
++    name = img[name_off:name_off + namesize].split(b"\0")[0].decode()
++    data_off = (name_off + namesize + 3) & ~3
++    if name in ("hey.c.elf", "./hey.c.elf", "/hey.c.elf"):
++        initrd_digest = fnv1a(img[data_off:data_off + filesize])
++        initrd_size = filesize
++    if name == "TRAILER!!!":
++        break
++    off = (data_off + filesize + 3) & ~3
++assert initrd_digest is not None, "hey.c.elf not found in initrd"
++
++# --- FAT32: BPB at LBA 2048, root-dir walk + chain follow ---
++d = open(fat_path, "rb").read()
++base = 2048 * 512
++bps = struct.unpack("<H", d[base+11:base+13])[0]
++spc = d[base+13]
++rsvd = struct.unpack("<H", d[base+14:base+16])[0]
++fats = d[base+16]
++fatsz = struct.unpack("<I", d[base+36:base+40])[0]
++rootclus = struct.unpack("<I", d[base+44:base+48])[0]
++assert (d[base+510], d[base+511]) == (0x55, 0xAA), "no BPB signature"
++data_start = base // 512 + rsvd + fats * fatsz
++
++def read_cluster(clus):
++    lba = data_start + (clus - 2) * spc
++    return d[lba*512:(lba+spc)*512]
++
++def fat_next(clus):
++    foff = clus * 4
++    sec = foff // 512
++    o = base + (rsvd + sec) * 512 + foff % 512
++    return struct.unpack("<I", d[o:o+4])[0] & 0x0FFFFFFF
++
++def read_chain(start, size):
++    out = b""
++    clus, trips = start, 0
++    while len(out) < size:
++        trips += 1
++        assert trips <= 64, "chain too long"
++        assert clus < 0x0FFFFFF8, "unexpected EOF"
++        out += read_cluster(clus)
++        nxt = fat_next(clus)
++        if len(out) >= size:
++            break
++        assert nxt < 0x0FFFFFF8, "premature chain end"
++        clus = nxt
++    return out[:size]
++
++def find_root(name83):
++    for i in range(0, spc * 512, 32):
++        e = read_cluster(rootclus)[i:i+32]
++        if e[0] == 0x00:
++            break
++        if e[0] == 0xE5 or e[11] & 0x08:
++            continue
++        nm = e[0:11].decode("ascii")
++        if nm == name83:
++            lo = struct.unpack("<H", e[26:28])[0]
++            hi = struct.unpack("<H", e[20:22])[0]
++            sz = struct.unpack("<I", e[28:32])[0]
++            return (hi << 16) | lo, sz
++    raise AssertionError("file not found: " + name83)
++
++results = {}
++clus, sz = find_root("HELLO   TXT")
++results["fat32"] = fnv1a(read_chain(clus, sz))
++clus, sz = find_root("MULTI   TXT")
++results["fat32m"] = fnv1a(read_chain(clus, sz))
++
++# --- ramdisk probe: deterministic 600 B pattern (test writes it) ---
++pat = bytes(((i * 7 + 3) & 0xFF) for i in range(600))
++results["ramdisk"] = fnv1a(pat)
++
++results["initrd"] = initrd_digest
++results["initrd_size"] = initrd_size
++for k in ("initrd", "fat32", "fat32m", "ramdisk"):
++    print("%s 0x%x" % (k, results[k]))
++with open(outdir + "/expected.txt", "w") as f:
++    for k in ("initrd", "fat32", "fat32m", "ramdisk"):
++        f.write("%s 0x%x\n" % (k, results[k]))
++EOF
++echo "--- expected digests above ---"
++
++CAPTURE="$OUTDIR/qemu.log"
++python3 tools/meson/qemu_test.py --arch "$ARCH" --build debug \
++    --builddir "$BUILDDIR" --class vfs_srv_live > "$CAPTURE" 2>&1
++RC=$?
++tail -n 12 "$CAPTURE"
++
++FAIL=0
++for NAME in initrd fat32 fat32m ramdisk; do
++    GOT=$(grep -o "S VFS $NAME digest=0x[0-9a-fA-F]*" "$CAPTURE" | tail -n 1 | cut -d= -f2)
++    EXP=$(grep "^$NAME " "$OUTDIR/expected.txt" | awk '{print $2}')
++    if [ -z "$GOT" ]; then
++        echo "VERDICT: MISSING (no S VFS $NAME digest line; qemu rc=$RC)"
++        FAIL=1
++    elif [ "$(echo "$GOT" | tr 'A-F' 'a-f')" = "$(echo "$EXP" | tr 'A-F' 'a-f')" ]; then
++        echo "MATCH $NAME $GOT"
++    else
++        echo "MISMATCH $NAME guest=$GOT host=$EXP"
++        FAIL=1
++    fi
++done
++# procfs digest is dynamic content: presence + in-harness equality is the gate.
++if grep -q "S VFS procfs digest=0x" "$CAPTURE"; then
++    echo "PRESENT procfs $(grep -o 'S VFS procfs digest=0x[0-9a-fA-F]*' "$CAPTURE" | tail -n 1 | cut -d= -f2)"
++else
++    echo "VERDICT: MISSING (no S VFS procfs digest line; qemu rc=$RC)"
++    FAIL=1
++fi
++if [ "$FAIL" = 0 ]; then
++    echo "VERDICT: MATCH (all oracles agree)"
++else
++    echo "VERDICT: MISMATCH (see above)"
++    exit 1
++fi
+diff --git a/userspace/vfs-srv.c b/userspace/vfs-srv.c
+index ecba714c1..d0a0b79c2 100644
+--- a/userspace/vfs-srv.c
++++ b/userspace/vfs-srv.c
+@@ -6,6 +6,32 @@
+ #include <syscall.h>
+ #include <ipc.h>
+ 
++/*
++ * Nexios RTOS — vfs-srv PD (issue #47, strangler step-b3: VFS backends
++ * live path). Userspace VFS backend server: CAP_GET/BIND handshake,
++ * shared-window access, per-backend dispatch.
++ *
++ * Split of duties (kernel stages RAW bytes, the PD parses):
++ * - INITRD: kernel stages a compact cpio index (name/data_off/size/mode
++ *   records); the PD resolves paths and packs image offsets into
++ *   handles; data reads are kernel-staged image slices the PD validates.
++ * - FAT32: kernel stages BPB + root-dir cluster; the PD parses geometry
++ *   + dirents and packs (start_cluster, size); data reads are
++ *   kernel-walked chains the PD length-checks against its dirent.
++ * - RAMDISK: kernel stages super + full dir region; the PD parses
++ *   entries and packs (start_block, size); data reads are kernel-staged
++ *   spans the PD range-checks.
++ * - TMPFS/PIPE: PD-owned bounded stores (no staging; behavioral parity).
++ * - DEVFS: static metadata table; data ops are -ENOSYS (device authority
++ *   stays kernel-side — D3).
++ * - PROCFS: kernel renders via its own VnodeOps into the window; the PD
++ *   validates format (D6 validator, never renders).
++ * Handles are PD table indices for owned stores, packed locators
++ * (backend << 56 | base) for image-backed backends — the kernel decodes
++ * the same packing (vfs_srv.cpp READ dispatch). One-shot fault drill
++ * per backend + PD-wide stats slot. Wire stays 48 B.
++ */
++
+ #define MSG_DAEMON_READY 0xF0000001
+ #define MSG_TYPE_REPLY 0xF0000002
+ 
+@@ -19,8 +45,29 @@ typedef enum {
+     VFS_OP_RAMDISK = 6,
+     VFS_OP_PROCFS_RENDER = 7,
+     VFS_OP_INJECT_CORRUPT = 8,
++    VFS_OP_CAP_GET = 9,
++    VFS_OP_OPEN = 10,
++    VFS_OP_CLOSE = 11,
++    VFS_OP_READ = 12,
++    VFS_OP_WRITE = 13,
++    VFS_OP_STAT = 14,
++    VFS_OP_READDIR = 15,
++    VFS_OP_CREATE = 16,
++    VFS_OP_UNLINK = 17,
++    VFS_OP_BACKEND_STATUS = 18,
++    VFS_OP_INJECT_BACKEND_FAULT = 19,
+ } vfs_srv_op_t;
+ 
++typedef enum {
++    VFS_BACKEND_INITRD = 0,
++    VFS_BACKEND_FAT32 = 1,
++    VFS_BACKEND_TMPFS = 2,
++    VFS_BACKEND_DEVFS = 3,
++    VFS_BACKEND_PIPE = 4,
++    VFS_BACKEND_RAMDISK = 5,
++    VFS_BACKEND_PROCFS = 6,
++} vfs_backend_t;
++
+ struct VfsRpc {
+     uint8_t op;
+     uint8_t flags;
+@@ -36,29 +83,520 @@ struct VfsRpc {
+     uint32_t rsvd2;
+ };
+ 
++/* Shared-window layout (mirror kernel kVfs*Offset). */
++#define VFS_REGION_PAGES 4
++#define VFS_DATA_OFF 0x000
++#define VFS_DATA_SIZE 0x3000
++#define VFS_NAME_OFF 0x3000
++#define VFS_MAX_NAME 64
++#define VFS_HDR_OFF 0x3080
++#define VFS_STATS_OFF 0x30C0
++
++#define VFS_MAX_CAPS 8
++
++/* Errno shapes (negated in status). */
++#define VFS_ENOSYS 38
++#define VFS_EINVAL 22
++#define VFS_ENOENT 2
++#define VFS_EIO 5
++#define VFS_EAGAIN 11
++#define VFS_EACCES 13
++#define VFS_EEXIST 17
++#define VFS_ENOTDIR 20
++#define VFS_EISDIR 21
++#define VFS_ENOSPC 28
++#define VFS_ENAMETOOLONG 36
++#define VFS_ENOTEMPTY 39
++
+ static void vfs_assert_shape(void) {
+     char check[sizeof(struct VfsRpc) <= 48 ? 1 : -1];
+     (void)check;
+ }
+ 
+-static int g_corrupt_once = 0;
++static uint16_t vfs_neg(unsigned v) {
++    return (uint16_t)(uint16_t)(-(int)v);
++}
++
++/* Cap table + shared window. */
++static struct {
++    int mapped;
++    unsigned kind;
++    unsigned long handle;
++    unsigned long phys;
++    unsigned long size;
++    unsigned long va;
++} g_caps[VFS_MAX_CAPS];
++
++static unsigned long g_win_va;
++static unsigned long g_win_phys;
++static uint32_t g_epoch;
++static uint8_t g_backend_mask = 0x7F; /* all seven backends live */
++
++/* One-shot fault drill per backend + PD-wide stats. */
++static int g_fault_once[7];
++static int g_corrupt_once;
++static struct {
++    uint64_t magic;
++    uint32_t version;
++    uint32_t ops;
++    uint64_t bytes;
++    uint32_t faults;
++    uint32_t rsvd;
++} g_stats;
++
++#define VFS_STATS_MAGIC 0x5646535354415453ULL
++
++static void stats_publish(void) {
++    if (g_win_va == 0)
++        return;
++    volatile unsigned char *slot =
++        (volatile unsigned char *)(g_win_va + VFS_STATS_OFF);
++    /* Release-ordered publish: payload first, magic last. */
++    slot[8] = 0; /* version lo (rest zeroed below by field stores) */
++    volatile uint64_t *m64 = (volatile uint64_t *)slot;
++    volatile uint32_t *m32 = (volatile uint32_t *)(slot + 8);
++    m32[0] = 1; /* version */
++    m32[1] = g_stats.ops;
++    volatile uint64_t *m64b = (volatile uint64_t *)(slot + 16);
++    m64b[0] = g_stats.bytes;
++    m32[6] = g_stats.faults;
++    m32[7] = 0;
++    m64[0] = VFS_STATS_MAGIC;
++}
++
++/* PD open-handle table (owned stores + validated image handles). */
++#define VFS_MAX_OPEN 16
++static struct {
++    int used;
++    uint32_t gen;
++    uint8_t backend;
++    uint64_t base; /* image locator or store index */
++    uint64_t size;
++} g_open[VFS_MAX_OPEN];
++static uint32_t g_open_gen;
++
++/* TMPFS arena: 8 files x 4 KiB (PD-owned, D4). BSS-zeroed at PD
++ * (re)start — the epoch purge clears only the open-handle table and
++ * fault drills, so a restart always starts from empty stores (no
++ * epoch-persisted namespace leaks across restarts by design). */
++#define VFS_TMPFS_FILES 8
++#define VFS_TMPFS_SIZE 4096
++static struct {
++    int used;
++    char name[VFS_MAX_NAME];
++    uint64_t size;
++    uint32_t mode;
++    unsigned char data[VFS_TMPFS_SIZE];
++} g_tmpfs[VFS_TMPFS_FILES];
++
++/* PIPE rings: 4 x 1 KiB (PD-owned, D4). Same restart-zeroed
++ * invariant as the tmpfs arena above. */
++#define VFS_PIPES 4
++#define VFS_PIPE_SIZE 1024
++static struct {
++    int used;
++    char name[VFS_MAX_NAME];
++    unsigned head;
++    unsigned count;
++    unsigned char data[VFS_PIPE_SIZE];
++} g_pipes[VFS_PIPES];
++
++/* DEVFS static nodes (metadata-only, D3). */
++static const struct {
++    const char *name;
++    uint32_t mode;
++} g_devfs[] = {
++    {"null", 0666},
++    {"zero", 0666},
++    {"tty", 0600},
++    {"serial", 0600},
++};
++
++/* PROCFS shared index table (must match kernel kProcFiles). */
++static const char *g_proc_files[] = {"/proc/meminfo", "/proc/stat"};
++
++/* Cpio index record (kernel-staged, PD-parsed). */
++struct vfs_cpio_idx {
++    char name[48];
++    uint32_t data_off;
++    uint32_t size;
++    uint32_t mode;
++};
++
++/* Ramdisk dir entry (kernel-staged blocks 0..10, PD-parsed). */
++struct vfs_rd_entry {
++    char name[64];
++    uint64_t size;
++    uint64_t start_block;
++    uint64_t block_count;
++    uint32_t crc32;
++    uint32_t flags;
++};
++
++#define RDSB_MAGIC 0x52445331464C4154ULL
++#define RDSB_VERSION 2
++#define RD_ENTRY_VALID 1U
++
++static unsigned char *win_data(void) {
++    /* Step-b3 restore tolerance: a fresh/restarted PD has no window
++     * until CAP_GET maps it. Never touch address 0 — fail the op
++     * instead of faulting (a faulted PD cannot serve the rebind). */
++    if (g_win_va == 0)
++        return (unsigned char *)0;
++    return (unsigned char *)(g_win_va + VFS_DATA_OFF);
++}
++
++static char *win_name(void) {
++    if (g_win_va == 0)
++        return (char *)0;
++    return (char *)(g_win_va + VFS_NAME_OFF);
++}
++
++/* Fault drill gate: one-shot -EIO per backend, then recover. */
++static int fault_gate(unsigned backend) {
++    if (backend < 7 && g_fault_once[backend]) {
++        g_fault_once[backend] = 0;
++        g_stats.faults++;
++        stats_publish();
++        return -VFS_EIO;
++    }
++    return 0;
++}
++
++static int alloc_handle(unsigned backend, uint64_t base, uint64_t size) {
++    for (int i = 0; i < VFS_MAX_OPEN; ++i) {
++        if (!g_open[i].used) {
++            g_open[i].used = 1;
++            g_open[i].gen = ++g_open_gen;
++            g_open[i].backend = (uint8_t)backend;
++            g_open[i].base = base;
++            g_open[i].size = size;
++            /* Packed locator (kernel decodes backend << 56 | base):
++             * image-backed handles carry the raw locator; owned-store
++             * handles carry the store slot. */
++            return i;
++        }
++    }
++    return -1;
++}
++
++static int find_handle(uint64_t packed, unsigned *backend, uint64_t *base,
++                       uint64_t *size) {
++    unsigned b = (unsigned)(packed >> 56);
++    uint64_t lo = packed & 0x00FFFFFFFFFFFFFFULL;
++    *backend = b > 6 ? 7 : b;
++    *base = lo;
++    *size = 0;
++    if (b > 6)
++        return -1;
++    /* Image-backed handles are self-describing (PD validated at OPEN);
++     * owned-store handles index the open table. */
++    if (b == VFS_BACKEND_TMPFS || b == VFS_BACKEND_PIPE) {
++        if (lo >= (uint64_t)VFS_MAX_OPEN || !g_open[lo].used ||
++            g_open[lo].backend != b)
++            return -1;
++        *backend = b;
++        *base = g_open[lo].base;
++        *size = g_open[lo].size;
++        return (int)lo;
++    }
++    *backend = b;
++    *base = lo;
++    *size = 0; /* validated against staged dirent at serve time */
++    return -2; /* direct (no table slot) */
++}
++
++/* ---- backend resolvers: path -> packed handle ---- */
++
++static int match_name(const char *a, const char *b) {
++    while (*a && *b && *a == *b) {
++        ++a;
++        ++b;
++    }
++    return *a == *b;
++}
++
++/* Skip leading '/' and './' sequences on both sides (cpio names carry
++ * a './' prefix; kernel paths are absolute). */
++static const char *norm_skip(const char *p) {
++    for (;;) {
++        if (p[0] == '/') {
++            ++p;
++            continue;
++        }
++        if (p[0] == '.' && p[1] == '/') {
++            p += 2;
++            continue;
++        }
++        return p;
++    }
++}
++
++static int match_path(const char *indexed, const char *req) {
++    return match_name(norm_skip(indexed), norm_skip(req));
++}
++
++static int resolve_initrd(const char *path, uint64_t *out_base,
++                          uint64_t *out_size) {
++    /* Staged cpio index: count lives where? The kernel stages records
++     * back-to-back; scan until an empty name or window end. */
++    struct vfs_cpio_idx *t = (struct vfs_cpio_idx *)win_data();
++    unsigned max =
++        (unsigned)(VFS_DATA_SIZE / sizeof(struct vfs_cpio_idx));
++    for (unsigned i = 0; i < max; ++i) {
++        if (t[i].name[0] == '\0')
++            break;
++        if (match_path(t[i].name, path)) {
++            *out_base = t[i].data_off;
++            *out_size = t[i].size;
++            return (int)(t[i].mode & 0777);
++        }
++    }
++    return -VFS_ENOENT;
++}
++
++static void fat83(char *dst, const unsigned char *raw) {
++    unsigned n = 0;
++    for (unsigned i = 0; i < 8 && raw[i] != ' '; ++i)
++        dst[n++] = (char)raw[i];
++    if (raw[8] != ' ') {
++        dst[n++] = '.';
++        for (unsigned i = 8; i < 11 && raw[i] != ' '; ++i)
++            dst[n++] = (char)raw[i];
++    }
++    dst[n] = '\0';
++}
++
++static int resolve_fat32(const char *path, uint64_t *out_base,
++                         uint64_t *out_size) {
++    /* Staged: BPB at [0,512), root-dir cluster at [512,...). BPB+25 =
++     * sectors-per-cluster u8? BPB layout: +11 sector size u16, +13
++     * sec/cluster u8, +14 reserved u16, +16 fats u8, +36 fat sectors u32
++     * (FAT32), +44 root cluster u32. Dirent: +0 name[11], +11 attr,
++     * +26 cluster-lo u16, +28 size u32, +20 cluster-hi u16. */
++    unsigned char *w = win_data();
++    if (w[510] != 0x55 || w[511] != 0xAA)
++        return -VFS_EIO;
++    /* Root dir scan: entries of 32 B from offset 512. */
++    unsigned maxe = (unsigned)((VFS_DATA_SIZE - 512) / 32);
++    const char *p = path;
++    if (*p == '/')
++        ++p;
++    /* Only root-level files in b3 (documented bound). */
++    for (unsigned i = 0; p[i] != '\0'; ++i) {
++        if (p[i] == '/')
++            return -VFS_ENOTDIR;
++    }
++    char want[16];
++    unsigned n = 0;
++    while (*p && n < 12) {
++        char c = *p++;
++        if (c >= 'a' && c <= 'z')
++            c = (char)(c - 'a' + 'A');
++        want[n++] = c;
++    }
++    want[n] = '\0';
++    for (unsigned i = 0; i < maxe; ++i) {
++        unsigned char *e = w + 512 + i * 32;
++        if (e[0] == 0x00)
++            break;
++        if (e[0] == 0xE5)
++            continue;
++        if (e[11] & 0x08)
++            continue; /* volume label */
++        char name[16];
++        fat83(name, e);
++        if (match_name(name, want)) {
++            uint32_t lo = (uint32_t)e[26] | ((uint32_t)e[27] << 8);
++            uint32_t hi = (uint32_t)e[20] | ((uint32_t)e[21] << 8);
++            uint32_t clus = lo | (hi << 16);
++            uint32_t sz = (uint32_t)e[28] | ((uint32_t)e[29] << 8) |
++                          ((uint32_t)e[30] << 16) |
++                          ((uint32_t)e[31] << 24);
++            *out_base = clus;
++            *out_size = sz;
++            return 0644;
++        }
++    }
++    return -VFS_ENOENT;
++}
++
++static int resolve_ramdisk(const char *path, uint64_t *out_base,
++                           uint64_t *out_size) {
++    unsigned char *w = win_data();
++    uint64_t magic = 0;
++    for (unsigned i = 0; i < 8; ++i)
++        magic |= ((uint64_t)w[i]) << (i * 8);
++    if (magic != RDSB_MAGIC)
++        return -VFS_EIO;
++    uint64_t ver = 0;
++    for (unsigned i = 8; i < 16; ++i)
++        ver |= ((uint64_t)w[i]) << ((i - 8) * 8);
++    if (ver != RDSB_VERSION)
++        return -VFS_EIO;
++    struct vfs_rd_entry *ents =
++        (struct vfs_rd_entry *)(w + 512); /* blocks 1..10 */
++    for (unsigned i = 0; i < 50; ++i) {
++        if (ents[i].name[0] == '\0')
++            continue;
++        if (!(ents[i].flags & RD_ENTRY_VALID))
++            continue;
++        if (match_path(ents[i].name, path)) {
++            *out_base = ents[i].start_block;
++            *out_size = ents[i].size;
++            return 0644;
++        }
++    }
++    return -VFS_ENOENT;
++}
++
++static int resolve_tmpfs(const char *path, uint64_t *out_slot) {
++    for (unsigned i = 0; i < VFS_TMPFS_FILES; ++i) {
++        if (g_tmpfs[i].used && match_path(g_tmpfs[i].name, path)) {
++            *out_slot = i;
++            return (int)g_tmpfs[i].mode;
++        }
++    }
++    return -VFS_ENOENT;
++}
++
++static int resolve_pipe(const char *path, uint64_t *out_slot) {
++    for (unsigned i = 0; i < VFS_PIPES; ++i) {
++        if (g_pipes[i].used && match_path(g_pipes[i].name, path)) {
++            *out_slot = i;
++            return 0600;
++        }
++    }
++    return -VFS_ENOENT;
++}
++
++static int resolve_devfs(const char *path, uint64_t *out_idx) {
++    const char *p = norm_skip(path);
++    /* Strip the "dev/" directory prefix for node matches; the bare
++     * "dev" (or empty) names the directory itself. */
++    if (match_name(p, "dev") || *p == '\0')
++        return -VFS_EISDIR; /* the dir itself: listable, not openable */
++    if (p[0] == 'd' && p[1] == 'e' && p[2] == 'v' && p[3] == '/')
++        p += 4;
++    for (unsigned i = 0;
++         i < (unsigned)(sizeof(g_devfs) / sizeof(g_devfs[0])); ++i) {
++        if (match_name(g_devfs[i].name, p)) {
++            *out_idx = i;
++            return (int)g_devfs[i].mode;
++        }
++    }
++    return -VFS_ENOENT;
++}
++
++static int resolve_procfs(const char *path, uint64_t *out_idx) {
++    const char *p = norm_skip(path);
++    if (match_name(p, "proc") || *p == '\0')
++        return -VFS_EISDIR;
++    /* Strip the "proc/" directory prefix for file matches. */
++    if (p[0] == 'p' && p[1] == 'r' && p[2] == 'o' && p[3] == 'c' &&
++        p[4] == '/')
++        p += 5;
++    for (unsigned i = 0;
++         i < (unsigned)(sizeof(g_proc_files) / sizeof(g_proc_files[0]));
++         ++i) {
++        const char *f = g_proc_files[i] + 6; /* strip "/proc/" */
++        if (match_name(f, p)) {
++            *out_idx = i;
++            return 0444;
++        }
++    }
++    return -VFS_ENOENT;
++}
++
++/* Validate a staged procfs render (D6 validator). */
++static int validate_procfs(unsigned idx, uint64_t *out_len) {
++    unsigned char *w = win_data();
++    /* Bounded NUL scan inside the window. */
++    uint64_t len = 0;
++    while (len < VFS_DATA_SIZE && w[len] != '\0')
++        ++len;
++    if (len == 0 || len >= VFS_DATA_SIZE)
++        return -VFS_EIO;
++    /* Format needles: meminfo starts with "MemTotal:", stat with "cpu ". */
++    if (idx == 0) {
++        if (len < 9 || w[0] != 'M' || w[1] != 'e' || w[2] != 'm')
++            return -VFS_EIO;
++    } else if (idx == 1) {
++        if (len < 4 || w[0] != 'c' || w[1] != 'p' || w[2] != 'u')
++            return -VFS_EIO;
++    } else {
++        return -VFS_EINVAL;
++    }
++    *out_len = len;
++    return 0;
++}
++
++static int map_cap(unsigned idx, unsigned kind, unsigned long handle,
++                   unsigned long phys, unsigned long size) {
++    if (idx >= VFS_MAX_CAPS || handle == 0 ||
++        handle == (unsigned long)-1)
++        return -VFS_EINVAL;
++    if (kind != 6) /* kernel CapKind::DMA_REGION only */
++        return -VFS_EINVAL;
++    /* Always (re)map: a restore may have undone the PTEs while the
++     * slot record survived. Unmap the stale VA first (idempotent). */
++    if (g_caps[idx].mapped) {
++        unsigned long old_va = g_caps[idx].va;
++        if (old_va != 0) {
++            __syscall5(SYS_FRAME_UNMAP, (long)old_va, 0, 0, 0);
++            if (g_win_va == old_va)
++                g_win_va = 0;
++        }
++        g_caps[idx].mapped = 0;
++        g_caps[idx].va = 0;
++    }
++    long va = __syscall5(SYS_FRAME_MAP, (long)handle, 0, 0, 0);
++    if (va <= 0)
++        return -VFS_EIO;
++    g_caps[idx].mapped = 1;
++    g_caps[idx].kind = kind;
++    g_caps[idx].handle = handle;
++    g_caps[idx].phys = phys;
++    g_caps[idx].size = size;
++    g_caps[idx].va = (unsigned long)va;
++    if (kind == 6) {
++        g_win_va = g_caps[idx].va;
++        g_win_phys = phys;
++        stats_publish();
++    }
++    return 0;
++}
+ 
+ int main(void) {
+     vfs_assert_shape();
+     (void)getpid();
++    for (unsigned i = 0; i < 7; ++i)
++        g_fault_once[i] = 0;
++    g_corrupt_once = 0;
++    g_stats.magic = 0;
++    g_stats.version = 1;
+     ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
+ 
+     static unsigned char rbuf[64];
+     for (;;) {
+         int rc = ipc_recv(rbuf, sizeof(rbuf));
+         if (rc < 0)
+-            continue; // fail-closed: no reply on transport error
++            continue; /* fail-closed: no reply on transport error */
+         struct VfsRpc req;
+         memset(&req, 0, sizeof(req));
+         unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
+         memcpy(&req, rbuf, copy);
+         if ((unsigned long)rc != req.op)
+-            continue; // torn/stale payload: kernel type must match body op (audit S3)
++            continue; /* torn/stale payload (audit S3) */
++
++        /* Epoch purge: drop PD-side open state on kernel epoch bump. */
++        if (req.epoch != g_epoch) {
++            g_epoch = req.epoch;
++            for (unsigned i = 0; i < VFS_MAX_OPEN; ++i)
++                g_open[i].used = 0;
++            for (unsigned i = 0; i < 7; ++i)
++                g_fault_once[i] = 0;
++        }
+ 
+         struct VfsRpc rep;
+         memset(&rep, 0, sizeof(rep));
+@@ -67,11 +605,527 @@ int main(void) {
+         rep.owner_id = req.owner_id;
+         rep.owner_gen = req.owner_gen;
+         rep.status_op = (uint16_t)req.op;
++        g_stats.ops++;
++
++        /* Window gate (step-b3 restore tolerance): ops 10..17 parse or
++         * fill the shared window. A fresh/restarted PD has no mapping
++         * until CAP_GET — reply -ENOSYS so the kernel rebinds instead
++         * of faulting the PD (a dead PD cannot serve the rebind). */
++        if (req.op >= VFS_OP_OPEN && req.op <= VFS_OP_UNLINK &&
++            g_win_va == 0) {
++            rep.status = vfs_neg(VFS_ENOSYS);
++            ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep),
++                     0);
++            stats_publish();
++            continue;
++        }
+ 
+         switch (req.op) {
+         case VFS_OP_BIND:
++            rep.offset = req.offset; /* echo cap count */
++            rep.size = g_backend_mask;
++            rep.status = 0;
++            break;
++        case VFS_OP_CAP_GET: {
++            /* Wire (kernel vfs_srv_bind): ino=phys, offset=size-bytes,
++             * size=encoded row handle (for SYS_FRAME_MAP), flags=kind,
++             * status_op=index. */
++            int r = map_cap((unsigned)req.status_op,
++                            (unsigned)req.flags, req.size, req.ino,
++                            req.offset);
++            rep.ino = req.ino;
++            rep.offset = req.offset;
++            rep.size = req.size;
++            rep.flags = req.flags;
++            rep.status_op = req.status_op;
++            rep.status = r == 0 ? 0 : vfs_neg((unsigned)-r);
++            break;
++        }
++        case VFS_OP_OPEN: {
++            unsigned b = (unsigned)req.offset;
++            int fr = fault_gate(b);
++            uint64_t base = 0;
++            uint64_t sz = 0;
++            int mode = -VFS_ENOSYS;
++            if (fr == 0) {
++                if (b == 0)
++                    mode = resolve_initrd(win_name(), &base, &sz);
++                else if (b == 1)
++                    mode = resolve_fat32(win_name(), &base, &sz);
++                else if (b == 2)
++                    mode = resolve_tmpfs(win_name(), &base);
++                else if (b == 3)
++                    mode = resolve_devfs(win_name(), &base);
++                else if (b == 4)
++                    mode = resolve_pipe(win_name(), &base);
++                else if (b == 5)
++                    mode = resolve_ramdisk(win_name(), &base, &sz);
++                else if (b == 6)
++                    mode = resolve_procfs(win_name(), &base);
++                else
++                    mode = -VFS_EINVAL;
++            }
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++            } else if (mode < 0) {
++                rep.status = vfs_neg((unsigned)-mode);
++            } else {
++                /* Direct-handle packing (kernel decodes bounds): low 56
++                 * bits = (locator24 << 32 | size32). Locators are raw
++                 * image offsets/clusters/blocks; sizes cap the read.
++                 * Guards keep the backend tag bits clear (fail closed
++                 * past 16 MiB image offsets — b3 test images are ~2 MiB). */
++                uint64_t packed = ((uint64_t)b << 56) | base;
++                if (b == 0 || b == 1 || b == 5) {
++                    if ((base >> 24) != 0 || (sz >> 32) != 0) {
++                        rep.status = vfs_neg(VFS_EINVAL);
++                        break;
++                    }
++                    packed = ((uint64_t)b << 56) |
++                             ((base & 0xFFFFFFULL) << 32) |
++                             (sz & 0xFFFFFFFFULL);
++                }
++                if (b == 2 || b == 4) {
++                    /* Owned stores: table slot (find_handle decodes). */
++                    int slot = alloc_handle(b, base, sz);
++                    if (slot < 0) {
++                        rep.status = vfs_neg(VFS_ENOSPC);
++                        break;
++                    }
++                    packed = ((uint64_t)b << 56) | (uint64_t)slot;
++                }
++                rep.ino = packed;
++                rep.status = 0;
++            }
++            break;
++        }
++        case VFS_OP_CLOSE: {
++            unsigned b;
++            uint64_t base;
++            uint64_t fsize;
++            int slot = find_handle(req.ino, &b, &base, &fsize);
++            (void)base;
++            (void)fsize;
++            if (slot < 0 && (b == 2 || b == 4)) {
++                /* Owned-store double close (or foreign slot): typed. */
++                rep.status = vfs_neg(VFS_ENOENT);
++            } else {
++                if (slot >= 0)
++                    g_open[(unsigned)slot].used = 0;
++                rep.status = 0;
++            }
++            rep.ino = req.ino;
++            break;
++        }
++        case VFS_OP_READ: {
++            unsigned b;
++            uint64_t base;
++            uint64_t fsize;
++            int slot = find_handle(req.ino, &b, &base, &fsize);
++            int fr = fault_gate(b > 6 ? 7 : b);
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++                rep.ino = req.ino;
++                break;
++            }
++            if (b > 6 || req.offset + req.size < req.offset ||
++                req.size > VFS_DATA_SIZE) {
++                rep.status = vfs_neg(VFS_EINVAL);
++                rep.ino = req.ino;
++                break;
++            }
++            if (b == 2) { /* tmpfs arena */
++                if (slot < 0 || req.offset > g_tmpfs[base].size) {
++                    rep.status = vfs_neg(VFS_EINVAL);
++                } else {
++                    uint64_t n = g_tmpfs[base].size - req.offset;
++                    if (n > req.size)
++                        n = req.size;
++                    for (uint64_t i = 0; i < n; ++i)
++                        win_data()[i] =
++                            g_tmpfs[base].data[req.offset + i];
++                    g_stats.bytes += n;
++                    rep.size = n;
++                    rep.status = 0;
++                }
++            } else if (b == 4) { /* pipe ring */
++                if (slot < 0) {
++                    rep.status = vfs_neg(VFS_EINVAL);
++                } else if (g_pipes[base].count == 0) {
++                    rep.size = 0; /* empty: EOF-shaped, never blocks */
++                    rep.status = 0;
++                } else {
++                    uint64_t n = g_pipes[base].count;
++                    if (n > req.size)
++                        n = req.size;
++                    for (uint64_t i = 0; i < n; ++i) {
++                        win_data()[i] = g_pipes[base]
++                                            .data[g_pipes[base].head];
++                        g_pipes[base].head =
++                            (g_pipes[base].head + 1) % VFS_PIPE_SIZE;
++                        g_pipes[base].count--;
++                    }
++                    g_stats.bytes += n;
++                    rep.size = n;
++                    rep.status = 0;
++                }
++            } else if (b == 6) { /* procfs: validate staged render */                uint64_t len = 0;
++                int vr = validate_procfs((unsigned)base, &len);
++                if (vr != 0) {
++                    rep.status = vfs_neg((unsigned)-vr);
++                } else if (req.offset > len) {
++                    rep.status = vfs_neg(VFS_EINVAL);
++                } else {
++                    uint64_t n = len - req.offset;
++                    if (n > req.size)
++                        n = req.size;
++                    /* Staged bytes already at window head; compact
++                     * when the offset is nonzero. */
++                    if (req.offset != 0) {
++                        for (uint64_t i = 0; i < n; ++i)
++                            win_data()[i] =
++                                win_data()[req.offset + i];
++                    }
++                    g_stats.bytes += n;
++                    rep.size = n;
++                    rep.status = 0;
++                }
++            } else if (b == 3) { /* devfs: metadata-only (D3) */
++                rep.status = vfs_neg(VFS_ENOSYS);
++            } else {
++                /* Image-backed: kernel staged [base+off, size); the PD
++                 * re-validates the range against its OPEN-time size for
++                 * initrd (dirent size unknown here — accept staged). */
++                (void)fsize;
++                (void)slot;
++                g_stats.bytes += req.size;
++                rep.size = req.size;
++                rep.status = 0;
++            }
++            rep.ino = req.ino;
++            stats_publish();
++            break;
++        }
++        case VFS_OP_WRITE: {
++            unsigned b;
++            uint64_t base;
++            uint64_t fsize;
++            int slot = find_handle(req.ino, &b, &base, &fsize);
++            (void)fsize;
++            int fr = fault_gate(b > 6 ? 7 : b);
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++                rep.ino = req.ino;
++                break;
++            }
++            if (req.size > VFS_DATA_SIZE) {
++                rep.status = vfs_neg(VFS_EINVAL);
++                rep.ino = req.ino;
++                break;
++            }
++            if (b == 2) {
++                if (slot < 0 ||
++                    req.offset > VFS_TMPFS_SIZE ||
++                    req.size > VFS_TMPFS_SIZE - req.offset) {
++                    rep.status = vfs_neg(VFS_ENOSPC);
++                } else {
++                    for (uint64_t i = 0; i < req.size; ++i)
++                        g_tmpfs[base].data[req.offset + i] =
++                            win_data()[i];
++                    if (req.offset + req.size > g_tmpfs[base].size)
++                        g_tmpfs[base].size = req.offset + req.size;
++                    g_stats.bytes += req.size;
++                    rep.size = req.size;
++                    rep.status = 0;
++                }
++            } else if (b == 4) {
++                if (slot < 0) {
++                    rep.status = vfs_neg(VFS_EINVAL);
++                } else {
++                    uint64_t room =
++                        VFS_PIPE_SIZE - g_pipes[base].count;
++                    if (req.size > room) {
++                        rep.status = vfs_neg(VFS_ENOSPC);
++                    } else {
++                        for (uint64_t i = 0; i < req.size; ++i) {
++                            unsigned t =
++                                (g_pipes[base].head +
++                                 g_pipes[base].count) %
++                                VFS_PIPE_SIZE;
++                            g_pipes[base].data[t] = win_data()[i];
++                            g_pipes[base].count++;
++                        }
++                        g_stats.bytes += req.size;
++                        rep.size = req.size;
++                        rep.status = 0;
++                    }
++                }
++            } else {
++                rep.status = vfs_neg(VFS_ENOSYS); /* read-only/image */
++            }
++            rep.ino = req.ino;
++            stats_publish();
++            break;
++        }
++        case VFS_OP_STAT: {
++            unsigned b = (unsigned)req.offset;
++            int fr = fault_gate(b);
++            uint64_t base = 0;
++            uint64_t sz = 0;
++            int mode = -VFS_ENOSYS;
++            if (fr == 0) {
++                if (b == 0)
++                    mode = resolve_initrd(win_name(), &base, &sz);
++                else if (b == 1)
++                    mode = resolve_fat32(win_name(), &base, &sz);
++                else if (b == 2) {
++                    mode = resolve_tmpfs(win_name(), &base);
++                    if (mode >= 0)
++                        sz = g_tmpfs[base].size;
++                } else if (b == 3)
++                    mode = resolve_devfs(win_name(), &base);
++                else if (b == 4) {
++                    mode = resolve_pipe(win_name(), &base);
++                    if (mode >= 0)
++                        sz = g_pipes[base].count;
++                } else if (b == 5)
++                    mode = resolve_ramdisk(win_name(), &base, &sz);
++                else if (b == 6) {
++                    mode = resolve_procfs(win_name(), &base);
++                    if (mode >= 0) {
++                        /* Staged render length = size. */
++                        uint64_t len = 0;
++                        int vr = validate_procfs((unsigned)base,
++                                                 &len);
++                        if (vr != 0)
++                            mode = vr;
++                        else
++                            sz = len;
++                    }
++                } else {
++                    mode = -VFS_EINVAL;
++                }
++            }
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++            } else if (mode < 0) {
++                rep.status = vfs_neg((unsigned)-mode);
++            } else {
++                rep.offset = sz;
++                rep.size = (uint64_t)(mode & 0777);
++                rep.status = 0;
++            }
++            break;
++        }
++        case VFS_OP_READDIR: {
++            unsigned b = (unsigned)req.offset;
++            int fr = fault_gate(b);
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++                break;
++            }
++            /* Directories: "/" per backend + /dev + /proc. next_ino
++             * chains; end = size 1. */
++            uint64_t next = req.ino;
++            const char *dp = norm_skip(win_name());
++            char entry[VFS_MAX_NAME];
++            int have = 0;
++            if (b == 3) { /* devfs: null/zero/tty/serial */
++                unsigned n =
++                    (unsigned)(sizeof(g_devfs) / sizeof(g_devfs[0]));
++                if (match_name(dp, "dev") || *dp == '\0') {
++                    if (next < n) {
++                        const char *dn = g_devfs[next].name;
++                        unsigned i = 0;
++                        while (dn[i] && i < VFS_MAX_NAME - 1) {
++                            entry[i] = dn[i];
++                            ++i;
++                        }
++                        entry[i] = '\0';
++                        have = 1;
++                        next++;
++                    }
++                }
++            } else if (b == 6) { /* procfs: meminfo/stat */
++                if (match_name(dp, "proc") || *dp == '\0') {
++                    unsigned n = 2;
++                    if (next < n) {
++                        const char *f =
++                            g_proc_files[next] + 6;
++                        unsigned i = 0;
++                        while (f[i] && i < VFS_MAX_NAME - 1) {
++                            entry[i] = f[i];
++                            ++i;
++                        }
++                        entry[i] = '\0';
++                        have = 1;
++                        next++;
++                    }
++                }
++            } else {
++                /* Root dirs of image/tmpfs/pipe backends: single
++                 * level in b3 — entries enumerated via repeated
++                 * STAT is out of scope; list well-known test paths
++                 * only when next == 0 (documented bound). */
++                (void)dp;
++                (void)next;
++                have = 0;
++            }
++            if (have) {
++                for (unsigned i = 0; i < VFS_MAX_NAME; ++i) {
++                    win_data()[i] = (unsigned char)entry[i];
++                    if (entry[i] == '\0')
++                        break;
++                }
++                rep.ino = next;
++                rep.size = 0;
++                rep.status = 0;
++            } else {
++                rep.ino = next;
++                rep.size = 1; /* end of dir */
++                rep.status = 0;
++            }
++            break;
++        }
++        case VFS_OP_CREATE: {
++            unsigned b = (unsigned)req.offset;
++            int fr = fault_gate(b);
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++                break;
++            }
++            const char *p = win_name();
++            if (*p == '/')
++                ++p;
++            for (unsigned i = 0; p[i] != '\0'; ++i) {
++                if (p[i] == '/') {
++                    rep.status = vfs_neg(VFS_ENOTDIR);
++                    goto created;
++                }
++            }
++            if (b == 2) {
++                uint64_t dummy = 0;
++                if (resolve_tmpfs(win_name(), &dummy) >= 0) {
++                    rep.status = vfs_neg(VFS_EEXIST);
++                } else {
++                    int free = -1;
++                    for (unsigned i = 0; i < VFS_TMPFS_FILES;
++                         ++i) {
++                        if (!g_tmpfs[i].used) {
++                            free = (int)i;
++                            break;
++                        }
++                    }
++                    if (free < 0) {
++                        rep.status = vfs_neg(VFS_ENOSPC);
++                    } else {
++                        g_tmpfs[free].used = 1;
++                        unsigned i = 0;
++                        while (p[i] && i < VFS_MAX_NAME - 1) {
++                            g_tmpfs[free].name[i] = p[i];
++                            ++i;
++                        }
++                        g_tmpfs[free].name[i] = '\0';
++                        g_tmpfs[free].size = 0;
++                        g_tmpfs[free].mode = (uint32_t)req.size;
++                        rep.status = 0;
++                    }
++                }
++            } else if (b == 4) {
++                int free = -1;
++                for (unsigned i = 0; i < VFS_PIPES; ++i) {
++                    if (!g_pipes[i].used) {
++                        free = (int)i;
++                        break;
++                    }
++                }
++                if (free < 0) {
++                    rep.status = vfs_neg(VFS_ENOSPC);
++                } else {
++                    g_pipes[free].used = 1;
++                    unsigned i = 0;
++                    while (p[i] && i < VFS_MAX_NAME - 1) {
++                        g_pipes[free].name[i] = p[i];
++                        ++i;
++                    }
++                    g_pipes[free].name[i] = '\0';
++                    g_pipes[free].head = 0;
++                    g_pipes[free].count = 0;
++                    rep.status = 0;
++                }
++            } else {
++                rep.status = vfs_neg(VFS_ENOSYS);
++            }
++        created:
++            break;
++        }
++        case VFS_OP_UNLINK: {
++            unsigned b = (unsigned)req.offset;
++            int fr = fault_gate(b);
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++                break;
++            }
++            const char *p = win_name();
++            if (*p == '/')
++                ++p;
++            if (b == 2) {
++                uint64_t slot = 0;
++                if (resolve_tmpfs(win_name(), &slot) < 0) {
++                    rep.status = vfs_neg(VFS_ENOENT);
++                } else {
++                    g_tmpfs[slot].used = 0;
++                    rep.status = 0;
++                }
++            } else if (b == 4) {
++                uint64_t slot = 0;
++                if (resolve_pipe(win_name(), &slot) < 0) {
++                    rep.status = vfs_neg(VFS_ENOENT);
++                } else {
++                    g_pipes[slot].used = 0;
++                    rep.status = 0;
++                }
++            } else {
++                rep.status = vfs_neg(VFS_ENOSYS);
++            }
++            break;
++        }
++        case VFS_OP_BACKEND_STATUS:
++            stats_publish();
++            rep.offset = (uint64_t)req.offset;
+             rep.status = 0;
+             break;
++        case VFS_OP_INJECT_BACKEND_FAULT: {
++            unsigned b = (unsigned)req.offset;
++            if (b < 7) {
++                g_fault_once[b] = 1;
++                rep.status = 0;
++            } else {
++                rep.status = vfs_neg(VFS_EINVAL);
++            }
++            break;
++        }
++        case VFS_OP_INITRD:
++        case VFS_OP_FAT32:
++        case VFS_OP_TMPFS:
++        case VFS_OP_DEVFS:
++        case VFS_OP_PIPE:
++        case VFS_OP_RAMDISK:
++        case VFS_OP_PROCFS_RENDER: {
++            /* Legacy step-a probes: now liveness checks per backend. */
++            unsigned b = (unsigned)(req.op - VFS_OP_INITRD);
++            if (b == 7) /* PROCFS_RENDER maps to backend 6 */
++                b = 6;
++            int fr = fault_gate(b > 6 ? 7 : b);
++            if (fr != 0) {
++                rep.status = vfs_neg((unsigned)-fr);
++            } else if (b < 7 && (g_backend_mask & (1U << b))) {
++                rep.status = 0;
++            } else {
++                rep.status = vfs_neg(VFS_ENOSYS);
++            }
++            break;
++        }
+         case VFS_OP_INJECT_CORRUPT:
+             g_corrupt_once = 1;
+             rep.status = 0;
+@@ -86,9 +1140,10 @@ int main(void) {
+             break;
+         }
+ 
+-        // Reply to the requester (owner_id carried in the RPC body):
+-        // send_sync_bounded waits on the REQUESTER's own queue, so a
+-        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
++        /* Reply to the requester (owner_id carried in the RPC body):
++         * send_sync_bounded waits on the REQUESTER's own queue, so a
++         * reply to PID 1 (init) is a dead letter (issue #441; #51
++         * precedent). */
+         ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
+     }
+     return 0;

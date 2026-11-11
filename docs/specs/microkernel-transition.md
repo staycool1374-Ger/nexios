@@ -195,11 +195,16 @@ generation-tagged stored pointers). Enforced at these points:
     (merged `fc4a5e0e8`: SDF `DMA_REGION` + `kPdRoleCount`,
     BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
     read+write, `block_srv_live` class + host digest oracle).
-    Status 2026-11 (in progress): #47 step-b2 block-srv IRQ
+    Status 2026-11 (landed): #47 step-b2 block-srv IRQ
     delegation (main): WAIT_ACK delivery + bounded wait + poll
     fallback, SDF IRQ caps (ATA IRQ14/15, virtio transport IRQ,
     AHCI MSI conveyance-only), PD stats window, +4 tests per class
     (`cap_irq` 16/15/15, `block_srv_live` 8/8/8).
+    Status 2026-11 (landed): #47 step-b3 vfs-srv backends live path
+    (main): BIND/CAP_GET + per-op raw-byte staging (cpio index/FAT
+    sectors/ramdisk blocks cached per epoch; PD parses + owns
+    namespace/handles/policy), 7 backends, `vfs_srv_live` 14/14/14
+    x3 arches; tests land via testbed (D8a), kernel+PD+docs on main.
     Status 2026-11 (in progress): #51 console-PD substrate (main):
     SDF FB row (SHM ring + DMA status page + slot-chunked scanout —
     MMIO or FRAME pins per backing), `fb-pd.c` console PD (bounded

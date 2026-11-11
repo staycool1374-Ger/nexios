@@ -23,6 +23,7 @@
 #include <kernel/memory/address.hpp>
 #include <kernel/ipc/shm_ring.hpp>
 #include <services/terminal/framebuffer.hpp>
+#include <kernel/vfs/vfs_srv.hpp>
 
 namespace kernel {
 namespace sdf {
@@ -417,11 +418,24 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // (planner S5/S6); the shape (MSI-X/INTID + DMA + SHM) is declared
         // in docs/specs/driver-pds.md. No static row yet.
         return 0;
-    case PdRole::VFS_SRV:
-        // No ambient authority: the vfs-srv row IS the empty set (planner
-        // SDF rules). Compose succeeds with zero caps; the PD talks to
-        // clients over its endpoint only.
-        return 0;
+    case PdRole::VFS_SRV: {
+        // VFS backend server row (issue #47 step-b3): exactly one
+        // DMA_REGION shared window (kVfsRegionPages). No FRAME cap:
+        // the initrd image lives in kernel pages, which the FRAME mint
+        // rejects (PMM::is_user_page gate), and D5 mandates a private
+        // copy anyway — so the kernel stages raw backend bytes into the
+        // window per op and the PD parses. The row carries no device
+        // caps (MMIO/IRQ/DMA-device), so sdf_policy_only still holds.
+        uint64_t n = 0;
+        if (n + 1 > kMaxCapsPerRole) {
+            return 0;
+        }
+        out[n++] = CapSpec{CapKind::DMA_REGION, 0,
+                           kernel::vfs_srv::kVfsRegionPages *
+                               arch::PAGE_SIZE,
+                           0, 0};
+        return n;
+    }
     case PdRole::BLOCK_SRV: {
         // Block-storage server row (issue #47 step-b2): static
         // arch-switched shape + shared data window + IRQ caps (polled
@@ -661,8 +675,17 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
     }
     if (sdf_policy_only(role) && count != 0) {
         // Structural no-double-ownership (issues #47/#51): a policy-only
-        // row must never carry device caps. Fail closed, never compose.
-        return false;
+        // row must never carry DEVICE caps (IRQ/MSIX/MMIO/DMA). Memory
+        // caps (FRAME/SHM/DMA_REGION — fresh user frames, no device
+        // authority) are allowed: VFS_SRV carries its data window this
+        // way (issue #47 step-b3). Fail closed, never compose.
+        for (uint64_t i = 0; i < count; ++i) {
+            const auto kind = specs[i].kind;
+            if (kind == CapKind::IRQ || kind == CapKind::MSIX ||
+                kind == CapKind::MMIO || kind == CapKind::DMA) {
+                return false;
+            }
+        }
     }
     if (count == 0) {
         // Zero-cap rows compose empty only on the explicit allowlist

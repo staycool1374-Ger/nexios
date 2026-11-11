@@ -55,6 +55,16 @@ int ramdisk_fs_verify_all();
 bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
                        uint64_t &block_count, uint32_t &crc);
 
+/// @brief Transport seam for the vfs-srv PD (issue #47 step b3): read raw
+/// 512 B blocks into @p out (count bounded by the 12 KiB staging window).
+/// Mechanical transport only — no lookup, no CRC; the PD validates.
+/// @param out must hold at least `count * 512` bytes (all in-tree
+/// callers stage into the fixed 12 KiB window: super+dir = 11 blocks,
+/// data spans caller-chunked to fit).
+/// @return true on full transfer, false on any block IPC failure.
+bool ramdisk_fs_read_blocks(uint64_t start_block, uint64_t count,
+                            uint8_t *out);
+
 extern Filesystem ramdisk_fs;
 
 } // namespace vfs

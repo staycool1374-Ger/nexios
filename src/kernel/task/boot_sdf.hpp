@@ -187,11 +187,13 @@ bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen);
 bool pd_owns_device(PdRole role);
 
 /// @brief Structural policy-only predicate (issues #47/#51): true only
-/// for roles whose SDF row MUST stay empty (no device caps ever —
-/// VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/PROCFS_SRV
-/// policy PDs). Used by compose to
-/// reject any non-empty row for these roles, and by #48's SDF boundary
-/// test to prove the emulation side holds no device caps.
+/// for roles whose SDF row MUST NOT carry device caps (IRQ/MSIX/MMIO/
+/// DMA) — VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/
+/// PROCFS_SRV policy PDs. Memory caps (FRAME/SHM/DMA_REGION — fresh
+/// user frames, no device authority) are allowed: VFS_SRV carries its
+/// step-b3 data window this way. Used by compose to reject device-cap
+/// rows for these roles, and by #48's SDF boundary test to prove the
+/// emulation side holds no device caps.
 /// @return True for VFS_SRV, TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON,
 /// PROCFS_SRV; false otherwise.
 bool sdf_policy_only(PdRole role);
@@ -203,8 +205,9 @@ bool sdf_policy_only(PdRole role);
 bool capture_block_topology();
 
 /// @brief True when @p role may compose with zero caps (explicit
-/// allowlist): VFS_SRV always (no ambient authority — the row IS the
-/// empty set); degraded BLOCK_SRV when no controller/IOMMU was captured
+/// allowlist): VFS_SRV always (no ambient authority — the row is its
+/// memory-only data window; a zero-cap compose still starts the PD
+/// endpoint-only); degraded BLOCK_SRV when no controller/IOMMU was captured
 /// (logged at the call site; never a silent start).
 bool sdf_zero_caps_allowed(PdRole role);
 

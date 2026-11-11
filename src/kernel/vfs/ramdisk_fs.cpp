@@ -879,6 +879,25 @@ bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
     return true;
 }
 
+/// @brief Transport seam for the vfs-srv PD (issue #47 step b3): read raw
+/// 512 B blocks into @p out. Mechanical transport only — no entry lookup,
+/// no CRC check; the PD validates extents against its parsed dir region.
+/// Never under rd_lock (does block IPC).
+bool ramdisk_fs_read_blocks(uint64_t start_block, uint64_t count,
+                            uint8_t *out) {
+    if (out == nullptr || count == 0 ||
+        count > (0x3000 / RD_BLOCK_SIZE)) {
+        return false;
+    }
+    for (uint64_t i = 0; i < count; ++i) {
+        if (rd_block_op_retry(start_block + i, out + i * RD_BLOCK_SIZE,
+                              false) < 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int ramdisk_fs_try_mount() {
     // Grant check FIRST: an already-mounted store with a dead/cleared
     // grant must report failure (fail-closed degraded), not success.

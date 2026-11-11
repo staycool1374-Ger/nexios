@@ -537,6 +537,11 @@ void reset_and_remount() {
     // boot and tests never block on it; absence just means /mnt/ramdisk
     // does not resolve).
     ramdisk_fs_try_mount();
+    // Re-mount the live FAT32 partition (issue #47 step-b3): boot mounts
+    // it at /mnt, but the snapshot rewind drops it (like every mount)
+    // and only the mounts below are restored. Without this, no test
+    // can resolve through /mnt. Fail-closed when the drive is absent.
+    mount_fat32("/mnt");
 }
 
 /// @brief Find a mounted filesystem by name.

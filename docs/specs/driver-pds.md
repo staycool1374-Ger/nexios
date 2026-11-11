@@ -146,8 +146,14 @@ aarch64 (FRAME); riscv64 blocked by a platform scheduler/timer issue
 
 ## VFS/block rows (#47, issue #47 PDs share this SDF)
 
-- `VFS_SRV` (vfs-srv PD): zero-cap row by design (no ambient authority).
-  Composes empty; the PD talks to clients over its endpoint only.
+- `VFS_SRV` (vfs-srv PD, issue #47 step-b3): one 4-page shared window
+  (`CapKind::DMA_REGION`, raw backend bytes in / parsed results out,
+  kernel HHDM alias) + `FRAME` initrd pin is NOT conveyed (images live
+  in kernel pages, rejected by the FRAME mint; D5 mandates a private
+  copy — the kernel stages per-op instead). No device caps
+  (MMIO/IRQ/DMA-device), so `sdf_policy_only` still holds; the compose
+  gate rejects device kinds for policy roles. Composes with the window
+  only; the PD talks to clients over its endpoint.
 - `BLOCK_SRV` (block-srv PD, issue #47 step-b1/b2): static
   arch-switched row + one 4-page shared window (`CapKind::DMA_REGION`,
   raw sector/queue area, kernel HHDM alias) + IRQ caps (step-b2:
