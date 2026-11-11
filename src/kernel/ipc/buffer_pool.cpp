@@ -79,6 +79,10 @@ static void clear_pte_in_pml4(uint64_t virt_addr, uint64_t pml4_phys) {
     size_t l0_idx = (virt_addr >> L0_SHIFT) & 0x1FF;
     if (!(l0[l0_idx] & PAGE_PRESENT))
         return;
+    if (l0[l0_idx] & RWX) {
+        l0[l0_idx] = 0; // 1GB block leaf: clear whole slot, never descend
+        return;
+    }
     auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                              VMM::sv39_pte_phys(l0[l0_idx]));
     size_t l1_idx = (virt_addr >> L1_SHIFT) & 0x1FF;
