@@ -25,6 +25,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/kernel_object.hpp>
+#include <kernel/sync/mutex.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <string.hpp>
@@ -38,6 +39,12 @@ namespace kernel {
 namespace vfs {
 
 static constexpr size_t PIPE_BUF_SIZE = 4096;
+
+// Would-block errno used at the ops layer (issue #474). Tree convention
+// for EAGAIN is raw -11 (block_srv, vfs_srv). NOTE: sys_read/sys_write
+// collapse negatives (-1 / 0), so -11 is observable only via direct
+// ops->read/ops->write calls, which is how the tests drive it.
+constexpr int64_t k_pipe_again = -11; // -EAGAIN
 
 /// @brief Ring buffer shared between the read and write ends of a pipe.
 ///
@@ -53,6 +60,16 @@ struct PipeBuffer : public KernelObject {
     size_t count = 0;            ///< Number of bytes currently in the buffer.
     bool read_closed = false;    ///< True when the read end is closed.
     bool write_closed = false;   ///< True when the write end is closed.
+    // O_NONBLOCK per end (issue #474): open-file-description state, so the
+    // two ends diverge. Set at open (pipe_open honors O_NONBLOCK=0x800);
+    // read via __atomic builtins — the setter runs before first use, but a
+    // reopen/toggle may race in-flight I/O on SMP.
+    bool read_nonblock = false;  ///< True when the read end is non-blocking.
+    bool write_nonblock = false; ///< True when the write end is non-blocking.
+    sync::Mutex lock;            ///< Serializes cursor updates (issue #474:
+                                 ///< writer-writer / reader-writer RMW was
+                                 ///< lock-free). Leaf lock: never held across
+                                 ///< data_avail.wait() or block IPC.
     sync::Semaphore data_avail;  ///< Semaphore signalled when data is written.
 
     /// @brief Final teardown on the last release: releases the pipe-buffer
@@ -76,14 +93,27 @@ static int64_t pipe_read(Vnode &self, uint8_t *buffer, uint64_t count,
     auto *pb = static_cast<PipeBuffer *>(self.private_data);
     if (!pb || pb->read_closed)
         return VFS_INVALID;
-    if (pb->write_closed && pb->count == 0)
-        return 0;
+    // O_NONBLOCK short-circuit (issue #474): empty pipe + live writer
+    // fails closed with -EAGAIN instead of parking in data_avail.wait().
+    pb->lock.lock();
     while (pb->count == 0) {
-        if (pb->write_closed)
+        if (pb->write_closed) {
+            pb->lock.unlock();
             return 0;
-        if (pb->read_closed)
+        }
+        if (pb->read_closed) {
+            pb->lock.unlock();
             return VFS_INVALID;
+        }
+        if (__atomic_load_n(&pb->read_nonblock, __ATOMIC_ACQUIRE)) {
+            pb->lock.unlock();
+            return k_pipe_again;
+        }
+        // Condition-pattern: never hold the leaf lock across the
+        // semaphore wait (a writer needs the lock to make progress).
+        pb->lock.unlock();
         pb->data_avail.wait();
+        pb->lock.lock();
     }
     uint64_t total = 0;
     while (total < count && pb->count > 0) {
@@ -91,6 +121,7 @@ static int64_t pipe_read(Vnode &self, uint8_t *buffer, uint64_t count,
         pb->read_pos = (pb->read_pos + 1) % PIPE_BUF_SIZE;
         --pb->count;
     }
+    pb->lock.unlock();
     return static_cast<int64_t>(total);
 }
 
@@ -102,21 +133,48 @@ static int64_t pipe_write(Vnode &self, const uint8_t *buf, uint64_t count,
         return VFS_INVALID;
     if (pb->write_closed)
         return VFS_INVALID;
+    pb->lock.lock();
+    // Re-check under the lock: a close on the other end may have landed
+    // between the fast-path checks above and the acquisition.
+    if (pb->read_closed || pb->write_closed) {
+        pb->lock.unlock();
+        return VFS_INVALID;
+    }
+    if (pb->count >= PIPE_BUF_SIZE &&
+        __atomic_load_n(&pb->write_nonblock, __ATOMIC_ACQUIRE)) {
+        pb->lock.unlock();
+        return k_pipe_again;
+    }
     uint64_t total = 0;
     while (total < count) {
         if (pb->count >= PIPE_BUF_SIZE) {
-            return static_cast<int64_t>(total);
+            break;
         }
         pb->data[pb->write_pos] = buf[total++];
         pb->write_pos = (pb->write_pos + 1) % PIPE_BUF_SIZE;
         ++pb->count;
     }
-    pb->data_avail.post();
+    pb->lock.unlock();
+    // No phantom wake: total==0 means nothing became readable (S3 audit).
+    if (total > 0)
+        pb->data_avail.post();
     return static_cast<int64_t>(total);
 }
 
 /// @brief Open a pipe vnode.
-static int pipe_open(Vnode &, uint64_t) {
+static int pipe_open(Vnode &self, uint64_t flags) {
+    auto *pb = static_cast<PipeBuffer *>(self.private_data);
+    if (!pb)
+        return VFS_INVALID;
+    // Per-end state (issue #474): the read ops table carries a read fn,
+    // the write ops table does not — that discriminates the two ends
+    // sharing this buffer.
+    const bool nonblock = (flags & O_NONBLOCK) != 0;
+    if (self.ops != nullptr && self.ops->read != nullptr) {
+        __atomic_store_n(&pb->read_nonblock, nonblock, __ATOMIC_RELEASE);
+    } else {
+        __atomic_store_n(&pb->write_nonblock, nonblock, __ATOMIC_RELEASE);
+    }
     return 0;
 }
 
@@ -125,7 +183,11 @@ static void pipe_read_close(Vnode &self) {
     auto *pb = static_cast<PipeBuffer *>(self.private_data);
     if (!pb)
         return;
+    // Flag-set under the leaf lock so in-flight I/O observes the close
+    // atomically with the cursor state (bounded: no wait under this lock).
+    pb->lock.lock();
     pb->read_closed = true;
+    pb->lock.unlock();
     // Drop this endpoint's reference.  The last release (both ends closed)
     // invokes dispose() -> track_remove + MemPool::free.  Never touch pb
     // after this — it may be freed here.
@@ -140,7 +202,9 @@ static void pipe_write_close(Vnode &self) {
     auto *pb = static_cast<PipeBuffer *>(self.private_data);
     if (!pb)
         return;
+    pb->lock.lock();
     pb->write_closed = true;
+    pb->lock.unlock();
     // Wake readers while pb is still alive (before release).
     pb->data_avail.post();
     // Drop this endpoint's reference; last release disposes the block.
@@ -207,6 +271,7 @@ int create_pipe(int fds[2]) {
     new (pb) PipeBuffer;
     pb->mark_pool_backed();
     pb->data_avail.init(0, PIPE_BUF_SIZE);
+    pb->lock.init();
     kernel::test::ResourceTracker::instance().track_pipe_buffer_add();
 
     auto *rnode = static_cast<Vnode *>(MemPool::alloc(sizeof(Vnode)));

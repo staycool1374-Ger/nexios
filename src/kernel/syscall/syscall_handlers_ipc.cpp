@@ -124,10 +124,15 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
                 // Wait is over: restore RUNNING (the trapper resumes running;
                 // a stale BLOCKED marking would mislead the next scheduler
                 // decision — issue #513 follow-up).
+                // sti: the hlt wake below parked with IF=0 (cli); the wait
+                // is over so interrupts go back on (idempotent when already
+                // enabled; trap iret restores entry state regardless).
+                arch::sti();
                 cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
         }
+        arch::sti(); // wait over via delivery-break: same IF restore.
         cur->blocked_in_recv = false;
         IPC::recv_wait_cancel(*cur);
     } else {
@@ -290,6 +295,9 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 // Wait is over: restore RUNNING (see sys_receive above).
+                // sti: wait-loop exit restores IF (hlt/cli wake pattern —
+                // see sys_receive; idempotent, trap iret restores anyway).
+                arch::sti();
                 cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
@@ -322,6 +330,7 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 // Wait is over: restore RUNNING (see sys_receive above).
+                arch::sti(); // wait-loop exit restores IF (see sys_receive).
                 cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
@@ -329,10 +338,12 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 // Wait is over: restore RUNNING (see sys_receive above).
+                arch::sti(); // wait-loop exit restores IF (see sys_receive).
                 cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
         }
+        arch::sti(); // wait over via delivery-break: same IF restore.
         cur->blocked_in_recv = false;
         IPC::recv_wait_cancel(*cur);
     } else {
