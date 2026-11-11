@@ -13,12 +13,12 @@
 # Exit: 0 ok, 1 missing value, 2 usage, 3 unknown key, 4 validation failure.
 BEGIN {
     FS = "|"
-    nkeys = 9
+    nkeys = 10
     keys[1] = "expect_timeout"; keys[2] = "outer_timeout"
     keys[3] = "max_attempts";   keys[4] = "stall_signatures"
     keys[5] = "watchdog_stall"; keys[6] = "expected_panic"
     keys[7] = "expected_empty"; keys[8] = "arch_scope"
-    keys[9] = "build_scope"
+    keys[9] = "build_scope";    keys[10] = "scope_cause"
     for (i = 1; i <= nkeys; i++) knownkey[keys[i]] = 1
     if (validate == 1) { mode = "validate" }
     else if (dump == 1) { mode = "dump" }

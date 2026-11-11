@@ -48,14 +48,19 @@ if [ -n "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="$NEXIOS_TEST_CLASSES"
 fi
 
-# riscv64 runs its measured green-evidenced list (tools/meson/list_tests.py
-# RISCV64_CLASSES, issue #357 parity — the #207 2-class onboarding ramp is
-# retired; all measured classes run). Resolved dynamically so the measured
-# list has a single source of truth (the NEXIOS_TEST_CLASSES escape hatch
-# is honored inside list_tests.py, so an explicit override still wins).
-if [ "$ARCH" = "riscv64" ] && [ -z "${NEXIOS_TEST_CLASSES:-}" ]; then
-    CLASSES="$(python3 tools/meson/list_tests.py "$ARCH" "$BUILD" | cut -d'|' -f1 | tr '\n' ' ')"
-    if [ -z "$CLASSES" ]; then echo "ERROR: empty riscv64 class list from list_tests.py" >&2; exit 1; fi
+# Per-arch extras (issue #525/#518 gate work): the generic 26 do not contain
+# the arch-specific classes (arch_riscv64, scheduler_zombie,
+# configuration_build, memory_vmm, ...). The full per-arch universe is
+# generic + extras from the measured lists in tools/meson/list_tests.py
+# (single source of truth); the table-driven arch/build scopes below then
+# remove what the arch cannot do (reported as UNSUPPORTED, never SKIP).
+# testrunner stays last: its expected-panic halts the kernel.
+if [ -z "${NEXIOS_TEST_CLASSES:-}" ] && [ "$ARCH" != "x86_64" ]; then
+    EXTRA=""
+    for c in $(python3 tools/meson/list_tests.py "$ARCH" "$BUILD" | cut -d'|' -f1); do
+        case " $CLASSES " in *" $c "*) ;; *) EXTRA="$EXTRA $c";; esac
+    done
+    if [ -n "$EXTRA" ]; then CLASSES="${CLASSES% testrunner}$EXTRA testrunner"; fi
 fi
 
 RUN=""
@@ -68,7 +73,16 @@ for c in $CLASSES; do
             if [ "$ARCH" = "$x" ]; then hit=1; break; fi
         done
         if [ "$hit" -eq 0 ]; then
-            printf 'UNSUPPORTED %s (arch_scope=%s, ARCH=%s — no such function on this arch)\n' "$c" "$ascope" "$ARCH"
+            # Cause-aware exclusion: hole (should run — work item) vs
+            # unsupported (arch lacks the function — permanent). Cause
+            # vocabulary lives in tools/test-policy.tsv (scope_cause key).
+            cause=$(policy "$c" scope_cause)
+            kind=${cause%%:*}; text=${cause#*: }
+            if [ "$kind" = "hole" ]; then
+                printf 'HOLE %s on ARCH=%s — %s (arch_scope=%s)\n' "$c" "$ARCH" "$text" "$ascope"
+            else
+                printf 'UNSUPPORTED %s on ARCH=%s — %s\n' "$c" "$ARCH" "$text"
+            fi
             skip=1
         fi
     fi

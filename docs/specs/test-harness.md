@@ -239,6 +239,34 @@ owns the lists (`tools/meson/list_tests.py`: per-arch class tuples),
 Per-class rows in `test-history.txt` are canonical; the SUMMARY line
 carries `ARCH=<arch>`. Counts are measured, never hand-summed.
 
+### Test taxonomy (4 buckets)
+
+Every class falls in exactly one bucket. `arch_scope` in
+`tools/test-policy.tsv` is the execution gate; `scope_cause` records WHY
+(printed by `run_all_classes.sh` as `HOLE` vs `UNSUPPORTED`):
+
+- **common** — tests basic Nexios functionality; implementations may differ
+  per arch (asm/ISR trampolines, MMIO maps) but the behavior is
+  arch-independent. Runs everywhere listed. This is the vast majority.
+- **unsupported** — the arch genuinely lacks the function; permanent.
+  Current roster: `ahci_live` (no Q35/ICH9 off-x86; pendant: virtio-blk via
+  `storage`), `iommu_live` (no VT-d off-x86; pendant: SMMUv3 pending #168).
+- **hole** — should run on the arch but can't yet (functionality or test
+  bodies missing); each names its work item. Current roster: `smp`,
+  `smp_multicpu` on aarch64+riscv64 (PSCI/HSM bodies missing, #525).
+  In-scope-but-red classes (aarch64 `core_sched` STALL, `core_memory`
+  PANIC, `capability` STALL, `deadline` PANIC, `bench` fails) are holes of
+  the same kind — visible as FAILs, owned by QE/arch issues.
+- **special-arch** — one arch only, by design; enforced by list membership
+  (`list_tests.py`), not scope. Current roster: `arch_riscv64` (rv64-only);
+  `process_pml4_clone` stays x86-only (empty class stalls off-x86).
+
+Note (2×3 gate + union resolution): `run_all_classes.sh` now resolves
+generic-26 + arch extras minus scopes (x86_64 26, aarch64 28, riscv64
+35). The Green column below remains the measured-evidence set; delta
+classes run as evidence-gathering — a 0/0 row proves link+boot only, a
+FAIL is a work item, neither is a pass claim.
+
 ### Debug full gate (`bash scripts/run_all_classes.sh <arch> debug`)
 
 | Arch | Runs | Green (FAILED: 0) | Excluded (with evidence) |

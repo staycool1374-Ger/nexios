@@ -21,6 +21,17 @@ default|*|expected_panic|0
 default|*|expected_empty|0
 default|*|arch_scope|any
 default|*|build_scope|any
+# scope_cause: WHY the arch_scope is what it is (shown by run_all_classes.sh
+# on exclusion). Vocabulary: common (runs everywhere listed — the vast
+# majority), hole (should run but can't yet — work item with issue ref),
+# unsupported (the arch lacks the function — permanent; pendant named
+# where one exists), special-arch (one arch only, by design — documented
+# here, enforced by list membership, not scope).
+default|*|scope_cause|common: no arch restriction
+class|smp|scope_cause|hole: PSCI/HSM test bodies missing on aarch64+riscv64, see #525
+class|smp_multicpu|scope_cause|hole: PSCI/HSM test bodies missing on aarch64+riscv64, see #525
+class|ahci_live|scope_cause|unsupported: no Q35/ICH9 off-x86 (pendant: virtio-blk via storage class)
+class|iommu_live|scope_cause|unsupported: no VT-d off-x86 (pendant: SMMUv3 pending, see #168)
 arch|riscv64|expect_timeout|400
 arch|riscv64|outer_timeout|1200
 group|heavy|members|core_basic core_sync core_sched core_task core_memory core_syscall core_tracing smp_multicpu ahci_live iommu_live deadline
