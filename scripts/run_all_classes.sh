@@ -8,6 +8,12 @@
 #   (abnormal termination appends STATUS: <TIMEOUT|PANIC|NO_SUMMARY>)
 # Usage: bash scripts/run_all_classes.sh [arch] [build]
 #        (the full-suite entry point; per-class runs go through qemu_test.py)
+# Release-version gate (build type vs version): --build selects COMPILE
+# SETTINGS only (debug = symbols + full registry; release = optimized +
+# TF_RELEASE subset). A release-version (vX.Y.Z) ships both: gate it with
+# the 2x3 matrix — debug+release x x86_64/aarch64/riscv64, 6 runs, no
+# arch exempt. Per-class arch/build scoping stays table-driven
+# (tools/test-policy.tsv; ahci_live/iommu_live are debug-only UEFI classes).
 # Per-class run policy (timeouts, retries, scopes, markers) comes from
 # tools/test-policy.tsv via tools/test-policy.awk — no literals here.
 # No debugging — only observe what works and what does not.
@@ -89,19 +95,6 @@ if [ -n "${NEXIOS_POLICY_DUMP:-}" ]; then
     exit 0
 fi
 
-# Issue #520: qemu_test.py refuses release builds off-x86 (fails loud by
-# design, issue #207) — those combos never boot, so probe once up front and
-# emit SKIP lines (same shape as the scope SKIPs above) instead of 22 false
-# FAIL rows. No history rows for refused combos; x86_64 release is unaffected.
-if [ "$BUILD" = "release" ] && [ "$ARCH" != "x86_64" ]; then
-    for c in $RUN; do
-        printf 'SKIP %s (release unsupported on ARCH=%s)\n' "$c" "$ARCH"
-    done
-    printf '\n=== SUMMARY total=0 ok=0 fail=0 ARCH=%s (SKIP: release unsupported) ===\n' "$ARCH"
-    printf '\nSUMMARY: total=0 ok=0 fail=0 ARCH=%s\n' "$ARCH" >> test-history.txt
-    exit 0
-fi
-
 # Fail fast when the q35 variants cannot boot: clear message instead of a
 # QEMU boot error deep in the loop.  Mirrors the OVMF_CODE guards
 # (which remain the authoritative per-class check inside qemu_test.py).
@@ -137,16 +130,6 @@ for c in $RUN; do
     rc=$?
     end=$(date +%s%N)
     wall_ms=$(( (end - start) / 1000000 ))
-
-    # Issue #520 safety net: the runner refused this arch/build combo (fails
-    # loud by design) — SKIP with no history row, never a FAIL. The up-front
-    # probe above should have caught this; reaching here means the refusal
-    # set grew, so stay silent-fail-free by construction.
-    if grep -q 'release builds only supported on' "$log"; then
-        printf 'SKIP %s (release unsupported on ARCH=%s)\n' "$c" "$ARCH"
-        total=$((total-1))
-        continue
-    fi
 
     # Harness summary (authoritative when present)
     npass=$(grep -E '^\s*PASSED:' "$log" | tail -1 | awk '{print $2}' | tr -d '[:space:]')

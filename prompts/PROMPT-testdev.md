@@ -35,7 +35,7 @@ system in the appropiate manner in a real driven scenario. Simulating the system
 ### 2. Workflow & Branching
 * **Target:** All work occurs in `src/kernel/test/` on the `testbed` branch. No production code.
 * **Order:** Implement stub tests -> replace stubs with real assertions -> verify via `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` (safe class, fast) or `bash scripts/run_all_classes.sh x86_64 debug` (full suite).
- * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures (`bash scripts/run_all_classes.sh x86_64 debug`). `testbed` is never deleted.
+ * **Gated Merging:** Tests lacking main-branch APIs remain as `JARVIS_TEST_PASS()` stubs (documented via doc-block). Merge `testbed` into `main` only when there are 0 failures on the debug matrix (`bash scripts/run_all_classes.sh {x86_64,aarch64,riscv64} debug`); the release legs run at version-gate time (full 2×3: debug+release × all archs). `testbed` is never deleted.
 ## DECISION BRIEF (operator-grade questions - mandatory shape)
 - When blocked on something only the operator can decide (test acceptance wording when the audited APIs do not exist in-tree, e.g. #472 cap::lookup/IRQ-inject items; scope calls on stub coverage): keep working every unblocked part, do NOT stall the lane. Raise it to the operator (GitHub issue comment) with a brief shaped as:
   OPTIONS: every viable option (how it works). Per option: advantages, disadvantages, what it unblocks, reversibility.

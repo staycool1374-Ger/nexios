@@ -90,7 +90,7 @@ Read and update the `lessons.md` file **only** when a debugging situation occurs
 
 **Pre-flight gate (abort on any failure):**
 - Verify `git status --porcelain` is clean
-- Run `bash scripts/run_all_classes.sh x86_64 debug` — this launches the kernel in QEMU once per class and runs the full test base (22 aggregates + 4 specials, issues #173, #364). Every class must pass (`[FAIL]` count = 0). Do **not** rely on a partial test run; confirm the script SUMMARY shows all 26 runs ok.
+- Run the 2×3 release-version matrix — `bash scripts/run_all_classes.sh {x86_64,aarch64,riscv64} {debug,release}` (6 runs: debug legs run the full test base, 22 aggregates + 4 specials, issues #173, #364; release legs run the stripped TF_RELEASE subset). Every class must pass (`[FAIL]` count = 0) in ALL six runs. Do **not** rely on a partial test run; confirm each script SUMMARY shows all runs ok. Build type (`--build debug|release` = compile settings) is not the release-version (`vX.Y.Z` ships both builds).
 - Check `prompts/testcases-v$(KERNEL_VERSION).md` — if still `*Outline*` or any stubs remain, **abort**. If all tests implemented, delete the file.
 - Verify tag `v$(major).$(minor).$(patch)` does not exist: `git tag | grep "v$(major).$(minor).$(patch)"`
 
@@ -204,6 +204,8 @@ tools/meson/build.sh --arch aarch64 --nolto                     # aarch64 no-LTO
 python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class none      # interactive QEMU
 bash scripts/run_all_classes.sh x86_64 debug                    # full debug suite (26 runs)
 bash scripts/run_all_classes.sh x86_64 release                  # full release suite (26 runs)
+bash scripts/run_all_classes.sh aarch64 debug                   # same matrix off-x86 …
+bash scripts/run_all_classes.sh aarch64 release                 # … debug AND release on ALL archs (2×3 version gate)
 python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest   # CI gate
 python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class drivers   # specific aggregate
 python3 tools/meson/gdb_run.py debug-test --arch x86_64 --build debug --class core --gdb-script tools/gdb/test-batch.gdb  # GDB panic capture
@@ -309,7 +311,7 @@ If a test fails or a regression is detected:
 |----------|--------|--------|
 | Kernel bugfix in subsystem X | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class <class-X>` | Fastest feedback, isolates the subsystem |
 | Test harness / test-environment fix | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class testrunner` | Validates harness integrity without kernel noise |
-| Release gate or full regression check | `bash scripts/run_all_classes.sh x86_64 debug` | Only acceptable after per-aggregate passes |
+| Release-version gate or full regression check | `bash scripts/run_all_classes.sh {x86_64,aarch64,riscv64} {debug,release}` (2×3 matrix, 0 failures everywhere) | Only acceptable after per-aggregate passes |
 | CI / selftest | `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` | Matches CI pipeline |
 
 **Never** use `all` or `run_all_classes.sh` during active bugfixing — both are too time-consuming.
