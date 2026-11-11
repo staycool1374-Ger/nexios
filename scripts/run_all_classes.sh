@@ -48,13 +48,14 @@ if [ -n "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="$NEXIOS_TEST_CLASSES"
 fi
 
-# Issue #207: riscv64 runs its own green-evidenced class set (arch_riscv64
-# 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
-# aggregates are not gated on riscv64 (no evidence yet — wiring them in
-# blind would red the gate for unrelated pre-existing gaps).
-# Issue #357: skipped when list_tests.py passes its measured list.
+# riscv64 runs its measured green-evidenced list (tools/meson/list_tests.py
+# RISCV64_CLASSES, issue #357 parity — the #207 2-class onboarding ramp is
+# retired; all measured classes run). Resolved dynamically so the measured
+# list has a single source of truth (the NEXIOS_TEST_CLASSES escape hatch
+# is honored inside list_tests.py, so an explicit override still wins).
 if [ "$ARCH" = "riscv64" ] && [ -z "${NEXIOS_TEST_CLASSES:-}" ]; then
-    CLASSES="arch_riscv64 scheduler_zombie"
+    CLASSES="$(python3 tools/meson/list_tests.py "$ARCH" "$BUILD" | cut -d'|' -f1 | tr '\n' ' ')"
+    if [ -z "$CLASSES" ]; then echo "ERROR: empty riscv64 class list from list_tests.py" >&2; exit 1; fi
 fi
 
 RUN=""
@@ -67,7 +68,7 @@ for c in $CLASSES; do
             if [ "$ARCH" = "$x" ]; then hit=1; break; fi
         done
         if [ "$hit" -eq 0 ]; then
-            printf 'SKIP %s (arch_scope=%s, ARCH=%s)\n' "$c" "$ascope" "$ARCH"
+            printf 'UNSUPPORTED %s (arch_scope=%s, ARCH=%s — no such function on this arch)\n' "$c" "$ascope" "$ARCH"
             skip=1
         fi
     fi
