@@ -159,8 +159,8 @@ static void stats_publish(void) {
     m32[1] = g_stats.ops;
     volatile uint64_t *m64b = (volatile uint64_t *)(slot + 16);
     m64b[0] = g_stats.bytes;
-    m32[6] = g_stats.faults;
-    m32[7] = 0;
+    m32[4] = g_stats.faults; /* offset 24: VfsBackendStatus::faults */
+    m32[5] = 0;              /* offset 28: rsvd */
     m64[0] = VFS_STATS_MAGIC;
 }
 
