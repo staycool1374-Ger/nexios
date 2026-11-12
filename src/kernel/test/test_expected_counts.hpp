@@ -103,7 +103,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"iommu_live",            6,    0,       0      },  // live VT-d enablement (q35 variant; not in all)
     {"cap_shm",               7,    0,       0      },  // cap-gated shared-memory rings
     {"cap_death",             9,    0,       0      },  // async task-death notifications
-    {"cap_pager",             16,   0,       0      },  // external pager protocol (+1 premise, issue #527)
+    {"cap_pager",             16,   0,       0      },  // external pager protocol (+1 unaliased-probe premise)
     {"cap_broker",             6,   6,       6      },  // broker policy stubs (issue #240 step-a)
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath
     {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics
@@ -300,7 +300,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_sched",          114,  0,       0      },  // scheduler_* + #513 slot-safety x2
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
-    {"core_syscall",        85,   0,       0      },  // syscall_*, debug_syscall, tls
+    {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
     {"capability",          161,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker)
