@@ -338,6 +338,10 @@ void note_shootdown_send_failure() {
     __atomic_fetch_add(&shoot_send_failures_, 1ULL, __ATOMIC_RELAXED);
 }
 
+void note_shootdown_applied() {
+    __atomic_fetch_add(&shoot_applied_, 1ULL, __ATOMIC_RELAXED);
+}
+
 void handle_sswi_ipi() {
     const uint64_t here = arch::cpu_index() % CONFIG_MAX_CPUS;
     const uint64_t bits =

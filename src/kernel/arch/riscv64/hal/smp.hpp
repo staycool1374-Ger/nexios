@@ -156,13 +156,21 @@ void apply_shootdowns();
 /// @brief Applied-entry counter for test readback (slice-5 QE owns the
 /// per-entry batch tests; this counter lets them observe AP-side apply
 /// without extra instrumentation).
-/// @return Total entries applied by AP ISR runs since boot.
+/// @return Total remote-fence completions since boot: AP-ISR applied
+/// entries plus synchronous SBI RFENCE calls (issue #529 — RFENCE
+/// completes remotely in firmware with no AP ISR run, so it must
+/// account the same way or the counter under-reports completed work).
 uint64_t shootdown_applied();
 /// @brief Total shootdown sends refused by the transport (issue #390 S3).
 /// Monotonic, never gates control flow.
 uint64_t shootdown_send_failures();
 /// @brief Record one refused shootdown send.
 void note_shootdown_send_failure();
+/// @brief Record one completed synchronous RFENCE remote fence
+/// (issue #529).  Monotonic, never gates control flow; the SBI call
+/// returns only after remote harts fence, so success means the
+/// invalidation landed exactly like an AP-ISR applied entry.
+void note_shootdown_applied();
 
 /// @brief Force the RFENCE presence answer for tests (issue #389).
 /// Nonzero pretends RFENCE present, zero forces the S-soft fallback

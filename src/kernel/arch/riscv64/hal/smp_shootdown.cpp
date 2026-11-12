@@ -162,6 +162,12 @@ void VMM::smp_tlb_shootdown_hook(uint64_t va, uint16_t context_id, bool all) {
             SbiRet ret = sbi_call4(SBI_EID_RFENCE, SBI_RFENCE_SFENCE_VMA,
                                    mask, 0U, start, size);
             if (ret.error == 0U) {
+                // Issue #529: the SBI call returns only after remote
+                // harts fence, so the invalidation landed synchronously
+                // with no AP ISR run — account it exactly like an
+                // applied entry or the applied counter under-reports
+                // completed work (test polled it forever).
+                kernel::smp::note_shootdown_applied();
                 return;
             }
             kernel::smp::note_shootdown_send_failure();
