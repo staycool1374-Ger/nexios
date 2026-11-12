@@ -179,6 +179,21 @@ void set_canary_trip(uint64_t task_id, uint8_t segment, uint64_t rip) noexcept;
 void reset_canary_trip() noexcept;
 /// @brief SMAP recovery IP (extern "C" symbol kept for the fault handler).
 uint64_t &user_access_recover_ip() noexcept;
+/// @brief Opaque fault-recovery sink for safe_copy_* (issue #539): disarms
+///        the recover IP and returns false. MUST stay a real out-of-line
+///        call (defined noinline): the recover label is entered by the trap
+///        epilogue with arbitrary register state, and compiling the body
+///        inline lets the optimizer assume the known edge state and drop
+///        the zeroing (every fault then returned true — fail-open user
+///        copy). A call re-establishes everything regardless of entry state.
+bool fault_recover_false() noexcept;
+/// @brief Opaque never-taken probe for the recovery keep-alive edge
+///        (issue #539): always returns false, but opaque to the compiler
+///        so the KEEP's conditional goto stays a live edge (a provably
+///        dead condition lets the optimizer delete the recover block).
+///        Never taken at runtime; a spurious take would only reach the
+///        failure path (fail-closed).
+bool recovery_probe() noexcept;
 
 // ---------------------------------------------------------------------------
 // Trap-owner trip latch (issue #513, M1 attribution validation)

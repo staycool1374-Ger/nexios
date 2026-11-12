@@ -131,6 +131,23 @@ extern "C" {
 uint64_t g_user_access_recover_ip = 0;
 }
 
+// Opaque fault-recovery sink for safe_copy_* (issue #539). See the header:
+// noinline keeps it a real call so the trap-entered recover path cannot be
+// merged or constant-folded by the optimizer (fail-open true was observed
+// when the inlined body lost its zeroing). Qualified definitions (no new
+// namespace block) to keep the style gate's short-name count stable.
+__attribute__((noinline)) bool gs::fault_recover_false() noexcept {
+    g_user_access_recover_ip = 0;
+    return false;
+}
+// Opaque never-taken probe for the recovery keep-alive edge (issue #539).
+// noinline keeps the KEEP's conditional goto a live edge: the optimizer
+// cannot fold the condition, so the recover block is never deleted as
+// unreachable. Always false at runtime (never taken).
+__attribute__((noinline)) bool gs::recovery_probe() noexcept {
+    return false;
+}
+
 namespace test {
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 const char *g_current_class = nullptr;

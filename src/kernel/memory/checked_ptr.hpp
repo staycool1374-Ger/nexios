@@ -24,6 +24,7 @@
 #include <concepts.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/hal/io.hpp>
+#include <kernel/core/global_state.hpp>
 
 namespace kernel {
 
@@ -37,19 +38,20 @@ extern "C" constinit uint64_t g_user_access_recover_ip;
 /// address is taken with &&label (verified at -O0/-Og/-O2: recover bodies
 /// absent binary-wide, labels resolve into the setup sequence, so a #PF
 /// resume re-arms and re-faults forever; only blocks rejoining hot code
-/// survive). A conditional goto through a value the compiler cannot fold
-/// (CR3 low 12 bits via volatile asm — always zero at runtime since the
-/// table root is page-aligned) forces emission with the label resolving
-/// to the real body. The condition is false at runtime; even if taken it
-/// only reaches the failure path (fail-closed, never fail-open).
+/// survive). The edge must stay live but carry no usable state: opaque
+/// computed gotos wedge boot (stale-zero jump), and CR3-mask conditions
+/// fold dead on riscv64 (shifted root proofs). An opaque never-taken call
+/// keeps the edge live with zero runtime effect; the recover bodies call
+/// the opaque fault_recover_false() sink (issue #539), so entry state —
+/// known or trap-provided — cannot leak into the failure value.
 /// @note Place in reachable code before the label — either immediately after
 ///       `g_user_access_recover_ip = &&label;`, or after the last initialized
-///       declaration when one sits between setup and label: the goto must not
-///       cross a non-vacuous initialization (hard error). Crossing
+///       declaration when one sits between setup and label: the keep must
+///       not cross a non-vacuous initialization (hard error). Crossing
 ///       clac/g=0/return tails is always safe.
 #define NEXIOS_FAULT_RECOVERY_KEEP(label)                                    \
     do {                                                                     \
-        if ((arch::read_cr3() & 0xFFFULL) == 0xFFFULL) {                      \
+        if (kernel::gs::recovery_probe()) {                                  \
             goto label;                                                      \
         }                                                                    \
     } while (0)
@@ -146,8 +148,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
 
     recover_cf:
         arch::clac();
-        g_user_access_recover_ip = 0;
-        return false;
+        return kernel::gs::fault_recover_false();
     }
 
     /// @brief Copy count elements from kernel buffer to user space.
@@ -168,8 +169,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
 
     recover_ct:
         arch::clac();
-        g_user_access_recover_ip = 0;
-        return false;
+        return kernel::gs::fault_recover_false();
     }
 
     /// @brief Read one element from user space at the given index.
@@ -189,7 +189,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
 
     recover_rd:
         arch::clac();
-        g_user_access_recover_ip = 0;
+        (void)kernel::gs::fault_recover_false();
         return T{};
     }
 
@@ -208,8 +208,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
 
     recover_wr:
         arch::clac();
-        g_user_access_recover_ip = 0;
-        return false;
+        return kernel::gs::fault_recover_false();
     }
 };
 
@@ -266,8 +265,7 @@ static inline bool is_user_string(const void *user_ptr,
 
 recover_str_chk:
     arch::clac();
-    g_user_access_recover_ip = 0;
-    return false;
+    return kernel::gs::fault_recover_false();
 }
 
 /// @brief Copy a null-terminated string from user space to kernel buffer.
@@ -297,10 +295,9 @@ static inline bool strncpy_from_user(char *dst, const char *src,
 
 recover_str:
     arch::clac();
-    g_user_access_recover_ip = 0;
     if (max_len > 0)
         dst[0] = '\0';
-    return false;
+    return kernel::gs::fault_recover_false();
 }
 
 /// @brief Safely copies memory from user-space to kernel buffer.
@@ -325,8 +322,7 @@ static inline bool safe_copy_from_user(T *dst, const T *src,
 
 recover_from:
     arch::clac();
-    g_user_access_recover_ip = 0;
-    return false;
+    return kernel::gs::fault_recover_false();
 }
 
 /// @brief Safely copies memory from kernel buffer to user-space.
@@ -351,8 +347,7 @@ static inline bool safe_copy_to_user(T *dst, const T *src,
 
 recover_to:
     arch::clac();
-    g_user_access_recover_ip = 0;
-    return false;
+    return kernel::gs::fault_recover_false();
 }
 
 } // namespace kernel
