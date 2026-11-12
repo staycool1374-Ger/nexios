@@ -12,6 +12,7 @@
 #include <kernel/task/idle_monitor.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/crash_dump.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <signal.hpp>
 
 #include <kernel/arch/hal/irq_storm.hpp>
@@ -360,12 +361,50 @@ extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
                 return 1;
             }
             auto *t = kernel::Scheduler::current_task();
-            t->state = kernel::TaskState::TERMINATED;
-            t->exit_code = static_cast<uint64_t>(
-                -static_cast<int64_t>(kernel::Signal::SIGSEGV));
-            kernel::Scheduler::wake_waiting_parent(*t);
+            // Issue #523: full trap-safe termination (dequeue + join-note +
+            // zombie release) so the drain reaps the corpse; the discard
+            // switch below stays the trap-safe mechanism.  Refusal is
+            // impossible here (task == current) — the switch runs regardless.
+            const auto trap_term_err =
+                kernel::Scheduler::terminate_err_from_trap(
+                    *t, static_cast<uint64_t>(-static_cast<int64_t>(
+                            kernel::Signal::SIGSEGV)));
+            (void)trap_term_err;
             kernel::Scheduler::switch_away_from_terminating_discard(*t);
             return 1;
+        }
+    }
+    // Issue #523: user-mode data-abort delegation to a designated pager
+    // (mirrors the x86 #PF arm in kernel.cpp). The classifier runs BEFORE
+    // debugger routing and the SIGSEGV kill below; a delegated client
+    // blocks inside delegate_fault and the vectors epilogue switches away
+    // with the trap frame preserved for retry. Whitelist-only ESR decode:
+    // EC 0x24/0x25 (data abort; 0x25 is unreachable from EL0 but kept so
+    // the two EC arms stay textually identical) with a translation-fault
+    // DFSC (0b0001xx = not-present). Permission, access-flag, address-size
+    // and external faults, instruction aborts, and kernel-half FARs fall
+    // through to the existing kill (the classifier's F3/F5/F6/F7 reject
+    // them the same way). No registration -> delegate returns false ->
+    // kill path byte-identical, so the existing EL0-fault tests (which
+    // register no pager) are unaffected.
+    {
+        kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
+        if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
+            t->state != kernel::TaskState::TERMINATED) {
+            const uint64_t ec = (esr >> 26) & 0x3FULL;
+            if (ec == 0x24 || ec == 0x25) {
+                const uint64_t dfsc = esr & 0x3FULL;
+                if ((dfsc & 0x3CU) == 0x04U) {
+                    const uint64_t wnr = (esr >> 6) & 1ULL;
+                    // x86 #PF code shape: P=0 (not-present), W=ISS WnR,
+                    // U/S=1 (EL0 fault), RSVD=0, I/D=0 (data).
+                    const uint64_t pf_code = (wnr << 1) | (1ULL << 2);
+                    if (kernel::ipc::PagerRegistry::delegate_fault(
+                            *t, pf_code, frame, far)) {
+                        return 1;
+                    }
+                }
+            }
         }
     }
     kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
@@ -427,13 +466,18 @@ extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
 #endif
             }
         }
-        t->state = kernel::TaskState::TERMINATED;
-        t->exit_code = static_cast<uint64_t>(
-            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
         // Issue #217: wake a parent blocked in waitpid BEFORE switching
         // away (wake needs parent_id, which it clears) so the woken
         // parent can be selected as the switch successor.
-        kernel::Scheduler::wake_waiting_parent(*t);
+        // Issue #523: full trap-safe termination (dequeue + join-note +
+        // zombie release) so the drain reaps the corpse; the deferred
+        // switch below stays the trap-safe mechanism.  Refusal is
+        // impossible here (task == current) — the switch runs regardless.
+        const auto trap_term_err =
+            kernel::Scheduler::terminate_err_from_trap(
+                *t, static_cast<uint64_t>(
+                        -static_cast<int64_t>(kernel::Signal::SIGSEGV)));
+        (void)trap_term_err;
         kernel::Scheduler::switch_away_from_terminating(*t);
         return 1;
     }
