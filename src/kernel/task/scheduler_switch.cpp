@@ -267,10 +267,22 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
         old->magic == TaskControlBlock::TCB_MAGIC &&
         (old->state == TaskState::READY ||
          old->state == TaskState::RUNNING)) {
-        old->in_ready_queue_ = false;
-        old->rq_priority_ = 0;
-        old->ready_deferred_ = false;
-        enqueue_ready_inner(*old);
+        // Issue #522: ownership guard (mirrors the H2 guard in
+        // enqueue_ready).  The impersonation pattern (ScopedCurrentTask
+        // over an unregistered task) linked the outgoing task here; the
+        // aarch64 epilogue then applied the resulting arm
+        // unconditionally and the CPU resumed an unregistered task with
+        // DAIF masked (silent stall in idle_mem_overhead_bounded).  An
+        // unowned TCB stays current-resumable via set_current_ptr below
+        // but never enters dispatch.
+        if (Scheduler::find_task(old->id) != old) {
+            old->in_ready_queue_ = false;
+        } else {
+            old->in_ready_queue_ = false;
+            old->rq_priority_ = 0;
+            old->ready_deferred_ = false;
+            enqueue_ready_inner(*old);
+        }
     }
 
     set_current_ptr(&task);

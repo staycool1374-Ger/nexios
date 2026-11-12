@@ -256,6 +256,8 @@ el0_sync:
 
 .extern scheduler_save_rsp_to
 .extern scheduler_load_rsp_from
+.extern scheduler_validate_pending_switch
+.extern scheduler_abort_switch_fixup
 .extern scheduler_load_cr3_from
 .extern scheduler_load_tls_from // Issue #74: TLS base publish slot
 .extern scheduler_on_context_switch
@@ -287,10 +289,14 @@ el0_irq:
     // fall through to irq_context_switch_common
 
 // After handle_gic_irq, check for scheduler context switch
-// NOTE (audited limitation, S3): unlike the x86_64 isr_stubs epilogue this
-// path performs no deferred-switch generation re-check, no isr-nesting
-// depth guard and no H2 liveness/ownership re-validation — the arm is
-// applied as observed.  Documented follow-up for the aarch64 H2 port.
+// Issue #522: this path now performs the deferred-switch liveness +
+// ownership re-check (scheduler_validate_pending_switch), mirroring the
+// x86_64 isr_stubs and riscv64 syscall_entry epilogues — the arm can
+// outlive its tick and the target can be removed/never-registered in
+// between (resuming an unregistered task with DAIF masked stalled
+// scheduler_idle silently).  Generation re-check + ISR-nesting-depth
+// guard remain a tracked follow-up (single-CPU + IRQs masked here, so a
+// torn publish is impossible today).
 .globl irq_context_switch_common
 .type irq_context_switch_common, @function
 irq_context_switch_common:
@@ -301,6 +307,16 @@ irq_context_switch_common:
     // Save current SP to *scheduler_save_rsp_to
     mov     x1, sp
     str     x1, [x0]
+
+    // H2 apply-side liveness + ownership re-check.  C call with the trap
+    // frame intact: every user GPR is in the save area (save_all ran
+    // above); x0/x1 are scratch here (reloaded via adrp after the call)
+    // and LR is dead (clobbered by the handle_gic_irq bl above; the
+    // epilogue ends in eret, never ret).  SP stays 16-byte aligned.
+    // Returns 1 = apply, 0 = abort (validator cleared the atoms and
+    // undid the publish side effects).
+    bl      scheduler_validate_pending_switch
+    cbz     w0, .Lswitch_abort
 
     // Load new SP from scheduler_load_rsp_from
     adrp    x1, scheduler_load_rsp_from
@@ -350,6 +366,15 @@ irq_context_switch_common:
     adrp    x4, scheduler_load_tls_from
     str     xzr, [x4, #:lo12:scheduler_load_tls_from]
 8:  isb
+    b       .restore
+
+.Lswitch_abort:
+    // The validator refused the arm (removed/unregistered target or
+    // foreign RSP) and already invalidated the atoms + undid the publish
+    // side effects.  Rebind arm-side redirects, then resume the
+    // interrupted task (SP untouched — the new SP was never loaded).
+    bl      scheduler_abort_switch_fixup
+    b       .restore
 
 .restore:
     restore_all
