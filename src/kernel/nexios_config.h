@@ -923,6 +923,15 @@
 #ifndef CONFIG_KERNEL_PRIV_DATA_BASE
 #define CONFIG_KERNEL_PRIV_DATA_BASE 0xFFFFA00000000000ULL
 #endif
+#if defined(CONFIG_ARCH_RISCV64)
+// Issue #540: the x86-shaped base is non-canonical on Sv39 (bit38=0 with
+// top bits set, so no mapping can ever make it accessible) and its Sv39
+// root slot is L0[0] (the shared low-half identity block). Sv39-canonical
+// equivalent in the same root slot 320 the boot overlap check pins, so
+// cross-arch slot numbering stays uniform.
+#undef CONFIG_KERNEL_PRIV_DATA_BASE
+#define CONFIG_KERNEL_PRIV_DATA_BASE 0xFFFFFFD000000000ULL
+#endif
 
 /// Kernel stack sizes per priority tier (bytes).  Indexed by priority.
 #ifndef CONFIG_STACK_SIZE_TABLE

@@ -1332,7 +1332,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     // TRUE cross-task isolation, not an aliased kernel mapping.
     {
         constexpr uint64_t priv_base = CONFIG_KERNEL_PRIV_DATA_BASE;
+#if defined(CONFIG_ARCH_RISCV64)
+        // Sv39 root index (issue #540): the x86 >>39 index names slot 511
+        // for the canonical base, not the window's slot. Sv39's root index
+        // is bits [38:30]; the canonical base keeps slot 320 on all archs.
+        size_t pml4_idx = (priv_base >> 30) & 0x1FF;
+#else
         size_t pml4_idx = (priv_base >> 39) & 0x1FF;
+#endif
         auto *kpml4 = reinterpret_cast<const uint64_t *>(
             arch::HHDM_OFFSET + (kernel::VMM::get_kernel_pml4() & ~0xFFFULL));
         if (kpml4[pml4_idx] & 1ULL)
