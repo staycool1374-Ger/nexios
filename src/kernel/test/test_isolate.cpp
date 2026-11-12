@@ -251,7 +251,14 @@ static size_t off_user_page_data() {
 }
 
 static constexpr size_t PML4_USER_BYTES = 256 * sizeof(uint64_t); // 2048
+// Issue #524: aarch64 HHDM restore needs the L1 table plus the child L2
+// tables it can rewind (slots 0/1/256: MMIO alias, RAM window, upper
+// HHDM): 4 pages. x86_64/riscv64 keep the single-table layout.
+#if defined(CONFIG_ARCH_AARCH64)
+static constexpr size_t HHDM_PD_BYTES = 4 * 512 * sizeof(uint64_t);
+#else
 static constexpr size_t HHDM_PD_BYTES = 512 * sizeof(uint64_t); // 4096
+#endif
 static constexpr size_t IDENTITY_PD_BYTES = 512 * sizeof(uint64_t); // 4096
 
 #if defined(CONFIG_ARCH_RISCV64)
@@ -679,16 +686,20 @@ bool snapshot_create() {
         g_snapshot + off_kslot_snapshot(user_page_count, task_count));
 
     // ---- HHDM PD save ----
-    // Save PDPT[0]→PD (512 entries) so snapshot_restore can undo any
-    // huge-page splits performed by kernel-space VMM tests.
-    // Issue #29: x86/aarch64 4-level-MMU-shaped only (PML4[256] walk,
-    // ~0xFFF PTE decode).  Sv39 has 3 levels and (pte>>10)<<12 decode —
-    // this walk misdecodes L0 entries into unmapped HHDM (load fault).
-    // Skipped on riscv64: its Sv39 map_page branch never sets the
-    // hhdm/identity-modified flags, so the flag-gated restores below stay
-    // unfired regardless; the real Sv39 save/restore backend is #152
-    // follow-up work.
-#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
+    // Save the HHDM tables so snapshot_restore can undo huge-page splits
+    // performed by kernel-space VMM tests.
+    // x86_64: save PDPT[0]→PD (512 entries, PD[256] block shape).
+    // aarch64 (issue #524): save the L0[256]→L1 table plus the child L2
+    // tables for slots 0/1/256 (MMIO alias, RAM window, upper HHDM) — the
+    // old x86-shaped walk saved L1[0] (the MMIO L2), missing every RAM
+    // split, and the restore gate below skipped it all as CORRUPTED.
+    // Issue #29: 4-level-MMU-shaped only (PML4[256] walk, ~0xFFF PTE
+    // decode).  Sv39 has 3 levels and (pte>>10)<<12 decode — this walk
+    // misdecodes L0 entries into unmapped HHDM (load fault).  Skipped on
+    // riscv64: its Sv39 map_page branch never sets the hhdm/identity-
+    // modified flags, so the flag-gated restores below stay unfired
+    // regardless; the real Sv39 save/restore backend is #152 follow-up.
+#if defined(CONFIG_ARCH_X86_64)
     {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
@@ -703,6 +714,37 @@ bool snapshot_create() {
                     __builtin_memcpy(
                         g_snapshot + off_hhdm_pd(user_page_count, task_count),
                         pd, HHDM_PD_BYTES);
+                }
+            }
+        }
+    }
+#endif
+#if defined(CONFIG_ARCH_AARCH64)
+    {
+        constexpr uint64_t kSlots[] = {0, 1, 256};
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            auto *l0 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            if ((l0[256] & 3ULL) == 3ULL) {
+                auto *l1 = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (l0[256] & ~0xFFFULL));
+                uint8_t *dst =
+                    g_snapshot + off_hhdm_pd(user_page_count, task_count);
+                __builtin_memcpy(dst, l1, 512 * sizeof(uint64_t));
+                for (size_t si = 0; si < 3; ++si) {
+                    uint64_t e = l1[kSlots[si]];
+                    uint8_t *slot_dst =
+                        dst + (1 + si) * 512 * sizeof(uint64_t);
+                    if ((e & 3ULL) == 3ULL) {
+                        auto *l2 = reinterpret_cast<uint64_t *>(
+                            arch::HHDM_OFFSET + (e & ~0xFFFULL));
+                        __builtin_memcpy(slot_dst, l2,
+                                         512 * sizeof(uint64_t));
+                    } else {
+                        __builtin_memset(slot_dst, 0,
+                                         512 * sizeof(uint64_t));
+                    }
                 }
             }
         }
@@ -987,14 +1029,20 @@ void snapshot_restore(const char *test_name) {
 
     // ---- HHDM PD restore (before PMM restore) ----
     // Only runs when a test actually modified HHDM page tables.
-    // PD[1..511] are restored (PD[0] maps the PD page itself).
+    // x86_64: PD[1..511] are restored (PD[0] maps the PD page itself).
+    // aarch64 (issue #524): per-slot rewind of L1{0,1,256} child L2s
+    // (see the save side for the buffer layout). A live L2 entry that
+    // went block/absent→table is freed (split page reclaim, mirroring
+    // the x86 predicate) before the saved L2 is copied back; slots
+    // whose live L1 descriptor no longer matches the saved one are
+    // genuine corruption — logged and skipped, never memcpy'd blind.
     // Issue #60: atomic take (not check-then-clear) — a set landing
     // after the exchange stays set, so the next restore over-restores
     // (safe) instead of skipping (stale mappings leak).
-    // Issue #152: 4-level shape (pml4[256]/pdpt[0]/0x5000) — x86_64 and
-    // aarch64 only.  On riscv64 these decodes misread Sv39 tables, so
-    // this block is arch-gated and Sv39 has its own restore below.
-#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
+    // Issue #152: x86 shape is pml4[256]/pdpt[0]/0x5000.  On riscv64
+    // these decodes misread Sv39 tables, so this block is arch-gated
+    // and Sv39 has its own restore below.
+#if defined(CONFIG_ARCH_X86_64)
     if (VMM::take_hhdm_modified()) {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {
@@ -1042,6 +1090,73 @@ void snapshot_restore(const char *test_name) {
             }
         }
     }
+#endif
+#if defined(CONFIG_ARCH_AARCH64)
+    // Issue #524: aarch64 HHDM L2 rewind. Saved layout (see the save
+    // side) is [L1 copy][L2 slot0][L2 slot1][L2 slot256]. The L1 copy
+    // is the stability check: a live slot that no longer decodes to
+    // the saved child means genuine corruption (skip + log, same
+    // fail-closed direction as the x86 0x5000 gate).
+    if (VMM::take_hhdm_modified()) {
+        constexpr uint64_t kSlots[] = {0, 1, 256};
+        uint64_t pml4_phys = VMM::get_kernel_pml4();
+        if (pml4_phys) {
+            auto *nu_p = reinterpret_cast<uint64_t *>(
+                g_snapshot + off_user_page_count());
+            uint64_t nu = *nu_p;
+            // Read nk from kstack header (stable)
+            uint64_t nk = *reinterpret_cast<uint64_t *>(
+                g_snapshot + off_kstack_header(nu));
+            const uint8_t *saved_base = g_snapshot + off_hhdm_pd(nu, nk);
+            auto *saved_l1 = reinterpret_cast<const uint64_t *>(saved_base);
+            auto *l0 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
+            if ((l0[256] & 3ULL) == 3ULL) {
+                auto *l1 = reinterpret_cast<uint64_t *>(
+                    arch::HHDM_OFFSET + (l0[256] & ~0xFFFULL));
+                for (size_t si = 0; si < 3; ++si) {
+                    uint64_t saved_slot = saved_l1[kSlots[si]];
+                    uint64_t live_slot = l1[kSlots[si]];
+                    if (saved_slot != live_slot) {
+                        Logger::raw_write("[PD-RESTORE] aarch64 L1 slot ");
+                        Logger::print_dec(kSlots[si]);
+                        Logger::raw_write(" mismatch in test=\"");
+                        Logger::raw_write(test_name ? test_name : "?");
+                        Logger::raw_write("\"\n");
+                        continue;
+                    }
+                    if ((saved_slot & 3ULL) != 3ULL)
+                        continue;
+                    auto *saved_l2 =
+                        reinterpret_cast<const uint64_t *>(saved_base +
+                            (1 + si) * 512 * sizeof(uint64_t));
+                    auto *l2 = reinterpret_cast<uint64_t *>(
+                        arch::HHDM_OFFSET + (live_slot & ~0xFFFULL));
+                    for (size_t i = 0; i < 512; ++i) {
+                        uint64_t s = saved_l2[i];
+                        uint64_t c = l2[i];
+                        // Saved block/absent, live table: free the split
+                        // page the test allocated (mirrors the x86
+                        // saved-huge/live-split reclaim above).
+                        if ((s == 0 || (s & 3ULL) == 1ULL) &&
+                            (c & 3ULL) == 3ULL)
+                            PMM::free_page(c & 0xFFFFFFFFF000ULL);
+                    }
+                    __builtin_memcpy(l2, saved_l2,
+                                     512 * sizeof(uint64_t));
+                }
+                arch::ArchPageTable::tlb_flush_all();
+                arch::isb();
+            } else {
+                Logger::raw_write("[PD-RESTORE] CORRUPTED l0[256]=");
+                Logger::print_hex(l0[256]);
+                Logger::raw_write(" in test=\"");
+                Logger::raw_write(test_name ? test_name : "?");
+                Logger::raw_write("\"\n");
+            }
+        }
+    }
+#endif
 
     // ---- Identity PD restore (before PMM restore) ----
     // Undo huge-page splits in the LOW identity map (PML4[0]→PDPT[0]→PD,
@@ -1052,6 +1167,7 @@ void snapshot_restore(const char *test_name) {
     // later (off_pt_pool), so this block only restores the PD entries.
     // (Issue #60: same take-instead-of-check-then-clear as above.)
     // Issue #152: same 4-level gate as the HHDM block above.
+#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
     if (VMM::take_identity_modified()) {
         uint64_t pml4_phys = VMM::get_kernel_pml4();
         if (pml4_phys) {

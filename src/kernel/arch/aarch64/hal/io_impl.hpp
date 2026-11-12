@@ -305,7 +305,9 @@ inline void write_tpidr_el0(uint64_t v) {
 inline void write_ttbr1_el1(uint64_t v) {
     asm volatile("msr ttbr1_el1, %0" : : "r"(v) : "memory");
 }
-/// @brief Write CR3 alias (switches TTBR0_EL1) and invalidate TLB.
+/// @brief Write CR3 alias (switches TTBR0_EL1, the user half) and
+/// invalidate TLB. User-half-only by contract: kernel-half (TTBR1)
+/// selection is a separate decision owned by switch_address_space().
 /// Safe after higher-half migration: kernel runs via TTBR1_EL1, so
 /// TTBR0_EL1 can point to any user's page table without faulting.
 /// @param[in] v Physical address of the user page table.
@@ -317,6 +319,18 @@ inline void write_cr3(uint64_t v) {
     tlbi_alle1();
     system_barrier();
     isb();
+}
+/// @brief Switch the full address space to a task-private root
+/// (issue #524). Installs root_phys (ASID-stripped) in TTBR1 first so
+/// kernel-half translations bind before the user half, then switches
+/// TTBR0 via write_cr3 (which supplies dsb/tlbi_alle1/dsb/isb).
+/// Exec-only: temporary peer user-half switches keep the current
+/// kernel half and must NOT use this.
+/// @param[in] root_phys Physical address of the task-private root.
+inline void switch_address_space(uint64_t root_phys) {
+    constexpr uint64_t kPhys48Mask = 0x0000FFFFFFFFFFFFULL;
+    write_ttbr1_el1(root_phys & kPhys48Mask);
+    write_cr3(root_phys);
 }
 /// @brief Read the kernel page-table root (TTBR1_EL1, issue #352).
 /// @return Physical address of the kernel page table.

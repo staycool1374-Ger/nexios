@@ -47,6 +47,13 @@ SECTIONS
         _stack_end_low = .;
     } :boot_data
 
+    /* Issue #524: the aarch64 boot stack must bracket the live stack
+     * (_boot_stack lives in .boot_stack so the _stack_start.._stack_end
+     * span covers it; the span feeds is_boot_stack_rsp() and the
+     * integrity_stack_markers_span test). This ld rejects ASSERT() (see
+     * the riscv64 script), so the span is fail-stopped at runtime in
+     * boot.S instead of asserted here. */
+
     . = ALIGN(., 4K);
     boot_vma_end = .;
     phys_lma = boot_vma_end;

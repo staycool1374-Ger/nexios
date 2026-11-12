@@ -320,6 +320,16 @@ irq_context_switch_common:
     ldr     x3, [x3, #:lo12:scheduler_load_cr3_from]
     cbz     x3, .tls_apply
     msr     ttbr0_el1, x3
+    // Issue #524: TTBR1 follows the same root (ASID-stripped; TCR_EL1.A1==0
+    // selects TTBR0's ASID, and read_ttbr1_el1() consumers expect a clean
+    // physical root). Kernel-half VAs always translate via TTBR1, so a
+    // per-task private kernel-half window (e.g. L0[320] PRIV_BASE) is
+    // unreachable without this. x5 is scratch here (post-save_all; every
+    // user GPR is in the frame and restore_all reloads them). Both writes
+    // stay inside the dsb/tlbi/dsb window below; the shared isb at
+    // .tls_apply pairs them.
+    ubfx    x5, x3, #0, #48
+    msr     ttbr1_el1, x5
     // A TTBR0 change with ASID=0 requires an invalidation of the stale
     // boot-context translations, otherwise stale identity-map entries are
     // reused for user VAs.
@@ -329,10 +339,10 @@ irq_context_switch_common:
     adrp    x4, scheduler_load_cr3_from
     str     xzr, [x4, #:lo12:scheduler_load_cr3_from]
 .tls_apply:
-    // Issue #74: apply the published TLS base (TPIDR_EL0 only — TTBR1/EL1
-    // state untouched). x3/x4 reuse is safe (all user regs in the save
-    // area); the isb below is the SHARED join point pairing both the TTBR0
-    // switch above and the TPIDR_EL0 write here.
+    // Issue #74: apply the published TLS base (TPIDR_EL0 only — TTBR1
+    // follows the task root since issue #524). x3/x4 reuse is safe (all
+    // user regs in the save area); the isb below is the SHARED join point
+    // pairing the TTBR0+TTBR1 switch above and the TPIDR_EL0 write here.
     adrp    x3, scheduler_load_tls_from
     ldr     x3, [x3, #:lo12:scheduler_load_tls_from]
     cbz     x3, 8f

@@ -96,6 +96,23 @@ _start:
     ldr     x0, =_boot_stack_end
     mov     sp, x0
 
+    // Issue #524: fail-stop if the link-time boot-stack span is
+    // degenerate. _boot_stack must live in .boot_stack so the
+    // _stack_start.._stack_end span brackets it (the span feeds
+    // is_boot_stack_rsp() and the integrity_stack_markers_span test).
+    // This ld rejects ASSERT(), so the check lives here (riscv64
+    // precedent: runtime fail-stop instead of link ASSERT).
+    ldr     x0, =_stack_start_low
+    ldr     x1, =_stack_end_low
+    sub     x2, x1, x0
+    cmp     x2, #16384
+    b.hs    .Lspan_ok
+.Lspan_park:
+    msr     daifset, #15
+    wfi
+    b       .Lspan_park
+.Lspan_ok:
+
     // === Init PL011 UART ===
     ldr     x0, =0x9000030
     mov     w1, #0
@@ -332,7 +349,7 @@ _start:
     ldr     x2, =higherhalf_entry
     br      x2
 
-.section .boot.data, "aw"
+.section .boot_stack, "aw"
 .balign 4096
 _boot_stack:
     .space  16384

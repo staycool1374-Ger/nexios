@@ -62,6 +62,13 @@ inline uint64_t read_cr4() {
 inline void write_cr3(uint64_t v) {
     asm volatile("mov %0, %%cr3" : : "r"(v) : "memory");
 }
+/// @brief Switch the full address space to a task-private root
+/// (issue #524 parity shim). A single CR3 already selects both halves,
+/// so this is write_cr3 with identical behavior.
+/// @param root_phys Physical address of the task-private root.
+inline void switch_address_space(uint64_t root_phys) {
+    write_cr3(root_phys);
+}
 /// @brief Write CR0.
 /// @param v Value to write to CR0.
 inline void write_cr0(uint64_t v) {
