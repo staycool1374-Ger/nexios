@@ -27,7 +27,6 @@ NexIOS Meson build (issue #170). Canonical commands:
   python3 tools/meson/qemu_test.py --arch A --build B --class C   # single class, explicit
   python3 tools/meson/qemu_test.py --arch A --build B --dump-counts  # TCOUNT dump
   python3 tools/meson/gdb_run.py debug-test ...    # GDB panic surveillance (NO_LTO twin builddir)
-  python3 tools/check-parity.py (--report | --require-all)  # cutover gate
 EOF
     exit 0
 fi

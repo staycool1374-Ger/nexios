@@ -951,9 +951,12 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     regs[9] = 0;            // A0 = 0 (child/exec return value)
 #endif
 
-    if (arch::read_cr3() != new_pml4) {
-        arch::write_cr3(new_pml4);
-    }
+    // Issue #524: retarget the FULL address space (TTBR1 included on
+    // aarch64) before freeing the old root below — the old read_cr3 guard
+    // was TTBR0-only, so the kernel kept walking a freed root's kernel
+    // half (use-after-free). Unconditional: a stale TTBR1 must be
+    // retargeted even when TTBR0 already names the new root.
+    arch::switch_address_space(new_pml4);
 
     // v0.4.0 MP-3: arm segment-boundary canaries in the new address space.
     install_segment_canaries(tcb, hdr, data, file_size);

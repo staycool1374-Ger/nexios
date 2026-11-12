@@ -202,6 +202,7 @@ evidence-backed. Do not stack changes across steps.
 ## Build & Test Target Usage (MANDATORY — re-read this before every test invocation)
 - Only valid entry points: `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>` and `bash scripts/run_all_classes.sh [<arch>] [<build>]`
 - Parameters: `<arch>` = `x86_64`|`aarch64`|`riscv64`, `<build>` = `debug`|`release`, `<class>` = `<aggregate>`|`selftest`|`none`|`<name>` (`run_all_classes.sh` runs all 26 classes, one reboot per class; the `all` class is removed)
+- Build type vs release-version: `--build` selects COMPILE SETTINGS ONLY — `debug` = symbols + CONFIG_DEBUG + full test registry, `release` = optimized (`-O2`, no LTO) + TF_RELEASE subset. A release-version (`vX.Y.Z`) ships BOTH: its gate is the 2×3 matrix `bash scripts/run_all_classes.sh {x86_64,aarch64,riscv64} {debug,release}` — 6 runs, no arch exempt. Debug legs run the full registry; release legs run the stripped TF_RELEASE subset by design. Per-class arch/build scoping is table-driven (`tools/test-policy.tsv`).
 - Do NOT use bare `meson test --suite`, raw QEMU invocations, or any other pattern
 - Full reference in prompts/AGENTS-KERNEL-BRIEFING.md §6
 - Before running any test, paste the syntax from §6 of prompts/AGENTS-KERNEL-BRIEFING.md to verify
@@ -237,7 +238,7 @@ evidence-backed. Do not stack changes across steps.
   orphan re-enqueue, owner-resolution self-switch, elf_loader
   lock-across-preemption; see BUGS.md); the *debug* `all` gate passes with the
   trace OFF (873/873 ×2 on 2026-08-15, later 932/932 and 942/942).
-- Before running the release gate (`bash scripts/run_all_classes.sh x86_64 release`),
+- Before running the release-version gate (the 2×3 matrix: `bash scripts/run_all_classes.sh {x86_64,aarch64,riscv64} {debug,release}` — 6 runs, 0 failures everywhere before `git tag`),
   verify the macro is undefined:
   `grep -n CONFIG_DEBUG_IPC_SCHED src/kernel/debug/ipc_sched_trace.hpp`
   must show it commented out.  Re-enable only for targeted debug analysis,

@@ -214,6 +214,13 @@ inline uint64_t read_cr3() {
 inline void write_cr3(uint64_t v) {
     write_satp((8ULL << 60) | (v >> 12));
 }
+/// @brief Switch the full address space to a task-private root
+/// (issue #524 parity shim). A single satp already selects both halves,
+/// so this is write_cr3 with identical behavior.
+/// @param root_phys Physical address of the task-private root.
+inline void switch_address_space(uint64_t root_phys) {
+    write_cr3(root_phys);
+}
 /// @brief Read the kernel page-table root (issue #352).  Sv39 uses one
 ///        shared root for both halves, so this equals the user root.
 /// @return Physical address of the kernel page table.

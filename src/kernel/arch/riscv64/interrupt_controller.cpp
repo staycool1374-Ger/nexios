@@ -13,6 +13,7 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/debug/debug_stop.hpp>
 #include <kernel/debug/crash_dump.hpp>
+#include <kernel/ipc/pager_registry.hpp>
 #include <kernel/arch/irq_guard.hpp>
 #include <signal.hpp>
 
@@ -236,10 +237,35 @@ extern "C" uint64_t riscv64_u_fault_handler(uint64_t *frame) {
                 return 1;
             }
         }
-        t->state = kernel::TaskState::TERMINATED;
-        t->exit_code = static_cast<uint64_t>(
-            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
-        kernel::Scheduler::wake_waiting_parent(*t);
+        // Issue #523: user-mode page-fault delegation to a designated pager
+        // (mirrors the x86 #PF arm and the aarch64 EL0 arm). The classifier
+        // runs BEFORE the SIGSEGV kill below; a delegated client blocks
+        // inside delegate_fault and the asm epilogue switches away with the
+        // trap frame preserved for retry. Whitelist-only scause decode:
+        // 13 (load page fault) / 15 (store/AMO page fault). Instruction
+        // page faults (12), misaligned, illegal-instruction and S-mode
+        // traps fall through to the existing kill (the classifier's F6
+        // rejects instruction fetches the same way). No registration ->
+        // delegate returns false -> kill path byte-identical.
+        if (scause == 13 || scause == 15) {
+            // x86 #PF code shape: P=0 (not-present), W=(store?1:0),
+            // U/S=1 (U-mode fault), RSVD=0, I/D=0 (data).
+            const uint64_t pf_code =
+                ((scause == 15) ? (1ULL << 1) : 0ULL) | (1ULL << 2);
+            if (kernel::ipc::PagerRegistry::delegate_fault(*t, pf_code,
+                                                           frame, stval)) {
+                return 1;
+            }
+        }
+        // Issue #523: full trap-safe termination (dequeue + join-note +
+        // zombie release) so the drain reaps the corpse; the deferred
+        // switch below stays the trap-safe mechanism.  Refusal is
+        // impossible here (task == current) — the switch runs regardless.
+        const auto trap_term_err =
+            kernel::Scheduler::terminate_err_from_trap(
+                *t, static_cast<uint64_t>(
+                        -static_cast<int64_t>(kernel::Signal::SIGSEGV)));
+        (void)trap_term_err;
         kernel::Scheduler::switch_away_from_terminating(*t);
         return 1;
     }
@@ -303,10 +329,15 @@ extern "C" uint64_t riscv64_exception_dispatch(uint64_t *frame,
                 return 1;
             }
             auto *t = kernel::Scheduler::current_task();
-            t->state = kernel::TaskState::TERMINATED;
-            t->exit_code = static_cast<uint64_t>(
-                -static_cast<int64_t>(kernel::Signal::SIGSEGV));
-            kernel::Scheduler::wake_waiting_parent(*t);
+            // Issue #523: full trap-safe termination (dequeue + join-note +
+            // zombie release) so the drain reaps the corpse; the discard
+            // switch below stays the trap-safe mechanism.  Refusal is
+            // impossible here (task == current) — the switch runs regardless.
+            const auto trap_term_err =
+                kernel::Scheduler::terminate_err_from_trap(
+                    *t, static_cast<uint64_t>(-static_cast<int64_t>(
+                            kernel::Signal::SIGSEGV)));
+            (void)trap_term_err;
             kernel::Scheduler::switch_away_from_terminating_discard(*t);
             return 1;
         }

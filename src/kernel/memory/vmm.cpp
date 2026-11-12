@@ -286,7 +286,12 @@ uint64_t *VMM::get_table(uint64_t *table, size_t index, bool create,
             if (test_maybe_fail_table_alloc()) // issue #361: injected fault
                 return nullptr;
 #endif
-            uint64_t new_page = PMM::alloc_page_table();
+            // Issue #526: split tables follow the same ownership as fresh
+            // tables (create branch below) — a USER-map split must be
+            // USER-owned or free_user_pages skips it (PMM+1 leak on
+            // riscv64; x86 already allocates its split PTs USER-owned).
+            uint64_t new_page =
+                user_alloc ? PMM::alloc_user_page() : PMM::alloc_page_table();
             if (!new_page)
                 return nullptr;
             // NOLINTNEXTLINE(performance-no-int-to-ptr)

@@ -1,5 +1,10 @@
 # Build System Requirements (build-system) — issue #170
 
+> CUTOVER COMPLETE (historical record): the frozen Make build (`Makefile`,
+> `mk/`) was deleted, the parity ledger/CI jobs removed. The per-topic
+> sections below are the migration record — Meson behavior described here
+> is authoritative, Make behavior is history.
+
 Extensible per-topic requirements spec for the Makefile → Meson migration.
 Each topic follows a fixed template: *Requirement / Current Make behavior
 (file:line anchors) / Meson solution / Acceptance evidence / Owning issue*.

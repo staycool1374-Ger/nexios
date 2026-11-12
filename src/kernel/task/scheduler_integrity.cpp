@@ -335,6 +335,13 @@ TrapOwnerDisposition trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
                                               uint64_t scause, uint64_t stval,
                                               uint64_t frame_base,
                                               uint64_t site) noexcept {
+    // Used only by the CONFIG_DEBUG first-chance dump below; silence
+    // -Werror=unused-parameter in release builds (same (void) pattern as
+    // trap_owner_hook above).
+    (void)sepc;
+    (void)scause;
+    (void)stval;
+    (void)frame_base;
     auto *cur = kernel::Scheduler::current_task();
     const uint64_t expected =
         (cur != nullptr && cur->magic == TaskControlBlock::TCB_MAGIC)

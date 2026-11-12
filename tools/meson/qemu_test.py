@@ -663,9 +663,6 @@ def main():
         print("qemu_test runs automated classes; 'none' is interactive "
               "(use the run_* targets).")
         return 2
-    if args.build == "release" and args.arch != "x86_64":
-        print("ERROR: release builds only supported on x86_64")
-        return 2
     builddir = Path(args.builddir or
                     ("build/meson-%s-release" % args.arch
                      if args.build == "release"

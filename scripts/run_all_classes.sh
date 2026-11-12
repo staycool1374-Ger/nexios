@@ -8,6 +8,12 @@
 #   (abnormal termination appends STATUS: <TIMEOUT|PANIC|NO_SUMMARY>)
 # Usage: bash scripts/run_all_classes.sh [arch] [build]
 #        (the full-suite entry point; per-class runs go through qemu_test.py)
+# Release-version gate (build type vs version): --build selects COMPILE
+# SETTINGS only (debug = symbols + full registry; release = optimized +
+# TF_RELEASE subset). A release-version (vX.Y.Z) ships both: gate it with
+# the 2x3 matrix — debug+release x x86_64/aarch64/riscv64, 6 runs, no
+# arch exempt. Per-class arch/build scoping stays table-driven
+# (tools/test-policy.tsv; ahci_live/iommu_live are debug-only UEFI classes).
 # Per-class run policy (timeouts, retries, scopes, markers) comes from
 # tools/test-policy.tsv via tools/test-policy.awk — no literals here.
 # No debugging — only observe what works and what does not.
@@ -42,13 +48,19 @@ if [ -n "${NEXIOS_TEST_CLASSES:-}" ]; then
     CLASSES="$NEXIOS_TEST_CLASSES"
 fi
 
-# Issue #207: riscv64 runs its own green-evidenced class set (arch_riscv64
-# 24/24 incl. full daemon boot, scheduler_zombie 5/5).  The generic
-# aggregates are not gated on riscv64 (no evidence yet — wiring them in
-# blind would red the gate for unrelated pre-existing gaps).
-# Issue #357: skipped when list_tests.py passes its measured list.
-if [ "$ARCH" = "riscv64" ] && [ -z "${NEXIOS_TEST_CLASSES:-}" ]; then
-    CLASSES="arch_riscv64 scheduler_zombie"
+# Per-arch extras (issue #525/#518 gate work): the generic 26 do not contain
+# the arch-specific classes (arch_riscv64, scheduler_zombie,
+# configuration_build, memory_vmm, ...). The full per-arch universe is
+# generic + extras from the measured lists in tools/meson/list_tests.py
+# (single source of truth); the table-driven arch/build scopes below then
+# remove what the arch cannot do (reported as UNSUPPORTED, never SKIP).
+# testrunner stays last: its expected-panic halts the kernel.
+if [ -z "${NEXIOS_TEST_CLASSES:-}" ] && [ "$ARCH" != "x86_64" ]; then
+    EXTRA=""
+    for c in $(python3 tools/meson/list_tests.py "$ARCH" "$BUILD" | cut -d'|' -f1); do
+        case " $CLASSES " in *" $c "*) ;; *) EXTRA="$EXTRA $c";; esac
+    done
+    if [ -n "$EXTRA" ]; then CLASSES="${CLASSES% testrunner}$EXTRA testrunner"; fi
 fi
 
 RUN=""
@@ -61,7 +73,16 @@ for c in $CLASSES; do
             if [ "$ARCH" = "$x" ]; then hit=1; break; fi
         done
         if [ "$hit" -eq 0 ]; then
-            printf 'SKIP %s (arch_scope=%s, ARCH=%s)\n' "$c" "$ascope" "$ARCH"
+            # Cause-aware exclusion: hole (should run — work item) vs
+            # unsupported (arch lacks the function — permanent). Cause
+            # vocabulary lives in tools/test-policy.tsv (scope_cause key).
+            cause=$(policy "$c" scope_cause)
+            kind=${cause%%:*}; text=${cause#*: }
+            if [ "$kind" = "hole" ]; then
+                printf 'HOLE %s on ARCH=%s — %s (arch_scope=%s)\n' "$c" "$ARCH" "$text" "$ascope"
+            else
+                printf 'UNSUPPORTED %s on ARCH=%s — %s\n' "$c" "$ARCH" "$text"
+            fi
             skip=1
         fi
     fi

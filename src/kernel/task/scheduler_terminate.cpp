@@ -150,6 +150,58 @@ Scheduler::terminate_err(TaskControlBlock &task,
     return errors::SCHED_ERR_OK;
 }
 
+/// @brief Trap-safe termination prefix (issue #523): everything
+///        terminate_err does EXCEPT the self-current switch_to_task.
+///        Fault handlers (aarch64 EL0, riscv64 U-mode) run with traps masked
+///        and must leave via the deferred-switch arm published by
+///        switch_away_from_terminating — a direct switch_to_task from trap
+///        context would publish the trap frame as the resume point.
+///        The pre-existing fault-kill shape (TERMINATED + wake + switch_away)
+///        skipped release_zombie, so fault-killed tasks were never
+///        zombie-listed and drain_zombie_list reaped nothing (PMM/Tasks/MQ
+///        leak, e.g. the pager probes).  This helper restores the full
+///        prefix: dequeue, TERMINATED mark, join-note, parent wake,
+///        release_zombie, reaper poke.
+///        Caller contract (mirrors switch_away_from_terminating): hold no
+///        scheduler lock; the task must be live (not already TERMINATED —
+///        release_zombie has no idempotency guard); call
+///        switch_away_from_terminating[_discard] AFTER this returns, so the
+///        zombie-before-arm ordering holds (release_zombie's
+///        invalidate_pending_switch_to runs before the arm is published).
+errors::SchedulerError Scheduler::terminate_err_from_trap(
+    TaskControlBlock &task, uint64_t exit_code) noexcept {
+    ENSURE(validate_task_ptr(&task, "terminate_err_from_trap"));
+    arch::IrqGuard irq_guard{};
+    // Issue #197: same fail-closed remote-current refusal as terminate_err.
+    if (is_current_on_any_cpu(&task) && &task != current_task()) [[unlikely]] {
+        kernel::Logger::warn("sched: trap-terminate id=%u refused "
+                             "(remote-current)",
+                             static_cast<unsigned>(task.id));
+        return errors::SCHED_ERR_REMOTE_CURRENT;
+    }
+    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take
+    SchedulerLockGuard guard(scheduler_lock_);
+    charge_exec(task); // issue #21: bill the final partial quantum
+    dequeue_ready(task);
+    task.state = TaskState::TERMINATED;
+    task.exit_code = exit_code;
+    // Issue #53: join-rendezvous handoff (mirrors terminate_err).
+    TaskControlBlock::thread_join_note_termination(task);
+    // Issue #217: wake a waitpid-blocked parent before switching away.
+    wake_waiting_parent(task);
+    teardown_step(SchedTeardownSteps::Terminate);
+    // Zombie-list the corpse for the deferred drain (idle cleanup_step or
+    // the harness's drain_zombie_list) — the step the trap kill skipped.
+    release_zombie(task);
+    // Issue #155: prompt the PID 1 reaper (same placement as terminate_err:
+    // after the list push so wake-then-miss is impossible).
+    if (task.id != 1) {
+        if (auto *reaper = Scheduler::find_task(1))
+            reaper->notify.notify(1);
+    }
+    return errors::SCHED_ERR_OK;
+}
+
 void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
     // Void legacy wrapper: refusal is fail-closed warn-only (all existing
     // callers are own-CPU paths where refusal is unreachable). Fallible

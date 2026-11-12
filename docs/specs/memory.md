@@ -239,3 +239,33 @@ Classification rules (authoritative):
    a kernel task), then `PMM::free_page(page_table_)` reclaims the single
    private PML4 page.  The kslot window, HHDM and kernel text/data/bss pages
    are boot-shared and intentionally NOT freed individually.
+
+### 7.1.2 aarch64 TTBR0/TTBR1 split (issue #524)
+
+x86_64 switches the whole root with one CR3, so rule 3 above exposes a
+task's private kernel-half windows (e.g. `CONFIG_KERNEL_PRIV_DATA_BASE`,
+L0[320]) automatically.  aarch64 splits the space: TTBR0 carries the user
+half, TTBR1 the kernel half, and `TCR_EL1.A1 == 0` selects TTBR0's ASID
+(0 for kernel/harness tasks).  Kernel-half VAs therefore translate via
+TTBR1 **regardless of task**, so a private kernel-half window is
+unreachable unless TTBR1 follows the task root too.
+
+Authoritative rules:
+1. Every applied context switch programs **both** TTBRs from the published
+   root (`scheduler_load_cr3_from`): TTBR0 verbatim, TTBR1 ASID-stripped
+   (`& 0x0000FFFFFFFFFFFF`), inside one `dsb sy; tlbi vmalle1; dsb sy`
+   window with the shared `isb` as the pairing point (`vectors.S`
+   `irq_context_switch_common`). No TTBR1 write may ever occur outside a
+   TLBI window; the full `vmalle1` is the isolation barrier (global
+   `nG=0` leaves must never alias across tasks).
+2. `arch::switch_address_space(root)` is the only API that changes both
+   halves (exec path, before freeing the old root — a stale TTBR1 over a
+   freed root is a use-after-free). Temporary peer user-half switches
+   keep the current kernel half and must NOT use it (grep-enforced).
+3. riscv64 needs no twin: a single `satp` already selects both halves.
+   Note: `CONFIG_KERNEL_PRIV_DATA_BASE` (`0xFFFFA00000000000`) is not a
+   canonical Sv39 VA, so the private window is unreachable on riscv64 for
+   an address-encoding reason — permanent arch limitation, no code owed.
+4. No targeted-TLBI or ASID-tagged optimization without making
+   private-window leaves `nG=1` first (tracked separately; the full flush
+   stays until then).

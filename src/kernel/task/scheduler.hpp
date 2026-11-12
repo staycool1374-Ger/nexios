@@ -541,6 +541,16 @@ class Scheduler {
     ///        terminate() above delegates and warns on refusal.
     [[nodiscard]] static errors::SchedulerError terminate_err(TaskControlBlock &task,
                                                 uint64_t exit_code) noexcept;
+    /// @brief Trap-safe termination prefix (issue #523): everything
+    ///        terminate_err does EXCEPT the self-current switch_to_task.
+    ///        For fault handlers (traps masked): call this, then
+    ///        switch_away_from_terminating[_discard] — the zombie-before-arm
+    ///        order is load-bearing (release_zombie invalidates pending arms
+    ///        before the new arm is published).  Precondition: task live
+    ///        (release_zombie has no idempotency guard); hold no scheduler
+    ///        lock.
+    [[nodiscard]] static errors::SchedulerError terminate_err_from_trap(
+        TaskControlBlock &task, uint64_t exit_code) noexcept;
     /// @brief Result of one idle authenticity re-verify slice (issue #46).
     enum class AuthStepResult : uint8_t {
         NONE = 0,    ///< No verifiable user image found.

@@ -51,7 +51,15 @@ void test_cleanup_all() {
     for (uint64_t i = 1; i < Scheduler::task_count(); ++i) {
         auto *t = Scheduler::task_at(i);
         if (!t || t == idle || t == current || t == harness || t == shell ||
-            IrqThread::is_irq_thread_task(t))
+            IrqThread::is_irq_thread_task(t) ||
+            // Issue #521: spare ALL CPUs' idle tasks (the AP idle is a
+            // live runner, not test debris) and anything current on ANY
+            // CPU (never free a live stack — an AP-running task freed
+            // here triple-faults the AP and reset-loops a -smp 2 boot).
+            // Mirrors terminate_err's remote-current refusal and
+            // cleanup_test_tasks' spare set.
+            Scheduler::is_idle_task(t) ||
+            Scheduler::is_current_on_any_cpu(t))
             continue;
         t->state = TaskState::TERMINATED;
         t->exit_code = 0;

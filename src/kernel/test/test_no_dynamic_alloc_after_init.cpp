@@ -85,7 +85,11 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
 //           show up as a free-count delta.  If the alias' 2 MB region is
 //           still huge, the first map splits it (allocating a PT page);
 //           the split is warm-up'ed and re-huged + freed here so the live
-//           PD matches the snapshot.
+//           PD matches the snapshot.  Huge-page detection is arch-specific
+//           (issue #524): x86 checks the PS bit, aarch64 checks the block
+//           descriptor shape ((e & 3) == 1) — bit 7 is an output-address
+//           bit in a block descriptor, not a size flag, so the x86 check
+//           is address lottery there and the teardown is wrongly skipped.
 // Input: Snapshot PMM::free_pages_ref(), run the cycle, re-count.
 // Expect: before == after.
 // Depends: kernel/memory/pmm.hpp, kernel/memory/mempool.hpp,
@@ -104,8 +108,13 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
     // page; remember the huge entry to re-huge at the end.
     // Issue #200: HHDM PD surgery is IRQ-critical — mask the timer ISR
     // and task preemption across the warm-up split only.
+    // Issue #524: huge detection is arch-specific (see Testidea above).
     uint64_t saved_huge = kernel_pd_entry(va);
+#if defined(CONFIG_ARCH_AARCH64)
+    bool split_now = (saved_huge & 3ULL) == 1ULL;
+#else
     bool split_now = (saved_huge & (1ULL << 7)) != 0;
+#endif
     if (split_now) {
         arch::IrqGuard split_guard;
         VMM::map_page(va, phys, false);
