@@ -94,12 +94,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_syscall",           9,    0,       0      },  // cap syscall dispatch + handle roundtrip
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator, sub-range carve, child split
-    {"cap_mmio",              20,   0,       0      },  // MMIO caps, I/O delegation, revocation closure
+    {"cap_mmio",              20,   11,      11     },  // MMIO caps, I/O delegation, revocation closure (4 ioport happy x86-only, #528)
     {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry
     {"cap_irq",               17,   15,      15     },  // IRQ caps, user-space delivery (x86-only ACKs off-x86; +4 WAIT_ACK b2 +1 IOAPIC b2)
     {"cap_irq_notify",        7,   6,       6      },  // IRQ to IPC Notify bridge (x86-only 7th off-x86)
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery
-    {"cap_iommu",             12,   0,       0      },  // IOMMU DMA protection
+    {"cap_iommu",             12,   10,      10     },  // IOMMU DMA protection (2 dispatch happy x86-only, #528)
     {"iommu_live",            6,    0,       0      },  // live VT-d enablement (q35 variant; not in all)
     {"cap_shm",               7,    0,       0      },  // cap-gated shared-memory rings
     {"cap_death",             9,    0,       0      },  // async task-death notifications

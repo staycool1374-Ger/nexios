@@ -1155,11 +1155,21 @@ void register_cap_mmio_tests() {
     JARVIS_REGISTER_TEST(mmio_map_err_rollback_oom);
     JARVIS_REGISTER_TEST(cap_unmap_clears_present_bit);
     JARVIS_REGISTER_TEST(cap_map_nx_policy_pinning);
+#if defined(CONFIG_ARCH_X86_64)
+    // issue #528: the ioport/IOPB happy paths need the x86_64 IOPB layer
+    // (TSS bitmap + grant ledger). Off-x86 the arch stubs fail closed by
+    // design (no port-I/O hardware), so these can never go green there.
+    // The validation matrix below stays ungated — it pins the fail-closed
+    // stub contract on every arch.
     JARVIS_REGISTER_TEST(ioport_grant_dispatch_happy);
+#endif
     JARVIS_REGISTER_TEST(ioport_grant_validation_matrix);
+#if defined(CONFIG_ARCH_X86_64)
+    // issue #528: same x86_64-only IOPB layer (see above).
     JARVIS_REGISTER_TEST(ioport_switch_applies_and_restores);
     JARVIS_REGISTER_TEST(ioport_task_cleanup_releases_slot_and_remasks);
     JARVIS_REGISTER_TEST(ioport_pool_exhaustion_fails_closed);
+#endif
 #if defined(CONFIG_ARCH_X86_64)
     // issue #8 revocation-closure tests (ledger lives in the x86_64 IOPB layer).
     JARVIS_REGISTER_TEST(ioport_revoke_clears_live_bits);

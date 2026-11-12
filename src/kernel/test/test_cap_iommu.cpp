@@ -847,8 +847,17 @@ void register_cap_iommu_tests() {
     JARVIS_REGISTER_TEST(iommu_unmap_clears_entries_frees_pages);
     JARVIS_REGISTER_TEST(iommu_domain_destroy_frees_all_pages);
     JARVIS_REGISTER_TEST(iommu_attach_device_programs_context_entry);
+#if defined(CONFIG_ARCH_X86_64)
+    // issue #528: the IOMMU syscall dispatch happy paths need the x86_64
+    // VT-d layer (SL walker + x86-gated pair validation — non-x86 builds
+    // return -1 by design, SMMUv3 pending per #168). The validation
+    // matrix stays ungated — it pins the fail-closed contract everywhere.
     JARVIS_REGISTER_TEST(sys_iommu_map_dispatch_happy);
+#endif
     JARVIS_REGISTER_TEST(sys_iommu_map_validation_matrix);
+#if defined(CONFIG_ARCH_X86_64)
+    // issue #528: same x86_64-only dispatch layer (see above).
     JARVIS_REGISTER_TEST(sys_iommu_unmap_dispatch);
+#endif
     JARVIS_REGISTER_TEST(iommu_bounded_exhaustion_fails_closed);
 }
