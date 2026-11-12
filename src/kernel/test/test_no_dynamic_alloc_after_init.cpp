@@ -36,8 +36,25 @@ using namespace kernel;
 
 /// @brief Read the kernel PD entry covering @p va (0 if hierarchy absent).
 ///        Used to detect/revert the 2 MB huge-page split that map_page()
-///        performs on first touch of a kernel-space VA.
+///        performs on first touch of a kernel-space VA.  On riscv64 this
+///        is the covering Sv39 L1 entry (leaf or split table): the x86
+///        shifts read the wrong level there, so the warm-up split is
+///        never detected and its table page leaks (+1, issue #536).
 static uint64_t kernel_pd_entry(uint64_t va) {
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t kV = 1ULL << 0;
+    auto *l2 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+    size_t l2_idx = (va >> 30) & 0x1FF;
+    size_t l1_idx = (va >> 21) & 0x1FF;
+    if (!(l2[l2_idx] & kV))
+        return 0;
+    if (VMM::sv39_is_leaf(l2[l2_idx]))
+        return l2[l2_idx];
+    auto *l1 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + VMM::sv39_pte_phys(l2[l2_idx]));
+    return l1[l1_idx];
+#else
     constexpr uint64_t PT_P = 1ULL << 0;
     constexpr uint64_t PT_FRAME = 0x000FFFFFFFFFF000ULL;
     auto *pml4 = reinterpret_cast<uint64_t *>(
@@ -54,11 +71,29 @@ static uint64_t kernel_pd_entry(uint64_t va) {
     auto *pd = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (pdpt[pdpt_idx] & PT_FRAME));
     return pd[pd_idx];
+#endif
 }
 
 /// @brief Restore the kernel PD entry covering @p va (re-huge after a test
 ///        split) — the PD page must already exist.
 static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t kV = 1ULL << 0;
+    auto *l2 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+    size_t l2_idx = (va >> 30) & 0x1FF;
+    size_t l1_idx = (va >> 21) & 0x1FF;
+    if (!(l2[l2_idx] & kV))
+        return;
+    if (VMM::sv39_is_leaf(l2[l2_idx])) {
+        l2[l2_idx] = entry;
+    } else {
+        auto *l1 = reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + VMM::sv39_pte_phys(l2[l2_idx]));
+        l1[l1_idx] = entry;
+    }
+    arch::ArchPageTable::tlb_flush(va);
+#else
     constexpr uint64_t PT_P = 1ULL << 0;
     constexpr uint64_t PT_FRAME = 0x000FFFFFFFFFF000ULL;
     auto *pml4 = reinterpret_cast<uint64_t *>(
@@ -76,6 +111,7 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
         arch::HHDM_OFFSET + (pdpt[pdpt_idx] & PT_FRAME));
     pd[pd_idx] = entry;
     arch::ArchPageTable::tlb_flush(va);
+#endif
 }
 
 // Runmode: kernel
@@ -85,11 +121,11 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
 //           show up as a free-count delta.  If the alias' 2 MB region is
 //           still huge, the first map splits it (allocating a PT page);
 //           the split is warm-up'ed and re-huged + freed here so the live
-//           PD matches the snapshot.  Huge-page detection is arch-specific
-//           (issue #524): x86 checks the PS bit, aarch64 checks the block
-//           descriptor shape ((e & 3) == 1) — bit 7 is an output-address
-//           bit in a block descriptor, not a size flag, so the x86 check
-//           is address lottery there and the teardown is wrongly skipped.
+//           tables match the snapshot.  Split detection is empirical
+//           (covering-entry changed across one warm-up map/unmap, #418
+//           precedent) with a per-arch covering-entry walk (x86 PD,
+//           aarch64 block-shaped, Sv39 L2/L1): descriptor-bit tests are
+//           address lottery across archs.
 // Input: Snapshot PMM::free_pages_ref(), run the cycle, re-count.
 // Expect: before == after.
 // Depends: kernel/memory/pmm.hpp, kernel/memory/mempool.hpp,
@@ -108,19 +144,28 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
     // page; remember the huge entry to re-huge at the end.
     // Issue #200: HHDM PD surgery is IRQ-critical — mask the timer ISR
     // and task preemption across the warm-up split only.
-    // Issue #524: huge detection is arch-specific (see Testidea above).
+    // Split detection is empirical (entry-changed across one warm-up
+    // map/unmap, #418 precedent): huge/block flag bits are arch-specific
+    // (x86_64 PS bit, aarch64 block shape, Sv39 leaf R/W/X), and the
+    // covering-entry walk itself is per-arch (Sv39 L2/L1, issue #536),
+    // so compare entries instead of testing descriptor bits.
     uint64_t saved_huge = kernel_pd_entry(va);
-#if defined(CONFIG_ARCH_AARCH64)
-    bool split_now = (saved_huge & 3ULL) == 1ULL;
-#else
-    bool split_now = (saved_huge & (1ULL << 7)) != 0;
-#endif
-    if (split_now) {
+    bool split_now = false;
+    {
         arch::IrqGuard split_guard;
         VMM::map_page(va, phys, false);
         VMM::unmap_page(va);
+        split_now = (kernel_pd_entry(va) != saved_huge);
     }
 
+    // The loop is HHDM surgery like the warm-up (each map/unmap touches
+    // the shared kernel tables + shootdown path): hold the guard across
+    // it so a tick cannot interleave mid-sequence (issue #200
+    // IRQ-criticality; the neutrality property under test is unaffected).
+    // An unguarded variant hung intermittently on riscv64 (~2/7 runs,
+    // silent wedge mid-loop, never under GDB/logging); the guarded form
+    // has not reproduced it.
+    arch::IrqGuard loop_guard;
     for (size_t i = 0; i < ITERATIONS; ++i) {
         void *p = MemPool::alloc(32);
         JARVIS_ASSERT_FMT(p != nullptr, "MemPool::alloc(32) failed at iter %lu",
@@ -132,12 +177,23 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
 
     // Re-huge + free the split PT page (only if we created it).
     // Issue #200: guarded like the warm-up split (IRQ-critical surgery).
+    // Owned-guard mirrors wcet_vmm_map_unmap (#418): free only a
+    // PMM-tracked table page, and assert it (a missing table means the
+    // detector and the allocator disagree).
     if (split_now) {
         arch::IrqGuard rehuge_guard;
+#if defined(CONFIG_ARCH_RISCV64)
+        // Sv39 PTEs carry PPN<<10 (issue #206): the x86 frame mask
+        // decodes 4x too low here — use the Sv39 codec.
+        uint64_t pt_phys = VMM::sv39_pte_phys(kernel_pd_entry(va));
+#else
         uint64_t pt_phys = kernel_pd_entry(va) & 0x000FFFFFFFFFF000ULL;
+#endif
+        bool owned = (pt_phys != 0) && PMM::is_allocated(pt_phys);
         kernel_pd_entry_restore(va, saved_huge);
-        if (pt_phys)
+        if (owned)
             PMM::free_page(pt_phys);
+        JARVIS_ASSERT_FMT(owned, "neutral-cycle split table not PMM-owned");
     }
     PMM::free_page(phys);
 

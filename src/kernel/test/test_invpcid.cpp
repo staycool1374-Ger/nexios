@@ -61,7 +61,9 @@ uint64_t alloc_zero_page() {
 //        via the VMM path.
 // Expect: Descriptor words exact (pcid masked, addr page-masked);
 //         cleared VA walks unmapped, sibling intact and re-touchable;
-//         single_va counter +1 (routing proof on any CPU).
+//         branch-correct counter +1 (single_va on INVPCID hosts,
+//         ctx_fallback via the purge-context fallback otherwise —
+//         same sibling pattern as single_context/all_context).
 // Depends: invpcid_build_desc, VMM unmap selective path (issue #157)
 JARVIS_TEST(invpcid_single_page, "PRE: none | POST: none") {
     auto desc = arch::invpcid_build_desc(
@@ -84,7 +86,11 @@ JARVIS_TEST(invpcid_single_page, "PRE: none | POST: none") {
     arch::TlbFlushStats before = arch::tlb_flush_stats();
     VMM::unmap_page_in_pml4(k_va_a, pml4);
     arch::TlbFlushStats after = arch::tlb_flush_stats();
-    JARVIS_ASSERT(after.single_va == before.single_va + 1);
+    if (arch::has_invpcid()) {
+        JARVIS_ASSERT(after.single_va == before.single_va + 1);
+    } else {
+        JARVIS_ASSERT(after.ctx_fallback == before.ctx_fallback + 1);
+    }
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_a, pml4) == 0);
     JARVIS_ASSERT(VMM::virt_to_phys_in_pml4(k_va_b, pml4) == pb);
     // Re-touch the sibling through its stable mapping (no fault).

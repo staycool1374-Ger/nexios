@@ -44,6 +44,7 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/memory/checked_ptr.hpp>
+#include <kernel/memory/vmm.hpp>
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -349,9 +350,15 @@ JARVIS_TEST(checked_ptr_api_safe_copy_templates_fail_closed,
 //           PARKED as stub (issue #149): the recovery resume loops
 //           silently instead of returning false; re-activate once #149
 //           is fixed.
-// Input: safe_copy_from_user (kernel dst, unmapped 0x60000000 src) and
-//        safe_copy_to_user (unmapped 0x60000000 dst, kernel src), 16 bytes
-//        each; sentinel planted in the kernel destination first.
+// Input: safe_copy_from_user (kernel dst, unmapped probe-VA src) and
+//        safe_copy_to_user (unmapped probe-VA dst, kernel src), 16 bytes
+//        each; sentinel planted in the kernel destination first.  The probe
+//        VA is per-arch: 0x60000000 is unmapped on x86_64/aarch64, but the
+//        riscv64 kernel root carries the low-half identity/MMIO clone there
+//        (deliberate port design) — riscv64 probes L0[3] (0xC0000000,
+//        canonical, in user range, no mapping) instead, with a
+//        virt_to_phys premise check so a future port change fails loud
+//        instead of passing vacuously.
 // Expect: Both return false, destination sentinel unchanged, no panic,
 //         no hang — the fault is recovered synchronously.
 // Depends: safe_copy_from_user/safe_copy_to_user fault recovery
@@ -359,6 +366,18 @@ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
             "PRE: vfsd, iocd | POST: none") {
     // Reactivated by the issue #149 keep-alive fix: the recover bodies now
     // survive codegen, so a #PF inside the copy redirects to them.
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t kProbeVa = 0xC0000000ULL;
+    // Premise check (riscv64 only): fail loud if the port ever maps the
+    // probe slot instead of passing vacuously. Other arches keep their
+    // proven premise untouched.
+    JARVIS_ASSERT_FMT(
+        VMM::virt_to_phys_in_pml4(kProbeVa, VMM::get_kernel_pml4()) == 0,
+        "probe VA 0x%lx is mapped: unmapped premise false on this port",
+        kProbeVa);
+#else
+    constexpr uint64_t kProbeVa = 0x60000000ULL;
+#endif
     uint8_t kernel_dst[16] = {};
     uint8_t kernel_src[16] = {};
     for (size_t idx = 0; idx < sizeof(kernel_dst); ++idx) {
@@ -366,7 +385,7 @@ JARVIS_TEST(checked_ptr_api_safe_copy_fault_recovery,
         kernel_src[idx] = static_cast<uint8_t>(idx);
     }
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
-    auto *unmapped = reinterpret_cast<uint8_t *>(0x60000000ULL);
+    auto *unmapped = reinterpret_cast<uint8_t *>(kProbeVa);
     const bool from_ok =
         safe_copy_from_user(kernel_dst, unmapped, sizeof(kernel_dst));
     const bool to_ok =

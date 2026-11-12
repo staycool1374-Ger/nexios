@@ -383,7 +383,15 @@ JARVIS_TEST(mmio_user_map_unmap_zero_delta, "PRE: none | POST: none") {
 JARVIS_TEST(mmio_user_fork_child_not_inherited, "PRE: none | POST: none") {
     // Device-like phys outside the kernel direct map (PCI MMIO hole).  Not a
     // PMM page — never allocated/freed, only referenced as a PTE frame.
+    // Per-arch: 0x80000000 is the PCI hole above RAM on x86_64, but DRAM
+    // base (managed RAM) on riscv64 virt — riscv64 probes 0xA0000000
+    // (above the managed window top) instead. The assert fails loud if a
+    // port change ever makes the constant managed again.
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t kDevPhys = 0xA0000000ULL;
+#else
     constexpr uint64_t kDevPhys = 0x80000000ULL;
+#endif
     JARVIS_ASSERT(kDevPhys >= PMM::total_memory());
 
     uint64_t parent_pml4 = VMM::clone_kernel_pml4();

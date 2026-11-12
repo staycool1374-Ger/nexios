@@ -2520,9 +2520,13 @@ JARVIS_TEST(debug_launch_entry_trap_parks, "PRE: vfsd, iocd | POST: none") {
     t->period_ticks = 100;
     JARVIS_ASSERT(Scheduler::add_task_err(*t) == errors::SCHED_ERR_OK);
     uint64_t handle = 0;
-    JARVIS_ASSERT_FMT(kernel::debug::debug_launch_handoff(
-                          me->id, t->id, me->id, handle) == 0,
-                      "handoff failed");
+    // Diagnostic value on failure (rare loaded-run flake): the denial
+    // branch (ESRCH/EPERM/EBUSY) the next occurrence takes.
+    const uint64_t handoff_rc = kernel::debug::debug_launch_handoff(
+        me->id, t->id, me->id, handle);
+    JARVIS_ASSERT_FMT(handoff_rc == 0,
+                      "handoff failed: rc=0x%lx (ESRCH/EPERM/EBUSY denial?)",
+                      handoff_rc);
     JARVIS_ASSERT_FMT(kernel::debug::debug_bp_insert(*t, entry),
                       "entry bp insert failed");
     const uint64_t tid = t->id;

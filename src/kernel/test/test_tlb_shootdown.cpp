@@ -396,6 +396,21 @@ JARVIS_TEST(shootdown_apply_lands, "PRE: none | POST: none") {
         "worker never touched TEST_VA on CPU0");
     JARVIS_ASSERT_FMT(Scheduler::is_queued_on(*worker, 0),
                       "observer worker is not placed on CPU0");
+#if defined(CONFIG_ARCH_RISCV64)
+    // Issue #529 handoff: real SBI RFENCE completes synchronously in
+    // firmware, so the S-soft mailbox path never runs and the applied
+    // counter only advances via the synchronous account. Force the
+    // mailbox fallback here so this leg exercises the AP-apply path
+    // end to end. ScopeGuard-cleared: the override is not tracker state.
+    if (kernel::smp::set_sbi_rfence_for_test != nullptr) {
+        kernel::smp::set_sbi_rfence_for_test(false);
+    }
+    auto rfence_guard = ScopeGuard([]() {
+        if (kernel::smp::clear_sbi_rfence_for_test != nullptr) {
+            kernel::smp::clear_sbi_rfence_for_test();
+        }
+    });
+#endif
     // Unmap through the VMM choke (deployment direction): local
     // invalidate on the BSP plus cross-CPU fan-out to the AP.
     VMM::unmap_page_in_pml4(SWEEP_TEST_VA, worker->get_page_table());
@@ -581,6 +596,19 @@ JARVIS_TEST(shootdown_teardown_refault, "PRE: none | POST: none") {
         "teardown worker A never touched TEST_VA on CPU0");
     JARVIS_ASSERT_FMT(Scheduler::is_queued_on(*worker_a, 0),
                       "teardown worker A is not placed on CPU0");
+#if defined(CONFIG_ARCH_RISCV64)
+    // Same #529 mailbox-forcing as shootdown_apply_lands: the teardown
+    // all-purge must reach the AP through the S-soft path, not the
+    // synchronous RFENCE fast path.
+    if (kernel::smp::set_sbi_rfence_for_test != nullptr) {
+        kernel::smp::set_sbi_rfence_for_test(false);
+    }
+    auto rfence_guard = ScopeGuard([]() {
+        if (kernel::smp::clear_sbi_rfence_for_test != nullptr) {
+            kernel::smp::clear_sbi_rfence_for_test();
+        }
+    });
+#endif
     // Teardown of the live address space: terminate -> destroy ->
     // free_user_pages -> tlb_shootdown(0,0,true) fans out to the AP.
     // first_phys/first_flag_phys are reclaimed by that teardown.

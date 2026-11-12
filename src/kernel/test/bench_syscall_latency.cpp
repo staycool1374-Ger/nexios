@@ -37,12 +37,26 @@ struct BenchResult {
     uint64_t min;
     uint64_t avg;
     uint64_t max;
+    uint64_t total;
 };
+
+// riscv64 rdtsc is the 10 MHz mtime (100 ns/tick): a sub-tick op reads 0
+// on nearly every iteration, so the integer per-op mean is 0 by
+// granularity, not by speed. The honest pin there is the aggregate total
+// over all iterations (a nonzero sum proves time actually elapsed);
+// coarser clocks keep the per-op mean pin.
+inline bool bench_latency_nonzero(const BenchResult &r) {
+#if defined(CONFIG_ARCH_RISCV64)
+    return r.total > 0;
+#else
+    return r.avg > 0;
+#endif
+}
 
 } // anonymous namespace
 
 template <typename F> static BenchResult measure(F fn) {
-    BenchResult r = {~0ULL, 0, 0};
+    BenchResult r = {~0ULL, 0, 0, 0};
     for (size_t i = 0; i < 100; ++i)
         fn();
     for (size_t i = 0; i < BENCH_ITERATIONS; ++i) {
@@ -55,6 +69,7 @@ template <typename F> static BenchResult measure(F fn) {
             r.max = elapsed;
         r.avg += elapsed;
     }
+    r.total = r.avg;
     r.avg /= BENCH_ITERATIONS;
     return r;
 }
@@ -69,7 +84,7 @@ JARVIS_TEST(bench_spinlock_acquire_release, "PRE: none | POST: none") {
     auto r = measure([&lock]() { SpinLockGuard<sync::SpinLock> g(lock); });
     Logger::info("spinlock_lock_unlock: min=%lu, avg=%lu, max=%lu", r.min,
                  r.avg, r.max);
-    JARVIS_ASSERT(r.avg > 0);
+    JARVIS_ASSERT(bench_latency_nonzero(r));
     JARVIS_TEST_PASS();
 }
 
@@ -86,7 +101,7 @@ JARVIS_TEST(bench_mutex_acquire_release, "PRE: none | POST: none") {
     });
     Logger::info("mutex_lock_unlock: min=%lu, avg=%lu, max=%lu", r.min, r.avg,
                  r.max);
-    JARVIS_ASSERT(r.avg > 0);
+    JARVIS_ASSERT(bench_latency_nonzero(r));
     JARVIS_TEST_PASS();
 }
 
@@ -104,7 +119,7 @@ JARVIS_TEST(bench_spsc_push_pop, "PRE: none | POST: none") {
     });
     Logger::info("spsc_push_pop: min=%lu, avg=%lu, max=%lu", r.min, r.avg,
                  r.max);
-    JARVIS_ASSERT(r.avg > 0);
+    JARVIS_ASSERT(bench_latency_nonzero(r));
     JARVIS_TEST_PASS();
 }
 

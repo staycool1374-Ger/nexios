@@ -61,8 +61,25 @@ template <typename F> CycleStats measure_cycles(size_t iterations, F fn) {
 
 /// @brief Read the kernel PD entry covering @p va (0 if hierarchy absent).
 ///        Used to detect/revert the 2 MB huge-page split that map_page()
-///        performs on first touch of a kernel-space VA.
+///        performs on first touch of a kernel-space VA.  On riscv64 this
+///        is the covering Sv39 L1 entry: the x86 shifts read the wrong
+///        level there, so the warm-up split is never detected and its
+///        table page leaks (+1, issue #536).
 static uint64_t kernel_pd_entry(uint64_t va) {
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t kV = 1ULL << 0;
+    auto *l2 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+    size_t l2_idx = (va >> 30) & 0x1FF;
+    size_t l1_idx = (va >> 21) & 0x1FF;
+    if (!(l2[l2_idx] & kV))
+        return 0;
+    if (VMM::sv39_is_leaf(l2[l2_idx]))
+        return l2[l2_idx];
+    auto *l1 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + VMM::sv39_pte_phys(l2[l2_idx]));
+    return l1[l1_idx];
+#else
     constexpr uint64_t PT_P = 1ULL << 0;
     constexpr uint64_t PT_FRAME = 0x000FFFFFFFFFF000ULL;
     auto *pml4 = reinterpret_cast<uint64_t *>(
@@ -79,6 +96,7 @@ static uint64_t kernel_pd_entry(uint64_t va) {
     auto *pd = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (pdpt[pdpt_idx] & PT_FRAME));
     return pd[pd_idx];
+#endif
 }
 
 /// @brief Restore the kernel PD entry covering @p va (re-huge after a test
@@ -86,6 +104,23 @@ static uint64_t kernel_pd_entry(uint64_t va) {
 ///        at physical 0x5000 (PDPT[0]); restoring the exact saved huge entry
 ///        makes the live table match the snapshot.
 static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
+#if defined(CONFIG_ARCH_RISCV64)
+    constexpr uint64_t kV = 1ULL << 0;
+    auto *l2 = reinterpret_cast<uint64_t *>(
+        arch::HHDM_OFFSET + (VMM::get_kernel_pml4() & ~0xFFFULL));
+    size_t l2_idx = (va >> 30) & 0x1FF;
+    size_t l1_idx = (va >> 21) & 0x1FF;
+    if (!(l2[l2_idx] & kV))
+        return;
+    if (VMM::sv39_is_leaf(l2[l2_idx])) {
+        l2[l2_idx] = entry;
+    } else {
+        auto *l1 = reinterpret_cast<uint64_t *>(
+            arch::HHDM_OFFSET + VMM::sv39_pte_phys(l2[l2_idx]));
+        l1[l1_idx] = entry;
+    }
+    arch::ArchPageTable::tlb_flush(va);
+#else
     constexpr uint64_t PT_P = 1ULL << 0;
     constexpr uint64_t PT_FRAME = 0x000FFFFFFFFFF000ULL;
     auto *pml4 = reinterpret_cast<uint64_t *>(
@@ -103,6 +138,7 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
         arch::HHDM_OFFSET + (pdpt[pdpt_idx] & PT_FRAME));
     pd[pd_idx] = entry;
     arch::ArchPageTable::tlb_flush(va);
+#endif
 }
 
 } // anonymous namespace
@@ -177,7 +213,13 @@ JARVIS_TEST(wcet_vmm_map_unmap, "PRE: none | POST: none") {
     // Issue #200: guarded like the warm-up split (IRQ-critical surgery).
     if (split_now) {
         arch::IrqGuard rehuge_guard;
+#if defined(CONFIG_ARCH_RISCV64)
+        // Sv39 PTEs carry PPN<<10 (issue #206): the x86 frame mask
+        // (bits 12..51) decodes 4x too low here — use the Sv39 codec.
+        uint64_t pt_phys = VMM::sv39_pte_phys(kernel_pd_entry(va));
+#else
         uint64_t pt_phys = kernel_pd_entry(va) & 0x000FFFFFFFFFF000ULL;
+#endif
         bool owned = (pt_phys != 0) && PMM::is_allocated(pt_phys);
         kernel_pd_entry_restore(va, saved_entry);
         if (owned)

@@ -39,7 +39,19 @@ struct BenchResult {
     uint64_t min;
     uint64_t avg;
     uint64_t max;
+    uint64_t total;
 };
+
+// Same sub-tick granularity doctrine as bench_syscall_latency: riscv64
+// mtime (10 MHz) cannot resolve a fast path per-op, so the pin is the
+// aggregate total; coarser clocks keep the per-op mean pin.
+inline bool bench_latency_nonzero(const BenchResult &r) {
+#if defined(CONFIG_ARCH_RISCV64)
+    return r.total > 0;
+#else
+    return r.avg > 0;
+#endif
+}
 
 } // anonymous namespace
 
@@ -57,7 +69,7 @@ JARVIS_TEST(bench_reschedule_latency, "PRE: none | POST: none") {
     Scheduler::add_task(*b);
 
     auto *original = Scheduler::current_task();
-    BenchResult r = {~0ULL, 0, 0};
+    BenchResult r = {~0ULL, 0, 0, 0};
 
     for (size_t i = 0; i < 100; ++i) {
         kernel::test::yield_as(*a);
@@ -74,6 +86,7 @@ JARVIS_TEST(bench_reschedule_latency, "PRE: none | POST: none") {
             r.max = elapsed;
         r.avg += elapsed;
     }
+    r.total = r.avg;
     r.avg /= BENCH_ITERATIONS;
 
     Scheduler::set_current(*original);
@@ -82,7 +95,7 @@ JARVIS_TEST(bench_reschedule_latency, "PRE: none | POST: none") {
 
     kernel::test::terminate_and_drain2(a, b);
 
-    JARVIS_ASSERT(r.avg > 0);
+    JARVIS_ASSERT(bench_latency_nonzero(r));
     JARVIS_TEST_PASS();
 }
 
@@ -93,7 +106,7 @@ JARVIS_TEST(bench_reschedule_latency, "PRE: none | POST: none") {
 // Depends: SpinLock, arch::rdtsc
 JARVIS_TEST(bench_spinlock_try_lock, "PRE: none | POST: none") {
     sync::SpinLock lock;
-    BenchResult r = {~0ULL, 0, 0};
+    BenchResult r = {~0ULL, 0, 0, 0};
     for (size_t i = 0; i < 100; ++i) {
         lock.try_lock();
         lock.unlock();
@@ -109,10 +122,11 @@ JARVIS_TEST(bench_spinlock_try_lock, "PRE: none | POST: none") {
             r.max = elapsed;
         r.avg += elapsed;
     }
+    r.total = r.avg;
     r.avg /= BENCH_ITERATIONS;
     Logger::info("spinlock_try_lock: min=%lu, avg=%lu, max=%lu", r.min, r.avg,
                  r.max);
-    JARVIS_ASSERT(r.avg > 0);
+    JARVIS_ASSERT(bench_latency_nonzero(r));
     JARVIS_TEST_PASS();
 }
 
