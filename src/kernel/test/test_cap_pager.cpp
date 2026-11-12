@@ -27,7 +27,7 @@
 /// paths.  The harness (init, PID 1) is the designated pager.
 ///
 /// Probe: userspace/pager-probe.c — registers PID 1 as pager, dereferences
-/// 0x10000000 (unmapped), writes 0xCAFE after the pager maps it, then _exit(0).
+/// kProbeVa (unmapped), writes 0xCAFE after the pager maps it, then _exit(0).
 /// A fault WITHOUT pager resolution re-faults (poisoned VA / evicted) →
 /// SIGSEGV → TERMINATED (signal exit code, high bit set).
 ///
@@ -59,6 +59,11 @@
 using namespace kernel;
 
 namespace {
+
+/// @brief Probe fault VA (issue #527): clear on all arches.  0x10000000
+///        aliased the riscv64 L0[0] identity window; 0x50000000 sits in
+///        the zeroed clone region (L0[1], #352 precedent).
+constexpr uint64_t kProbeVa = 0x50000000ULL;
 
 /// @brief Dispatches a syscall by number.
 uint64_t pager_syscall(uint64_t number, uint64_t a0, uint64_t a1, uint64_t a2,
@@ -281,12 +286,32 @@ JARVIS_TEST(pager_recover_ip_not_delegated, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: Issue #527 premise pin — the probe VA has no PTE in a fresh
+// clone table on any arch (clone zeroes L0[1..255]; kProbeVa sits in
+// L0[1] on riscv64, above the image, below the stack). Guards against
+// a repeat of the 0x10000000 identity-window alias.
+// Input: Load the probe (not run); walk kProbeVa in its fresh table.
+// Expect: walk returns 0; probe terminated + drained, zero delta.
+// Depends: elf load (clone tables), VMM::virt_to_phys_in_pml4
+JARVIS_TEST(pager_probe_va_unaliased_premise, "PRE: none | POST: none") {
+    auto *t = load_pager_probe();
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(
+        0ULL, VMM::virt_to_phys_in_pml4(kProbeVa, t->get_page_table()));
+    // Never dispatched: terminate + drain (no fault driven, no pager
+    // state touched).
+    Scheduler::terminate(*t, 0);
+    Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: A real user-mode #PF on an unmapped VA is delegated to the
 // registered pager (the harness); the pager maps a FrameCap via SYS_PAGER_MAP;
 // the client resumes and the faulting write succeeds.  This is the definitive
 // block-in-#PF-ISR resume test.
 // Input: Load bin/pager-probe.c.elf (registers PID 1 as pager, faults at
-//        0x10000000); harness recvs + maps + SYS_PAGER_MAP.
+//        kProbeVa); harness recvs + maps + SYS_PAGER_MAP.
 // Expect: the probe writes 0xCAFE and _exit(0); record consumed; no pending.
 // Depends: block-in-ISR, PagerRegistry, SYS_PAGER_MAP, elf loader
 JARVIS_TEST(pager_fault_roundtrip, "PRE: none | POST: none") {
@@ -303,7 +328,7 @@ JARVIS_TEST(pager_fault_roundtrip, "PRE: none | POST: none") {
 
     ipc::PagerFaultMsg msg{};
     JARVIS_ASSERT_EQ(1, ipc::PagerRegistry::recv(*cur, msg));
-    JARVIS_ASSERT_EQ(0x10000000ULL, msg.fault_va);
+    JARVIS_ASSERT_EQ(kProbeVa, msg.fault_va);
     JARVIS_ASSERT_EQ(t->id, msg.client_id);
     // The record is STILL pending after RECV (two-phase protocol).
     JARVIS_ASSERT(ipc::PagerRegistry::pending_fault(*cur));
@@ -325,13 +350,13 @@ JARVIS_TEST(pager_fault_roundtrip, "PRE: none | POST: none") {
 
     // Both mapped pages in the client PML4 resolve to the pager's frames.
     // (Check while the probe's PML4 is still alive.)
-    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(0x10000000,
+    JARVIS_ASSERT_EQ(phys, VMM::virt_to_phys_in_pml4(kProbeVa,
                                                      t->get_page_table()));
     JARVIS_ASSERT_EQ(phys + arch::PAGE_SIZE,
-                     VMM::virt_to_phys_in_pml4(0x10000000 + arch::PAGE_SIZE,
+                     VMM::virt_to_phys_in_pml4(kProbeVa + arch::PAGE_SIZE,
                                                t->get_page_table()));
 
-    // Client resumes; the faulting write to 0x10000000 now succeeds; _exit(0).
+    // Client resumes; the faulting write to kProbeVa now succeeds; _exit(0).
     kernel::test::wait_for_termination_safe(t);
     JARVIS_ASSERT(t->state == TaskState::TERMINATED);
     JARVIS_ASSERT_EQ(0ULL, t->exit_code); // clean exit (2 = reg fail)
@@ -395,7 +420,7 @@ JARVIS_TEST(pager_map_after_timeout_denied, "PRE: none | POST: none") {
     // re-faults on the poisoned VA and SIGSEGV-terminates; check before the
     // cleanup frees the PML4).
     JARVIS_ASSERT_EQ(0ULL,
-                     VMM::virt_to_phys_in_pml4(0x10000000, t->get_page_table()));
+                     VMM::virt_to_phys_in_pml4(kProbeVa, t->get_page_table()));
 
     // The probe re-faults on the poisoned VA -> SIGSEGV -> terminated.
     kernel::test::wait_for_termination_safe(t);
@@ -724,6 +749,7 @@ void register_cap_pager_tests() {
     JARVIS_REGISTER_TEST(pager_recv_nonblocking_none);
     JARVIS_REGISTER_TEST(pager_classification_rejects);
     JARVIS_REGISTER_TEST(pager_recover_ip_not_delegated);
+    JARVIS_REGISTER_TEST(pager_probe_va_unaliased_premise);
     JARVIS_REGISTER_TEST(pager_fault_roundtrip);
     JARVIS_REGISTER_TEST(pager_map_after_timeout_denied);
     JARVIS_REGISTER_TEST(pager_abort_poisons_va);

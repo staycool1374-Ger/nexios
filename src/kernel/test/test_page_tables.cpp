@@ -440,6 +440,80 @@ JARVIS_TEST(kernel_half_runtime_map_nx, "PRE: none | POST: none") {
         PMM::free_page(split_pt);
     }
     JARVIS_ASSERT_EQ(boot_entry, pd[pd_idx]);
+#elif defined(CONFIG_ARCH_RISCV64)
+    // Manual L0/L1 save/restore (issue #526, testbed lane): the scratch
+    // VA sits in a boot 1 GiB HHDM block; map_page_err splits L0 (fresh
+    // L1 table) and may split an L1 2 MiB leaf (fresh L2). Neither the
+    // snapshot rewind nor free_user_pages reclaims kernel-half tables
+    // (L0[256+] never walked), so the test restores the boot entries
+    // itself and frees the split tables (zero PMM delta). Mirrors the
+    // x86 branch above; kernel-side reclaim would risk shared-table UAF.
+    constexpr uint64_t kRvL0Shift = 30;
+    constexpr uint64_t kRvL1Shift = 21;
+    constexpr uint64_t kRvIdxMask = 0x1FF;
+    constexpr uint64_t kRvPresent = 1ULL;
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *rv_l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                               VMM::get_kernel_pml4());
+    const size_t rv_l0_idx =
+        static_cast<size_t>((SCRATCH_VA >> kRvL0Shift) & kRvIdxMask);
+    const size_t rv_l1_idx =
+        static_cast<size_t>((SCRATCH_VA >> kRvL1Shift) & kRvIdxMask);
+    const uint64_t boot_rv_l0 = rv_l0[rv_l0_idx];
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *boot_rv_l1 =
+        (!VMM::sv39_is_leaf(boot_rv_l0) && (boot_rv_l0 & kRvPresent) != 0)
+            ? reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            VMM::sv39_pte_phys(boot_rv_l0))
+            : nullptr;
+    const uint64_t boot_rv_l1e =
+        (boot_rv_l1 != nullptr) ? boot_rv_l1[rv_l1_idx] : 0;
+    {
+        arch::IrqGuard irq_guard;
+        JARVIS_ASSERT(VMM::map_page_err(SCRATCH_VA, phys, false) ==
+                      errors::VMM_ERR_OK);
+        JARVIS_ASSERT(!VMM::pte_is_executable_in_pml4(
+            SCRATCH_VA, VMM::get_kernel_pml4()));
+        VMM::unmap_page(SCRATCH_VA);
+        const uint64_t cur_rv_l0 = rv_l0[rv_l0_idx];
+        if (cur_rv_l0 != boot_rv_l0) {
+            // The split happened at L0: cur is a fresh L1 table. Free
+            // any L2 tables hanging off it, then the L1 itself — all
+            // private to this split (single-VA path), leaves hold no
+            // pages. Restore the boot 1 GiB block.
+            JARVIS_ASSERT(!VMM::sv39_is_leaf(cur_rv_l0));
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            auto *split_l1 = reinterpret_cast<uint64_t *>(
+                arch::HHDM_OFFSET + VMM::sv39_pte_phys(cur_rv_l0));
+            for (size_t i = 0; i < 512; ++i) {
+                const uint64_t e = split_l1[i];
+                if ((e & kRvPresent) != 0 && !VMM::sv39_is_leaf(e)) {
+                    const uint64_t l2 = VMM::sv39_pte_phys(e);
+                    JARVIS_ASSERT(PMM::is_allocated(l2));
+                    PMM::free_page(l2);
+                }
+            }
+            const uint64_t l1phys = VMM::sv39_pte_phys(cur_rv_l0);
+            JARVIS_ASSERT(PMM::is_allocated(l1phys));
+            PMM::free_page(l1phys);
+            rv_l0[rv_l0_idx] = boot_rv_l0;
+        } else if (boot_rv_l1 != nullptr &&
+                   boot_rv_l1[rv_l1_idx] != boot_rv_l1e) {
+            // L0 already a table at boot: the split happened at L1.
+            // Free the split L2, restore the boot 2 MiB leaf.
+            const uint64_t cur_rv_l1e = boot_rv_l1[rv_l1_idx];
+            JARVIS_ASSERT(!VMM::sv39_is_leaf(cur_rv_l1e));
+            const uint64_t l2phys = VMM::sv39_pte_phys(cur_rv_l1e);
+            JARVIS_ASSERT(PMM::is_allocated(l2phys));
+            PMM::free_page(l2phys);
+            boot_rv_l1[rv_l1_idx] = boot_rv_l1e;
+        }
+        arch::ArchPageTable::tlb_flush(SCRATCH_VA);
+    }
+    JARVIS_ASSERT_EQ(boot_rv_l0, rv_l0[rv_l0_idx]);
+    if (boot_rv_l1 != nullptr) {
+        JARVIS_ASSERT_EQ(boot_rv_l1e, boot_rv_l1[rv_l1_idx]);
+    }
 #else
     JARVIS_ASSERT(VMM::map_page_err(SCRATCH_VA, phys, false) ==
                   errors::VMM_ERR_OK);

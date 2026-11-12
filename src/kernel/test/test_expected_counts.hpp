@@ -103,7 +103,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"iommu_live",            6,    0,       0      },  // live VT-d enablement (q35 variant; not in all)
     {"cap_shm",               7,    0,       0      },  // cap-gated shared-memory rings
     {"cap_death",             9,    0,       0      },  // async task-death notifications
-    {"cap_pager",             15,   0,       0      },  // external pager protocol
+    {"cap_pager",             16,   0,       0      },  // external pager protocol (+1 premise, issue #527)
     {"cap_broker",             6,   6,       6      },  // broker policy stubs (issue #240 step-a)
     {"ipc_fastpath",          14,   0,       0      },  // in-register IPC fastpath
     {"ipc_pipe_blocking",      6,   0,       0      },  // pipe blocking semantics
@@ -264,7 +264,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // arch
     {"arch_cross",           25,    0,       0      },  // cross-architecture tests (x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
-    {"arch_aarch64",          0,   35,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
+    {"arch_aarch64",          0,   38,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
 #endif
 #if defined(CONFIG_ARCH_RISCV64)
     {"arch_riscv64",          0,    0,      31      },  // S-mode traps, loader probes, UART, RTC (M-mode CSRs deferred)
@@ -299,7 +299,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_sync",           93,   0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api
     {"core_sched",          114,  0,       0      },  // scheduler_* + #513 slot-safety x2
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
-    {"core_memory",         124,  0,       0      },  // memory_* incl. NX/W^X pins
+    {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
     {"core_syscall",        85,   0,       0      },  // syscall_*, debug_syscall, tls
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
@@ -317,7 +317,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"drivers",             111,   66,      66     },  // drivers_* + virtio_blk_req + ahci_deep + net + #51 shm-tx ring x2 (+4 knob-gated: 3 serial-SHM + fb_bounded_render under CONFIG_DRIVER_PD_FB)
     {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
-    {"smp_multicpu",        21,   3,       3      },  // smp_bringup + smp_sched (x86) + tlb_shootdown E2E (2-CPU)
+    {"smp_multicpu",        22,   4,       4      },  // smp_bringup + smp_sched (x86) + census + tlb_shootdown E2E (2-CPU)
     {"tlb_shootdown",          3,   3,       3      },  // cross-CPU shootdown E2E (skips single-CPU)
     {"deadline",            148,  0,       0      },  // wcet/deadline/timing/hrt/servers + posix_time
     {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler

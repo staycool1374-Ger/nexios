@@ -216,6 +216,7 @@ void register_page_tables_tests();
 void register_kernel_isolation_tests();
 void register_memory_isolation_tests();
 void register_tlb_shootdown_tests();
+void register_smp_census_tests();
 void register_buffer_pool_deterministic_tests();
 void register_no_op_new_tests();
 void register_stress_hrt_tests();
@@ -581,6 +582,7 @@ static void run_tlb_latency_group() { register_tlb_latency_tests(); }
 static void run_pml4_sync_group() { register_pml4_sync_tests(); }
 #endif
 static void run_tlb_shootdown_group() { register_tlb_shootdown_tests(); }
+static void run_smp_census_group() { register_smp_census_tests(); }
 static void run_drivers_core_group() { register_driver_tests(); }
 static void run_drivers_block_group() { register_block_device_tests(); }
 static void run_block_srv_live_group() { register_block_srv_tests(); }
@@ -1320,6 +1322,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_smp_bringup_group();
          run_smp_sched_group();
 #endif
+         // AP census first: a -smp 2 run with no AP up must fail here,
+         // not pass the multicpu class vacuously (issue #525).
+         run_smp_census_group();
          run_tlb_shootdown_group();
      }},
     {"deadline",
