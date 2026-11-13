@@ -1,0 +1,140 @@
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index 5ad30c34e..a16fbfa99 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -556,7 +556,11 @@ static uint64_t stack_size_for_priority(uint64_t priority) {
+ // (CS=0x1B) -> #PF, and the user page table maps only PAGE_USER frames.
+ // BUGS.md#020.  A C++ lambda cannot run in user mode at all (there is no
+ // mechanism to map it); a real user task is an ELF-loaded app.  So for
+-// create_user() tasks we install a tiny user-mode stub that yields forever.
++// create_user() tasks whose saved entry is a kernel-half placeholder we
++// install a tiny user-mode stub that yields forever.  A caller-supplied
++// real user entry (e.g. a per-test spinner page) is left executable —
++// that is what makes per-test fault injection work on every arch
++// (issue #533; the stub replaces a placeholder only, never a real entry).
+ // The stub VA is in low user space and never collides with test buffer VAs
+ // (>= 0x100000000) or the stack/heap (0x60000000/0x70000000).
+ // ---------------------------------------------------------------------------
+@@ -599,10 +603,45 @@ static constexpr uint8_t kUserYieldStub[] = {
+ 
+ /// @brief Map the user-mode yield stub into @p tcb's user PML4 and rewrite the
+ ///        saved iret frame's entry slots to point at it.  Returns false if the
+-///        stub page cannot be allocated/mapped.
++///        stub page cannot be allocated/mapped, or if the saved entry is not
++///        a kernel-half placeholder (issue #533: a caller-supplied real user
++///        entry, e.g. a per-test spinner page, is executed as-is — the stub
++///        is never installed and no page is allocated or mapped).
+ /// @post After a successful call, dispatching @p tcb enters user mode at the
+ ///       yield stub (never a kernel address) and cooperatively yields forever.
+ static bool install_user_yield_stub(TaskControlBlock &tcb) {
++#if defined(CONFIG_ARCH_X86_64)
++    // The saved iret frame stores the (placeholder kernel) entry in two slots:
++    // the iret RIP and the SysV rdi copy.  The placeholder is a kernel
++    // higher-half address (TaskControlBlock::is_kernel_address()); a caller
++    // supplied user entry means the caller owns the mapping — leave the
++    // frame as-is.  Issue #533: hoisted before any allocation so the miss
++    // path maps nothing (no orphan PTE to a freed page).
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *frame = reinterpret_cast<uint64_t *>(tcb.context.rsp);
++    size_t slots = (tcb.kernel_stack_top - tcb.context.rsp) / sizeof(uint64_t);
++
++    uint64_t original_entry = 0;
++    for (size_t i = 0; i < slots; ++i) {
++        if (TaskControlBlock::is_kernel_address(frame[i])) {
++            original_entry = frame[i];
++            break;
++        }
++    }
++    if (original_entry == 0)
++        return false;
++#elif defined(CONFIG_ARCH_RISCV64)
++    // SEPC at frame offset 31 (SAVE_SIZE = 37 qwords).  Issue #533:
++    // x86-parity gate — only a kernel-half placeholder is rewritten.  A
++    // caller-supplied user entry (e.g. a per-test spinner page) survives,
++    // so the task executes its own mapped page instead of the shared stub
++    // (whose stale fetch under emulation caused the control-arm flake).
++    // NOLINTNEXTLINE(performance-no-int-to-ptr)
++    auto *frame = reinterpret_cast<uint64_t *>(tcb.context.sp);
++    if (frame == nullptr || !TaskControlBlock::is_kernel_address(frame[31]))
++        return false;
++#endif
++
+     uint64_t stub_phys = PMM::alloc_user_page();
+     if (!stub_phys)
+         return false;
+@@ -622,34 +661,22 @@ static bool install_user_yield_stub(TaskControlBlock &tcb) {
+                           tcb.get_page_table());
+ 
+ #if defined(CONFIG_ARCH_X86_64)
+-    // The saved iret frame stores the (placeholder kernel) entry in two slots:
+-    // the iret RIP and the SysV rdi copy.  The placeholder is a kernel
+-    // higher-half address (TaskControlBlock::is_kernel_address()); the stub
+-    // is a low user VA.
+-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+-    auto *frame = reinterpret_cast<uint64_t *>(tcb.context.rsp);
+-    size_t slots = (tcb.kernel_stack_top - tcb.context.rsp) / sizeof(uint64_t);
+-
+-    uint64_t original_entry = 0;
+-    for (size_t i = 0; i < slots; ++i) {
+-        if (TaskControlBlock::is_kernel_address(frame[i])) {
+-            original_entry = frame[i];
+-            break;
+-        }
+-    }
+-    if (original_entry == 0) {
+-        PMM::free_page(stub_phys);
+-        return false;
+-    }
++    // Entry validation hoisted above (issue #533); the miss path maps
++    // nothing, so this loop only ever rewrites a found placeholder.
+     for (size_t i = 0; i < slots; ++i)
+         if (frame[i] == original_entry)
+             frame[i] = kUserYieldStubVa;
+ #elif defined(CONFIG_ARCH_AARCH64)
++    // The rewrite lands in context.elr_el1, which initial dispatch never
++    // consumes (it restores the stacked frame at context.sp_el0) — see
++    // scheduler_switch.cpp.  A caller-supplied user entry therefore already
++    // survives on this arch (documented arch-equivalent, issue #533);
++    // exit_rip still reports the stub for such tasks (display-only).
+     tcb.context.elr_el1 = kUserYieldStubVa;
+ #elif defined(CONFIG_ARCH_RISCV64)
+-    // SEPC at frame offset 31 (SAVE_SIZE = 37 qwords).
+-    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+-    auto *frame = reinterpret_cast<uint64_t *>(tcb.context.sp);
++    // Entry validation hoisted above (issue #533): reaching here means the
++    // stacked SEPC held a kernel-half placeholder (frame is the hoisted
++    // gate's pointer).  SEPC at frame offset 31 (SAVE_SIZE = 37 qwords).
+     frame[31] = kUserYieldStubVa;
+ #endif
+     return true;
+@@ -1247,7 +1274,9 @@ done_stack:
+ /// @brief Creates a new user-space TaskControlBlock.
+ /// Allocates a TCB, kernel stack, user stack, and a cloned PML4 page table.
+ /// The initial register frame targets user-mode execution.
+-/// @param entry  User-space entry point address.
++/// @param entry  User-space entry point address.  A kernel-half value is
++///               treated as a dispatch placeholder and replaced with the
++///               yield stub (issue #533); a real user VA is executed as-is.
+ /// @param priority  Initial scheduling priority.
+ /// @param period_ticks  Period for rate-monotonic scheduling.
+ /// @param user_stack_size  Size of the user stack in bytes.
+diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
+index 870ef2a72..cb2faaa32 100644
+--- a/src/kernel/task/task.hpp
++++ b/src/kernel/task/task.hpp
+@@ -161,10 +161,11 @@ struct PagerFault; // issue #107 (pager_registry.hpp) — pointer only
+ namespace task {
+ class SporadicServer;
+ void dmesg_task_main();
+-/// @brief VA of the user-mode yield stub mapped into every create_user()
+-///        task (issue #226: tests plant faults at a VA the task is
+-///        guaranteed to execute — aarch64/riscv64 rewrite low-VA entries
+-///        to this stub, so per-test mapped VAs never run there).
++/// @brief VA of the user-mode yield stub mapped into create_user() tasks
++///        whose saved entry is a kernel-half placeholder (issue #226:
++///        tests plant faults at a VA the task is guaranteed to execute;
++///        issue #533: a caller-supplied real user entry is executed as-is
++///        and the stub is never installed for it).
+ constexpr uint64_t kUserYieldStubVa = 0x40000000ULL;
+ } // namespace task
+ 
