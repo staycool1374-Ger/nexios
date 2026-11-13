@@ -145,13 +145,10 @@ JARVIS_TEST(kernel_priv_pml4_clone_kernel_half_present,
             "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(t != nullptr);
-    // Issue #541, option A (testbed workaround): create() never registers,
-    // while cleanup() unconditionally removes — a create-without-add +
-    // cleanup test nets Tasks -1 on every arch. Registering (no enqueue:
-    // the task never dispatches, tables inspected are unchanged) closes
-    // the pair with zero kernel change. The structural fix (birth/death
-    // symmetry) is tracked kernel-side.
-    Scheduler::register_task(*t);
+    // Issue #542 (birth/death symmetry): track_task_add moved to the TCB
+    // birth funnels, so pure create/cleanup nets zero with no registration.
+    // (Supersedes the #541 option-A register_task workaround, reverted —
+    // keeping it would mask a future accounting regression.)
     auto cleanup = ScopeGuard([&]() {
         t->cleanup();
         delete t;
