@@ -605,6 +605,8 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
         (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
     uint64_t kstack_phys = PMM::alloc_contiguous(kstack_pages);
     if (!kstack_phys) {
+        // Issue #542: init_task_common above already ran the birth
+        // track_task_add; cleanup() pairs it via complete_teardown.
         tcb->cleanup();
         delete tcb;
         return nullptr;

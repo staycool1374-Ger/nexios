@@ -30,7 +30,8 @@
 #include <kernel/task/tcb_write_log.hpp>                // issue #323 dump_tcb_write_log
 #include <kernel/log/dmesg.hpp>                         // issue #323 dmesg ring
 #include <kernel/memory/integrity.hpp>                  // issue #323 integrity checks
-#include <kernel/test/resource_tracker.hpp>             // issue #323 track_task_add
+// Issue #542: no track_task_* calls remain in this file — tasks are
+// counted at TCB birth, removed once in complete_teardown().
 #include <kernel/arch/hal/ipi.hpp>                      // issue #351 arch::send_resched_ipi
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/gdt.hpp>
@@ -558,7 +559,9 @@ void Scheduler::register_task(TaskControlBlock &task) {
     task.in_ready_queue_ = false;
     task.runq_next_ = nullptr;
     task.runq_prev_ = nullptr;
-    kernel::test::ResourceTracker::instance().track_task_add();
+    // Issue #542: no track_task_add here — birth accounting lives in the
+    // TCB factories (init_task_common/clone/spawn_thread); registration
+    // is not accounting.
 }
 
 void Scheduler::add_task(TaskControlBlock &task) {
@@ -582,7 +585,7 @@ void Scheduler::add_task(TaskControlBlock &task) {
     task.edf_next_ = nullptr;
     task.edf_prev_ = nullptr;
     enqueue_ready(task);
-    kernel::test::ResourceTracker::instance().track_task_add();
+    // Issue #542: no track_task_add here (see register_task).
 
     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
                  task.id, task.priority);
@@ -674,12 +677,10 @@ void Scheduler::remove_task(TaskControlBlock &task) {
     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
-    // NOTE: ResourceTracker::track_task_remove() is intentionally NOT called
-    // here.  Task teardown has two styles (operator delete, and the reaper's
-    // manual MemPool::free), and BOTH route through TaskControlBlock::cleanup(),
-    // which is the single canonical point that calls track_task_remove().
-    // Tracking here too would double-count every deleted task (remove_task is
-    // also invoked by operator delete) and produce a false ResourceTracker leak.
+    // Issue #542: no track_task_* calls in registration or removal.
+    // Tasks are counted at TCB birth (factories) and removed once in
+    // TaskControlBlock::complete_teardown(); the loader's manual-free
+    // bypass (ElfLoader::destroy_completed_tcb) pairs its own remove.
 }
 
 bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
@@ -803,7 +804,7 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
     task.edf_next_ = nullptr;
     task.edf_prev_ = nullptr;
     enqueue_ready(task);
-    kernel::test::ResourceTracker::instance().track_task_add();
+    // Issue #542: no track_task_add here (see register_task).
     return SCHED_ERR_OK;
 }
 
@@ -824,8 +825,7 @@ SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
     __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
 
-    // track_task_remove() lives in TaskControlBlock::cleanup() (shared teardown
-    // point) — not here — to avoid double-counting.  See Scheduler::remove_task.
+    // Issue #542: no track_task_* calls here (see Scheduler::remove_task).
     return SCHED_ERR_OK;
 }
 

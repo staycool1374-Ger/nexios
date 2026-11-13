@@ -421,6 +421,11 @@ void init_task_common(TaskControlBlock &tcb) {
 
     tcb.event_group.init();
     kernel::test::ResourceTracker::instance().track_event_group_add();
+    // Issue #542: tasks are counted at TCB birth (this funnel, clone,
+    // spawn_thread), removed once in complete_teardown(); registration
+    // is not accounting. Pairs with the remove in complete_teardown and
+    // the manual remove in ElfLoader::destroy_completed_tcb.
+    kernel::test::ResourceTracker::instance().track_task_add();
 
     // Process hierarchy initialization
     tcb.first_child = nullptr;
@@ -1756,6 +1761,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 
     tcb->event_group.init();
     kernel::test::ResourceTracker::instance().track_event_group_add();
+    // Issue #542: clone does not route through init_task_common, so the
+    // birth add lives here. Pairs with the remove in complete_teardown.
+    kernel::test::ResourceTracker::instance().track_task_add();
 
     // Copy fd_table.  Each copied used vnode gets a vnode_ref_inc (mirrors the
     // dup2/open/dup discipline): the child owns an independent reference and
@@ -2151,6 +2159,9 @@ TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
 
     tcb->event_group.init();
     kernel::test::ResourceTracker::instance().track_event_group_add();
+    // Issue #542: spawn_thread does not route through init_task_common,
+    // so the birth add lives here. Pairs with complete_teardown.
+    kernel::test::ResourceTracker::instance().track_task_add();
 
     // Copy fd_table with vnode ref bumps (mirrors clone): the thread owns
     // independent references torn down at its own cleanup.
@@ -2937,6 +2948,10 @@ void TaskControlBlock::complete_teardown() noexcept {
         vfs::vnode_ref_dec(cwd_vnode);
     cwd_vnode = nullptr;
     kernel::task_step(kernel::TaskCleanupSteps::CapRelease); // issue #347 Slice C
+    // Issue #542: the single canonical remove — pairs the birth add from
+    // init_task_common/clone/spawn_thread for every cleanup() caller. The
+    // only other remove is the loader's manual-free bypass
+    // (ElfLoader::destroy_completed_tcb), which never runs cleanup().
     kernel::test::ResourceTracker::instance().track_task_remove();
     // If this block was the deadline-monitor task's TCB, clear the scheduler's
     // pointer so s_monitor_task_ can never dangle into a reused block (the
