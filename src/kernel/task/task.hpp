@@ -161,10 +161,11 @@ struct PagerFault; // issue #107 (pager_registry.hpp) — pointer only
 namespace task {
 class SporadicServer;
 void dmesg_task_main();
-/// @brief VA of the user-mode yield stub mapped into every create_user()
-///        task (issue #226: tests plant faults at a VA the task is
-///        guaranteed to execute — aarch64/riscv64 rewrite low-VA entries
-///        to this stub, so per-test mapped VAs never run there).
+/// @brief VA of the user-mode yield stub mapped into create_user() tasks
+///        whose saved entry is a kernel-half placeholder (issue #226:
+///        tests plant faults at a VA the task is guaranteed to execute;
+///        issue #533: a caller-supplied real user entry is executed as-is
+///        and the stub is never installed for it).
 constexpr uint64_t kUserYieldStubVa = 0x40000000ULL;
 } // namespace task
 
