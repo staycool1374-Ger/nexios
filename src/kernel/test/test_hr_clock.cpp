@@ -189,8 +189,10 @@ JARVIS_TEST(hrt_oneshot_remaining_ns, "PRE: none | POST: none") {
 //         there — see #319) and under slow tick delivery (the tick-implied
 //         wall assumes nominal CONFIG_TICK_HZ; TCG per-IRQ latency compounds
 //         into a permanently slow tick on aarch64/riscv64 QEMU, which the
-//         effective-rate gate below detects — same unenforceability
-//         doctrine, no QEMU fingerprinting needed).
+//         effective-rate gate below detects at ±20% — tighter than the
+//         assert's ±25% so borderline platforms skip rather than fail
+//         (issue #532); same unenforceability doctrine, no QEMU
+//         fingerprinting needed).
 // Depends: arch::Timer::ticks/ns_monotonic/tsc_freq_hz, arch::pause
 JARVIS_TEST(hrt_wall_accuracy_bound, "PRE: none | POST: none") {
 #if defined(CONFIG_ARCH_X86_64)
@@ -231,14 +233,17 @@ JARVIS_TEST(hrt_wall_accuracy_bound, "PRE: none | POST: none") {
     // Effective tick-rate health gate (aarch64/riscv64 have no CPUID
     // hypervisor bit): the counter domain is TCG-robust (counters never
     // slow — only IRQ delivery does), so the effective tick rate exposes
-    // slow delivery directly. Beyond ±25% of nominal the tick-implied
+    // slow delivery directly. Beyond ±20% of nominal the tick-implied
     // wall is unenforceable here; warn-skip instead of failing a
-    // platform property. Healthy platforms (incl. real HW) still enforce
-    // the strict bound below.
+    // platform property. The ±20% (not ±25%) closes the margin against
+    // the assert below: delivery x% slow reads as 1/(1-x) on the mono
+    // side, so a ±25% gate still enforces platforms the assert fails
+    // (issue #532: eff 787Hz passed the gate, mono +26.5% failed it).
+    // Healthy platforms (incl. real HW) still enforce the strict bound.
     if (tsc_delta != 0 && freq_now != 0) {
         const uint64_t eff_hz = (tick_delta * freq_now) / tsc_delta;
-        const uint64_t lo_hz = (CONFIG_TICK_HZ * 3ULL) / 4ULL;
-        const uint64_t hi_hz = (CONFIG_TICK_HZ * 5ULL) / 4ULL;
+        const uint64_t lo_hz = (CONFIG_TICK_HZ * 4ULL) / 5ULL;
+        const uint64_t hi_hz = (CONFIG_TICK_HZ * 6ULL) / 5ULL;
         if (eff_hz < lo_hz || eff_hz > hi_hz) {
             Logger::warn("HRT wall accuracy skipped (slow tick delivery)");
             JARVIS_TEST_PASS();
