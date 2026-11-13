@@ -1326,19 +1326,28 @@ JARVIS_TEST(debug_stop_fault_routed, "PRE: none | POST: none") {
                                  sizeof(kBrkInsn)),
         "stub poison failed");
 #else
-    // NOTE (issue #239): riscv64 keeps the legacy yield-stub poison.
-    // Poisoning kSpinStubVa is more correct (as on aarch64), but the
-    // riscv control currently fails BEFORE dispatch (exec=0 starvation
-    // under timer dilation — sleeps never expire, spinner never runs),
-    // so poison content is irrelevant there; changing it only churns
-    // a luck-governed path. Revisit with the timer/dilation work.
+    // Issue #533 (coupled kernel half): install_user_yield_stub now skips
+    // the rewrite for user-VA entries (x86-parity), so the spinner starts
+    // at its private kSpinStubVa like on the other arches — poison the VA
+    // the task actually executes (poisoning the shared yield stub would
+    // hit a page the task never runs). Spawn + poison hold one IrqGuard
+    // so the spinner cannot dispatch between the two.
     uint64_t cphys = 0;
-    TaskControlBlock *c = debug_spawn_spinner(cphys);
+    TaskControlBlock *c = nullptr;
+    bool poisoned = false;
+    {
+        arch::IrqGuard ig{};
+        c = debug_spawn_spinner(cphys);
+        if (c != nullptr)
+            poisoned = debug_write_target_bytes(c, kSpinStubVa, kFaultInsn,
+                                                sizeof(kFaultInsn));
+    }
     JARVIS_ASSERT_FMT(c != nullptr, "control spawn failed");
-    JARVIS_ASSERT_FMT(
-        debug_write_target_bytes(c, kernel::task::kUserYieldStubVa,
-                                 kFaultInsn, sizeof(kFaultInsn)),
-        "stub poison failed");
+    if (!poisoned) {
+        debug_free_spinner_page(c, cphys);
+        debug_reap_child(c);
+    }
+    JARVIS_ASSERT_FMT(poisoned, "stub poison failed");
 #endif
     // Death = TERMINATED, reaped, invalid, or RECYCLED (id changed): the
     // control task has no debugger to serialize teardown against, so the
