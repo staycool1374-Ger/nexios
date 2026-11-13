@@ -40,13 +40,49 @@ namespace {
 constexpr uint64_t PRIV_BASE = CONFIG_KERNEL_PRIV_DATA_BASE;
 
 /// @brief Walk A's PML4 at CONFIG_KERNEL_PRIV_DATA_BASE and free the
-///        kernel-owned table pages (PDPT/PD/PT) plus the leaf data page.
-///        free_user_pages() only walks the user half (0..255), so the
-///        kernel-half private window must be torn down manually.
-///        x86_64-only: the PRIV window VA is non-canonical on Sv39 (see the
-///        gated tests below), so no rv64 caller remains.
-#if !defined(CONFIG_ARCH_RISCV64)
+///        kernel-owned table pages (PDPT/PD/PT on x86_64, L1/L2 on Sv39)
+///        plus the leaf data page.  free_user_pages() only walks the user
+///        half (0..255), so the kernel-half private window must be torn
+///        down manually. Boot asserts the window slot absent, so tables
+///        below it are test-exclusive on every arch.
 void free_priv_window(uint64_t pml4_phys) {
+#if defined(CONFIG_ARCH_RISCV64)
+    // Sv39 branch (issue #540): the canonical window decodes to L0[320]
+    // (same slot number as x86 by design), L1[0], L2[0]. Mirrors the x86
+    // chain teardown level for level; the L0[320] subtree is
+    // test-exclusive exactly like the x86 PDPT chain.
+    constexpr uint64_t kV = 1ULL << 0;
+    auto *l0 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
+                                            (pml4_phys & ~0xFFFULL));
+    size_t l0_idx = (PRIV_BASE >> 30) & 0x1FF;
+    if (!(l0[l0_idx] & kV))
+        return;
+    uint64_t l1_phys = VMM::sv39_pte_phys(l0[l0_idx]);
+    auto *l1 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l1_phys);
+    size_t l1_idx = (PRIV_BASE >> 21) & 0x1FF;
+    if (!(l1[l1_idx] & kV)) {
+        PMM::free_page(l1_phys);
+        l0[l0_idx] = 0;
+        return;
+    }
+    uint64_t l2_phys = VMM::sv39_pte_phys(l1[l1_idx]);
+    auto *l2 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET + l2_phys);
+    size_t l2_idx = (PRIV_BASE >> 12) & 0x1FF;
+    // Reclaim through the canonical translation (page-aligned) instead of
+    // a raw mask (Sv39 PTEs carry PPN<<10 — raw masking decodes 4x too
+    // low; same class as the #536 helper bug).
+    if ((l2[l2_idx] & kV) != 0) {
+        uint64_t leaf_phys =
+            VMM::virt_to_phys_in_pml4(PRIV_BASE, pml4_phys);
+        if (leaf_phys != 0)
+            PMM::free_page(leaf_phys);
+    }
+    PMM::free_page(l2_phys);
+    PMM::free_page(l1_phys);
+    l1[l1_idx] = 0;
+    l0[l0_idx] = 0;
+    return;
+#else
     constexpr uint64_t P = 1ULL << 0;
     auto *pml4 = reinterpret_cast<uint64_t *>(arch::HHDM_OFFSET +
                                               (pml4_phys & ~0xFFFULL));
@@ -91,8 +127,8 @@ void free_priv_window(uint64_t pml4_phys) {
     pd[pd_idx] = 0;
     pdpt[pdpt_idx] = 0;
     pml4[pml4_idx] = 0;
+#endif
 }
-#endif // !defined(CONFIG_ARCH_RISCV64)
 
 } // namespace
 
@@ -109,6 +145,13 @@ JARVIS_TEST(kernel_priv_pml4_clone_kernel_half_present,
             "PRE: none | POST: none") {
     auto *t = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(t != nullptr);
+    // Issue #541, option A (testbed workaround): create() never registers,
+    // while cleanup() unconditionally removes — a create-without-add +
+    // cleanup test nets Tasks -1 on every arch. Registering (no enqueue:
+    // the task never dispatches, tables inspected are unchanged) closes
+    // the pair with zero kernel change. The structural fix (birth/death
+    // symmetry) is tracked kernel-side.
+    Scheduler::register_task(*t);
     auto cleanup = ScopeGuard([&]() {
         t->cleanup();
         delete t;
@@ -171,20 +214,9 @@ JARVIS_TEST(kernel_priv_pml4_clone_kernel_half_present,
 // Depends: kernel::task::TaskControlBlock, kernel::memory::VMM, PMM
 JARVIS_TEST(kernel_priv_cross_task_data_isolation,
             "PRE: none | POST: none") {
-#if defined(CONFIG_ARCH_RISCV64)
-    // Gated: CONFIG_KERNEL_PRIV_DATA_BASE (0xFFFFA00000000000) is
-    // NON-canonical on Sv39 (canonical kernel half starts at
-    // 0xFFFFFFC000000000), so no mapping can ever make the window VA
-    // accessible — the first-chance halt on the dispatched store is the
-    // correct fail-stop, not a test failure. A port-canonical private
-    // window (per-arch PRIV_BASE in Sv39 canonical range + kernel.cpp
-    // boot-check index + helper rework) is a port-design follow-up for
-    // the arch owner, not a premise this test can gate around: testing
-    // the isolation mechanism at a substitute VA would prove nothing
-    // about the configured window.
-    JARVIS_TEST_PASS();
-    return;
-#else
+    // riscv64 uses the canonical window (issue #540: PRIV_BASE
+    // 0xFFFFFFD000000000, Sv39 slot 320); the free_priv_window helper
+    // carries the matching Sv39 walk.
     static uint64_t g_written = 0;
     static uint64_t g_cr3_in_a = 0;
 
@@ -259,7 +291,6 @@ JARVIS_TEST(kernel_priv_cross_task_data_isolation,
     (void)pml4_b;
 #endif
     JARVIS_TEST_PASS();
-#endif
 }
 
 // Runmode: kernel
@@ -336,12 +367,6 @@ JARVIS_TEST(kernel_priv_teardown_frees_pml4_stack,
 // Depends: kernel::VMM, kernel::PMM, free_priv_window
 JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
             "PRE: none | POST: none") {
-#if defined(CONFIG_ARCH_RISCV64)
-    // Gated: exercises the PRIV window at non-canonical PRIV_BASE (see the
-    // cross-task test above) — same canonical-PRIV follow-up.
-    JARVIS_TEST_PASS();
-    return;
-#else
     uint64_t free_before = PMM::free_pages_ref();
 
     auto *task_a = TaskControlBlock::create([]() {}, 11, 10);
@@ -371,7 +396,15 @@ JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto *pml4 = reinterpret_cast<uint64_t *>(
         arch::HHDM_OFFSET + (task_a->get_page_table() & ~0xFFFULL));
+#if defined(CONFIG_ARCH_RISCV64)
+    // Sv39 root index (issue #540: canonical window names slot 320, the
+    // same slot number as the x86 shift below — static-asserted equal).
+    constexpr size_t PRIV_SLOT = (CONFIG_KERNEL_PRIV_DATA_BASE >> 30) & 0x1FF;
+#else
     constexpr size_t PRIV_SLOT = (CONFIG_KERNEL_PRIV_DATA_BASE >> 39) & 0x1FF;
+#endif
+    static_assert(PRIV_SLOT == 320,
+                  "PRIV window must live in slot 320 on every arch");
     JARVIS_ASSERT_FMT(pml4[PRIV_SLOT] == 0, "PML4 priv slot must be clear");
 
     task_a->cleanup();
@@ -381,7 +414,6 @@ JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
                       "PMM delta %ld pages after priv-window teardown",
                       (long)(PMM::free_pages_ref() - free_before));
     JARVIS_TEST_PASS();
-#endif
 }
 
 // Runmode: kernel
@@ -392,11 +424,6 @@ JARVIS_TEST(kernel_priv_teardown_clears_pml4_slot_and_reclaims,
 // Depends: free_priv_window early-return chain
 JARVIS_TEST(kernel_priv_teardown_double_free_safe,
             "PRE: none | POST: none") {
-#if defined(CONFIG_ARCH_RISCV64)
-    // Gated: same non-canonical PRIV_BASE premise as above.
-    JARVIS_TEST_PASS();
-    return;
-#else
     uint64_t free_before = PMM::free_pages_ref();
 
     auto *task_a = TaskControlBlock::create([]() {}, 11, 10);
@@ -431,7 +458,6 @@ JARVIS_TEST(kernel_priv_teardown_double_free_safe,
                       "PMM delta %ld pages after double teardown",
                       (long)(PMM::free_pages_ref() - free_before));
     JARVIS_TEST_PASS();
-#endif
 }
 
 // Runmode: kernel
