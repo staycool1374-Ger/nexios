@@ -1,0 +1,39 @@
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 53ac4b154..0bfd82ba8 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -1332,7 +1332,14 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
+     // TRUE cross-task isolation, not an aliased kernel mapping.
+     {
+         constexpr uint64_t priv_base = CONFIG_KERNEL_PRIV_DATA_BASE;
++#if defined(CONFIG_ARCH_RISCV64)
++        // Sv39 root index (issue #540): the x86 >>39 index names slot 511
++        // for the canonical base, not the window's slot. Sv39's root index
++        // is bits [38:30]; the canonical base keeps slot 320 on all archs.
++        size_t pml4_idx = (priv_base >> 30) & 0x1FF;
++#else
+         size_t pml4_idx = (priv_base >> 39) & 0x1FF;
++#endif
+         auto *kpml4 = reinterpret_cast<const uint64_t *>(
+             arch::HHDM_OFFSET + (kernel::VMM::get_kernel_pml4() & ~0xFFFULL));
+         if (kpml4[pml4_idx] & 1ULL)
+diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
+index 2fab08ccd..39ed6669a 100644
+--- a/src/kernel/nexios_config.h
++++ b/src/kernel/nexios_config.h
+@@ -923,6 +923,15 @@
+ #ifndef CONFIG_KERNEL_PRIV_DATA_BASE
+ #define CONFIG_KERNEL_PRIV_DATA_BASE 0xFFFFA00000000000ULL
+ #endif
++#if defined(CONFIG_ARCH_RISCV64)
++// Issue #540: the x86-shaped base is non-canonical on Sv39 (bit38=0 with
++// top bits set, so no mapping can ever make it accessible) and its Sv39
++// root slot is L0[0] (the shared low-half identity block). Sv39-canonical
++// equivalent in the same root slot 320 the boot overlap check pins, so
++// cross-arch slot numbering stays uniform.
++#undef CONFIG_KERNEL_PRIV_DATA_BASE
++#define CONFIG_KERNEL_PRIV_DATA_BASE 0xFFFFFFD000000000ULL
++#endif
+ 
+ /// Kernel stack sizes per priority tier (bytes).  Indexed by priority.
+ #ifndef CONFIG_STACK_SIZE_TABLE

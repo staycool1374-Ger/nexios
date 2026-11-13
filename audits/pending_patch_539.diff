@@ -1,0 +1,176 @@
+diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
+index 6fd33803c..e226a0bcf 100644
+--- a/src/kernel/core/global_state.cpp
++++ b/src/kernel/core/global_state.cpp
+@@ -131,6 +131,23 @@ extern "C" {
+ uint64_t g_user_access_recover_ip = 0;
+ }
+ 
++// Opaque fault-recovery sink for safe_copy_* (issue #539). See the header:
++// noinline keeps it a real call so the trap-entered recover path cannot be
++// merged or constant-folded by the optimizer (fail-open true was observed
++// when the inlined body lost its zeroing). Qualified definitions (no new
++// namespace block) to keep the style gate's short-name count stable.
++__attribute__((noinline)) bool gs::fault_recover_false() noexcept {
++    g_user_access_recover_ip = 0;
++    return false;
++}
++// Opaque never-taken probe for the recovery keep-alive edge (issue #539).
++// noinline keeps the KEEP's conditional goto a live edge: the optimizer
++// cannot fold the condition, so the recover block is never deleted as
++// unreachable. Always false at runtime (never taken).
++__attribute__((noinline)) bool gs::recovery_probe() noexcept {
++    return false;
++}
++
+ namespace test {
+ // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+ const char *g_current_class = nullptr;
+diff --git a/src/kernel/core/global_state.hpp b/src/kernel/core/global_state.hpp
+index a7d78d1d9..dd568568e 100644
+--- a/src/kernel/core/global_state.hpp
++++ b/src/kernel/core/global_state.hpp
+@@ -179,6 +179,21 @@ void set_canary_trip(uint64_t task_id, uint8_t segment, uint64_t rip) noexcept;
+ void reset_canary_trip() noexcept;
+ /// @brief SMAP recovery IP (extern "C" symbol kept for the fault handler).
+ uint64_t &user_access_recover_ip() noexcept;
++/// @brief Opaque fault-recovery sink for safe_copy_* (issue #539): disarms
++///        the recover IP and returns false. MUST stay a real out-of-line
++///        call (defined noinline): the recover label is entered by the trap
++///        epilogue with arbitrary register state, and compiling the body
++///        inline lets the optimizer assume the known edge state and drop
++///        the zeroing (every fault then returned true — fail-open user
++///        copy). A call re-establishes everything regardless of entry state.
++bool fault_recover_false() noexcept;
++/// @brief Opaque never-taken probe for the recovery keep-alive edge
++///        (issue #539): always returns false, but opaque to the compiler
++///        so the KEEP's conditional goto stays a live edge (a provably
++///        dead condition lets the optimizer delete the recover block).
++///        Never taken at runtime; a spurious take would only reach the
++///        failure path (fail-closed).
++bool recovery_probe() noexcept;
+ 
+ // ---------------------------------------------------------------------------
+ // Trap-owner trip latch (issue #513, M1 attribution validation)
+diff --git a/src/kernel/memory/checked_ptr.hpp b/src/kernel/memory/checked_ptr.hpp
+index 3abc382f2..67215ce3b 100644
+--- a/src/kernel/memory/checked_ptr.hpp
++++ b/src/kernel/memory/checked_ptr.hpp
+@@ -24,6 +24,7 @@
+ #include <concepts.hpp>
+ #include <kernel/memory/vmm.hpp>
+ #include <kernel/arch/hal/io.hpp>
++#include <kernel/core/global_state.hpp>
+ 
+ namespace kernel {
+ 
+@@ -37,19 +38,20 @@ extern "C" constinit uint64_t g_user_access_recover_ip;
+ /// address is taken with &&label (verified at -O0/-Og/-O2: recover bodies
+ /// absent binary-wide, labels resolve into the setup sequence, so a #PF
+ /// resume re-arms and re-faults forever; only blocks rejoining hot code
+-/// survive). A conditional goto through a value the compiler cannot fold
+-/// (CR3 low 12 bits via volatile asm — always zero at runtime since the
+-/// table root is page-aligned) forces emission with the label resolving
+-/// to the real body. The condition is false at runtime; even if taken it
+-/// only reaches the failure path (fail-closed, never fail-open).
++/// survive). The edge must stay live but carry no usable state: opaque
++/// computed gotos wedge boot (stale-zero jump), and CR3-mask conditions
++/// fold dead on riscv64 (shifted root proofs). An opaque never-taken call
++/// keeps the edge live with zero runtime effect; the recover bodies call
++/// the opaque fault_recover_false() sink (issue #539), so entry state —
++/// known or trap-provided — cannot leak into the failure value.
+ /// @note Place in reachable code before the label — either immediately after
+ ///       `g_user_access_recover_ip = &&label;`, or after the last initialized
+-///       declaration when one sits between setup and label: the goto must not
+-///       cross a non-vacuous initialization (hard error). Crossing
++///       declaration when one sits between setup and label: the keep must
++///       not cross a non-vacuous initialization (hard error). Crossing
+ ///       clac/g=0/return tails is always safe.
+ #define NEXIOS_FAULT_RECOVERY_KEEP(label)                                    \
+     do {                                                                     \
+-        if ((arch::read_cr3() & 0xFFFULL) == 0xFFFULL) {                      \
++        if (kernel::gs::recovery_probe()) {                                  \
+             goto label;                                                      \
+         }                                                                    \
+     } while (0)
+@@ -146,8 +148,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+ 
+     recover_cf:
+         arch::clac();
+-        g_user_access_recover_ip = 0;
+-        return false;
++        return kernel::gs::fault_recover_false();
+     }
+ 
+     /// @brief Copy count elements from kernel buffer to user space.
+@@ -168,8 +169,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+ 
+     recover_ct:
+         arch::clac();
+-        g_user_access_recover_ip = 0;
+-        return false;
++        return kernel::gs::fault_recover_false();
+     }
+ 
+     /// @brief Read one element from user space at the given index.
+@@ -189,7 +189,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+ 
+     recover_rd:
+         arch::clac();
+-        g_user_access_recover_ip = 0;
++        (void)kernel::gs::fault_recover_false();
+         return T{};
+     }
+ 
+@@ -208,8 +208,7 @@ template <kernel::TriviallyCopiable T> class CheckedPtr {
+ 
+     recover_wr:
+         arch::clac();
+-        g_user_access_recover_ip = 0;
+-        return false;
++        return kernel::gs::fault_recover_false();
+     }
+ };
+ 
+@@ -266,8 +265,7 @@ static inline bool is_user_string(const void *user_ptr,
+ 
+ recover_str_chk:
+     arch::clac();
+-    g_user_access_recover_ip = 0;
+-    return false;
++    return kernel::gs::fault_recover_false();
+ }
+ 
+ /// @brief Copy a null-terminated string from user space to kernel buffer.
+@@ -297,10 +295,9 @@ static inline bool strncpy_from_user(char *dst, const char *src,
+ 
+ recover_str:
+     arch::clac();
+-    g_user_access_recover_ip = 0;
+     if (max_len > 0)
+         dst[0] = '\0';
+-    return false;
++    return kernel::gs::fault_recover_false();
+ }
+ 
+ /// @brief Safely copies memory from user-space to kernel buffer.
+@@ -325,8 +322,7 @@ static inline bool safe_copy_from_user(T *dst, const T *src,
+ 
+ recover_from:
+     arch::clac();
+-    g_user_access_recover_ip = 0;
+-    return false;
++    return kernel::gs::fault_recover_false();
+ }
+ 
+ /// @brief Safely copies memory from kernel buffer to user-space.
+@@ -351,8 +347,7 @@ static inline bool safe_copy_to_user(T *dst, const T *src,
+ 
+ recover_to:
+     arch::clac();
+-    g_user_access_recover_ip = 0;
+-    return false;
++    return kernel::gs::fault_recover_false();
+ }
+ 
+ } // namespace kernel
