@@ -1,0 +1,159 @@
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index fc6335f19..393f8f001 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -605,6 +605,8 @@ TaskControlBlock *finalize_loaded_task(const ELF64Header *hdr, uint64_t pml4,
+         (TaskControlBlock::STACK_SIZE + 4095) / arch::PAGE_SIZE;
+     uint64_t kstack_phys = PMM::alloc_contiguous(kstack_pages);
+     if (!kstack_phys) {
++        // Issue #542: init_task_common above already ran the birth
++        // track_task_add; cleanup() pairs it via complete_teardown.
+         tcb->cleanup();
+         delete tcb;
+         return nullptr;
+diff --git a/src/kernel/elf/elf_loader.cpp b/src/kernel/elf/elf_loader.cpp
+index ccefbcb97..882fd8e68 100644
+--- a/src/kernel/elf/elf_loader.cpp
++++ b/src/kernel/elf/elf_loader.cpp
+@@ -1039,10 +1039,11 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
+         return;
+     // Teardown of a completed-but-NEVER-scheduled TCB (built by
+     // finalize_loaded_task, never add_task'd).  cleanup() is unsafe here
+-    // (Scheduler::unregister_task removes an absent task; parent/daemon logic
+-    // and track_task_remove assume add_task ran).  Free the resources directly,
+-    // mirroring cleanup()'s frees but skipping all scheduler + task-accounting
+-    // interactions.
++    // (Scheduler::unregister_task removes an absent task; parent/daemon
++    // logic assumes registration).  Free the resources directly, mirroring
++    // cleanup()'s frees but skipping scheduler interactions.  Issue #542:
++    // this path bypasses cleanup(), so it must still pair the birth
++    // track_task_add (init_task_common) with an explicit remove below.
+     if (tcb->get_page_table()) {
+         kernel::BufferPool::unmap_all(*tcb);
+         // Issue #95: release shared libs (unmap shared RO + drop
+@@ -1086,6 +1087,8 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
+     if (tcb->cwd_vnode)
+         vfs::vnode_ref_dec(tcb->cwd_vnode);
+     tcb->cwd_vnode = nullptr;
++    // Issue #542: pair the birth add (cleanup() bypassed on this path).
++    kernel::test::ResourceTracker::instance().track_task_remove();
+     tcb->magic = 0;
+     kernel::MemPool::free(tcb);
+ }
+diff --git a/src/kernel/task/scheduler_registry.cpp b/src/kernel/task/scheduler_registry.cpp
+index 5b1af8e42..295f28204 100644
+--- a/src/kernel/task/scheduler_registry.cpp
++++ b/src/kernel/task/scheduler_registry.cpp
+@@ -30,7 +30,8 @@
+ #include <kernel/task/tcb_write_log.hpp>                // issue #323 dump_tcb_write_log
+ #include <kernel/log/dmesg.hpp>                         // issue #323 dmesg ring
+ #include <kernel/memory/integrity.hpp>                  // issue #323 integrity checks
+-#include <kernel/test/resource_tracker.hpp>             // issue #323 track_task_add
++// Issue #542: no track_task_* calls remain in this file — tasks are
++// counted at TCB birth, removed once in complete_teardown().
+ #include <kernel/arch/hal/ipi.hpp>                      // issue #351 arch::send_resched_ipi
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/arch/gdt.hpp>
+@@ -558,7 +559,9 @@ void Scheduler::register_task(TaskControlBlock &task) {
+     task.in_ready_queue_ = false;
+     task.runq_next_ = nullptr;
+     task.runq_prev_ = nullptr;
+-    kernel::test::ResourceTracker::instance().track_task_add();
++    // Issue #542: no track_task_add here — birth accounting lives in the
++    // TCB factories (init_task_common/clone/spawn_thread); registration
++    // is not accounting.
+ }
+ 
+ void Scheduler::add_task(TaskControlBlock &task) {
+@@ -582,7 +585,7 @@ void Scheduler::add_task(TaskControlBlock &task) {
+     task.edf_next_ = nullptr;
+     task.edf_prev_ = nullptr;
+     enqueue_ready(task);
+-    kernel::test::ResourceTracker::instance().track_task_add();
++    // Issue #542: no track_task_add here (see register_task).
+ 
+     Logger::info("Scheduler: task '%s' (ID=%u, prio=%u) started", task.name,
+                  task.id, task.priority);
+@@ -674,12 +677,10 @@ void Scheduler::remove_task(TaskControlBlock &task) {
+     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
+ 
+-    // NOTE: ResourceTracker::track_task_remove() is intentionally NOT called
+-    // here.  Task teardown has two styles (operator delete, and the reaper's
+-    // manual MemPool::free), and BOTH route through TaskControlBlock::cleanup(),
+-    // which is the single canonical point that calls track_task_remove().
+-    // Tracking here too would double-count every deleted task (remove_task is
+-    // also invoked by operator delete) and produce a false ResourceTracker leak.
++    // Issue #542: no track_task_* calls in registration or removal.
++    // Tasks are counted at TCB birth (factories) and removed once in
++    // TaskControlBlock::complete_teardown(); the loader's manual-free
++    // bypass (ElfLoader::destroy_completed_tcb) pairs its own remove.
+ }
+ 
+ bool Scheduler::unregister_task(TaskControlBlock &task) noexcept {
+@@ -803,7 +804,7 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
+     task.edf_next_ = nullptr;
+     task.edf_prev_ = nullptr;
+     enqueue_ready(task);
+-    kernel::test::ResourceTracker::instance().track_task_add();
++    // Issue #542: no track_task_add here (see register_task).
+     return SCHED_ERR_OK;
+ }
+ 
+@@ -824,8 +825,7 @@ SchedulerError Scheduler::remove_task_err(TaskControlBlock &task) {
+     __atomic_store_n(&Scheduler::SwSlots::load_cr3_from(), (uint64_t)0, __ATOMIC_RELEASE);
+     __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0, __ATOMIC_RELEASE);
+ 
+-    // track_task_remove() lives in TaskControlBlock::cleanup() (shared teardown
+-    // point) — not here — to avoid double-counting.  See Scheduler::remove_task.
++    // Issue #542: no track_task_* calls here (see Scheduler::remove_task).
+     return SCHED_ERR_OK;
+ }
+ 
+diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
+index c9afec59c..5ad30c34e 100644
+--- a/src/kernel/task/task.cpp
++++ b/src/kernel/task/task.cpp
+@@ -421,6 +421,11 @@ void init_task_common(TaskControlBlock &tcb) {
+ 
+     tcb.event_group.init();
+     kernel::test::ResourceTracker::instance().track_event_group_add();
++    // Issue #542: tasks are counted at TCB birth (this funnel, clone,
++    // spawn_thread), removed once in complete_teardown(); registration
++    // is not accounting. Pairs with the remove in complete_teardown and
++    // the manual remove in ElfLoader::destroy_completed_tcb.
++    kernel::test::ResourceTracker::instance().track_task_add();
+ 
+     // Process hierarchy initialization
+     tcb.first_child = nullptr;
+@@ -1756,6 +1761,9 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
+ 
+     tcb->event_group.init();
+     kernel::test::ResourceTracker::instance().track_event_group_add();
++    // Issue #542: clone does not route through init_task_common, so the
++    // birth add lives here. Pairs with the remove in complete_teardown.
++    kernel::test::ResourceTracker::instance().track_task_add();
+ 
+     // Copy fd_table.  Each copied used vnode gets a vnode_ref_inc (mirrors the
+     // dup2/open/dup discipline): the child owns an independent reference and
+@@ -2151,6 +2159,9 @@ TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
+ 
+     tcb->event_group.init();
+     kernel::test::ResourceTracker::instance().track_event_group_add();
++    // Issue #542: spawn_thread does not route through init_task_common,
++    // so the birth add lives here. Pairs with complete_teardown.
++    kernel::test::ResourceTracker::instance().track_task_add();
+ 
+     // Copy fd_table with vnode ref bumps (mirrors clone): the thread owns
+     // independent references torn down at its own cleanup.
+@@ -2937,6 +2948,10 @@ void TaskControlBlock::complete_teardown() noexcept {
+         vfs::vnode_ref_dec(cwd_vnode);
+     cwd_vnode = nullptr;
+     kernel::task_step(kernel::TaskCleanupSteps::CapRelease); // issue #347 Slice C
++    // Issue #542: the single canonical remove — pairs the birth add from
++    // init_task_common/clone/spawn_thread for every cleanup() caller. The
++    // only other remove is the loader's manual-free bypass
++    // (ElfLoader::destroy_completed_tcb), which never runs cleanup().
+     kernel::test::ResourceTracker::instance().track_task_remove();
+     // If this block was the deadline-monitor task's TCB, clear the scheduler's
+     // pointer so s_monitor_task_ can never dangle into a reused block (the

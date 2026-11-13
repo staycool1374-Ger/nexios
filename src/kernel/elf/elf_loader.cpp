@@ -1039,10 +1039,11 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
         return;
     // Teardown of a completed-but-NEVER-scheduled TCB (built by
     // finalize_loaded_task, never add_task'd).  cleanup() is unsafe here
-    // (Scheduler::unregister_task removes an absent task; parent/daemon logic
-    // and track_task_remove assume add_task ran).  Free the resources directly,
-    // mirroring cleanup()'s frees but skipping all scheduler + task-accounting
-    // interactions.
+    // (Scheduler::unregister_task removes an absent task; parent/daemon
+    // logic assumes registration).  Free the resources directly, mirroring
+    // cleanup()'s frees but skipping scheduler interactions.  Issue #542:
+    // this path bypasses cleanup(), so it must still pair the birth
+    // track_task_add (init_task_common) with an explicit remove below.
     if (tcb->get_page_table()) {
         kernel::BufferPool::unmap_all(*tcb);
         // Issue #95: release shared libs (unmap shared RO + drop
@@ -1086,6 +1087,8 @@ void ElfLoader::destroy_completed_tcb(TaskControlBlock *tcb) {
     if (tcb->cwd_vnode)
         vfs::vnode_ref_dec(tcb->cwd_vnode);
     tcb->cwd_vnode = nullptr;
+    // Issue #542: pair the birth add (cleanup() bypassed on this path).
+    kernel::test::ResourceTracker::instance().track_task_remove();
     tcb->magic = 0;
     kernel::MemPool::free(tcb);
 }
