@@ -108,14 +108,6 @@ Done roadmap archived in `prompts/README_done.md`.
 ### v0.6.0: Scheduler Lifecycle & Cross-Arch Parity
 * **Task accounting birth/death symmetry + SMP shootdown observability**
 * **riscv64/aarch64 bring-up: canonical private window, fault-recovery keep-alive, yield-stub entry parity**
-* **Release-version gates green (debug + release) on x86_64/aarch64/riscv64; interactive shell + dmesg catalog fixes**
-* **Foundations carried:** planner → implement → SIL 3 audit pipeline, test-history discipline, audit-trail artifacts
-
-### v0.5.7: SMP Multicore Enablement & Cross-CPU Shootdown
-* **SMP Bring-Up**
-* **Cross-CPU TLB Shootdown**
-* **Scheduler + IPC Hardening**
-* **Foundations carried:** SMP-safe globals, EL0 guard-arm, toolchain parity
 
 ---
 
