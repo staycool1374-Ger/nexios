@@ -44,7 +44,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal), bring-up on Raspberry Pi4 planned
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.7 — SMP multicore enablement across all three architectures (AP bring-up, cross-CPU TLB shootdown, scheduler/IPC hardening)
+* **Status:** v0.6.0 — Scheduler lifecycle & cross-arch parity (task-accounting birth/death symmetry, SMP shootdown accounting, riscv64/aarch64 bring-up fixes, release-version gates green on all three architectures)
 * **License:** GPLv3
 
 ---
@@ -104,6 +104,12 @@ Done roadmap archived in `prompts/README_done.md`.
 ---
 
 ## Recent Release Highlights
+
+### v0.6.0: Scheduler Lifecycle & Cross-Arch Parity
+* **Task accounting birth/death symmetry + SMP shootdown observability**
+* **riscv64/aarch64 bring-up: canonical private window, fault-recovery keep-alive, yield-stub entry parity**
+* **Release-version gates green (debug + release) on x86_64/aarch64/riscv64; interactive shell + dmesg catalog fixes**
+* **Foundations carried:** planner → implement → SIL 3 audit pipeline, test-history discipline, audit-trail artifacts
 
 ### v0.5.7: SMP Multicore Enablement & Cross-CPU Shootdown
 * **SMP Bring-Up**
