@@ -1,2989 +1,1107 @@
-diff --git a/docs/specs/driver-pds.md b/docs/specs/driver-pds.md
-index d09bbf6ed..8f87357dc 100644
---- a/docs/specs/driver-pds.md
-+++ b/docs/specs/driver-pds.md
-@@ -146,8 +146,14 @@ aarch64 (FRAME); riscv64 blocked by a platform scheduler/timer issue
- 
- ## VFS/block rows (#47, issue #47 PDs share this SDF)
- 
--- `VFS_SRV` (vfs-srv PD): zero-cap row by design (no ambient authority).
--  Composes empty; the PD talks to clients over its endpoint only.
-+- `VFS_SRV` (vfs-srv PD, issue #47 step-b3): one 4-page shared window
-+  (`CapKind::DMA_REGION`, raw backend bytes in / parsed results out,
-+  kernel HHDM alias) + `FRAME` initrd pin is NOT conveyed (images live
-+  in kernel pages, rejected by the FRAME mint; D5 mandates a private
-+  copy — the kernel stages per-op instead). No device caps
-+  (MMIO/IRQ/DMA-device), so `sdf_policy_only` still holds; the compose
-+  gate rejects device kinds for policy roles. Composes with the window
-+  only; the PD talks to clients over its endpoint.
- - `BLOCK_SRV` (block-srv PD, issue #47 step-b1/b2): static
-   arch-switched row + one 4-page shared window (`CapKind::DMA_REGION`,
-   raw sector/queue area, kernel HHDM alias) + IRQ caps (step-b2:
 diff --git a/docs/specs/microkernel-transition.md b/docs/specs/microkernel-transition.md
-index 6993c92e4..ff8df5f44 100644
+index ff8df5f44..2c6bb7286 100644
 --- a/docs/specs/microkernel-transition.md
 +++ b/docs/specs/microkernel-transition.md
-@@ -195,11 +195,16 @@ generation-tagged stored pointers). Enforced at these points:
-     (merged `fc4a5e0e8`: SDF `DMA_REGION` + `kPdRoleCount`,
-     BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
-     read+write, `block_srv_live` class + host digest oracle).
--    Status 2026-11 (in progress): #47 step-b2 block-srv IRQ
-+    Status 2026-11 (landed): #47 step-b2 block-srv IRQ
-     delegation (main): WAIT_ACK delivery + bounded wait + poll
-     fallback, SDF IRQ caps (ATA IRQ14/15, virtio transport IRQ,
-     AHCI MSI conveyance-only), PD stats window, +4 tests per class
-     (`cap_irq` 16/15/15, `block_srv_live` 8/8/8).
-+    Status 2026-11 (landed): #47 step-b3 vfs-srv backends live path
-+    (main): BIND/CAP_GET + per-op raw-byte staging (cpio index/FAT
-+    sectors/ramdisk blocks cached per epoch; PD parses + owns
-+    namespace/handles/policy), 7 backends, `vfs_srv_live` 14/14/14
-+    x3 arches; tests land via testbed (D8a), kernel+PD+docs on main.
-     Status 2026-11 (in progress): #51 console-PD substrate (main):
-     SDF FB row (SHM ring + DMA status page + slot-chunked scanout —
-     MMIO or FRAME pins per backing), `fb-pd.c` console PD (bounded
-diff --git a/docs/specs/vfs-srv.md b/docs/specs/vfs-srv.md
-index cb0bde634..5d708982b 100644
---- a/docs/specs/vfs-srv.md
-+++ b/docs/specs/vfs-srv.md
-@@ -1,38 +1,91 @@
--# vfs-srv — VFS Server PD Contract (issue #47, strangler step a)
-+# vfs-srv — VFS Server PD Contract (issue #47, strangler step-b3)
- 
--Userspace VFS server behind `CONFIG_VFS_SRV` (default 0). Step-a scope:
--PD task + SDF row + Kconfig OFF shim + loopback/parity + fault drill.
--No flip: authorize stays kernel-side (`syscall_handlers_fs.cpp`,
--`vfs.cpp`, `vfsd.c` untouched).
-+Userspace VFS server behind `CONFIG_VFS_SRV` (default 0). Step-a scope
-+(PD task + SDF row + Kconfig OFF shim + loopback/parity + fault drill)
-+is superseded by step-b3: live backend serving for all seven backends
-+(INITRD/FAT32/TMPFS/DEVFS/PIPE/RAMDISK/PROCFS). No flip: authorize
-+stays kernel-side (`syscall_handlers_fs.cpp`, `vfs.cpp`, `vfsd.c`
-+untouched); the kernel VFS path stays authoritative, the PD shadows it.
- 
- ## Wire
- 
- 48 B `VfsRpc` (`kernel/vfs/vfs_srv.hpp`, mirrors `TimerRpc`): op/flags/
--epoch/owner id+gen/ino/offset/size/status-op/status. Ops: BIND,
--INITRD/FAT32/TMPFS/DEVFS/PIPE/RAMDISK/PROCFS_RENDER (probe only),
--INJECT_CORRUPT (one-shot drill). Server answers BIND; every other op
--returns a typed error pre-flip (`-ENOSYS`, corrupt probe `-EIO`).
-+rsvd/epoch/owner id+gen/ino/offset/size/status-op/status. Ops 0..8 are
-+the frozen step-a ABI (BIND, backend probes, INJECT_CORRUPT drill).
-+Step-b3 adds 9..19: CAP_GET, OPEN, CLOSE, READ, WRITE, STAT, READDIR,
-+CREATE, UNLINK, BACKEND_STATUS, INJECT_BACKEND_FAULT.
-+
-+CAP_GET/BIND mirror the block-srv shape with a 48 B packing difference:
-+kind rides `flags`, the encoded row handle rides `size`, phys/size go
-+in `ino`/`offset`, the row index in `status_op`. BIND goes last
-+(`offset` = row cap count); the PD answers the backend mask in `size`
-+(one bit per backend, INITRD=0 .. PROCFS=6).
-+
-+OPEN returns a PD-owned handle packed as `backend << 56 | base`. For
-+image-backed backends the low 56 bits are `(locator24 << 32 | size32)`
-+— the raw image locator (cpio byte offset / FAT start cluster /
-+ramdisk start block / proc file index) plus the file size, which the
-+kernel uses to clamp reads (EOF shape). Locators stay under 2^24
-+(16 MiB images; b3 test images are ~2 MiB — larger images fail closed
-+at OPEN with `-EINVAL`). TMPFS/PIPE handles are table slots into the
-+PD-owned stores (generation-tagged; stale handles fail typed, never
-+silently succeed).
-+
-+## Split of duties
-+
-+The kernel stages RAW backend bytes into the shared 4-page window
-+(`kVfsRegionPages`, data at `kVfsDataOffset`, name slot at
-+`kVfsNameOffset`, stats at `kVfsStatsOffset`); the PD parses and owns
-+namespace, handles and policy:
-+- INITRD: kernel builds a compact cpio index (name/data_off/size/mode,
-+  ≤128 entries) once per epoch into .bss and stages it per op; the PD
-+  resolves paths and packs image offsets.
-+- FAT32: kernel stages BPB + root-dir cluster; the PD parses geometry +
-+  dirents and packs (start_cluster, size); data reads are kernel-walked
-+  chains the PD length-checks.
-+- RAMDISK: kernel stages super + full dir region; the PD parses extents
-+  and packs (start_block, size); data reads are kernel-staged spans.
-+- TMPFS/PIPE: PD-owned bounded stores (8×4 KiB files, 4×1 KiB rings);
-+  no staging, behavioral parity only.
-+- DEVFS: static metadata table; data ops are `-ENOSYS` (device authority
-+  stays kernel-side — D3).
-+- PROCFS: kernel renders via its own VnodeOps into the window; the PD
-+  validates format + digest (D6 validator, never renders).
-+
-+Per-op staging (not bind-time): the 2.3 MiB initrd image cannot fit a
-+16 KiB window. The cpio index is cached kernel-side per epoch; the
-+PD keeps no cross-op image state except its open-handle table (cleared
-+on epoch bump). Single RPC per op; the kernel clamps reads to
-+`min(size, file_size - offset)` so short final chunks terminate the
-+digest loop deterministically.
- 
- ## Lifecycle
- 
- PID cell + epoch + tombstone ring (same shape as timer-srv):
- `on_restart` stores the PID and bumps the epoch; the server purges
--all state on epoch change. Teardown appends (owner id, gen) to a
--bounded (16) lock-free ring; the next RPC piggybacks CANCEL_OWNERS.
--Replies validate (server, epoch, owner id+gen, op echo); mismatch is
--dropped with a bounded re-wait, never consumed.
-+its open-handle table on epoch change. Replies validate (server,
-+epoch, owner id+gen); mismatch is dropped, never consumed. A dead PD
-+is restarted by the supervisor; the next op rebinds (CAP_GET re-maps
-+the fresh window — the PD always unmaps + remaps on convey, never
-+trusts a stale VA; a null window fails closed with `-ENOSYS`, never
-+faults). `sdf_policy_only` still holds: the VFS_SRV row carries only a
-+memory DMA_REGION window (no MMIO/IRQ/DMA-device caps); the compose
-+gate rejects device kinds for policy roles.
- 
- ## Bounded wait
- 
- `IPC::send_sync_bounded` with `kRpcGuardTicks` (5000). Expiry returns
--`-EAGAIN`; never a silent success, never a held block. No IRQ window
--widening vs `send_sync`.
-+`-EAGAIN`; never a silent success, never a held block. Single in-flight
-+claim per proxy (fail-fast `-EAGAIN`, no spin across reschedule).
- 
- ## Pre-flip status
- 
--80-83-style VFS RPC numbers do not exist yet; all POSIX VFS traffic
--still runs the in-kernel path. The flip (real backend serving,
--fd-table handoff design, revoke cascade) is a later step with the
--§7 gate (audit + test-full debug AND release + delta-0). OFF
--(default) keeps the in-kernel registry: `storage` 167/167 + `vfs_*`
--+ `proc_elf` + shell E2E oracles bit-identical.
-+`src/kernel/vfs/` stays compiled (no removal); `vfs_srv_live`
-+14/14/14 on x86_64/aarch64/riscv64 ON builds
-+(`vfs_srv_bind_backends`, `vfs_srv_cap_rounds`, initrd stat/read,
-+tmpfs roundtrip/guards, devfs nodes, pipe roundtrip/bounded, fat32
-+geometry/read, ramdisk extent, procfs digest, fault/epoch/restart),
-+host FNV-1a digests match per backend. OFF (default) keeps the
-+in-kernel paths: `storage` 167/167 ×3 arches. `test_vfs_srv.cpp` and
-+its registry wiring land via the testbed lane (D8a); only the kernel
-+proxy + PD + docs ship on main.
-diff --git a/src/kernel/task/boot_sdf.cpp b/src/kernel/task/boot_sdf.cpp
-index 0d8a56120..789a22e90 100644
---- a/src/kernel/task/boot_sdf.cpp
-+++ b/src/kernel/task/boot_sdf.cpp
-@@ -23,6 +23,7 @@
- #include <kernel/memory/address.hpp>
- #include <kernel/ipc/shm_ring.hpp>
- #include <services/terminal/framebuffer.hpp>
-+#include <kernel/vfs/vfs_srv.hpp>
- 
- namespace kernel {
- namespace sdf {
-@@ -417,11 +418,24 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
-         // (planner S5/S6); the shape (MSI-X/INTID + DMA + SHM) is declared
-         // in docs/specs/driver-pds.md. No static row yet.
-         return 0;
--    case PdRole::VFS_SRV:
--        // No ambient authority: the vfs-srv row IS the empty set (planner
--        // SDF rules). Compose succeeds with zero caps; the PD talks to
--        // clients over its endpoint only.
--        return 0;
-+    case PdRole::VFS_SRV: {
-+        // VFS backend server row (issue #47 step-b3): exactly one
-+        // DMA_REGION shared window (kVfsRegionPages). No FRAME cap:
-+        // the initrd image lives in kernel pages, which the FRAME mint
-+        // rejects (PMM::is_user_page gate), and D5 mandates a private
-+        // copy anyway — so the kernel stages raw backend bytes into the
-+        // window per op and the PD parses. The row carries no device
-+        // caps (MMIO/IRQ/DMA-device), so sdf_policy_only still holds.
-+        uint64_t n = 0;
-+        if (n + 1 > kMaxCapsPerRole) {
-+            return 0;
-+        }
-+        out[n++] = CapSpec{CapKind::DMA_REGION, 0,
-+                           kernel::vfs_srv::kVfsRegionPages *
-+                               arch::PAGE_SIZE,
-+                           0, 0};
-+        return n;
-+    }
-     case PdRole::BLOCK_SRV: {
-         // Block-storage server row (issue #47 step-b2): static
-         // arch-switched shape + shared data window + IRQ caps (polled
-@@ -661,8 +675,17 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
-     }
-     if (sdf_policy_only(role) && count != 0) {
-         // Structural no-double-ownership (issues #47/#51): a policy-only
--        // row must never carry device caps. Fail closed, never compose.
--        return false;
-+        // row must never carry DEVICE caps (IRQ/MSIX/MMIO/DMA). Memory
-+        // caps (FRAME/SHM/DMA_REGION — fresh user frames, no device
-+        // authority) are allowed: VFS_SRV carries its data window this
-+        // way (issue #47 step-b3). Fail closed, never compose.
-+        for (uint64_t i = 0; i < count; ++i) {
-+            const auto kind = specs[i].kind;
-+            if (kind == CapKind::IRQ || kind == CapKind::MSIX ||
-+                kind == CapKind::MMIO || kind == CapKind::DMA) {
-+                return false;
-+            }
-+        }
-     }
-     if (count == 0) {
-         // Zero-cap rows compose empty only on the explicit allowlist
-diff --git a/src/kernel/task/boot_sdf.hpp b/src/kernel/task/boot_sdf.hpp
-index 86ffb9c6f..1782fa4ef 100644
---- a/src/kernel/task/boot_sdf.hpp
-+++ b/src/kernel/task/boot_sdf.hpp
-@@ -187,11 +187,13 @@ bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen);
- bool pd_owns_device(PdRole role);
- 
- /// @brief Structural policy-only predicate (issues #47/#51): true only
--/// for roles whose SDF row MUST stay empty (no device caps ever —
--/// VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/PROCFS_SRV
--/// policy PDs). Used by compose to
--/// reject any non-empty row for these roles, and by #48's SDF boundary
--/// test to prove the emulation side holds no device caps.
-+/// for roles whose SDF row MUST NOT carry device caps (IRQ/MSIX/MMIO/
-+/// DMA) — VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/
-+/// PROCFS_SRV policy PDs. Memory caps (FRAME/SHM/DMA_REGION — fresh
-+/// user frames, no device authority) are allowed: VFS_SRV carries its
-+/// step-b3 data window this way. Used by compose to reject device-cap
-+/// rows for these roles, and by #48's SDF boundary test to prove the
-+/// emulation side holds no device caps.
- /// @return True for VFS_SRV, TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON,
- /// PROCFS_SRV; false otherwise.
- bool sdf_policy_only(PdRole role);
-@@ -203,8 +205,9 @@ bool sdf_policy_only(PdRole role);
- bool capture_block_topology();
- 
- /// @brief True when @p role may compose with zero caps (explicit
--/// allowlist): VFS_SRV always (no ambient authority — the row IS the
--/// empty set); degraded BLOCK_SRV when no controller/IOMMU was captured
-+/// allowlist): VFS_SRV always (no ambient authority — the row is its
-+/// memory-only data window; a zero-cap compose still starts the PD
-+/// endpoint-only); degraded BLOCK_SRV when no controller/IOMMU was captured
- /// (logged at the call site; never a silent start).
- bool sdf_zero_caps_allowed(PdRole role);
- 
-diff --git a/src/kernel/vfs/ramdisk_fs.cpp b/src/kernel/vfs/ramdisk_fs.cpp
-index 73f5aa827..b1af64302 100644
---- a/src/kernel/vfs/ramdisk_fs.cpp
-+++ b/src/kernel/vfs/ramdisk_fs.cpp
-@@ -879,6 +879,25 @@ bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
-     return true;
- }
- 
-+/// @brief Transport seam for the vfs-srv PD (issue #47 step b3): read raw
-+/// 512 B blocks into @p out. Mechanical transport only — no entry lookup,
-+/// no CRC check; the PD validates extents against its parsed dir region.
-+/// Never under rd_lock (does block IPC).
-+bool ramdisk_fs_read_blocks(uint64_t start_block, uint64_t count,
-+                            uint8_t *out) {
-+    if (out == nullptr || count == 0 ||
-+        count > (0x3000 / RD_BLOCK_SIZE)) {
-+        return false;
-+    }
-+    for (uint64_t i = 0; i < count; ++i) {
-+        if (rd_block_op_retry(start_block + i, out + i * RD_BLOCK_SIZE,
-+                              false) < 0) {
-+            return false;
-+        }
-+    }
-+    return true;
-+}
-+
- int ramdisk_fs_try_mount() {
-     // Grant check FIRST: an already-mounted store with a dead/cleared
-     // grant must report failure (fail-closed degraded), not success.
-diff --git a/src/kernel/vfs/ramdisk_fs.hpp b/src/kernel/vfs/ramdisk_fs.hpp
-index 47026a786..f6d4ab15d 100644
---- a/src/kernel/vfs/ramdisk_fs.hpp
-+++ b/src/kernel/vfs/ramdisk_fs.hpp
-@@ -55,6 +55,16 @@ int ramdisk_fs_verify_all();
- bool ramdisk_fs_extent(const char *name, uint64_t &start_block,
-                        uint64_t &block_count, uint32_t &crc);
- 
-+/// @brief Transport seam for the vfs-srv PD (issue #47 step b3): read raw
-+/// 512 B blocks into @p out (count bounded by the 12 KiB staging window).
-+/// Mechanical transport only — no lookup, no CRC; the PD validates.
-+/// @param out must hold at least `count * 512` bytes (all in-tree
-+/// callers stage into the fixed 12 KiB window: super+dir = 11 blocks,
-+/// data spans caller-chunked to fit).
-+/// @return true on full transfer, false on any block IPC failure.
-+bool ramdisk_fs_read_blocks(uint64_t start_block, uint64_t count,
-+                            uint8_t *out);
-+
- extern Filesystem ramdisk_fs;
- 
- } // namespace vfs
-diff --git a/src/kernel/vfs/vfs.cpp b/src/kernel/vfs/vfs.cpp
-index 23d91d43b..75a063bec 100644
---- a/src/kernel/vfs/vfs.cpp
-+++ b/src/kernel/vfs/vfs.cpp
-@@ -537,6 +537,11 @@ void reset_and_remount() {
-     // boot and tests never block on it; absence just means /mnt/ramdisk
-     // does not resolve).
-     ramdisk_fs_try_mount();
-+    // Re-mount the live FAT32 partition (issue #47 step-b3): boot mounts
-+    // it at /mnt, but the snapshot rewind drops it (like every mount)
-+    // and only the mounts below are restored. Without this, no test
-+    // can resolve through /mnt. Fail-closed when the drive is absent.
-+    mount_fat32("/mnt");
- }
- 
- /// @brief Find a mounted filesystem by name.
-diff --git a/src/kernel/vfs/vfs_srv.cpp b/src/kernel/vfs/vfs_srv.cpp
-index 39b2d18ae..6e5b9461b 100644
---- a/src/kernel/vfs/vfs_srv.cpp
-+++ b/src/kernel/vfs/vfs_srv.cpp
-@@ -8,8 +8,28 @@
-  * default) yields an empty TU (no symbols), so the link is
-  * byte-identical to the pre-#47 tree. Authorize stays kernel-side: this
-  * proxy is diagnostic/parity only until the flip.
-+ *
-+ * Step b3 split of duties: the kernel stages RAW backend bytes (cpio
-+ * image slices, FAT sectors, ramdisk blocks) into the shared window;
-+ * the PD parses and owns namespace, handles and policy. POSIX routing
-+ * stays kernel-side (no sys_* flip in b3).
-  */
- 
-+#include <kernel/ipc/ipc.hpp>
-+#include <kernel/task/boot_sdf.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/cap/cap.hpp>
-+#include <kernel/cap/cap_types.hpp>
-+#include <kernel/memory/address.hpp>
-+#include <kernel/core/global_state.hpp>
-+#include <kernel/vfs/fat32.hpp>
-+#include <kernel/vfs/ramdisk_fs.hpp>
-+#include <kernel/ramdisk/ramdiskd.hpp>
-+
-+extern "C" uint8_t _binary_initrd_cpio_start[];
-+extern "C" uint8_t _binary_initrd_cpio_end[];
-+
- #include <kernel/ipc/ipc.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
-@@ -131,6 +151,1116 @@ int64_t vfs_srv_fault_corrupt() {
-     return reply.status;
- }
- 
-+namespace {
-+
-+// Bound cache (issue #47 step-b3, block_srv_bind precedent): cached at
-+// bind, valid only when g_bound_epoch == vfs_srv_epoch(). Every field is
-+// atomic-only (SMP tasks may bind concurrently; values are idempotent
-+// but plain/atomic mixing is UB — step-b1 audit S2).
-+uint32_t g_bound_epoch = 0;
-+uint8_t g_backend_mask = 0;
-+uint64_t g_data_phys = 0;
-+uint64_t g_data_pages = 0;
-+// Single in-flight RPC claim: fail-fast (-EAGAIN), never spun on, so
-+// there is no lock-order edge and no spin-across-reschedule (§11.1).
-+uint8_t g_claim = 0;
-+
-+void clear_bound() {
-+    __atomic_store_n(&g_bound_epoch, 0U, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_backend_mask, 0, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_data_phys, 0ULL, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_data_pages, 0ULL, __ATOMIC_RELAXED);
-+}
-+
-+void fill_identity(VfsRpc &req) {
-+    auto *cur = Scheduler::current_task();
-+    req.owner_id = static_cast<uint32_t>(cur->id);
-+    req.owner_gen = cur->generation;
-+    req.epoch = vfs_srv_epoch();
-+}
-+
-+// Encode one row cap for conveyance, cross-checked against the SDF
-+// record (slot, gen, phys/size). Fail-closed: any mismatch returns 0.
-+uint64_t encode_row_handle(TaskControlBlock &srv, uint64_t idx,
-+                           const sdf::CapSpec &spec) {
-+    int slot = -1;
-+    uint32_t gen = 0;
-+    if (!sdf::sdf_role_cap(sdf::PdRole::VFS_SRV, idx, slot, gen)) {
-+        return 0;
-+    }
-+    auto *space = srv.get_cspace();
-+    if (space == nullptr) {
-+        return 0;
-+    }
-+    const uint64_t handle =
-+        cap::encode_user_handle(space->cspace_id, slot, gen);
-+    if (handle == static_cast<uint64_t>(-1)) {
-+        return 0;
-+    }
-+    if (spec.kind == sdf::CapKind::DMA_REGION) {
-+        uint64_t phys = 0;
-+        uint64_t pages = 0;
-+        if (!sdf::sdf_role_frame(sdf::PdRole::VFS_SRV, idx, phys,
-+                                 pages) ||
-+            phys == 0 || pages == 0) {
-+            return 0;
-+        }
-+    }
-+    return handle;
-+}
-+
-+// Window accessors. The claim must be held; copies are plain memcpy
-+// pairs fenced with acquire/release (UP-only; no spinlock and no
-+// IrqGuard is taken — nothing here may sleep, and the claim is never
-+// held across a blocking RPC, so no guard would add safety).
-+uint8_t *window_base() {
-+    const uint64_t phys =
-+        __atomic_load_n(&g_data_phys, __ATOMIC_RELAXED);
-+    if (phys == 0) {
-+        return nullptr;
-+    }
-+    return reinterpret_cast<uint8_t *>(arch::HHDM_OFFSET + phys);
-+}
-+
-+// Stage a NUL-terminated path into the name slot (kernel → PD).
-+// Rejects over-long names before touching the window.
-+bool stage_name(const char *path) {
-+    if (path == nullptr) {
-+        return false;
-+    }
-+    uint64_t len = 0;
-+    while (len < kVfsMaxName && path[len] != '\0') {
-+        ++len;
-+    }
-+    if (len >= kVfsMaxName) {
-+        return false;
-+    }
-+    auto *win = window_base();
-+    if (win == nullptr) {
-+        return false;
-+    }
-+    __builtin_memcpy(win + kVfsNameOffset, path, len + 1);
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+// Copy caller bytes into the data region (kernel → PD, WRITE path).
-+bool stage_bytes_in(const uint8_t *in, uint64_t size) {
-+    if (size > kVfsDataSize) {
-+        return false;
-+    }
-+    auto *win = window_base();
-+    if (win == nullptr || (size != 0 && in == nullptr)) {
-+        return false;
-+    }
-+    if (size != 0) {
-+        __builtin_memcpy(win + kVfsDataOffset, in, size);
-+    }
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+// Copy staged bytes out of the data region (PD → kernel, READ path).
-+bool fetch_bytes_out(uint8_t *out, uint64_t size) {
-+    if (size > kVfsDataSize) {
-+        return false;
-+    }
-+    auto *win = window_base();
-+    if (win == nullptr || (size != 0 && out == nullptr)) {
-+        return false;
-+    }
-+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
-+    if (size != 0) {
-+        __builtin_memcpy(out, win + kVfsDataOffset, size);
-+    }
-+    return true;
-+}
-+
-+// Fetch the PD-written dirent name from the data region (READDIR path).
-+bool fetch_name_out(char *name_out) {
-+    auto *win = window_base();
-+    if (win == nullptr || name_out == nullptr) {
-+        return false;
-+    }
-+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
-+    uint64_t len = 0;
-+    while (len < kVfsMaxName - 1 && win[kVfsDataOffset + len] != '\0') {
-+        ++len;
-+    }
-+    if (win[kVfsDataOffset + len] != '\0') {
-+        return false;
-+    }
-+    __builtin_memcpy(name_out, win + kVfsDataOffset, len + 1);
-+    return true;
-+}
-+
-+// Raw-byte staging (step b3 split of duties): copy backend image bytes
-+// into the data region. Initrd slices come from the linked image;
-+// FAT32 slices are raw device sectors past the partition base.
-+bool stage_initrd(uint64_t img_off, uint64_t size) {
-+    const uint64_t img_size = static_cast<uint64_t>(
-+        _binary_initrd_cpio_end - _binary_initrd_cpio_start);
-+    if (size > kVfsDataSize || img_off > img_size ||
-+        size > img_size - img_off) {
-+        return false;
-+    }
-+    auto *win = window_base();
-+    if (win == nullptr) {
-+        return false;
-+    }
-+    __builtin_memcpy(win + kVfsDataOffset,
-+                     _binary_initrd_cpio_start + img_off, size);
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+// Single RPC with the claim held. Thin wrapper: identity envelope is
-+// filled by the caller, reply validated by vfs_srv_rpc.
-+bool rpc_once(VfsRpc &req, VfsRpc &reply) {
-+    fill_identity(req);
-+    return vfs_srv_rpc(req, reply);
-+}
-+
-+} // namespace
-+
-+bool vfs_srv_bind() {
-+    const uint64_t pid = get_vfs_srv_pid();
-+    if (pid == 0 || !vfs_srv_alive()) {
-+        return false;
-+    }
-+    auto *srv = Scheduler::find_task(pid);
-+    if (srv == nullptr) {
-+        return false;
-+    }
-+    auto *cur = Scheduler::current_task();
-+    if (cur == nullptr) {
-+        return false;
-+    }
-+    sdf::CapSpec specs[sdf::kMaxCapsPerRole] = {};
-+    const uint64_t count = sdf::sdf_row(sdf::PdRole::VFS_SRV, specs);
-+    if (count > sdf::kMaxCapsPerRole) {
-+        return false;
-+    }
-+    // CAP_GET rounds convey one cap each (index order): the PD maps and
-+    // echoes. BIND goes last so the PD probes with every cap present.
-+    // Restore tolerance: a snapshot rewind can stale the composed slots
-+    // (encode fails) while the PD survives. Retry once via a fresh
-+    // re-compose (re-mints the window + slots), then re-convey.
-+    for (uint64_t attempt = 0; ; ++attempt) {
-+        bool ok = true;
-+        for (uint64_t i = 0; i < count && ok; ++i) {
-+            const uint64_t handle = encode_row_handle(*srv, i, specs[i]);
-+            if (handle == 0) {
-+                ok = false;
-+                break;
-+            }
-+            uint64_t cap_phys = specs[i].addr;
-+            uint64_t cap_size = specs[i].size;
-+            if (specs[i].kind == sdf::CapKind::DMA_REGION) {
-+                // sdf_role_frame returns (phys, pages); the size gate
-+                // is in bytes (block_srv_bind precedent).
-+                if (!sdf::sdf_role_frame(sdf::PdRole::VFS_SRV, i,
-+                                         cap_phys, cap_size) ||
-+                    cap_phys == 0) {
-+                    return false;
-+                }
-+                cap_size *= arch::PAGE_SIZE;
-+                if (cap_size < kVfsRegionPages * arch::PAGE_SIZE) {
-+                    return false;
-+                }
-+            }
-+            VfsRpc get{};
-+            get.op = static_cast<uint8_t>(VfsSrvOp::CAP_GET);
-+            get.owner_id = static_cast<uint32_t>(cur->id);
-+            get.owner_gen = cur->generation;
-+            get.epoch = vfs_srv_epoch();
-+            get.ino = cap_phys;
-+            get.offset = cap_size;
-+            // 48 B budget: kind rides flags, the encoded row handle
-+            // rides size (the PD needs the handle for SYS_FRAME_MAP;
-+            // phys/size alone do not resolve a CSpace slot).
-+            get.size = handle;
-+            get.flags = static_cast<uint8_t>(specs[i].kind);
-+            get.status_op = static_cast<uint16_t>(i);
-+            VfsRpc got{};
-+            if (!vfs_srv_rpc(get, got)) {
-+                clear_bound();
-+                return false;
-+            }
-+            if (got.op != get.op || got.epoch != get.epoch ||
-+                got.owner_id != get.owner_id ||
-+                got.owner_gen != get.owner_gen ||
-+                got.ino != get.ino || got.offset != get.offset ||
-+                got.size != get.size || got.flags != get.flags ||
-+                got.status_op != get.status_op || got.status != 0) {
-+                clear_bound();
-+                return false;
-+            }
-+        }
-+        if (ok) {
-+            break;
-+        }
-+        // Stale compose: re-mint once, then re-convey. A second stale
-+        // round is a real defect, not restore skew — fail closed.
-+        if (attempt > 0 || !sdf::sdf_rebind(*srv, sdf::PdRole::VFS_SRV)) {
-+            clear_bound();
-+            return false;
-+        }
-+    }
-+    VfsRpc req{};
-+    req.op = static_cast<uint8_t>(VfsSrvOp::BIND);
-+    req.owner_id = static_cast<uint32_t>(cur->id);
-+    req.owner_gen = cur->generation;
-+    req.epoch = vfs_srv_epoch();
-+    req.offset = count;
-+    VfsRpc reply{};
-+    if (!vfs_srv_rpc(req, reply)) {
-+        return false;
-+    }
-+    if (reply.op != req.op || reply.epoch != req.epoch ||
-+        reply.owner_id != req.owner_id ||
-+        reply.owner_gen != req.owner_gen) {
-+        return false;
-+    }
-+    if (reply.status != 0 || reply.offset != count) {
-+        return false;
-+    }
-+    // Resolve the shared data window (exactly one DMA_REGION per row).
-+    uint64_t data_phys = 0;
-+    uint64_t data_pages = 0;
-+    for (uint64_t i = 0; i < count; ++i) {
-+        if (specs[i].kind == sdf::CapKind::DMA_REGION) {
-+            if (data_phys != 0) {
-+                return false; // two windows: row malformed
-+            }
-+            if (!sdf::sdf_role_frame(sdf::PdRole::VFS_SRV, i, data_phys,
-+                                     data_pages)) {
-+                return false;
-+            }
-+        }
-+    }
-+    if (data_phys == 0) {
-+        return false;
-+    }
-+    // Live-topology mask (step b3 degraded path): the PD reports what
-+    // it implements; the kernel clears backends with no live backing
-+    // (FAT32 needs a mounted partition, RAMDISK a live daemon).
-+    uint8_t live = static_cast<uint8_t>(reply.size & 0x7FU);
-+    if (kernel::gs::get_fat32_partition() == nullptr) {
-+        live &= static_cast<uint8_t>(
-+            ~(1U << static_cast<uint8_t>(VfsBackend::FAT32)));
-+    }
-+    if (kernel::ramdiskd::get_ramdiskd_pid() == 0) {
-+        live &= static_cast<uint8_t>(
-+            ~(1U << static_cast<uint8_t>(VfsBackend::RAMDISK)));
-+    }
-+    __atomic_store_n(&g_data_phys, data_phys, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_data_pages, data_pages, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_backend_mask, live, __ATOMIC_RELAXED);
-+    __atomic_store_n(&g_bound_epoch, vfs_srv_epoch(), __ATOMIC_RELAXED);
-+    return true;
-+}
-+
-+uint8_t vfs_srv_backend_mask() {
-+    if (__atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED) !=
-+        vfs_srv_epoch()) {
-+        return 0;
-+    }
-+    return __atomic_load_n(&g_backend_mask, __ATOMIC_RELAXED);
-+}
-+
-+bool vfs_srv_backend_available(VfsBackend backend) {
-+    const uint8_t bit = static_cast<uint8_t>(1U << static_cast<uint8_t>(backend));
-+    return (vfs_srv_backend_mask() & bit) != 0;
-+}
-+
-+// Claim guard: try-claim, fail-fast -EAGAIN, release on every exit.
-+namespace {
-+
-+bool claim_or_busy(int64_t &busy) {
-+    if (__atomic_test_and_set(&g_claim, __ATOMIC_ACQUIRE) != 0) {
-+        busy = -11; // -EAGAIN: one in-flight RPC, never spun on
-+        return false;
-+    }
-+    busy = 0;
-+    return true;
-+}
-+
-+bool bound_or_rebind() {
-+    if (__atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED) ==
-+        vfs_srv_epoch()) {
-+        return true;
-+    }
-+    clear_bound();
-+    return vfs_srv_bind();
-+}
-+
-+} // namespace
-+
-+// Directory-region staging (step b3): the kernel ships the metadata
-+// bytes the PD parses. All spans are window-bounded and fail-closed.
-+
-+// Compact cpio index record (PD parses this, never the raw image).
-+struct CpioIndexEntry {
-+    char name[48];
-+    uint32_t data_off;
-+    uint32_t size;
-+    uint32_t mode;
-+};
-+
-+// Cached cpio index (step b3 performance): walking the ~2.3 MiB image
-+// per op costs seconds under TCG and trips the 5000-tick RPC bound.
-+// Build once per epoch into .bss (not a pooled resource — no tracker
-+// entry; snapshot rewind simply triggers a lazy rebuild).
-+namespace {
-+constexpr uint64_t kCpioIndexCap = 128;
-+CpioIndexEntry g_cpio_index[kCpioIndexCap] = {};
-+uint64_t g_cpio_index_count = 0;
-+uint32_t g_cpio_index_epoch = 0;
-+bool g_cpio_index_truncated = false;
-+} // namespace
-+
-+// Build the compact index of the linked initrd image into the .bss
-+// cache (one walk per epoch; see g_cpio_index_* above). Returns the
-+// entry count, or -1 when the image is malformed or the table
-+// overflows (fail-closed, PD sees no index).
-+int64_t build_cpio_cache() {
-+    const uint8_t *img = _binary_initrd_cpio_start;
-+    const uint64_t img_size = static_cast<uint64_t>(
-+        _binary_initrd_cpio_end - _binary_initrd_cpio_start);
-+    constexpr uint64_t kMaxEntries = 128;
-+    constexpr uint64_t kHdrLen = 110; // "070701" + 13x8 hex
-+    auto *table = g_cpio_index;
-+    const uint64_t cap = kMaxEntries;
-+    uint64_t off = 0;
-+    uint64_t count = 0;
-+    while (true) {
-+        if (off + kHdrLen > img_size) {
-+            return -1;
-+        }
-+        // Freestanding-safe magic compare (no memcmp libcall on rv64).
-+        if (img[off + 0] != '0' || img[off + 1] != '7' ||
-+            img[off + 2] != '0' || img[off + 3] != '7' ||
-+            img[off + 4] != '0' || img[off + 5] != '1') {
-+            return -1;
-+        }
-+        // Parse the 13 hex fields (namesize @ field 11, filesize @ 6,
-+        // mode @ 1). Bounded: fixed offsets, no scanning.
-+        auto hex8 = [&](uint64_t at, uint32_t &out) {
-+            uint32_t v = 0;
-+            for (uint64_t i = 0; i < 8; ++i) {
-+                const uint8_t c = img[off + at + i];
-+                uint32_t d = 0;
-+                if (c >= '0' && c <= '9') {
-+                    d = static_cast<uint32_t>(c - '0');
-+                } else if (c >= 'a' && c <= 'f') {
-+                    d = static_cast<uint32_t>(c - 'a' + 10);
-+                } else if (c >= 'A' && c <= 'F') {
-+                    d = static_cast<uint32_t>(c - 'A' + 10);
-+                } else {
-+                    return false;
-+                }
-+                v = (v << 4) | d;
-+            }
-+            out = v;
-+            return true;
-+        };
-+        uint32_t mode = 0;
-+        uint32_t filesize = 0;
-+        uint32_t namesize = 0;
-+        if (!hex8(6 + 8, mode) || !hex8(6 + 6 * 8, filesize) ||
-+            !hex8(6 + 11 * 8, namesize)) {
-+            return -1;
-+        }
-+        const uint64_t name_off = off + kHdrLen;
-+        if (namesize == 0 || namesize > 64 ||
-+            name_off + namesize > img_size) {
-+            return -1;
-+        }
-+        const uint64_t data_off =
-+            (name_off + namesize + 3) & ~static_cast<uint64_t>(3);
-+        if (data_off > img_size || filesize > img_size - data_off) {
-+            return -1;
-+        }
-+        char name[64] = {};
-+        __builtin_memcpy(name, img + name_off,
-+                         namesize < 64 ? namesize : 64);
-+        // Freestanding-safe trailer compare (no memcmp libcall).
-+        static const char kTrailer[10] = {'T', 'R', 'A', 'I', 'L', 'E',
-+                                          'R', '!', '!', '!'};
-+        bool is_trailer = true;
-+        for (uint64_t i = 0; i < 10; ++i) {
-+            if (name[i] != kTrailer[i]) {
-+                is_trailer = false;
-+                break;
-+            }
-+        }
-+        if (is_trailer) {
-+            break;
-+        }
-+        if (count >= cap) {
-+            return -1;
-+        }
-+        __builtin_memset(table[count].name, 0,
-+                         sizeof(table[count].name));
-+        uint64_t nl = 0;
-+        while (nl + 1 < sizeof(table[count].name) && name[nl] != '\0') {
-+            table[count].name[nl] = name[nl];
-+            ++nl;
-+        }
-+        table[count].data_off = static_cast<uint32_t>(data_off);
-+        table[count].size = filesize;
-+        table[count].mode = mode;
-+        ++count;
-+        off = (data_off + filesize + 3) & ~static_cast<uint64_t>(3);
-+        if (off >= img_size) {
-+            return -1;
-+        }
-+    }
-+    g_cpio_index_count = count;
-+    g_cpio_index_truncated = false;
-+    g_cpio_index_epoch = vfs_srv_epoch();
-+    return static_cast<int64_t>(count);
-+}
-+
-+// Stage the cached cpio index into the data region (fast memcpy; the
-+// walk happens once per epoch in build_cpio_cache).
-+bool stage_cpio_index() {
-+    if (g_cpio_index_epoch != vfs_srv_epoch() || g_cpio_index_truncated) {
-+        g_cpio_index_count = 0;
-+        g_cpio_index_truncated = false;
-+        if (build_cpio_cache() < 0) {
-+            g_cpio_index_truncated = true;
-+            return false;
-+        }
-+    }
-+    auto *win = window_base();
-+    if (win == nullptr || g_cpio_index_count == 0) {
-+        return false;
-+    }
-+    const uint64_t bytes =
-+        g_cpio_index_count * sizeof(CpioIndexEntry);
-+    if (bytes > kVfsDataSize) {
-+        return false;
-+    }
-+    __builtin_memcpy(win + kVfsDataOffset, g_cpio_index, bytes);
-+    // Zero the tail so the PD's empty-name scan terminates even if a
-+    // previous op left a longer table staged.
-+    __builtin_memset(win + kVfsDataOffset + bytes, 0,
-+                     kVfsDataSize - bytes);
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+// Stage BPB + first root-dir cluster for FAT32 (PD parses both).
-+bool stage_fat32_dir() {
-+    constexpr uint64_t kSector = 512;
-+    auto *part = kernel::gs::get_fat32_partition();
-+    if (part == nullptr) {
-+        return false;
-+    }
-+    if (!part->bpb().valid) {
-+        return false;
-+    }
-+    auto *win = window_base();
-+    if (win == nullptr) {
-+        return false;
-+    }
-+    const uint64_t base = part->partition_lba();
-+    if (!part->device().read_sector(base, win + kVfsDataOffset)) {
-+        return false;
-+    }
-+    const uint64_t cluster_lba =
-+        part->cluster_to_lba(part->bpb().root_cluster);
-+    const uint64_t cluster_bytes =
-+        static_cast<uint64_t>(part->bpb().sectors_per_cluster) * kSector;
-+    if (kSector + cluster_bytes > kVfsDataSize) {
-+        return false;
-+    }
-+    const uint64_t nsec = cluster_bytes / kSector;
-+    for (uint64_t i = 0; i < nsec; ++i) {
-+        if (!part->device().read_sector(
-+                cluster_lba + i,
-+                win + kVfsDataOffset + kSector + i * kSector)) {
-+            return false;
-+        }
-+    }
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+// Stage one FAT32 cluster chain as contiguous bytes (mechanical walk;
-+// the PD validates the staged length against its parsed dirent).
-+bool stage_fat32_chain(uint32_t start_cluster, uint64_t file_size,
-+                        uint64_t skip, uint64_t want) {
-+    constexpr uint64_t kSector = 512;
-+    auto *part = kernel::gs::get_fat32_partition();
-+    if (part == nullptr || !part->bpb().valid || want > kVfsDataSize ||
-+        skip > file_size || want > file_size - skip) {
-+        return false;
-+    }
-+    auto *win = window_base();
-+    if (win == nullptr) {
-+        return false;
-+    }
-+    const uint64_t cluster_bytes =
-+        static_cast<uint64_t>(part->bpb().sectors_per_cluster) * kSector;
-+    uint32_t cluster = start_cluster;
-+    uint64_t file_off = 0;
-+    uint64_t staged = 0;
-+    uint8_t *dst = win + kVfsDataOffset;
-+    uint64_t trips = 0;
-+    while (staged < want) {
-+        if (++trips > 64 || kernel::fat32::Fat32Partition::is_eof(cluster)) {
-+            return false;
-+        }
-+        const uint64_t cluster_lba = part->cluster_to_lba(cluster);
-+        const uint64_t nsec = cluster_bytes / kSector;
-+        for (uint64_t i = 0; i < nsec && staged < want; ++i) {
-+            uint8_t sec[kSector];
-+            if (!part->device().read_sector(cluster_lba + i, sec)) {
-+                return false;
-+            }
-+            for (uint64_t b = 0; b < kSector && staged < want; ++b) {
-+                if (file_off >= skip) {
-+                    dst[staged++] = sec[b];
-+                }
-+                ++file_off;
-+                if (file_off >= file_size) {
-+                    break;
-+                }
-+            }
-+        }
-+        if (file_off >= file_size) {
-+            break;
-+        }
-+        uint32_t next = 0;
-+        if (!part->read_fat_entry(cluster, next)) {
-+            return false;
-+        }
-+        cluster = next;
-+    }
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return staged == want;
-+}
-+
-+// Stage a ramdisk byte span contiguously at the data region head,
-+// chunked so no single block read overruns the window (alignment
-+// overhang can push span+pad past 24 blocks for a 12 KiB read).
-+bool stage_ramdisk_span(uint64_t start_block, uint64_t file_size,
-+                        uint64_t offset, uint64_t size) {
-+    auto *win = window_base();
-+    if (win == nullptr || offset > file_size ||
-+        size > file_size - offset || size > kVfsDataSize) {
-+        return false;
-+    }
-+    uint64_t done = 0;
-+    uint64_t trips = 0;
-+    uint8_t sec[512];
-+    while (done < size) {
-+        if (++trips > 32) {
-+            return false; // bounded: 12 KiB needs ≤ 25 blocks
-+        }
-+        const uint64_t cur = offset + done;
-+        const uint64_t blk = start_block + cur / 512;
-+        const uint64_t blk_off = cur % 512;
-+        if (!kernel::vfs::ramdisk_fs_read_blocks(blk, 1, sec)) {
-+            return false;
-+        }
-+        uint64_t take = 512 - blk_off;
-+        if (take > size - done) {
-+            take = size - done;
-+        }
-+        __builtin_memcpy(win + kVfsDataOffset + done, sec + blk_off,
-+                         take);
-+        done += take;
-+    }
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return done == size;
-+}
-+bool stage_ramdisk_dir() {
-+    auto *win = window_base();
-+    if (win == nullptr) {
-+        return false;
-+    }
-+    // Superblock (block 0) + full dir region (blocks 1..10); the PD
-+    // parses entries. 11 x 512 B = 5632 B, fits the data region.
-+    for (uint64_t b = 0; b <= 10; ++b) {
-+        if (!kernel::vfs::ramdisk_fs_read_blocks(
-+                b, 1, win + kVfsDataOffset + b * 512)) {
-+            return false;
-+        }
-+    }
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+bool stage_procfs_path(const char *path) {
-+    auto *win = window_base();
-+    if (win == nullptr || path == nullptr || path[0] == '\0') {
-+        return false;
-+    }
-+    kernel::vfs::Vnode *vn = kernel::vfs::resolve(path);
-+    if (vn == nullptr || vn->ops == nullptr ||
-+        vn->ops->read == nullptr) {
-+        if (vn != nullptr) {
-+            kernel::vfs::release(vn);
-+        }
-+        return false;
-+    }
-+    const int64_t got =
-+        vn->ops->read(*vn, win + kVfsDataOffset, kVfsDataSize, 0);
-+    kernel::vfs::release(vn);
-+    if (got < 0 || static_cast<uint64_t>(got) > kVfsDataSize) {
-+        return false;
-+    }
-+    __atomic_thread_fence(__ATOMIC_RELEASE);
-+    return true;
-+}
-+
-+// Stage a /proc file render via the in-kernel procfs (D6 validator:
-+// the kernel renders through its own VnodeOps; the PD validates format
-+// + digest, never renders). Two entry points sharing one helper:
-+// - OPEN/STAT/READDIR: path comes from the name slot (staged under the
-+//   same claim, so no cross-op race).
-+// - READ: the locator base carries the shared-table index
-+//   (VFS_PROC_* — must match userspace/vfs-srv.c), no name slot use.
-+// fd-table untouched: resolve + ops->read directly, release after.
-+bool stage_procfs(uint64_t idx) {
-+    static const char *const kProcFiles[] = {"/proc/meminfo",
-+                                             "/proc/stat"};
-+    if (idx >= 2) {
-+        return false;
-+    }
-+    return stage_procfs_path(kProcFiles[idx]);
-+}
-+
-+// Stage the directory region for an OPEN/STAT/READDIR path op. Returns
-+// false when the backend needs no staging (PD-owned stores) — the
-+// caller treats that as "proceed without staging".
-+bool stage_dir_region(VfsBackend backend) {
-+    switch (backend) {
-+    case VfsBackend::INITRD:
-+        return stage_cpio_index();
-+    case VfsBackend::FAT32:
-+        return stage_fat32_dir();
-+    case VfsBackend::RAMDISK:
-+        return stage_ramdisk_dir();
-+    case VfsBackend::TMPFS:
-+    case VfsBackend::DEVFS:
-+    case VfsBackend::PIPE:
-+        return true; // PD-owned/static: nothing to stage
-+    case VfsBackend::PROCFS: {
-+        // Render by name-slot path (same claim, no race); the PD
-+        // matches the path against its VFS_PROC_* table for the
-+        // READ-time index.
-+        auto *win = window_base();
-+        if (win == nullptr) {
-+            return false;
-+        }
-+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
-+        char path[kVfsMaxName];
-+        uint64_t len = 0;
-+        while (len < kVfsMaxName - 1 &&
-+               win[kVfsNameOffset + len] != '\0') {
-+            path[len] = static_cast<char>(win[kVfsNameOffset + len]);
-+            ++len;
-+        }
-+        path[len] = '\0';
-+        return len != 0 && stage_procfs_path(path);
-+    }
-+    case VfsBackend::COUNT:
-+        break;
-+    }
-+    return false;
-+}
-+
-+int64_t vfs_srv_open(VfsBackend backend, const char *path, uint64_t flags,
-+                     uint64_t &handle) {
-+    handle = 0;
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind() || !stage_name(path) ||
-+            !stage_dir_region(backend)) {
-+            rc = -38;
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::OPEN);
-+        req.offset = static_cast<uint64_t>(backend);
-+        req.size = flags;
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            rc = -38;
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+        if (rc == 0) {
-+            handle = reply.ino;
-+        }
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+int64_t vfs_srv_close(uint64_t handle) {
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind()) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::CLOSE);
-+        req.ino = handle;
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+// Locator convention (step b3): for image-backed backends the PD passes
-+// the raw locator back in ino/offset — initrd image byte offset in ino,
-+// FAT32 start cluster in ino (file size in the PD handle, re-passed via
-+// size hi/lo? no: size carries the read length; the PD validates the
-+// range against its open-handle table and fails closed on overrun).
-+// The kernel bounds every stage against the image/device size.
-+int64_t vfs_srv_read(uint64_t handle, uint64_t offset, uint8_t *out,
-+                     uint64_t size) {
-+    if (size == 0) {
-+        return 0; // POSIX: zero-length reads succeed with no bytes
-+    }
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind() || out == nullptr ||
-+            size > kVfsDataSize) {
-+            break;
-+        }
-+        const uint64_t locator = handle;
-+        // The locator kind rides the top byte (PD-assigned at OPEN).
-+        // Direct-handle layout (PD packs, kernel decodes): low 56 bits
-+        // = (locator24 << 32 | size32); the size caps reads (EOF clamp).
-+        // PD-owned stores (tmpfs/pipe) use table slots instead.
-+        const auto backend =
-+            static_cast<VfsBackend>((locator >> 56) & 0x7FU);
-+        const uint64_t base = locator & 0x00FFFFFFFFFFFFFFULL;
-+        // Clamp the request to the file size carried in the handle
-+        // (image-backed backends); PD-owned stores serve whole windows.
-+        uint64_t want = size;
-+        if (backend == VfsBackend::INITRD ||
-+            backend == VfsBackend::FAT32 ||
-+            backend == VfsBackend::RAMDISK) {
-+            const uint64_t file_size = base & 0xFFFFFFFFULL;
-+            if (offset >= file_size) {
-+                rc = 0; // EOF: zero-length read, no staging, no RPC
-+                break;
-+            }
-+            if (want > file_size - offset) {
-+                want = file_size - offset;
-+            }
-+        }
-+        if (want == 0 || want > kVfsDataSize) {
-+            rc = (want == 0) ? 0 : -38;
-+            break;
-+        }
-+        bool staged = false;
-+        if (backend == VfsBackend::INITRD) {
-+            const uint64_t data_off = (base >> 32) & 0xFFFFFFULL;
-+            staged = stage_initrd(data_off + offset, want);
-+        } else if (backend == VfsBackend::FAT32) {
-+            // Base packs (start_cluster << 32 | file_size); the skip
-+            // is the read offset. Chain walk is mechanical transport;
-+            // the PD validates the staged length at serve.
-+            const uint32_t start_cluster =
-+                static_cast<uint32_t>((base >> 32) & 0xFFFFFFULL);
-+            const uint64_t file_size = base & 0xFFFFFFFFULL;
-+            staged = stage_fat32_chain(start_cluster, file_size, offset,
-+                                       want);
-+        } else if (backend == VfsBackend::RAMDISK) {
-+            // Base packs (start_block << 32 | file_size).
-+            const uint64_t start_block = (base >> 32) & 0xFFFFFFULL;
-+            const uint64_t file_size = base & 0xFFFFFFFFULL;
-+            staged = stage_ramdisk_span(start_block, file_size, offset,
-+                                        want);
-+        } else if (backend == VfsBackend::PROCFS) {
-+            staged = stage_procfs(base);
-+        } else {
-+            // PD-owned stores serve from their own arenas (WRITE-path
-+            // mirror): stage nothing, let the PD fill the window.
-+            staged = true;
-+        }
-+        if (!staged) {
-+            rc = -5; // -EIO: staging failed, fail closed
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::READ);
-+        req.ino = locator;
-+        req.offset = offset;
-+        req.size = want;
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+        if (rc < 0) {
-+            break;
-+        }
-+        const uint64_t got = reply.size;
-+        if (got > want) {
-+            rc = -5;
-+            break;
-+        }
-+        if (!fetch_bytes_out(out, got)) {
-+            rc = -5;
-+            break;
-+        }
-+        rc = static_cast<int64_t>(got);
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+int64_t vfs_srv_write(uint64_t handle, uint64_t offset, const uint8_t *in,
-+                      uint64_t size) {
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind() || !stage_bytes_in(in, size)) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::WRITE);
-+        req.ino = handle;
-+        req.offset = offset;
-+        req.size = size;
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+        if (rc == 0) {
-+            // POSIX write semantics: return the validated byte count.
-+            if (reply.size > size) {
-+                rc = -5; // PD echoes more than staged: fail closed
-+            } else {
-+                rc = static_cast<int64_t>(reply.size);
-+            }
-+        }
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+int64_t vfs_srv_stat(VfsBackend backend, const char *path,
-+                     uint64_t &st_size, uint64_t &st_mode) {
-+    st_size = 0;
-+    st_mode = 0;
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind() || !stage_name(path) ||
-+            !stage_dir_region(backend)) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::STAT);
-+        req.offset = static_cast<uint64_t>(backend);
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+        if (rc == 0) {
-+            st_size = reply.offset;
-+            st_mode = reply.size;
-+        }
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+int64_t vfs_srv_readdir(VfsBackend backend, const char *path,
-+                        uint64_t &next_ino, char *name_out) {
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind() || !stage_name(path) ||
-+            !stage_dir_region(backend)) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::READDIR);
-+        req.offset = static_cast<uint64_t>(backend);
-+        req.ino = next_ino;
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+        if (rc == 0) {
-+            // 0 = entry (name in data region, next ino echoed),
-+            // 1 = end of dir.
-+            if (reply.size == 1) {
-+                rc = 1;
-+                break;
-+            }
-+            if (name_out == nullptr || !fetch_name_out(name_out)) {
-+                rc = -5;
-+                break;
-+            }
-+            next_ino = reply.ino;
-+        }
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+int64_t vfs_srv_create(VfsBackend backend, const char *path,
-+                       uint64_t mode) {
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind() || !stage_name(path)) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::CREATE);
-+        req.offset = static_cast<uint64_t>(backend);
-+        req.size = mode;
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+int64_t vfs_srv_unlink(VfsBackend backend, const char *path) {
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind() || !stage_name(path)) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::UNLINK);
-+        req.offset = static_cast<uint64_t>(backend);
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
-+bool vfs_srv_backend_status(VfsBackend backend, VfsBackendStatus &out) {
-+    __builtin_memset(&out, 0, sizeof(out));
-+    if (__atomic_load_n(&g_bound_epoch, __ATOMIC_RELAXED) !=
-+        vfs_srv_epoch()) {
-+        return false;
-+    }
-+    // Publish the request first (PD fills the stats slot), then read
-+    // the slot with magic/version validation (block_srv_irq_stats
-+    // shape). Claim serializes against concurrent op windows.
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return false;
-+    }
-+    bool ok = false;
-+    do {
-+        if (!bound_or_rebind()) {
-+            break;
-+        }
-+        // Re-load the window phys after bind: a re-compose mints a
-+        // fresh window, and a stale HHDM read would only pass on
-+        // magic-gated luck (SIL3 audit #47 step-b3 S3).
-+        const uint64_t phys =
-+            __atomic_load_n(&g_data_phys, __ATOMIC_RELAXED);
-+        if (phys == 0) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::BACKEND_STATUS);
-+        req.offset = static_cast<uint64_t>(backend);
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply) || reply.status != 0) {
-+            break;
-+        }
-+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
-+        const auto *slot = reinterpret_cast<const VfsBackendStatus *>(
-+            arch::HHDM_OFFSET + phys + kVfsStatsOffset);
-+        VfsBackendStatus local{};
-+        __builtin_memcpy(&local, slot, sizeof(local));
-+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
-+        if (local.magic != kVfsBackendStatusMagic ||
-+            local.version != kVfsBackendStatusVersion) {
-+            break;
-+        }
-+        out = local;
-+        ok = true;
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return ok;
-+}
-+
-+int64_t vfs_srv_fault_backend(VfsBackend backend) {
-+    int64_t busy = 0;
-+    if (!claim_or_busy(busy)) {
-+        return busy;
-+    }
-+    int64_t rc = -38;
-+    do {
-+        if (!bound_or_rebind()) {
-+            break;
-+        }
-+        VfsRpc req{};
-+        req.op = static_cast<uint8_t>(VfsSrvOp::INJECT_BACKEND_FAULT);
-+        req.offset = static_cast<uint64_t>(backend);
-+        VfsRpc reply{};
-+        if (!rpc_once(req, reply)) {
-+            break;
-+        }
-+        rc = static_cast<int64_t>(static_cast<int16_t>(reply.status));
-+    } while (false);
-+    __atomic_clear(&g_claim, __ATOMIC_RELEASE);
-+    return rc;
-+}
-+
- } // namespace vfs_srv
- } // namespace kernel
- 
-diff --git a/src/kernel/vfs/vfs_srv.hpp b/src/kernel/vfs/vfs_srv.hpp
-index ca6f119eb..c85a602d4 100644
---- a/src/kernel/vfs/vfs_srv.hpp
-+++ b/src/kernel/vfs/vfs_srv.hpp
-@@ -19,7 +19,7 @@
-  */
- 
- /// @file vfs_srv.hpp
--/// @brief VFS server proxy (issue #47, strangler step a).
-+/// @brief VFS server proxy (issue #47, strangler step a → step b3).
- ///        Kernel-side contract for the userspace vfs-srv PD: 48 B wire
- ///        RPC, PID cell, epoch/liveness, tombstone drain, and the sys_*
- ///        proxy entry points. Everything here is declaration-only;
-@@ -27,6 +27,14 @@
- ///        so the OFF build (`CONFIG_VFS_SRV=0`, shipped default) is
- ///        byte-identical to the pre-#47 tree. Authorize stays kernel-side:
- ///        this proxy is diagnostic/parity only until the flip.
-+///        Step b3 (VFS backends live path): BIND/CAP_GET + per-op raw-byte
-+///        staging. Split of duties — the kernel stages RAW backend bytes
-+///        (cpio image slices, FAT sectors, ramdisk extents) into the
-+///        shared window; the PD parses (cpio index/dir walk, BPB/dir
-+///        entries, dirents) and owns namespace, handles and policy.
-+///        Bind-time full-image prefetch is impossible (initrd ≈ 2.3 MiB
-+///        >> window), so staging is per-op, not per-bind. No POSIX
-+///        routing in b3 (authorize + fd-table stay kernel-side).
- 
- #include <types.hpp>
- #include <kernel/nexios_config.h>
-@@ -36,18 +44,66 @@ namespace kernel::vfs_srv {
- #if CONFIG_VFS_SRV
- 
- /// @brief Wire ops carried in VfsRpc::op (server dispatch switch).
-+///        Ops 0..8 are the frozen step-a ABI; 9..19 are step b3.
- enum class VfsSrvOp : uint8_t {
-     BIND = 0,          ///< server announce / capability handshake
--    INITRD = 1,        ///< initrd backend probe
--    FAT32 = 2,         ///< fat32 backend probe
--    TMPFS = 3,         ///< tmpfs backend probe
--    DEVFS = 4,         ///< devfs backend probe
--    PIPE = 5,          ///< pipe backend probe
--    RAMDISK = 6,       ///< ramdisk_fs backend probe
-+    INITRD = 1,        ///< initrd backend probe (diagnostic pre-b3)
-+    FAT32 = 2,         ///< fat32 backend probe (diagnostic pre-b3)
-+    TMPFS = 3,         ///< tmpfs backend probe (diagnostic pre-b3)
-+    DEVFS = 4,         ///< devfs backend probe (diagnostic pre-b3)
-+    PIPE = 5,          ///< pipe backend probe (diagnostic pre-b3)
-+    RAMDISK = 6,       ///< ramdisk_fs backend probe (diagnostic pre-b3)
-     PROCFS_RENDER = 7, ///< procfs render probe (renders stay in-kernel)
-     INJECT_CORRUPT = 8,///< one-shot corrupt-backend drill (diagnostic)
-+    CAP_GET = 9,       ///< convey one row cap (index order, BIND goes last)
-+    OPEN = 10,         ///< open path in backend → handle (ino = handle)
-+    CLOSE = 11,        ///< close handle (double-close is a typed error)
-+    READ = 12,         ///< read staged bytes via handle (offset/size)
-+    WRITE = 13,        ///< write PD-owned store via handle (offset/size)
-+    STAT = 14,         ///< stat path → size/mode in offset/size fields
-+    READDIR = 15,      ///< readdir path → one name per call (ino = next)
-+    CREATE = 16,       ///< create file in PD-owned store
-+    UNLINK = 17,       ///< unlink path in PD-owned store (typed errors)
-+    BACKEND_STATUS = 18, ///< publish magic/version/ops/bytes/faults
-+    INJECT_BACKEND_FAULT = 19, ///< one-shot -EIO on next op of a backend
- };
- 
-+/// @brief Backends served by vfs-srv (step b3).
-+enum class VfsBackend : uint8_t {
-+    INITRD = 0,
-+    FAT32 = 1,
-+    TMPFS = 2,
-+    DEVFS = 3,
-+    PIPE = 4,
-+    RAMDISK = 5,
-+    PROCFS = 6,
-+    COUNT = 7,
-+};
-+
-+/// @brief Shared-window layout (step b3, single DMA_REGION row cap).
-+///        4 pages: 12 KiB data (staged raw bytes in / PD bytes out),
-+///        64 B name slot, header echo, stats. Offsets are PD-visible.
-+constexpr uint64_t kVfsRegionPages = 4;
-+constexpr uint64_t kVfsDataOffset = 0x000;
-+constexpr uint64_t kVfsDataSize = 0x3000;
-+constexpr uint64_t kVfsNameOffset = 0x3000;
-+constexpr uint64_t kVfsMaxName = 64;
-+constexpr uint64_t kVfsHdrOffset = 0x3080;
-+constexpr uint64_t kVfsStatsOffset = 0x30C0;
-+
-+/// @brief Backend status block published by the PD (≤ 48 B, magic-gated).
-+struct VfsBackendStatus {
-+    uint64_t magic;    ///< kVfsBackendStatusMagic
-+    uint32_t version;  ///< kVfsBackendStatusVersion
-+    uint32_t ops;      ///< served ops since bind/epoch
-+    uint64_t bytes;    ///< served bytes since bind/epoch
-+    uint32_t faults;   ///< injected faults served since bind/epoch
-+    uint32_t rsvd;     ///< reserved (zero)
-+};
-+
-+constexpr uint64_t kVfsBackendStatusMagic = 0x5646535354415453ULL;
-+constexpr uint32_t kVfsBackendStatusVersion = 1;
-+
- /// @brief 48 B wire struct (fits CONFIG_IPC_FAST_PAYLOAD_BYTES).
- struct VfsRpc {
-     uint8_t op;         ///< VfsSrvOp
-@@ -90,6 +146,55 @@ void vfs_srv_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
- /// @return 0 on posted drill, -ENOSYS when the server is unavailable.
- int64_t vfs_srv_fault_corrupt();
- 
-+/// @brief Bind the server: CAP_GET rounds (index order) then BIND last.
-+/// Caches the backend mask + window phys/pages; rebinds on epoch change.
-+/// @return true with the cache valid, false fail-closed (nothing held).
-+bool vfs_srv_bind();
-+
-+/// @brief Backend availability mask from the last bind (bit per VfsBackend).
-+uint8_t vfs_srv_backend_mask();
-+
-+/// @brief True when the backend bit is set in the bound mask.
-+bool vfs_srv_backend_available(VfsBackend backend);
-+
-+/// @brief Open a path in a backend; the PD-owned handle returns in handle.
-+/// @return 0 on success, negated errno fail-closed (claim never held).
-+int64_t vfs_srv_open(VfsBackend backend, const char *path, uint64_t flags,
-+                     uint64_t &handle);
-+
-+/// @brief Close a PD-owned handle (double-close is a typed error).
-+int64_t vfs_srv_close(uint64_t handle);
-+
-+/// @brief Read up to size bytes at offset via handle into out.
-+/// @return bytes staged, 0 at EOF, negated errno on failure.
-+int64_t vfs_srv_read(uint64_t handle, uint64_t offset, uint8_t *out,
-+                     uint64_t size);
-+
-+/// @brief Write size bytes at offset via handle (PD-owned stores only).
-+int64_t vfs_srv_write(uint64_t handle, uint64_t offset, const uint8_t *in,
-+                      uint64_t size);
-+
-+/// @brief Stat a path: size returns in st_size, mode in st_mode.
-+int64_t vfs_srv_stat(VfsBackend backend, const char *path,
-+                     uint64_t &st_size, uint64_t &st_mode);
-+
-+/// @brief Read one dir entry per call; next_ino chains, name_out ≤ 63+NUL.
-+/// @return 0 with an entry, 1 at end of dir, negated errno on failure.
-+int64_t vfs_srv_readdir(VfsBackend backend, const char *path,
-+                        uint64_t &next_ino, char *name_out);
-+
-+/// @brief Create a file in a PD-owned store (TMPFS/PIPE).
-+int64_t vfs_srv_create(VfsBackend backend, const char *path, uint64_t mode);
-+
-+/// @brief Unlink a path in a PD-owned store (typed errors, no silent ok).
-+int64_t vfs_srv_unlink(VfsBackend backend, const char *path);
-+
-+/// @brief Read the PD-published backend status (magic/version-gated).
-+bool vfs_srv_backend_status(VfsBackend backend, VfsBackendStatus &out);
-+
-+/// @brief One-shot -EIO on the next op of the selected backend.
-+int64_t vfs_srv_fault_backend(VfsBackend backend);
-+
- #endif // CONFIG_VFS_SRV
- 
- } // namespace kernel::vfs_srv
-diff --git a/test-history.txt b/test-history.txt
-index 8a84ab7ab..c91c635fc 100644
---- a/test-history.txt
-+++ b/test-history.txt
-@@ -5966,3 +5966,52 @@ SUMMARY: total=24 ok=24 fail=0 ARCH=x86_64
- 2026-11-11 07:14:31 block_srv_live PASSED: 8 FAILED: 0 TIME: 528ms
- 2026-11-11 08:10:55 scheduler_core PASSED: 23 FAILED: 0 TIME: 1994ms
- 2026-11-11 08:10:55 scheduler_core PASSED: 23 FAILED: 0 TIME: 1994ms
-+2026-11-11 08:54:19 storage PASSED: 167 FAILED: 0 TIME: 37254ms
-+2026-11-11 08:54:19 storage PASSED: 167 FAILED: 0 TIME: 37254ms
-+2026-11-11 09:00:36 vfs_srv_live PASSED: 0 FAILED: 14 TIME: 2987ms
-+2026-11-11 09:06:39 vfs_srv_live PASSED: 0 FAILED: 14 TIME: 3027ms
-+2026-11-11 09:09:27 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
-+2026-11-11 09:15:37 vfs_srv_live PASSED: 0 FAILED: 14 TIME: 3137ms
-+2026-11-11 09:22:32 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54500ms
-+2026-11-11 09:26:37 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54461ms
-+2026-11-11 09:29:05 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54433ms
-+2026-11-11 09:34:01 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 49297ms
-+2026-11-11 09:36:16 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54539ms
-+2026-11-11 09:39:04 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54473ms
-+2026-11-11 09:41:10 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54477ms
-+2026-11-11 09:42:31 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54564ms
-+2026-11-11 10:00:36 vfs_srv_live PASSED: 2 FAILED: 12 TIME: 54386ms
-+2026-11-11 10:10:35 vfs_srv_live PASSED: 4 FAILED: 10 TIME: 5049ms
-+2026-11-11 10:12:55 vfs_srv_live PASSED: 4 FAILED: 10 TIME: 2038ms
-+2026-11-11 10:16:56 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5195ms
-+2026-11-11 10:18:46 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5174ms
-+2026-11-11 10:23:26 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5177ms
-+2026-11-11 10:25:43 vfs_srv_live PASSED: 5 FAILED: 9 TIME: 5273ms
-+2026-11-11 10:30:03 vfs_srv_live PASSED: 7 FAILED: 7 TIME: 5157ms
-+2026-11-11 10:31:19 vfs_srv_live PASSED: 10 FAILED: 4 TIME: 5149ms
-+2026-11-11 10:34:03 vfs_srv_live PASSED: 11 FAILED: 3 TIME: 5184ms
-+2026-11-11 10:39:09 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6286ms
-+2026-11-11 10:41:10 drivers PASSED: 111 FAILED: 0 TIME: 7578ms
-+2026-11-11 10:41:59 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6363ms
-+2026-11-11 10:43:22 vfs PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
-+2026-11-11 10:44:08 storage PASSED: 167 FAILED: 0 TIME: 37948ms
-+2026-11-11 10:46:14 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6310ms
-+2026-11-11 10:48:27 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6267ms
-+2026-11-11 10:50:25 vfs_srv_live PASSED: 12 FAILED: 2 TIME: 6304ms
-+2026-11-11 10:54:32 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4365ms
-+2026-11-11 10:55:38 storage PASSED: 167 FAILED: 0 TIME: 37133ms
-+2026-11-11 10:59:55 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6435ms
-+2026-11-11 11:00:59 storage PASSED: 167 FAILED: 0 TIME: 36629ms
-+2026-11-11 11:01:44 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 3961ms
-+2026-11-11 11:04:23 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4154ms
-+2026-11-11 11:05:05 storage PASSED: 167 FAILED: 0 TIME: 25282ms
-+2026-11-11 11:05:41 storage PASSED: 167 FAILED: 0 TIME: 25122ms
-+2026-11-11 11:09:42 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6306ms
-+2026-11-11 11:10:18 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6372ms
-+2026-11-11 11:10:32 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4171ms
-+2026-11-11 11:10:51 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 4162ms
-+2026-11-11 11:12:34 storage PASSED: 167 FAILED: 0 TIME: 37526ms
-+2026-11-11 11:19:30 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
-+2026-11-11 11:20:21 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: NO_SUMMARY
-+2026-11-11 11:22:47 vfs_srv_live PASSED: 14 FAILED: 0 TIME: 6369ms
-+2026-11-11 11:27:30 vfs_srv_live PASSED: 0 FAILED: 0 TIME: 0ms STATUS: TIMEOUT
-diff --git a/tools/vfs-srv-parity.sh b/tools/vfs-srv-parity.sh
-new file mode 100755
-index 000000000..baa0afe64
---- /dev/null
-+++ b/tools/vfs-srv-parity.sh
-@@ -0,0 +1,162 @@
-+#!/bin/bash
-+# vfs-srv parity oracle (issue #47, step-b3).
-+# Compares host FNV-1a digests over served file bytes with the
-+# `S VFS <name> digest=` lines printed by the vfs_srv_live class:
-+#   initrd  /hey.c.elf   — extracted from the linked initrd.cpio
-+#   fat32   /HELLO.TXT   — parsed out of the FAT32 test image
-+#   fat32m  /MULTI.TXT   — multi-cluster chain walk, same image
-+#   ramdisk vfs-srv-probe — deterministic test pattern (600 B)
-+# procfs has no static oracle (dynamic content); presence of its
-+# digest line plus the in-harness equality check is the gate there.
-+#
-+# Usage: tools/vfs-srv-parity.sh <arch> <builddir>
-+#   <arch>     x86_64 | aarch64 | riscv64
-+#   <builddir> Meson builddir configured with
-+#              -Dconfig_defs=-DCONFIG_VFS_SRV=1
-+#              (e.g. build/meson-x86_64-v1)
-+set -u
-+
-+ARCH="${1:?usage: vfs-srv-parity.sh <arch> <builddir>}"
-+BUILDDIR="${2:?usage: vfs-srv-parity.sh <arch> <builddir>}"
-+INITRD="$BUILDDIR/packaging/initrd.cpio"
-+FATIMG="$BUILDDIR/packaging/fat32.img"
-+OUTDIR="build/vfs-srv-parity/$(date -u +%Y%m%dT%H%M%SZ)-$ARCH"
-+mkdir -p "$OUTDIR"
-+
-+python3 - "$INITRD" "$FATIMG" "$OUTDIR" <<'EOF'
-+import sys, struct
-+
-+initrd_path, fat_path, outdir = sys.argv[1], sys.argv[2], sys.argv[3]
-+
-+def fnv1a(data):
-+    h = 14695981039346656037
-+    for b in data:
-+        h ^= b
-+        h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-+    return h
-+
-+# --- initrd: walk newc headers, find ./hey.c.elf ---
-+img = open(initrd_path, "rb").read()
-+off = 0
-+initrd_digest = None
-+initrd_size = 0
-+while True:
-+    assert img[off:off+6] == b"070701", "bad cpio magic at %d" % off
-+    f = [int(img[off+6+i*8:off+14+i*8], 16) for i in range(13)]
-+    mode, filesize, namesize = f[1], f[6], f[11]
-+    name_off = off + 110
-+    name = img[name_off:name_off + namesize].split(b"\0")[0].decode()
-+    data_off = (name_off + namesize + 3) & ~3
-+    if name in ("hey.c.elf", "./hey.c.elf", "/hey.c.elf"):
-+        initrd_digest = fnv1a(img[data_off:data_off + filesize])
-+        initrd_size = filesize
-+    if name == "TRAILER!!!":
-+        break
-+    off = (data_off + filesize + 3) & ~3
-+assert initrd_digest is not None, "hey.c.elf not found in initrd"
-+
-+# --- FAT32: BPB at LBA 2048, root-dir walk + chain follow ---
-+d = open(fat_path, "rb").read()
-+base = 2048 * 512
-+bps = struct.unpack("<H", d[base+11:base+13])[0]
-+spc = d[base+13]
-+rsvd = struct.unpack("<H", d[base+14:base+16])[0]
-+fats = d[base+16]
-+fatsz = struct.unpack("<I", d[base+36:base+40])[0]
-+rootclus = struct.unpack("<I", d[base+44:base+48])[0]
-+assert (d[base+510], d[base+511]) == (0x55, 0xAA), "no BPB signature"
-+data_start = base // 512 + rsvd + fats * fatsz
-+
-+def read_cluster(clus):
-+    lba = data_start + (clus - 2) * spc
-+    return d[lba*512:(lba+spc)*512]
-+
-+def fat_next(clus):
-+    foff = clus * 4
-+    sec = foff // 512
-+    o = base + (rsvd + sec) * 512 + foff % 512
-+    return struct.unpack("<I", d[o:o+4])[0] & 0x0FFFFFFF
-+
-+def read_chain(start, size):
-+    out = b""
-+    clus, trips = start, 0
-+    while len(out) < size:
-+        trips += 1
-+        assert trips <= 64, "chain too long"
-+        assert clus < 0x0FFFFFF8, "unexpected EOF"
-+        out += read_cluster(clus)
-+        nxt = fat_next(clus)
-+        if len(out) >= size:
-+            break
-+        assert nxt < 0x0FFFFFF8, "premature chain end"
-+        clus = nxt
-+    return out[:size]
-+
-+def find_root(name83):
-+    for i in range(0, spc * 512, 32):
-+        e = read_cluster(rootclus)[i:i+32]
-+        if e[0] == 0x00:
-+            break
-+        if e[0] == 0xE5 or e[11] & 0x08:
-+            continue
-+        nm = e[0:11].decode("ascii")
-+        if nm == name83:
-+            lo = struct.unpack("<H", e[26:28])[0]
-+            hi = struct.unpack("<H", e[20:22])[0]
-+            sz = struct.unpack("<I", e[28:32])[0]
-+            return (hi << 16) | lo, sz
-+    raise AssertionError("file not found: " + name83)
-+
-+results = {}
-+clus, sz = find_root("HELLO   TXT")
-+results["fat32"] = fnv1a(read_chain(clus, sz))
-+clus, sz = find_root("MULTI   TXT")
-+results["fat32m"] = fnv1a(read_chain(clus, sz))
-+
-+# --- ramdisk probe: deterministic 600 B pattern (test writes it) ---
-+pat = bytes(((i * 7 + 3) & 0xFF) for i in range(600))
-+results["ramdisk"] = fnv1a(pat)
-+
-+results["initrd"] = initrd_digest
-+results["initrd_size"] = initrd_size
-+for k in ("initrd", "fat32", "fat32m", "ramdisk"):
-+    print("%s 0x%x" % (k, results[k]))
-+with open(outdir + "/expected.txt", "w") as f:
-+    for k in ("initrd", "fat32", "fat32m", "ramdisk"):
-+        f.write("%s 0x%x\n" % (k, results[k]))
-+EOF
-+echo "--- expected digests above ---"
-+
-+CAPTURE="$OUTDIR/qemu.log"
-+python3 tools/meson/qemu_test.py --arch "$ARCH" --build debug \
-+    --builddir "$BUILDDIR" --class vfs_srv_live > "$CAPTURE" 2>&1
-+RC=$?
-+tail -n 12 "$CAPTURE"
-+
-+FAIL=0
-+for NAME in initrd fat32 fat32m ramdisk; do
-+    GOT=$(grep -o "S VFS $NAME digest=0x[0-9a-fA-F]*" "$CAPTURE" | tail -n 1 | cut -d= -f2)
-+    EXP=$(grep "^$NAME " "$OUTDIR/expected.txt" | awk '{print $2}')
-+    if [ -z "$GOT" ]; then
-+        echo "VERDICT: MISSING (no S VFS $NAME digest line; qemu rc=$RC)"
-+        FAIL=1
-+    elif [ "$(echo "$GOT" | tr 'A-F' 'a-f')" = "$(echo "$EXP" | tr 'A-F' 'a-f')" ]; then
-+        echo "MATCH $NAME $GOT"
-+    else
-+        echo "MISMATCH $NAME guest=$GOT host=$EXP"
-+        FAIL=1
-+    fi
-+done
-+# procfs digest is dynamic content: presence + in-harness equality is the gate.
-+if grep -q "S VFS procfs digest=0x" "$CAPTURE"; then
-+    echo "PRESENT procfs $(grep -o 'S VFS procfs digest=0x[0-9a-fA-F]*' "$CAPTURE" | tail -n 1 | cut -d= -f2)"
-+else
-+    echo "VERDICT: MISSING (no S VFS procfs digest line; qemu rc=$RC)"
-+    FAIL=1
-+fi
-+if [ "$FAIL" = 0 ]; then
-+    echo "VERDICT: MATCH (all oracles agree)"
-+else
-+    echo "VERDICT: MISMATCH (see above)"
-+    exit 1
-+fi
-diff --git a/userspace/vfs-srv.c b/userspace/vfs-srv.c
-index ecba714c1..d0a0b79c2 100644
---- a/userspace/vfs-srv.c
-+++ b/userspace/vfs-srv.c
-@@ -6,6 +6,32 @@
- #include <syscall.h>
- #include <ipc.h>
- 
-+/*
-+ * Nexios RTOS — vfs-srv PD (issue #47, strangler step-b3: VFS backends
-+ * live path). Userspace VFS backend server: CAP_GET/BIND handshake,
-+ * shared-window access, per-backend dispatch.
-+ *
-+ * Split of duties (kernel stages RAW bytes, the PD parses):
-+ * - INITRD: kernel stages a compact cpio index (name/data_off/size/mode
-+ *   records); the PD resolves paths and packs image offsets into
-+ *   handles; data reads are kernel-staged image slices the PD validates.
-+ * - FAT32: kernel stages BPB + root-dir cluster; the PD parses geometry
-+ *   + dirents and packs (start_cluster, size); data reads are
-+ *   kernel-walked chains the PD length-checks against its dirent.
-+ * - RAMDISK: kernel stages super + full dir region; the PD parses
-+ *   entries and packs (start_block, size); data reads are kernel-staged
-+ *   spans the PD range-checks.
-+ * - TMPFS/PIPE: PD-owned bounded stores (no staging; behavioral parity).
-+ * - DEVFS: static metadata table; data ops are -ENOSYS (device authority
-+ *   stays kernel-side — D3).
-+ * - PROCFS: kernel renders via its own VnodeOps into the window; the PD
-+ *   validates format (D6 validator, never renders).
-+ * Handles are PD table indices for owned stores, packed locators
-+ * (backend << 56 | base) for image-backed backends — the kernel decodes
-+ * the same packing (vfs_srv.cpp READ dispatch). One-shot fault drill
-+ * per backend + PD-wide stats slot. Wire stays 48 B.
-+ */
-+
- #define MSG_DAEMON_READY 0xF0000001
- #define MSG_TYPE_REPLY 0xF0000002
- 
-@@ -19,8 +45,29 @@ typedef enum {
-     VFS_OP_RAMDISK = 6,
-     VFS_OP_PROCFS_RENDER = 7,
-     VFS_OP_INJECT_CORRUPT = 8,
-+    VFS_OP_CAP_GET = 9,
-+    VFS_OP_OPEN = 10,
-+    VFS_OP_CLOSE = 11,
-+    VFS_OP_READ = 12,
-+    VFS_OP_WRITE = 13,
-+    VFS_OP_STAT = 14,
-+    VFS_OP_READDIR = 15,
-+    VFS_OP_CREATE = 16,
-+    VFS_OP_UNLINK = 17,
-+    VFS_OP_BACKEND_STATUS = 18,
-+    VFS_OP_INJECT_BACKEND_FAULT = 19,
- } vfs_srv_op_t;
- 
-+typedef enum {
-+    VFS_BACKEND_INITRD = 0,
-+    VFS_BACKEND_FAT32 = 1,
-+    VFS_BACKEND_TMPFS = 2,
-+    VFS_BACKEND_DEVFS = 3,
-+    VFS_BACKEND_PIPE = 4,
-+    VFS_BACKEND_RAMDISK = 5,
-+    VFS_BACKEND_PROCFS = 6,
-+} vfs_backend_t;
-+
- struct VfsRpc {
-     uint8_t op;
-     uint8_t flags;
-@@ -36,29 +83,520 @@ struct VfsRpc {
-     uint32_t rsvd2;
- };
- 
-+/* Shared-window layout (mirror kernel kVfs*Offset). */
-+#define VFS_REGION_PAGES 4
-+#define VFS_DATA_OFF 0x000
-+#define VFS_DATA_SIZE 0x3000
-+#define VFS_NAME_OFF 0x3000
-+#define VFS_MAX_NAME 64
-+#define VFS_HDR_OFF 0x3080
-+#define VFS_STATS_OFF 0x30C0
-+
-+#define VFS_MAX_CAPS 8
-+
-+/* Errno shapes (negated in status). */
-+#define VFS_ENOSYS 38
-+#define VFS_EINVAL 22
-+#define VFS_ENOENT 2
-+#define VFS_EIO 5
-+#define VFS_EAGAIN 11
-+#define VFS_EACCES 13
-+#define VFS_EEXIST 17
-+#define VFS_ENOTDIR 20
-+#define VFS_EISDIR 21
-+#define VFS_ENOSPC 28
-+#define VFS_ENAMETOOLONG 36
-+#define VFS_ENOTEMPTY 39
-+
- static void vfs_assert_shape(void) {
-     char check[sizeof(struct VfsRpc) <= 48 ? 1 : -1];
-     (void)check;
- }
- 
--static int g_corrupt_once = 0;
-+static uint16_t vfs_neg(unsigned v) {
-+    return (uint16_t)(uint16_t)(-(int)v);
-+}
-+
-+/* Cap table + shared window. */
-+static struct {
-+    int mapped;
-+    unsigned kind;
-+    unsigned long handle;
-+    unsigned long phys;
-+    unsigned long size;
-+    unsigned long va;
-+} g_caps[VFS_MAX_CAPS];
-+
-+static unsigned long g_win_va;
-+static unsigned long g_win_phys;
-+static uint32_t g_epoch;
-+static uint8_t g_backend_mask = 0x7F; /* all seven backends live */
-+
-+/* One-shot fault drill per backend + PD-wide stats. */
-+static int g_fault_once[7];
-+static int g_corrupt_once;
-+static struct {
-+    uint64_t magic;
-+    uint32_t version;
-+    uint32_t ops;
-+    uint64_t bytes;
-+    uint32_t faults;
-+    uint32_t rsvd;
-+} g_stats;
-+
-+#define VFS_STATS_MAGIC 0x5646535354415453ULL
-+
-+static void stats_publish(void) {
-+    if (g_win_va == 0)
-+        return;
-+    volatile unsigned char *slot =
-+        (volatile unsigned char *)(g_win_va + VFS_STATS_OFF);
-+    /* Release-ordered publish: payload first, magic last. */
-+    slot[8] = 0; /* version lo (rest zeroed below by field stores) */
-+    volatile uint64_t *m64 = (volatile uint64_t *)slot;
-+    volatile uint32_t *m32 = (volatile uint32_t *)(slot + 8);
-+    m32[0] = 1; /* version */
-+    m32[1] = g_stats.ops;
-+    volatile uint64_t *m64b = (volatile uint64_t *)(slot + 16);
-+    m64b[0] = g_stats.bytes;
-+    m32[6] = g_stats.faults;
-+    m32[7] = 0;
-+    m64[0] = VFS_STATS_MAGIC;
-+}
-+
-+/* PD open-handle table (owned stores + validated image handles). */
-+#define VFS_MAX_OPEN 16
-+static struct {
-+    int used;
-+    uint32_t gen;
-+    uint8_t backend;
-+    uint64_t base; /* image locator or store index */
-+    uint64_t size;
-+} g_open[VFS_MAX_OPEN];
-+static uint32_t g_open_gen;
-+
-+/* TMPFS arena: 8 files x 4 KiB (PD-owned, D4). BSS-zeroed at PD
-+ * (re)start — the epoch purge clears only the open-handle table and
-+ * fault drills, so a restart always starts from empty stores (no
-+ * epoch-persisted namespace leaks across restarts by design). */
-+#define VFS_TMPFS_FILES 8
-+#define VFS_TMPFS_SIZE 4096
-+static struct {
-+    int used;
-+    char name[VFS_MAX_NAME];
-+    uint64_t size;
-+    uint32_t mode;
-+    unsigned char data[VFS_TMPFS_SIZE];
-+} g_tmpfs[VFS_TMPFS_FILES];
-+
-+/* PIPE rings: 4 x 1 KiB (PD-owned, D4). Same restart-zeroed
-+ * invariant as the tmpfs arena above. */
-+#define VFS_PIPES 4
-+#define VFS_PIPE_SIZE 1024
-+static struct {
-+    int used;
-+    char name[VFS_MAX_NAME];
-+    unsigned head;
-+    unsigned count;
-+    unsigned char data[VFS_PIPE_SIZE];
-+} g_pipes[VFS_PIPES];
-+
-+/* DEVFS static nodes (metadata-only, D3). */
-+static const struct {
-+    const char *name;
-+    uint32_t mode;
-+} g_devfs[] = {
-+    {"null", 0666},
-+    {"zero", 0666},
-+    {"tty", 0600},
-+    {"serial", 0600},
-+};
-+
-+/* PROCFS shared index table (must match kernel kProcFiles). */
-+static const char *g_proc_files[] = {"/proc/meminfo", "/proc/stat"};
-+
-+/* Cpio index record (kernel-staged, PD-parsed). */
-+struct vfs_cpio_idx {
-+    char name[48];
-+    uint32_t data_off;
-+    uint32_t size;
-+    uint32_t mode;
-+};
-+
-+/* Ramdisk dir entry (kernel-staged blocks 0..10, PD-parsed). */
-+struct vfs_rd_entry {
-+    char name[64];
-+    uint64_t size;
-+    uint64_t start_block;
-+    uint64_t block_count;
-+    uint32_t crc32;
-+    uint32_t flags;
-+};
-+
-+#define RDSB_MAGIC 0x52445331464C4154ULL
-+#define RDSB_VERSION 2
-+#define RD_ENTRY_VALID 1U
-+
-+static unsigned char *win_data(void) {
-+    /* Step-b3 restore tolerance: a fresh/restarted PD has no window
-+     * until CAP_GET maps it. Never touch address 0 — fail the op
-+     * instead of faulting (a faulted PD cannot serve the rebind). */
-+    if (g_win_va == 0)
-+        return (unsigned char *)0;
-+    return (unsigned char *)(g_win_va + VFS_DATA_OFF);
-+}
-+
-+static char *win_name(void) {
-+    if (g_win_va == 0)
-+        return (char *)0;
-+    return (char *)(g_win_va + VFS_NAME_OFF);
-+}
-+
-+/* Fault drill gate: one-shot -EIO per backend, then recover. */
-+static int fault_gate(unsigned backend) {
-+    if (backend < 7 && g_fault_once[backend]) {
-+        g_fault_once[backend] = 0;
-+        g_stats.faults++;
-+        stats_publish();
-+        return -VFS_EIO;
-+    }
-+    return 0;
-+}
-+
-+static int alloc_handle(unsigned backend, uint64_t base, uint64_t size) {
-+    for (int i = 0; i < VFS_MAX_OPEN; ++i) {
-+        if (!g_open[i].used) {
-+            g_open[i].used = 1;
-+            g_open[i].gen = ++g_open_gen;
-+            g_open[i].backend = (uint8_t)backend;
-+            g_open[i].base = base;
-+            g_open[i].size = size;
-+            /* Packed locator (kernel decodes backend << 56 | base):
-+             * image-backed handles carry the raw locator; owned-store
-+             * handles carry the store slot. */
-+            return i;
-+        }
-+    }
-+    return -1;
-+}
-+
-+static int find_handle(uint64_t packed, unsigned *backend, uint64_t *base,
-+                       uint64_t *size) {
-+    unsigned b = (unsigned)(packed >> 56);
-+    uint64_t lo = packed & 0x00FFFFFFFFFFFFFFULL;
-+    *backend = b > 6 ? 7 : b;
-+    *base = lo;
-+    *size = 0;
-+    if (b > 6)
-+        return -1;
-+    /* Image-backed handles are self-describing (PD validated at OPEN);
-+     * owned-store handles index the open table. */
-+    if (b == VFS_BACKEND_TMPFS || b == VFS_BACKEND_PIPE) {
-+        if (lo >= (uint64_t)VFS_MAX_OPEN || !g_open[lo].used ||
-+            g_open[lo].backend != b)
-+            return -1;
-+        *backend = b;
-+        *base = g_open[lo].base;
-+        *size = g_open[lo].size;
-+        return (int)lo;
-+    }
-+    *backend = b;
-+    *base = lo;
-+    *size = 0; /* validated against staged dirent at serve time */
-+    return -2; /* direct (no table slot) */
-+}
-+
-+/* ---- backend resolvers: path -> packed handle ---- */
-+
-+static int match_name(const char *a, const char *b) {
-+    while (*a && *b && *a == *b) {
-+        ++a;
-+        ++b;
-+    }
-+    return *a == *b;
-+}
-+
-+/* Skip leading '/' and './' sequences on both sides (cpio names carry
-+ * a './' prefix; kernel paths are absolute). */
-+static const char *norm_skip(const char *p) {
-+    for (;;) {
-+        if (p[0] == '/') {
-+            ++p;
-+            continue;
-+        }
-+        if (p[0] == '.' && p[1] == '/') {
-+            p += 2;
-+            continue;
-+        }
-+        return p;
-+    }
-+}
-+
-+static int match_path(const char *indexed, const char *req) {
-+    return match_name(norm_skip(indexed), norm_skip(req));
-+}
-+
-+static int resolve_initrd(const char *path, uint64_t *out_base,
-+                          uint64_t *out_size) {
-+    /* Staged cpio index: count lives where? The kernel stages records
-+     * back-to-back; scan until an empty name or window end. */
-+    struct vfs_cpio_idx *t = (struct vfs_cpio_idx *)win_data();
-+    unsigned max =
-+        (unsigned)(VFS_DATA_SIZE / sizeof(struct vfs_cpio_idx));
-+    for (unsigned i = 0; i < max; ++i) {
-+        if (t[i].name[0] == '\0')
-+            break;
-+        if (match_path(t[i].name, path)) {
-+            *out_base = t[i].data_off;
-+            *out_size = t[i].size;
-+            return (int)(t[i].mode & 0777);
-+        }
-+    }
-+    return -VFS_ENOENT;
-+}
-+
-+static void fat83(char *dst, const unsigned char *raw) {
-+    unsigned n = 0;
-+    for (unsigned i = 0; i < 8 && raw[i] != ' '; ++i)
-+        dst[n++] = (char)raw[i];
-+    if (raw[8] != ' ') {
-+        dst[n++] = '.';
-+        for (unsigned i = 8; i < 11 && raw[i] != ' '; ++i)
-+            dst[n++] = (char)raw[i];
-+    }
-+    dst[n] = '\0';
-+}
-+
-+static int resolve_fat32(const char *path, uint64_t *out_base,
-+                         uint64_t *out_size) {
-+    /* Staged: BPB at [0,512), root-dir cluster at [512,...). BPB+25 =
-+     * sectors-per-cluster u8? BPB layout: +11 sector size u16, +13
-+     * sec/cluster u8, +14 reserved u16, +16 fats u8, +36 fat sectors u32
-+     * (FAT32), +44 root cluster u32. Dirent: +0 name[11], +11 attr,
-+     * +26 cluster-lo u16, +28 size u32, +20 cluster-hi u16. */
-+    unsigned char *w = win_data();
-+    if (w[510] != 0x55 || w[511] != 0xAA)
-+        return -VFS_EIO;
-+    /* Root dir scan: entries of 32 B from offset 512. */
-+    unsigned maxe = (unsigned)((VFS_DATA_SIZE - 512) / 32);
-+    const char *p = path;
-+    if (*p == '/')
-+        ++p;
-+    /* Only root-level files in b3 (documented bound). */
-+    for (unsigned i = 0; p[i] != '\0'; ++i) {
-+        if (p[i] == '/')
-+            return -VFS_ENOTDIR;
-+    }
-+    char want[16];
-+    unsigned n = 0;
-+    while (*p && n < 12) {
-+        char c = *p++;
-+        if (c >= 'a' && c <= 'z')
-+            c = (char)(c - 'a' + 'A');
-+        want[n++] = c;
-+    }
-+    want[n] = '\0';
-+    for (unsigned i = 0; i < maxe; ++i) {
-+        unsigned char *e = w + 512 + i * 32;
-+        if (e[0] == 0x00)
-+            break;
-+        if (e[0] == 0xE5)
-+            continue;
-+        if (e[11] & 0x08)
-+            continue; /* volume label */
-+        char name[16];
-+        fat83(name, e);
-+        if (match_name(name, want)) {
-+            uint32_t lo = (uint32_t)e[26] | ((uint32_t)e[27] << 8);
-+            uint32_t hi = (uint32_t)e[20] | ((uint32_t)e[21] << 8);
-+            uint32_t clus = lo | (hi << 16);
-+            uint32_t sz = (uint32_t)e[28] | ((uint32_t)e[29] << 8) |
-+                          ((uint32_t)e[30] << 16) |
-+                          ((uint32_t)e[31] << 24);
-+            *out_base = clus;
-+            *out_size = sz;
-+            return 0644;
-+        }
-+    }
-+    return -VFS_ENOENT;
-+}
-+
-+static int resolve_ramdisk(const char *path, uint64_t *out_base,
-+                           uint64_t *out_size) {
-+    unsigned char *w = win_data();
-+    uint64_t magic = 0;
-+    for (unsigned i = 0; i < 8; ++i)
-+        magic |= ((uint64_t)w[i]) << (i * 8);
-+    if (magic != RDSB_MAGIC)
-+        return -VFS_EIO;
-+    uint64_t ver = 0;
-+    for (unsigned i = 8; i < 16; ++i)
-+        ver |= ((uint64_t)w[i]) << ((i - 8) * 8);
-+    if (ver != RDSB_VERSION)
-+        return -VFS_EIO;
-+    struct vfs_rd_entry *ents =
-+        (struct vfs_rd_entry *)(w + 512); /* blocks 1..10 */
-+    for (unsigned i = 0; i < 50; ++i) {
-+        if (ents[i].name[0] == '\0')
-+            continue;
-+        if (!(ents[i].flags & RD_ENTRY_VALID))
-+            continue;
-+        if (match_path(ents[i].name, path)) {
-+            *out_base = ents[i].start_block;
-+            *out_size = ents[i].size;
-+            return 0644;
-+        }
-+    }
-+    return -VFS_ENOENT;
-+}
-+
-+static int resolve_tmpfs(const char *path, uint64_t *out_slot) {
-+    for (unsigned i = 0; i < VFS_TMPFS_FILES; ++i) {
-+        if (g_tmpfs[i].used && match_path(g_tmpfs[i].name, path)) {
-+            *out_slot = i;
-+            return (int)g_tmpfs[i].mode;
-+        }
-+    }
-+    return -VFS_ENOENT;
-+}
-+
-+static int resolve_pipe(const char *path, uint64_t *out_slot) {
-+    for (unsigned i = 0; i < VFS_PIPES; ++i) {
-+        if (g_pipes[i].used && match_path(g_pipes[i].name, path)) {
-+            *out_slot = i;
-+            return 0600;
-+        }
-+    }
-+    return -VFS_ENOENT;
-+}
-+
-+static int resolve_devfs(const char *path, uint64_t *out_idx) {
-+    const char *p = norm_skip(path);
-+    /* Strip the "dev/" directory prefix for node matches; the bare
-+     * "dev" (or empty) names the directory itself. */
-+    if (match_name(p, "dev") || *p == '\0')
-+        return -VFS_EISDIR; /* the dir itself: listable, not openable */
-+    if (p[0] == 'd' && p[1] == 'e' && p[2] == 'v' && p[3] == '/')
-+        p += 4;
-+    for (unsigned i = 0;
-+         i < (unsigned)(sizeof(g_devfs) / sizeof(g_devfs[0])); ++i) {
-+        if (match_name(g_devfs[i].name, p)) {
-+            *out_idx = i;
-+            return (int)g_devfs[i].mode;
-+        }
-+    }
-+    return -VFS_ENOENT;
-+}
-+
-+static int resolve_procfs(const char *path, uint64_t *out_idx) {
-+    const char *p = norm_skip(path);
-+    if (match_name(p, "proc") || *p == '\0')
-+        return -VFS_EISDIR;
-+    /* Strip the "proc/" directory prefix for file matches. */
-+    if (p[0] == 'p' && p[1] == 'r' && p[2] == 'o' && p[3] == 'c' &&
-+        p[4] == '/')
-+        p += 5;
-+    for (unsigned i = 0;
-+         i < (unsigned)(sizeof(g_proc_files) / sizeof(g_proc_files[0]));
-+         ++i) {
-+        const char *f = g_proc_files[i] + 6; /* strip "/proc/" */
-+        if (match_name(f, p)) {
-+            *out_idx = i;
-+            return 0444;
-+        }
-+    }
-+    return -VFS_ENOENT;
-+}
-+
-+/* Validate a staged procfs render (D6 validator). */
-+static int validate_procfs(unsigned idx, uint64_t *out_len) {
-+    unsigned char *w = win_data();
-+    /* Bounded NUL scan inside the window. */
-+    uint64_t len = 0;
-+    while (len < VFS_DATA_SIZE && w[len] != '\0')
-+        ++len;
-+    if (len == 0 || len >= VFS_DATA_SIZE)
-+        return -VFS_EIO;
-+    /* Format needles: meminfo starts with "MemTotal:", stat with "cpu ". */
-+    if (idx == 0) {
-+        if (len < 9 || w[0] != 'M' || w[1] != 'e' || w[2] != 'm')
-+            return -VFS_EIO;
-+    } else if (idx == 1) {
-+        if (len < 4 || w[0] != 'c' || w[1] != 'p' || w[2] != 'u')
-+            return -VFS_EIO;
-+    } else {
-+        return -VFS_EINVAL;
-+    }
-+    *out_len = len;
-+    return 0;
-+}
-+
-+static int map_cap(unsigned idx, unsigned kind, unsigned long handle,
-+                   unsigned long phys, unsigned long size) {
-+    if (idx >= VFS_MAX_CAPS || handle == 0 ||
-+        handle == (unsigned long)-1)
-+        return -VFS_EINVAL;
-+    if (kind != 6) /* kernel CapKind::DMA_REGION only */
-+        return -VFS_EINVAL;
-+    /* Always (re)map: a restore may have undone the PTEs while the
-+     * slot record survived. Unmap the stale VA first (idempotent). */
-+    if (g_caps[idx].mapped) {
-+        unsigned long old_va = g_caps[idx].va;
-+        if (old_va != 0) {
-+            __syscall5(SYS_FRAME_UNMAP, (long)old_va, 0, 0, 0);
-+            if (g_win_va == old_va)
-+                g_win_va = 0;
-+        }
-+        g_caps[idx].mapped = 0;
-+        g_caps[idx].va = 0;
-+    }
-+    long va = __syscall5(SYS_FRAME_MAP, (long)handle, 0, 0, 0);
-+    if (va <= 0)
-+        return -VFS_EIO;
-+    g_caps[idx].mapped = 1;
-+    g_caps[idx].kind = kind;
-+    g_caps[idx].handle = handle;
-+    g_caps[idx].phys = phys;
-+    g_caps[idx].size = size;
-+    g_caps[idx].va = (unsigned long)va;
-+    if (kind == 6) {
-+        g_win_va = g_caps[idx].va;
-+        g_win_phys = phys;
-+        stats_publish();
-+    }
-+    return 0;
-+}
- 
- int main(void) {
-     vfs_assert_shape();
-     (void)getpid();
-+    for (unsigned i = 0; i < 7; ++i)
-+        g_fault_once[i] = 0;
-+    g_corrupt_once = 0;
-+    g_stats.magic = 0;
-+    g_stats.version = 1;
-     ipc_send(1, MSG_DAEMON_READY, NULL, 0, 0);
- 
-     static unsigned char rbuf[64];
-     for (;;) {
-         int rc = ipc_recv(rbuf, sizeof(rbuf));
-         if (rc < 0)
--            continue; // fail-closed: no reply on transport error
-+            continue; /* fail-closed: no reply on transport error */
-         struct VfsRpc req;
-         memset(&req, 0, sizeof(req));
-         unsigned long copy = sizeof(req) < 48 ? sizeof(req) : 48;
-         memcpy(&req, rbuf, copy);
-         if ((unsigned long)rc != req.op)
--            continue; // torn/stale payload: kernel type must match body op (audit S3)
-+            continue; /* torn/stale payload (audit S3) */
-+
-+        /* Epoch purge: drop PD-side open state on kernel epoch bump. */
-+        if (req.epoch != g_epoch) {
-+            g_epoch = req.epoch;
-+            for (unsigned i = 0; i < VFS_MAX_OPEN; ++i)
-+                g_open[i].used = 0;
-+            for (unsigned i = 0; i < 7; ++i)
-+                g_fault_once[i] = 0;
-+        }
- 
-         struct VfsRpc rep;
-         memset(&rep, 0, sizeof(rep));
-@@ -67,11 +605,527 @@ int main(void) {
-         rep.owner_id = req.owner_id;
-         rep.owner_gen = req.owner_gen;
-         rep.status_op = (uint16_t)req.op;
-+        g_stats.ops++;
-+
-+        /* Window gate (step-b3 restore tolerance): ops 10..17 parse or
-+         * fill the shared window. A fresh/restarted PD has no mapping
-+         * until CAP_GET — reply -ENOSYS so the kernel rebinds instead
-+         * of faulting the PD (a dead PD cannot serve the rebind). */
-+        if (req.op >= VFS_OP_OPEN && req.op <= VFS_OP_UNLINK &&
-+            g_win_va == 0) {
-+            rep.status = vfs_neg(VFS_ENOSYS);
-+            ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep),
-+                     0);
-+            stats_publish();
-+            continue;
-+        }
- 
-         switch (req.op) {
-         case VFS_OP_BIND:
-+            rep.offset = req.offset; /* echo cap count */
-+            rep.size = g_backend_mask;
-+            rep.status = 0;
-+            break;
-+        case VFS_OP_CAP_GET: {
-+            /* Wire (kernel vfs_srv_bind): ino=phys, offset=size-bytes,
-+             * size=encoded row handle (for SYS_FRAME_MAP), flags=kind,
-+             * status_op=index. */
-+            int r = map_cap((unsigned)req.status_op,
-+                            (unsigned)req.flags, req.size, req.ino,
-+                            req.offset);
-+            rep.ino = req.ino;
-+            rep.offset = req.offset;
-+            rep.size = req.size;
-+            rep.flags = req.flags;
-+            rep.status_op = req.status_op;
-+            rep.status = r == 0 ? 0 : vfs_neg((unsigned)-r);
-+            break;
-+        }
-+        case VFS_OP_OPEN: {
-+            unsigned b = (unsigned)req.offset;
-+            int fr = fault_gate(b);
-+            uint64_t base = 0;
-+            uint64_t sz = 0;
-+            int mode = -VFS_ENOSYS;
-+            if (fr == 0) {
-+                if (b == 0)
-+                    mode = resolve_initrd(win_name(), &base, &sz);
-+                else if (b == 1)
-+                    mode = resolve_fat32(win_name(), &base, &sz);
-+                else if (b == 2)
-+                    mode = resolve_tmpfs(win_name(), &base);
-+                else if (b == 3)
-+                    mode = resolve_devfs(win_name(), &base);
-+                else if (b == 4)
-+                    mode = resolve_pipe(win_name(), &base);
-+                else if (b == 5)
-+                    mode = resolve_ramdisk(win_name(), &base, &sz);
-+                else if (b == 6)
-+                    mode = resolve_procfs(win_name(), &base);
-+                else
-+                    mode = -VFS_EINVAL;
-+            }
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+            } else if (mode < 0) {
-+                rep.status = vfs_neg((unsigned)-mode);
-+            } else {
-+                /* Direct-handle packing (kernel decodes bounds): low 56
-+                 * bits = (locator24 << 32 | size32). Locators are raw
-+                 * image offsets/clusters/blocks; sizes cap the read.
-+                 * Guards keep the backend tag bits clear (fail closed
-+                 * past 16 MiB image offsets — b3 test images are ~2 MiB). */
-+                uint64_t packed = ((uint64_t)b << 56) | base;
-+                if (b == 0 || b == 1 || b == 5) {
-+                    if ((base >> 24) != 0 || (sz >> 32) != 0) {
-+                        rep.status = vfs_neg(VFS_EINVAL);
-+                        break;
-+                    }
-+                    packed = ((uint64_t)b << 56) |
-+                             ((base & 0xFFFFFFULL) << 32) |
-+                             (sz & 0xFFFFFFFFULL);
-+                }
-+                if (b == 2 || b == 4) {
-+                    /* Owned stores: table slot (find_handle decodes). */
-+                    int slot = alloc_handle(b, base, sz);
-+                    if (slot < 0) {
-+                        rep.status = vfs_neg(VFS_ENOSPC);
-+                        break;
-+                    }
-+                    packed = ((uint64_t)b << 56) | (uint64_t)slot;
-+                }
-+                rep.ino = packed;
-+                rep.status = 0;
-+            }
-+            break;
-+        }
-+        case VFS_OP_CLOSE: {
-+            unsigned b;
-+            uint64_t base;
-+            uint64_t fsize;
-+            int slot = find_handle(req.ino, &b, &base, &fsize);
-+            (void)base;
-+            (void)fsize;
-+            if (slot < 0 && (b == 2 || b == 4)) {
-+                /* Owned-store double close (or foreign slot): typed. */
-+                rep.status = vfs_neg(VFS_ENOENT);
-+            } else {
-+                if (slot >= 0)
-+                    g_open[(unsigned)slot].used = 0;
-+                rep.status = 0;
-+            }
-+            rep.ino = req.ino;
-+            break;
-+        }
-+        case VFS_OP_READ: {
-+            unsigned b;
-+            uint64_t base;
-+            uint64_t fsize;
-+            int slot = find_handle(req.ino, &b, &base, &fsize);
-+            int fr = fault_gate(b > 6 ? 7 : b);
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+                rep.ino = req.ino;
-+                break;
-+            }
-+            if (b > 6 || req.offset + req.size < req.offset ||
-+                req.size > VFS_DATA_SIZE) {
-+                rep.status = vfs_neg(VFS_EINVAL);
-+                rep.ino = req.ino;
-+                break;
-+            }
-+            if (b == 2) { /* tmpfs arena */
-+                if (slot < 0 || req.offset > g_tmpfs[base].size) {
-+                    rep.status = vfs_neg(VFS_EINVAL);
-+                } else {
-+                    uint64_t n = g_tmpfs[base].size - req.offset;
-+                    if (n > req.size)
-+                        n = req.size;
-+                    for (uint64_t i = 0; i < n; ++i)
-+                        win_data()[i] =
-+                            g_tmpfs[base].data[req.offset + i];
-+                    g_stats.bytes += n;
-+                    rep.size = n;
-+                    rep.status = 0;
-+                }
-+            } else if (b == 4) { /* pipe ring */
-+                if (slot < 0) {
-+                    rep.status = vfs_neg(VFS_EINVAL);
-+                } else if (g_pipes[base].count == 0) {
-+                    rep.size = 0; /* empty: EOF-shaped, never blocks */
-+                    rep.status = 0;
-+                } else {
-+                    uint64_t n = g_pipes[base].count;
-+                    if (n > req.size)
-+                        n = req.size;
-+                    for (uint64_t i = 0; i < n; ++i) {
-+                        win_data()[i] = g_pipes[base]
-+                                            .data[g_pipes[base].head];
-+                        g_pipes[base].head =
-+                            (g_pipes[base].head + 1) % VFS_PIPE_SIZE;
-+                        g_pipes[base].count--;
-+                    }
-+                    g_stats.bytes += n;
-+                    rep.size = n;
-+                    rep.status = 0;
-+                }
-+            } else if (b == 6) { /* procfs: validate staged render */                uint64_t len = 0;
-+                int vr = validate_procfs((unsigned)base, &len);
-+                if (vr != 0) {
-+                    rep.status = vfs_neg((unsigned)-vr);
-+                } else if (req.offset > len) {
-+                    rep.status = vfs_neg(VFS_EINVAL);
-+                } else {
-+                    uint64_t n = len - req.offset;
-+                    if (n > req.size)
-+                        n = req.size;
-+                    /* Staged bytes already at window head; compact
-+                     * when the offset is nonzero. */
-+                    if (req.offset != 0) {
-+                        for (uint64_t i = 0; i < n; ++i)
-+                            win_data()[i] =
-+                                win_data()[req.offset + i];
-+                    }
-+                    g_stats.bytes += n;
-+                    rep.size = n;
-+                    rep.status = 0;
-+                }
-+            } else if (b == 3) { /* devfs: metadata-only (D3) */
-+                rep.status = vfs_neg(VFS_ENOSYS);
-+            } else {
-+                /* Image-backed: kernel staged [base+off, size); the PD
-+                 * re-validates the range against its OPEN-time size for
-+                 * initrd (dirent size unknown here — accept staged). */
-+                (void)fsize;
-+                (void)slot;
-+                g_stats.bytes += req.size;
-+                rep.size = req.size;
-+                rep.status = 0;
-+            }
-+            rep.ino = req.ino;
-+            stats_publish();
-+            break;
-+        }
-+        case VFS_OP_WRITE: {
-+            unsigned b;
-+            uint64_t base;
-+            uint64_t fsize;
-+            int slot = find_handle(req.ino, &b, &base, &fsize);
-+            (void)fsize;
-+            int fr = fault_gate(b > 6 ? 7 : b);
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+                rep.ino = req.ino;
-+                break;
-+            }
-+            if (req.size > VFS_DATA_SIZE) {
-+                rep.status = vfs_neg(VFS_EINVAL);
-+                rep.ino = req.ino;
-+                break;
-+            }
-+            if (b == 2) {
-+                if (slot < 0 ||
-+                    req.offset > VFS_TMPFS_SIZE ||
-+                    req.size > VFS_TMPFS_SIZE - req.offset) {
-+                    rep.status = vfs_neg(VFS_ENOSPC);
-+                } else {
-+                    for (uint64_t i = 0; i < req.size; ++i)
-+                        g_tmpfs[base].data[req.offset + i] =
-+                            win_data()[i];
-+                    if (req.offset + req.size > g_tmpfs[base].size)
-+                        g_tmpfs[base].size = req.offset + req.size;
-+                    g_stats.bytes += req.size;
-+                    rep.size = req.size;
-+                    rep.status = 0;
-+                }
-+            } else if (b == 4) {
-+                if (slot < 0) {
-+                    rep.status = vfs_neg(VFS_EINVAL);
-+                } else {
-+                    uint64_t room =
-+                        VFS_PIPE_SIZE - g_pipes[base].count;
-+                    if (req.size > room) {
-+                        rep.status = vfs_neg(VFS_ENOSPC);
-+                    } else {
-+                        for (uint64_t i = 0; i < req.size; ++i) {
-+                            unsigned t =
-+                                (g_pipes[base].head +
-+                                 g_pipes[base].count) %
-+                                VFS_PIPE_SIZE;
-+                            g_pipes[base].data[t] = win_data()[i];
-+                            g_pipes[base].count++;
-+                        }
-+                        g_stats.bytes += req.size;
-+                        rep.size = req.size;
-+                        rep.status = 0;
-+                    }
-+                }
-+            } else {
-+                rep.status = vfs_neg(VFS_ENOSYS); /* read-only/image */
-+            }
-+            rep.ino = req.ino;
-+            stats_publish();
-+            break;
-+        }
-+        case VFS_OP_STAT: {
-+            unsigned b = (unsigned)req.offset;
-+            int fr = fault_gate(b);
-+            uint64_t base = 0;
-+            uint64_t sz = 0;
-+            int mode = -VFS_ENOSYS;
-+            if (fr == 0) {
-+                if (b == 0)
-+                    mode = resolve_initrd(win_name(), &base, &sz);
-+                else if (b == 1)
-+                    mode = resolve_fat32(win_name(), &base, &sz);
-+                else if (b == 2) {
-+                    mode = resolve_tmpfs(win_name(), &base);
-+                    if (mode >= 0)
-+                        sz = g_tmpfs[base].size;
-+                } else if (b == 3)
-+                    mode = resolve_devfs(win_name(), &base);
-+                else if (b == 4) {
-+                    mode = resolve_pipe(win_name(), &base);
-+                    if (mode >= 0)
-+                        sz = g_pipes[base].count;
-+                } else if (b == 5)
-+                    mode = resolve_ramdisk(win_name(), &base, &sz);
-+                else if (b == 6) {
-+                    mode = resolve_procfs(win_name(), &base);
-+                    if (mode >= 0) {
-+                        /* Staged render length = size. */
-+                        uint64_t len = 0;
-+                        int vr = validate_procfs((unsigned)base,
-+                                                 &len);
-+                        if (vr != 0)
-+                            mode = vr;
-+                        else
-+                            sz = len;
-+                    }
-+                } else {
-+                    mode = -VFS_EINVAL;
-+                }
-+            }
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+            } else if (mode < 0) {
-+                rep.status = vfs_neg((unsigned)-mode);
-+            } else {
-+                rep.offset = sz;
-+                rep.size = (uint64_t)(mode & 0777);
-+                rep.status = 0;
-+            }
-+            break;
-+        }
-+        case VFS_OP_READDIR: {
-+            unsigned b = (unsigned)req.offset;
-+            int fr = fault_gate(b);
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+                break;
-+            }
-+            /* Directories: "/" per backend + /dev + /proc. next_ino
-+             * chains; end = size 1. */
-+            uint64_t next = req.ino;
-+            const char *dp = norm_skip(win_name());
-+            char entry[VFS_MAX_NAME];
-+            int have = 0;
-+            if (b == 3) { /* devfs: null/zero/tty/serial */
-+                unsigned n =
-+                    (unsigned)(sizeof(g_devfs) / sizeof(g_devfs[0]));
-+                if (match_name(dp, "dev") || *dp == '\0') {
-+                    if (next < n) {
-+                        const char *dn = g_devfs[next].name;
-+                        unsigned i = 0;
-+                        while (dn[i] && i < VFS_MAX_NAME - 1) {
-+                            entry[i] = dn[i];
-+                            ++i;
-+                        }
-+                        entry[i] = '\0';
-+                        have = 1;
-+                        next++;
-+                    }
-+                }
-+            } else if (b == 6) { /* procfs: meminfo/stat */
-+                if (match_name(dp, "proc") || *dp == '\0') {
-+                    unsigned n = 2;
-+                    if (next < n) {
-+                        const char *f =
-+                            g_proc_files[next] + 6;
-+                        unsigned i = 0;
-+                        while (f[i] && i < VFS_MAX_NAME - 1) {
-+                            entry[i] = f[i];
-+                            ++i;
-+                        }
-+                        entry[i] = '\0';
-+                        have = 1;
-+                        next++;
-+                    }
-+                }
-+            } else {
-+                /* Root dirs of image/tmpfs/pipe backends: single
-+                 * level in b3 — entries enumerated via repeated
-+                 * STAT is out of scope; list well-known test paths
-+                 * only when next == 0 (documented bound). */
-+                (void)dp;
-+                (void)next;
-+                have = 0;
-+            }
-+            if (have) {
-+                for (unsigned i = 0; i < VFS_MAX_NAME; ++i) {
-+                    win_data()[i] = (unsigned char)entry[i];
-+                    if (entry[i] == '\0')
-+                        break;
-+                }
-+                rep.ino = next;
-+                rep.size = 0;
-+                rep.status = 0;
-+            } else {
-+                rep.ino = next;
-+                rep.size = 1; /* end of dir */
-+                rep.status = 0;
-+            }
-+            break;
-+        }
-+        case VFS_OP_CREATE: {
-+            unsigned b = (unsigned)req.offset;
-+            int fr = fault_gate(b);
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+                break;
-+            }
-+            const char *p = win_name();
-+            if (*p == '/')
-+                ++p;
-+            for (unsigned i = 0; p[i] != '\0'; ++i) {
-+                if (p[i] == '/') {
-+                    rep.status = vfs_neg(VFS_ENOTDIR);
-+                    goto created;
-+                }
-+            }
-+            if (b == 2) {
-+                uint64_t dummy = 0;
-+                if (resolve_tmpfs(win_name(), &dummy) >= 0) {
-+                    rep.status = vfs_neg(VFS_EEXIST);
-+                } else {
-+                    int free = -1;
-+                    for (unsigned i = 0; i < VFS_TMPFS_FILES;
-+                         ++i) {
-+                        if (!g_tmpfs[i].used) {
-+                            free = (int)i;
-+                            break;
-+                        }
-+                    }
-+                    if (free < 0) {
-+                        rep.status = vfs_neg(VFS_ENOSPC);
-+                    } else {
-+                        g_tmpfs[free].used = 1;
-+                        unsigned i = 0;
-+                        while (p[i] && i < VFS_MAX_NAME - 1) {
-+                            g_tmpfs[free].name[i] = p[i];
-+                            ++i;
-+                        }
-+                        g_tmpfs[free].name[i] = '\0';
-+                        g_tmpfs[free].size = 0;
-+                        g_tmpfs[free].mode = (uint32_t)req.size;
-+                        rep.status = 0;
-+                    }
-+                }
-+            } else if (b == 4) {
-+                int free = -1;
-+                for (unsigned i = 0; i < VFS_PIPES; ++i) {
-+                    if (!g_pipes[i].used) {
-+                        free = (int)i;
-+                        break;
-+                    }
-+                }
-+                if (free < 0) {
-+                    rep.status = vfs_neg(VFS_ENOSPC);
-+                } else {
-+                    g_pipes[free].used = 1;
-+                    unsigned i = 0;
-+                    while (p[i] && i < VFS_MAX_NAME - 1) {
-+                        g_pipes[free].name[i] = p[i];
-+                        ++i;
-+                    }
-+                    g_pipes[free].name[i] = '\0';
-+                    g_pipes[free].head = 0;
-+                    g_pipes[free].count = 0;
-+                    rep.status = 0;
-+                }
-+            } else {
-+                rep.status = vfs_neg(VFS_ENOSYS);
-+            }
-+        created:
-+            break;
-+        }
-+        case VFS_OP_UNLINK: {
-+            unsigned b = (unsigned)req.offset;
-+            int fr = fault_gate(b);
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+                break;
-+            }
-+            const char *p = win_name();
-+            if (*p == '/')
-+                ++p;
-+            if (b == 2) {
-+                uint64_t slot = 0;
-+                if (resolve_tmpfs(win_name(), &slot) < 0) {
-+                    rep.status = vfs_neg(VFS_ENOENT);
-+                } else {
-+                    g_tmpfs[slot].used = 0;
-+                    rep.status = 0;
-+                }
-+            } else if (b == 4) {
-+                uint64_t slot = 0;
-+                if (resolve_pipe(win_name(), &slot) < 0) {
-+                    rep.status = vfs_neg(VFS_ENOENT);
-+                } else {
-+                    g_pipes[slot].used = 0;
-+                    rep.status = 0;
-+                }
-+            } else {
-+                rep.status = vfs_neg(VFS_ENOSYS);
-+            }
-+            break;
-+        }
-+        case VFS_OP_BACKEND_STATUS:
-+            stats_publish();
-+            rep.offset = (uint64_t)req.offset;
-             rep.status = 0;
-             break;
-+        case VFS_OP_INJECT_BACKEND_FAULT: {
-+            unsigned b = (unsigned)req.offset;
-+            if (b < 7) {
-+                g_fault_once[b] = 1;
-+                rep.status = 0;
-+            } else {
-+                rep.status = vfs_neg(VFS_EINVAL);
-+            }
-+            break;
-+        }
-+        case VFS_OP_INITRD:
-+        case VFS_OP_FAT32:
-+        case VFS_OP_TMPFS:
-+        case VFS_OP_DEVFS:
-+        case VFS_OP_PIPE:
-+        case VFS_OP_RAMDISK:
-+        case VFS_OP_PROCFS_RENDER: {
-+            /* Legacy step-a probes: now liveness checks per backend. */
-+            unsigned b = (unsigned)(req.op - VFS_OP_INITRD);
-+            if (b == 7) /* PROCFS_RENDER maps to backend 6 */
-+                b = 6;
-+            int fr = fault_gate(b > 6 ? 7 : b);
-+            if (fr != 0) {
-+                rep.status = vfs_neg((unsigned)-fr);
-+            } else if (b < 7 && (g_backend_mask & (1U << b))) {
-+                rep.status = 0;
-+            } else {
-+                rep.status = vfs_neg(VFS_ENOSYS);
-+            }
-+            break;
-+        }
-         case VFS_OP_INJECT_CORRUPT:
-             g_corrupt_once = 1;
-             rep.status = 0;
-@@ -86,9 +1140,10 @@ int main(void) {
-             break;
-         }
- 
--        // Reply to the requester (owner_id carried in the RPC body):
--        // send_sync_bounded waits on the REQUESTER's own queue, so a
--        // reply to PID 1 (init) is a dead letter (issue #441; #51 precedent).
-+        /* Reply to the requester (owner_id carried in the RPC body):
-+         * send_sync_bounded waits on the REQUESTER's own queue, so a
-+         * reply to PID 1 (init) is a dead letter (issue #441; #51
-+         * precedent). */
-         ipc_send(req.owner_id, MSG_TYPE_REPLY, &rep, sizeof(rep), 0);
-     }
-     return 0;
+@@ -1,278 +1,825 @@
+-# Microkernel Transition — System Transformation Spec (Phase 8, v0.7.x–0.8.x)
+-
+-**Status:** draft iter-3 (planner iter-2: count 34→38 fixed; `queue_target` verified scheduler.hpp:816) · **Milestone:** `[v0.7.x] Transition to Microkernel` (to be created — ROADMAP.md currently has no v0.7.x milestone; Phase 8 un-milestoned; step §7.0 creates it first)
+-**Issues:** #47–#54 (existing) + #190–#194 (gap closure, this cycle)
+-**Author:** developer (orchestrator) · **Reviewer:** planner subagent (Phase 1 pipeline)
+-
+-## 0. Goal
+-
+-Transform NexIOS from a monolithic kernel with in-kernel daemons into a real
+-microkernel: the kernel provides **threads + scheduling contexts, address
+-spaces, IPC (endpoints/notifications incl. fastpath), capability spaces with
+-take-grant/revoke, IRQ routing slots, and tick + budget enforcement** — and
+-nothing else. VFS/filesystems, block storage, drivers, console/framebuffer,
+-network, procfs, timers/POSIX time, paging policy, and process management move
+-to isolated userspace servers composed by a **static system architecture**
+-with a **supervisor** (restart/reincarnation).
+-
+-Non-goals: rewriting the scheduler core (O(1) bitmap + RMS/EDF stays),
+-changing the x86_64 trap path, or touching Phase 9 protocol stacks (TCP/IP,
+-USB) beyond their server scaffolding.
+-
+-## 1. Modern background (what "real microkernel" means in 2025–2026)
+-
+-- **seL4 (~10 kLOC, verified):** capabilities as unforgeable tokens in CNodes,
+-  take-grant propagation, recursive revoke; 3 syscalls conceptually
+-  (Send/Recv/Yield + Call variants); no kernel allocation (all objects from
+-  user Untyped); IPC ~0.2 µs ARM64, +5–10% vs monolith at system level.
+-- **seL4 MCS:** scheduling contexts (budget/period) as first-class cap
+-  objects; **passive servers** execute on the **donated caller SC**
+-  (`Call` donates, reply returns); **timeout faults** to a handler endpoint
+-  on overrun; `extra_refills` bounds sporadic-server fragmentation.
+-  This is the principled fix for server priority-inversion/overrun —
+-  direct-process-switch donation without accounting is unanalysable.
+-- **LionsOS (seL4/Microkit):** static architecture (SDF: PDs, channels, memory
+-  regions, IRQ bindings generated into setup); strictly-sequential servers;
+-  **SPSC shared-memory** channels + semaphores between driver and clients;
+-  PPC runs the server on the caller core. Fine-grained modularity beats Linux
+-  on throughput/latency despite more IPC hops — IPC cost is not the bottleneck.
+-- **QNX:** microkernel (sched + IPC + signals) + resource-manager servers
+-  presenting pathname namespaces; supervisor (`procnto`/`slogger`).
+-- **MINIX 3:** per-driver isolation + **reincarnation server** restarts crashed
+-  drivers; Intel ME ships it — most-deployed µk in the world.
+-- **Zircon/Fuchsia:** handles ≈ capabilities; channels/sockets/vmos for bulk;
+-  driver framework in userspace.
+-- **1st-gen lesson (Mach):** 100 µs IPC killed the design; **L4 (1993):**
+-  register-passing + direct switch → <1 µs. NexIOS already has the analogue
+-  (`SEND_FAST/RECV_FAST/SEND_SYNC_FAST`, #11) — keep it, add donation.
+-
+-## 2. Current architecture inventory (as built)
+-
+-| Subsystem | Now (in-kernel) | Target |
++# Microkernel Transition — Normative System Transformation Spec
++
++**Milestone:** `v0.6.1 Transition to full Microkernel` (GitHub milestone #18).
++The separate milestone `v0.7.0 Audit Specifications for Transition to
++Microkernel` (#20) is a different milestone and is not the target of this spec.
++**Phase:** 8 (microkernel transition).
++**Anchor issues:** #512 (plan), #547 (evidence audit).
++**Component issues:** #190, #191, #192, #193, #194, #516, #517, #476, #545,
++#546, #49, #50, #398, #515; closed predecessors #47, #48, #51, #52, #53, #54,
++#76, #105.
++**Milestone gap / coverage issues:** #528 (aarch64 ioport/IOMMU dispatch
++tests, §11), #544 (riscv64 debug-syscall flake, KEEP-D 86–90, §11), #89
++(v0.6.1 test coverage tracker, §13).
++
++## 0. Scope, language, evidence rules
++
++### 0.1 Language
++
++MUST / MUST NOT / SHALL / SHALL NOT are normative. "Should" is advisory.
++A value written `TBD at API freeze` is an owner decision that has not been
++made (see §16). No other unmeasured number is normative in this document.
++
++### 0.2 Evidence rule
++
++Every factual claim cites `path:symbol`. Line numbers are advisory and
++SHALL NOT be treated as normative (they drift; prior audit
++`audits/report-2026-09-19T22:14:29Z.md` S3 recorded one such drift).
++Performance figures are allowed only when measured in this tree; external
++literature figures are not requirements.
++
++### 0.3 Scope
++
++In scope: the kernel mechanism boundary, the invariants every component must
++keep, the inter-server contracts, the failure and reclaim rules, the per-arch
++parity matrix, and the gated migration sequence.
++
++Out of scope: the scheduler core algorithm (O(1) bitmap + RMS/EDF,
++`scheduler.md`), TCP/IP and USB stacks (Phase 9), new server internals beyond
++their kernel-facing contracts.
++
++### 0.4 Design references
++
++The target follows three established patterns, used only as structure:
++seL4 MCS (passive servers on donated scheduling contexts, timeout faults),
++LionsOS / Microkit (static system description, strictly sequential servers,
++SPSC shared-memory channels), MINIX 3 (reincarnation of failed servers).
++
++### 0.5 Normative in-tree references
++
++| Spec | Binds |
++|---|---|
++| `ipc.md`, `ipc-fastpath.md`, `syscall-fastpath.md` | message queues, deferred switch, FAST tier |
++| `scheduler.md`, `rms-rework.md`, `deadline.md`, `wcet-reaudit-v0.4.5.md` | scheduler, breaker, budgets, WCET |
++| `memory.md`, `oom-rt.md`, `configuration.md` | PMM/MemPool/VMM, budgets, CONFIG_* |
++| `cspace.md`, `shm.md`, `iommu.md`, `external-pager.md` | capabilities, frames, DMA, pager |
++| `death-notify.md`, `zombie-list.md`, `idle_monitor.md`, `watchdog.md` | death, teardown, supervision inputs |
++| `irq-early-init.md`, `per-cpu-smp.md`, `threads.md` | IRQ init, per-CPU, threads |
++| `driver-pds.md`, `block-srv.md`, `vfs-srv.md`, `timer-srv.md`, `term-srv.md` | existing PD contracts |
++| `boundary.md`, `privilege-audit.md` | trust boundary, ring inventory |
++
++## 1. Normative invariants
++
++Each invariant states its enforcement point and its current status. An
++invariant with a known violation is tagged `STATUS: VIOLATED` with the
++tracking issue; it is never presented as already true.
++
++| ID | Invariant | Enforcement point | Status / evidence |
++|---|---|---|---|
++| INV-MK-1 | After boot ownership handover the kernel SHALL NOT allocate physical memory on behalf of a task. Every kernel object SHALL be created by `CAP_RETYPE` from a user-held Untyped, except the fixed boot pool set (§7.2). | `CONFIG_STATIC_POOLS_ONLY` asserts in `memory/pmm.cpp:PMM::alloc_page` / `alloc_contiguous` / `alloc_page_colored`; GAP: `alloc_user_page`, `alloc_user_contiguous`, `alloc_page_table` carry no such assert, and every listed violation site uses them (F21) | VIOLATED (#193): `syscall_handlers_shm.cpp:sys_frame_create` (PMM), `ipc/buffer_pool.cpp:BufferPool::alloc_page` (PMM fallback), `elf/elf_loader.cpp` page allocation, `memory/vmm.cpp` page-table allocation on map |
++| INV-MK-2 | Every scarce resource SHALL have a compile-time bound, and the composed system description SHALL be checked against it at compose time. | `task/boot_sdf.hpp:sdf_compose` | PARTIAL: bounds exist (§7.3); demand-vs-bound check absent |
++| INV-MK-3 | Every client-visible server RPC SHALL have a finite, documented bound. Unbounded `send_sync` SHALL NOT appear on any server path. | proxy call sites | PARTIAL: proxies use `kRpcGuardTicks = 5000` (5 s at `CONFIG_TICK_HZ 1000`) in `log/log_srv.cpp`, `time/timer_srv.cpp`, `cap/cap_broker.cpp`, `term/term_srv.cpp`, `vfs/procfs_srv.cpp`, `vfs/vfs_srv.cpp`, `driver/block_srv.cpp`, `driver/driver_pds.hpp`, `watchdog/wdog_mon.cpp`; per-server bounds `TBD at API freeze` (Q5) |
++| INV-MK-4 | Task context runs with IF=1 except inside an explicit `IrqGuard`; syscall entry owns IF=0 until the handler blocks or returns; no spinlock SHALL be held across a blocking point or `reschedule()`; every IRQ-off region SHALL be bounded. | debug assertions (§6) | VIOLATED (#545 S1, #546 S2); contract currently implicit |
++| INV-MK-5 | A context switch is applied only at an ISR epilogue at nesting depth 1, or a nested timer (vector `0xE0`) at depth 2. A blocking IPC hop therefore costs up to one tick until a direct-switch path exists (§5.6). | `arch/x86_64/isr_stubs.asm` epilogue, `arch/aarch64/vectors.S`, `arch/riscv64/syscall_entry.S` + `interrupt_controller.cpp` (§11); `ipc.md` §4 | TRUE today; is the latency limit, removed by M3 |
++| INV-MK-6 | Exactly one death record per task, latched at a single funnel, visible to a watching supervisor within a bounded number of ticks. | `ipc/death_notify.cpp:DeathNotify::on_task_death` | VIOLATED (#516 + F6): latch only in `TaskControlBlock::complete_teardown()` (reached via `cleanup()` / `destroy()`); for `Scheduler::terminate` deaths (kill, fault, watchdog) that runs from priority-0 deferred drains only (§9.1) |
++| INV-MK-7 | Capabilities SHALL be non-amplifying. Revoke SHALL invalidate derivations only; deleting one's own cap SHALL NOT invalidate other holders. | `cap/cap.cpp` | VIOLATED (F2): `cap::revoke` clears the slot and calls the object's `revoke()` (object-wide); no `CAP_DELETE` exists |
++| INV-MK-8 | Bulk channels SHALL be single-producer / single-consumer: `head` written only by the producer, `tail` only by the consumer. | `ipc/shm_ring.hpp` | TRUE; ring header lacks an epoch (§5.4) |
++| INV-MK-9 | An absent mechanism SHALL deny, never degrade silently: no IOMMU domain ⇒ no DMA cap; stale IRQ slot ⇒ refuse; missing cap ⇒ typed error. | `syscall_handlers_iommu.cpp`, `syscall_handlers_irq.cpp` | TRUE for IOMMU/IRQ arm paths |
++| INV-MK-10 | Every mechanism SHALL exist on x86_64, aarch64 and riscv64, or carry a documented arch-equivalent and a tracked issue (§11). | per-arch matrix | PARTIAL (§11) |
++| INV-MK-11 | A server death SHALL wake or error-reply every client blocked on it, including reply waiters. | death funnel + IPC teardown | VIOLATED (F7): `MessageQueue::~MessageQueue` wakes queue-full senders only (§9.2) |
++| INV-MK-12 | Priority boosts and donations SHALL be revertible and symmetric, mutated only through scheduler helpers, and bounded in chain depth. | `Scheduler::move_priority` | PARTIAL: single-level boost in `IPC::block_sender` only; not transitive (§8.1) |
++
++## 2. Kernel mechanism boundary (current vs end state)
++
++| Subsystem | Now (verified) | End state | Issue |
++|---|---|---|---|
++| Scheduler | O(1) bitmap, RMS + sporadic budget, EDF peek, affinity; no scheduling-context object (no `SchedContext` symbol in tree) | keep core; add SchedContext object, bind/unbind/donate, passive servers, timeout faults | #190 |
++| IPC | per-task `MessageQueue`; `send` / `recv` (optional arg3 timeout, 0 = forever) / `send_sync`; FAST register path (48 B); SHM SPSC rings; Notify | keep core; add reply object + `REPLY_RECV`, direct switch on Call/ReplyRecv, death wake of reply waiters | #190, F3, F7 |
++| Memory | PMM + `MemPool` (hard-coded table `memory/mempool.cpp:MemPool::init`) + `BufferPool`; Untyped carve (`CAP_RETYPE`, single fixed target); `FRAME_CREATE` allocates from PMM | kernel allocation-free after handover; frame/region manager PD owns Untyped; creation by retype only | #193 |
++| IRQ | `IrqDelivery` slots; modes WAIT / NOTIFY / WAIT_ACK; MSI-X; storm limiter on aarch64 + riscv64 only | kernel routes direct to the owning PD; irq-mux owns configuration, sharing and IRTE only | #192, F8 |
++| Time | 80–83 live in-kernel (`sys_clock_gettime`, `sys_nanosleep`, `sys_timer_create`, `sys_timerfd_create`); optional proxy `time/timer_srv.cpp` behind `CONFIG_TIMER_SRV` (default 0) | kernel keeps tick + replenishment + timeout faults; POSIX time is timer-srv RPC | #194 |
++| VFS / FS | `vfs.cpp` core + 7 backends + fd table; vfs-srv shadows the kernel path (`vfs/vfs_srv.cpp`) | capability-mediated split with per-open channels; backends in PD | #517 (supersedes #47) |
++| Block | in-kernel AHCI / ATA / virtio; block-srv live path (`driver/block_srv.cpp`) | block PD owns device via SDF caps + IOMMU domain | #517 |
++| Drivers | PD sources `userspace/{serial,kbd,rtc,fb,block,net}-pd.c`; kernel probing retained | PDs own devices; kernel keeps routing slots only | #476 |
++| Console / FB | `fb-pd.c` console PD over SHM; in-kernel `Terminal` and shell remain | emulation in PD; kernel keeps panic raw write only | #476 |
++| Supervision | in-kernel `daemon_mgr` (`MAX_RESTART_COUNT = 10`, no backoff, polled from `on_tick`); death notify syscalls 66–68 | supervisor PD with restart policy, cap re-derive, client rebind | #191, #516 |
++| Caps | `CapType` {Null, Task, Endpoint, Frame, CNode, Untyped, Mmio, Irq, IoMmuDma, Msix, Wdog} | add TCB, VSpace, PageTable, Notification, SchedContext; split delete/revoke | #50, F1, F2 |
++| Process mgmt | `FORK/EXEC/WAITPID/KILL/GETPID` in kernel | proc-mgr PD over TCB/VSpace mechanisms | F11 |
++| Syscalls | `MAX_SYSCALL = 97` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
++
++## 3. Target kernel API
++
++### 3.1 Rule
++
++The certified kernel API is a **closed set** of numbered entries. The set is
++defined by Table T-1, not by a count in prose. `syscall_surface` SHALL assert
++the exact set. Any addition requires SIL 3 justification (feeds #80). Retired
++numbers SHALL NOT be reused.
++
++Legend: **KEEP** certified mechanism · **KEEP-D** `CONFIG_DEBUG`-only,
++excluded from the certified set · **MOVE** behaviour moves to a server RPC,
++number retired · **RETIRE** number retired without replacement ·
++**GATED** live, retirement gated on a migration step.
++
++### 3.2 Table T-1 — disposition of every number 0–96
++
++| Nr | Name | Today | Disposition |
++|---|---|---|---|
++| 0 | YIELD | live | KEEP |
++| 1 | SEND | live | KEEP |
++| 2 | RECEIVE | live; `arg3` = timeout ticks, 0 = forever (`syscall_handlers_ipc.cpp:sys_receive`) | KEEP |
++| 3 | SEND_SYNC | live; Call semantics (`ipc.cpp:IPC::send_sync`) | KEEP |
++| 4 | PRINT | live | RETIRE → log-srv RPC; panic raw write stays (not a syscall) |
++| 5 | GET_TICKS | live | KEEP |
++| 6 | EXIT | live, self only | KEEP |
++| 7 | CREATE_MAILBOX | no-op stub returning success | RETIRE |
++| 8 | DESTROY_MAILBOX | no-op stub | RETIRE |
++| 9–19 | OPEN, READ, CLOSE, FSTAT, WRITE, LSEEK, IOCTL, READDIR, STAT, DUP, CHDIR | live | MOVE → vfs-srv |
++| 20 | EXEC | live | MOVE → proc-mgr |
++| 21 | FORK | live | MOVE → proc-mgr |
++| 22 | WAITPID | live | MOVE → proc-mgr |
++| 23 | GETPID | live | MOVE → proc-mgr |
++| 24 | KILL | POSIX signal delivery | MOVE → proc-mgr; stop authority via N2 |
++| 25 | PIPE | live | MOVE → vfs-srv (SHM-backed) |
++| 26 | DUP2 | live | MOVE → vfs-srv |
++| 27 | NOTIFY | live | KEEP |
++| 28 | NOTIFY_WAIT | live | KEEP |
++| 29 | EVENT_SET | live | MOVE → sync-srv |
++| 30 | EVENT_WAIT | live | MOVE → sync-srv |
++| 31 | SIGNAL | live | MOVE → proc-mgr (#164) |
++| 32 | SIGRETURN | live | MOVE → proc-mgr (#164) |
++| 33 | ALARM | live | MOVE → timer-srv |
++| 34 | GETTOD | live | MOVE → timer-srv |
++| 35 | UNAME | live | MOVE → supervisor RPC (static data) |
++| 36 | PAUSE | live, FAST member | RETIRE; replaced by NOTIFY_WAIT or bounded RECEIVE (libc check F20) |
++| 37–40 | BUF_ALLOC, BUF_FREE, BUF_MAP, BUF_UNMAP | live | MOVE → SHM-manager |
++| 41–43 | MKDIR, UNLINK, RMDIR | live | MOVE → vfs-srv |
++| 44–46 | BRK, GETRLIMIT, SETRLIMIT | live | MOVE → mem-mgr |
++| 47 | GETRANDOM | live | MOVE → entropy-srv |
++| 48 | KLOG | live | MOVE → log-srv |
++| 49 | REBOOT | live | KEEP, supervisor-cap-gated |
++| 50 | HALT | live | KEEP, supervisor-cap-gated |
++| 51 | CAP_GRANT | live | KEEP |
++| 52 | CAP_COPY | live | KEEP |
++| 53 | CAP_REVOKE | live, object-wide | KEEP, semantics redefined: derivations only (INV-MK-7) |
++| 54 | CAP_MINT | live | KEEP |
++| 55 | IOPORT_GRANT | live, x86_64 only | KEEP; aarch64/riscv64: not applicable, fail-closed |
++| 56 | CAP_RETYPE | live; target fixed per Untyped (`cap/untyped.hpp:retype_target`) | KEEP, extended: target type per invocation (F1) |
++| 57 | IRQ_REGISTER | live; mode 0 WAIT, 1 NOTIFY, 2 WAIT_ACK | KEEP |
++| 58 | IRQ_WAIT | live; arg1 timeout ticks, 0 = forever (`syscall_handlers_irq.cpp:sys_irq_wait`) | KEEP |
++| 59 | IOMMU_MAP | live, x86_64 VT-d only | KEEP; other arches fail-closed (§11) |
++| 60 | IOMMU_UNMAP | live, x86_64 only | KEEP |
++| 61 | MMIO_MAP | live | KEEP (mechanism; policy in mem-mgr) |
++| 62 | MMIO_UNMAP | live | KEEP |
++| 63 | FRAME_CREATE | live; allocates from PMM | GATED → RETIRE at M12 |
++| 64 | FRAME_MAP | live | KEEP |
++| 65 | FRAME_UNMAP | live | KEEP |
++| 66 | DEATH_WATCH | live | KEEP |
++| 67 | DEATH_RECV | live | KEEP |
++| 68 | DEATH_UNWATCH | live | KEEP |
++| 69–73 | PAGER_REGISTER, PAGER_RECV, PAGER_MAP, PAGER_ABORT, PAGER_UNREGISTER | live | KEEP |
++| 74 | SEND_FAST | live, register passing | KEEP |
++| 75 | RECV_FAST | live; arg3 timeout ticks, 0 = forever (`syscall_handlers_ipc.cpp:sys_recv_fast`) | KEEP |
++| 76 | SEND_SYNC_FAST | live; calls blocking `IPC::send_sync` | KEEP |
++| 77 | SET_AFFINITY | live (`Scheduler::set_affinity_err`) | KEEP mechanism; placement policy → sched-policy srv |
++| 78 | GET_AFFINITY | live | KEEP |
++| 79 | TIMES | live (`Scheduler::read_times`) | KEEP |
++| 80–83 | CLOCK_GETTIME, NANOSLEEP, TIMER_CREATE, TIMERFD_CREATE | live in-kernel | MOVE → timer-srv |
++| 84 | ABI_VERSION | live | KEEP |
++| 85 | TLS_SET | live | KEEP |
++| 86–90 | TASK_DEBUG_ATTACH / READ_REGS / WRITE_REGS / READ_MEM / WRITE_MEM | live under `CONFIG_DEBUG`, ENOSYS in release | KEEP-D |
++| 91 | WATCHDOG_CREATE | live, WdogCap-gated | KEEP |
++| 92 | WATCHDOG_KICK | live | KEEP |
++| 93–96 | THREAD_CREATE, THREAD_EXIT, THREAD_JOIN, THREAD_WRAP | live (#52, #53) | KEEP |
++
++### 3.3 New entries (numbers `TBD at API freeze`)
++
++| ID | Name | Justification |
++|---|---|---|
++| N1 | TCB_CONFIGURE | priority, affinity, SchedContext binding and fault endpoint as one cap-gated invocation |
++| N2 | TCB_SUSPEND | supervisor must stop a hung PD; no mechanism exists (KILL is signal delivery) |
++| N3 | TCB_RESUME | counterpart of N2; also starts a retyped TCB |
++| N4 | VSPACE_MAP | map a PageTable object into a VSpace; proc-mgr and mem-mgr cannot build address spaces without it |
++| N5 | REPLY_RECV | reply to the current caller and receive the next request in one entry; today a reply is `SEND` + sender-id filter (`ipc.cpp:IPC::send_sync`) |
++| N6 | CAP_DELETE | delete one's own slot without invalidating other holders |
++| N7 | SC_BIND | bind a SchedContext to a TCB |
++| N8 | SC_UNBIND | counterpart of N7 |
++| N9 | SC_DONATE | explicit donation where Call-implicit donation does not apply (if Q1 selects donation) |
++
++FAST-tier membership of N1–N9 is decided at API freeze under the
++pointer-free rule of `syscall-fastpath.md` §0.
++
++### 3.4 Derived counts (informative; the set in T-1 is normative)
++
++KEEP: 0, 1, 2, 3, 5, 6, 27, 28 (8), 49, 50 (2), 51–62 (12), 64–79 (16),
++84, 85 (2), 91–96 (6) = 46.
++New: N1–N9 = 9. Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
++MOVE/RETIRE/GATED: 4 (1), 7–26 (20), 29–48 (20), 63 (1), 80–83 (4) = 46.
++46 + 5 + 46 = 97 =
++`MAX_SYSCALL`, so every existing number has exactly one disposition.
++
++### 3.5 Affinity and accounting split
++
++The mechanism stays in the kernel: `Scheduler::set_affinity_err` (admission
++probe), `Scheduler::queue_target`, `Scheduler::read_times`, and
++`Scheduler::is_current_on_any_cpu`. Pinning per #167 is honoured: isolated RT
++cores are excluded from the balancer. Placement policy moves to the
++scheduler-policy server (F15). Violations fail with a typed error.
++
++## 4. Kernel object model
++
++### 4.1 Object types
++
++Existing `CapType` (`cap/cap_types.hpp`): Null, Task, Endpoint, Frame, CNode,
++Untyped, Mmio, Irq, IoMmuDma, Msix, Wdog.
++Required additions (F1): TCB (split from Task as the schedulable object),
++VSpace, PageTable, Notification, SchedContext, Reply (if Q2 selects reply
++objects).
++
++### 4.2 Retype
++
++- Today an Untyped carries one fixed `retype_target` (default Frame) checked
++  at retype (`cap/untyped.cpp`). The caller cannot choose the type.
++- REQUIRED: the target type is a per-invocation argument of `CAP_RETYPE`. The
++  Untyped records its physical range and watermark only.
++- Every object type SHALL have a fixed, compile-time size; retype SHALL fail
++  with a typed error if the remaining range is too small. No partial object.
++- Retyped kernel objects SHALL be reclaimable only by revoking the parent
++  Untyped's derivations, which destroys every object carved from it.
++
++### 4.3 Delete vs revoke
++
++- `CAP_DELETE` (N6): removes the caller's slot. If it was the last reference
++  the object is destroyed; otherwise other holders are unaffected.
++- `CAP_REVOKE` (53): destroys all derivations of the named cap; the named
++  cap itself survives. Requires a derivation tree per object (#50).
++- Both SHALL be bounded: revocation depth is bounded by `TBD at API freeze`;
++  a revoke that exceeds the bound returns a typed error and is resumable.
++
++### 4.4 Receive with timeout
++
++`RECEIVE` (2) and `RECV_FAST` (75) already accept a timeout in ticks
++(`syscall_handlers_ipc.cpp`). No new timeout-receive entry is required.
++
++## 5. IPC contracts
++
++### 5.1 Call
++
++`SEND_SYNC` (3) and `SEND_SYNC_FAST` (76) are Call: send, then wait for a
++reply from that receiver. Today the caller waits in a halt loop inside the
++syscall (`ipc.cpp:IPC::send_sync`); the wait ends on reply, on bounded
++timeout (`send_sync_bounded`), or never. REQUIRED: every Call on a server path
++is bounded (INV-MK-3), and the death of the receiver wakes the caller with a
++typed error (INV-MK-11).
++
++### 5.2 Reply matching
++
++Today replies are matched by sender id. `ipc.md` §2 accepts same-sender stale
++replies as a residual. REQUIRED before donation lands: each Call carries a
++one-shot reply token (reply object or generation-tagged reply id, Q2); a reply
++without a live token is dropped.
++
++### 5.3 FAST tier
++
++`CONFIG_IPC_FAST_PAYLOAD_BYTES = 48`, pointer-free, oversize fail-closed
++(`syscall-fastpath.md`, `ipc-fastpath.md`). FAST is register passing only. It
++is not a direct switch and does not bypass the scheduler. Every control
++message between servers SHALL fit 48 B (`BlockRpc` is `static_assert`ed
++`== 48`, `TimerRpc` and `VfsRpc` `<= 48`); bulk data SHALL use §5.4.
++
++### 5.4 Bulk channels
++
++- SPSC rings in capability-mapped shared frames (`shm.md`,
++  `ipc/shm_ring.hpp`), INV-MK-8.
++- REQUIRED: the ring header gains an `epoch` field (header version bump). A
++  peer SHALL reject a ring whose epoch differs from the epoch it bound to,
++  and rebind (§10 D5).
++- Wake-ups for rings use Notify, never polling loops without a bound.
++
++### 5.5 Donation (if Q1 selects donation)
++
++- Donated: the caller's SchedContext (budget, period, priority).
++- Lifetime: lent on Call, returned exactly once on reply, on timeout fault,
++  or on server death. A SchedContext SHALL NOT be held by two TCBs at once.
++- Chain depth bound: `TBD at API freeze`; a Call that would exceed it fails
++  with a typed error before blocking.
++- Overrun: budget exhaustion inside a passive server raises a timeout fault
++  to the server's fault endpoint; the handler resets the server to its
++  receive state and error-replies the client.
++- Passive server initialisation: a passive server SHALL be started on a
++  temporary SchedContext, reach its receive point, and then unbind (N8). The
++  same sequence is mandatory after every restart (§9.3).
++- The external-pager inversion acceptance (`external-pager.md` B9) SHALL be
++  replaced by this rule or by the Q1 alternative (F18).
++
++If Q1 selects "no donation", the alternative is normative: every server's
++priority SHALL be at least the highest priority of any client that calls it,
++checked by `sdf_compose`; a composition that violates it fails.
++
++### 5.6 Latency model
++
++- Mechanism: a blocking hop is applied at the next timer interrupt
++  (INV-MK-5). At `CONFIG_TICK_HZ = 1000` each hop costs up to 1 ms. A file read
++  routed client → vfs-srv → block-srv → vfs-srv → client has four blocking
++  hops.
++- REQUIRED: direct switch on Call and REPLY_RECV (migration M3): when the
++  receiver is blocked in receive and runnable on this core, the kernel switches
++  to it inside the syscall, without waiting for a tick.
++- Per-hop bound and end-to-end overhead target: `TBD at API freeze` (Q3),
++  set against the baseline from M0 (F17).
++
++## 6. Preemption, IRQ and lock discipline (#545, #546)
++
++### 6.1 Facts
++
++- x86_64 syscall entry is `int 0x80` through an interrupt gate (`0xEE`,
++  `arch/x86_64/hal/idt.cpp:IDT::init`), so IF=0 on entry.
++- `sync::SpinLock` is not priority-inheriting and publishes `locked_` before
++  `holder_` (`sync/spinlock.hpp`); #545 observed a waiter spinning on
++  `(locked=1, holder=NULL)`.
++- The lock order `scheduler_lock_ → endpoint/queue lock` used by
++  `IPC::block_sender` and the leaf locks `DeathNotify::s_lock_`,
++  `g_iopb_lock`, `MessageQueue::lock_` are documented but not enforced.
++
++### 6.2 Contract
++
++1. Syscall handlers run with IF=0 until they block or return; a handler that
++   re-enables interrupts SHALL do so only through `IrqGuard` scoping.
++2. No spinlock SHALL be held at `reschedule()` or at any BLOCKED transition.
++   DEBUG builds SHALL assert this at every `reschedule()` entry.
++3. A task SHALL publish its wait channel before it becomes BLOCKED
++   (reference pattern: `syscall_handlers_ipc.cpp:sys_receive`).
++4. A task holding a non-PI spinlock SHALL NOT block or be descheduled
++   voluntarily. Locks shared between task context and ISRs SHALL be taken
++   with IRQs disabled.
++5. Every IRQ-off region SHALL have a WCET bound recorded in the WCET table.
++6. A tick watchdog in the TSC domain SHALL detect a stalled tick (#546).
++7. Lock order (outer → inner): `scheduler_lock_` → endpoint / queue lock →
++   leaf locks. DEBUG builds SHALL record and check acquisition order.
++
++## 7. Static architecture, resources and budgets
++
++### 7.1 System description
++
++The SDF already exists: `task/boot_sdf.hpp` with `sdf_row` / `sdf_compose`
++(all-or-nothing with rollback) and cap kinds IRQ, MSIX, MMIO, DMA, FRAME, SHM,
++DMA_REGION. Roles: SERIAL, KBD, RTC, FB, BLOCK, NET, VFS_SRV, BLOCK_SRV,
++TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON, PROCFS_SRV (13).
++REQUIRED additions: rows for supervisor, mem-mgr, irq-mux, timer-srv,
++proc-mgr, sync-srv, entropy-srv, SHM-manager, sched-policy; per row a
++priority, a budget/period, an Untyped quota, its channels, and its restart
++class (§9.3). `sdf_compose` SHALL reject a description whose demand exceeds
++any bound in §7.3.
++
++### 7.2 Fixed kernel pools
++
++After handover the kernel keeps only fixed pools sized at build time: MemPool
++classes (hard-coded in `memory/mempool.cpp:MemPool::init`: 16…8192 B, last
++class 16384 B on aarch64), the IRQ slot table, the death-watch table, IOMMU
++tables, IOPB pool. `sizeof(TaskControlBlock)` SHALL be checked by
++`static_assert` against the largest MemPool class. The dead
++`CONFIG_MEMPOOL_*` macros in `nexios_config.h` SHALL be removed or wired to
++the table (F21). `CONFIG_STATIC_POOLS_ONLY` (default 0) is the certification
++switch. Today it asserts only in `PMM::alloc_page`, `PMM::alloc_contiguous`
++and `PMM::alloc_page_colored`; `PMM::alloc_user_page`,
++`PMM::alloc_user_contiguous` and `PMM::alloc_page_table` are not gated, so
++the switch does not yet forbid PMM allocation after init. REQUIRED (F21,
++before M4's gate): every post-init PMM entry point SHALL be covered.
++
++### 7.3 Bounds vs demand
++
++| Bound | Value (`nexios_config.h`) | Demand / conflict |
+ |---|---|---|
+-| Scheduler | O(1) bitmap 128 lvl, RMS + sporadic budget (`SS(2,10,0)` vfsd, `SS(3,10,0)` iocd), EDF peek, affinity (#61) | Keep; **add** SC donation + passive + timeout (#190) |
+-| IPC | per-task `MessageQueue`, `send/recv/send_sync` + FAST register path (#11), `BufferPool` zero-copy, endpoints, SHM caps, notify/event/queue/mutex | Keep core; **add** reply-object donation chain, SPSC bulk channels per server |
+-| Memory | PMM + `MemPool` + `BufferPool` global pools; Untyped carve (#1), Frame caps (#106), pager protocol (#107), CoW planned (#162) | Kernel paths allocation-free; **userspace frame/region manager** (#191); creation via Untyped retype through mem-mgr |
+-| IRQ | `IrqDelivery` slots, IrqCap (#2), NOTIFY mode (#7), MSI-X vectors (#10), IOAPIC/APIC | Kernel routes only; **userspace IRQ mux** + IRTE (#192); IRQ/MMIO numbers are cap invocations, never ambient |
+-| Time | kernel timer wheel, tick, `CLOCK_GETTIME/NANOSLEEP/TIMER_CREATE/TIMERFD` (#76, currently `sys_unimplemented`) in-kernel | tick + replenishment in kernel; **timer server** (#194); land #76 as server-RPC stubs first |
+-| VFS/FS | `vfs.cpp` core + 7 backends + fd-table + `vfsd` k-task prio 20 `send_sync` authorize | fd-table + authorize stay; backends + block server → userspace (#47) |
+-| Drivers | AHCI/virtio-blk-net/PCI/kbd/RTC/fb/serial in-kernel; completion ISRs (#64/#65) | userspace PDs on Irq+MMIO+DMA caps (#48 owns fb MMIO+IRQ caps + PD isolation); DMA per-domain IOMMU (#4/#9, #168) |
+-| Console/FB | `Terminal` UC pixel loops + `Klog/Dmesg` singletons in-kernel | terminal **emulation policy** PD over SHM with bounded ops; kernel keeps panic `raw_write` (#51; #48 owns the fb device caps, #51 owns the emulation — no double ownership) |
+-| procfs | in-kernel over VFS | procfs PD over external VFS (#54) |
+-| Threads | `fork/clone` deep-copy, TLS base (#74), no shared-space threads | cap-gated address-space share + pthread on picolibc (#52/#53) |
+-| Caps | GRANT/COPY/REVOKE/MINT/RETYPE, Mmio/Irq/IOMMU/Msix/Frame/Endpoint/Pager/Death | **add** grant/revoke cascade proof (#50), SC + SchedControl caps (#190) |
+-| Init/supervision | `reboot_from_table` + `g_task_defs`, death notify (#105) | **static arch + supervisor** with restart (#193) |
+-| Syscalls | **86** (`MAX_SYSCALL=86`) | **38 numbered mechanism entries** (35 retained + 3 new SC; see §3) |
+-
+-## 3. Target kernel API — normative numbered list (reconciles the ~20/~38 mismatch)
+-
+-"Core" = mechanism-only invocations. Target = **38 numbered entries**
+-(35 retained existing numbers + 3 new SC; FAST 74/75/76 are distinct retained
+-numbers inside the set):
+-`YIELD=0`, `SEND=1`, `RECEIVE=2`, `SEND_SYNC=3`, `GET_TICKS=5` (tick only),
+-`EXIT=6` (self only), `NOTIFY=27`, `NOTIFY_WAIT=28`,
+-`CAP_GRANT=51`, `CAP_COPY=52`, `CAP_REVOKE=53`, `CAP_MINT=54`,
+-`CAP_RETYPE=56` (Untyped carve; **creation path for frames — FRAME_CREATE=63
+-is REMOVED**, frames are created via retype through mem-mgr),
+-`FRAME_MAP=64`, `FRAME_UNMAP=65` (mechanism only),
+-`DEATH_WATCH=66`, `DEATH_RECV=67`, `DEATH_UNWATCH=68`,
+-`PAGER_REGISTER=69`, `PAGER_RECV=70`, `PAGER_MAP=71`, `PAGER_ABORT=72`,
+-`PAGER_UNREGISTER=73`, `ABI_VERSION=84`, `TLS_SET=85`,
+-`IOPORT_GRANT=55` (cap mechanism, x86_64; policy in mem-mgr),
+-`MMIO_MAP=61`, `MMIO_UNMAP=62` (cap-invocation mechanism only on an MmioCap;
+-mapping policy in mem-mgr),
+-`IOMMU_MAP=59`, `IOMMU_UNMAP=60` (mechanism only; fail-closed without domain),
+-`IRQ_REGISTER=57`, `IRQ_WAIT=58` (route-only mechanism on an IrqCap;
+-masking/sharing policy in irq-mux #192),
+-`SC_BIND/SC_UNBIND/SC_DONATE` (new, numbers TBD at API freeze; pointer-free
+-args per syscall.hpp:188-193 review; FAST-mask membership decided then).
+-Count: 8 thread/IPC + 5 CAP + 2 FRAME-mech + 3 DEATH + 5 PAGER + 2 misc +
+-1 IOPORT-mech + 2 MMIO-mech + 2 IOMMU-mech + 2 IRQ-mech + 3 FAST + 3 SC = **38**.
+-`syscall_surface` asserts exactly this set; any addition needs SIL 3
+-justification (feeds Phase 10 #80).
+-
+-Explicit disposition of all other current numbers (nothing left ambiguous):
+-`PRINT=4` → removed (replaced by log-server RPC; kernel keeps panic
+-`raw_write` only, no PRINT syscall); `CREATE_MAILBOX=7`/`DESTROY_MAILBOX=8` →
+-removed (legacy; endpoints via caps); `EVENT_SET=29`/`EVENT_WAIT=30` → sync
+-server RPC (notify-based); `SIGNAL=31`/`SIGRETURN=32` → process-server RPC
+-(#164); `ALARM=33` → timer-srv RPC; `GETTOD=34` → timer-srv RPC;
+-`UNAME=35` → supervisor RPC (static info); `PAUSE=36` → removed (use
+-NOTIFY_WAIT / timeout-recv); `OPEN=9`/`READ=10`/`CLOSE=11`/`FSTAT=12`/
+-`WRITE=13`/`LSEEK=14`/`IOCTL=15`/`READDIR=16`/`STAT=17`/`DUP=18`/`DUP2=26`/
+-`PIPE=25`/`MKDIR=41`/`UNLINK=42`/`RMDIR=43`/`CHDIR=19` → VFS-server RPC;
+-`FORK=21`/`EXEC=20`/`WAITPID=22`/`KILL=24`/`GETPID=23` → process-server RPC;
+-`CLOCK_GETTIME=80`/`NANOSLEEP=81`/`TIMER_CREATE=82`/`TIMERFD_CREATE=83` →
+-timer-srv RPC (land as stubs first, §7.0); `BRK=44`/`GETRLIMIT=45`/
+-`SETRLIMIT=46` → memory-manager RPC; `BUF_ALLOC=37`/`BUF_FREE=38`/
+-`BUF_MAP=39`/`BUF_UNMAP=40` → SHM-manager RPC; `GETRANDOM=47` → entropy-server
+-RPC; `KLOG=48` → log-server RPC; `SET_AFFINITY=77`/`GET_AFFINITY=78`/
+-`TIMES=79` → split per §3.1; `SEND_FAST=74`/`RECV_FAST=75`/
+-`SEND_SYNC_FAST=76` → retained (FAST variants of 1/2/3);
+-`REBOOT=49`/`HALT=50` → supervisor-gated (cap-checked, supervisor PD only —
+-never open syscalls).
+-
+-### 3.1 Affinity/accounting split (SET/GET_AFFINITY, TIMES)
+-
+-Mechanism stays in-kernel: `set_affinity_err` admission probe +
+-`queue_target` + `read_times` (scheduler.hpp:229-242 semantics), SC→core
+-binding honouring #167 pinning (isolated RT cores excluded from balancer,
+-mandatory pinning). Policy (placement decisions, load thresholds) moves to a
+-scheduler policy server. The probe is the enforcement point: unpinned or
+-isolated-core violations fail with a typed error, never silently.
+-
+-## 4. Server architecture (static, supervised)
+-
+-```
+-boot SDF ──► supervisor ─┬─ mem-mgr (#191) ── frames/regions for all (owns_untyped)
+-                         ├─ proc-mgr ── fork/exec/waitpid, pid+gen
+-                         ├─ vfs-srv (#47) ─┬─ initrd/tmpfs/fat32 backends
+-                         │                 └─ block-srv (AHCI/virtio, DMA caps)
+-                         ├─ drv PDs (#48: fb/kbd/rtc/net MMIO+IRQ caps, PD isolation)
+-                         ├─ term-srv (#51: emulation policy over SHM, bounded UC ops)
+-                         ├─ procfs-srv (#54) ── over vfs-srv
+-                         ├─ timer-srv (#194) ── POSIX time over tick+timeout
+-                         ├─ irq-mux (#192) ── policy routing + IRTE
+-                         ├─ sync-srv ── EVENT_* over NOTIFY
+-                         └─ log-srv ── Klog/Dmesg sink, drop/meter, panic path stays in kernel
+-```
+-Rules: strictly-sequential servers; bulk via SPSC SHM channels (LionsOS);
+-control via `send_sync` (+FAST for ≤48 B); passive servers bill the caller
+-(#190); every server supervised: death-notify → restart → cap re-derive →
+-client rebind (MINIX reincarnation; #193). No ambient authority: boot derives
+-exactly the SDF-declared caps; `boot_composition` test enforces it.
+-
+-## 5. IPC design (performance contract)
+-
+-- Keep FAST register path (48 B, pointer-free, fail-closed oversize clamp).
+-- Add donation: `Call` lends caller SC to passive server; reply returns it
+-  exactly once; overrun → timeout fault with consumed amount; handler resets
+-  server to receive state and error-replies the client (MCS §3.5/IPCP ceiling
+-  option). FAST ≤48 B path is donation-accounted but scheduler-bypassed;
+-  exemption measured against §9.4.
+-- Bulk: per-channel SPSC rings in SHM (`BufferPool` transfer/map as
+-  mechanism, policy in servers); single-producer/single-consumer, lock-free;
+-  head/tail atomic in ALL contexts (CODING_STYLE §11.6 all-or-nothing).
+-- Budget: `extra_refills`-style bound on replenishment fragmentation;
+-  documented per-server (timer server highest client rate bounds its handler
+-  budget — MCS thesis lesson).
+-
+-## 6. Capability plan + enforced invariants (CODING_STYLE §§11–12, with points)
+-
+-Existing caps stay; add **SC cap** (budget/period, bind/unbind/donate,
+-per-core `SchedControl`) and complete **#50** (take-grant copy/mint,
+-recursive revoke with depth bound, owner-death drain on every teardown path,
+-generation-tagged stored pointers). Enforced at these points:
+-- (a) No spinlock across `reschedule()` on the donate path
+-  (`ipc.cpp:block_sender/wake_sender`, endpoint locks, CNode/SC locks released
+-  before BLOCKED + `reschedule()`; lock order scheduler_lock_ → endpoint).
+-- (b) BLOCKED always dequeued, incl. passive-receive and timeout-reset paths
+-  (`dequeue_ready` before `reschedule()`; `recv_wait_arm` false → stay RUNNING).
+-- (c) Generation tags on the donation chain, waiter arrays, `bound_receiver_`,
+-  `last_sender_`, mailbox slots; validate at use; reject TERMINATED **and**
+-  REAPED (dead-state filter).
+-- (d) Wakers own wakeup: endpoint dispose, SC unbind, timeout-reset-to-receive,
+-  and server-crash paths drain/wake or error-reply every blocked client.
+-- (e) OOM-as-error on retype/bind/donate/enqueue-full/refill-full (typed
+-  errors; ENSURE only for impossible-by-design).
+-- (f) PI/donation revertible + symmetric: boosts/donations cleared on
+-  wake/unlock/reply; priority mutation via scheduler helper only.
+-
+-## 7. Migration (strangler, dual-mode, per-server gates)
+-
+-0. Create milestone `[v0.7.x] Transition to Microkernel` first if it does
+-   not exist yet (ROADMAP.md was un-milestoned for Phase 8 at draft time);
+-   record kernel text budget + §3 38-entry target at approval. Land #76
+-   (80..83, now `sys_unimplemented`) as server-RPC stubs **before** the
+-   timer-srv flip.
+-    Status 2026-11 (landed since draft): timer-srv PD + spec/loopback
+-    (`timer-srv.c`, `CONFIG_TIMER_SRV`); #47 step-a VFS+block strangler
+-    merged (`d1b44d849`, no flip); #51 serial SHM-ring TX merged
+-    (`960b27673`, ring-first, fallback preserved). Open per §7 gates:
+-    parity → fault drill → SIL 3 audit → flip → delete-after-gate, per
+-    server in the order below.
+-    Status 2026-11 (landed): #47 step-b1 block-srv live path
+-    (merged `fc4a5e0e8`: SDF `DMA_REGION` + `kPdRoleCount`,
+-    BIND/CAP_GET + shared window, ATA-PIO/virtio-mmio PD with
+-    read+write, `block_srv_live` class + host digest oracle).
+-    Status 2026-11 (landed): #47 step-b2 block-srv IRQ
+-    delegation (main): WAIT_ACK delivery + bounded wait + poll
+-    fallback, SDF IRQ caps (ATA IRQ14/15, virtio transport IRQ,
+-    AHCI MSI conveyance-only), PD stats window, +4 tests per class
+-    (`cap_irq` 16/15/15, `block_srv_live` 8/8/8).
+-    Status 2026-11 (landed): #47 step-b3 vfs-srv backends live path
+-    (main): BIND/CAP_GET + per-op raw-byte staging (cpio index/FAT
+-    sectors/ramdisk blocks cached per epoch; PD parses + owns
+-    namespace/handles/policy), 7 backends, `vfs_srv_live` 14/14/14
+-    x3 arches; tests land via testbed (D8a), kernel+PD+docs on main.
+-    Status 2026-11 (in progress): #51 console-PD substrate (main):
+-    SDF FB row (SHM ring + DMA status page + slot-chunked scanout —
+-    MMIO or FRAME pins per backing), `fb-pd.c` console PD (bounded
+-    per-pass render, peek-before-pop budget rule, status counters),
+-    kernel client + `fb_bounded_render` proof (exact counts, pixel
+-    oracle, quiesce). Green x86_64 + aarch64; all three arches
+-    build+link; riscv64 runtime blocked by a scheduler/timer
+-    platform issue (first timed PD RPC hangs; tracked separately).
+-    Kernel keeps probe-only init + read-only pixel oracle; the
+-    in-kernel Terminal/shell removal (item 1) and shell↔console IPC
+-    (item 3) remain.
+-Per server, in order: timer → log → procfs → term/fb → drivers → block →
+-VFS backends → process management → memory manager. Each step:
+-(a) server PD + Kconfig shim default OFF; (b) loopback/parity tests
+-(kernel vs server path byte-identical); (c) fault-injection
+-(crash/overrun/revoke) green; (d) SIL 3 audit APPROVED; (e) flip default,
+-keep kernel fallback one milestone. Kernel code is deleted **only after**
+-that server's gate (audit APPROVED + full `test-full` debug AND release
+-green + ResourceTracker delta-0); §9.1 restated accordingly — no
+-delete-first reading is valid.
+-
+-## 8. Test plan (maps to issues; all stub-first)
+-
+-Every new test starts as `JARVIS_TEST_PASS()` stub with
+-`JARVIS_REGISTER_TEST` + `test_expected_counts.hpp` update, real asserts only
+-after the stub lands; every test runs under `test_isolate` snapshot/restore
+-with `ResourceTracker::check` delta-0 — including kill/restart cycles
+-(`crash_restart`, `restart_no_leak`), whose drain paths must respect
+-`is_current_on_any_cpu` (scheduler.hpp:838-846, never remove a running task).
+-- #47: `vfs_server_restart`, `block_dma_isolated`, `vfs_authorize_toctou`.
+-- #48: `driver_crash_isolated`, `irq_no_ambient`, `timer_drift_bound`.
+-- #49: `syscall_surface` (asserts exact §3 38-entry set), `core_footprint`
+-  (kernel text ≤ budget), `no_kernel_fs` (fault-inject fs path → kernel fs
+-  code absent from backtrace).
+-- #50: `revoke_cascade`, `stale_use_fails`, `death_drain`.
+-- #51: `fb_fault_isolated`, `scroll_bounded`, `log_no_block`.
+-- #52: `thread_share_mem`, `thread_exit_isolated`, `tls_isolation`.
+-- #53: `pthread_n1_stress`, `cond_wakeup`, `cancel_safe`.
+-- #54: `proc_over_vfs`, `pid_reuse_safe`, `watchdog_visible`.
+-- #190 (`cap_schedctx`): donation billing, overrun timeout, no-leak return.
+-- #191 (`mm_usermgr`): zero-alloc IPC, OOM-as-error, partition isolation.
+-- #192 (`irq_mux`): owner-only routing, revoke-drain, MSI-X entry isolation.
+-- #193 (`srv_supervisor`): crash-restart, boot composition, restart-no-leak.
+-- #194 (`srv_timer`): no-kernel-block sleep, 50-timer multiplex, RTC-degrade.
+-Related: #76 moves in-kernel POSIX time out; #105 death-notify is the
+-supervisor primitive; #106/#1 frame primitives feed #191; #107 pager becomes
+-a server client; #162–#166 userspace subsystems sit atop; #167 pinning constrains
+-SC→core binding; #168 SMMU extends DMA isolation to ARM.
+-
+-## 9. Acceptance
+-
+-1. Kernel = §3 38-entry mechanism API only, reached **exclusively** via the
+-   §7 per-server sequence (Kconfig default-OFF → parity → flip → fallback one
+-   milestone → delete after gate). No kernel deletion before its server gate.
+-2. All §8 classes green, debug `test-full` 20/20 + release 18/18+2skips,
+-   `tools/meson/build.sh` Errors 0, ResourceTracker delta 0 on restart cycles.
+-3. Fault demo: kill any server → rest live, supervisor restarts, clients
+-   rebind (recorded serial log).
+-4. IPC overhead ≤10% vs in-kernel path on send_sync-heavy load (LionsOS bar).
+-5. SIL 3 APPROVED per issue; this spec planner-APPROVED (stable draft).
+-
+-## 10. Risks
+-
+-- Donation accounting overhead (MCS reports up to 13–35% IPC worst-case with
+-  strict limits) → mitigate with FAST-path accounting + measure §9.4.
+-- Replenishment fragmentation under preemption storms → bound refills,
+-  forfeit policy documented per server.
+-- POSIX compat creep back into kernel → §3 list is normative; additions
+-  rejected without audit.
+-- Driver DMA without IOMMU on legacy paths → fail-closed: no DMA cap without
+-  domain (x86 VT-d now, SMMU #168 keeps ARM honest).
++| `CONFIG_MAX_TASKS` | 64 | all PDs + clients |
++| `CONFIG_MAX_CPUS` | 8 | — |
++| `CONFIG_CSLOT_COUNT` | 64 per CNode | SDF caps per PD + derived caps |
++| `CONFIG_MAX_PER_TASK_OBJECTS` | 32 | mem-mgr owning many objects |
++| `CONFIG_CAP_MAX_UNTYPED` | 16 live system-wide | CONFLICT: mem-mgr owning all free memory as Untyped |
++| `CONFIG_CAP_MAX_DEATH_WATCHES` | 16 | supervisor watching every PD (≥ 13 roles + new rows) |
++| `CONFIG_IOMMU_MAX_DOMAINS` / `_MAPPINGS` | 8 / 32 per domain | net RX rings, block DMA |
++| `CONFIG_IOPB_MAX_TASKS` | 4 (x86_64) | CONFLICT: serial, kbd, rtc, ATA block all need port caps |
++| `CONFIG_MAX_DAEMONS` | 16 | interim `daemon_mgr` |
++| `CONFIG_IPC_FAST_PAYLOAD_BYTES` | 48 | all control RPCs |
++| `CONFIG_ZOMBIE_STARVATION_LIMIT` | 32 | death latency (§9.1) |
++| `CONFIG_IRQ_STORM_LIMIT` | 256 (aarch64, riscv64 users) | x86 has no limiter (§8.3) |
++
++New values for conflicting bounds are an owner decision (Q7, F9).
++
++### 7.4 WCET inputs
++
++`scan_deadlines` worst case 2,030,000 cycles with 30 overrun tasks, measured
++under TCG (`wcet-reaudit-v0.4.5.md` §3). It runs under `scheduler_lock_` in
++the timer ISR. The composed system's task count SHALL be re-measured at each
++gate; hardware measurement is required before certification.
++
++## 8. Components
++
++Each subsection gives: (1) current vs end state and syscall mapping,
++(2) invariants and safety requirements, (3) protocols and IPC contracts,
++(4) failure and supervision, (5) verification.
++
++### 8.1 Scheduler and scheduling-context donation (#190)
++
++1. **State.** No SchedContext object exists. Budgets live in the sporadic
++   server (`task/sporadic_server.hpp`); an exhausted server drops to
++   `bg_priority` (0 for vfsd and iocd, `taskdefs.cpp`). The only priority
++   boost is in `IPC::block_sender` on a full queue. Syscalls: keeps 0, 77–79;
++   adds N1, N7–N9.
++2. **Invariants.** SchedContexts are fixed-size retyped objects (INV-MK-1).
++   A donated SchedContext is returned exactly once (INV-MK-12). Boost or
++   donation SHALL propagate along a blocked chain up to the depth bound, or
++   the Call fails. The starvation breaker excludes level 0
++   (`ready_queue_manager.cpp`); REQUIRED: an exhausted server SHALL NOT be
++   demoted to level 0 unless the SDF declares it background-only, or the
++   breaker SHALL be able to serve it.
++3. **Protocol.** §5.5. Budget replenishment bounded by an `extra_refills`
++   style limit per SchedContext, value `TBD at API freeze`.
++4. **Failure.** Timeout fault → server fault endpoint; server death →
++   donation returned to the client with a typed error (§10 D1).
++5. **Verification.** `cap_schedctx`: donate/return exactly once; overrun
++   fault; three-hop chain keeps the client's priority at every hop; server
++   killed mid-call returns the donation; ResourceTracker delta 0.
++
++### 8.2 Memory manager and frame/region manager (#193)
++
++1. **State.** Kernel allocates from PMM, MemPool and BufferPool on client
++   behalf (INV-MK-1 violations). `FRAME_CREATE` (63) allocates; `CAP_RETYPE`
++   (56) carves Frames only. `PMM::alloc_user_page` performs no budget check
++   or attribution, while `alloc_page` and `alloc_page_colored` do. End state:
++   mem-mgr PD owns all free memory as Untyped; the kernel creates objects only
++   by retype. Syscalls: keeps 56, 61, 62, 64, 65; adds N4; retires 63 at M12;
++   moves 44–46 to mem-mgr RPC.
++2. **Invariants.** Split into **bootstrap** (M4: root task receives all free
++   memory as Untyped, kernel pools frozen) and **policy** (M12: retype-only
++   creation). After M4 the BufferPool PMM fallback is removed; exhaustion
++   returns a typed error. Every allocation path checks the per-task budget.
++3. **Protocol.** Clients request memory by RPC (≤ 48 B); mem-mgr retypes from
++   its Untyped and grants the resulting cap. The kernel SHALL NOT need memory
++   from mem-mgr to deliver mem-mgr's own IPC: every IPC object used by
++   mem-mgr is allocated before handover.
++4. **Failure.** mem-mgr is a critical server (§9.3): its death is a system
++   fault, policy Q12. Revoking an Untyped destroys all objects carved from it;
++   in-flight DMA to those frames is handled by §10 D2.
++5. **Verification.** `mm_usermgr`: client RPC leaves PMM free count unchanged
++   after M4; OOM returns a typed error, never a panic; partition isolation;
++   `CONFIG_STATIC_POOLS_ONLY=1` build passes the class once the switch covers
++   every post-init PMM entry point (§7.2, F21).
++
++### 8.3 IRQ routing and multiplexer (#192)
++
++1. **State.** `IrqDelivery` slots with WAIT / NOTIFY / WAIT_ACK. The storm
++   limiter exists on aarch64 and riscv64 only. On x86 every PIC-kind arm
++   programs a level-triggered IOAPIC entry (`irq_delivery.cpp`), and
++   `mask_on_delivery` runs in WAIT_ACK mode only, so a WAIT-mode level line
++   is not masked on delivery and x86 has no storm limiter behind it. On
++   aarch64 the GIC line is masked on delivery in WAIT_ACK mode only; on
++   riscv64 the PLIC line is deliberately never masked (edge semantics,
++   `irq_delivery.cpp:mask_on_delivery`). `pending` is an unsaturated
++   `uint32_t` counter; NOTIFY keeps only the last vector. `sys_irq_wait`
++   accepts only the slot's recipient (`r->recipient != t` refused under the
++   slot lock), so a second distinct waiter cannot register today; the
++   single-waiter rule below is a hardening assertion, not a defect fix.
++   Syscalls: keeps 57–60.
++2. **Invariants.** Delivery goes from the kernel directly to the owning PD's
++   waiter or Notify; the mux SHALL NOT be in the delivery path. Level lines
++   SHALL be masked on delivery and unmasked only by the owner's ack. Per-line
++   storm limiting SHALL exist on all three arches. `pending` SHALL saturate
++   and count overflow. A second waiter on a slot SHALL fail with a typed error.
++3. **Protocol.** irq-mux holds IrqCaps for shared or remappable lines and
++   grants per-line or per-MSI-X-entry caps to drivers; IRTE programming is a
++   mux request to the kernel. NOTIFY delivery SHALL carry a per-line pending
++   bitmask, not a single last vector.
++4. **Failure.** Owner death masks the line, drains `pending`, clears the
++   waiter, and bumps the slot generation (§10 D3). Mux death leaves existing
++   routes live; only reconfiguration is unavailable.
++5. **Verification.** `irq_mux`: owner-only routing; storm on a stuck level
++   line is bounded on each arch; revoke and death drain; MSI-X entry
++   isolation; double-waiter refusal.
++
++### 8.4 Timer service and timekeeping (#194)
++
++1. **State.** 80–83 are live in-kernel; `time/timer_srv.cpp` is an optional
++   proxy (`CONFIG_TIMER_SRV`, default 0) with a 16-entry tombstone ring
++   (`timer-srv.md`). End state: kernel keeps tick, budget replenishment and
++   timeout faults; timer-srv multiplexes all POSIX time. Syscalls: moves
++   33, 34, 80–83; keeps 5.
++2. **Invariants.** timer-srv state is fixed-size; the client table size is an
++   SDF parameter. Sleeping clients block in bounded `RECEIVE` or
++   `NOTIFY_WAIT`, never in a kernel timer wheel after the flip.
++3. **Protocol.** 48 B `TimerRpc`; replies validated on server pid, epoch,
++   owner id + generation, timer id + slot generation (`timer-srv.md`).
++   timer-srv's own wake source is a tick Notify from the kernel.
++4. **Failure.** Epoch bump on restart; clients re-arm. Tombstone overflow
++   SHALL be counted and reported, not silently dropped (§10 D6).
++5. **Verification.** `srv_timer`: no kernel blocking for sleep after flip;
++   50-timer multiplex; restart re-arm; drift bound against the tick.
++
++### 8.5 VFS backends and block storage server (#517)
++
++1. **State.** Kernel VFS is authoritative; vfs-srv shadows it with seven
++   backends (`vfs-srv.md`); block-srv has a live path with IRQ delegation
++   (`block-srv.md`). #47 is closed; remaining scope is #517. Syscalls: moves
++   9–19, 25, 26, 41–43.
++2. **Invariants.** Per-open channels are capabilities; fd tables live in
++   vfs-srv. Authorization is done once at the boundary. Block DMA only into
++   frames mapped in the block PD's IOMMU domain (INV-MK-9).
++3. **Protocol.** 48 B `VfsRpc` / `BlockRpc` control; data through SPSC rings
++   per open channel; every RPC bounded (INV-MK-3).
++4. **Failure.** vfs-srv death: clients receive typed errors on open channels
++   and reopen after restart. block-srv death: device quiesced and IOMMU
++   domain detached before frames are reclaimed (§10 D2).
++5. **Verification.** `vfs_srv_live`, `block_srv_live` parity (byte-identical
++   to the kernel path); `vfs_server_restart`; `block_dma_isolated`;
++   `vfs_authorize_toctou`. Shadow-mode flip criterion: §12.
++
++### 8.6 Drivers and console / framebuffer PDs (#476; #48, #51 closed)
++
++1. **State.** PDs exist for serial, kbd, rtc, fb, block, net. The console PD
++   renders over SHM (4 ring pages + 1 status page, scanout in 2 MiB chunks,
++   `boot_sdf.hpp`). The in-kernel `Terminal` and shell remain. Syscalls: keeps
++   55, 57–62; retires 4 and 48 into log-srv.
++2. **Invariants.** One owner per device; no ambient authority; restart
++   re-derives caps via `sdf_compose` (`driver-pds.md`). Render work per pass
++   is bounded. Port-using PDs fit `CONFIG_IOPB_MAX_TASKS` (§7.3 conflict).
++3. **Protocol.** Console text over SPSC ring; status page counters; kbd input
++   via ring + Notify.
++4. **Failure.** fb-pd death: kernel panic path keeps raw write; console
++   output buffers in the ring up to its capacity, then drops with a counter.
++5. **Verification.** `fb_bounded_render`, `driver_crash_isolated`,
++   `irq_no_ambient`, `fb_fault_isolated`, `scroll_bounded`, `log_no_block`.
++
++### 8.7 Supervisor and death notification (#191, #516)
++
++1. **State.** In-kernel `daemon_mgr` restarts up to 10 times without backoff,
++   polled from `on_tick`. Death records latch only in
++   `TaskControlBlock::cleanup()`; fault-path kills bypass `notify_death`
++   (#516). Syscalls: keeps 49, 50, 66–68; adds N2, N3; receives 35.
++2. **Invariants.** INV-MK-6 and INV-MK-11. The supervisor SHALL hold a
++   death watch for every supervised PD (bound §7.3). Restart SHALL revoke the
++   dead PD's derivations before re-derive (§10 D4).
++3. **Protocol.** Death record → supervisor Notify → `DEATH_RECV`; restart =
++   revoke derivations, retype fresh objects from the PD's Untyped quota,
++   `sdf_compose` the row, bump the server epoch, publish the new endpoint.
++   Clients rebind on epoch change. This full protocol needs F1/F2/F4 (M11)
++   and the Untyped quota (M4, M12) and applies from M12. Interim (M5 to
++   M12): dispose the dead PD's own slots, re-mint via `task/boot_sdf.hpp:
++   sdf_rebind`, bump the epoch; no revoke of other holders' caps. #515
++   (cap-broker policy serving) lands alongside, its kernel consult
++   invalidated by the same epoch bump. Restart policy per SDF row: restart
++   class, maximum restarts, backoff (values `TBD at API freeze`).
++4. **Failure.** Supervisor death and mem-mgr death are critical (§9.3,
++   Q12). Watch-table exhaustion fails the restart closed and is reported.
++5. **Verification.** `srv_supervisor`: crash-restart loop with tracker delta
++   0; `mk_death_visible_bounded` under full CPU load; fault-killed PD is
++   reported (#516); boot composition grants exactly the SDF caps.
++
++### 8.8 Process manager (F11)
++
++1. **State.** No PD, no issue. 20–24 and 31–32 are in-kernel.
++2. **Invariants.** Requires N1–N4 and the retype types of §4.1. `fork` is
++   built from retype + VSpace map; no kernel deep copy after the flip.
++3. **Protocol.** proc-mgr holds TCB caps for every task it created.
++4. **Failure.** Critical-server class decided by Q12.
++5. **Verification.** `proc_elf` parity; `pid_reuse_safe`.
++
++### 8.9 Log server
++
++1. **State.** `log::DmesgService` and `log::KlogService` singletons in the
++   kernel; `log/log_srv.cpp` proxy exists.
++2. **Invariants.** The kernel keeps a fixed ring and the panic raw path;
++   log-srv is a sink and mirror. Early boot logs stay in the kernel ring until
++   log-srv drains them.
++3. **Protocol.** Ring + Notify; producers never block on log-srv.
++4. **Failure.** log-srv death drops nothing from the kernel ring; drain
++   resumes after restart.
++5. **Verification.** `logging_debug`; `log_no_block` under log-srv kill.
++
++### 8.10 Servers without code
++
++proc-mgr (F11), sync-srv (F12), entropy-srv (F13), SHM-manager (F14),
++scheduler-policy server (F15). Each SHALL get an SDF row, a restart class and
++a test class before its MOVE rows in T-1 take effect.
++
++## 9. Failure, supervision and death semantics
++
++### 9.1 DEATH-1 — death record latency
++
++`DeathNotify::on_task_death` runs only inside
++`TaskControlBlock::complete_teardown()`, reached from
++`TaskControlBlock::cleanup()` and `TaskControlBlock::destroy()`. Callers of
++`cleanup()`, by death path:
++
++- `Scheduler::terminate` deaths (kill, fault, watchdog; `scheduler_terminate.cpp`)
++  call `Scheduler::release_zombie`, which removes the task from `all_tasks_`,
++  so `Scheduler::reap_orphans` never reaches it. `cleanup()` then runs only
++  from: idle `Scheduler::cleanup_step` (`memory/integrity.cpp`), VMM teardown
++  `Scheduler::cleanup_step_try` (`memory/vmm_teardown.cpp`),
++  `Scheduler::flush_zombies` when the zombie count exceeds
++  `CONFIG_ZOMBIE_STARVATION_LIMIT` (checked every 100 ticks,
++  `scheduler_tick.cpp`), and `Scheduler::drain_zombie_list`, driven by the
++  PID 1 reaper loop (`kernel.cpp`, poked on every zombie birth but running at
++  priority 0 outside the shell `selftest` run, which raises it to 10) and by
++  `irq_thread.cpp` / `taskdefs.cpp` teardown helpers.
++  Idle and the priority-0 reaper are both outside the starvation breaker,
++  so under sustained load visibility is bounded only by the zombie-count
++  trigger, not by time.
++- Self-exit (`syscall_handlers_misc.cpp:sys_exit` →
++  `Scheduler::switch_away_from_terminating`) does not call `release_zombie`;
++  the task stays in `all_tasks_` and is torn down by the parent's
++  `syscall_handlers_process.cpp:sys_waitpid` (synchronous `cleanup()`), or by
++  `Scheduler::reap_orphans` → `note_termination_and_free` (every 100 ticks
++  from `on_tick`, when `parent_id == 0`, when the parent is a RUNNING PID 1,
++  or when the parent is TERMINATED or absent from the id table).
++- `TaskControlBlock::destroy` covers creation and compose failures.
++REQUIRED (F6): the death record is latched at the terminate funnel (state
++transition to zombie) for every death cause including fault kills (#516);
++resource teardown may stay deferred. The visibility bound is `TBD at API
++freeze` (Q4).
++
++### 9.2 DEATH-2 — reply waiters
++
++`MessageQueue::~MessageQueue` wakes queue-full senders only. A client in
++`reply_wait` on a dead server is not woken and waits until its own bound
++(or forever on plain `send_sync`). REQUIRED (F7): on server death the kernel
++wakes every reply waiter targeting that server with a typed error.
++
++### 9.3 Restart classes
++
++| Class | Members | Policy |
++|---|---|---|
++| critical | supervisor, mem-mgr | death is a system fault; recovery policy Q12 |
++| restartable | drivers, block-srv, vfs-srv, timer-srv, log-srv, term, procfs, irq-mux | supervisor restart per §8.7 |
++| client | applications | reported to proc-mgr / supervisor; no restart by default |
++
++A restarted passive server is initialised per §5.5 before it serves.
++
++## 10. Reclaim and leak rules on death or restart
++
++| Rule | Resource | Requirement |
++|---|---|---|
++| D1 | donated SchedContext | returned to the donor with a typed error before the server's objects are reclaimed |
++| D2 | in-flight DMA | quiesce the device (mask its IRQ, bounded wait) and detach its IOMMU domain before any of its frames are reclaimed; no domain ⇒ no DMA cap (INV-MK-9) |
++| D3 | IRQ slot | mask the line, drain `pending`, clear `waiter`, bump slot generation |
++| D4 | capability derivations | revoke the dead PD's derivations (not other holders, INV-MK-7) before `sdf_compose` re-derives |
++| D5 | SHM rings | epoch-tag; peers unmap and rebind on epoch mismatch |
++| D6 | timer tombstones | ring overflow is counted and reported; capacity from SDF |
++| D7 | BufferPool handles | released on owner death; no PMM fallback after M4 |
++| D8 | death-watch slots | 16 static slots fail closed; a supervisor with more watched PDs SHALL be split or the bound raised (Q7) |
++
++Every rule is verified by a kill/restart cycle under `test_isolate` with
++`ResourceTracker::check` delta 0.
++
++## 11. Cross-architecture parity matrix
++
++| Mechanism | x86_64 | aarch64 | riscv64 | Issue |
++|---|---|---|---|---|
++| Syscall entry IF state | interrupt gate, IF=0 | `svc` entry, IRQs masked | `ecall` entry, SIE cleared | #546 |
++| IRQ controller | PIC / IOAPIC / MSI-X | GICv2 (v3 path) | PLIC | #192 |
++| IRQ storm limiter | ABSENT | present | present | F8 |
++| Line mask on delivery (`irq_delivery.cpp:mask_on_delivery`) | WAIT_ACK only; WAIT mode programs a level IOAPIC entry and is not masked | WAIT_ACK only (GIC mask); WAIT mode relies on the storm limiter | never masked (PLIC edge semantics); storm limiter only | F8 |
++| Deferred-switch apply point (INV-MK-5) | `isr_stubs.asm` epilogue | `vectors.S` epilogue | `syscall_entry.S` / `interrupt_controller.cpp` trap epilogue | #546 |
++| IOMMU | VT-d | SMMUv3 pending; `sys_iommu_map`/`unmap` dispatch tests fail instead of being arch-scoped (#528) | none: DMA PDs fail closed (Q10) | #168, #528 |
++| I/O ports | IOPB, 4 tasks | not applicable, fail-closed; ioport dispatch tests fail instead of being arch-scoped (#528) | not applicable, fail-closed | F9, #528 |
++| Debug syscalls 86–90 (KEEP-D) | green (`core_syscall` debug, `test-history.txt` 2026-11-13) | green (`core_syscall` debug, `test-history.txt` 2026-11-13) | `debug_launch_entry_trap_parks` flakes under load (#544) | #544 |
++| SMP tests | `smp`, `smp_multicpu` | not run | not run | #525 |
++| Console PD runtime | green | green | was blocked by #513 (closed); re-verify at next gate | #476 |
++| Cross-core IPC / donation | out of scope unless Q11 decides otherwise | same | same | #167 |
++
++## 12. Configuration and build modes
++
++- Each server lands behind `CONFIG_<X>_SRV`, default 0, following
++  `CONFIG_TIMER_SRV`.
++- A certified build SHALL select exactly one path per subsystem (kernel or
++  server) at compile time. Runtime failover from a crashed server back into
++  kernel code SHALL NOT exist.
++- The kernel fallback is kept for one milestone after a flip, as a build
++  option only, then deleted after the subsystem's gate.
++- vfs-srv shadow-mode exit criterion: byte-identical results across the
++  parity class, tracker delta 0, and zero fallback hits over the full gate run
++  on all three arches; additional criteria Q6.
++
++## 13. Verification plan
++
++### 13.1 Entry points
++
++Only these are valid:
++- `python3 tools/meson/qemu_test.py --arch <arch> --build <build> --class <class>`
++- `bash scripts/run_all_classes.sh {x86_64,aarch64,riscv64} {debug,release}`
++  (26 generic classes on x86_64; aarch64 and riscv64 append their per-arch
++  extras from `tools/meson/list_tests.py`; the 2×3 matrix is the release
++  gate, 0 failures, no arch exempt). The `all` class and `test-full` are not valid entry points.
++
++### 13.2 Rules
++
++- New tests start as `JARVIS_TEST_PASS()` stubs with `JARVIS_REGISTER_TEST`
++  and a `test_expected_counts.hpp` update on `testbed`; real asserts follow.
++- Every test runs under `test_isolate` snapshot/restore with
++  `ResourceTracker::check` delta 0, including kill/restart cycles. Drain paths
++  respect `Scheduler::is_current_on_any_cpu`.
++- A test for a VIOLATED invariant is marked known-fail until its fix lands;
++  it is never registered as green.
++
++### 13.3 Planned tests
++
++| Test | Asserts |
++|---|---|
++| `syscall_surface` | exact T-1 KEEP set + N1–N9; KEEP-D only under `CONFIG_DEBUG` |
++| `mk_inv_no_kernel_alloc` | INV-MK-1 after M4 |
++| `mk_inv_static_bounds` | INV-MK-2 demand ≤ bound for the composed SDF |
++| `mk_rpc_bound` | INV-MK-3 typed error at each declared bound |
++| `mk_death_visible_bounded` | INV-MK-6 under full CPU load |
++| `mk_reply_waiter_wake` | INV-MK-11 |
++| `mk_cap_delete_vs_revoke` | INV-MK-7 |
++| `mk_retype_target_types` | §4.2 |
++| `mk_supervisor_stop` | N2 / N3 |
++| `mk_ring_epoch_reject` | D5 |
++| `mk_irq_slot_death_drain` | D3 |
++| `cap_schedctx`, `mm_usermgr`, `irq_mux`, `srv_supervisor`, `srv_timer` | §8.1–§8.4, §8.7 |
++| `revoke_cascade`, `stale_use_fails`, `death_drain` | #50 |
++| `core_footprint`, `no_kernel_fs` | #49 kernel minimality (#89 tracker) |
++| `vfs_server_restart`, `block_dma_isolated`, `vfs_authorize_toctou` | §8.5 |
++| `driver_crash_isolated`, `irq_no_ambient`, `fb_fault_isolated`, `scroll_bounded`, `log_no_block` | §8.6, §8.9 |
++| `pid_reuse_safe` | §8.8 |
++| `cap_broker_live` | #515 policy serving |
++
++### 13.4 Existing classes per step
++
++`core_sched`, `core_sync`, `ipc`, `capability`, `servers`, `cap_broker`,
++`block_srv_live`, `vfs_srv_live`, `storage`, `drivers`, `ui`,
++`logging_debug`, `deadline`, `proc_elf`, `smp` / `smp_multicpu` (x86_64
++only, per `tools/test-policy.tsv`).
++
++## 14. Migration sequence
++
++Every step's gate: (a) the named classes green on all three arches, (b)
++fault injection (kill, overrun, revoke) green, (c) SIL 3 audit APPROVED, (d)
++tracker delta 0 on kill/restart. The 2×3 matrix runs before every flip and
++before every kernel deletion.
++
++| # | Step | Needs | Gate classes |
++|---|---|---|---|
++| M0 | IPC baseline: define the workload, record per-hop cost of the current path (F17) | — | `ipc`, `bench` |
++| M1 | DEATH-1 and DEATH-2: latch at terminate funnel incl. fault kills; wake reply waiters (F6, F7, #516) | — | `capability`, `servers`, `ipc` |
++| M2 | Preemption / lock contract: fix #545, add §6.2 assertions and tick watchdog (#546) | — | `core_sched`, `core_sync`, `ipc` |
++| M3 | Direct switch on Call / REPLY_RECV; reply token (F3, #398, Q2, Q3) | M2 | `ipc`, `bench` |
++| M4 | mem-mgr bootstrap: root task Untyped handover, frozen pools, BufferPool fallback removed, user-page budget (F10) | M3 | `core_memory`, `capability` |
++| M5 | Supervisor skeleton: watches all PDs, interim restart (dispose own slots + `sdf_rebind`, §8.7 item 3), epoch publish; cap-broker policy serving (#515); `daemon_mgr` interim. Full revoke-then-retype restart and N2/N3 follow at M12 | M1 | `servers`, `cap_broker` |
++| M6 | timer-srv flip | M3, M5 | `deadline` |
++| M7 | log-srv flip | M3, M5 | `logging_debug` |
++| M8 | IRQ hardening (x86 limiter, level mask, `pending` saturation, single waiter), then irq-mux config role (F8, #192) | M2 | `capability`, `drivers` |
++| M9 | Driver PDs → block-srv → VFS (#476, #517) | M4, M8 | `drivers`, `storage`, `block_srv_live`, `vfs_srv_live` |
++| M10 | Console / term and procfs | M9 | `ui`, `servers` |
++| M11 | Object model: CapType additions, per-invocation retype, CAP_DELETE, TCB_*, VSPACE_MAP (F1, F2, F4, F5) | M3 | `capability`, `proc_elf` |
++| M12 | mem-mgr policy: retype-only creation; retire FRAME_CREATE; supervisor switches to the full §8.7 item 3 restart protocol | M4, M5, M11 | `core_memory`, `capability`, `servers` |
++| M13 | SchedContext donation or enforced priority rule (#190, Q1) | M3, M11 | `cap_schedctx`, `core_sched` |
++| M14 | proc-mgr | M11, M12 | `proc_elf`, `core_task` |
++| M15 | sync-srv, entropy-srv, SHM-manager, sched-policy | M11 | named classes |
++| M16 | Per-subsystem kernel deletion after its gate, then 2×3 matrix | each flip | 2×3 matrix |
++
++Rationale: mem-mgr is bootstrap-early and policy-late because every server
++needs frames at its first RPC. Donation (M13) follows the object model; until
++it lands the §5.5 enforced-priority rule applies to every SDF row.
++
++## 15. Follow-up issues
++
++| ID | Title | Scope |
++|---|---|---|
++| F1 | Object model: CapType additions + per-invocation retype target | `cap/cap_types.hpp`, `cap/untyped.*` |
++| F2 | Split CAP_DELETE from CAP_REVOKE | `cap/cap.cpp` |
++| F3 | Reply token + REPLY_RECV + direct switch on Call | `ipc/ipc.cpp`, ISR epilogue |
++| F4 | TCB_CONFIGURE / TCB_SUSPEND / TCB_RESUME | new |
++| F5 | VSPACE_MAP | new |
++| F6 | Death record at terminate funnel, bounded visibility | extends #516 |
++| F7 | Wake reply waiters on server death | `ipc/ipc.cpp` |
++| F8 | x86_64 IRQ parity: storm limiter, level mask, `pending` saturation, single waiter | `irq_delivery.cpp`, `syscall_handlers_irq.cpp` |
++| F9 | Static bound re-sizing (Untyped, per-task objects, CNode slots, IOPB, death watches) | `nexios_config.h` |
++| F10 | mem-mgr bootstrap handover | #193 part a |
++| F11 | proc-mgr PD | new |
++| F12 | sync-srv PD | new |
++| F13 | entropy-srv PD | new |
++| F14 | SHM-manager PD + ring epoch | new |
++| F15 | Scheduler-policy server | new |
++| F16 | log-srv completion: PRINT/KLOG retirement | `log/log_srv.cpp` |
++| F17 | IPC baseline and overhead harness | `bench` |
++| F18 | Reconcile `external-pager.md` B9 with §5.5 | spec |
++| F19 | Retire `docs/specs/microkernel-transition-udpate.md` (superseded; owner approval required to delete) | doc |
++| F20 | libc dependency audit for PAUSE and 80–83 retirement | `src/libc/syscall.h` |
++| F21 | Remove or wire dead `CONFIG_MEMPOOL_*`; TCB size `static_assert`; extend the `CONFIG_STATIC_POOLS_ONLY` assert to `alloc_user_page`, `alloc_user_contiguous`, `alloc_page_table` | `nexios_config.h`, `mempool.cpp`, `pmm.cpp` |
++
++## 16. Open owner decisions
++
++| Q | Decision |
++|---|---|
++| Q1 | Transitive SchedContext donation, or enforced SDF priority rule (§5.5 alternative)? |
++| Q2 | Reply object (seL4 style) or generation-tagged reply id? |
++| Q3 | Direct-switch scope (Call/ReplyRecv only, or synchronous SEND too); per-hop and end-to-end targets |
++| Q4 | Death-visibility bound in ticks |
++| Q5 | Per-server RPC bounds replacing the uniform 5000 ticks |
++| Q6 | Additional vfs-srv shadow-mode exit criteria |
++| Q7 | New values for conflicting static bounds (§7.3) |
++| Q8 | x86 storm limiter: reuse `CONFIG_IRQ_STORM_LIMIT` or a per-vector knob |
++| Q9 | Supervisor stop authority: any PD or only its own subtree |
++| Q10 | riscv64 DMA: permanent fail-closed or gate on a RISC-V IOMMU issue |
++| Q11 | Cross-core IPC and donation in v0.6.1 scope, or deferred behind #525 / #167 |
++| Q12 | Critical-server death policy (supervisor, mem-mgr): reboot, kernel recovery path, or redundant supervisor |
++
++## Appendix A — Implementation record (non-normative)
++
++| Commit | Content |
++|---|---|
++| `d1b44d849` | #47 step-a vfs + block PDs: SDF, PDs, parity, fault demo (no flip) |
++| `960b27673` | #51 step-c-prime serial SHM SPSC ring TX |
++| `fc4a5e0e8` | #47 step-b1 block-srv live path |
++| `ace5c4da1` | #47 step-b2 block-srv IRQ delegation (WAIT_ACK, bounded wait, poll fallback) |
++| `579605bd4` | #47 step-b3 vfs-srv backends live path |
++| `27842ffa2` | #51 console PD substrate (SDF FB row, fb-pd render, `fb_bounded_render`) |
