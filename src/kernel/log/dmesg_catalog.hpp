@@ -119,6 +119,17 @@ constexpr DmesgRecord kDmesgCatalog_USER[] = {
      "Task started"},
 };
 
+/// @brief Task lifecycle event records (canonical base kDmesgBase_TASK).
+/// Genuine task errors (+1/+7/+9) intentionally stay uncatalogued: they
+/// coincide with TaskError enum values and render through that table.
+/// Only the routine termination notice (+17, pushed by
+/// Scheduler::note_termination_and_free) needs a catalog label — without
+/// it the record falls through to "Unknown task error".
+constexpr DmesgRecord kDmesgCatalog_TASK[] = {
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 17, LogSeverity::INFO,
+     "Task terminated"},
+};
+
 /// @brief Network records (canonical base kDmesgBase_NET). No producer
 /// pushes these yet — the space is reserved so drivers report into a
 /// stable numbering from day one.
@@ -281,6 +292,10 @@ inline const DmesgRecord *catalog_lookup(ErrorSubsystem subsys,
         table = kDmesgCatalog_TEST;
         count = sizeof(kDmesgCatalog_TEST) / sizeof(kDmesgCatalog_TEST[0]);
         break;
+    case ErrorSubsystem::TASK:
+        table = kDmesgCatalog_TASK;
+        count = sizeof(kDmesgCatalog_TASK) / sizeof(kDmesgCatalog_TASK[0]);
+        break;
     case ErrorSubsystem::PMM:
         table = kDmesgCatalog_PMM;
         count = sizeof(kDmesgCatalog_PMM) / sizeof(kDmesgCatalog_PMM[0]);
@@ -299,7 +314,7 @@ inline const DmesgRecord *catalog_lookup(ErrorSubsystem subsys,
 /// @brief Text for a (subsystem, error-nr) pair: catalog text when
 /// catalogued, "UNKNOWN" fail-closed otherwise. Backs error_string()
 /// for the event-driven subsystems (NET/ELF/USER/DAEMON/DRIVER/INIT/
-/// TIMING/TEST).
+/// TIMING/TEST/TASK).
 inline const char *catalog_text(ErrorSubsystem subsys,
                                 uint64_t error_nr) noexcept {
     const DmesgRecord *found = catalog_lookup(subsys, error_nr);

@@ -44,7 +44,7 @@ Currently a hybrid kernel actively transitioning toward a capability-based micro
 
 * **Target:** x86_64, ARM64 & RISC-V (QEMU only, untested on bare metal), bring-up on Raspberry Pi4 planned
 * **Language:** Freestanding C++20 (`-fno-exceptions`, `-fno-rtti`, zero `libc`/`libstdc++`)
-* **Status:** v0.5.7 — SMP multicore enablement across all three architectures (AP bring-up, cross-CPU TLB shootdown, scheduler/IPC hardening)
+* **Status:** v0.6.0 — Scheduler lifecycle & cross-arch parity (task-accounting birth/death symmetry, SMP shootdown accounting, riscv64/aarch64 bring-up fixes, release-version gates green on all three architectures)
 * **License:** GPLv3
 
 ---
@@ -105,11 +105,9 @@ Done roadmap archived in `prompts/README_done.md`.
 
 ## Recent Release Highlights
 
-### v0.5.7: SMP Multicore Enablement & Cross-CPU Shootdown
-* **SMP Bring-Up**
-* **Cross-CPU TLB Shootdown**
-* **Scheduler + IPC Hardening**
-* **Foundations carried:** SMP-safe globals, EL0 guard-arm, toolchain parity
+### v0.6.0: Scheduler Lifecycle & Cross-Arch Parity
+* **Task accounting birth/death symmetry + SMP shootdown observability**
+* **riscv64/aarch64 bring-up: canonical private window, fault-recovery keep-alive, yield-stub entry parity**
 
 ---
 
@@ -127,8 +125,8 @@ Have questions about the architecture, CSpace capabilities, or real-time schedul
 #### Using Docker (recommended)
 
 ```bash
-docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.7
-docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.7
+docker pull ghcr.io/staycool1374-ger/nexios-env:v0.6.0
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.6.0
 # inside the container:
 tools/meson/build.sh
 python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
@@ -145,14 +143,14 @@ python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_sysca
 Run a gate directly without an interactive shell:
 
 ```bash
-docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.7 \
+docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.6.0 \
     python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
 ```
 
 Pin a different snapshot explicitly (default is the image's own tag):
 
 ```bash
-docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.7
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.6.0
 ```
 #### Running in QEMU Emulator
 

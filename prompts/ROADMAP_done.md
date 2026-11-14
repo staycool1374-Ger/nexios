@@ -2529,3 +2529,12 @@ Builds on `jarvis_config.h` (v0.2.21) to bring Jarvis up on ARM Cortex-A in QEMU
   - [x] `test_buffer_pool.cpp` — `SimpleTaskPtr` for 17 single-TCB tests, `ScopeGuard` for 5 dual-TCB tests
   - [x] `test_spinlock.cpp`, `test_preemption_under_syscall.cpp` — removed `guard.dismiss()` + manual redo anti-pattern in all 6 sites
   - [x] Add `UniquePtr<T, Deleter>` usage guide to code style docs
+
+### v0.6.0 — Scheduler Lifecycle & Cross-Arch Parity (RELEASED 2026-11-14)
+- [x] Task accounting birth/death symmetry (issue #542: track_task_add moved from Scheduler registration to TCB birth funnels; audited APPROVED)
+- [x] SMP shootdown RFENCE accounting gap fixed (issue #529: note_shootdown_applied on RFENCE success; audited APPROVED, closed)
+- [x] riscv64 canonical private window (issue #540: PRIV_BASE 0xFFFFFFD000000000, Sv39-canonical; audited APPROVED, closed)
+- [x] riscv64 safe_copy fail-open recovery fixed (issue #539: opaque keep-alive + noinline sink; audited APPROVED, closed)
+- [x] riscv64 yield-stub entry parity (issue #533: x86-parity skip for user-VA entries + testbed kSpinStubVa poison; audited APPROVED, closed)
+- [x] dmesg TASK+17 termination notice catalogued (was "Unknown task error")
+- [x] Release-version gates green (debug + release) on x86_64/aarch64/riscv64; interactive shell verified; full audit trail + test-history discipline
