@@ -278,7 +278,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
     {"bench_path_tracer",     1,    0,       0      },  // path-tracer per-step overhead, TF_BENCH
     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
-    {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
+    {"bench_microkernel",     12,   0,       0      },  // +7 mk stubs (#547 IPC-2/IPC-4/SCHED-1/IRQ-1/IRQ-2/MEM-1/MEM-2)
 
     // hrt — hard real-time measurement
     {"stress_hrt",            2,    0,       0      },  // rdtsc canary + IPC under stress (TF_KERNEL)

@@ -7120,3 +7120,4 @@ SUMMARY: total=35 ok=34 fail=1 ARCH=riscv64
 2026-11-13 15:58:46 logging_debug PASSED: 36 FAILED: 0 TIME: 2285ms STATUS: TASK+17-catalog-fix-x86
 2026-11-13 15:59:06 core_task PASSED: 52 FAILED: 0 TIME: 3408ms STATUS: TASK+17-catalog-fix-x86
 2026-11-13 15:59:23 logging_debug PASSED: 36 FAILED: 0 TIME: 1071ms STATUS: TASK+17-catalog-fix-rv64
+2026-11-14 20:17:55 bench_microkernel PASSED: 12 FAILED: 0 TIME: 782ms
