@@ -125,8 +125,8 @@ Have questions about the architecture, CSpace capabilities, or real-time schedul
 #### Using Docker (recommended)
 
 ```bash
-docker pull ghcr.io/staycool1374-ger/nexios-env:v0.5.7
-docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.7
+docker pull ghcr.io/staycool1374-ger/nexios-env:v0.6.0
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.6.0
 # inside the container:
 tools/meson/build.sh
 python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
@@ -143,14 +143,14 @@ python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_sysca
 Run a gate directly without an interactive shell:
 
 ```bash
-docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.5.7 \
+docker run --rm ghcr.io/staycool1374-ger/nexios-env:v0.6.0 \
     python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class debug_syscall
 ```
 
 Pin a different snapshot explicitly (default is the image's own tag):
 
 ```bash
-docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.5.7
+docker run --rm -it -e NEXIOS_TAG=main ghcr.io/staycool1374-ger/nexios-env:v0.6.0
 ```
 #### Running in QEMU Emulator
 
