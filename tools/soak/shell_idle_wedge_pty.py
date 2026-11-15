@@ -222,12 +222,22 @@ def one_run(index, idle_s, probe_s, logdir):
     argv = build_argv(mon_sock, gdb_port, logdir)
     guest = Guest(argv, logdir / ("pty-%d.log" % index))
 
-    def issue(text, settle_s=1.0):
-        # Shell-side prompt-time serial reset flushes the RX ring right
-        # after drawing the prompt: bytes sent immediately on prompt-match
-        # are silently dropped. Settle first.
+    def issue(text, settle_s=0.2):
+        # Echo-synced send. The shell echoes every consumed char
+        # (readline bulk path); bytes sent before readline starts polling
+        # die in the prompt-time serial reset. The first char is a probe:
+        # its echo proves the shell is actively reading (post-reset), so
+        # the remainder cannot land in the reset window. A coincident
+        # output byte can only cause an early proceed, never a wrong
+        # verdict — the command's output needle stays authoritative.
+        # Returns False when even the probe is not echoed (shell wedged
+        # or long-descheduled); the caller classifies via alive probe.
         time.sleep(settle_s)
-        guest.send(text)
+        guest.send(text[0])
+        if guest.expect(text[0:1].encode(), 10) is None:
+            return False
+        guest.send(text[1:])
+        return True
 
     def forensics(tag):
         regs = monitor_info(mon_sock)
@@ -247,23 +257,27 @@ def one_run(index, idle_s, probe_s, logdir):
     try:
         if guest.expect(PROMPT, 120) is None:
             return (False, forensics("no shell prompt within 120 s of boot"))
-        issue("version" + CR)
+        if not issue("version" + CR):
+            return (False, forensics("version not echoed (%s)" % alive_probe()))
         if guest.expect(VERSION_NEEDLE, 15) is None:
             return (False, forensics("no version output (%s)"
                                      % alive_probe()))
         if guest.expect(PROMPT, 15) is None:
             return (False, forensics("no prompt back after version (%s)"
                                      % alive_probe()))
-        issue("help" + CR)
+        if not issue("help" + CR):
+            return (False, forensics("help not echoed (%s)" % alive_probe()))
         if guest.expect(PROMPT, 15) is None:
             return (False, forensics("no prompt after 'help' (%s)"
                                      % alive_probe()))
-        issue("loadelf hey.c.elf" + CR)
+        if not issue("loadelf hey.c.elf" + CR):
+            return (False, forensics("loadelf not echoed (%s)" % alive_probe()))
         if guest.expect(PROMPT, 30) is None:
             return (False, forensics("no prompt after loadelf (%s)"
                                      % alive_probe()))
         time.sleep(2)
-        issue("runelf" + CR)
+        if not issue("runelf" + CR):
+            return (False, forensics("runelf not echoed (%s)" % alive_probe()))
         if guest.expect(RUNELF_NEEDLE, 60) is None:
             return (False, forensics("no hey output after runelf (%s)"
                                      % alive_probe()))
