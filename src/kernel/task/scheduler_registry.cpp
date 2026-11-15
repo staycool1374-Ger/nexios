@@ -38,6 +38,7 @@
 #include <kernel/arch/msr.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/task/tick_watchdog.hpp> // M2 §6.2 item 6
 #include <kernel/sync/spinlock_guard.hpp>
 #include <lib/logger.hpp>
 #include <assert.hpp>
@@ -515,6 +516,10 @@ void Scheduler::init(const SchedulerConfig &cfg) {
     // Issue #242: breaker starts unwatched (zero-init would fake-watch the
     // idle band on every CPU).
     reset_starvation_breaker();
+
+    // M2 §6.2 item 6: TSC-domain tick watchdog (fail-closed when the raw
+    // counter is not calibrated yet; note_tick() retries enablement).
+    tick_watchdog::init();
 
 #if CONFIG_DEADLINE_MONITOR_TASK
     ensure_monitor();

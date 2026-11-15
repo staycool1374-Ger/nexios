@@ -186,7 +186,7 @@ sync::SpinLock Scheduler::zombie_lock_;
 constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
 constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
 constinit uint64_t Scheduler::zombie_count_ = 0;
-sync::SpinLock Scheduler::scheduler_lock_;
+sync::SpinLock Scheduler::scheduler_lock_{sync::LockRank::Sched};
 
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ namespace sync {
 
 /// @brief Initialise the message queue to empty.
 void Queue::init() {
+    lock_.set_rank(LockRank::Queue); // M2 §6.2: queue rank.
     head_ = 0;
     tail_ = 0;
     count_ = 0;

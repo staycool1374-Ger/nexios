@@ -39,6 +39,8 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/spinlock_order.hpp> // M2 §6.2 INV-C1 contract check
+#include <kernel/task/tick_watchdog.hpp>  // M2 §6.2 item 6
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/memory/tlb_shootdown.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -955,6 +957,10 @@ void Scheduler::on_tick() noexcept {
     TlbShootdown::on_tick(arch::Timer::ticks());
 
     rate_monotonic_schedule();
+
+    // M2 §6.2 item 6: TSC-domain tick watchdog notes every completed BSP
+    // tick.  Lock-free snapshot (atomics only); a no-op until calibrated.
+    kernel::tick_watchdog::note_tick();
 }
 
 // ---------------------------------------------------------------------------
@@ -1153,6 +1159,31 @@ void Scheduler::rate_monotonic_schedule() noexcept {
 }
 
 void Scheduler::reschedule() noexcept {
+#if defined(CONFIG_DEBUG) && CONFIG_IRQ_CONTRACT_ASSERT != 0
+    // M2 §6.2 item 2 (INV-C1): no tracked spinlock may be held across
+    // reschedule() or a BLOCKED transition.  Owner-id matched: a task
+    // preempted on this CPU while holding a lock is legal (its waiter
+    // continues after the ISR); only the calling context's own holdings
+    // trip this.  Boundary: only order-table locks are visible here.
+    // scheduler_lock_ takes use the separate per-CPU depth counter with
+    // their own no-reentrant-take ENSUREs (issue #369 T2b) — including the
+    // on_tick adopted-guard path, which legitimately calls reschedule()
+    // with scheduler_lock_ held and must not trip this check.
+    // Lock-free check (per-CPU depth reads only) — safe at entry.
+    if (!sync::spinlock_contract_check_clean("reschedule")) {
+#if CONFIG_IRQ_CONTRACT_ASSERT >= 2
+        panic("sched: spinlock held across reschedule()");
+#else
+        // SCHED +15: uncatalogued (SCHED has no catalog array; follows the
+        // +1/+14 precedent) — WARN-severity per default_severity_for.
+        log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
+                            log::kDmesgBase_SCHED + 15, log::LogSeverity::WARN,
+                            "lock held across reschedule",
+                            current_task() ? current_task()->id : 0);
+        kernel::Logger::warn("sched: spinlock held across reschedule");
+#endif
+    }
+#endif
     // Single-core UP: read-only ready-queue peek needs only IRQ-safety,
     // not the full scheduler_lock_ (issue #369 T4b: it is IF=0 — not a
     // held lock — that prevents the timer ISR from running at all here,

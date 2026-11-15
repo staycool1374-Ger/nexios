@@ -365,6 +365,18 @@ enforced-priority rule above applies to every SDF row.
 7. Lock order (outer → inner): `scheduler_lock_` → endpoint / queue lock →
    leaf locks. DEBUG builds SHALL record and check acquisition order.
 
+Landed for M2 (no semantic change to the contract above, code pointers
+only): `ParkLockGuard` bounded-spin→timed-park (`sync/park_lock.*`),
+lock ranks + per-CPU order bookkeeping (`sync/spinlock_order.*`,
+ranks `Sched(1) > Queue(2) > Leaf(3)`), reschedule-entry INV-C1 check
+(`scheduler_tick.cpp`), TSC tick watchdog (`task/tick_watchdog.*`,
+TIMING+8), per-CPU `IrqGuard` depth + `irq_guard_depth_own()`
+(`arch/hal/irq_guard.hpp`, `core/global_state.cpp`), 12-site
+ISR-reachability audit (all task-context; `Keyboard::try_forward_to_iocd`
+as the fenced precedent). Full instance:
+`docs/specs/irq-preemption-contract.md`; ledger:
+`docs/irqguard-ledger.md` §"Lock order and acquisition ranks".
+
 ## 7. Static architecture, resources and budgets
 
 ### 7.1 System description

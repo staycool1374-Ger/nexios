@@ -929,8 +929,13 @@ class DescriptiveNamesChecker(Checker):
             ch = m.group(1)
             if ch not in allow_loop:
                 loop_line = get_line(text, m.start(1))
-                # Count lines in loop body
-                body_start = text.index("{", m.end()) + 1
+                # Count lines in loop body.  Braceless single-statement
+                # tails have no measurable body — skip instead of crashing
+                # the whole gate (ValueError on missing "{" blocked M2).
+                try:
+                    body_start = text.index("{", m.end()) + 1
+                except ValueError:
+                    continue
                 body_end = self._find_brace_end(text, body_start - 1)
                 body_lines = text[body_start:body_end - 1].count("\n")
                 if body_lines > max_loop_lines:

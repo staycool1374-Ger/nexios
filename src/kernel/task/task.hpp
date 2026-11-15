@@ -124,10 +124,7 @@ struct MessageQueue {
     bool is_full() const {
         return __atomic_load_n(&count, __ATOMIC_RELAXED) >= IPC_MAX_QUEUE_MSG;
     }
-    bool is_full_locked() {
-        SpinLockGuard<sync::SpinLock> guard(lock_);
-        return count >= IPC_MAX_QUEUE_MSG;
-    }
+    bool is_full_locked();
 
     size_t highest_priority() const;
 

@@ -85,6 +85,13 @@ uint64_t scheduler_force_apply[CONFIG_MAX_CPUS] = {};
 // counts takes by that CPU not yet released.  Transitory by
 // construction — never held across test boundaries or quiesce.
 uint64_t scheduler_lock_depth[CONFIG_MAX_CPUS] = {};
+// M1 follow-up / M2 (issues #545/#546): per-CPU arch::IrqGuard nesting
+// depth (see arch/hal/irq_guard.hpp).  Zero-initialised; slot [cpu]
+// counts live IrqGuard scopes on that CPU.  Always maintained (not
+// DEBUG-gated): the lock-park predicate and the reschedule-entry
+// contract check read it in release builds too.  Transitory by
+// construction, same reasoning as scheduler_lock_depth.
+uint64_t irq_guard_depth[CONFIG_MAX_CPUS] = {};
 // Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
 // in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
 // Other architectures keep plain definitions here until their per-CPU

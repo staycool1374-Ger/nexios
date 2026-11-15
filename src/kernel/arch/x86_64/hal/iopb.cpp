@@ -49,8 +49,8 @@ static uint32_t g_iopb_claimed = 0;
 static const kernel::TaskControlBlock *g_iopb_owner = nullptr;
 
 /// @brief Serializes pool/owner/TSS-bitmap state.  Lock order:
-/// scheduler_lock_ -> g_iopb_lock (never the reverse).
-static kernel::sync::SpinLock g_iopb_lock{};
+/// scheduler_lock_ -> g_iopb_lock (never the reverse).  M2 rank: Leaf.
+static kernel::sync::SpinLock g_iopb_lock{kernel::sync::LockRank::Leaf};
 
 // --- issue #8: capability-gated grant ledger ---
 // Records which granted port range was installed under which capability so a

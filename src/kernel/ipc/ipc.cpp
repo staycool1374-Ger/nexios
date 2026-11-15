@@ -30,6 +30,7 @@
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/park_lock.hpp>
 #include <assert.hpp>
 
 namespace kernel {
@@ -81,14 +82,23 @@ void MessageQueue::init() {
     prio_bitmap = 0;
     blocked_senders_head = nullptr;
     blocked_senders_tail = nullptr;
+    lock_.set_rank(sync::LockRank::Queue); // M2 §6.2: queue rank.
     lock_.unlock(); // Ensure SpinLock is unlocked (constructor not called on
-                    // MemPool alloc)
+                    // MemPool alloc).  Unpaired by design: note_release()
+                    // treats an init-time unlock as a silent no-op.
+}
+
+/// @brief Locked fullness probe (M2: ParkLockGuard so a contended probe
+///        parks instead of spinning behind a preempted holder).
+bool MessageQueue::is_full_locked() {
+    sync::ParkLockGuard guard(lock_, "mq:is_full_locked");
+    return count >= IPC_MAX_QUEUE_MSG;
 }
 
 /// @brief Insert a message at the tail of the queue.
 /// @return true on success, false if the queue is full.
 bool MessageQueue::push(const Message &msg) {
-    SpinLockGuard<sync::SpinLock> guard(lock_);
+    sync::ParkLockGuard guard(lock_, "mq:push");
     if (is_full())
         return false;
 
@@ -152,7 +162,7 @@ void MessageQueue::remove_at(size_t best_idx) {
 /// @brief Remove the highest-priority message (FIFO within same priority).
 /// @return true if a message was dequeued.
 bool MessageQueue::pop(Message &out) {
-    SpinLockGuard<sync::SpinLock> guard(lock_);
+    sync::ParkLockGuard guard(lock_, "mq:pop");
     if (is_empty())
         return false;
 
@@ -170,7 +180,7 @@ bool MessageQueue::pop(Message &out) {
 ///         empty OR the best match is oversized (NOT removed — fail-closed,
 ///         issue #11 paper §3.9).  Callers disambiguate with is_empty().
 bool MessageQueue::pop_clamped(Message &msg, uint32_t max_size) {
-    SpinLockGuard<sync::SpinLock> guard(lock_);
+    sync::ParkLockGuard guard(lock_, "mq:pop_clamped");
     if (is_empty())
         return false;
 
@@ -211,7 +221,7 @@ size_t MessageQueue::find_best_from_sender(uint64_t sender_id) const {
 ///        Non-matching messages are never touched.
 /// @return true with @p out filled; false when none is queued.
 bool MessageQueue::pop_from_sender(Message &out, uint64_t sender_id) {
-    SpinLockGuard<sync::SpinLock> guard(lock_);
+    sync::ParkLockGuard guard(lock_, "mq:pop_from_sender");
     size_t best_idx = find_best_from_sender(sender_id);
     if (best_idx >= IPC_MAX_QUEUE_MSG)
         return false;
@@ -227,7 +237,7 @@ bool MessageQueue::pop_from_sender(Message &out, uint64_t sender_id) {
 ///        consumed.
 bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
                                             uint64_t sender_id) {
-    SpinLockGuard<sync::SpinLock> guard(lock_);
+    sync::ParkLockGuard guard(lock_, "mq:pop_from_sender_clamped");
     size_t best_idx = find_best_from_sender(sender_id);
     if (best_idx >= IPC_MAX_QUEUE_MSG)
         return false;
@@ -242,7 +252,7 @@ bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
 /// @brief Non-destructive probe for a queued message from @p sender_id
 ///        (issue #296, send_sync dest-death path).
 bool MessageQueue::has_from(uint64_t sender_id) {
-    SpinLockGuard<sync::SpinLock> guard(lock_);
+    sync::ParkLockGuard guard(lock_, "mq:has_from");
     return find_best_from_sender(sender_id) < IPC_MAX_QUEUE_MSG;
 }
 
@@ -444,7 +454,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
 
     TaskControlBlock *receiver = nullptr;
     {
-        SpinLockGuard<sync::SpinLock> guard(ep->lock_);
+        sync::ParkLockGuard guard(ep->lock_, "ep:bound_receiver");
         receiver = ep->bound_receiver;
     }
     // Issue #208: same gate as IPC::send — do not requeue a receiver
@@ -785,7 +795,7 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
     // scheduler_lock_ first, then queue lock).  The queue lock protects
     // the blocked_senders list and priority-inheritance boost.
     {
-        SpinLockGuard<sync::SpinLock> guard(q.lock_);
+        sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
 
         task.blocked_on_queue = &q;
         TaskControlBlock **pp = &q.blocked_senders_head;
@@ -831,7 +841,7 @@ void IPC::wake_sender(MessageQueue &q, TaskControlBlock &receiver) {
     // Pop sender from head under the queue lock.  set_task_ready and priority
     // restore run outside the lock (they take scheduler_lock_ internally).
     {
-        SpinLockGuard<sync::SpinLock> guard(q.lock_);
+        sync::ParkLockGuard guard(q.lock_, "mq:wake_sender_pop");
 
         if (!q.blocked_senders_head)
             return;
@@ -852,7 +862,7 @@ void IPC::wake_sender(MessageQueue &q, TaskControlBlock &receiver) {
     // Priority inheritance — restore receiver priority after sender removal.
     // FIX(sched-race): same IRQ-safety rationale as block_sender's boost.
     {
-        SpinLockGuard<sync::SpinLock> guard(q.lock_);
+        sync::ParkLockGuard guard(q.lock_, "mq:wake_sender_pi");
         uint64_t max_prio = receiver.base_priority;
         auto *cur_bs = q.blocked_senders_head;
         while (cur_bs) {

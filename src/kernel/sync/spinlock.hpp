@@ -29,6 +29,7 @@
 
 #include <kernel/arch/io.hpp>
 #include <lib/atomic.hpp>
+#include <kernel/sync/spinlock_order.hpp>
 
 namespace kernel {
 namespace sync {
@@ -37,6 +38,11 @@ namespace sync {
 class SpinLock {
   public:
     SpinLock() = default;
+
+    /// @brief Ranked construction (M2, #546 §6.2): the rank feeds the
+    ///        lock-order check.  Unranked by default (invisible to it).
+    constexpr explicit SpinLock(LockRank rank) noexcept
+        : rank_(static_cast<uint8_t>(rank)) {};
 
     SpinLock(const SpinLock &) = delete;
     SpinLock &operator=(const SpinLock &) = delete;
@@ -50,10 +56,12 @@ class SpinLock {
         }
         __atomic_store_n(&holder_, __builtin_return_address(0),
                          __ATOMIC_RELAXED);
+        spinlock_note_acquire(this, rank_);
     }
 
     /// @brief Release the lock.
     void unlock() noexcept {
+        spinlock_note_release(this);
         atomic_store(&locked_, 0, __ATOMIC_RELEASE);
         __atomic_store_n(&holder_, nullptr, __ATOMIC_RELAXED);
     }
@@ -63,6 +71,11 @@ class SpinLock {
     void reset() noexcept {
         locked_ = 0;
         holder_ = nullptr;
+        // NOTE: rank_ survives reset (set once at declaration/init).
+        // NOTE: no order-bookkeeping update — reset() runs on locks
+        // that are not held (fresh or recycled blocks, never a live
+        // critical section); an init-time unlock() of a never-locked
+        // lock is an unpaired no-op by design (see spinlock_order).
     }
 
     /// @brief Attempt to acquire without blocking.
@@ -72,6 +85,7 @@ class SpinLock {
         if (acquired) {
             __atomic_store_n(&holder_, __builtin_return_address(0),
                              __ATOMIC_RELAXED);
+            spinlock_note_acquire(this, rank_);
         }
         return acquired;
     }
@@ -80,10 +94,27 @@ class SpinLock {
         return __atomic_load_n(&holder_, __ATOMIC_RELAXED);
     }
 
+    /// @brief Assign the lock-order rank (M2, #546).  Set once at
+    ///        declaration/init; never mutated while contended.
+    void set_rank(LockRank rank) noexcept {
+        rank_ = static_cast<uint8_t>(rank);
+    }
+
+    /// @brief The lock-order rank (Unranked = invisible to the check).
+    LockRank rank() const noexcept {
+        return static_cast<LockRank>(rank_);
+    }
+
   private:
     int locked_ = 0; ///< 0 = unlocked, 1 = locked.
+    // M2 (issue #546): rank byte lives in the existing padding —
+    // sizeof(SpinLock) stays 16 (static_assert below).
+    uint8_t rank_ = static_cast<uint8_t>(LockRank::Unranked);
     const void *holder_ = nullptr;
 };
+
+static_assert(sizeof(sync::SpinLock) == 16,
+              "SpinLock layout: rank_ must fit the existing padding (#546)");
 
 } // namespace sync
 } // namespace kernel

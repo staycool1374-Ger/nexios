@@ -1182,6 +1182,66 @@
 #define CONFIG_WATCHDOG_ACTION 3
 #endif
 
+/// M2 lock contract (issues #545/#546). Bounded spin-then-park knobs.
+/// CONFIG_LOCK_SPIN_ROUNDS: pause-spin iterations before parking (0 =
+/// park immediately after a failed try; watch the Q3 direct-switch
+/// window — spinning holds no lock, parking deschedules).
+/// Default: 1024.
+#ifndef CONFIG_LOCK_SPIN_ROUNDS
+#define CONFIG_LOCK_SPIN_ROUNDS 1024
+#endif
+
+/// Ticks to sleep per park attempt before re-checking the lock.
+/// Default: 2 (bounded added latency per attempt, ≤ MAX_ATTEMPTS).
+#ifndef CONFIG_LOCK_PARK_TICKS
+#define CONFIG_LOCK_PARK_TICKS 2
+#endif
+
+/// Master switch for timed park (1 = park when INV-L1 allows, 0 = pure
+/// spin status quo ante).  Kill-switch for bisecting park regressions.
+#ifndef CONFIG_LOCK_PARK_ENABLE
+#define CONFIG_LOCK_PARK_ENABLE 1
+#endif
+
+/// Maximum park attempts per acquire before falling back to pure spin
+/// (never blocks forever on a dead holder — the holder may be gone).
+/// Default: 8.
+#ifndef CONFIG_LOCK_PARK_MAX_ATTEMPTS
+#define CONFIG_LOCK_PARK_MAX_ATTEMPTS 8
+#endif
+
+/// reschedule()-entry lock-hygiene assertion (issue #546 §6.2 item 2):
+/// no order-table spinlock may be held at reschedule() or a BLOCKED
+/// transition (scheduler_lock_ itself is covered by its own T2b depth
+/// ENSUREs). 0 = check compiled out; 1 = dmesg + warn on violation
+/// (default, DEBUG only); 2 = panic.  Release builds: no-op (the park
+/// predicate gates on depth counters instead — see
+/// irq_guard_depth_own/scheduler_lock_depth_own).
+#ifndef CONFIG_IRQ_CONTRACT_ASSERT
+#define CONFIG_IRQ_CONTRACT_ASSERT 1
+#endif
+
+/// TSC-domain tick watchdog (issue #546 §6.2 item 6): fires when raw TSC
+/// advances past grace while the tick count is frozen (stalled tick with
+/// the CPU out of idle). 1 = enabled (default). 0 = compiled out.
+#ifndef CONFIG_TICK_WATCHDOG_ENABLE
+#define CONFIG_TICK_WATCHDOG_ENABLE 1
+#endif
+
+/// Grace period for the tick watchdog, in ticks (converted with
+/// raw_counter_freq_hz at init; disabled when either frequency is 0).
+/// Default: 500.
+#ifndef CONFIG_TICK_WATCHDOG_GRACE_TICKS
+#define CONFIG_TICK_WATCHDOG_GRACE_TICKS 500
+#endif
+
+/// Tick-watchdog fire action: 0 = dmesg ERROR + serial evidence + one-shot
+/// latch (default; Q4-A fail-safe hook, never panic here). 1 = reserved.
+/// 2 = panic (Q12-A reboot hook; M2 forbids wiring it — policy lands M3+).
+#ifndef CONFIG_TICK_WATCHDOG_ACTION
+#define CONFIG_TICK_WATCHDOG_ACTION 0
+#endif
+
 /// Boot-time admission self-test (issue #24): read-only probes of the
 /// frozen LUB/WCET/budget gate math + miss-action range check, run once
 /// after Scheduler::init (zero alloc, zero table mutation, one success
@@ -1588,6 +1648,30 @@ extern "C" void panic(const char *msg);
 // --- Policies (no validator rule) ---
 #if CONFIG_WATCHDOG_ACTION < 0 || CONFIG_WATCHDOG_ACTION > 4
 #error "CONFIG_WATCHDOG_ACTION must be in [0..4] (default 3)"
+#endif
+#if CONFIG_LOCK_SPIN_ROUNDS < 0
+#error "CONFIG_LOCK_SPIN_ROUNDS must be >= 0 (default 1024)"
+#endif
+#if CONFIG_LOCK_PARK_TICKS < 1
+#error "CONFIG_LOCK_PARK_TICKS must be >= 1 (default 2)"
+#endif
+#if CONFIG_LOCK_PARK_ENABLE != 0 && CONFIG_LOCK_PARK_ENABLE != 1
+#error "CONFIG_LOCK_PARK_ENABLE must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_LOCK_PARK_MAX_ATTEMPTS < 1
+#error "CONFIG_LOCK_PARK_MAX_ATTEMPTS must be >= 1 (default 8)"
+#endif
+#if CONFIG_IRQ_CONTRACT_ASSERT < 0 || CONFIG_IRQ_CONTRACT_ASSERT > 2
+#error "CONFIG_IRQ_CONTRACT_ASSERT must be in [0..2] (default 1)"
+#endif
+#if CONFIG_TICK_WATCHDOG_ENABLE != 0 && CONFIG_TICK_WATCHDOG_ENABLE != 1
+#error "CONFIG_TICK_WATCHDOG_ENABLE must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_TICK_WATCHDOG_GRACE_TICKS < 1
+#error "CONFIG_TICK_WATCHDOG_GRACE_TICKS must be >= 1 (default 500)"
+#endif
+#if CONFIG_TICK_WATCHDOG_ACTION < 0 || CONFIG_TICK_WATCHDOG_ACTION > 2
+#error "CONFIG_TICK_WATCHDOG_ACTION must be in [0..2] (default 0)"
 #endif
 #if CONFIG_OOM_POLICY != 0 && CONFIG_OOM_POLICY != 1
 #error "CONFIG_OOM_POLICY must be 0 or 1 (default 0)"
