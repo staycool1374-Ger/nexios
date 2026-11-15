@@ -67,7 +67,7 @@ def ensure_none_iso():
     return iso
 
 
-def build_argv(mon_sock, logdir):
+def build_argv(mon_sock, gdb_port, logdir):
     tag = harness.checkout_tag()
     paths = {
         "serial": str(logdir / "debugcon.log"),
@@ -93,6 +93,9 @@ def build_argv(mon_sock, logdir):
     for banned in ("-s", "-S", "-gdb"):
         if banned in out:
             sys.exit("internal error: stub flag %s leaked" % banned)
+    # GDB stub for post-wedge forensics (no -S: guest runs free until
+    # we interrupt on failure).
+    out += ["-gdb", "tcp::%d" % gdb_port]
     return out
 
 
@@ -161,7 +164,21 @@ def monitor_info(mon_sock):
         s.settimeout(10)
         s.connect(str(mon_sock))
         data = b""
+        # Consume the banner + first prompt BEFORE sending: the banner
+        # itself ends with "(qemu) ", so match the SECOND occurrence.
+        prompts = 0
+        end = time.time() + 10
+        while time.time() < end and prompts < 1:
+            try:
+                chunk = s.recv(65536)
+            except socket.timeout:
+                break
+            if not chunk:
+                break
+            data += chunk
+            prompts += data.count(b"(qemu) ")
         s.sendall(b"info registers\n")
+        data = b""
         end = time.time() + 10
         while time.time() < end:
             try:
@@ -179,32 +196,78 @@ def monitor_info(mon_sock):
         return ("monitor query failed: %s\n" % exc).encode()
 
 
+def gdb_backtrace(gdb_port, elf_path, out_path):
+    """Interrupt the wedged guest via the GDB stub and capture backtraces."""
+    try:
+        r = subprocess.run(
+            ["x86_64-elf-gdb", "--batch",
+             "-ex", "target remote :%d" % gdb_port,
+             "-ex", "interrupt", "-ex", "bt", "-ex", "info registers",
+             "-ex", "detach", "-ex", "quit", str(elf_path)],
+            capture_output=True, timeout=60)
+        out_path.write_bytes(b"### gdb --batch rc=%d\nSTDOUT:\n%s\nSTDERR:\n%s\n"
+                             % (r.returncode, r.stdout, r.stderr))
+    except Exception as exc:  # noqa: BLE001 — forensics best-effort
+        out_path.write_bytes(("gdb capture failed: %s\n" % exc).encode())
+
+
 def one_run(index, idle_s, probe_s, logdir):
     mon_sock = logdir / ("mon-%d.sock" % index)
     if mon_sock.exists():
         mon_sock.unlink()
-    argv = build_argv(mon_sock, logdir)
+    gdb_port = 11234 + (os.getpid() % 1000) + index
+    elf_path = BUILD_DIR / "src" / "kernel-debug.elf"
+    argv = build_argv(mon_sock, gdb_port, logdir)
     guest = Guest(argv, logdir / ("pty-%d.log" % index))
+
+    def issue(text, settle_s=1.0):
+        # Shell-side prompt-time serial reset flushes the RX ring right
+        # after drawing the prompt: bytes sent immediately on prompt-match
+        # are silently dropped. Settle first.
+        time.sleep(settle_s)
+        guest.send(text)
+
+    def forensics(tag):
+        regs = monitor_info(mon_sock)
+        (logdir / ("regs-%d.log" % index)).write_bytes(regs)
+        gdb_backtrace(gdb_port, elf_path,
+                      logdir / ("gdb-%d.log" % index))
+        return tag
+
+    def alive_probe():
+        # Classify a command-stage miss: bare CR — prompt back means the
+        # shell is alive and the command bytes were lost; still dead
+        # means the shell itself is wedged.
+        guest.send(CR)
+        if guest.expect(PROMPT, 3) is None:
+            return "shell-dead"
+        return "shell-alive-bytes-lost"
     try:
         if guest.expect(PROMPT, 120) is None:
-            return (False, "no shell prompt within 120 s of boot")
-        guest.send("version" + CR)
+            return (False, forensics("no shell prompt within 120 s of boot"))
+        issue("version" + CR)
         if guest.expect(VERSION_NEEDLE, 15) is None:
-            return (False, "no version output (input dead?)")
+            return (False, forensics("no version output (%s)"
+                                     % alive_probe()))
         if guest.expect(PROMPT, 15) is None:
-            return (False, "no prompt back after version")
-        guest.send("help" + CR)
+            return (False, forensics("no prompt back after version (%s)"
+                                     % alive_probe()))
+        issue("help" + CR)
         if guest.expect(PROMPT, 15) is None:
-            return (False, "no prompt after 'help'")
-        guest.send("loadelf hey.c.elf" + CR)
+            return (False, forensics("no prompt after 'help' (%s)"
+                                     % alive_probe()))
+        issue("loadelf hey.c.elf" + CR)
         if guest.expect(PROMPT, 30) is None:
-            return (False, "no prompt after loadelf")
+            return (False, forensics("no prompt after loadelf (%s)"
+                                     % alive_probe()))
         time.sleep(2)
-        guest.send("runelf" + CR)
+        issue("runelf" + CR)
         if guest.expect(RUNELF_NEEDLE, 60) is None:
-            return (False, "no hey output after runelf")
+            return (False, forensics("no hey output after runelf (%s)"
+                                     % alive_probe()))
         if guest.expect(PROMPT, 15) is None:
-            return (False, "no prompt back after runelf")
+            return (False, forensics("no prompt back after runelf (%s)"
+                                     % alive_probe()))
         # Idle window: drain (so the wedge signature is absence of
         # solicited output, not unread backlog) but send nothing.
         guest._drain(idle_s)
@@ -213,10 +276,8 @@ def one_run(index, idle_s, probe_s, logdir):
             time.sleep(5)
             guest.send(CR)
             if guest.expect(PROMPT, probe_s) is None:
-                regs = monitor_info(mon_sock)
-                (logdir / ("regs-%d.log" % index)).write_bytes(regs)
-                return (False, "probe miss persisted after re-probe "
-                               "(serial + regs saved)")
+                return (False, forensics("probe miss persisted after "
+                                        "re-probe"))
         return (True, "ok")
     finally:
         guest.close()
