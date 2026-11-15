@@ -201,10 +201,12 @@ def gdb_backtrace(gdb_port, elf_path, out_path):
     try:
         r = subprocess.run(
             ["x86_64-elf-gdb", "--batch",
+             "-ex", "source %s" % (ROOT / "tools" / "gdb" / "kernel.py"),
              "-ex", "target remote :%d" % gdb_port,
-             "-ex", "interrupt", "-ex", "bt", "-ex", "info registers",
+             "-ex", "interrupt", "-ex", "tasks",
+             "-ex", "bt", "-ex", "info registers",
              "-ex", "detach", "-ex", "quit", str(elf_path)],
-            capture_output=True, timeout=60)
+            capture_output=True, timeout=120, cwd=str(ROOT))
         out_path.write_bytes(b"### gdb --batch rc=%d\nSTDOUT:\n%s\nSTDERR:\n%s\n"
                              % (r.returncode, r.stdout, r.stderr))
     except Exception as exc:  # noqa: BLE001 — forensics best-effort
