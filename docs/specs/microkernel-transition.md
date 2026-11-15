@@ -38,6 +38,11 @@ Out of scope: the scheduler core algorithm (O(1) bitmap + RMS/EDF,
 `scheduler.md`), TCP/IP and USB stacks (Phase 9), new server internals beyond
 their kernel-facing contracts.
 
+R-SCOPE (owner, #512): internal implementation bugs are not an architecture
+input. Fault containment (F6/M1 latch, supervision restart) and the contracts
+below are defense-in-depth; no protocol assumes a buggy peer, and every
+protocol survives one (R-INPUT validation, bounded calls, death wake).
+
 ### 0.4 Design references
 
 The target follows three established patterns, used only as structure:
@@ -265,9 +270,16 @@ typed error (INV-MK-11).
 ### 5.2 Reply matching
 
 Today replies are matched by sender id. `ipc.md` §2 accepts same-sender stale
-replies as a residual. REQUIRED before donation lands: each Call carries a
-one-shot reply token (reply object or generation-tagged reply id, Q2); a reply
-without a live token is dropped.
+replies as a residual. REQUIRED (Q2 DECIDED, owner, #512): each Call carries a
+one-shot generation-tagged reply id (kernel-held token, Q1-style tag extended
+to the call); a reply without a live token is dropped, and a consumed token
+never matches again. The kernel stamps the caller identity on the Call request
+path (plain `send_sync` included, mirroring `send_via_cap`), so token plus
+stamped identity is unforgeable by a local peer. R-INPUT (owner, #512): every
+server RPC validates its input first and rejects malformed messages with a
+typed error; a service SHALL NEVER terminate because of a communication error.
+No delegation: reply rights are not transferable in v0.6.1 (revisit only if a
+protocol ever requires handoff; reply objects stay deferred with F1/F2).
 
 ### 5.3 FAST tier
 
@@ -305,6 +317,10 @@ message between servers SHALL fit 48 B (`BlockRpc` is `static_assert`ed
 If Q1 selects "no donation", the alternative is normative: every server's
 priority SHALL be at least the highest priority of any client that calls it,
 checked by `sdf_compose`; a composition that violates it fails.
+R-TIME (owner, #512): Q1 is DECIDED for transitive donation (depth bound 4);
+time exhaustion is PREVENTED by donation, not merely detected — every server
+call runs under a donated context. Until M13 lands donation, the
+enforced-priority rule above applies to every SDF row.
 
 ### 5.6 Latency model
 
@@ -312,12 +328,13 @@ checked by `sdf_compose`; a composition that violates it fails.
   (INV-MK-5). At `CONFIG_TICK_HZ = 1000` each hop costs up to 1 ms. A file read
   routed client → vfs-srv → block-srv → vfs-srv → client has four blocking
   hops.
-- REQUIRED: direct switch on Call and REPLY_RECV (migration M3): when the
-  receiver is blocked in receive and runnable on this core, the kernel switches
-  to it inside the syscall, without waiting for a tick.
-- Per-hop bound and end-to-end overhead target: `TBD at API freeze` (Q3),
-  set against the baseline from M0 (F17); the measured record lives in
-  `docs/specs/ipc-baseline.md` §4.
+- REQUIRED: direct switch on Call and REPLY_RECV (migration M3, Q3 DECIDED scope):
+  when the receiver is blocked in receive and runnable on this core, the kernel
+  switches to it inside the syscall, without waiting for a tick. No
+  synchronous-SEND switch (deferred to a follow-up only with new evidence).
+- Per-hop bound and end-to-end overhead target: values frozen post-M0 against
+  the F17 baseline (Q3 numeric half open; TCG-relative only until HW numbers
+  exist); the measured record lives in `docs/specs/ipc-baseline.md` §4.
 
 ## 6. Preemption, IRQ and lock discipline (#545, #546)
 
@@ -348,6 +365,18 @@ checked by `sdf_compose`; a composition that violates it fails.
 7. Lock order (outer → inner): `scheduler_lock_` → endpoint / queue lock →
    leaf locks. DEBUG builds SHALL record and check acquisition order.
 
+Landed for M2 (no semantic change to the contract above, code pointers
+only): `ParkLockGuard` bounded-spin→timed-park (`sync/park_lock.*`),
+lock ranks + per-CPU order bookkeeping (`sync/spinlock_order.*`,
+ranks `Sched(1) > Queue(2) > Leaf(3)`), reschedule-entry INV-C1 check
+(`scheduler_tick.cpp`), TSC tick watchdog (`task/tick_watchdog.*`,
+TIMING+8), per-CPU `IrqGuard` depth + `irq_guard_depth_own()`
+(`arch/hal/irq_guard.hpp`, `core/global_state.cpp`), 12-site
+ISR-reachability audit (all task-context; `Keyboard::try_forward_to_iocd`
+as the fenced precedent). Full instance:
+`docs/specs/irq-preemption-contract.md`; ledger:
+`docs/irqguard-ledger.md` §"Lock order and acquisition ranks".
+
 ## 7. Static architecture, resources and budgets
 
 ### 7.1 System description
@@ -360,7 +389,9 @@ REQUIRED additions: rows for supervisor, mem-mgr, irq-mux, timer-srv,
 proc-mgr, sync-srv, entropy-srv, SHM-manager, sched-policy; per row a
 priority, a budget/period, an Untyped quota, its channels, and its restart
 class (§9.3). `sdf_compose` SHALL reject a description whose demand exceeds
-any bound in §7.3.
+any bound in §7.3. Each row additionally carries a core-affinity mask
+(Q11-A: placement hint for future #167 pinning only; no cross-core
+donation semantics in v0.6.1).
 
 ### 7.2 Fixed kernel pools
 
@@ -444,6 +475,10 @@ Each subsection gives: (1) current vs end state and syscall mapping,
    memory as Untyped, kernel pools frozen) and **policy** (M12: retype-only
    creation). After M4 the BufferPool PMM fallback is removed; exhaustion
    returns a typed error. Every allocation path checks the per-task budget.
+   R-MEM (owner, #512, mechanism #575): exhaustion/pressure past the
+   threshold latches an explicit unstable-state warning (diagnostic +
+   supervisor notify, zero-alloc), never silent coping — the supervisor
+   answers by driving the §9.3 fail-safe rows.
 3. **Protocol.** Clients request memory by RPC (≤ 48 B); mem-mgr retypes from
    its Untyped and grants the resulting cap. The kernel SHALL NOT need memory
    from mem-mgr to deliver mem-mgr's own IPC: every IPC object used by
@@ -624,8 +659,9 @@ a test class before its MOVE rows in T-1 take effect.
 - `TaskControlBlock::destroy` covers creation and compose failures.
 REQUIRED (F6): the death record is latched at the terminate funnel (state
 transition to zombie) for every death cause including fault kills (#516);
-resource teardown may stay deferred. The visibility bound is `TBD at API
-freeze` (Q4).
+resource teardown may stay deferred. Visibility bound (Q4 DECIDED, owner,
+#512): synchronous latch; supervisor-observable ≤ 2 ticks given the
+supervisor is runnable at highest priority.
 
 ### 9.2 DEATH-2 — reply waiters
 
@@ -638,11 +674,13 @@ wakes every reply waiter targeting that server with a typed error.
 
 | Class | Members | Policy |
 |---|---|---|
-| critical | supervisor, mem-mgr | death is a system fault; recovery policy Q12 |
+| critical | supervisor, mem-mgr | death is a system fault; two-phase recovery (Q12 DECIDED, owner, #512): drive the SDF-declared fail-safe state FIRST (R-FAILSAFE — safe outputs, quiesce), THEN reboot. Reboot-loop guard required (consecutive-early-death counter → fail-stop, mechanism TBD with watchdog work). Redundant supervisor is a post-v0.6 follow-up only if availability analysis demands it; never for mem-mgr |
 | restartable | drivers, block-srv, vfs-srv, timer-srv, log-srv, term, procfs, irq-mux | supervisor restart per §8.7 |
 | client | applications | reported to proc-mgr / supervisor; no restart by default |
 
 A restarted passive server is initialised per §5.5 before it serves.
+
+R-MEM (owner, #512): memory exhaustion is unrecoverable — the manager MUST emit an explicit unstable-state warning (diagnostic + supervisor notify, zero-alloc latched path, mechanism #575) instead of failing silently. The supervisor reacts to the warning by driving the fail-safe rows above. Every SDF row SHALL declare its fail-safe contribution (safe output values, quiesce order); `sdf_compose` rejects a description without one for restartable/critical members.
 
 ## 10. Reclaim and leak rules on death or restart
 
@@ -655,7 +693,7 @@ A restarted passive server is initialised per §5.5 before it serves.
 | D5 | SHM rings | epoch-tag; peers unmap and rebind on epoch mismatch |
 | D6 | timer tombstones | ring overflow is counted and reported; capacity from SDF |
 | D7 | BufferPool handles | released on owner death; no PMM fallback after M4 |
-| D8 | death-watch slots | 16 static slots fail closed; a supervisor with more watched PDs SHALL be split or the bound raised (Q7) |
+| D8 | death-watch slots | 32 static slots fail closed (Q7); a supervisor with more watched PDs SHALL be split or the bound raised |
 
 Every rule is verified by a kill/restart cycle under `test_isolate` with
 `ResourceTracker::check` delta 0.
@@ -685,9 +723,18 @@ Every rule is verified by a kill/restart cycle under `test_isolate` with
   kernel code SHALL NOT exist.
 - The kernel fallback is kept for one milestone after a flip, as a build
   option only, then deleted after the subsystem's gate.
-- vfs-srv shadow-mode exit criterion: byte-identical results across the
-  parity class, tracker delta 0, and zero fallback hits over the full gate run
-  on all three arches; additional criteria Q6.
+- vfs-srv shadow-mode exit criterion (Q6 DECIDED, owner, #512 — closed list, no
+  further TBD): (a) byte-identical results across the parity class;
+  (b) tracker delta 0; (c) zero fallback hits over the full gate run on all
+  three arches; PLUS (d) fault-injection parity (corrupt image, full
+  filesystem, I/O-error legs return identical errors, not just identical
+  bytes on success); (e) restart-in-flight proven pre-flip
+  (`vfs_server_restart`, `vfs_authorize_toctou` green, tracker delta 0 across
+  the kill cycle); (f) performance ceiling (VFS op latency within the M3
+  per-hop budget × chain depth, TCG-relative with headroom, absolute numbers
+  HW-only); (g) soak + concurrency (3 consecutive full-gate greens incl. the
+  `storage` class under concurrent multi-client load, not just sequential
+  parity). Happy-path-only equivalence is explicitly insufficient.
 
 ## 13. Verification plan
 
@@ -797,22 +844,22 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F20 | #572 | libc dependency audit for PAUSE and 80–83 retirement | `src/libc/syscall.h` |
 | F21 | #573 | Remove or wire dead `CONFIG_MEMPOOL_*`; TCB size `static_assert`; extend the `CONFIG_STATIC_POOLS_ONLY` assert to `alloc_user_page`, `alloc_user_contiguous`, `alloc_page_table` | `nexios_config.h`, `mempool.cpp`, `pmm.cpp` |
 
-## 16. Open owner decisions
+## 16. Owner decisions (Q1–Q12 DECIDED per #512)
 
 | Q | Decision |
 |---|---|
-| Q1 | Transitive SchedContext donation, or enforced SDF priority rule (§5.5 alternative)? |
-| Q2 | Reply object (seL4 style) or generation-tagged reply id? |
-| Q3 | Direct-switch scope (Call/ReplyRecv only, or synchronous SEND too); per-hop and end-to-end targets |
-| Q4 | Death-visibility bound in ticks |
-| Q5 | Per-server RPC bounds replacing the uniform 5000 ticks |
-| Q6 | Additional vfs-srv shadow-mode exit criteria |
-| Q7 | New values for conflicting static bounds (§7.3) |
-| Q8 | x86 storm limiter: reuse `CONFIG_IRQ_STORM_LIMIT` or a per-vector knob |
-| Q9 | Supervisor stop authority: any PD or only its own subtree |
-| Q10 | riscv64 DMA: permanent fail-closed or gate on a RISC-V IOMMU issue |
-| Q11 | Cross-core IPC and donation in v0.6.1 scope, or deferred behind #525 / #167 |
-| Q12 | Critical-server death policy (supervisor, mem-mgr): reboot, kernel recovery path, or redundant supervisor |
+| Q1 | DECIDED (owner, #512): transitive SchedContext donation, depth bound 4; enforced SDF priority rule as M5–M12 interim gate (§5.5) |
+| Q2 | DECIDED (owner, #512): generation-tagged reply id (kernel-held one-shot token); kernel stamps sender_id on the Call path; no-delegation note in §5.2; reply objects deferred until a protocol needs handoff |
+| Q3 | DECIDED scope (owner, #512): direct switch on Call + REPLY_RECV only (no synchronous-SEND switch); per-hop and end-to-end numeric targets frozen post-M0 against the F17 baseline |
+| Q4 | DECIDED (owner, #512): latch synchronous at terminate funnel (all death causes); supervisor-observable ≤ 2 ticks given supervisor runnable at highest priority (see §9.1) |
+| Q5 | DECIDED mechanism (owner, #512): per-server SDF-declared RPC bounds, values set post-M0 (TCG-relative, ≥3× headroom); uniform 5000-tick guard stays as interim ceiling; per-operation-class refinement deferred to #574 (v1.1.0) |
+| Q6 | DECIDED closed list (owner, #512): byte-identity + tracker-0 + zero fallback hits, PLUS fault-injection parity, restart-in-flight proven pre-flip, performance ceiling (M3 budget × depth), soak + concurrency (3 consecutive greens). See §12 |
+| Q7 | DECIDED values (owner, #512; landed via F9/#562): CAP_MAX_UNTYPED 64; MAX_PER_TASK_OBJECTS 256 for mem-mgr/supervisor rows, 32 elsewhere; CSLOT_COUNT 64 per CNode with 2 CNodes for infra servers; CAP_MAX_DEATH_WATCHES 32; IOPB_MAX_TASKS 8 (x86_64); IOMMU 8 domains / 128 mappings per domain; MAX_TASKS 64, FAST_PAYLOAD 48, ZOMBIE_LIMIT 32, STORM_LIMIT 256 unchanged |
+| Q8 | DECIDED (owner, #512): port the identical limiter to x86 (one `g_storm`, same 256/tick same-INTID rule, explicit timer-vector exemption named in the port); extend the stuck-line test to x86. Per-vector knob rejected (unmeasured need, wrong layer for MSI-X floods). Single-slot A/B-alternation blind spot noted as a follow-up candidate only (per-slot counters, filed if demonstrated) |
+| Q9 | DECIDED subtree-only (owner, #512): N2/N3 supervisor-cap-gated + supervised-set membership check (SDF watches = authority, compose-checked); exclusions hardcoded (never self, never mem-mgr, never kernel tasks); proc-mgr owns client stop, supervisor owns server stop; cross-subtree attempts fail closed with a typed error. Multi-supervisor delegation is a post-v0.6 protocol |
+| Q10 | DECIDED gated follow-up (owner, #512): #577 tracks RISC-V IOMMU (criteria-gated: QEMU virt emulation + stable programming interface + in-tree test gate; v0.8.0 family with #168/#525); interim riscv64 DMA PDs stay fail-closed. Permanent fail-closed REJECTED (two-tier drivers vs INV-MK-10) |
+| Q11 | DECIDED single-core scope (owner, #512): IPC + donation semantics are single-core in v0.6.1; cross-core wake stays tick-deferred via mailbox/IPI; SDF carries a core-affinity field (needed by #167) but cross-core donation transfer is out of scope. Accepted as an explicit fidelity gap (unprovable on single-hart QEMU); follow-up #576 filed (depends on #525 SMP coverage) so the gap cannot fossilize |
+| Q12 | DECIDED uniform two-phase (owner, #512): critical-server death (supervisor, mem-mgr) drives the system into an SDF-declared fail-safe state FIRST (R-FAILSAFE), THEN reboots (MINIX-RS/seL4-init precedent). Reboot-loop guard required (consecutive-early-death counter → fail-stop, mechanism TBD with watchdog work). Redundant supervisor filed as post-v0.6 follow-up only if availability analysis demands it; never for mem-mgr (revoke-cascade makes survival incoherent). Kernel recovery path REJECTED (violates INV-MK-1, reintroduces kernel omnipotence) |
 
 ## Appendix A — Implementation record (non-normative)
 

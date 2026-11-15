@@ -142,3 +142,14 @@ reference-migratable only when the caller *provably holds a live object*
 `register_task(TaskControlBlock &)`, `unregister_task`-adjacent TCB APIs,
 `IPC::block_sender(MessageQueue &, TaskControlBlock &)`,
 `IPC::wake_sender(MessageQueue &, TaskControlBlock &)`.
+
+## Lock order and acquisition ranks (#546, M2)
+
+Full contract: `docs/specs/irq-preemption-contract.md` (normative instance
+of the microkernel plan §6.2). Order outer → inner: `Sched(1)` → `Queue(2)`
+→ `Leaf(3)`; Unranked locks are invisible to the order check and are
+re-audited by M8. Rank table: `scheduler_lock_` (Sched),
+`MessageQueue::lock_` + `sync::Queue::lock_` (Queue), `DeathNotify::s_lock_`
++ `g_iopb_lock` (Leaf). Enforcement is report-only per (outer,inner) pair
+(`sync/spinlock_order.*`); the reschedule-entry INV-C1 assertion is
+warn-by-default (`CONFIG_IRQ_CONTRACT_ASSERT`), panic only at level 2.

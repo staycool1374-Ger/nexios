@@ -233,6 +233,8 @@ constexpr DmesgRecord kDmesgCatalog_TIMING[] = {
      "Timing: watchdog expired"},
     {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 7, LogSeverity::WARN,
      "Timing: stall suspected"},
+    {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 8, LogSeverity::ERROR,
+     "Timing: tick stalled (TSC advanced, tick frozen)"},
 };
 
 /// @brief PMM records (canonical base kDmesgBase_PMM): leak-suspect

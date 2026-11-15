@@ -33,7 +33,7 @@
 namespace kernel::ipc {
 
 DeathNotify::Slot DeathNotify::s_slots_[DeathNotify::kMaxWatches];
-sync::SpinLock DeathNotify::s_lock_{};
+sync::SpinLock DeathNotify::s_lock_{sync::LockRank::Leaf};
 
 namespace {
 

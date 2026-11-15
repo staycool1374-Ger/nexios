@@ -23,6 +23,7 @@
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
+#include <kernel/task/tick_watchdog.hpp> // M2 §6.2: syscall-exit checkpoint
 #include <kernel/core/global_state.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -135,8 +136,10 @@ int syscall_path_open(const char *path, uint64_t flags) {
 
 uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
                          uint64_t arg2, uint64_t arg3, uint64_t *regs) {
-    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
+    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL)) {
+        kernel::tick_watchdog::checkpoint("syscall_exit");
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
 
     // Issue #225: every syscall proves a user-mode trap frame exists for
     // the caller (monotonic has_utrap_frame for debugger register reads).
@@ -161,8 +164,10 @@ uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
     // syscalls keep the canary verify (see canary_check_on_full_path below).
     // Bounds are already checked above — exactly one check before indexing.
     if (s_fastpath_enabled_ &&
-        (SYSCALL_FAST_MASK & ((__uint128_t)1 << number)))
+        (SYSCALL_FAST_MASK & ((__uint128_t)1 << number))) {
+        kernel::tick_watchdog::checkpoint("syscall_exit");
         return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
+    }
 
     // FULL path: MP-3 canary verify of user segments (page-table reads, no
     // locks). Mismatch → controlled panic in production; test mode latches
@@ -171,16 +176,21 @@ uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
     // Canary relocation (issue #92): this check now runs ONLY on the FULL
     // path; FAST members are covered by the context-switch / timer-tick
     // sampling in the scheduler (canary_check_in_scheduler_hooks).
-    if (!canary_check_on_full_path(regs))
+    if (!canary_check_on_full_path(regs)) {
+        kernel::tick_watchdog::checkpoint("syscall_exit");
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
 
+    kernel::tick_watchdog::checkpoint("syscall_exit");
     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
 }
 
 uint64_t Syscall::handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
                               uint64_t arg2, uint64_t arg3, uint64_t *regs) {
-    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
+    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL)) {
+        kernel::tick_watchdog::checkpoint("syscall_exit");
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
     // Issue #225: same U-trap proof as handle() (fast-path syscalls trap
     // identically; a yield-only spinner must still become readable).
     // Atomic: debugger data calls on other tasks load this flag (cf. S2).
@@ -188,6 +198,7 @@ uint64_t Syscall::handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
         __atomic_store_n(&t->has_utrap_frame, true, __ATOMIC_RELEASE);
     // Lean path: bounds check only, then direct table dispatch.  The caller
     // guarantees `number` is a FAST member (no user-pointer dereference).
+    kernel::tick_watchdog::checkpoint("syscall_exit");
     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
 }
 

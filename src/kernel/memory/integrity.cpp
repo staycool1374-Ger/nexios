@@ -23,6 +23,7 @@
 #include <assert.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/tick_watchdog.hpp> // M2 §6.2: idle resync checkpoint
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf.hpp>
 #include <kernel/log/dmesg.hpp>
@@ -193,6 +194,8 @@ void idle_task_main() {
         // chunk-budgeted, noexcept, no alloc). Never skips hlt (M2).
         idle_monitor_slice();
 #endif
+        // M2 §6.2 item 6: idle resyncs (never fires) the tick watchdog.
+        kernel::tick_watchdog::idle_checkpoint("idle");
         arch::hlt();
     }
 }
