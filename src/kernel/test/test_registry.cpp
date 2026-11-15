@@ -89,6 +89,7 @@ void register_atomic_context_switch_tests();
 void register_bench_syscall_latency_tests();
 void register_bench_irq_latency_tests();
 void register_bench_path_tracer_tests(); // issue #347 Slice E
+void register_bench_mk_baseline_tests(); // M0 F17 #570
 void register_apic_timer_tests();
 void register_apic_tpr_tests();
 void register_jitter_tests();
@@ -204,6 +205,8 @@ void register_o1_scheduler_tests();
 void register_vmm_tests();
 void register_hal_bits_tests();
 void register_lock_order_tests();
+void register_park_lock_tests();
+void register_tick_watchdog_tests();
 void register_budget_tests();
 void register_pip_tests();
 void register_pcp_tests();
@@ -345,6 +348,7 @@ static void run_synchronization_locking_group() {
 }
 static void run_synchronization_lock_order_group() {
     register_lock_order_tests();
+    register_park_lock_tests(); // M2 #545/#546 park + order contract
 }
 static void run_synchronization_lock_validator_group() {
     register_lock_validator_tests();
@@ -370,6 +374,7 @@ static void run_synchronization_err_api_group() {
 static void run_scheduler_core_group() {
     register_scheduler_tests();
     register_sched_slot_safety_tests(); // issue #513 QE
+    register_tick_watchdog_tests();     // M2 #546 tick watchdog
 }
 static void run_scheduler_o1_group() { register_o1_scheduler_tests(); }
 static void run_scheduler_atomic_group() {
@@ -644,6 +649,7 @@ static void run_bench_irq_group() { register_bench_irq_latency_tests(); }
 static void run_bench_path_tracer_group() {
     register_bench_path_tracer_tests();
 }
+static void run_bench_mk_baseline_group() { register_bench_mk_baseline_tests(); }
 static void run_bench_jitter_group() { register_jitter_tests(); }
 static void run_bench_microkernel_group() {
     register_microkernel_transition_tests();
@@ -1390,6 +1396,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_bench_path_tracer_group(); // issue #347 Slice E
          run_bench_jitter_group();
          run_bench_microkernel_group();
+          run_bench_mk_baseline_group(); // M0 F17 #570
          run_bench_wcet_memory_group();
      }},
 };

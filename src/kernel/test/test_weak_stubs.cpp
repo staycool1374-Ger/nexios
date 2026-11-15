@@ -42,6 +42,7 @@ __attribute__((weak)) void register_spinlock_stress_tests() {}
 __attribute__((weak)) void register_atomic_context_switch_tests() {}
 __attribute__((weak)) void register_bench_syscall_latency_tests() {}
 __attribute__((weak)) void register_bench_irq_latency_tests() {}
+__attribute__((weak)) void register_bench_mk_baseline_tests() {} // M0 F17 #570
 __attribute__((weak)) void register_gdt_tests() {}
 __attribute__((weak)) void register_idt_tests() {}
 __attribute__((weak)) void register_exc_table_tests() {}
@@ -112,6 +113,8 @@ __attribute__((weak)) void register_aarch64_tests() {}
 __attribute__((weak)) void register_riscv64_tests() {}
 #endif
 __attribute__((weak)) void register_lock_order_tests() {}
+__attribute__((weak)) void register_park_lock_tests() {}
+__attribute__((weak)) void register_tick_watchdog_tests() {}
 __attribute__((weak)) void register_budget_tests() {}
 __attribute__((weak)) void register_pip_tests() {}
 __attribute__((weak)) void register_pcp_tests() {}

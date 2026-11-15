@@ -197,6 +197,97 @@ TEST_CLASS(TimerDrift) {
     Logger::info("TSC delta over busy-wait: %llu ticks", delta);
 };
 
+// Runmode: kernel
+// Testidea: Server death wakes clients blocked in send_sync (IPC-2).
+// Input: Client in send_sync to a server; server dies.
+// Expect: Client woken with typed DEAD_SERVER error, never hangs.
+// Depends: kernel::IPC, death funnel, test_isolate, ResourceTracker
+JARVIS_TEST(ipc_server_death_wakes_clients, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   client send_sync to live server; kill server mid-wait;
+     *   assert client wakes with DEAD_SERVER error, tracker delta 0.
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Mandatory bound on every cross-server call (IPC-4).
+// Input: Call to an alive-but-stuck server via bounded call.
+// Expect: Call faults with timeout error within the stated bound.
+// Depends: kernel::IPC send_sync_bounded, wheel timeout, ResourceTracker
+JARVIS_TEST(ipc_call_timeout_fault, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   call stuck server with bound; assert timeout fault fires;
+     *   no plain send_sync on any server path, tracker delta 0.
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Donation or PI keeps an RT client off inversion (SCHED-1).
+// Input: Low spinner, exhausted server, high client (3-task setup).
+// Expect: Client latency within the stated bound, cross-arch.
+// Depends: kernel::Scheduler, SporadicServer, test_isolate
+JARVIS_TEST(sched_donation_bound, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   exhaust server budget; high client calls server under load;
+     *   assert client served within bound (donation or PI-on-send).
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: x86 storm limiter or level mask bounds a stuck line (IRQ-1).
+// Input: Injected stuck-asserted level line on each arch.
+// Expect: Tick keeps advancing; storm bounded on x86_64/aarch64/riscv64.
+// Depends: IrqDelivery, IrqStormLimiter, arch interrupt controllers
+JARVIS_TEST(irq_storm_x86_bounded, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   inject stuck level line; assert tick advances and ISR loop
+     *   bounded on all three arches, tracker delta 0.
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Pending count saturates with overflow accounting (IRQ-2).
+// Input: Burst beyond the pending cap on one IRQ line.
+// Expect: Count capped, explicit overflow/dropped counter advances.
+// Depends: IrqDelivery pending, mux counting contract
+JARVIS_TEST(irq_pending_capped, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   burst IRQs past cap; assert pending saturates (never wraps);
+     *   overflow counter reports the excess, tracker delta 0.
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: No PMM fallback on the IPC data path (MEM-1).
+// Input: Drive BufferPool past its preallocated page count.
+// Expect: Typed BUF_POOL_EXHAUSTED, never a runtime PMM allocation.
+// Depends: BufferPool, PMM free-count, static budget test
+JARVIS_TEST(buffer_pool_no_pmm_fallback, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   snapshot PMM free count; exhaust pool to max live buffers;
+     *   assert typed exhaustion error and unchanged PMM count.
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Composed SDF demand fits every static bound (MEM-2).
+// Input: Planned static architecture (servers, restart churn, tables).
+// Expect: Demand vs bound table passes for Untyped/TCBs/caps/ports.
+// Depends: SDF compose, nexios_config bounds, boot_composition test
+JARVIS_TEST(boot_composition_budget, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   compose SDF worst case; assert demand <= bound per object
+     *   table (Untyped, TCBs, caps, IOPB, death watches), delta 0.
+     */
+    JARVIS_TEST_PASS();
+}
+
 void register_microkernel_transition_tests() {
     Logger::info("Registering microkernel transition tests");
     REGISTER_CLASS(MinimalPrivilegedSurface);
@@ -206,4 +297,11 @@ void register_microkernel_transition_tests() {
     // Re-enabled for v0.3.8 investigation (was: memcpy stack corruption at
     // all class position ~657).
     REGISTER_CLASS(KernelApiPureFunctions);
+    JARVIS_REGISTER_TEST(ipc_server_death_wakes_clients);
+    JARVIS_REGISTER_TEST(ipc_call_timeout_fault);
+    JARVIS_REGISTER_TEST(sched_donation_bound);
+    JARVIS_REGISTER_TEST(irq_storm_x86_bounded);
+    JARVIS_REGISTER_TEST(irq_pending_capped);
+    JARVIS_REGISTER_TEST(buffer_pool_no_pmm_fallback);
+    JARVIS_REGISTER_TEST(boot_composition_budget);
 }

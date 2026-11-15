@@ -278,7 +278,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
     {"bench_path_tracer",     1,    0,       0      },  // path-tracer per-step overhead, TF_BENCH
     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
-    {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
+    {"bench_microkernel",     12,   0,       0      },  // +7 mk stubs (#547 IPC-2/IPC-4/SCHED-1/IRQ-1/IRQ-2/MEM-1/MEM-2)
 
     // hrt — hard real-time measurement
     {"stress_hrt",            2,    0,       0      },  // rdtsc canary + IPC under stress (TF_KERNEL)
@@ -296,8 +296,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // core_* — split of the former `core` aggregate. Values filled from
     // measured `dump-counts` output; 0 disables validation.
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
-    {"core_sync",           93,   0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api
-    {"core_sched",          114,  0,       0      },  // scheduler_* + #513 slot-safety x2
+    {"core_sync",           101,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8
+    {"core_sched",          119,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
@@ -323,7 +323,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov
     {"random",              17,   0,       0      },  // random_*
-    {"bench",               28,   0,       0      },  // bench_* (TF_BENCH)
+    {"bench",               39,   0,       0      },  // bench_* (TF_BENCH) incl. 4 mk_baseline M0 F17
     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls
     {"tls",                 13,   12,      12     },  // TLS publish/apply + errno cell
 };

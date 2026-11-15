@@ -334,7 +334,7 @@ enforced-priority rule above applies to every SDF row.
   synchronous-SEND switch (deferred to a follow-up only with new evidence).
 - Per-hop bound and end-to-end overhead target: values frozen post-M0 against
   the F17 baseline (Q3 numeric half open; TCG-relative only until HW numbers
-  exist).
+  exist); the measured record lives in `docs/specs/ipc-baseline.md` §4.
 
 ## 6. Preemption, IRQ and lock discipline (#545, #546)
 

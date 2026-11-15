@@ -1,0 +1,997 @@
+diff --git a/src/kernel/test/test_park_lock.cpp b/src/kernel/test/test_park_lock.cpp
+new file mode 100644
+index 000000000..93b63082e
+--- /dev/null
++++ b/src/kernel/test/test_park_lock.cpp
+@@ -0,0 +1,386 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_park_lock.cpp
++/// @brief M2 (issues #545/#546) QE: bounded-park acquisition + lock-order
++///        contract tests (core_sync).  Measurement of the ParkLockGuard
++///        slow path, the INV-L1 park predicate, the INV-C1 reschedule check,
++///        and the report-only rank-order table.  No production code touched.
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/sync/spinlock.hpp>
++#include <kernel/sync/park_lock.hpp>
++#include <kernel/sync/spinlock_order.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/cpu_context.hpp>
++#include <kernel/arch/hal/timer.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/time/posix_time.hpp>
++#include "test_sched_helpers.hpp"
++
++using namespace kernel;
++
++// Runmode: kernel
++// Testidea: Uncontended ParkLockGuard takes the try_lock fast path.
++// Input: Free SpinLock, counters reset.
++// Expect: owned, lock_park_count/lock_spin_fallback_count/
++//         lock_park_exhausted_count all unchanged.
++// Depends: sync::ParkLockGuard, park counters + reset_for_test
++JARVIS_TEST(lock_park_fast_path_no_park, "PRE: none | POST: none") {
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    {
++        sync::SpinLock free_lock;
++        sync::ParkLockGuard guard(free_lock, "test_fast");
++        JARVIS_ASSERT(guard.owned());
++        JARVIS_ASSERT_EQ(0ULL, sync::lock_park_count());
++        JARVIS_ASSERT_EQ(0ULL, sync::lock_spin_fallback_count());
++        JARVIS_ASSERT_EQ(0ULL, sync::lock_park_exhausted_count());
++    }
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++namespace park_test {
++
++// Queue-ranked rendezvous lock.  A static MessageQueue is impossible here
++// (its non-constexpr ctor needs __cxa_atexit, absent freestanding); the
++// Queue rank preserves the prescription's intent — the park path under
++// test does not consult the rank.
++sync::SpinLock g_lock(sync::LockRank::Queue);
++volatile bool g_holder_has_lock = false;
++volatile bool g_holder_armed = false;
++volatile bool g_contender_acquired = false;
++volatile uint64_t g_contender_park_delta = 0;
++
++void holder_entry() {
++    auto *self = Scheduler::current_task();
++    sync::ParkLockGuard hold(g_lock, "test_holder");
++    if (!hold.owned())
++        return;
++    g_holder_has_lock = true;
++    // Hold ~10 ms while BLOCKED so the contender can run and park.  The
++    // BLOCKED transition with a lock held trips the INV-C1 WARN (warn-only
++    // at ASSERT=1) — expected here; it proves the check is live.
++    const uint64_t ns =
++        10ULL * 1000000000ULL / static_cast<uint64_t>(CONFIG_TICK_HZ);
++    if (time::PosixTime::sleep_arm(*self, ns)) {
++        g_holder_armed = true;
++        {
++            arch::IrqGuard irq_guard{};
++            Scheduler::dequeue_ready(*self);
++            self->state = TaskState::BLOCKED;
++        }
++        Scheduler::reschedule();
++        for (;;) {
++            arch::sti();
++            arch::hlt();
++            arch::cli();
++            if (self->state != TaskState::BLOCKED)
++                break;
++        }
++        time::PosixTime::sleep_cancel(*self);
++    }
++    // Guard dtor releases; entry return terminates the task.
++}
++
++void contender_entry() {
++    auto *self = Scheduler::current_task();
++    (void)self;
++    for (uint64_t i = 0; i < 100000ULL && !g_holder_has_lock; ++i) {
++        Scheduler::reschedule();
++        arch::hlt();
++    }
++    if (!g_holder_has_lock)
++        return;
++    const uint64_t park_before = sync::lock_park_count();
++    sync::ParkLockGuard guard(g_lock, "test_contender");
++    if (guard.owned()) {
++        g_contender_acquired = true;
++        g_contender_park_delta = sync::lock_park_count() - park_before;
++    }
++}
++
++} // namespace park_test
++
++// Runmode: kernel
++// Testidea: Contended ParkLockGuard parks (not spins) then acquires.
++// Input: Holder task holds a Queue-ranked rendezvous lock across a 10 ms
++//        wheel sleep; contender ParkLockGuards it (holder releases on wake).
++//        (Static MessageQueue is impossible in a freestanding TU — no
++//        __cxa_atexit — so a Queue-ranked SpinLock stands in; the park path
++//        under test does not consult the rank.)
++// Expect: Contender acquires; at suite-entry depth 0 the park path runs
++//         (park_count >= 1, fallback/exhausted == 0); at the harness depth
++//         1 the denied path runs instead (park == 0, fallback >= 1,
++//         exhausted == 0) — the park path is unreachable in-harness while
++//         the harness holds its outer IrqGuard (see #545 QE gap note).
++//         Both tasks terminate, tracker delta 0.  One INV-C1 WARN from the
++//         holder's BLOCK transition is expected (warn-only, proves the
++//         check is live).
++// Depends: ParkLockGuard park/denied paths, sleep wheel wake,
++//         wait_for_termination
++JARVIS_TEST(lock_park_taken_under_contention, "PRE: none | POST: none") {
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    park_test::g_holder_has_lock = false;
++    park_test::g_holder_armed = false;
++    park_test::g_contender_acquired = false;
++    park_test::g_contender_park_delta = 0;
++    const uint64_t d0 = arch::irq_guard_depth_own();
++    Logger::info("[PARK-TEST] contention entry depth=%lu", d0);
++    auto *holder = TaskControlBlock::create(park_test::holder_entry, 11, 10);
++    JARVIS_ASSERT(holder != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
++    auto *contender =
++        TaskControlBlock::create(park_test::contender_entry, 12, 10);
++    JARVIS_ASSERT(contender != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*contender, SchedPolicy::FIXED));
++    {
++        arch::IrqGuard irq_guard{};
++        Scheduler::add_task(*holder);
++        Scheduler::add_task(*contender);
++    }
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(holder);
++    test::wait_for_termination_safe(contender);
++    Logger::info("[PARK-TEST] contention exit depth=%lu",
++                 arch::irq_guard_depth_own());
++    Logger::info("[PARK-TEST] contention have=%lu armed=%lu got=%lu "
++                 "parkdelta=%lu park=%lu fb=%lu exh=%lu",
++                 static_cast<uint64_t>(park_test::g_holder_has_lock),
++                 static_cast<uint64_t>(park_test::g_holder_armed),
++                 static_cast<uint64_t>(park_test::g_contender_acquired),
++                 park_test::g_contender_park_delta,
++                 sync::lock_park_count(), sync::lock_spin_fallback_count(),
++                 sync::lock_park_exhausted_count());
++    JARVIS_ASSERT(park_test::g_holder_has_lock);
++    JARVIS_ASSERT(park_test::g_contender_acquired);
++    JARVIS_ASSERT(d0 <= 1);
++    if (d0 == 0) {
++        JARVIS_ASSERT(sync::lock_park_count() >= 1);
++        JARVIS_ASSERT_EQ(0ULL, sync::lock_spin_fallback_count());
++    } else {
++        JARVIS_ASSERT_EQ(0ULL, sync::lock_park_count());
++        JARVIS_ASSERT(sync::lock_spin_fallback_count() >= 1);
++    }
++    JARVIS_ASSERT_EQ(0ULL, sync::lock_park_exhausted_count());
++    test::terminate_and_drain2(holder, contender);
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: No park under ISR nesting (INV-L1 IsrContext arm).
++// Input: isr_nesting_own() raised by one (IF=0 across the mutation so no
++//        ISR can observe it), free lock.
++// Expect: lock_park_allowed() false; nesting restored; IF unchanged.
++// Depends: lock_park_allowed predicate, isr_nesting_own
++JARVIS_TEST(lock_park_denied_in_irq, "PRE: none | POST: none") {
++    sync::SpinLock probe;
++    const uint64_t d0 = arch::irq_guard_depth_own();
++    const uint64_t n0 = kernel::isr_nesting_own();
++    Logger::info("[PARK-TEST] irq baseline depth=%lu nesting=%lu", d0, n0);
++    {
++        arch::IrqGuard irq_guard{};
++        ++kernel::isr_nesting_own();
++        JARVIS_ASSERT(!sync::lock_park_allowed(probe));
++        --kernel::isr_nesting_own();
++        JARVIS_ASSERT_EQ(n0, kernel::isr_nesting_own());
++        JARVIS_ASSERT_EQ(d0 + 1, arch::irq_guard_depth_own());
++    }
++    JARVIS_ASSERT_EQ(d0, arch::irq_guard_depth_own());
++    JARVIS_ASSERT(arch::interrupts_enabled());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: No park inside an IrqGuard scope (INV-L1 IrqGuarded arm) and no
++// park while the caller already holds a spinlock (LockHeld arm).
++// Input: Free lock + live IrqGuard; then lock held by self, no guard.
++// Expect: lock_park_allowed() false in both; fast-path guard on the free
++//         lock inside the guard acquires with counters unchanged; d0 restored.
++// Depends: lock_park_allowed predicate, ParkLockGuard fast path
++JARVIS_TEST(lock_park_denied_inside_irqguard, "PRE: none | POST: none") {
++    sync::park_lock_reset_for_test();
++    sync::SpinLock probe;
++    const uint64_t d0 = arch::irq_guard_depth_own();
++    Logger::info("[PARK-TEST] irqguard baseline depth=%lu", d0);
++    {
++        arch::IrqGuard irq_guard{};
++        JARVIS_ASSERT_EQ(d0 + 1, arch::irq_guard_depth_own());
++        JARVIS_ASSERT(!sync::lock_park_allowed(probe));
++        // Fast path still acquires a free lock inside the guard — no park
++        // is attempted, so no counter moves.
++        sync::ParkLockGuard guard(probe, "test_irqguard");
++        JARVIS_ASSERT(guard.owned());
++    }
++    JARVIS_ASSERT_EQ(d0, arch::irq_guard_depth_own());
++    JARVIS_ASSERT_EQ(0ULL, sync::lock_park_count());
++    JARVIS_ASSERT_EQ(0ULL, sync::lock_spin_fallback_count());
++    // LockHeld arm: a self-held spinlock denies parking without a guard.
++    sync::SpinLock held;
++    held.lock();
++    JARVIS_ASSERT(!sync::lock_park_allowed(probe));
++    held.unlock();
++    // Positive leg is depth-relative: the harness holds one outer IrqGuard
++    // across all tests (suite-entry depth 1, logged above), so a bare test
++    // task is parkable only at depth 0.  d0 > 1 would mean a leaked guard.
++    JARVIS_ASSERT(d0 <= 1);
++    JARVIS_ASSERT(sync::lock_park_allowed(probe) == (d0 == 0));
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: INV-C1 reschedule-entry check is warn-only and owner-matched.
++// Input: Clean task reschedules (held count 0); then task takes a stack
++//        SpinLock, observes held count 1, reschedules (WARN, no panic),
++//        releases, observes 0.
++// Expect: Positive leg clean; negative leg held==1 across reschedule with
++//         no panic/termination; release restores 0; tracker delta 0.
++// Depends: spinlock_contract_check_clean, INV-C1 (ASSERT=1 warn-only)
++JARVIS_TEST(irq_contract_no_spinlock_at_reschedule, "PRE: none | POST: none") {
++    sync::spinlock_order_reset_for_test();
++    // Positive leg: clean context reschedules with nothing held.
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
++    JARVIS_ASSERT(sync::spinlock_contract_check_clean("test_positive"));
++    Scheduler::reschedule();
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
++    // Negative leg: a held stack lock is observed (held count 1) and the
++    // reschedule survives warn-only (ASSERT=1: dmesg SCHED+15, no panic).
++    sync::SpinLock probe;
++    probe.lock();
++    JARVIS_ASSERT_EQ(1ULL, sync::spinlock_held_by_current_count());
++    JARVIS_ASSERT(!sync::spinlock_contract_check_clean("test_negative"));
++    Scheduler::reschedule();
++    JARVIS_ASSERT_EQ(1ULL, sync::spinlock_held_by_current_count());
++    probe.unlock();
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Rank inversion is reported once per (outer, inner) pair.
++// Input: Ranked locks Queue(2) then Sched(1) nested (violation);
++//        Sched(1)->Queue(2)->Leaf(3) nested (clean).
++// Expect: violations[Queue][Sched]==1; all legal-pair counters 0.
++// Depends: spinlock_note_acquire order check, violation accessors + reset
++JARVIS_TEST(lock_order_violation_reported, "PRE: none | POST: none") {
++    sync::spinlock_order_reset_for_test();
++    {
++        // Illegal: outer Queue(2) taken before inner Sched(1).
++        sync::SpinLock outer(sync::LockRank::Queue);
++        sync::SpinLock inner(sync::LockRank::Sched);
++        outer.lock();
++        inner.lock();
++        JARVIS_ASSERT_EQ(
++            1ULL, sync::spinlock_violation_count(
++                      static_cast<uint8_t>(sync::LockRank::Queue),
++                      static_cast<uint8_t>(sync::LockRank::Sched)));
++        inner.unlock();
++        outer.unlock();
++    }
++    {
++        // Legal: strictly increasing Sched(1) -> Queue(2) -> Leaf(3).
++        sync::SpinLock sched(sync::LockRank::Sched);
++        sync::SpinLock queue(sync::LockRank::Queue);
++        sync::SpinLock leaf(sync::LockRank::Leaf);
++        sched.lock();
++        queue.lock();
++        leaf.lock();
++        JARVIS_ASSERT_EQ(
++            0ULL, sync::spinlock_violation_count(
++                      static_cast<uint8_t>(sync::LockRank::Sched),
++                      static_cast<uint8_t>(sync::LockRank::Queue)));
++        JARVIS_ASSERT_EQ(
++            0ULL, sync::spinlock_violation_count(
++                      static_cast<uint8_t>(sync::LockRank::Queue),
++                      static_cast<uint8_t>(sync::LockRank::Leaf)));
++        JARVIS_ASSERT_EQ(
++            0ULL, sync::spinlock_violation_count(
++                      static_cast<uint8_t>(sync::LockRank::Sched),
++                      static_cast<uint8_t>(sync::LockRank::Leaf)));
++        leaf.unlock();
++        queue.unlock();
++        sched.unlock();
++    }
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_unpaired_release_count());
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Non-LIFO release order does not corrupt the held-lock census.
++// Input: Three ranked locks taken, released in a LIFO-breaking order.
++// Expect: held_by_current_count() 0 after; unpaired_release 0; no overflow.
++// Depends: spinlock_note_release pop-by-address, census + reset
++JARVIS_TEST(lock_order_reverse_no_false_release, "PRE: none | POST: none") {
++    sync::spinlock_order_reset_for_test();
++    {
++        // LIFO-breaking release order: pop-by-address must still empty
++        // the stack exactly (no false unpaired/overflow).
++        sync::SpinLock a(sync::LockRank::Sched);
++        sync::SpinLock b(sync::LockRank::Queue);
++        sync::SpinLock c(sync::LockRank::Leaf);
++        a.lock();
++        b.lock();
++        c.lock();
++        a.unlock();
++        c.unlock();
++        b.unlock();
++    }
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_unpaired_release_count());
++    JARVIS_ASSERT_EQ(0ULL, sync::spinlock_overflow_count());
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: SpinLock layout guard (M2 rank byte fits padding).
++// Input: None (compile-time + runtime shape).
++// Expect: sizeof(SpinLock)==16 (holder_ offset 8 is not observable from
++//         test context — private member, no accessor; covered by the
++//         static_assert in spinlock.hpp, noted here).
++// Depends: sync::SpinLock layout
++JARVIS_TEST(spinlock_layout_unchanged, "PRE: none | POST: none") {
++    JARVIS_ASSERT_EQ(16ULL, static_cast<uint64_t>(sizeof(sync::SpinLock)));
++    // holder_ offset 8 is not observable from test context (private member,
++    // no accessor); enforced by the static_assert in spinlock.hpp.
++    JARVIS_TEST_PASS();
++}
++
++void register_park_lock_tests() {
++    JARVIS_REGISTER_TEST(lock_park_fast_path_no_park);
++    JARVIS_REGISTER_TEST(lock_park_taken_under_contention);
++    JARVIS_REGISTER_TEST(lock_park_denied_in_irq);
++    JARVIS_REGISTER_TEST(lock_park_denied_inside_irqguard);
++    JARVIS_REGISTER_TEST(irq_contract_no_spinlock_at_reschedule);
++    JARVIS_REGISTER_TEST(lock_order_violation_reported);
++    JARVIS_REGISTER_TEST(lock_order_reverse_no_false_release);
++    JARVIS_REGISTER_TEST(spinlock_layout_unchanged);
++}
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 49a2a3563..f69254dce 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -89,6 +89,7 @@ void register_atomic_context_switch_tests();
+ void register_bench_syscall_latency_tests();
+ void register_bench_irq_latency_tests();
+ void register_bench_path_tracer_tests(); // issue #347 Slice E
++void register_bench_mk_baseline_tests(); // M0 F17 #570
+ void register_apic_timer_tests();
+ void register_apic_tpr_tests();
+ void register_jitter_tests();
+@@ -204,6 +205,8 @@ void register_o1_scheduler_tests();
+ void register_vmm_tests();
+ void register_hal_bits_tests();
+ void register_lock_order_tests();
++void register_park_lock_tests();
++void register_tick_watchdog_tests();
+ void register_budget_tests();
+ void register_pip_tests();
+ void register_pcp_tests();
+@@ -345,6 +348,7 @@ static void run_synchronization_locking_group() {
+ }
+ static void run_synchronization_lock_order_group() {
+     register_lock_order_tests();
++    register_park_lock_tests(); // M2 #545/#546 park + order contract
+ }
+ static void run_synchronization_lock_validator_group() {
+     register_lock_validator_tests();
+@@ -370,6 +374,7 @@ static void run_synchronization_err_api_group() {
+ static void run_scheduler_core_group() {
+     register_scheduler_tests();
+     register_sched_slot_safety_tests(); // issue #513 QE
++    register_tick_watchdog_tests();     // M2 #546 tick watchdog
+ }
+ static void run_scheduler_o1_group() { register_o1_scheduler_tests(); }
+ static void run_scheduler_atomic_group() {
+@@ -644,6 +649,7 @@ static void run_bench_irq_group() { register_bench_irq_latency_tests(); }
+ static void run_bench_path_tracer_group() {
+     register_bench_path_tracer_tests();
+ }
++static void run_bench_mk_baseline_group() { register_bench_mk_baseline_tests(); }
+ static void run_bench_jitter_group() { register_jitter_tests(); }
+ static void run_bench_microkernel_group() {
+     register_microkernel_transition_tests();
+@@ -1390,6 +1396,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+          run_bench_path_tracer_group(); // issue #347 Slice E
+          run_bench_jitter_group();
+          run_bench_microkernel_group();
++          run_bench_mk_baseline_group(); // M0 F17 #570
+          run_bench_wcet_memory_group();
+      }},
+ };
+diff --git a/src/kernel/test/test_tick_watchdog.cpp b/src/kernel/test/test_tick_watchdog.cpp
+new file mode 100644
+index 000000000..dbe915ee5
+--- /dev/null
++++ b/src/kernel/test/test_tick_watchdog.cpp
+@@ -0,0 +1,264 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_tick_watchdog.cpp
++/// @brief M2 (issue #546 §6.2 item 6) QE: TSC-domain tick watchdog tests
++///        (core_sched).  Fire/quiet/one-shot/override-seam legs driven via
++///        the test-active stand-down + IrqGuard-frozen ticks.  No production
++///        code touched.
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/task/tick_watchdog.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/hal/timer.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++
++using namespace kernel;
++
++namespace {
++
++// Grace in raw-counter cycles, mirroring try_enable() (grace ticks at
++// CONFIG_TICK_HZ converted with the calibrated counter frequency).
++uint64_t grace_cycles() {
++    const uint64_t freq = arch::Timer::raw_counter_freq_hz();
++    if (freq == 0 || CONFIG_TICK_HZ == 0)
++        return 0;
++    uint64_t grace = static_cast<uint64_t>(CONFIG_TICK_WATCHDOG_GRACE_TICKS);
++    if (grace > ~0ULL / freq)
++        grace = ~0ULL / freq;
++    grace *= freq;
++    grace /= static_cast<uint64_t>(CONFIG_TICK_HZ);
++    return grace == 0 ? 1 : grace;
++}
++
++// Wall-spin until the raw counter advances past @p target cycles (IF=0
++// caller freezes ticks meanwhile).  Fail-stop: false after 15 s wall.
++bool spin_past(uint64_t base, uint64_t target) {
++    const uint64_t freq = arch::Timer::raw_counter_freq_hz();
++    const uint64_t limit = (freq == 0 ? 1000000000ULL : 15ULL * freq);
++    for (;;) {
++        arch::pause();
++        const uint64_t now = arch::Timer::raw_counter();
++        const uint64_t elapsed = now >= base ? now - base : 0;
++        if (elapsed >= target)
++            return true;
++        if (elapsed >= limit)
++            return false;
++    }
++}
++
++// Stand-down wrapper: every leg restores test-active before returning so
++// a drive failure can never strand the harness clock-ownership gate.
++bool drive_quiet_before_first_tick() {
++    tick_watchdog::reset_for_test();
++    Logger::info("[TICKWD-TEST] entry depth=%lu",
++                 arch::irq_guard_depth_own());
++    Scheduler::set_test_active(false);
++    tick_watchdog::checkpoint("test_quiet_first");
++    const bool quiet =
++        !tick_watchdog::fired() && tick_watchdog::fire_count() == 0;
++    Scheduler::set_test_active(true);
++    tick_watchdog::reset_for_test();
++    return quiet;
++}
++
++bool drive_quiet_on_advance() {
++    tick_watchdog::reset_for_test();
++    tick_watchdog::note_tick();
++    Scheduler::set_test_active(false);
++    tick_watchdog::checkpoint("test_quiet_advance");
++    const bool quiet =
++        !tick_watchdog::fired() && tick_watchdog::fire_count() == 0;
++    Scheduler::set_test_active(true);
++    tick_watchdog::reset_for_test();
++    return quiet;
++}
++
++bool drive_quiet_under_test_active() {
++    tick_watchdog::reset_for_test();
++    const uint64_t grace = grace_cycles();
++    if (grace == 0)
++        return false; // No calibrated counter: watchdog dead by design.
++    bool quiet = false;
++    {
++        arch::IrqGuard irq_guard{}; // Freeze ticks; raw TSC keeps advancing.
++        tick_watchdog::note_tick();
++        const uint64_t base = arch::Timer::raw_counter();
++        if (spin_past(base, 2 * grace + 1)) {
++            // Test-active HELD: the harness owns the clock, no fire.
++            tick_watchdog::checkpoint("test_quiet_active");
++            quiet = !tick_watchdog::fired() &&
++                    tick_watchdog::fire_count() == 0;
++        }
++    }
++    tick_watchdog::note_tick_override(); // Resync post-freeze snapshot.
++    tick_watchdog::reset_for_test();
++    return quiet;
++}
++
++bool drive_fires_on_stall() {
++    tick_watchdog::reset_for_test();
++    const uint64_t grace = grace_cycles();
++    if (grace == 0)
++        return false;
++    bool fired_once = false;
++    Scheduler::set_test_active(false);
++    {
++        arch::IrqGuard irq_guard{};
++        tick_watchdog::note_tick();
++        const uint64_t base = arch::Timer::raw_counter();
++        if (spin_past(base, 2 * grace + 1)) {
++            tick_watchdog::checkpoint("test_stall");
++            fired_once = tick_watchdog::fired() &&
++                         tick_watchdog::fire_count() == 1 &&
++                         tick_watchdog::last_evidence() > 0;
++            // One-shot latch: a second checkpoint must not re-fire.
++            tick_watchdog::checkpoint("test_stall_again");
++            fired_once =
++                fired_once && tick_watchdog::fire_count() == 1;
++        }
++    }
++    Scheduler::set_test_active(true);
++    tick_watchdog::reset_for_test(); // Unlatch for later tests.
++    return fired_once;
++}
++
++// Frozen-tick setup: note the live tick, then rewind to exactly the noted
++// value (retry-bounded: a tick advancing between the two reads breaks the
++// exact match and the attempt is retried).  Caller holds IrqGuard (ticks
++// frozen) with test-active stood down.  Returns the pre-spin raw counter,
++// or 0 if the exact match never lined up.
++uint64_t setup_rewound(bool apply_override) {
++    for (uint64_t attempt = 0; attempt < 10; ++attempt) {
++        const uint64_t t0 = arch::Timer::ticks();
++        tick_watchdog::note_tick();
++        if (arch::Timer::ticks() != t0)
++            continue;
++        arch::Timer::set_ticks_for_test(t0);
++        if (apply_override)
++            tick_watchdog::note_tick_override();
++        return arch::Timer::raw_counter();
++    }
++    return 0;
++}
++
++// Leg (a) without override must fire (the pre-rewind elapsed is retained);
++// leg (b) with override must stay quiet (the override forgives it).
++bool drive_override_resync() {
++    const uint64_t grace = grace_cycles();
++    if (grace == 0)
++        return false;
++    const uint64_t half = grace * 6 / 10;
++    bool leg_a_fired = false;
++    bool leg_b_quiet = false;
++    Scheduler::set_test_active(false);
++    {
++        arch::IrqGuard irq_guard{};
++        tick_watchdog::reset_for_test();
++        // Leg (a): note, stall past half grace, rewind, stall again.
++        uint64_t base = setup_rewound(false);
++        if (base != 0 && spin_past(base, half)) {
++            base = arch::Timer::raw_counter();
++            if (spin_past(base, half)) {
++                tick_watchdog::checkpoint("test_override_plain");
++                leg_a_fired = tick_watchdog::fired() &&
++                              tick_watchdog::fire_count() == 1;
++            }
++        }
++        tick_watchdog::reset_for_test();
++        // Leg (b): same, but the override resyncs at the rewind point.
++        base = setup_rewound(true);
++        if (base != 0 && spin_past(base, half)) {
++            tick_watchdog::checkpoint("test_override_seam");
++            leg_b_quiet = !tick_watchdog::fired() &&
++                          tick_watchdog::fire_count() == 0;
++        }
++    }
++    Scheduler::set_test_active(true);
++    tick_watchdog::note_tick_override();
++    tick_watchdog::reset_for_test();
++    return leg_a_fired && leg_b_quiet;
++}
++
++} // namespace
++
++// Runmode: kernel
++// Testidea: No fire before the first tick is observed.
++// Input: reset_for_test(), then checkpoint with test-active stood down.
++// Expect: fired()==false, fire_count()==0 (g_last_counter==0 path).
++// Depends: tick_watchdog reset/checkpoint/fire_count, set_test_active
++JARVIS_TEST(tick_watchdog_quiet_before_first_tick, "PRE: none | POST: none") {
++    JARVIS_ASSERT(drive_quiet_before_first_tick());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A fresh tick snapshot never fires (elapsed < grace).
++// Input: reset, note_tick, immediate checkpoint with test-active down.
++// Expect: No fire (both tick-advanced and elapsed~0 paths are quiet).
++// Depends: note_tick + checkpoint
++JARVIS_TEST(tick_watchdog_quiet_on_advance, "PRE: none | POST: none") {
++    JARVIS_ASSERT(drive_quiet_on_advance());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: The harness clock-ownership stand-down holds (no fire while
++// the test harness owns the clock, even across a grace-length stall).
++// Input: reset, note_tick, IrqGuard-frozen ticks + wall spin past grace,
++//        checkpoint with test-active HELD.
++// Expect: No fire (is_test_active path).
++// Depends: checkpoint test-active gate
++JARVIS_TEST(tick_watchdog_quiet_under_test_active, "PRE: none | POST: none") {
++    JARVIS_ASSERT(drive_quiet_under_test_active());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: A frozen tick with advancing TSC fires exactly once.
++// Input: reset, note_tick, IrqGuard-frozen ticks + wall spin past grace,
++//        checkpoint with test-active stood down, checkpoint again.
++// Expect: fired(), fire_count()==1, last_evidence()>0; second checkpoint
++//         does not re-fire (one-shot latch).
++// Depends: checkpoint fire path, fired/fire_count/last_evidence
++JARVIS_TEST(tick_watchdog_fires_on_stall, "PRE: none | POST: none") {
++    JARVIS_ASSERT(drive_fires_on_stall());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: note_tick_override() resyncs a deliberate tick rewind so it
++// is not misread as a stall (test seam for set_ticks_for_test users).
++// Input: Frozen-tick setup rewound to the noted value; leg (a) without
++//        override fires; leg (b) with override stays quiet.
++// Expect: (a) fires (seam necessity proven); (b) quiet after override.
++// Depends: note_tick_override, set_ticks_for_test
++JARVIS_TEST(tick_watchdog_override_resync, "PRE: none | POST: none") {
++    JARVIS_ASSERT(drive_override_resync());
++    JARVIS_TEST_PASS();
++}
++
++void register_tick_watchdog_tests() {
++    JARVIS_REGISTER_TEST(tick_watchdog_quiet_before_first_tick);
++    JARVIS_REGISTER_TEST(tick_watchdog_quiet_on_advance);
++    JARVIS_REGISTER_TEST(tick_watchdog_quiet_under_test_active);
++    JARVIS_REGISTER_TEST(tick_watchdog_fires_on_stall);
++    JARVIS_REGISTER_TEST(tick_watchdog_override_resync);
++}
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index 7886edfa7..4c0716deb 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -42,6 +42,7 @@ __attribute__((weak)) void register_spinlock_stress_tests() {}
+ __attribute__((weak)) void register_atomic_context_switch_tests() {}
+ __attribute__((weak)) void register_bench_syscall_latency_tests() {}
+ __attribute__((weak)) void register_bench_irq_latency_tests() {}
++__attribute__((weak)) void register_bench_mk_baseline_tests() {} // M0 F17 #570
+ __attribute__((weak)) void register_gdt_tests() {}
+ __attribute__((weak)) void register_idt_tests() {}
+ __attribute__((weak)) void register_exc_table_tests() {}
+@@ -112,6 +113,8 @@ __attribute__((weak)) void register_aarch64_tests() {}
+ __attribute__((weak)) void register_riscv64_tests() {}
+ #endif
+ __attribute__((weak)) void register_lock_order_tests() {}
++__attribute__((weak)) void register_park_lock_tests() {}
++__attribute__((weak)) void register_tick_watchdog_tests() {}
+ __attribute__((weak)) void register_budget_tests() {}
+ __attribute__((weak)) void register_pip_tests() {}
+ __attribute__((weak)) void register_pcp_tests() {}
+diff --git a/tools/soak/shell_idle_wedge_pty.py b/tools/soak/shell_idle_wedge_pty.py
+new file mode 100644
+index 000000000..5fb91bd73
+--- /dev/null
++++ b/tools/soak/shell_idle_wedge_pty.py
+@@ -0,0 +1,255 @@
++#!/usr/bin/env python3
++"""Soak: x86_64 interactive shell idle-wedge probe (M2 QE, issues #545/#546).
++
++Repro shape from #545: after a few commands + ~1 min idle, the serial
++shell goes dead (no echo, no exec) with QEMU alive. Pipe-stdin never
++reproduces it — the guest serial must sit on a PTY slave (faithful
++macOS-TTY path), which is what this script does.
++
++Per run: boot the test_class=none ISO, script version/help/loadelf
++hey.c.elf/runelf, idle IDLE_S doing nothing, then probe with a bare
++newline and require the next shell prompt within PROBE_S. A missed probe
++is re-probed once (TCG jitter must not fail the soak); a persistent miss
++is a wedge: serial capture + `info registers` via the dedicated monitor
++socket are saved and the run fails.
++
++Adopted permanently (testbed-owned; replaces the /tmp repro harness
++referenced on #545, which was never homed in-tree).
++
++Usage:
++  python3 tools/soak/shell_idle_wedge_pty.py [--runs 5] [--idle 90]
++                                             [--smoke] [--keep-iso-class]
++
++--smoke shortens to 1 run x 10 s idle (harness validation only).
++The script reconfigures build/meson-x86_64 to -Dtest_class=none and
++rebuilds; the next qemu_test.py run re-bakes its own class automatically,
++so no restore is needed.
++"""
++
++import argparse
++import os
++import pty
++import select
++import socket
++import subprocess
++import sys
++import termios
++import time
++import tty
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[2]
++sys.path.insert(0, str(ROOT / "tools" / "meson"))
++import qemu_test as harness  # noqa: E402  (argv builder + OVMF locate)
++
++BUILD_DIR = ROOT / "build" / "meson-x86_64"
++PROMPT = b"$ "
++# Shell-smoke discipline (tools/shell-smoke.exp, issue #245): a bare
++# re-prompt proves NOTHING (async background output redraws the prompt,
++# faking a round-trip while typed bytes rot in the FIFO). Every scripted
++# command needs its real output needle. The shell takes CR as Enter.
++CR = "\r"
++VERSION_NEEDLE = b"Kernel: "
++RUNELF_NEEDLE = b"Hey!"
++
++
++def run(cmd, **kw):
++    print("+ %s" % " ".join(str(c) for c in cmd), flush=True)
++    subprocess.run(cmd, check=True, cwd=str(ROOT), **kw)
++
++
++def ensure_none_iso():
++    run(["meson", "configure", str(BUILD_DIR), "-Dtest_class=none"])
++    run(["meson", "compile", "-C", str(BUILD_DIR)])
++    iso = BUILD_DIR / "src" / "nexios-rtos.iso"
++    if not iso.exists():
++        sys.exit("ERROR: missing built ISO %s" % iso)
++    return iso
++
++
++def build_argv(mon_sock, logdir):
++    tag = harness.checkout_tag()
++    paths = {
++        "serial": str(logdir / "debugcon.log"),
++        "com1": str(logdir / "com1.log"),
++        "iso": str(BUILD_DIR / "src" / "nexios-rtos.iso"),
++        "fat32": str(BUILD_DIR / "packaging" / "fat32.img"),
++    }
++    argv = harness.qemu_argv("x86_64", "debug", "none", paths, tag)
++    out = []
++    skip_next = False
++    for tok in argv:
++        if skip_next:
++            skip_next = False
++            continue
++        if tok == "-serial":
++            out += ["-serial", "mon:stdio"]
++            skip_next = True
++        elif tok == "-monitor":
++            out += ["-monitor", "unix:%s,server,nowait" % mon_sock]
++            skip_next = True
++        else:
++            out.append(tok)
++    for banned in ("-s", "-S", "-gdb"):
++        if banned in out:
++            sys.exit("internal error: stub flag %s leaked" % banned)
++    return out
++
++
++class Guest:
++    def __init__(self, argv, logpath):
++        self.log = open(logpath, "wb")
++        self.buf = b""
++        # pty.fork (not Popen+slave): the slave becomes QEMU's controlling
++        # terminal, mirroring the operator's repro harness. A bare
++        # Popen stdio slave demonstrably delivers no input to the guest.
++        self.pid, self.master = pty.fork()
++        if self.pid == 0:
++            os.execvp(argv[0], argv)
++
++    def close(self):
++        import signal
++        try:
++            os.kill(self.pid, signal.SIGTERM)
++            _, _ = os.waitpid(self.pid, 0)
++        except Exception:
++            pass
++        try:
++            os.close(self.master)
++        except OSError:
++            pass
++        self.log.close()
++
++    def _drain(self, timeout):
++        end = time.time() + timeout
++        while True:
++            wait = end - time.time()
++            if wait <= 0:
++                return
++            r, _, _ = select.select([self.master], [], [], wait)
++            if not r:
++                return
++            try:
++                chunk = os.read(self.master, 65536)
++            except OSError:
++                return
++            if not chunk:
++                return
++            self.buf += chunk
++            self.log.write(chunk)
++            self.log.flush()
++
++    def expect(self, needle, timeout):
++        end = time.time() + timeout
++        while True:
++            idx = self.buf.find(needle)
++            if idx >= 0:
++                del_note = self.buf[:idx + len(needle)]
++                self.buf = self.buf[idx + len(needle):]
++                return del_note
++            if time.time() >= end:
++                return None
++            self._drain(end - time.time())
++
++    def send(self, text):
++        os.write(self.master, text.encode())
++
++
++def monitor_info(mon_sock):
++    try:
++        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
++        s.settimeout(10)
++        s.connect(str(mon_sock))
++        data = b""
++        s.sendall(b"info registers\n")
++        end = time.time() + 10
++        while time.time() < end:
++            try:
++                chunk = s.recv(65536)
++            except socket.timeout:
++                break
++            if not chunk:
++                break
++            data += chunk
++            if b"(qemu)" in data:
++                break
++        s.close()
++        return data
++    except Exception as exc:  # noqa: BLE001 — forensics best-effort
++        return ("monitor query failed: %s\n" % exc).encode()
++
++
++def one_run(index, idle_s, probe_s, logdir):
++    mon_sock = logdir / ("mon-%d.sock" % index)
++    if mon_sock.exists():
++        mon_sock.unlink()
++    argv = build_argv(mon_sock, logdir)
++    guest = Guest(argv, logdir / ("pty-%d.log" % index))
++    try:
++        if guest.expect(PROMPT, 120) is None:
++            return (False, "no shell prompt within 120 s of boot")
++        guest.send("version" + CR)
++        if guest.expect(VERSION_NEEDLE, 15) is None:
++            return (False, "no version output (input dead?)")
++        if guest.expect(PROMPT, 15) is None:
++            return (False, "no prompt back after version")
++        guest.send("help" + CR)
++        if guest.expect(PROMPT, 15) is None:
++            return (False, "no prompt after 'help'")
++        guest.send("loadelf hey.c.elf" + CR)
++        if guest.expect(PROMPT, 30) is None:
++            return (False, "no prompt after loadelf")
++        time.sleep(2)
++        guest.send("runelf" + CR)
++        if guest.expect(RUNELF_NEEDLE, 60) is None:
++            return (False, "no hey output after runelf")
++        if guest.expect(PROMPT, 15) is None:
++            return (False, "no prompt back after runelf")
++        # Idle window: drain (so the wedge signature is absence of
++        # solicited output, not unread backlog) but send nothing.
++        guest._drain(idle_s)
++        guest.send(CR)
++        if guest.expect(PROMPT, probe_s) is None:
++            time.sleep(5)
++            guest.send(CR)
++            if guest.expect(PROMPT, probe_s) is None:
++                regs = monitor_info(mon_sock)
++                (logdir / ("regs-%d.log" % index)).write_bytes(regs)
++                return (False, "probe miss persisted after re-probe "
++                               "(serial + regs saved)")
++        return (True, "ok")
++    finally:
++        guest.close()
++        try:
++            if mon_sock.exists():
++                mon_sock.unlink()
++        except OSError:
++            pass
++
++
++def main():
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--runs", type=int, default=5)
++    ap.add_argument("--idle", type=float, default=90.0)
++    ap.add_argument("--probe", type=float, default=2.0)
++    ap.add_argument("--smoke", action="store_true",
++                    help="1 run x 10 s idle (validation only)")
++    args = ap.parse_args()
++    if args.smoke:
++        args.runs, args.idle = 1, 10.0
++    logdir = BUILD_DIR / "soak-logs"
++    logdir.mkdir(parents=True, exist_ok=True)
++    ensure_none_iso()
++    results = []
++    for i in range(args.runs):
++        ok, note = one_run(i, args.idle, args.probe, logdir)
++        print("soak run %d/%d: %s (%s)"
++              % (i + 1, args.runs, "PASS" if ok else "WEDGE", note),
++              flush=True)
++        results.append(ok)
++    print("soak: %d/%d clean" % (sum(results), len(results)), flush=True)
++    return 0 if all(results) else 1
++
++
++if __name__ == "__main__":
++    sys.exit(main())
