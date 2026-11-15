@@ -7,11 +7,11 @@ reproduces it — the guest serial must sit on a PTY slave (faithful
 macOS-TTY path), which is what this script does.
 
 Per run: boot the test_class=none ISO, script version/help/loadelf
-hey.c.elf/runelf, idle IDLE_S doing nothing, then probe with a bare
-newline and require the next shell prompt within PROBE_S. A missed probe
-is re-probed once (TCG jitter must not fail the soak); a persistent miss
-is a wedge: serial capture + `info registers` via the dedicated monitor
-socket are saved and the run fails.
+hey.c.elf/runelf, then idle IDLE_S under a looped liveness watch (bare
+newline every PROBE_EVERY_S, prompt required within PROBE_S each time).
+A twice-missed probe is a wedge: serial capture + `info registers` via
+the dedicated monitor socket + GDB backtrace/task forensics are saved
+and the run fails.
 
 Adopted permanently (testbed-owned; replaces the /tmp repro harness
 referenced on #545, which was never homed in-tree).
@@ -44,6 +44,9 @@ import qemu_test as harness  # noqa: E402  (argv builder + OVMF locate)
 
 BUILD_DIR = ROOT / "build" / "meson-x86_64"
 PROMPT = b"$ "
+# Idle liveness cadence: an empty line every PROBE_EVERY_S during the
+# idle window (shell no-ops it to a reprompt).
+PROBE_EVERY_S = 10.0
 # Shell-smoke discipline (tools/shell-smoke.exp, issue #245): a bare
 # re-prompt proves NOTHING (async background output redraws the prompt,
 # faking a round-trip while typed bytes rot in the FIFO). Every scripted
@@ -284,16 +287,24 @@ def one_run(index, idle_s, probe_s, logdir):
         if guest.expect(PROMPT, 15) is None:
             return (False, forensics("no prompt back after runelf (%s)"
                                      % alive_probe()))
-        # Idle window: drain (so the wedge signature is absence of
-        # solicited output, not unread backlog) but send nothing.
-        guest._drain(idle_s)
-        guest.send(CR)
-        if guest.expect(PROMPT, probe_s) is None:
-            time.sleep(5)
+        # Looped liveness watch over the idle window: probe every
+        # PROBE_EVERY_S instead of once at the end, so a wedge is caught
+        # close to when it strikes (better tick correlation for the
+        # watchdog FIRE line) instead of up to idle_s later. An empty
+        # line is a no-op for the shell (reprompt only), so the guest
+        # stays effectively idle.
+        start_idle = time.time()
+        deadline = start_idle + idle_s
+        while time.time() < deadline:
+            guest._drain(min(PROBE_EVERY_S, deadline - time.time()))
             guest.send(CR)
             if guest.expect(PROMPT, probe_s) is None:
-                return (False, forensics("probe miss persisted after "
-                                        "re-probe"))
+                time.sleep(5)
+                guest.send(CR)
+                if guest.expect(PROMPT, probe_s) is None:
+                    return (False, forensics(
+                        "idle liveness probe miss at +%.0fs"
+                        % (time.time() - start_idle)))
         return (True, "ok")
     finally:
         guest.close()
