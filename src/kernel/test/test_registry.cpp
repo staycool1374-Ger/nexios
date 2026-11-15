@@ -205,6 +205,8 @@ void register_o1_scheduler_tests();
 void register_vmm_tests();
 void register_hal_bits_tests();
 void register_lock_order_tests();
+void register_park_lock_tests();
+void register_tick_watchdog_tests();
 void register_budget_tests();
 void register_pip_tests();
 void register_pcp_tests();
@@ -346,6 +348,7 @@ static void run_synchronization_locking_group() {
 }
 static void run_synchronization_lock_order_group() {
     register_lock_order_tests();
+    register_park_lock_tests(); // M2 #545/#546 park + order contract
 }
 static void run_synchronization_lock_validator_group() {
     register_lock_validator_tests();
@@ -371,6 +374,7 @@ static void run_synchronization_err_api_group() {
 static void run_scheduler_core_group() {
     register_scheduler_tests();
     register_sched_slot_safety_tests(); // issue #513 QE
+    register_tick_watchdog_tests();     // M2 #546 tick watchdog
 }
 static void run_scheduler_o1_group() { register_o1_scheduler_tests(); }
 static void run_scheduler_atomic_group() {

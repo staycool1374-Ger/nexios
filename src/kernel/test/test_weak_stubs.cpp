@@ -113,6 +113,8 @@ __attribute__((weak)) void register_aarch64_tests() {}
 __attribute__((weak)) void register_riscv64_tests() {}
 #endif
 __attribute__((weak)) void register_lock_order_tests() {}
+__attribute__((weak)) void register_park_lock_tests() {}
+__attribute__((weak)) void register_tick_watchdog_tests() {}
 __attribute__((weak)) void register_budget_tests() {}
 __attribute__((weak)) void register_pip_tests() {}
 __attribute__((weak)) void register_pcp_tests() {}

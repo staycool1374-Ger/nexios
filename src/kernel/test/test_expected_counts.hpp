@@ -296,8 +296,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // core_* — split of the former `core` aggregate. Values filled from
     // measured `dump-counts` output; 0 disables validation.
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
-    {"core_sync",           93,   0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api
-    {"core_sched",          114,  0,       0      },  // scheduler_* + #513 slot-safety x2
+    {"core_sync",           101,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8
+    {"core_sched",          119,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
