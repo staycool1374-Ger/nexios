@@ -323,7 +323,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler
     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov
     {"random",              17,   0,       0      },  // random_*
-    {"bench",               28,   0,       0      },  // bench_* (TF_BENCH)
+    {"bench",               39,   0,       0      },  // bench_* (TF_BENCH) incl. 4 mk_baseline M0 F17
     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls
     {"tls",                 13,   12,      12     },  // TLS publish/apply + errno cell
 };
