@@ -96,9 +96,51 @@ gdb.pretty_printers.append(jarvis_pretty_printer)
 def _sched_var(name):
     return gdb.parse_and_eval(f"'kernel::Scheduler::{name}'")
 
-def _sched_task(i):
-    tasks = gdb.parse_and_eval("'kernel::Scheduler::tasks_'")
-    return tasks[i]
+def _iter_all_tasks():
+    """Yield (bucket_prio, tcb_value) over AllTasksRegistry buckets.
+
+    The linear tasks_[]/task_count_ era is over (all_tasks_ intrusive
+    per-priority lists); walk heads_ + pri_next_ with cycle + hop caps
+    so a corrupted link cannot hang the debugger.
+    """
+    reg = gdb.parse_and_eval("'kernel::Scheduler::all_tasks_'")
+    heads = reg["heads_"]
+    lo, hi = heads.type.range()
+    seen = set()
+    n = 0
+    for prio in range(int(hi), int(lo) - 1, -1):
+        try:
+            node = heads[int(prio)]
+        except Exception:
+            continue
+        hops = 0
+        while n < 256 and hops < 512:
+            try:
+                if node == 0:
+                    break
+                addr = int(node)
+            except Exception:
+                break
+            if addr in seen:
+                break
+            seen.add(addr)
+            try:
+                tcb = node.dereference()
+            except Exception:
+                break
+            yield int(prio), tcb
+            n += 1
+            try:
+                node = tcb["pri_next_"]
+            except Exception:
+                break
+            hops += 1
+
+def _tcb_name(tcb):
+    try:
+        return tcb["name"].string(encoding="utf-8", errors="replace")
+    except Exception:
+        return "?"
 
 class TasksCommand(gdb.Command):
     """List all kernel tasks with state, priority, PID."""
@@ -108,30 +150,23 @@ class TasksCommand(gdb.Command):
 
     def invoke(self, arg, from_tty):
         try:
-            count = int(_sched_var("task_count_"))
-            current_idx = int(_sched_var("current_index_"))
+            rows = list(_iter_all_tasks())
         except Exception as e:
             gdb.write(f"Error: cannot read scheduler state ({e})\n")
             return
 
-        gdb.write(f"{'Idx':>4} {'PID':>8} {'State':<12} {'Prio':>4} {'Parent':>8} {'ExecTicks':>10}\n")
-        gdb.write("-" * 52 + "\n")
+        gdb.write(f"{'Idx':>4} {'PID':>8} {'State':<12} {'Prio':>4} {'Name':<16}\n")
+        gdb.write("-" * 48 + "\n")
         gdb.flush()
 
-        for i in range(min(count, 64)):
+        for i, (bucket, tcb) in enumerate(rows):
             try:
-                tcb_ptr = _sched_task(i)
-                if tcb_ptr == 0:
-                    continue
-                tcb = tcb_ptr.dereference()
                 pid = int(tcb["id"])
                 state_val = int(tcb["state"])
                 state_name = TASK_STATE_NAMES.get(state_val, f"UNKNOWN({state_val})")
                 prio = int(tcb["priority"])
-                parent = int(tcb["parent_id"])
-                exec_ticks = int(tcb["executed_ticks"])
-                marker = " <-" if i == current_idx else ""
-                gdb.write(f"{i:>4}  0x{pid:<6x} {state_name:<12} {prio:>4}  0x{parent:<6x} {exec_ticks:>10}{marker}\n")
+                name = _tcb_name(tcb)
+                gdb.write(f"{i:>4}  0x{pid:<6x} {state_name:<12} {prio:>4}  {name:<16}\n")
             except Exception as e:
                 gdb.write(f"  {i:>4} error: {e}\n")
         gdb.flush()
@@ -155,18 +190,14 @@ class TaskCommand(gdb.Command):
             return
 
         try:
-            count = int(_sched_var("task_count_"))
+            rows = list(_iter_all_tasks())
         except Exception as e:
             gdb.write(f"Error: {e}\n")
             return
 
         found = None
-        for i in range(count):
+        for i, (bucket, t) in enumerate(rows):
             try:
-                p = _sched_task(i)
-                if p == 0:
-                    continue
-                t = p.dereference()
                 if i == query or int(t["id"]) == query:
                     found = (i, t)
                     break
