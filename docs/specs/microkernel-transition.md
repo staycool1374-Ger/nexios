@@ -832,7 +832,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F20 | #572 | libc dependency audit for PAUSE and 80–83 retirement | `src/libc/syscall.h` |
 | F21 | #573 | Remove or wire dead `CONFIG_MEMPOOL_*`; TCB size `static_assert`; extend the `CONFIG_STATIC_POOLS_ONLY` assert to `alloc_user_page`, `alloc_user_contiguous`, `alloc_page_table` | `nexios_config.h`, `mempool.cpp`, `pmm.cpp` |
 
-## 16. Owner decisions (Q1–Q12 DECIDED per #512; Q8–Q10 open — briefed, awaiting owner call)
+## 16. Owner decisions (Q1–Q12 DECIDED per #512)
 
 | Q | Decision |
 |---|---|
@@ -843,9 +843,9 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | Q5 | DECIDED mechanism (owner, #512): per-server SDF-declared RPC bounds, values set post-M0 (TCG-relative, ≥3× headroom); uniform 5000-tick guard stays as interim ceiling; per-operation-class refinement deferred to #574 (v1.1.0) |
 | Q6 | DECIDED closed list (owner, #512): byte-identity + tracker-0 + zero fallback hits, PLUS fault-injection parity, restart-in-flight proven pre-flip, performance ceiling (M3 budget × depth), soak + concurrency (3 consecutive greens). See §12 |
 | Q7 | DECIDED values (owner, #512; landed via F9/#562): CAP_MAX_UNTYPED 64; MAX_PER_TASK_OBJECTS 256 for mem-mgr/supervisor rows, 32 elsewhere; CSLOT_COUNT 64 per CNode with 2 CNodes for infra servers; CAP_MAX_DEATH_WATCHES 32; IOPB_MAX_TASKS 8 (x86_64); IOMMU 8 domains / 128 mappings per domain; MAX_TASKS 64, FAST_PAYLOAD 48, ZOMBIE_LIMIT 32, STORM_LIMIT 256 unchanged |
-| Q8 | x86 storm limiter: reuse `CONFIG_IRQ_STORM_LIMIT` or a per-vector knob |
-| Q9 | Supervisor stop authority: any PD or only its own subtree |
-| Q10 | riscv64 DMA: permanent fail-closed or gate on a RISC-V IOMMU issue |
+| Q8 | DECIDED (owner, #512): port the identical limiter to x86 (one `g_storm`, same 256/tick same-INTID rule, explicit timer-vector exemption named in the port); extend the stuck-line test to x86. Per-vector knob rejected (unmeasured need, wrong layer for MSI-X floods). Single-slot A/B-alternation blind spot noted as a follow-up candidate only (per-slot counters, filed if demonstrated) |
+| Q9 | DECIDED subtree-only (owner, #512): N2/N3 supervisor-cap-gated + supervised-set membership check (SDF watches = authority, compose-checked); exclusions hardcoded (never self, never mem-mgr, never kernel tasks); proc-mgr owns client stop, supervisor owns server stop; cross-subtree attempts fail closed with a typed error. Multi-supervisor delegation is a post-v0.6 protocol |
+| Q10 | DECIDED gated follow-up (owner, #512): #577 tracks RISC-V IOMMU (criteria-gated: QEMU virt emulation + stable programming interface + in-tree test gate; v0.8.0 family with #168/#525); interim riscv64 DMA PDs stay fail-closed. Permanent fail-closed REJECTED (two-tier drivers vs INV-MK-10) |
 | Q11 | DECIDED single-core scope (owner, #512): IPC + donation semantics are single-core in v0.6.1; cross-core wake stays tick-deferred via mailbox/IPI; SDF carries a core-affinity field (needed by #167) but cross-core donation transfer is out of scope. Accepted as an explicit fidelity gap (unprovable on single-hart QEMU); follow-up #576 filed (depends on #525 SMP coverage) so the gap cannot fossilize |
 | Q12 | DECIDED uniform two-phase (owner, #512): critical-server death (supervisor, mem-mgr) drives the system into an SDF-declared fail-safe state FIRST (R-FAILSAFE), THEN reboots (MINIX-RS/seL4-init precedent). Reboot-loop guard required (consecutive-early-death counter → fail-stop, mechanism TBD with watchdog work). Redundant supervisor filed as post-v0.6 follow-up only if availability analysis demands it; never for mem-mgr (revoke-cascade makes survival incoherent). Kernel recovery path REJECTED (violates INV-MK-1, reintroduces kernel omnipotence) |
 
