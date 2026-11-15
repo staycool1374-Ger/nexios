@@ -1,651 +1,660 @@
-diff --git a/src/kernel/daemon/daemon_mgr.cpp b/src/kernel/daemon/daemon_mgr.cpp
-index 17e85b444..860d5a719 100644
---- a/src/kernel/daemon/daemon_mgr.cpp
-+++ b/src/kernel/daemon/daemon_mgr.cpp
-@@ -430,6 +430,10 @@ void terminate(const char *name) {
-             task->magic == TaskControlBlock::TCB_MAGIC) {
-             task->state = TaskState::TERMINATED;
-             task->exit_code = 0;
-+            // M1/F6 (issue #559): interim supervisor path never reaches a
-+            // terminate funnel — latch synchronously so the restart loop
-+            // observes the death without a reaper pass.
-+            Scheduler::publish_task_death(*task);
-         }
- 
-         notify_death(entries_[i].pid); // clears PID + calls set_pid_fn(0)
-diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
-index a99009685..0b2939117 100644
---- a/src/kernel/ipc/ipc.cpp
-+++ b/src/kernel/ipc/ipc.cpp
-@@ -350,8 +350,9 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
-     // send_sync sets reply_wait and blocks; without this, the reply would sit
-     // in the queue and the sender would hang forever (only rescued by a
-     // spurious re-dispatch).  This is the reply-delivery wakeup path.
--    if (tcb->reply_wait) {
--        tcb->reply_wait = false;
-+    // M1/F7 (§11.6): ACQUIRE load pairs with the waiter's RELEASE publish.
-+    if (__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE)) {
-+        __atomic_store_n(&tcb->reply_wait, false, __ATOMIC_RELEASE);
-         if (tcb->state == TaskState::BLOCKED) {
-             IPC_SCHED_TRACE("[WAKE]", "dest=", dest_id,
-                             "st=", static_cast<uint64_t>(tcb->state),
-@@ -372,8 +373,8 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
-     // (blocked_on_queue) self-correct on the fullness re-check; receive
-     // waiters (blocked_in_recv) consume the arrival.
-     if (tcb->state == TaskState::BLOCKED &&
--        (tcb->reply_wait || tcb->blocked_on_queue != nullptr ||
--         tcb->blocked_in_recv)) {
-+        (__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE) ||
-+         tcb->blocked_on_queue != nullptr || tcb->blocked_in_recv)) {
-         Scheduler::set_task_ready(*tcb);
-         tcb->remaining_ticks = tcb->period_ticks;
-     }
-@@ -452,7 +453,8 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
-     // only IPC-channel waiters (reply_wait, queue-full senders,
-     // receive waiters) may wake on message arrival.
-     if (receiver && receiver->state == TaskState::BLOCKED &&
--        (receiver->reply_wait || receiver->blocked_on_queue != nullptr ||
-+        (__atomic_load_n(&receiver->reply_wait, __ATOMIC_ACQUIRE) ||
-+         receiver->blocked_on_queue != nullptr ||
-          receiver->blocked_in_recv)) {
-         Scheduler::set_task_ready(*receiver);
-         receiver->remaining_ticks = receiver->period_ticks;
-@@ -482,16 +484,17 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
- ///        stay queued for their real consumer.  All other dispositions are
- ///        unchanged from the v1 contract (dest-death reply preservation,
- ///        #11 oversized-stays-queued clamp, arrival-triggered wake).
--bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
--                    uint32_t reply_max_size) noexcept {
-+errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
-+                                     Message &reply,
-+                                     uint32_t reply_max_size) noexcept {
-     // Send the request message
-     if (!send(dest_id, msg))
--        return false;
-+        return errors::IPC_ERR_NO_REPLY;
- 
-     // Block waiting for a reply on our own queue
-     auto *cur = Scheduler::current_task();
-     if (!cur)
--        return false;
-+        return errors::IPC_ERR_NO_REPLY;
- 
-     bool was_blocked = false;
-     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
-@@ -505,7 +508,9 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                              reply, reply_max_size, dest_id)
-                        : cur->msg_queue.pop_from_sender(reply, dest_id);
-         if (got) {
--            cur->reply_wait = false;
-+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
-             if (was_blocked) {
-                 cur->remaining_ticks = cur->period_ticks;
-                 // Issue #513: the wait loop below ends each sleep with
-@@ -517,18 +522,20 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                 // (was_blocked == false) never touched SIE: preserve it.
-                 arch::sti();
-             }
--            return true;
-+            return errors::IPC_ERR_OK;
-         }
-         // Clamped with a matching-but-oversized reply queued: fail closed
-         // at once (no block) so the fastpath caller falls back to a full
-         // RECEIVE — the pre-#296 immediate-false contract, preserved.
-         if (reply_max_size != 0 && cur->msg_queue.has_from(dest_id)) {
--            cur->reply_wait = false;
-+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
-             if (was_blocked) {
-                 cur->remaining_ticks = cur->period_ticks;
-                 arch::sti(); // Issue #513: restore IRQ-on (see above).
-             }
--            return false;
-+            return errors::IPC_ERR_NO_REPLY;
-         }
-         // If destination died while we were waiting for a reply, bail out.
-         // BUT: a reply may already be queued (the peer delivered its reply
-@@ -538,7 +545,17 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-         // means the peer died before replying.  Non-matching messages are
-         // never consumed here, so the queue is left intact on failure.
-         auto *dest = Scheduler::find_task(dest_id);
--        if (!dest || dest->state == TaskState::TERMINATED) {
-+        // M1/F7 (§12.2): a live id whose generation no longer matches the
-+        // wait tag is a recycled slot — the waited-on task is gone.  The
-+        // generation check only applies once a wait was armed (was_blocked);
-+        // the unpublished tag (0) never matches a live generation.
-+        bool dest_gone =
-+            !dest || dest->state == TaskState::TERMINATED ||
-+            dest->state == TaskState::REAPED ||
-+            (was_blocked &&
-+             dest->generation !=
-+                 __atomic_load_n(&cur->reply_wait_dest_gen, __ATOMIC_ACQUIRE));
-+        if (dest_gone) {
-             if (reply_max_size == 0 && cur->msg_queue.has_from(dest_id)) {
-                 continue; // unclamped match present: consume next iteration
-             }
-@@ -549,15 +566,22 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-             // latched reply channel — the caller resumes running now, and a
-             // leftover BLOCKED/reply_wait would mislead the next scheduler
-             // decision (issue #513 follow-up: stale wait-state livelock).
--            cur->reply_wait = false;
-+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
-             cur->state = TaskState::RUNNING;
-             if (was_blocked) {
-                 arch::sti(); // Issue #513: restore IRQ-on (see above).
-             }
--            return false;
-+            return errors::IPC_ERR_PEER_DIED;
-         }
- 
--        cur->reply_wait = true;
-+        // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag —
-+        // RELEASE order lets the death drain observe (tag, flag) atomically.
-+        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
-+        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
-+                         __ATOMIC_RELEASE);
-+        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-         cur->state = TaskState::BLOCKED;
-         Scheduler::dequeue_ready(*cur);
-         was_blocked = true;
-@@ -578,20 +602,28 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-     }
- }
- 
-+/// @brief Send and block until a reply arrives (client-side synchronous IPC).
-+bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-+                    uint32_t reply_max_size) noexcept {
-+    return send_sync_err(dest_id, msg, reply, reply_max_size) ==
-+           errors::IPC_ERR_OK;
-+}
+diff --git a/docs/specs/ipc-baseline.md b/docs/specs/ipc-baseline.md
+new file mode 100644
+index 000000000..9ee8c80fa
+--- /dev/null
++++ b/docs/specs/ipc-baseline.md
+@@ -0,0 +1,108 @@
++# IPC Baseline — Deferred-Switch Per-Hop Cost Record (M0 / F17, issue #570)
 +
- /// @brief Bounded send_sync for server proxies (issues #241, #48).
--bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
--                            Message &reply,
--                            uint64_t timeout_ticks) noexcept {
-+errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
-+                                            const Message &msg,
-+                                            Message &reply,
-+                                            uint64_t timeout_ticks) noexcept {
-     if (!send(dest_id, msg)) {
--        return false;
-+        return errors::IPC_ERR_NO_REPLY;
-     }
-     auto *cur = Scheduler::current_task();
-     if (!cur) {
--        return false;
-+        return errors::IPC_ERR_NO_REPLY;
-     }
-     if (timeout_ticks != 0) {
-         if (!recv_wait_arm(*cur, timeout_ticks)) {
--            return false; // fail-closed: no arm, no block (never park)
-+            return errors::IPC_ERR_NO_REPLY; // fail-closed: no arm, no block
-         }
-     }
-     bool was_blocked = false;
-@@ -599,7 +631,9 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
-     for (;;) {
-         bool got = cur->msg_queue.pop_from_sender(reply, dest_id);
-         if (got) {
--            cur->reply_wait = false;
-+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
-             if (armed_here) {
-                 recv_wait_cancel(*cur);
-             }
-@@ -607,10 +641,12 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
-                 cur->remaining_ticks = cur->period_ticks;
-                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
-             }
--            return true;
-+            return errors::IPC_ERR_OK;
-         }
-         if (cur->recv_timed_out) {
--            cur->reply_wait = false;
-+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
-             cur->recv_timed_out = false;
-             recv_wait_cancel(*cur);
-             // Wait over: caller resumes running (see above).
-@@ -618,10 +654,17 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
-             if (was_blocked) {
-                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
-             }
--            return false; // bounded expiry: fail-closed, no silent success
-+            return errors::IPC_ERR_TIMEOUT; // bounded expiry: fail-closed
-         }
-         auto *dest = Scheduler::find_task(dest_id);
--        if (!dest || dest->state == TaskState::TERMINATED) {
-+        // M1/F7 (§12.2): generation check gated on armed wait (see send_sync).
-+        bool dest_gone =
-+            !dest || dest->state == TaskState::TERMINATED ||
-+            dest->state == TaskState::REAPED ||
-+            (was_blocked &&
-+             dest->generation !=
-+                 __atomic_load_n(&cur->reply_wait_dest_gen, __ATOMIC_ACQUIRE));
-+        if (dest_gone) {
-             if (cur->msg_queue.has_from(dest_id)) {
-                 continue; // unclamped match present: consume next iteration
-             }
-@@ -629,14 +672,20 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
-                 recv_wait_cancel(*cur);
-             }
-             // Wait is over (see above): clear the channel, restore RUNNING.
--            cur->reply_wait = false;
-+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
-             cur->state = TaskState::RUNNING;
-             if (was_blocked) {
-                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
-             }
--            return false;
-+            return errors::IPC_ERR_PEER_DIED;
-         }
--        cur->reply_wait = true;
-+        // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag.
-+        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
-+        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
-+                         __ATOMIC_RELEASE);
-+        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-         cur->state = TaskState::BLOCKED;
-         Scheduler::dequeue_ready(*cur);
-         was_blocked = true;
-@@ -649,6 +698,14 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
-     }
- }
- 
-+/// @brief Bounded send_sync for server proxies (issues #241, #48).
-+bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
-+                            Message &reply,
-+                            uint64_t timeout_ticks) noexcept {
-+    return send_sync_bounded_err(dest_id, msg, reply, timeout_ticks) ==
-+           errors::IPC_ERR_OK;
-+}
++**Doc ID:** NEX-SPEC-2026-11-15-570
++**Status:** BASELINE RECORDED — TCG rows measured on `testbed` (debug
++`bench`, runs 2026-11-15); HW rows pending (one real machine, owner decision).
++No numeric target is frozen here; Q3 numeric targets are set against §4 at M3.
++**Milestone target:** v0.6.1 Transition to full Microkernel (M0 gate).
++**Related:** `docs/specs/microkernel-transition.md` §5.6 (latency model),
++`docs/specs/ipc.md` §4 (deferred switch), `docs/specs/ipc-fastpath.md`
++(48 B register tier — not exercised by the baseline workload, which uses
++the full path), `src/kernel/test/bench_mk_ipc_baseline.cpp` (harness).
 +
- /// @brief Return a reference to a task's message queue (asserts existence).
- MessageQueue &IPC::queue(uint64_t task_id) {
-     auto *tcb = Scheduler::find_task(task_id);
-@@ -814,6 +871,39 @@ void IPC::wake_sender(MessageQueue &q, TaskControlBlock &receiver) {
-     }
- }
++## 1. Purpose (M0 / F17)
++
++Define the baseline workload and record the per-hop cost of the current
++deferred-switch path (INV-MK-5: a blocking hop is applied at the next timer
++interrupt, so each hop costs up to 1 tick at `CONFIG_TICK_HZ = 1000`) before
++any target is set. This document is the measurement record the M3
++direct-switch comparison is contracted against. TCG numbers are
++non-normative (workload-dependent virtual clocks, no sub-second in-guest
++wall reference); only HW rows gate Q3.
++
++## 2. Workload descriptor (the defined workload)
++
++| ID | Shape | Trips | Payload | Prios |
++|---|---|---|---|---|
++| WL-1 | relay chain, depth 1 (client ↔ R0) | 100 | 48 B (`CONFIG_IPC_FAST_PAYLOAD_BYTES`) | client 30, relays 29..26, daemons 20 (interference-free band) |
++| WL-2 | relay chain, depth 2 | 100 | 48 B | same |
++| WL-3 | relay chain, depth 3 | 100 | 48 B | same |
++| WL-4 | relay chain, depth 4 | 100 | 48 B | same |
++| WL-R | rate window, depth 2 | 200 | 48 B | same |
++
++Rules (harness-enforced, fail-closed): every trip is one client
++`send_sync` round trip; relays forward with `send_sync` (all but deepest)
++and reply with the originator's payload echoed; request/reply type tags
++are per-depth (`100+i` / `200+i`) so a misrouted message fails the run
++instead of aliasing; all messages priority 0 (FIFO); relays bound
++(500-poll trip cap); inbox drained per test (no cross-test leakage);
++per-hop slope = (median(d=4) − median(d=1)) / 6 (fixed-overhead-free).
++
++## 3. Measurement protocol
++
++- Unit of record for hops: `arch::Timer::ticks()` (coarse scheduler ticks —
++  the INV-MK-5 unit: one blocking hop costs an integer number of ticks).
++- Wall unit: `arch::Timer::raw_counter()` converted with
++  `raw_counter_freq_hz()` (fail-closed 0 on zero/invalid freq, saturating
++  multiply); rewind-proof (never snapshot-rewound `ticks_`).
++- Percentiles: insertion sort, `pXX = sorted[(n−1)*XX/100]` (`n = 100`,
++  so p50 index 49, p99 index 98); `pmax` reported separately; mean direct.
++- Outputs: single-line `[MK-BASELINE]` records greppable from the raw
++  serial capture (Logger routes to debugcon in test mode).
++- TCG is non-normative: numbers below are the record, not a gate; no
++  test asserts a numeric bound tighter than the wedge ceiling
++  (`p50 <= hops*8 + 8`) and exact hop accounting.
++
++### 3.4 HW recipe (normative rows pending)
++
++`meson setup build/meson-<arch> --cross-file cross/<arch>-elf.txt
++-Darch=<arch> && meson configure build/meson-<arch> -Dtest_class=bench`
++→ build the ISO → boot on the target machine → capture the raw serial
++stream → grep `[MK-BASELINE]` → fill §4 R-HW rows. The normative Q3
++record needs one agreed machine and date (owner decision).
++
++## 4. Results
++
++TCG, x86_64 debug, `bench` 39/39 (testbed, 2026-11-15; two consecutive
++green runs; identical values unless noted):
++
++| Row | Depth | Hops/trip | Trips | Ticks p50/p99/pmax | Per-hop ticks×100 | ns p50/p99/pmax |
++|---|---|---|---|---|---|---|
++| TCG-1 | 1 | 2 | 100 | 2/2/2 | 100 | 3788682–3793176 / 3917518–3944484 / 3950476–3953472 |
++| TCG-2 | 2 | 4 | 100 | 4/4/4 | 100 | 7613318–7622307 / 7707698–7719683 / 7709196–7724177 |
++| TCG-3 | 3 | 6 | 100 | 6/6/6 | 100 | 11418480–11421476 / 11482898–11494883 / 11488890–11521848 |
++| TCG-4 | 4 | 8 | 100 | 8/8/8 | 100 | 15223641–15228135 / 15297048–15304538 / 15309032–15313527 |
++| Slope | — | — | — | median_d1=2, median_d4=8, slope=100 (1.00 tick/hop) | — | — |
++| R-HW | — | — | — | TBD (one real machine) | — | — |
++
++Rate window (depth 2, 200 trips, 800 hops): `switches=805 source=diag
++window_ns=1529348269 hops_per_s=523 switches_per_s=526` (run 2:
++`805/1529713804/522/526`). Core locality (single-CPU gate):
++`same_core hops_per_s=514–517 p50_ticks=2 up_cpus=1`;
++`split=unavailable up_cpus=1 note=Q11/#525`.
++
++Reading: under TCG each blocking hop costs exactly one tick
++(p50 == p99 == pmax at every depth; slope 1.00 tick/hop) — the INV-MK-5
++limit is directly visible. The M3 direct-switch comparison must beat
++this record on HW.
++
++## 5. Target contract
++
++No target is frozen in M0. Q3 numeric targets (per-hop and end-to-end,
++direct-switch scope per the Q3 decision) are set against §4 at M3, using
++R-HW rows once recorded. The TCG rows above are the comparison method
++reference, never the gate.
++
++## 6. Threats to validity
++
++- TCG quantization: tick granularity (1 ms at 1000 Hz) dominates; ns
++  values jitter run to run (see the two recorded ranges) while tick
++  medians are exact.
++- Counter rates differ per arch (riscv64 `rdtime` 10 MHz → 100 ns
++  resolution); cross-arch rows must be recorded per arch, never compared
++  across arches.
++- Single-CPU gate: the split-core leg reports `unavailable` by design
++  (Q11/#525); SMP numbers need an `-smp N` harness leg (not in M0 scope).
++- Daemon interference is excluded by construction (client/relays above
++  daemon prio 20); a loaded host can still stretch TCG wall time —
++  tick counts, not wall, are the stable comparator.
+diff --git a/docs/specs/microkernel-transition.md b/docs/specs/microkernel-transition.md
+index bfa57232e..e7f4d9f95 100644
+--- a/docs/specs/microkernel-transition.md
++++ b/docs/specs/microkernel-transition.md
+@@ -316,7 +316,8 @@ checked by `sdf_compose`; a composition that violates it fails.
+   receiver is blocked in receive and runnable on this core, the kernel switches
+   to it inside the syscall, without waiting for a tick.
+ - Per-hop bound and end-to-end overhead target: `TBD at API freeze` (Q3),
+-  set against the baseline from M0 (F17).
++  set against the baseline from M0 (F17); the measured record lives in
++  `docs/specs/ipc-baseline.md` §4.
  
-+/// @brief Wake every reply waiter of a dying task (M1/F7, INV-MK-11).
-+void IPC::wake_reply_waiters_of(TaskControlBlock &dead) noexcept {
-+    // No scheduler lock held (set_task_ready takes it on the not-own-CPU
-+    // branch).  IrqGuard pins the all_tasks_ walk against a concurrent
-+    // recycle on this CPU; cross-CPU teardown is serialized by the
-+    // waiter's own loop-top re-check (tag + find_task + state).
-+    arch::IrqGuard irq_guard{};
-+    const uint64_t dead_id = dead.id;
-+    const uint32_t dead_gen = dead.generation;
-+    Scheduler::TaskIter it{};
-+    for (TaskControlBlock *w = it.next(&dead); w != nullptr;
-+         w = it.next(&dead)) {
-+        // §12.1 dead-state filter: never touch TERMINATED/REAPED TCBs.
-+        if (w->state == TaskState::TERMINATED || w->state == TaskState::REAPED)
-+            continue;
-+        // M1/F7 (§11.6): ACQUIRE the flag first; the tag is only meaningful
-+        // when the flag was observably set.
-+        if (!__atomic_load_n(&w->reply_wait, __ATOMIC_ACQUIRE))
-+            continue;
-+        if (__atomic_load_n(&w->reply_wait_dest_id, __ATOMIC_ACQUIRE) !=
-+            dead_id)
-+            continue;
-+        if (__atomic_load_n(&w->reply_wait_dest_gen, __ATOMIC_ACQUIRE) !=
-+            dead_gen)
-+            continue;
-+        // Wake-only (never arms a switch, never clears the waiter's flag):
-+        // the waiter owns its reply_wait clear and re-checks the queued
-+        // reply first at loop top, so a pre-death reply is never lost (#296).
-+        Scheduler::set_task_ready(*w);
-+        w->remaining_ticks = w->period_ticks;
+ ## 6. Preemption, IRQ and lock discipline (#545, #546)
+ 
+diff --git a/src/kernel/test/bench_mk_ipc_baseline.cpp b/src/kernel/test/bench_mk_ipc_baseline.cpp
+new file mode 100644
+index 000000000..6178095f3
+--- /dev/null
++++ b/src/kernel/test/bench_mk_ipc_baseline.cpp
+@@ -0,0 +1,464 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file bench_mk_ipc_baseline.cpp
++/// @brief M0 (F17/#570): IPC baseline workload + microkernel-overhead harness.
++///
++/// Frozen workload descriptor (WL-1..WL-4), relay-chain drivers, tick/counter
++/// instrumentation, percentile + switch-rate + core-locality measurements.
++/// Measurement-only: zero edits under task/ipc/syscall/arch/memory/sync; the
++/// deferred-switch path (INV-MK-5) is observed, never changed. TCG numbers
++/// are non-normative; Q3 numeric targets freeze against HW baselines at M3.
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/ipc/ipc.hpp>
++#include <kernel/arch/timer.hpp>
++#include <kernel/arch/irq_guard.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/scheduler_debug_internal.hpp>
++#include "test_sched_helpers.hpp"
++
++using namespace kernel;
++
++namespace {
++
++// Frozen workload descriptor (the M0 "defined workload" deliverable).
++static constexpr uint64_t k_trips = 100;
++static constexpr uint64_t k_trips_rate = 200;
++static constexpr size_t k_depths[] = {1, 2, 3, 4};
++static constexpr size_t k_payload_bytes = CONFIG_IPC_FAST_PAYLOAD_BYTES;
++static constexpr uint64_t k_client_prio = 30;
++static constexpr uint64_t k_relay_prio0 = 29;
++static constexpr size_t k_max_relays = 4;
++static constexpr size_t k_max_hops = 8;
++static constexpr size_t k_samples = 100;
++
++static constexpr uint64_t k_tag_req(size_t relay_idx) { return 100 + relay_idx; }
++static constexpr uint64_t k_tag_rep(size_t relay_idx) { return 200 + relay_idx; }
++
++static_assert(k_payload_bytes <= IPC_MAX_MSG_SIZE,
++              "M0 payload must fit the message buffer");
++
++struct RelayCtx {
++    size_t index = 0;
++    uint64_t next_id = 0;
++    uint64_t depth = 0;
++    uint64_t trips = 0;
++};
++
++struct Stats {
++    uint64_t p50 = 0;
++    uint64_t p99 = 0;
++    uint64_t pmax = 0;
++    uint64_t mean = 0;
++};
++
++static uint64_t g_trip_ticks[k_samples] = {};
++static uint64_t g_trip_ns[k_samples] = {};
++static uint64_t g_trips_done = 0;
++static uint64_t g_relay_ids[k_max_relays] = {};
++static RelayCtx g_relay_ctx[k_max_relays] = {};
++static uint64_t g_dispatch_events = 0;
++static uint64_t g_client_trips = 0;
++static bool g_client_record = false;
++static TaskControlBlock *g_chain_relays[k_max_relays] = {};
++static TaskControlBlock *g_chain_client = nullptr;
++static size_t g_chain_depth = 0;
++
++static void sort_u64(uint64_t *arr, size_t count) {
++    for (size_t idx = 1; idx < count; ++idx) {
++        uint64_t key = arr[idx];
++        size_t pos = idx;
++        while (pos > 0 && arr[pos - 1] > key) {
++            arr[pos] = arr[pos - 1];
++            --pos;
++        }
++        arr[pos] = key;
 +    }
 +}
 +
- /// @brief Roll back a block_sender() mutation when IPC::send() is called with
- ///        interrupts disabled and the deferred switch can never apply.
- ///        Removes @p task from @p q's blocked-senders list, restores its state
-diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
-index 5c6ba4865..bcb65a6bb 100644
---- a/src/kernel/ipc/ipc.hpp
-+++ b/src/kernel/ipc/ipc.hpp
-@@ -22,6 +22,7 @@
- /// @brief Priority-based IPC — send, recv, events, notifications.
- 
- #include <types.hpp>
-+#include <kernel/ipc/ipc_errors.hpp>
- #include <kernel/task/task.hpp>
- #include <kernel/sync/spinlock.hpp>
- #include <kernel/sync/spinlock_guard.hpp>
-@@ -141,6 +142,32 @@ class IPC {
-                                   const Message &msg, Message &reply,
-                                   uint64_t timeout_ticks) noexcept;
- 
-+    /// @brief Typed-error core of send_sync (M1/F7, issues #559/#560).
-+    ///        Identical rendezvous semantics; returns IPC_ERR_OK on reply
-+    ///        consumed, IPC_ERR_NO_REPLY on clamped-oversize or dest-gone
-+    ///        without a queued reply, IPC_ERR_PEER_DIED when the
-+    ///        destination id is absent, TERMINATED, or generation-mismatched
-+    ///        (§12.2 PID-reuse close).  send_sync() is this returning == OK.
-+    [[nodiscard]] static errors::IpcError
-+    send_sync_err(uint64_t dest_id, const Message &msg, Message &reply,
-+                  uint32_t reply_max_size = 0) noexcept;
-+
-+    /// @brief Typed-error core of send_sync_bounded.  Adds
-+    ///        IPC_ERR_TIMEOUT on bounded expiry (wheel arm cancelled);
-+    ///        IPC_ERR_NO_REPLY when the arm cannot be established.
-+    [[nodiscard]] static errors::IpcError
-+    send_sync_bounded_err(uint64_t dest_id, const Message &msg,
-+                          Message &reply, uint64_t timeout_ticks) noexcept;
-+
-+    /// @brief Wake every reply waiter of a dying task (M1/F7, INV-MK-11).
-+    ///        READY-marks each live task with reply_wait set whose dest tag
-+    ///        names @p dead (id + generation); the waiter owns its
-+    ///        reply_wait clear and re-checks dest liveness at loop top, so a
-+    ///        reply queued before the death is still consumed first (#296).
-+    ///        Wake-only: never arms a switch, never changes BLOCKED state.
-+    ///        Caller must hold no scheduler lock.
-+    static void wake_reply_waiters_of(TaskControlBlock &dead) noexcept;
-+
-     /// @brief Returns the message queue for a given task ID.
-     static MessageQueue &queue(uint64_t task_id);
- 
-diff --git a/src/kernel/ipc/ipc_errors.hpp b/src/kernel/ipc/ipc_errors.hpp
-index aaaaf1874..67b9c03f8 100644
---- a/src/kernel/ipc/ipc_errors.hpp
-+++ b/src/kernel/ipc/ipc_errors.hpp
-@@ -36,7 +36,8 @@ namespace kernel::errors {
-     X(TIMEOUT, 6, "Operation timed out")                                       \
-     X(INVALID_MSG, 7, "Invalid message format")                                \
-     X(NO_BUFFER, 8, "No buffer available for zero-copy")                       \
--    X(INVALID_ARGS, 9, "Invalid arguments")
-+    X(INVALID_ARGS, 9, "Invalid arguments")                                    \
-+    X(PEER_DIED, 10, "Destination task died before replying")
- 
- /// @brief IPC subsystem error codes.
- // NOLINTNEXTLINE(performance-enum-size)
-diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 39ed6669a..8c5a6aa25 100644
---- a/src/kernel/nexios_config.h
-+++ b/src/kernel/nexios_config.h
-@@ -728,7 +728,7 @@
- /// registration fails closed when the registry is exhausted.  Static bounded
- /// array — no dynamic allocation on real-time paths.
- #ifndef CONFIG_CAP_MAX_DEATH_WATCHES
--#define CONFIG_CAP_MAX_DEATH_WATCHES 16
-+#define CONFIG_CAP_MAX_DEATH_WATCHES 32 // M1/Q7: 22 SDF rows + spares (was 16)
- #endif
- 
- /// Maximum number of queued debugger stop events in the DebugStop ring
-@@ -1546,7 +1546,7 @@ extern "C" void panic(const char *msg);
- #error "CONFIG_IOPB_MAX_GRANTS must be >= 1 (default 8)"
- #endif
- #if CONFIG_CAP_MAX_DEATH_WATCHES < 1
--#error "CONFIG_CAP_MAX_DEATH_WATCHES must be >= 1 (default 16)"
-+#error "CONFIG_CAP_MAX_DEATH_WATCHES must be >= 1 (default 32)"
- #endif
- #if CONFIG_DEBUG_MAX_STOPS < 1
- #error "CONFIG_DEBUG_MAX_STOPS must be >= 1 (default 16)"
-diff --git a/src/kernel/syscall/syscall_handlers_misc.cpp b/src/kernel/syscall/syscall_handlers_misc.cpp
-index 4d17e8844..35aa212b6 100644
---- a/src/kernel/syscall/syscall_handlers_misc.cpp
-+++ b/src/kernel/syscall/syscall_handlers_misc.cpp
-@@ -105,6 +105,13 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
-         // No-ops for non-threads (checked inside).
-         TaskControlBlock::thread_join_note_termination(*t);
- 
-+        // M1/F6 (issue #559): latch the death record synchronously.  The
-+        // self-exit path never calls release_zombie, so without this the
-+        // record would wait for the deferred complete_teardown backstop.
-+        // Idempotent: the terminate_err leg below re-enters publish
-+        // harmlessly (ACTIVE→PENDING is the exactly-once mechanism).
-+        Scheduler::publish_task_death(*t);
-+
-         // If the exiting task is the current running task (the normal case for
-         // sys_exit), we must switch the CPU off it BEFORE returning to user
-         // space, otherwise the syscall epilogue iret's back into a TERMINATED
-diff --git a/src/kernel/syscall/syscall_handlers_process.cpp b/src/kernel/syscall/syscall_handlers_process.cpp
-index f25239159..306edf3ae 100644
---- a/src/kernel/syscall/syscall_handlers_process.cpp
-+++ b/src/kernel/syscall/syscall_handlers_process.cpp
-@@ -324,6 +324,9 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
-         if (signal_is_fatal(sig) || !t->has_signal_handler(sig)) {
-             t->state = TaskState::TERMINATED;
-             t->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
-+            // M1/F6 (issue #559): the self-fatal leg never reaches a
-+            // terminate funnel — latch synchronously here.
-+            Scheduler::publish_task_death(*t);
-         } else {
-             t->pending_signals |= (1ULL << sig);
-         }
-diff --git a/src/kernel/syscall/syscall_handlers_thread.cpp b/src/kernel/syscall/syscall_handlers_thread.cpp
-index 097e15e9a..e39e5a005 100644
---- a/src/kernel/syscall/syscall_handlers_thread.cpp
-+++ b/src/kernel/syscall/syscall_handlers_thread.cpp
-@@ -171,6 +171,10 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
-     // task leaves the CPU (the joiner may be anywhere).  No-op when no
-     // joiner is registered.
-     TaskControlBlock::thread_join_note_termination(*t);
-+    // M1/F6 (issue #559): synchronous death latch (see sys_exit — the
-+    // self-exit path never reaches release_zombie; idempotent with the
-+    // terminate_err leg below).
-+    Scheduler::publish_task_death(*t);
-     if (Scheduler::current_task() == t) {
-         Scheduler::switch_away_from_terminating(*t);
-     } else {
-diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
-index 34552c6f1..751b666d1 100644
---- a/src/kernel/task/scheduler.hpp
-+++ b/src/kernel/task/scheduler.hpp
-@@ -885,6 +885,19 @@ class Scheduler {
-     ///        Precondition: task.state == TERMINATED, task NOT in ready queue.
-     static void release_zombie(TaskControlBlock &task) noexcept;
- 
-+    /// @brief Latch a death record + wake the dead task's IPC waiters
-+    ///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).  Runs
-+    ///        DeathNotify::on_task_death (exactly-once via the ACTIVE→
-+    ///        PENDING slot transition) and IPC::wake_reply_waiters_of.
-+    ///        Wake-only: never arms a deferred
-+    ///        switch, never calls reschedule(), never changes a BLOCKED
-+    ///        state — bounded visibility comes from the synchronous latch
-+    ///        plus the next tick's RMS dispatch (Q4-A ≤ 2 ticks).
-+    ///        Caller must hold NO scheduler lock (the wake path takes it
-+    ///        on the not-own-CPU branch).  Safe to call from every death
-+    ///        funnel site; repeat calls are idempotent no-ops.
-+    static void publish_task_death(TaskControlBlock &dead) noexcept;
-+
-     /// @brief Invalidate the pending deferred-switch arm (clear all switch
-     ///        atoms + bump the switch generation).  Used by the apply-side
-     ///        liveness re-check (scheduler_validate_pending_switch) and by
-diff --git a/src/kernel/task/scheduler_terminate.cpp b/src/kernel/task/scheduler_terminate.cpp
-index 95f81b76f..7557bcbf7 100644
---- a/src/kernel/task/scheduler_terminate.cpp
-+++ b/src/kernel/task/scheduler_terminate.cpp
-@@ -25,6 +25,9 @@
- #include <kernel/task/scheduler_switch_internal.hpp>
- #include <kernel/task/scheduler_queue_internal.hpp>
- #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
-+#include <kernel/task/scheduler_lock_guard.hpp>  // scheduler_lock_depth_own
-+#include <kernel/ipc/death_notify.hpp>           // M1/F6 death latch
-+#include <kernel/ipc/ipc.hpp>                    // M1/F7 waiter drains
- #include <assert.hpp>                              // issue #369 T1b ENSURE
- #include <kernel/arch/timer.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
-@@ -37,6 +40,35 @@ namespace kernel {
- using sched_queue::edf_peek_valid_own;
- using sched_verify::validate_task_ptr;
- 
-+/// @brief Latch a death record + wake the dead task's IPC waiters
-+///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).
-+void Scheduler::publish_task_death(TaskControlBlock &dead) noexcept {
-+    ENSURE(validate_task_ptr(&dead, "publish_task_death"));
-+    // Wake path takes scheduler_lock_ on the not-own-CPU branch
-+    // (set_task_ready): publishing under the global lock would panic a
-+    // supervisor affine off-BSP.  All terminate funnels release the lock
-+    // before calling here; the deferred complete_teardown backstop never
-+    // holds it either.
-+    ENSURE(scheduler_lock_depth_own() == 0);
-+    arch::IrqGuard irq_guard{};
-+    // Exactly-once by construction: on_task_death only transitions
-+    // ACTIVE→PENDING, so a repeat call finds no slot and emits no poke;
-+    // the reply drain only READY-marks (the waiter owns its flag clear).
-+    ipc::DeathNotify::on_task_death(dead);
-+    // M1/F7: wake reply waiters whose dest tag names the dead task.
-+    // Queue-full senders are deliberately NOT woken here: their queue is
-+    // still intact at funnel time, and the unconditional teardown drain
-+    // (MessageQueue::~MessageQueue) wakes them with fast-fail when the
-+    // queue is destroyed.  Waking them here collapses the BLOCKED window
-+    // the handshake depends on (test IpcBlockedSenderOnReceiverCleanup:
-+    // a woken sender retries, fast-fails and terminates before the
-+    // harness ever observes BLOCKED) — convicted by bisection, full
-+    // class green without the early sender wake.
-+    IPC::wake_reply_waiters_of(dead);
-+    // Wake-only: no reschedule(), no switch_to_task (single-writer arm
-+    // rule, H2).  The poked supervisor dispatches on the next tick.
++static Stats summarize(uint64_t *arr, size_t count) {
++    Stats result{};
++    if (count == 0) {
++        return result;
++    }
++    sort_u64(arr, count);
++    result.p50 = arr[(count - 1) * 50 / 100];
++    result.p99 = arr[(count - 1) * 99 / 100];
++    result.pmax = arr[count - 1];
++    uint64_t sum = 0;
++    for (size_t idx = 0; idx < count; ++idx) {
++        sum += arr[idx];
++    }
++    result.mean = sum / count;
++    return result;
 +}
 +
- errors::SchedulerError
- Scheduler::terminate_err(TaskControlBlock &task,
-                          uint64_t exit_code) noexcept {
-@@ -60,8 +92,10 @@ Scheduler::terminate_err(TaskControlBlock &task,
-         return errors::SCHED_ERR_REMOTE_CURRENT;
-     }
-     ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
--    SchedulerLockGuard guard(scheduler_lock_);
--    charge_exec(task); // issue #21: bill the final partial quantum (no loss)
-+    // M1 scope A: termination mutations under the lock (unchanged order).
-+    {
-+        SchedulerLockGuard guard(scheduler_lock_);
-+        charge_exec(task); // issue #21: bill the final partial quantum (no loss)
- #if defined(CONFIG_DEBUG_IPC_SCHED)
-     if (task.id == 6) {
-         auto *cur = current_task();
-@@ -115,7 +149,18 @@ Scheduler::terminate_err(TaskControlBlock &task,
-         if (auto *reaper = Scheduler::find_task(1))
-             reaper->notify.notify(1);
-     }
-+    } // M1 scope A ends: lock released before the death publish.
- 
-+    // M1/F6/F7: latch the death record + drain IPC waiters with NO
-+    // scheduler lock held (publish_task_death ENSUREs this — the wake
-+    // path retakes the lock on the not-own-CPU branch).
-+    publish_task_death(task);
++static uint64_t ns_from_counter(uint64_t delta) {
++    uint64_t freq = arch::Timer::raw_counter_freq_hz();
++    if (freq == 0) {
++        return 0;
++    }
++    if (delta > ~0ULL / 1000000000ULL) {
++        return ~0ULL;
++    }
++    return delta * 1000000000ULL / freq;
++}
 +
-+    // M1 scope B: successor selection + deferred-switch arm under a fresh
-+    // lock (peek helpers read scheduler state).  The peek runs after the
-+    // publish, so newly-readied waiters/supervisors are visible to it.
++static void drain_inbox() {
++    Message tmp{};
++    while (IPC::recv(tmp)) {
++    }
++}
++
++static void relay_entry() {
++    auto *self = Scheduler::current_task();
++    auto *ctx = reinterpret_cast<RelayCtx *>(self->user_data);
++    Message msg{};
++    Message inner{};
++    Message reply{};
++    for (uint64_t trip = 0; trip < ctx->trips; ++trip) {
++        bool got = false;
++        for (int wait = 0; wait < 500; ++wait) {
++            if (IPC::recv(msg)) {
++                got = true;
++                break;
++            }
++            Scheduler::reschedule();
++            arch::hlt();
++        }
++        JARVIS_ASSERT(got);
++        JARVIS_ASSERT_EQ(k_tag_req(ctx->index), msg.type);
++        if (ctx->index + 1 < ctx->depth) {
++            Message fwd = msg;
++            fwd.sender_id = self->id;
++            fwd.type = k_tag_req(ctx->index + 1);
++            __atomic_fetch_add(&g_dispatch_events, 1ULL, __ATOMIC_RELAXED);
++            bool ok = IPC::send_sync(ctx->next_id, fwd, inner);
++            JARVIS_ASSERT(ok);
++            JARVIS_ASSERT_EQ(k_tag_rep(ctx->index + 1), inner.type);
++            reply = inner;
++        } else {
++            JARVIS_ASSERT_EQ(k_payload_bytes, msg.data_size);
++            reply = msg;
++        }
++        reply.sender_id = self->id;
++        reply.type = k_tag_rep(ctx->index);
++        reply.priority = 0;
++        __atomic_fetch_add(&g_dispatch_events, 1ULL, __ATOMIC_RELAXED);
++        bool ok = IPC::send(msg.sender_id, reply);
++        JARVIS_ASSERT(ok);
++    }
++    drain_inbox();
++}
++
++static void client_entry() {
++    auto *self = Scheduler::current_task();
++    Message req{};
++    Message rep{};
++    req.sender_id = self->id;
++    req.priority = 0;
++    req.data_size = k_payload_bytes;
++    for (uint64_t trip = 0; trip < g_client_trips; ++trip) {
++        req.type = k_tag_req(0);
++        for (size_t idx = 0; idx < k_payload_bytes; ++idx) {
++            req.data[idx] = static_cast<uint8_t>((trip + idx) & 0xFF);
++        }
++        uint64_t c0 = arch::Timer::raw_counter();
++        uint64_t t0 = arch::Timer::ticks();
++        __atomic_fetch_add(&g_dispatch_events, 1ULL, __ATOMIC_RELAXED);
++        bool ok = IPC::send_sync(g_relay_ids[0], req, rep);
++        uint64_t c1 = arch::Timer::raw_counter();
++        uint64_t t1 = arch::Timer::ticks();
++        JARVIS_ASSERT(ok);
++        JARVIS_ASSERT_EQ(k_tag_rep(0), rep.type);
++        JARVIS_ASSERT_EQ(k_payload_bytes, rep.data_size);
++        for (size_t idx = 0; idx < k_payload_bytes; ++idx) {
++            JARVIS_ASSERT_EQ(static_cast<uint64_t>(req.data[idx]),
++                             static_cast<uint64_t>(rep.data[idx]));
++        }
++        if (g_client_record && trip < k_samples) {
++            g_trip_ticks[trip] = t1 - t0;
++            g_trip_ns[trip] = ns_from_counter(c1 - c0);
++        }
++    }
++    g_trips_done = g_client_trips;
++    drain_inbox();
++}
++
++static bool run_chain(size_t depth, uint64_t trips, bool record,
++                      uint64_t client_mask, uint64_t relay_mask) {
++    if (depth == 0 || depth > k_max_relays || trips == 0) {
++        return false;
++    }
++    g_client_trips = trips;
++    g_client_record = record;
++    g_trips_done = 0;
++    g_dispatch_events = 0;
++    g_chain_client = nullptr;
++    g_chain_depth = 0;
++    for (size_t idx = 0; idx < k_max_relays; ++idx) {
++        g_relay_ids[idx] = 0;
++        g_relay_ctx[idx] = RelayCtx{};
++        g_chain_relays[idx] = nullptr;
++    }
++    for (size_t idx = 0; idx < depth; ++idx) {
++        g_chain_relays[idx] =
++            TaskControlBlock::create(relay_entry, k_relay_prio0 - idx, 10);
++        if (g_chain_relays[idx] == nullptr) {
++            return false;
++        }
++        if (!Scheduler::set_sched_policy(*g_chain_relays[idx],
++                                         SchedPolicy::FIXED)) {
++            return false;
++        }
++        g_relay_ctx[idx].index = idx;
++        g_relay_ctx[idx].depth = depth;
++        g_relay_ctx[idx].trips = trips;
++        g_chain_relays[idx]->user_data = &g_relay_ctx[idx];
++        if (relay_mask != 0) {
++            if (Scheduler::set_affinity_err(*g_chain_relays[idx], relay_mask) !=
++                errors::SCHED_ERR_OK) {
++                return false;
++            }
++        }
++    }
++    for (size_t idx = 0; idx + 1 < depth; ++idx) {
++        g_relay_ctx[idx].next_id = g_chain_relays[idx + 1]->id;
++        g_relay_ids[idx] = g_chain_relays[idx]->id;
++    }
++    g_relay_ids[depth - 1] = g_chain_relays[depth - 1]->id;
++    g_chain_client = TaskControlBlock::create(client_entry, k_client_prio, 5);
++    if (g_chain_client == nullptr) {
++        return false;
++    }
++    if (!Scheduler::set_sched_policy(*g_chain_client, SchedPolicy::FIXED)) {
++        return false;
++    }
++    if (client_mask != 0) {
++        if (Scheduler::set_affinity_err(*g_chain_client, client_mask) !=
++            errors::SCHED_ERR_OK) {
++            return false;
++        }
++    }
++    auto *original = Scheduler::current_task();
 +    {
-+        SchedulerLockGuard guard(scheduler_lock_);
-     // If the terminating task is the one currently on the CPU, arrange for a
-     // context switch to a valid successor on the next ISR.  Otherwise
-     // current_task() stays parked on a TERMINATED task and the running RSP
-@@ -147,6 +192,7 @@ Scheduler::terminate_err(TaskControlBlock &task,
-         switch_to_task(&task, *next, nullptr);
-     }
-     }
-+    } // M1 scope B ends.
-     return errors::SCHED_ERR_OK;
++        arch::IrqGuard guard;
++        for (size_t idx = 0; idx < depth; ++idx) {
++            Scheduler::add_task(*g_chain_relays[idx]);
++        }
++        Scheduler::add_task(*g_chain_client);
++    }
++    test::yield_as(*g_chain_relays[depth - 1]);
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(g_chain_client);
++    for (size_t idx = 0; idx < depth; ++idx) {
++        test::wait_for_termination_safe(g_chain_relays[idx]);
++    }
++    Scheduler::set_current(*original);
++    g_chain_depth = depth;
++    return true;
++}
++
++static void teardown_chain() {
++    for (size_t idx = 0; idx < g_chain_depth; ++idx) {
++        test::terminate_if_live(g_chain_relays[idx]);
++    }
++    test::terminate_if_live(g_chain_client);
++    Scheduler::drain_zombie_list();
++    g_chain_depth = 0;
++}
++
++} // namespace
++
++// Runmode: kernel
++// Testidea: Frozen WL descriptor drift guard (WL-1..WL-4 shape constants).
++// Input: None (compile-time descriptor only).
++// Expect: Payload/depth/trip/priority constants match the WL table; the
++//         workload line is emitted for the baseline record.
++// Depends: docs/specs/ipc-baseline.md WL table
++JARVIS_TEST(mk_baseline_workload_shape, "PRE: none | POST: none") {
++    JARVIS_ASSERT(k_payload_bytes == CONFIG_IPC_FAST_PAYLOAD_BYTES);
++    JARVIS_ASSERT(k_payload_bytes <= IPC_MAX_MSG_SIZE);
++    JARVIS_ASSERT_EQ(1U, k_depths[0]);
++    JARVIS_ASSERT_EQ(4U, k_depths[3]);
++    JARVIS_ASSERT(k_depths[0] < k_depths[1]);
++    JARVIS_ASSERT(k_depths[1] < k_depths[2]);
++    JARVIS_ASSERT(k_depths[2] < k_depths[3]);
++    JARVIS_ASSERT(2 * k_depths[3] <= k_max_hops);
++    JARVIS_ASSERT(k_trips >= 100);
++    JARVIS_ASSERT(k_relay_prio0 < k_client_prio);
++    JARVIS_ASSERT(k_client_prio > 20);
++    JARVIS_ASSERT(k_client_prio <= CONFIG_DM_PRIO_MAX);
++    JARVIS_ASSERT(CONFIG_TICK_HZ > 0);
++    JARVIS_ASSERT(k_tag_req(0) != k_tag_rep(0));
++    JARVIS_ASSERT(k_tag_req(0) != k_tag_rep(3));
++    JARVIS_ASSERT(k_tag_req(3) != k_tag_rep(0));
++    Logger::info(
++        "[MK-BASELINE] workload payload_bytes=%lu depths=1,2,3,4 trips=%lu "
++        "client_prio=%lu relay_prio=29..26 tick_hz=%lu",
++        static_cast<uint64_t>(k_payload_bytes), k_trips, k_client_prio,
++        static_cast<uint64_t>(CONFIG_TICK_HZ));
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Per-hop trip latency (ticks + raw-counter ns, p50/p99/pmax, slope).
++// Input: Relay-chain depths 1..4, 100 trips per depth via send_sync.
++// Expect: Trip accounting exact, monotone percentiles, p50 >= 1 tick,
++//         wedge ceiling, deeper chains not faster; slope published.
++// Depends: IPC::send_sync, arch::Timer::ticks/raw_counter (M0 observes only)
++JARVIS_TEST(mk_baseline_hop_latency, "PRE: none | POST: none") {
++    uint64_t medians[4] = {};
++    for (size_t d = 0; d < 4; ++d) {
++        size_t depth = k_depths[d];
++        for (size_t idx = 0; idx < k_samples; ++idx) {
++            g_trip_ticks[idx] = 0;
++            g_trip_ns[idx] = 0;
++        }
++        bool ok = run_chain(depth, k_trips, true, 0, 0);
++        JARVIS_ASSERT(ok);
++        JARVIS_ASSERT_EQ(k_trips, g_trips_done);
++        Stats tick_stats = summarize(g_trip_ticks, k_samples);
++        Stats ns_stats = summarize(g_trip_ns, k_samples);
++        medians[d] = tick_stats.p50;
++        JARVIS_ASSERT(tick_stats.pmax >= tick_stats.p99);
++        JARVIS_ASSERT(tick_stats.p99 >= tick_stats.p50);
++        JARVIS_ASSERT(ns_stats.pmax >= ns_stats.p99);
++        JARVIS_ASSERT(ns_stats.p99 >= ns_stats.p50);
++        JARVIS_ASSERT(tick_stats.p50 >= 1);
++        uint64_t hops = 2 * depth;
++        JARVIS_ASSERT(tick_stats.p50 <= hops * 8 + 8);
++        uint64_t per_hop_x100 = tick_stats.p50 * 100 / hops;
++        Logger::info(
++            "[MK-BASELINE] latency depth=%lu hops_per_trip=%lu trips=%lu "
++            "ticks_p50=%lu ticks_p99=%lu ticks_pmax=%lu "
++            "per_hop_ticks_x100=%lu ns_p50=%lu ns_p99=%lu ns_pmax=%lu",
++            static_cast<uint64_t>(depth), hops, k_trips, tick_stats.p50,
++            tick_stats.p99, tick_stats.pmax, per_hop_x100, ns_stats.p50,
++            ns_stats.p99, ns_stats.pmax);
++        teardown_chain();
++    }
++    JARVIS_ASSERT(medians[3] >= medians[0]);
++    uint64_t slope_x100 = 0;
++    if (medians[3] >= medians[0]) {
++        slope_x100 = (medians[3] - medians[0]) * 100 / 6;
++    }
++    Logger::info(
++        "[MK-BASELINE] slope_ticks_per_hop_x100=%lu median_d1=%lu "
++        "median_d4=%lu",
++        slope_x100, medians[0], medians[3]);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Switch rate over a fixed 200-trip depth-2 window (diag or proxy).
++// Input: Depth-2 chain, 200 trips; diag counter on DEBUG, entry proxy else.
++// Expect: Hop count exact, switches >= hops, source labelled.
++// Depends: sched_debug::g_diag_switch_count (DEBUG) with entry fallback
++JARVIS_TEST(mk_baseline_switch_rate, "PRE: none | POST: none") {
++    const uint64_t depth = 2;
++    const uint64_t hops = 2 * k_trips_rate * depth;
++#if defined(CONFIG_DEBUG)
++    uint64_t sw0 = sched_debug::g_diag_switch_count;
++#endif
++    uint64_t c0 = arch::Timer::raw_counter();
++    bool ok = run_chain(depth, k_trips_rate, false, 0, 0);
++    uint64_t c1 = arch::Timer::raw_counter();
++    JARVIS_ASSERT(ok);
++    JARVIS_ASSERT_EQ(k_trips_rate, g_trips_done);
++    JARVIS_ASSERT(hops == 2 * k_trips_rate * depth);
++    JARVIS_ASSERT(hops > 0);
++    uint64_t window_ns = (c1 >= c0) ? ns_from_counter(c1 - c0) : 0;
++    JARVIS_ASSERT(window_ns > 0);
++#if defined(CONFIG_DEBUG)
++    uint64_t switches = sched_debug::g_diag_switch_count - sw0;
++    const char *source = "diag";
++#else
++    uint64_t switches = g_dispatch_events;
++    const char *source = "entry";
++#endif
++    JARVIS_ASSERT(switches >= hops);
++#if defined(CONFIG_DEBUG)
++    JARVIS_ASSERT(switches > 0);
++#else
++    JARVIS_ASSERT(switches == hops);
++#endif
++    uint64_t hops_per_s =
++        (window_ns == 0) ? 0 : hops * 1000000000ULL / window_ns;
++    uint64_t switches_per_s =
++        (window_ns == 0) ? 0 : switches * 1000000000ULL / window_ns;
++    Logger::info(
++        "[MK-BASELINE] rate depth=%lu trips=%lu hops=%lu switches=%lu "
++        "source=%s window_ns=%lu hops_per_s=%lu switches_per_s=%lu",
++        depth, k_trips_rate, hops, switches, source, window_ns, hops_per_s,
++        switches_per_s);
++    teardown_chain();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Core-locality leg (same-core asserts, split-core when available).
++// Input: Depth-1 chain, same-core masks; split masks only if SMP is up.
++// Expect: Same-core affinities honoured; split emits record, else an
++//         explicit unavailable note referencing Q11 (pass, never assert).
++// Depends: Scheduler::set_affinity_err/get_affinity, up_cpu_count
++JARVIS_TEST(mk_baseline_core_locality, "PRE: none | POST: none") {
++    uint64_t c0 = arch::Timer::raw_counter();
++    bool ok = run_chain(1, k_trips, true, 0x1, 0x1);
++    uint64_t c1 = arch::Timer::raw_counter();
++    JARVIS_ASSERT(ok);
++    JARVIS_ASSERT_EQ(k_trips, g_trips_done);
++    JARVIS_ASSERT_EQ(0x1ULL, Scheduler::get_affinity(*g_chain_client));
++    JARVIS_ASSERT_EQ(0x1ULL, Scheduler::get_affinity(*g_chain_relays[0]));
++    Stats tick_stats = summarize(g_trip_ticks, k_samples);
++    uint64_t window_ns = (c1 >= c0) ? ns_from_counter(c1 - c0) : 0;
++    uint64_t hops = 2 * k_trips;
++    uint64_t hops_per_s =
++        (window_ns == 0) ? 0 : hops * 1000000000ULL / window_ns;
++    Logger::info(
++        "[MK-BASELINE] core same_core hops_per_s=%lu p50_ticks=%lu "
++        "up_cpus=%lu",
++        hops_per_s, tick_stats.p50, Scheduler::up_cpu_count());
++    teardown_chain();
++    if (Scheduler::up_cpu_count() > 1) {
++        bool split_ok = run_chain(1, k_trips, true, 0x1, 0x2);
++        JARVIS_ASSERT(split_ok);
++        JARVIS_ASSERT_EQ(k_trips, g_trips_done);
++        JARVIS_ASSERT_EQ(0x1ULL, Scheduler::get_affinity(*g_chain_client));
++        JARVIS_ASSERT_EQ(0x2ULL, Scheduler::get_affinity(*g_chain_relays[0]));
++        Stats split_stats = summarize(g_trip_ticks, k_samples);
++        Logger::info("[MK-BASELINE] core split p50_ticks=%lu up_cpus=%lu",
++                     split_stats.p50, Scheduler::up_cpu_count());
++        teardown_chain();
++    } else {
++        Logger::info(
++            "[MK-BASELINE] core split=unavailable up_cpus=%lu note=Q11/#525",
++            Scheduler::up_cpu_count());
++    }
++    JARVIS_TEST_PASS();
++}
++
++void register_bench_mk_baseline_tests() {
++    JARVIS_REGISTER_TEST_FLAGS(mk_baseline_workload_shape, kernel::test::TF_BENCH);
++    JARVIS_REGISTER_TEST_FLAGS(mk_baseline_hop_latency, kernel::test::TF_BENCH);
++    JARVIS_REGISTER_TEST_FLAGS(mk_baseline_switch_rate, kernel::test::TF_BENCH);
++    JARVIS_REGISTER_TEST_FLAGS(mk_baseline_core_locality, kernel::test::TF_BENCH);
++}
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index 8273b6169..0b771da1a 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -278,7 +278,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"bench_irq",             3,    0,       0      },  // IRQ latency histogram (TF_BENCH)
+     {"bench_path_tracer",     1,    0,       0      },  // path-tracer per-step overhead, TF_BENCH
+     {"bench_jitter",          2,    0,       0      },  // schedule-to-schedule jitter
+-    {"bench_microkernel",     5,    0,       0      },  // minimal privileged surface / isolation / jitter / drift
++    {"bench_microkernel",     12,   0,       0      },  // +7 mk stubs (#547 IPC-2/IPC-4/SCHED-1/IRQ-1/IRQ-2/MEM-1/MEM-2)
+ 
+     // hrt — hard real-time measurement
+     {"stress_hrt",            2,    0,       0      },  // rdtsc canary + IPC under stress (TF_KERNEL)
+@@ -323,7 +323,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"ui",                  87,   87,      87     },  // shell_* + framebuffer + debug_dump + sampler
+     {"logging_debug",       36,   0,       0      },  // dmesg + klog + debug + gcov
+     {"random",              17,   0,       0      },  // random_*
+-    {"bench",               28,   0,       0      },  // bench_* (TF_BENCH)
++    {"bench",               39,   0,       0      },  // bench_* (TF_BENCH) incl. 4 mk_baseline M0 F17
+     {"syscall_affinity",    4,    0,       0      },  // SET/GET affinity syscalls
+     {"tls",                 13,   12,      12     },  // TLS publish/apply + errno cell
+ };
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index 49a2a3563..4887b3426 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -89,6 +89,7 @@ void register_atomic_context_switch_tests();
+ void register_bench_syscall_latency_tests();
+ void register_bench_irq_latency_tests();
+ void register_bench_path_tracer_tests(); // issue #347 Slice E
++void register_bench_mk_baseline_tests(); // M0 F17 #570
+ void register_apic_timer_tests();
+ void register_apic_tpr_tests();
+ void register_jitter_tests();
+@@ -644,6 +645,7 @@ static void run_bench_irq_group() { register_bench_irq_latency_tests(); }
+ static void run_bench_path_tracer_group() {
+     register_bench_path_tracer_tests();
  }
- 
-@@ -180,9 +226,11 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
-         return errors::SCHED_ERR_REMOTE_CURRENT;
-     }
-     ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take
--    SchedulerLockGuard guard(scheduler_lock_);
--    charge_exec(task); // issue #21: bill the final partial quantum
--    dequeue_ready(task);
-+    // M1 scope A: termination mutations under the lock (unchanged order).
-+    {
-+        SchedulerLockGuard guard(scheduler_lock_);
-+        charge_exec(task); // issue #21: bill the final partial quantum
-+        dequeue_ready(task);
-     task.state = TaskState::TERMINATED;
-     task.exit_code = exit_code;
-     // Issue #53: join-rendezvous handoff (mirrors terminate_err).
-@@ -199,6 +247,13 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
-         if (auto *reaper = Scheduler::find_task(1))
-             reaper->notify.notify(1);
-     }
-+    } // M1 scope A ends: lock released before the death publish.
-+
-+    // M1/F6/F7: latch + drain with NO scheduler lock held.  The caller
-+    // (switch_away_from_terminating) arms the deferred switch AFTER this
-+    // returns — publish never arms, so the zombie-before-arm ordering the
-+    // caller contract requires is preserved.
-+    publish_task_death(task);
-     return errors::SCHED_ERR_OK;
- }
- 
-diff --git a/src/kernel/task/task.cpp b/src/kernel/task/task.cpp
-index a16fbfa99..319b42176 100644
---- a/src/kernel/task/task.cpp
-+++ b/src/kernel/task/task.cpp
-@@ -407,6 +407,9 @@ void init_task_common(TaskControlBlock &tcb) {
-     tcb.blocked_next = nullptr;
-     tcb.blocked_prev = nullptr;
-     tcb.blocked_on_queue = nullptr;
-+    tcb.reply_wait = false;
-+    tcb.reply_wait_dest_id = 0;
-+    tcb.reply_wait_dest_gen = 0;
-     tcb.waiting_on_semaphore = nullptr;
-     tcb.waiting_on_eventgroup = nullptr;
-     tcb.waiting_on_queue = nullptr;
-@@ -2734,13 +2737,12 @@ void TaskControlBlock::complete_teardown() noexcept {
-     // instead of blocking on a zombie destination.
-     kernel::daemon::notify_death(this->id);
- 
--    // Issue #105 Part B: latch this task's death records and poke its
--    // supervisors BEFORE any of this task's resources are torn down, so a
--    // still-resolvable supervisor is woken while the death is fresh.  Then free
--    // this task's own watches (incl. any PENDING records it held as a
--    // supervisor for others) before its Notify is destroyed below — a poke or a
--    // drain must never touch a recycled supervisor TCB.
--    kernel::ipc::DeathNotify::on_task_death(*this);
-+    // Issue #105 Part B + M1/F6 (issue #559): death publish BEFORE any
-+    // resource teardown.  The prompt funnels (terminate/exit/kill)
-+    // latch first; this is the backstop for destroy()-driven and
-+    // reaper-driven deaths.  Exactly-once is guaranteed by the
-+    // ACTIVE→PENDING slot transition in DeathNotify::on_task_death.
-+    Scheduler::publish_task_death(*this);
- 
-     // Issue #226: debugger stop routing — publish the task-death stop
-     // event (reserved slot, never dropped) while bindings, Notify, and
-diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index cb2faaa32..1e9455081 100644
---- a/src/kernel/task/task.hpp
-+++ b/src/kernel/task/task.hpp
-@@ -342,6 +342,7 @@ struct TaskControlBlock {
-            buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
-           blocked_next(nullptr), blocked_prev(nullptr),
-           blocked_on_queue(nullptr), reply_wait(false),
-+          reply_wait_dest_id(0), reply_wait_dest_gen(0),
-           blocked_in_recv(false),
-            waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
-            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
-@@ -898,6 +899,19 @@ struct TaskControlBlock {
-     /// unblocked and hang forever).
-     bool reply_wait;
- 
-+    /// @brief Reply-wait destination tag (M1/F7, issues #559/#560).
-+    ///        Transient wait state: the id + generation of the task the
-+    ///        owner is blocked on in IPC::send_sync(_bounded), or 0 when
-+    ///        no reply wait is outstanding.  Written BEFORE reply_wait
-+    ///        (RELEASE store) and read ACQUIRED by IPC::wake_reply_waiters_of,
-+    ///        so a fault-kill drain (ISR context) can never observe
-+    ///        reply_wait == true with a stale tag (§11.6, §12.2: a
-+    ///        recycled TCB id can never alias the tag).  Cleared on every
-+    ///        waiter loop exit; never added to TaskFields (same treatment
-+    ///        as reply_wait).
-+    uint64_t reply_wait_dest_id;
-+    uint32_t reply_wait_dest_gen;
-+
-     /// @brief True while a task is BLOCKED in a receive wait (sys_receive /
-     /// sys_recv_fast) for a message on its own queue.  Lets IPC::send wake
-     /// a recv-waiter on message arrival.  Set immediately before the BLOCKED
++static void run_bench_mk_baseline_group() { register_bench_mk_baseline_tests(); }
+ static void run_bench_jitter_group() { register_jitter_tests(); }
+ static void run_bench_microkernel_group() {
+     register_microkernel_transition_tests();
+@@ -1390,6 +1392,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
+          run_bench_path_tracer_group(); // issue #347 Slice E
+          run_bench_jitter_group();
+          run_bench_microkernel_group();
++          run_bench_mk_baseline_group(); // M0 F17 #570
+          run_bench_wcet_memory_group();
+      }},
+ };
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index 7886edfa7..ad22d8e3b 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -42,6 +42,7 @@ __attribute__((weak)) void register_spinlock_stress_tests() {}
+ __attribute__((weak)) void register_atomic_context_switch_tests() {}
+ __attribute__((weak)) void register_bench_syscall_latency_tests() {}
+ __attribute__((weak)) void register_bench_irq_latency_tests() {}
++__attribute__((weak)) void register_bench_mk_baseline_tests() {} // M0 F17 #570
+ __attribute__((weak)) void register_gdt_tests() {}
+ __attribute__((weak)) void register_idt_tests() {}
+ __attribute__((weak)) void register_exc_table_tests() {}
