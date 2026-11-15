@@ -885,6 +885,19 @@ class Scheduler {
     ///        Precondition: task.state == TERMINATED, task NOT in ready queue.
     static void release_zombie(TaskControlBlock &task) noexcept;
 
+    /// @brief Latch a death record + wake the dead task's IPC waiters
+    ///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).  Runs
+    ///        DeathNotify::on_task_death (exactly-once via the ACTIVE→
+    ///        PENDING slot transition) and IPC::wake_reply_waiters_of.
+    ///        Wake-only: never arms a deferred
+    ///        switch, never calls reschedule(), never changes a BLOCKED
+    ///        state — bounded visibility comes from the synchronous latch
+    ///        plus the next tick's RMS dispatch (Q4-A ≤ 2 ticks).
+    ///        Caller must hold NO scheduler lock (the wake path takes it
+    ///        on the not-own-CPU branch).  Safe to call from every death
+    ///        funnel site; repeat calls are idempotent no-ops.
+    static void publish_task_death(TaskControlBlock &dead) noexcept;
+
     /// @brief Invalidate the pending deferred-switch arm (clear all switch
     ///        atoms + bump the switch generation).  Used by the apply-side
     ///        liveness re-check (scheduler_validate_pending_switch) and by

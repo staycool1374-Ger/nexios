@@ -350,8 +350,9 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     // send_sync sets reply_wait and blocks; without this, the reply would sit
     // in the queue and the sender would hang forever (only rescued by a
     // spurious re-dispatch).  This is the reply-delivery wakeup path.
-    if (tcb->reply_wait) {
-        tcb->reply_wait = false;
+    // M1/F7 (§11.6): ACQUIRE load pairs with the waiter's RELEASE publish.
+    if (__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&tcb->reply_wait, false, __ATOMIC_RELEASE);
         if (tcb->state == TaskState::BLOCKED) {
             IPC_SCHED_TRACE("[WAKE]", "dest=", dest_id,
                             "st=", static_cast<uint64_t>(tcb->state),
@@ -372,8 +373,8 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     // (blocked_on_queue) self-correct on the fullness re-check; receive
     // waiters (blocked_in_recv) consume the arrival.
     if (tcb->state == TaskState::BLOCKED &&
-        (tcb->reply_wait || tcb->blocked_on_queue != nullptr ||
-         tcb->blocked_in_recv)) {
+        (__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE) ||
+         tcb->blocked_on_queue != nullptr || tcb->blocked_in_recv)) {
         Scheduler::set_task_ready(*tcb);
         tcb->remaining_ticks = tcb->period_ticks;
     }
@@ -452,7 +453,8 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
     // only IPC-channel waiters (reply_wait, queue-full senders,
     // receive waiters) may wake on message arrival.
     if (receiver && receiver->state == TaskState::BLOCKED &&
-        (receiver->reply_wait || receiver->blocked_on_queue != nullptr ||
+        (__atomic_load_n(&receiver->reply_wait, __ATOMIC_ACQUIRE) ||
+         receiver->blocked_on_queue != nullptr ||
          receiver->blocked_in_recv)) {
         Scheduler::set_task_ready(*receiver);
         receiver->remaining_ticks = receiver->period_ticks;
@@ -482,16 +484,17 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
 ///        stay queued for their real consumer.  All other dispositions are
 ///        unchanged from the v1 contract (dest-death reply preservation,
 ///        #11 oversized-stays-queued clamp, arrival-triggered wake).
-bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
-                    uint32_t reply_max_size) noexcept {
+errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
+                                     Message &reply,
+                                     uint32_t reply_max_size) noexcept {
     // Send the request message
     if (!send(dest_id, msg))
-        return false;
+        return errors::IPC_ERR_NO_REPLY;
 
     // Block waiting for a reply on our own queue
     auto *cur = Scheduler::current_task();
     if (!cur)
-        return false;
+        return errors::IPC_ERR_NO_REPLY;
 
     bool was_blocked = false;
     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
@@ -505,7 +508,9 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
                              reply, reply_max_size, dest_id)
                        : cur->msg_queue.pop_from_sender(reply, dest_id);
         if (got) {
-            cur->reply_wait = false;
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
             if (was_blocked) {
                 cur->remaining_ticks = cur->period_ticks;
                 // Issue #513: the wait loop below ends each sleep with
@@ -517,18 +522,20 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
                 // (was_blocked == false) never touched SIE: preserve it.
                 arch::sti();
             }
-            return true;
+            return errors::IPC_ERR_OK;
         }
         // Clamped with a matching-but-oversized reply queued: fail closed
         // at once (no block) so the fastpath caller falls back to a full
         // RECEIVE — the pre-#296 immediate-false contract, preserved.
         if (reply_max_size != 0 && cur->msg_queue.has_from(dest_id)) {
-            cur->reply_wait = false;
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
             if (was_blocked) {
                 cur->remaining_ticks = cur->period_ticks;
                 arch::sti(); // Issue #513: restore IRQ-on (see above).
             }
-            return false;
+            return errors::IPC_ERR_NO_REPLY;
         }
         // If destination died while we were waiting for a reply, bail out.
         // BUT: a reply may already be queued (the peer delivered its reply
@@ -538,7 +545,17 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
         // means the peer died before replying.  Non-matching messages are
         // never consumed here, so the queue is left intact on failure.
         auto *dest = Scheduler::find_task(dest_id);
-        if (!dest || dest->state == TaskState::TERMINATED) {
+        // M1/F7 (§12.2): a live id whose generation no longer matches the
+        // wait tag is a recycled slot — the waited-on task is gone.  The
+        // generation check only applies once a wait was armed (was_blocked);
+        // the unpublished tag (0) never matches a live generation.
+        bool dest_gone =
+            !dest || dest->state == TaskState::TERMINATED ||
+            dest->state == TaskState::REAPED ||
+            (was_blocked &&
+             dest->generation !=
+                 __atomic_load_n(&cur->reply_wait_dest_gen, __ATOMIC_ACQUIRE));
+        if (dest_gone) {
             if (reply_max_size == 0 && cur->msg_queue.has_from(dest_id)) {
                 continue; // unclamped match present: consume next iteration
             }
@@ -549,15 +566,22 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
             // latched reply channel — the caller resumes running now, and a
             // leftover BLOCKED/reply_wait would mislead the next scheduler
             // decision (issue #513 follow-up: stale wait-state livelock).
-            cur->reply_wait = false;
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
             cur->state = TaskState::RUNNING;
             if (was_blocked) {
                 arch::sti(); // Issue #513: restore IRQ-on (see above).
             }
-            return false;
+            return errors::IPC_ERR_PEER_DIED;
         }
 
-        cur->reply_wait = true;
+        // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag —
+        // RELEASE order lets the death drain observe (tag, flag) atomically.
+        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
+        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
         cur->state = TaskState::BLOCKED;
         Scheduler::dequeue_ready(*cur);
         was_blocked = true;
@@ -578,20 +602,28 @@ bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
     }
 }
 
+/// @brief Send and block until a reply arrives (client-side synchronous IPC).
+bool IPC::send_sync(uint64_t dest_id, const Message &msg, Message &reply,
+                    uint32_t reply_max_size) noexcept {
+    return send_sync_err(dest_id, msg, reply, reply_max_size) ==
+           errors::IPC_ERR_OK;
+}
+
 /// @brief Bounded send_sync for server proxies (issues #241, #48).
-bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
-                            Message &reply,
-                            uint64_t timeout_ticks) noexcept {
+errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
+                                            const Message &msg,
+                                            Message &reply,
+                                            uint64_t timeout_ticks) noexcept {
     if (!send(dest_id, msg)) {
-        return false;
+        return errors::IPC_ERR_NO_REPLY;
     }
     auto *cur = Scheduler::current_task();
     if (!cur) {
-        return false;
+        return errors::IPC_ERR_NO_REPLY;
     }
     if (timeout_ticks != 0) {
         if (!recv_wait_arm(*cur, timeout_ticks)) {
-            return false; // fail-closed: no arm, no block (never park)
+            return errors::IPC_ERR_NO_REPLY; // fail-closed: no arm, no block
         }
     }
     bool was_blocked = false;
@@ -599,7 +631,9 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
     for (;;) {
         bool got = cur->msg_queue.pop_from_sender(reply, dest_id);
         if (got) {
-            cur->reply_wait = false;
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
             if (armed_here) {
                 recv_wait_cancel(*cur);
             }
@@ -607,10 +641,12 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
                 cur->remaining_ticks = cur->period_ticks;
                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
             }
-            return true;
+            return errors::IPC_ERR_OK;
         }
         if (cur->recv_timed_out) {
-            cur->reply_wait = false;
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
             cur->recv_timed_out = false;
             recv_wait_cancel(*cur);
             // Wait over: caller resumes running (see above).
@@ -618,10 +654,17 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
             if (was_blocked) {
                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
             }
-            return false; // bounded expiry: fail-closed, no silent success
+            return errors::IPC_ERR_TIMEOUT; // bounded expiry: fail-closed
         }
         auto *dest = Scheduler::find_task(dest_id);
-        if (!dest || dest->state == TaskState::TERMINATED) {
+        // M1/F7 (§12.2): generation check gated on armed wait (see send_sync).
+        bool dest_gone =
+            !dest || dest->state == TaskState::TERMINATED ||
+            dest->state == TaskState::REAPED ||
+            (was_blocked &&
+             dest->generation !=
+                 __atomic_load_n(&cur->reply_wait_dest_gen, __ATOMIC_ACQUIRE));
+        if (dest_gone) {
             if (cur->msg_queue.has_from(dest_id)) {
                 continue; // unclamped match present: consume next iteration
             }
@@ -629,14 +672,20 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
                 recv_wait_cancel(*cur);
             }
             // Wait is over (see above): clear the channel, restore RUNNING.
-            cur->reply_wait = false;
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
             cur->state = TaskState::RUNNING;
             if (was_blocked) {
                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
             }
-            return false;
+            return errors::IPC_ERR_PEER_DIED;
         }
-        cur->reply_wait = true;
+        // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag.
+        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
+        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
+                         __ATOMIC_RELEASE);
+        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
         cur->state = TaskState::BLOCKED;
         Scheduler::dequeue_ready(*cur);
         was_blocked = true;
@@ -647,6 +696,14 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
         arch::hlt();
         arch::cli();
     }
+}
+
+/// @brief Bounded send_sync for server proxies (issues #241, #48).
+bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
+                            Message &reply,
+                            uint64_t timeout_ticks) noexcept {
+    return send_sync_bounded_err(dest_id, msg, reply, timeout_ticks) ==
+           errors::IPC_ERR_OK;
 }
 
 /// @brief Return a reference to a task's message queue (asserts existence).
@@ -811,6 +868,39 @@ void IPC::wake_sender(MessageQueue &q, TaskControlBlock &receiver) {
         // bucket to move and is re-enqueued later via effective_priority.
         if (old_prio != new_prio && receiver.in_ready_queue_)
             Scheduler::move_priority(receiver, old_prio, new_prio);
+    }
+}
+
+/// @brief Wake every reply waiter of a dying task (M1/F7, INV-MK-11).
+void IPC::wake_reply_waiters_of(TaskControlBlock &dead) noexcept {
+    // No scheduler lock held (set_task_ready takes it on the not-own-CPU
+    // branch).  IrqGuard pins the all_tasks_ walk against a concurrent
+    // recycle on this CPU; cross-CPU teardown is serialized by the
+    // waiter's own loop-top re-check (tag + find_task + state).
+    arch::IrqGuard irq_guard{};
+    const uint64_t dead_id = dead.id;
+    const uint32_t dead_gen = dead.generation;
+    Scheduler::TaskIter it{};
+    for (TaskControlBlock *w = it.next(&dead); w != nullptr;
+         w = it.next(&dead)) {
+        // §12.1 dead-state filter: never touch TERMINATED/REAPED TCBs.
+        if (w->state == TaskState::TERMINATED || w->state == TaskState::REAPED)
+            continue;
+        // M1/F7 (§11.6): ACQUIRE the flag first; the tag is only meaningful
+        // when the flag was observably set.
+        if (!__atomic_load_n(&w->reply_wait, __ATOMIC_ACQUIRE))
+            continue;
+        if (__atomic_load_n(&w->reply_wait_dest_id, __ATOMIC_ACQUIRE) !=
+            dead_id)
+            continue;
+        if (__atomic_load_n(&w->reply_wait_dest_gen, __ATOMIC_ACQUIRE) !=
+            dead_gen)
+            continue;
+        // Wake-only (never arms a switch, never clears the waiter's flag):
+        // the waiter owns its reply_wait clear and re-checks the queued
+        // reply first at loop top, so a pre-death reply is never lost (#296).
+        Scheduler::set_task_ready(*w);
+        w->remaining_ticks = w->period_ticks;
     }
 }
 

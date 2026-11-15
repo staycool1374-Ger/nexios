@@ -22,6 +22,7 @@
 /// @brief Priority-based IPC — send, recv, events, notifications.
 
 #include <types.hpp>
+#include <kernel/ipc/ipc_errors.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -140,6 +141,32 @@ class IPC {
     [[nodiscard]] static bool send_sync_bounded(uint64_t dest_id,
                                   const Message &msg, Message &reply,
                                   uint64_t timeout_ticks) noexcept;
+
+    /// @brief Typed-error core of send_sync (M1/F7, issues #559/#560).
+    ///        Identical rendezvous semantics; returns IPC_ERR_OK on reply
+    ///        consumed, IPC_ERR_NO_REPLY on clamped-oversize or dest-gone
+    ///        without a queued reply, IPC_ERR_PEER_DIED when the
+    ///        destination id is absent, TERMINATED, or generation-mismatched
+    ///        (§12.2 PID-reuse close).  send_sync() is this returning == OK.
+    [[nodiscard]] static errors::IpcError
+    send_sync_err(uint64_t dest_id, const Message &msg, Message &reply,
+                  uint32_t reply_max_size = 0) noexcept;
+
+    /// @brief Typed-error core of send_sync_bounded.  Adds
+    ///        IPC_ERR_TIMEOUT on bounded expiry (wheel arm cancelled);
+    ///        IPC_ERR_NO_REPLY when the arm cannot be established.
+    [[nodiscard]] static errors::IpcError
+    send_sync_bounded_err(uint64_t dest_id, const Message &msg,
+                          Message &reply, uint64_t timeout_ticks) noexcept;
+
+    /// @brief Wake every reply waiter of a dying task (M1/F7, INV-MK-11).
+    ///        READY-marks each live task with reply_wait set whose dest tag
+    ///        names @p dead (id + generation); the waiter owns its
+    ///        reply_wait clear and re-checks dest liveness at loop top, so a
+    ///        reply queued before the death is still consumed first (#296).
+    ///        Wake-only: never arms a switch, never changes BLOCKED state.
+    ///        Caller must hold no scheduler lock.
+    static void wake_reply_waiters_of(TaskControlBlock &dead) noexcept;
 
     /// @brief Returns the message queue for a given task ID.
     static MessageQueue &queue(uint64_t task_id);

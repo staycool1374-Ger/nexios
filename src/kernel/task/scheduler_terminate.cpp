@@ -25,6 +25,9 @@
 #include <kernel/task/scheduler_switch_internal.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
+#include <kernel/task/scheduler_lock_guard.hpp>  // scheduler_lock_depth_own
+#include <kernel/ipc/death_notify.hpp>           // M1/F6 death latch
+#include <kernel/ipc/ipc.hpp>                    // M1/F7 waiter drains
 #include <assert.hpp>                              // issue #369 T1b ENSURE
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
@@ -36,6 +39,35 @@ namespace kernel {
 
 using sched_queue::edf_peek_valid_own;
 using sched_verify::validate_task_ptr;
+
+/// @brief Latch a death record + wake the dead task's IPC waiters
+///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).
+void Scheduler::publish_task_death(TaskControlBlock &dead) noexcept {
+    ENSURE(validate_task_ptr(&dead, "publish_task_death"));
+    // Wake path takes scheduler_lock_ on the not-own-CPU branch
+    // (set_task_ready): publishing under the global lock would panic a
+    // supervisor affine off-BSP.  All terminate funnels release the lock
+    // before calling here; the deferred complete_teardown backstop never
+    // holds it either.
+    ENSURE(scheduler_lock_depth_own() == 0);
+    arch::IrqGuard irq_guard{};
+    // Exactly-once by construction: on_task_death only transitions
+    // ACTIVE→PENDING, so a repeat call finds no slot and emits no poke;
+    // the reply drain only READY-marks (the waiter owns its flag clear).
+    ipc::DeathNotify::on_task_death(dead);
+    // M1/F7: wake reply waiters whose dest tag names the dead task.
+    // Queue-full senders are deliberately NOT woken here: their queue is
+    // still intact at funnel time, and the unconditional teardown drain
+    // (MessageQueue::~MessageQueue) wakes them with fast-fail when the
+    // queue is destroyed.  Waking them here collapses the BLOCKED window
+    // the handshake depends on (test IpcBlockedSenderOnReceiverCleanup:
+    // a woken sender retries, fast-fails and terminates before the
+    // harness ever observes BLOCKED) — convicted by bisection, full
+    // class green without the early sender wake.
+    IPC::wake_reply_waiters_of(dead);
+    // Wake-only: no reschedule(), no switch_to_task (single-writer arm
+    // rule, H2).  The poked supervisor dispatches on the next tick.
+}
 
 errors::SchedulerError
 Scheduler::terminate_err(TaskControlBlock &task,
@@ -60,8 +92,10 @@ Scheduler::terminate_err(TaskControlBlock &task,
         return errors::SCHED_ERR_REMOTE_CURRENT;
     }
     ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take (non-recursive)
-    SchedulerLockGuard guard(scheduler_lock_);
-    charge_exec(task); // issue #21: bill the final partial quantum (no loss)
+    // M1 scope A: termination mutations under the lock (unchanged order).
+    {
+        SchedulerLockGuard guard(scheduler_lock_);
+        charge_exec(task); // issue #21: bill the final partial quantum (no loss)
 #if defined(CONFIG_DEBUG_IPC_SCHED)
     if (task.id == 6) {
         auto *cur = current_task();
@@ -115,7 +149,18 @@ Scheduler::terminate_err(TaskControlBlock &task,
         if (auto *reaper = Scheduler::find_task(1))
             reaper->notify.notify(1);
     }
+    } // M1 scope A ends: lock released before the death publish.
 
+    // M1/F6/F7: latch the death record + drain IPC waiters with NO
+    // scheduler lock held (publish_task_death ENSUREs this — the wake
+    // path retakes the lock on the not-own-CPU branch).
+    publish_task_death(task);
+
+    // M1 scope B: successor selection + deferred-switch arm under a fresh
+    // lock (peek helpers read scheduler state).  The peek runs after the
+    // publish, so newly-readied waiters/supervisors are visible to it.
+    {
+        SchedulerLockGuard guard(scheduler_lock_);
     // If the terminating task is the one currently on the CPU, arrange for a
     // context switch to a valid successor on the next ISR.  Otherwise
     // current_task() stays parked on a TERMINATED task and the running RSP
@@ -147,6 +192,7 @@ Scheduler::terminate_err(TaskControlBlock &task,
         switch_to_task(&task, *next, nullptr);
     }
     }
+    } // M1 scope B ends.
     return errors::SCHED_ERR_OK;
 }
 
@@ -180,9 +226,11 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
         return errors::SCHED_ERR_REMOTE_CURRENT;
     }
     ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take
-    SchedulerLockGuard guard(scheduler_lock_);
-    charge_exec(task); // issue #21: bill the final partial quantum
-    dequeue_ready(task);
+    // M1 scope A: termination mutations under the lock (unchanged order).
+    {
+        SchedulerLockGuard guard(scheduler_lock_);
+        charge_exec(task); // issue #21: bill the final partial quantum
+        dequeue_ready(task);
     task.state = TaskState::TERMINATED;
     task.exit_code = exit_code;
     // Issue #53: join-rendezvous handoff (mirrors terminate_err).
@@ -199,6 +247,13 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
         if (auto *reaper = Scheduler::find_task(1))
             reaper->notify.notify(1);
     }
+    } // M1 scope A ends: lock released before the death publish.
+
+    // M1/F6/F7: latch + drain with NO scheduler lock held.  The caller
+    // (switch_away_from_terminating) arms the deferred switch AFTER this
+    // returns — publish never arms, so the zombie-before-arm ordering the
+    // caller contract requires is preserved.
+    publish_task_death(task);
     return errors::SCHED_ERR_OK;
 }
 

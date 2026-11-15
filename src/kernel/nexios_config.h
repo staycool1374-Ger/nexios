@@ -728,7 +728,7 @@
 /// registration fails closed when the registry is exhausted.  Static bounded
 /// array — no dynamic allocation on real-time paths.
 #ifndef CONFIG_CAP_MAX_DEATH_WATCHES
-#define CONFIG_CAP_MAX_DEATH_WATCHES 16
+#define CONFIG_CAP_MAX_DEATH_WATCHES 32 // M1/Q7: 22 SDF rows + spares (was 16)
 #endif
 
 /// Maximum number of queued debugger stop events in the DebugStop ring
@@ -1546,7 +1546,7 @@ extern "C" void panic(const char *msg);
 #error "CONFIG_IOPB_MAX_GRANTS must be >= 1 (default 8)"
 #endif
 #if CONFIG_CAP_MAX_DEATH_WATCHES < 1
-#error "CONFIG_CAP_MAX_DEATH_WATCHES must be >= 1 (default 16)"
+#error "CONFIG_CAP_MAX_DEATH_WATCHES must be >= 1 (default 32)"
 #endif
 #if CONFIG_DEBUG_MAX_STOPS < 1
 #error "CONFIG_DEBUG_MAX_STOPS must be >= 1 (default 16)"

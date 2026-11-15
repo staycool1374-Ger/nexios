@@ -324,6 +324,9 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
         if (signal_is_fatal(sig) || !t->has_signal_handler(sig)) {
             t->state = TaskState::TERMINATED;
             t->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
+            // M1/F6 (issue #559): the self-fatal leg never reaches a
+            // terminate funnel — latch synchronously here.
+            Scheduler::publish_task_death(*t);
         } else {
             t->pending_signals |= (1ULL << sig);
         }

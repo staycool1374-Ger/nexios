@@ -171,6 +171,10 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     // task leaves the CPU (the joiner may be anywhere).  No-op when no
     // joiner is registered.
     TaskControlBlock::thread_join_note_termination(*t);
+    // M1/F6 (issue #559): synchronous death latch (see sys_exit — the
+    // self-exit path never reaches release_zombie; idempotent with the
+    // terminate_err leg below).
+    Scheduler::publish_task_death(*t);
     if (Scheduler::current_task() == t) {
         Scheduler::switch_away_from_terminating(*t);
     } else {

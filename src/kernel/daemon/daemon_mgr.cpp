@@ -430,6 +430,10 @@ void terminate(const char *name) {
             task->magic == TaskControlBlock::TCB_MAGIC) {
             task->state = TaskState::TERMINATED;
             task->exit_code = 0;
+            // M1/F6 (issue #559): interim supervisor path never reaches a
+            // terminate funnel — latch synchronously so the restart loop
+            // observes the death without a reaper pass.
+            Scheduler::publish_task_death(*task);
         }
 
         notify_death(entries_[i].pid); // clears PID + calls set_pid_fn(0)
