@@ -316,7 +316,8 @@ checked by `sdf_compose`; a composition that violates it fails.
   receiver is blocked in receive and runnable on this core, the kernel switches
   to it inside the syscall, without waiting for a tick.
 - Per-hop bound and end-to-end overhead target: `TBD at API freeze` (Q3),
-  set against the baseline from M0 (F17).
+  set against the baseline from M0 (F17); the measured record lives in
+  `docs/specs/ipc-baseline.md` §4.
 
 ## 6. Preemption, IRQ and lock discipline (#545, #546)
 
