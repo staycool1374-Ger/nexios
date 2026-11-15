@@ -407,6 +407,9 @@ void init_task_common(TaskControlBlock &tcb) {
     tcb.blocked_next = nullptr;
     tcb.blocked_prev = nullptr;
     tcb.blocked_on_queue = nullptr;
+    tcb.reply_wait = false;
+    tcb.reply_wait_dest_id = 0;
+    tcb.reply_wait_dest_gen = 0;
     tcb.waiting_on_semaphore = nullptr;
     tcb.waiting_on_eventgroup = nullptr;
     tcb.waiting_on_queue = nullptr;
@@ -2734,13 +2737,12 @@ void TaskControlBlock::complete_teardown() noexcept {
     // instead of blocking on a zombie destination.
     kernel::daemon::notify_death(this->id);
 
-    // Issue #105 Part B: latch this task's death records and poke its
-    // supervisors BEFORE any of this task's resources are torn down, so a
-    // still-resolvable supervisor is woken while the death is fresh.  Then free
-    // this task's own watches (incl. any PENDING records it held as a
-    // supervisor for others) before its Notify is destroyed below — a poke or a
-    // drain must never touch a recycled supervisor TCB.
-    kernel::ipc::DeathNotify::on_task_death(*this);
+    // Issue #105 Part B + M1/F6 (issue #559): death publish BEFORE any
+    // resource teardown.  The prompt funnels (terminate/exit/kill)
+    // latch first; this is the backstop for destroy()-driven and
+    // reaper-driven deaths.  Exactly-once is guaranteed by the
+    // ACTIVE→PENDING slot transition in DeathNotify::on_task_death.
+    Scheduler::publish_task_death(*this);
 
     // Issue #226: debugger stop routing — publish the task-death stop
     // event (reserved slot, never dropped) while bindings, Notify, and

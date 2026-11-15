@@ -36,7 +36,8 @@ namespace kernel::errors {
     X(TIMEOUT, 6, "Operation timed out")                                       \
     X(INVALID_MSG, 7, "Invalid message format")                                \
     X(NO_BUFFER, 8, "No buffer available for zero-copy")                       \
-    X(INVALID_ARGS, 9, "Invalid arguments")
+    X(INVALID_ARGS, 9, "Invalid arguments")                                    \
+    X(PEER_DIED, 10, "Destination task died before replying")
 
 /// @brief IPC subsystem error codes.
 // NOLINTNEXTLINE(performance-enum-size)

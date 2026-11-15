@@ -105,6 +105,13 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
         // No-ops for non-threads (checked inside).
         TaskControlBlock::thread_join_note_termination(*t);
 
+        // M1/F6 (issue #559): latch the death record synchronously.  The
+        // self-exit path never calls release_zombie, so without this the
+        // record would wait for the deferred complete_teardown backstop.
+        // Idempotent: the terminate_err leg below re-enters publish
+        // harmlessly (ACTIVE→PENDING is the exactly-once mechanism).
+        Scheduler::publish_task_death(*t);
+
         // If the exiting task is the current running task (the normal case for
         // sys_exit), we must switch the CPU off it BEFORE returning to user
         // space, otherwise the syscall epilogue iret's back into a TERMINATED

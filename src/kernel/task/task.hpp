@@ -342,6 +342,7 @@ struct TaskControlBlock {
            buf_list_head(0), task_obj_head_(nullptr), task_obj_tail_(nullptr),
           blocked_next(nullptr), blocked_prev(nullptr),
           blocked_on_queue(nullptr), reply_wait(false),
+          reply_wait_dest_id(0), reply_wait_dest_gen(0),
           blocked_in_recv(false),
            waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
@@ -897,6 +898,19 @@ struct TaskControlBlock {
     /// when its reply is delivered (otherwise send_sync senders are never
     /// unblocked and hang forever).
     bool reply_wait;
+
+    /// @brief Reply-wait destination tag (M1/F7, issues #559/#560).
+    ///        Transient wait state: the id + generation of the task the
+    ///        owner is blocked on in IPC::send_sync(_bounded), or 0 when
+    ///        no reply wait is outstanding.  Written BEFORE reply_wait
+    ///        (RELEASE store) and read ACQUIRED by IPC::wake_reply_waiters_of,
+    ///        so a fault-kill drain (ISR context) can never observe
+    ///        reply_wait == true with a stale tag (§11.6, §12.2: a
+    ///        recycled TCB id can never alias the tag).  Cleared on every
+    ///        waiter loop exit; never added to TaskFields (same treatment
+    ///        as reply_wait).
+    uint64_t reply_wait_dest_id;
+    uint32_t reply_wait_dest_gen;
 
     /// @brief True while a task is BLOCKED in a receive wait (sys_receive /
     /// sys_recv_fast) for a message on its own queue.  Lets IPC::send wake
