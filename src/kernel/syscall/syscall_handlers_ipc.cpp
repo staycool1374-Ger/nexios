@@ -101,11 +101,11 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
                 Scheduler::dequeue_ready(*cur);
             }
             was_blocked = true;
-            Scheduler::reschedule();
-            // M2 follow-up (#545 SILENT): post-publish re-check.  A message
-            // that arrived between the loop-top empty check and the publish
-            // is consumed instead of slept through (self-rescue mirrors the
-            // timeout path's restoration, with ok=true).
+            // F1 (#545 SILENT): post-publish re-check BEFORE reschedule.
+            // A message that arrived between the loop-top empty check
+            // and the publish is consumed instead of armed-and-slept-
+            // through — the reschedule park (INV-4a) may not return
+            // until woken.  On a hit the arm is skipped entirely.
             if (IPC::recv(msg)) {
                 ok = true;
                 cur->blocked_in_recv = false;
@@ -114,6 +114,7 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
                 cur->state = TaskState::RUNNING;
                 break;
             }
+            Scheduler::reschedule();
             // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait
             // pattern; key on is_user_ (every task now owns a PML4).
             // Issue #513: the wait yields UNCONDITIONALLY.  A kernel-task
@@ -322,10 +323,40 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             }
             // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
             // BLOCKED transition (same rationale as sys_receive above).
-            cur->blocked_in_recv = true;
-            cur->state = TaskState::BLOCKED;
+            // F1 (#545): the publish triple goes out atomically under
+            // IrqGuard (Dekker close against the sender's wake gate —
+            // without it the new reschedule park can sleep through a
+            // message published in the unguarded window).
+            {
+                arch::IrqGuard publish_guard{};
+                cur->blocked_in_recv = true;
+                cur->state = TaskState::BLOCKED;
+                Scheduler::dequeue_ready(*cur);
+            }
             was_blocked = true;
-            Scheduler::dequeue_ready(*cur);
+            // F1 (#545 SILENT): post-publish re-check BEFORE reschedule.
+            // Oversized-or-present inbox states are resolved without
+            // arming a park the task might sleep through (same Dekker
+            // close as sys_receive above).
+            if (cur->msg_queue.pop_clamped(msg, clamp)) {
+                ok = true;
+                // F1 audit: restore the running wait-state (mirrors
+                // sys_receive above) — the arm was skipped, so no wake or
+                // dispatch will repair the BLOCKED marking.
+                cur->blocked_in_recv = false;
+                IPC::recv_wait_cancel(*cur);
+                arch::sti();
+                cur->state = TaskState::RUNNING;
+                break;
+            }
+            if (!cur->msg_queue.is_empty()) {
+                cur->blocked_in_recv = false;
+                IPC::recv_wait_cancel(*cur);
+                // Wait is over: restore RUNNING (see sys_receive above).
+                arch::sti();
+                cur->state = TaskState::RUNNING;
+                return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+            }
             Scheduler::reschedule();
             // Issue #513: yield unconditionally (see sys_receive above).
             // The old bare-hlt else-branch slept forever when entered

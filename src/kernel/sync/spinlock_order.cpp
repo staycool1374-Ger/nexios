@@ -4,6 +4,7 @@
 
 #include <kernel/sync/spinlock_order.hpp>
 #include <kernel/arch/cpu_context.hpp>
+#include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -94,6 +95,11 @@ void spinlock_note_acquire(const void *addr, uint8_t rank) noexcept {
         held.entries[held.depth].addr = addr;
         held.entries[held.depth].owner_id = owner;
         held.entries[held.depth].rank = rank;
+        held.entries[held.depth].site = nullptr;
+        held.entries[held.depth].cpu =
+            static_cast<uint8_t>(arch::cpu_index() % CONFIG_MAX_CPUS);
+        held.entries[held.depth].take_if =
+            arch::interrupts_enabled() ? 1 : 0;
         ++held.depth;
     } else {
         __atomic_fetch_add(&held.overflow, 1, __ATOMIC_RELAXED);
@@ -150,6 +156,40 @@ bool spinlock_find_holder(const void *addr, uint64_t *owner_out,
     if (rank_out)
         *rank_out = 0;
     return false;
+}
+
+void spinlock_annotate_site(const void *addr, const char *site) noexcept {
+    CpuHeldLocks &held = own_held();
+    for (uint64_t i = held.depth; i > 0; --i) {
+        if (held.entries[i - 1].addr == addr) {
+            held.entries[i - 1].site = site;
+            return;
+        }
+    }
+}
+
+uint64_t spinlock_dump_held(uint64_t *addr_out, const char **site_out,
+                            uint64_t *owner_out, uint8_t *rank_out,
+                            uint8_t *cpu_out, uint8_t *take_if_out,
+                            size_t max) noexcept {
+    const CpuHeldLocks &held = own_held();
+    const uint64_t n = held.depth < max ? held.depth : max;
+    for (uint64_t i = 0; i < n; ++i) {
+        if (addr_out)
+            addr_out[i] =
+                reinterpret_cast<uint64_t>(held.entries[i].addr);
+        if (site_out)
+            site_out[i] = held.entries[i].site;
+        if (owner_out)
+            owner_out[i] = held.entries[i].owner_id;
+        if (rank_out)
+            rank_out[i] = held.entries[i].rank;
+        if (cpu_out)
+            cpu_out[i] = held.entries[i].cpu;
+        if (take_if_out)
+            take_if_out[i] = held.entries[i].take_if;
+    }
+    return n;
 }
 
 bool spinlock_contract_check_clean(const char *where) noexcept {

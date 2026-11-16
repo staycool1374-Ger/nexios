@@ -29,10 +29,107 @@ uint64_t g_park_denied_reason =
 // depths admitted to the park (INV-L4).  Diagnostic only.
 uint64_t g_denied_escape_count = 0;
 uint64_t g_foreign_depth_count = 0;
+// Wedge hunt (#545): exhausted-fallback re-arms (timer kept alive) + park
+// attempts that observed a clobbered IRQ state (INV-L1' repairs).
+uint64_t g_park_rearm_count = 0;
+uint64_t g_park_if_clobber_count = 0;
 
 void note_denied(ParkDenyReason reason) noexcept {
     __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
     g_park_denied_reason = static_cast<uint64_t>(reason);
+}
+
+// Per-site one-shot diagnostic latches (site = string literal, compared
+// by pointer).  Slots cover all ParkLockGuard sites with margin; a full
+// table stays loud (fail-open diagnostics, never silent).
+inline constexpr uint64_t kSiteLatchSlots = 16;
+
+struct SiteLatch {
+    const char *site = nullptr;
+    bool fired = false;
+};
+
+SiteLatch g_escape_latches[kSiteLatchSlots] = {};
+SiteLatch g_exhaust_latches[kSiteLatchSlots] = {};
+SiteLatch g_budget_latches[kSiteLatchSlots] = {};
+
+bool site_latch_fire(SiteLatch *latches, const char *site) noexcept {
+    for (uint64_t i = 0; i < kSiteLatchSlots; ++i) {
+        if (latches[i].site == site) {
+            if (latches[i].fired)
+                return false;
+            latches[i].fired = true;
+            return true;
+        }
+        if (latches[i].site == nullptr) {
+            latches[i].site = site;
+            latches[i].fired = true;
+            return true;
+        }
+    }
+    return true;
+}
+
+/// @brief Annotate + INV-L1' repair on a successful take.  try_lock and
+///        pause-spin never change IF, so the repair only fires on
+///        park-window exits (whose sti/hlt loop ends cli'd) — the DEBUG
+///        clobber counter then proves the repair ran in-run.
+void take_success(SpinLock &lock, const char *site,
+                  bool entry_if) noexcept {
+    sync::spinlock_annotate_site(&lock, site);
+    if (arch::interrupts_enabled() != entry_if) {
+        __atomic_fetch_add(&g_park_if_clobber_count, 1,
+                           __ATOMIC_RELAXED);
+        if (entry_if)
+            arch::sti();
+        else
+            arch::cli();
+    }
+}
+
+enum class ParkWindowResult : uint8_t { Acquired, Contended, ArmFailed };
+
+/// @brief One park window: arm the wheel timeout, BLOCKED + dequeue,
+///        reschedule, sti/hlt wait, cancel, RUNNING + resume unlink
+///        (INV-L2), single try.  The Acquired exit repairs INV-L1' via
+///        take_success; the Contended exit ends cli'd exactly like the
+///        pre-hunt code, so the resume body is byte-identical in IRQ
+///        behavior to what the gates already validated.
+ParkWindowResult park_window(SpinLock &lock, const char *site,
+                             TaskControlBlock &task, uint64_t park_ns,
+                             bool entry_if) noexcept {
+    if (!time::PosixTime::sleep_arm(task, park_ns)) {
+        note_denied(ParkDenyReason::ArmFailed);
+        return ParkWindowResult::ArmFailed;
+    }
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::dequeue_ready(task);
+        task.state = TaskState::BLOCKED;
+    }
+    Scheduler::reschedule();
+    // sys_receive shape (unconditional sti/hlt/cli): trap entry owns the
+    // IRQ state, so sti is safe here — and mandatory, since IF=0 sleeps
+    // through the wheel timeout.
+    for (;;) {
+        arch::sti();
+        arch::hlt();
+        arch::cli();
+        if (task.state != TaskState::BLOCKED)
+            break;
+    }
+    time::PosixTime::sleep_cancel(task);
+    // INV-L2 resume: the tick scan READY+enqueued us; resuming on-CPU
+    // without a dispatch would leave RUNNING+queued, so unlink first
+    // (dequeue_ready is a safe no-op when not queued), then RUNNING.
+    Scheduler::dequeue_ready(task);
+    task.state = TaskState::RUNNING;
+    tick_watchdog::checkpoint("lock_park_resume");
+    if (lock.try_lock()) {
+        take_success(lock, site, entry_if);
+        return ParkWindowResult::Acquired;
+    }
+    return ParkWindowResult::Contended;
 }
 
 } // namespace
@@ -114,18 +211,17 @@ static bool denied_spin_block(SpinLock &lock, const char *where) noexcept {
     return false;
 }
 
-/// @brief First-escape diagnostic: one ERROR per lock site so the soak
-///        log convicts the shape without serial spam.  Includes the lock
-///        holder PC so a stale (abandoned) hold is distinguishable from a
-///        live slow holder without GDB: a holder address that never
-///        corresponds to a live critical section across repeated escapes
-///        is the follow-up target (#545).
+/// @brief Escape diagnostic: one ERROR per lock site so the soak log
+///        convicts each shape without serial spam.  Carries the order-stack
+///        holder identity (task/rank) — a holder with no live take site is
+///        the wedge-hunt conviction artifact (#545).
 static void note_escape(const SpinLock &lock, const char *site,
                         const char *where, ParkDenyReason reason) noexcept {
     const uint64_t escapes =
         __atomic_fetch_add(&g_denied_escape_count, 1, __ATOMIC_RELAXED) + 1;
 #if defined(CONFIG_DEBUG)
-    if (escapes == 1) {
+    (void)escapes; // Latch-gated now (per-site), counter stays for QE.
+    if (site_latch_fire(g_escape_latches, site)) {
         uint64_t holder_task = 0;
         uint64_t holder_rank = 0;
         const bool holder_known = sync::spinlock_find_holder(
@@ -149,10 +245,149 @@ static void note_escape(const SpinLock &lock, const char *site,
 #endif
 }
 
+/// @brief One-shot exhaustion dump: the first time a site exhausts its
+///        park attempts, name the holder's take site + schedulability.
+///        This is the wedge-hunt conviction line — A1 (hold across
+///        BLOCKED) vs A2 (READY but starved) vs A3 (READY, not queued).
+static void note_exhaustion(const SpinLock &lock, const char *site,
+                            bool entry_if) noexcept {
+    if (!site_latch_fire(g_exhaust_latches, site))
+        return;
+#if defined(CONFIG_DEBUG)
+    uint64_t addrs[sync::kMaxHeldLocks] = {};
+    const char *sites[sync::kMaxHeldLocks] = {};
+    uint64_t owners[sync::kMaxHeldLocks] = {};
+    uint8_t ranks[sync::kMaxHeldLocks] = {};
+    uint8_t cpus[sync::kMaxHeldLocks] = {};
+    uint8_t take_ifs[sync::kMaxHeldLocks] = {};
+    const uint64_t n = sync::spinlock_dump_held(
+        addrs, sites, owners, ranks, cpus, take_ifs, sync::kMaxHeldLocks);
+    const uint64_t lock_addr = reinterpret_cast<uint64_t>(&lock);
+    const char *holder_site = nullptr;
+    uint64_t holder_task = 0;
+    uint64_t holder_rank = 0;
+    uint64_t holder_cpu = 0;
+    uint64_t holder_take_if = 0;
+    bool holder_known = false;
+    for (uint64_t i = 0; i < n; ++i) {
+        if (addrs[i] == lock_addr) {
+            holder_site = sites[i];
+            holder_task = owners[i];
+            holder_rank = ranks[i];
+            holder_cpu = cpus[i];
+            holder_take_if = take_ifs[i];
+            holder_known = true;
+        }
+    }
+    // Scheduler snapshot of the recorded holder (lock-free id probe).
+    uint64_t h_valid = 0;
+    uint64_t h_state = 99;
+    uint64_t h_in_rq = 9;
+    uint64_t h_rq_prio = 0;
+    uint64_t h_prio = 0;
+    uint64_t h_on_q = 0;
+    uint64_t h_recv = 0;
+    uint64_t h_reply = 0;
+    uint64_t h_sleep = 0;
+    uint64_t h_reply_dest = 0;
+    uint64_t h_mq_lock = 0;
+    uint64_t h_qcount = 0;
+    if (holder_known && holder_task != 0) {
+        auto *h = Scheduler::find_task(holder_task);
+        if (h != nullptr && TaskControlBlock::is_valid(h)) {
+            h_valid = 1;
+            h_state = static_cast<uint64_t>(h->state);
+            h_in_rq = h->in_ready_queue_ ? 1 : 0;
+            h_rq_prio = h->rq_priority_;
+            h_prio = h->priority;
+            h_on_q = h->blocked_on_queue != nullptr ? 1 : 0;
+            h_recv = h->blocked_in_recv ? 1 : 0;
+            h_reply = h->reply_wait ? 1 : 0;
+            h_sleep = h->sleep_armed ? 1 : 0;
+            h_reply_dest = h->reply_wait ? h->reply_wait_dest_id : 0;
+            h_mq_lock = reinterpret_cast<uint64_t>(&h->msg_queue.lock_);
+            h_qcount = __atomic_load_n(&h->msg_queue.count, __ATOMIC_RELAXED);
+        }
+    }
+    // Owner-queue identity: is the contended lock the holder's own queue,
+    // the waiter's own queue, or a third queue?  Decides self-deadlock
+    // vs third-party stall without needing GDB.
+    uint64_t w_mq_lock = 0;
+    uint64_t w_qcount = 0;
+    uint64_t waiter_id = 0;
+    uint64_t waiter_state = 99;
+    uint64_t waiter_in_rq = 9;
+    {
+        auto *w = Scheduler::current_task();
+        if (w != nullptr && TaskControlBlock::is_valid(w)) {
+            waiter_id = w->id;
+            waiter_state = static_cast<uint64_t>(w->state);
+            waiter_in_rq = w->in_ready_queue_ ? 1 : 0;
+            w_mq_lock = reinterpret_cast<uint64_t>(&w->msg_queue.lock_);
+            w_qcount = __atomic_load_n(&w->msg_queue.count, __ATOMIC_RELAXED);
+        }
+    }
+    kernel::Logger::error(
+        "[PARK] exhausted lock=%lx site=%s entry_if=%d w_cpu=%lu w_task=%lu "
+        "w_state=%lu w_in_rq=%lu held=%lu "
+        "holder_site=%s holder_task=%lu holder_rank=%lu holder_cpu=%lu "
+        "holder_take_if=%lu holder_known=%d h_valid=%lu h_state=%lu "
+        "h_in_rq=%lu h_rq_prio=%lu h_prio=%lu h_on_q=%lu h_recv=%lu "
+        "h_reply=%lu h_sleep=%lu h_reply_dest=%lu h_mq_lock=%lx "
+        "h_qcount=%lu w_mq_lock=%lx w_qcount=%lu unpaired=%lu overflow=%lu",
+        lock_addr, site, entry_if ? 1 : 0,
+        static_cast<uint64_t>(arch::cpu_index()),
+        waiter_id, waiter_state, waiter_in_rq, n,
+        holder_site != nullptr ? holder_site : "?", holder_task,
+        holder_rank, holder_cpu, holder_take_if, holder_known ? 1 : 0,
+        h_valid, h_state, h_in_rq, h_rq_prio, h_prio, h_on_q, h_recv,
+        h_reply, h_sleep, h_reply_dest, h_mq_lock, h_qcount, w_mq_lock,
+        w_qcount, sync::spinlock_unpaired_release_count(),
+        sync::spinlock_overflow_count());
+    for (uint64_t i = 0; i < n; ++i) {
+        kernel::Logger::error(
+            "[PARK] held lock=%lx idx=%lu site=%s owner=%lu rank=%u "
+            "cpu=%u take_if=%u",
+            lock_addr, i, sites[i] != nullptr ? sites[i] : "?", owners[i],
+            ranks[i], cpus[i], take_ifs[i]);
+    }
+#else
+    (void)lock;
+    (void)site;
+    (void)entry_if;
+#endif
+}
+
+/// @brief Re-arm budget line: the fallback re-arms forever (timer alive),
+///        so this fires once per site when the budget is spent — proof the
+///        wedge survived past bounded parking, with the holder identity
+///        attached for the next conviction round.
+static void note_rearm_budget(const SpinLock &lock, const char *site,
+                              bool entry_if) noexcept {
+    __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
+    if (!site_latch_fire(g_budget_latches, site))
+        return;
+#if defined(CONFIG_DEBUG)
+    kernel::Logger::error(
+        "[PARK] re-arm budget exhausted lock=%lx site=%s entry_if=%d "
+        "budget=%lu (continuing re-arm, timer alive)",
+        reinterpret_cast<uint64_t>(&lock), site, entry_if ? 1 : 0,
+        static_cast<uint64_t>(CONFIG_LOCK_PARK_REARM_BUDGET));
+#else
+    (void)lock;
+    (void)site;
+    (void)entry_if;
+#endif
+}
+
 ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
     : lock_(lock) {
+    // INV-L1': snapshot the caller's IRQ state first (nothing above
+    // changes IF) — every exit path restores it via take_success.
+    entry_if_ = arch::interrupts_enabled();
     if (lock_.try_lock()) {
         owned_ = true;
+        take_success(lock_, site, entry_if_);
         return;
     }
     // Bounded pause-spin (fast path unchanged: uncontended try_lock).
@@ -162,6 +397,7 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
             tick_watchdog::checkpoint("lock_spin");
         if (lock_.try_lock()) {
             owned_ = true;
+            take_success(lock_, site, entry_if_);
             return;
         }
     }
@@ -191,6 +427,7 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
                     arch::cli();
                     if (got) {
                         owned_ = true;
+                        take_success(lock_, site, entry_if_);
                         return;
                     }
                     note_escape(lock_, site, "lock_spin_denied", reason);
@@ -199,6 +436,7 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
 #endif
                 if (denied_spin_block(lock_, "lock_spin_denied")) {
                     owned_ = true;
+                    take_success(lock_, site, entry_if_);
                     return;
                 }
                 note_escape(lock_, site, "lock_spin_denied", reason);
@@ -216,52 +454,66 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
     uint64_t park_ns = static_cast<uint64_t>(CONFIG_LOCK_PARK_TICKS);
     park_ns *= 1000000000ULL;
     park_ns /= static_cast<uint64_t>(CONFIG_TICK_HZ);
+    bool arm_ok = true;
     for (uint64_t attempt = 0;
-         attempt < CONFIG_LOCK_PARK_MAX_ATTEMPTS; ++attempt) {
-        if (!time::PosixTime::sleep_arm(*task, park_ns)) {
-            note_denied(ParkDenyReason::ArmFailed);
-            break; // Arm failed: fall through to pure spin below.
-        }
-        {
-            arch::IrqGuard irq_guard{};
-            Scheduler::dequeue_ready(*task);
-            task->state = TaskState::BLOCKED;
-        }
-        Scheduler::reschedule();
-        // sys_receive shape (unconditional sti/hlt/cli): trap entry owns
-        // the IRQ state (SIE=0, no locks held), so sti is safe here —
-        // and mandatory, since IF=0 sleeps through the wheel timeout.
-        for (;;) {
-            arch::sti();
-            arch::hlt();
-            arch::cli();
-            if (task->state != TaskState::BLOCKED)
-                break;
-        }
-        time::PosixTime::sleep_cancel(*task);
-        // INV-L2 resume: the tick scan READY+enqueued us; resuming on-CPU
-        // without a dispatch would leave RUNNING+queued, so unlink first
-        // (dequeue_ready is a safe no-op when not queued), then RUNNING.
-        Scheduler::dequeue_ready(*task);
-        task->state = TaskState::RUNNING;
-        tick_watchdog::checkpoint("lock_park_resume");
-        if (lock_.try_lock()) {
+         attempt < CONFIG_LOCK_PARK_MAX_ATTEMPTS && arm_ok; ++attempt) {
+        const ParkWindowResult result =
+            park_window(lock_, site, *task, park_ns, entry_if_);
+        if (result == ParkWindowResult::Acquired) {
             owned_ = true;
             return;
         }
+        if (result == ParkWindowResult::ArmFailed)
+            arm_ok = false;
         // Still contended: next attempt re-arms (fresh wheel timeout).
     }
     __atomic_fetch_add(&g_park_exhausted_count, 1, __ATOMIC_RELAXED);
     __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
-    // Reason untouched: exhaustion is not a denial (keeps the last
-    // real deny code for diagnosis).  Bounded loud spin (same discipline
-    // as the denied path): never silent, watchdog FIRES on a true wedge.
-    for (;;) {
-        if (denied_spin_block(lock_, "lock_spin_exhausted")) {
-            owned_ = true;
-            return;
+    note_exhaustion(lock_, site, entry_if_);
+    // INV-W1' (#545 wedge hunt): the old fallback spun here with IF=0,
+    // starving the tick that would dispatch a live holder — a
+    // self-completing wedge.  Re-arm the park instead: every window
+    // restores the entry IRQ state at its boundaries, so the timer stays
+    // alive and a live holder is always dispatchable.  Deny/state are
+    // re-verified per window (INV-L2); a lapsed predicate or a dead timer
+    // bridges with an entry-IF-preserving bounded loud spin — never an
+    // unbounded IF=0 spin.
+    for (uint64_t rearm = 0;; ++rearm) {
+        __atomic_fetch_add(&g_park_rearm_count, 1, __ATOMIC_RELAXED);
+        if (rearm == CONFIG_LOCK_PARK_REARM_BUDGET)
+            note_rearm_budget(lock_, site, entry_if_);
+        const ParkDenyReason why = deny_reason();
+        if (why != ParkDenyReason::None ||
+            task->state != TaskState::RUNNING) {
+            // Predicate lapsed mid-hunt: bounded loud spin (pause +
+            // watchdog checkpoints; try_lock/pause never touch IF, so the
+            // entry state is preserved by construction), then re-verify.
+            if (denied_spin_block(lock_, "lock_spin_rearm")) {
+                owned_ = true;
+                take_success(lock_, site, entry_if_);
+                return;
+            }
+            note_escape(lock_, site, "lock_spin_rearm", why);
+            continue;
         }
-        note_escape(lock_, site, "lock_spin_exhausted", deny_reason());
+        switch (park_window(lock_, site, *task, park_ns, entry_if_)) {
+            case ParkWindowResult::Acquired:
+                owned_ = true;
+                return;
+            case ParkWindowResult::Contended:
+                break;
+            case ParkWindowResult::ArmFailed:
+                // Timer truly dead: entry-IF-preserving bounded loud
+                // spin, then re-verify (never unbounded, never IF=0).
+                if (denied_spin_block(lock_, "lock_spin_rearm_armfail")) {
+                    owned_ = true;
+                    take_success(lock_, site, entry_if_);
+                    return;
+                }
+                note_escape(lock_, site, "lock_spin_rearm_armfail",
+                            ParkDenyReason::ArmFailed);
+                break;
+        }
     }
 }
 
@@ -296,6 +548,14 @@ uint64_t lock_foreign_depth_count() noexcept {
     return __atomic_load_n(&g_foreign_depth_count, __ATOMIC_RELAXED);
 }
 
+uint64_t lock_park_rearm_count() noexcept {
+    return __atomic_load_n(&g_park_rearm_count, __ATOMIC_RELAXED);
+}
+
+uint64_t lock_park_if_clobber_count() noexcept {
+    return __atomic_load_n(&g_park_if_clobber_count, __ATOMIC_RELAXED);
+}
+
 void park_lock_reset_for_test() noexcept {
     g_park_count = 0;
     g_spin_fallback_count = 0;
@@ -303,6 +563,13 @@ void park_lock_reset_for_test() noexcept {
     g_park_denied_reason = static_cast<uint64_t>(ParkDenyReason::None);
     g_denied_escape_count = 0;
     g_foreign_depth_count = 0;
+    g_park_rearm_count = 0;
+    g_park_if_clobber_count = 0;
+    for (uint64_t i = 0; i < kSiteLatchSlots; ++i) {
+        g_escape_latches[i] = SiteLatch{};
+        g_exhaust_latches[i] = SiteLatch{};
+        g_budget_latches[i] = SiteLatch{};
+    }
 }
 
 } // namespace sync

@@ -230,10 +230,10 @@ void Semaphore::wait() {
     Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
-    // reschedule() is deferred (INV-4): the current task keeps running with
-    // state=BLOCKED until the timer ISR applies the switch and a post() wakes
-    // it.  Spin-wait (mirrors IPC::send).  If interrupts are off the ISR can't
-    // fire — roll back and leave without the semaphore.
+    // reschedule() parks a BLOCKED caller until woken (INV-4a); the
+    // spin below is a no-op on that path and stays mandatory for
+    // gate-denied contexts.  Spin-wait (mirrors IPC::send).  If interrupts
+    // are off the ISR can't fire — roll back and leave without the semaphore.
     if (arch::interrupts_enabled()) {
         while (task->state == TaskState::BLOCKED) {
             arch::pause();

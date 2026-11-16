@@ -1208,6 +1208,101 @@ void Scheduler::rate_monotonic_schedule() noexcept {
     __atomic_store_n(&Scheduler::SwSlots::need_resched(), false, __ATOMIC_RELEASE);
 }
 
+namespace {
+// F1 (#545 wedge hunt, INV-4a): reschedule() park gate + park body.
+// reschedule() only arms the deferred switch and returns; a caller that
+// marked itself BLOCKED keeps executing until the tick switches it.  Any
+// lock taken in that zombie window strands permanently when the tick-tail
+// direct switch (which has no INV-C1 check) preempts mid-critical-section
+// — nobody will reschedule the stranded task back.  The park closes the
+// window: a BLOCKED caller hlt-waits (the timer wakes every tick) until
+// dispatched instead of running on while BLOCKED+dequeued.
+
+#if defined(CONFIG_DEBUG)
+uint64_t g_resched_park_entries = 0;
+uint64_t g_resched_park_wakeups = 0;
+#endif
+
+// CPU-local gate: no scheduler state, safe to call before the arm.
+bool resched_park_gate_base(bool entry_if) noexcept {
+    if (CONFIG_RESCHED_PARK_ON_BLOCKED == 0)
+        return false;
+    if (CONFIG_TICK_HZ == 0)
+        return false; // No ticks: hlt is uninterruptible, keep status quo.
+    if (arch::irq_guard_depth_own() != 0)
+        return false; // Live guard scope: re-enabling IRQs would break it.
+    if (sync::spinlock_held_by_current_count() != 0)
+        return false; // INV-C1 fail-safe: never park a lock holder.
+    if (kernel::isr_nesting_own() != 0 && !arch::in_syscall_trap_level())
+        return false; // Hardware ISR: no task to deschedule.
+    if (!entry_if && !arch::in_syscall_trap_level())
+        return false; // No IRQ entitlement: trap entry owns the IRQ state.
+    return true;
+}
+
+// Task gate: scheduler state, call only inside the arm's IrqGuard
+// (IRQ-off makes the size/current reads stable for the decision).
+bool resched_park_gate_task(TaskControlBlock *cur, bool base_ok) noexcept {
+    if (!base_ok || cur == nullptr)
+        return false;
+    if (cur->magic != TaskControlBlock::TCB_MAGIC)
+        return false;
+    if (Scheduler::all_tasks().size() <= 1)
+        return false; // Single-task guest must not hang.
+    if (cur->state != TaskState::BLOCKED)
+        return false; // RUNNING/READY callers return immediately (C1).
+    if (Scheduler::is_idle_task(cur))
+        return false;
+    if (Scheduler::is_test_active() &&
+        Scheduler::get_harness_task() != nullptr &&
+        cur == Scheduler::get_harness_task())
+        return false; // Test harness owns the clock.
+    if (Scheduler::is_test_active()) {
+        // Impersonation guard: a ScopedCurrentTask runs on the harness
+        // stack — its RSP is outside the impersonated TCB's kernel stack.
+        const uint64_t sp = current_sp();
+        if (sp < reinterpret_cast<uint64_t>(cur->kernel_stack) ||
+            sp >= cur->kernel_stack_top)
+            return false;
+    }
+    return true;
+}
+
+// Halt until dispatched (woken).  Never touches task state, the ready
+// queue, or any lock: wake bookkeeping stays 100% with the waker and
+// the dispatch path.  Bounded by the tick: every hlt exits on the next
+// timer interrupt, and a wake delivered inside an ISR is consumed before
+// the next hlt (no lost wake, no spin-out).
+void resched_park_until_dispatched(TaskControlBlock &t,
+                                   bool entry_if) noexcept {
+#if defined(CONFIG_DEBUG_IPC_SCHED)
+    IPC_SCHED_TRACE("[RPARK]", "id=", t.id);
+#endif
+#if defined(CONFIG_DEBUG)
+    __atomic_fetch_add(&g_resched_park_entries, 1, __ATOMIC_RELAXED);
+#endif
+    for (;;) {
+        if (t.state != TaskState::BLOCKED)
+            break; // Woken (possibly after dispatches): return to caller.
+        if (Scheduler::current_task() != &t)
+            break; // No longer the runner: someone else proceeds.
+        if (t.magic != TaskControlBlock::TCB_MAGIC)
+            break; // Fail-closed: TCB recycled under us.
+        arch::sti();
+        arch::hlt();
+        arch::cli();
+    }
+#if defined(CONFIG_DEBUG)
+    __atomic_fetch_add(&g_resched_park_wakeups, 1, __ATOMIC_RELAXED);
+#endif
+    tick_watchdog::checkpoint("resched_park_resume");
+    if (entry_if)
+        arch::sti();
+    else
+        arch::cli();
+}
+} // namespace
+
 void Scheduler::reschedule() noexcept {
 #if defined(CONFIG_DEBUG) && CONFIG_IRQ_CONTRACT_ASSERT != 0
     // M2 §6.2 item 2 (INV-C1): no tracked spinlock may be held across
@@ -1234,6 +1329,20 @@ void Scheduler::reschedule() noexcept {
 #endif
     }
 #endif
+    // F1 (#545 wedge hunt, INV-4a): capture the IRQ state and the park
+    // gate BEFORE the arm.  The arm below only publishes the deferred
+    // switch and returns; a BLOCKED caller would otherwise keep running
+    // while BLOCKED+dequeued (any lock it takes then strands on the
+    // tick-tail switch, which has no INV-C1 check).  The park (after the
+    // arm's guard closes) hlt-waits until dispatched instead.
+    const bool resched_entry_if = arch::interrupts_enabled();
+    const bool resched_base_ok = resched_park_gate_base(resched_entry_if);
+    TaskControlBlock *resched_park_candidate = nullptr;
+    // do/while(0): the arm's early exits below break to the park gate
+    // instead of returning — a BLOCKED caller must park even when there
+    // is no better task to switch to (running on while BLOCKED is the
+    // F1 bug).  Pre-candidate breaks leave the candidate null (no park).
+    do {
     // Single-core UP: read-only ready-queue peek needs only IRQ-safety,
     // not the full scheduler_lock_ (issue #369 T4b: it is IF=0 — not a
     // held lock — that prevents the timer ISR from running at all here,
@@ -1248,11 +1357,18 @@ void Scheduler::reschedule() noexcept {
     arch::IrqGuard irq_guard{};
 
     if (all_tasks_.size() <= 1)
-        return;
+        break;
 
     auto *current = current_task();
     if (!current || current->magic != TaskControlBlock::TCB_MAGIC)
-        return;
+        break;
+
+    // INV-4a candidate: validated while the guard above keeps the
+    // scheduler state stable.  The "nothing to arm" returns below keep
+    // the candidate — a BLOCKED caller must park even when there is no
+    // better task to switch to (running on while BLOCKED is the bug).
+    if (resched_park_gate_task(current, resched_base_ok))
+        resched_park_candidate = current;
 
     // Peek the highest-priority ready task.  We do NOT dequeue here —
     // the switch is deferred (INV-4) and the actual dequeue happens in
@@ -1275,24 +1391,31 @@ void Scheduler::reschedule() noexcept {
     if (edf_preempt) {
         __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
-        return;
+        break;
     }
 
     if ((!next || next == current))
-        return;
+        break;
 
     if (next != nullptr) {
         if (next == own_idle() && current->state == TaskState::RUNNING)
-            return;
+            break;
 
         if (next->state != TaskState::READY &&
             next->state != TaskState::RUNNING)
-            return;
+            break;
     }
 
     // IrqGuard destructor re-enables IRQs here, allowing the timer ISR to
     // fire and acquire scheduler_lock_ for rate_monotonic_schedule().
     __atomic_store_n(&Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
     kernel::dispatch_step(kernel::SchedDispatchSteps::Arm); // issue #347
+    } while (0); // End arm scope: guard closes, IRQs restored.
+    // INV-4a: a BLOCKED caller must not run on.  The park hlt-waits
+    // (timer wakes every tick) until dispatched; RUNNING callers and
+    // gate-denied contexts skip it (candidate is null).
+    if (resched_park_candidate != nullptr)
+        resched_park_until_dispatched(*resched_park_candidate,
+                                      resched_entry_if);
 }
 }  // namespace kernel

@@ -635,11 +635,13 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
             Scheduler::dequeue_ready(*cur);
         }
         was_blocked = true;
-        Scheduler::reschedule();
-        // M2 follow-up (#545 SILENT): post-publish re-check.  A reply that
-        // arrived between the loop-top empty check and the publish is
-        // consumed instead of slept through (mirrors the loop-top consume
-        // path, with the was_blocked slow-path exit).
+        // F1 (#545 SILENT): post-publish re-check BEFORE reschedule.  A
+        // reply that arrived between the loop-top empty check and the
+        // publish is consumed instead of armed-and-slept-through — with
+        // the reschedule park (INV-4a) the task may not return from
+        // reschedule() until woken, so a check placed after it could
+        // sleep through an already-queued reply.  On a hit the slow-path
+        // exit runs and the arm is skipped entirely.
         {
             bool got_late =
                 (reply_max_size != 0)
@@ -658,6 +660,7 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
                 return errors::IPC_ERR_OK;
             }
         }
+        Scheduler::reschedule();
         // Issue #513 (face A/C hang): the wait yields UNCONDITIONALLY.
         // A kernel task reaching this loop with SIE=0 (inherited IRQ-off
         // window) would sleep through every wakeup source with a bare
@@ -768,7 +771,10 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             Scheduler::dequeue_ready(*cur);
         }
         was_blocked = true;
-        Scheduler::reschedule();
+        // F1 (#545 SILENT): post-publish re-check BEFORE reschedule (same
+        // Dekker close as send_sync above — the reschedule park (INV-4a)
+        // may not return until woken, so a later check could sleep
+        // through an already-queued reply).
         if (cur->msg_queue.pop_from_sender(reply, dest_id)) {
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
@@ -781,6 +787,7 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             cur->state = TaskState::RUNNING;
             return errors::IPC_ERR_OK;
         }
+        Scheduler::reschedule();
         // Issue #513 (face A/C hang): unconditional yield (see send_sync
         // above — same SIE=0 wedge through the bounded wait below).
         arch::sti();
@@ -846,10 +853,10 @@ MessageQueue &IPC::queue(uint64_t task_id) {
 ///     should ensure IRQ safety is managed externally (e.g., via
 ///     `arch::IrqGuard` in `IPC::send`).
 ///   - After return, the caller MUST invoke `Scheduler::reschedule()` to
-///     request a deferred context switch (INV-4).  Because of the deferred
-///     model, the caller continues executing with state=BLOCKED until the
-///     next timer tick applies the switch.  The spin-wait loop in
-///     `IPC::send()` handles this window.  Calling `reschedule()` without
+///     request a deferred context switch (INV-4).  A BLOCKED caller is
+///     parked by reschedule() until woken (INV-4a) instead of running on
+///     while BLOCKED.  The spin-wait loop in
+///     `IPC::send()` handles gate-denied contexts.  Calling `reschedule()` without
 ///     having dequeued the task first would leave it BLOCKED+inrq and
 ///     trigger the [WEDGE] invariant violation on the very next tick.
 ///   - When IPC::send's spin-wait is active, the task's state is temporarily

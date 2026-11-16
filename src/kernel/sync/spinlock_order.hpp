@@ -51,10 +51,15 @@ void spinlock_held_drop() noexcept;
 #if defined(CONFIG_DEBUG)
 
 /// @brief One held-lock record (own CPU slot only, ISR-serialized).
+///        site/cpu/take_if (#545 wedge hunt): identify the take that must
+///        release the lock without GDB.  String literals only (no alloc).
 struct HeldLock {
     const void *addr = nullptr;
     uint64_t owner_id = 0;
     uint8_t rank = 0;
+    const char *site = nullptr;
+    uint8_t cpu = 0;
+    uint8_t take_if = 0;
 };
 
 inline constexpr size_t kMaxHeldLocks = 8;
@@ -90,6 +95,24 @@ uint64_t spinlock_held_by_current_count() noexcept;
 ///        never-taken): the caller must not infer abandonment from false.
 bool spinlock_find_holder(const void *addr, uint64_t *owner_out,
                           uint64_t *rank_out) noexcept;
+
+/// @brief Label the live order-stack entry for @p addr (diagnostic only).
+///        Called by ParkLockGuard right after a successful take: all takes
+///        share the guard's PC as holder, so the PC cannot name the critical
+///        section — this per-take label can.  No depth change, no release
+///        interaction; a preemption between push and annotate leaves a null
+///        site (prints as unknown, still convictable via cpu/take_if).
+void spinlock_annotate_site(const void *addr, const char *site) noexcept;
+
+/// @brief Snapshot the own-CPU held-lock stack (diagnostic only, const
+///        read: never mutates, never allocates).  Writes up to @p max
+///        entries into the parallel @p *_out arrays (any may be null to
+///        skip) and returns the number written.  Called with IF=0 from the
+///        park exhaustion path, so the snapshot is stable.
+uint64_t spinlock_dump_held(uint64_t *addr_out, const char **site_out,
+                            uint64_t *owner_out, uint8_t *rank_out,
+                            uint8_t *cpu_out, uint8_t *take_if_out,
+                            size_t max) noexcept;
 
 /// @brief Diagnostics accessors (per (outer,inner) pair, overflow,
 ///        unpaired-release, park/switch counters live in park_lock).
@@ -129,6 +152,24 @@ inline bool spinlock_find_holder(const void *addr, uint64_t *owner_out,
     if (rank_out)
         *rank_out = 0;
     return false;
+}
+inline void spinlock_annotate_site(const void *addr,
+                                   const char *site) noexcept {
+    (void)addr;
+    (void)site;
+}
+inline uint64_t spinlock_dump_held(uint64_t *addr_out, const char **site_out,
+                                   uint64_t *owner_out, uint8_t *rank_out,
+                                   uint8_t *cpu_out, uint8_t *take_if_out,
+                                   size_t max) noexcept {
+    (void)addr_out;
+    (void)site_out;
+    (void)owner_out;
+    (void)rank_out;
+    (void)cpu_out;
+    (void)take_if_out;
+    (void)max;
+    return 0;
 }
 inline uint64_t spinlock_violation_count(uint8_t outer_rank,
                                          uint8_t inner_rank) noexcept {

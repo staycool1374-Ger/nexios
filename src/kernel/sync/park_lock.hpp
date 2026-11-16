@@ -56,7 +56,13 @@ enum class ParkDenyReason : uint8_t {
 bool lock_park_allowed(const SpinLock &lock) noexcept;
 
 /// @brief RAII timed-park acquisition.  Fast path is a single try_lock;
-///        slow paths park and retry, then fall back to pure spin.
+///        slow paths park and retry, then re-arm the park (never an
+///        unbounded IF=0 spin — that starves the tick that would dispatch
+///        a live holder, #545 wedge hunt).
+///        INV-L1': every exit path returns with the caller's IRQ-enable
+///        state restored.  INV-W1': no unbounded wait runs with interrupts
+///        disabled while a live holder exists — the park (timer alive) is
+///        the only unbounded wait.
 class [[nodiscard]] ParkLockGuard {
   public:
     explicit ParkLockGuard(SpinLock &lock,
@@ -74,6 +80,9 @@ class [[nodiscard]] ParkLockGuard {
   private:
     SpinLock &lock_;
     bool owned_ = false;
+    /// @brief IRQ-enable state at entry (INV-L1'): all exit paths and
+    ///        every park-window boundary restore this.
+    bool entry_if_ = true;
 };
 
 /// @brief Park entries (diagnostic counters, QE assertions).
@@ -90,6 +99,13 @@ uint64_t lock_denied_escape_count() noexcept;
 /// @brief M2 follow-up (#545 FIRE): park acquisitions admitted on a
 ///        foreign-owned IrqGuard depth (INV-L4).
 uint64_t lock_foreign_depth_count() noexcept;
+/// @brief Wedge hunt (#545): park re-arm iterations taken by the exhausted
+///        fallback (each re-arm keeps the timer alive; the tick watchdog
+///        FIRE line reports this so the amplifier is visible in-row).
+uint64_t lock_park_rearm_count() noexcept;
+/// @brief Wedge hunt (#545): park attempts that observed an IRQ state
+///        different from the guard-entry state (INV-L1' repairs, DEBUG).
+uint64_t lock_park_if_clobber_count() noexcept;
 /// @brief Test-isolation reset (counters + denial code).
 void park_lock_reset_for_test() noexcept;
 

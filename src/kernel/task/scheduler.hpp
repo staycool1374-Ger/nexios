@@ -251,6 +251,22 @@ class Scheduler {
 
     /// @brief Forces a reschedule — selects the next task and sets
     /// up context switch.
+    /// Post-condition contract (F1 #545, INV-4a):
+    /// - C1 (RUNNING/READY/TERMINATED caller): arm-only return, zero
+    ///   additional latency.  Yield loops (e.g. ipc_blocking's
+    ///   `while (state != TERMINATED) reschedule();`) are unchanged.
+    /// - C2 (BLOCKED caller, park gate satisfied): returns only when the
+    ///   caller is no longer BLOCKED (woken, possibly after dispatches).
+    ///   Never returns to a caller that is still BLOCKED and the runner.
+    /// - C3 (BLOCKED caller, gate denied): status-quo-ante arm-only
+    ///   return; the caller handles it exactly as before.
+    /// - C4: IRQ state at return == entry; no scheduler_lock_; no
+    ///   allocation; `in_ready_queue_` untouched by the park.
+    /// - C5: single-task guest, null/invalid current, CONFIG_TICK_HZ==0,
+    ///   idle task, test harness: never park.
+    /// - C6: the deferred-switch arm and dispatch step are untouched.
+    /// Requires: no held tracked spinlock, no live IrqGuard (park denied
+    /// otherwise); not callable from a hardware ISR (deny → C3).
     static void reschedule() noexcept;
 
     /// @brief Change a task's scheduling priority at runtime.

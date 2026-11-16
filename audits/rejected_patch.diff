@@ -1,1 +1,17 @@
-audits/rejected_patch.diff intentionally left blank for M2 (no corrective patch owed; R1 hunk landed verbatim in-tree).
+diff --git a/src/kernel/syscall/syscall_handlers_ipc.cpp b/src/kernel/syscall/syscall_handlers_ipc.cpp
+--- a/src/kernel/syscall/syscall_handlers_ipc.cpp
++++ b/src/kernel/syscall/syscall_handlers_ipc.cpp
+@@ -340,6 +340,12 @@
+             // close as sys_receive above).
+             if (cur->msg_queue.pop_clamped(msg, clamp)) {
+                 ok = true;
++                // F1 audit: restore the running wait-state (mirrors
++                // sys_receive above) — the arm was skipped, so no wake or
++                // dispatch will repair the BLOCKED marking.
++                cur->blocked_in_recv = false;
++                IPC::recv_wait_cancel(*cur);
++                arch::sti();
++                cur->state = TaskState::RUNNING;
+                 break;
+             }
+             Scheduler::reschedule();

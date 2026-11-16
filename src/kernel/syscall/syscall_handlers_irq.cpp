@@ -242,9 +242,9 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t timeout_ticks,
     Scheduler::dequeue_ready(*t);
     Scheduler::reschedule();
 
-    // Spin-wait (mirrors IPC::send / Semaphore::wait).  reschedule() is
-    // deferred: the task physically continues until the timer ISR applies the
-    // switch.
+    // Spin-wait (mirrors IPC::send / Semaphore::wait).  reschedule()
+    // parks a BLOCKED caller until woken (INV-4a); the spin below is a
+    // no-op on that path and stays mandatory for gate-denied contexts.
     // Issue #47 step-b2 (+ #513 IRQ discipline): trap entry owns the
     // IRQ-off state (DAIF set / IF clear, no locks held here), and a
     // BLOCKED spin with interrupts masked sleeps through every wakeup —

@@ -59,12 +59,13 @@ inline void fire(const char *where, uint64_t elapsed) noexcept {
         cur != nullptr ? static_cast<uint64_t>(cur->state) : 99ULL;
     kernel::Logger::error(
         "[TICKWD] FIRE where=%s overrun_cyc=%lu ticks=%lu cur=%lu st=%lu "
-        "if=%d irqd=%lu isr=%lu deny=%lu park=%lu denied=%lu foreign=%lu",
+        "if=%d irqd=%lu isr=%lu deny=%lu park=%lu denied=%lu foreign=%lu "
+        "rearm=%lu",
         where, elapsed, g_last_ticks, cur_id, cur_state,
         arch::interrupts_enabled() ? 1 : 0, arch::irq_guard_depth_own(),
         kernel::isr_nesting_own(), sync::lock_park_denied_reason(),
         sync::lock_park_count(), sync::lock_denied_escape_count(),
-        sync::lock_foreign_depth_count());
+        sync::lock_foreign_depth_count(), sync::lock_park_rearm_count());
     log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
                         log::kDmesgBase_TIMING + 8, log::LogSeverity::ERROR,
                         "tick_watchdog", cur_id);

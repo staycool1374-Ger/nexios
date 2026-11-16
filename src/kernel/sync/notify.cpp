@@ -135,10 +135,10 @@ uint64_t Notify::wait() {
     Scheduler::dequeue_ready(*task);
     Scheduler::reschedule();
 
-    // reschedule() is deferred (INV-4): keep running with state=BLOCKED
-    // until the timer ISR applies the switch and notify() wakes us.
-    // Spin-wait (mirrors Semaphore::wait).  If interrupts are off the
-    // ISR cannot fire — roll back and leave without a value.
+    // reschedule() parks a BLOCKED caller until woken (INV-4a); the
+    // spin below is a no-op on that path and stays mandatory for
+    // gate-denied contexts (mirrors Semaphore::wait).  If interrupts
+    // are off the ISR cannot fire — roll back and leave without a value.
     if (arch::interrupts_enabled()) {
         while (task->state == TaskState::BLOCKED) {
             arch::pause();

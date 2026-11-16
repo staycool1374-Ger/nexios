@@ -1203,11 +1203,34 @@
 #define CONFIG_LOCK_PARK_ENABLE 1
 #endif
 
+/// F1 (#545 wedge hunt, INV-4a): park a BLOCKED caller inside
+/// Scheduler::reschedule() until it is dispatched (woken) instead of
+/// returning to it while it is still BLOCKED-and-not-queued.  A caller
+/// that keeps executing while marked BLOCKED strands any lock it takes:
+/// the tick-tail direct switch has no INV-C1 check and nobody will
+/// reschedule it back.  0 restores the status-quo-ante arm-only return
+/// (callers keep the pre-F1 zombie window).  Kill-switch for bisecting
+/// reschedule-park regressions.  Default: 1.
+#ifndef CONFIG_RESCHED_PARK_ON_BLOCKED
+#define CONFIG_RESCHED_PARK_ON_BLOCKED 1
+#endif
+
 /// Maximum park attempts per acquire before falling back to pure spin
 /// (never blocks forever on a dead holder — the holder may be gone).
 /// Default: 8.
 #ifndef CONFIG_LOCK_PARK_MAX_ATTEMPTS
 #define CONFIG_LOCK_PARK_MAX_ATTEMPTS 8
+#endif
+
+/// Wedge hunt (#545): re-arm budget for the exhausted fallback.  After
+/// MAX_ATTEMPTS parks fail, the guard re-arms the park (timer kept alive,
+/// entry IRQ state restored per window) instead of spinning with IF=0 —
+/// an unbounded IF=0 spin starves the tick that would dispatch a live
+/// holder (self-completing wedge).  One loud line per site when the
+/// budget is spent, then re-arming continues.  Default: 64 (~128 ms at
+/// 2-tick parks) before the line.
+#ifndef CONFIG_LOCK_PARK_REARM_BUDGET
+#define CONFIG_LOCK_PARK_REARM_BUDGET 64
 #endif
 
 /// M2 follow-up (#545 FIRE): bounded iterations for the denied/exhausted
@@ -1699,8 +1722,14 @@ extern "C" void panic(const char *msg);
 #if CONFIG_LOCK_PARK_ENABLE != 0 && CONFIG_LOCK_PARK_ENABLE != 1
 #error "CONFIG_LOCK_PARK_ENABLE must be 0 or 1 (default 1)"
 #endif
+#if CONFIG_RESCHED_PARK_ON_BLOCKED != 0 && CONFIG_RESCHED_PARK_ON_BLOCKED != 1
+#error "CONFIG_RESCHED_PARK_ON_BLOCKED must be 0 or 1 (default 1)"
+#endif
 #if CONFIG_LOCK_PARK_MAX_ATTEMPTS < 1
 #error "CONFIG_LOCK_PARK_MAX_ATTEMPTS must be >= 1 (default 8)"
+#endif
+#if CONFIG_LOCK_PARK_REARM_BUDGET < 1
+#error "CONFIG_LOCK_PARK_REARM_BUDGET must be >= 1 (default 64)"
 #endif
 #if CONFIG_LOCK_DENIED_SPIN_ROUNDS < 1024
 #error "CONFIG_LOCK_DENIED_SPIN_ROUNDS must be >= 1024 (default 65536)"

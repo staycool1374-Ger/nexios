@@ -351,7 +351,9 @@ bool VirtioBlkDriver::wait_request(uint16_t used_snapshot,
     Scheduler::dequeue_ready(*cur);
     Scheduler::reschedule();
 
-    // reschedule() is deferred: spin on BLOCKED until the ISR completion
+    // reschedule() parks a BLOCKED caller until woken (INV-4a); the
+    // spin below is a no-op on that path and stays mandatory for
+    // gate-denied contexts.  Spin on BLOCKED until the ISR completion
     // wake or the scheduler timeout-apply walk restores READY.  With
     // interrupts off no wake can arrive: roll back and poll.
     if (arch::interrupts_enabled()) {
