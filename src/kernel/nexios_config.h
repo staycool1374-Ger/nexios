@@ -1210,6 +1210,47 @@
 #define CONFIG_LOCK_PARK_MAX_ATTEMPTS 8
 #endif
 
+/// M2 follow-up (#545 FIRE): bounded iterations for the denied/exhausted
+/// pure-spin fallback.  The spin stays loud (tick_watchdog checkpoint every
+/// 256) and diagnosed (one ERROR on first escape); it never spins silently
+/// forever.  Default: 65536.
+#ifndef CONFIG_LOCK_DENIED_SPIN_ROUNDS
+#define CONFIG_LOCK_DENIED_SPIN_ROUNDS 65536
+#endif
+
+/// M2 follow-up (#545 FIRE, INV-L4): allow the timed park when the live
+/// IrqGuard depth is owned by a *foreign* context (depth > 0 but the owner
+/// token is neither the calling task nor the ISR sentinel).  The syscall
+/// trap path holds no IrqGuard, so any depth seen there is foreign/leaked
+/// and parking is safe.  0 restores the status-quo-ante deny.  Default: 1.
+#ifndef CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW
+#define CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW 1
+#endif
+
+/// M2 follow-up (#545 FIRE): last-resort sti window inside the denied
+/// fallback.  A bare sti widens someone else's live IrqGuard scope (S1),
+/// so this stays 0 (diagnose-only loud spin) unless Phase-1 evidence
+/// demonstrates a genuine own-guard denial shape.  Default: 0.
+#ifndef CONFIG_LOCK_DENIED_SPIN_STI_ALLOW
+#define CONFIG_LOCK_DENIED_SPIN_STI_ALLOW 0
+#endif
+
+/// M2 follow-up (#545 SILENT): drop orphaned IrqGuard depth whose owner
+/// task is dead (TERMINATED/REAPED/gone) at switch time.  A live owner's
+/// suspended scope is never cleared (its dtor still owns the count).
+/// Default: 1.
+#ifndef CONFIG_LOCK_PARK_SELFHEAL
+#define CONFIG_LOCK_PARK_SELFHEAL 1
+#endif
+
+/// M2 follow-up (#545 SILENT): level-triggered IPC wake sweep (recv
+/// channel only — BLOCKED recv-waiter with non-empty own inbox). Sender
+/// and reply channels are deliberately excluded (see sweep comment for
+/// the convicted reasons).  Default: 1.
+#ifndef CONFIG_IPC_WAKE_SWEEP_ENABLE
+#define CONFIG_IPC_WAKE_SWEEP_ENABLE 1
+#endif
+
 /// reschedule()-entry lock-hygiene assertion (issue #546 §6.2 item 2):
 /// no order-table spinlock may be held at reschedule() or a BLOCKED
 /// transition (scheduler_lock_ itself is covered by its own T2b depth
@@ -1660,6 +1701,21 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_LOCK_PARK_MAX_ATTEMPTS < 1
 #error "CONFIG_LOCK_PARK_MAX_ATTEMPTS must be >= 1 (default 8)"
+#endif
+#if CONFIG_LOCK_DENIED_SPIN_ROUNDS < 1024
+#error "CONFIG_LOCK_DENIED_SPIN_ROUNDS must be >= 1024 (default 65536)"
+#endif
+#if CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW != 0 && CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW != 1
+#error "CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_LOCK_DENIED_SPIN_STI_ALLOW != 0 && CONFIG_LOCK_DENIED_SPIN_STI_ALLOW != 1
+#error "CONFIG_LOCK_DENIED_SPIN_STI_ALLOW must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_LOCK_PARK_SELFHEAL != 0 && CONFIG_LOCK_PARK_SELFHEAL != 1
+#error "CONFIG_LOCK_PARK_SELFHEAL must be 0 or 1 (default 1)"
+#endif
+#if CONFIG_IPC_WAKE_SWEEP_ENABLE != 0 && CONFIG_IPC_WAKE_SWEEP_ENABLE != 1
+#error "CONFIG_IPC_WAKE_SWEEP_ENABLE must be 0 or 1 (default 1)"
 #endif
 #if CONFIG_IRQ_CONTRACT_ASSERT < 0 || CONFIG_IRQ_CONTRACT_ASSERT > 2
 #error "CONFIG_IRQ_CONTRACT_ASSERT must be in [0..2] (default 1)"

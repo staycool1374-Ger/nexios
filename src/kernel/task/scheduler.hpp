@@ -1224,7 +1224,18 @@ struct SwSlots {
     ///        reset_stuck_rescue_count_for_test().
     static uint64_t stuck_rescue_count_;
     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
+    ///        Shared by the stranded-READY and IPC-wake sweeps.
     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
+    /// @brief IPC-wake rescues since reset (M2 follow-up #545 SILENT).
+    ///        Detection-first: must stay 0 in a healthy run — every firing
+    ///        proves a lost wakeup on an IPC wait channel.  Monotonic like
+    ///        stuck_rescue_count_ (never rewound by snapshot restore);
+    ///        reset_ipc_wake_rescue_count_for_test() re-establishes 0.
+    static uint64_t ipc_wake_rescue_count_;
+    /// @brief For-test reset of the IPC-wake rescue detector.
+    static void reset_ipc_wake_rescue_count_for_test() noexcept;
+    /// @brief IPC-wake rescues since reset (QE diagnostic).
+    static uint64_t ipc_wake_rescue_count() noexcept;
     /// @brief Starvation-breaker trigger (issue #242): consecutive ticks the
     ///        top READY level may be picked while lower non-idle READY levels
     ///        wait before exactly one dispatch below the top is forced.  Fixed

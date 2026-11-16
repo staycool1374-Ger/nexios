@@ -1,0 +1,575 @@
+diff --git a/docs/specs/memory.md b/docs/specs/memory.md
+index 171515106..d7aa886e8 100644
+--- a/docs/specs/memory.md
++++ b/docs/specs/memory.md
+@@ -239,3 +239,33 @@ Classification rules (authoritative):
+    a kernel task), then `PMM::free_page(page_table_)` reclaims the single
+    private PML4 page.  The kslot window, HHDM and kernel text/data/bss pages
+    are boot-shared and intentionally NOT freed individually.
++
++### 7.1.2 aarch64 TTBR0/TTBR1 split (issue #524)
++
++x86_64 switches the whole root with one CR3, so rule 3 above exposes a
++task's private kernel-half windows (e.g. `CONFIG_KERNEL_PRIV_DATA_BASE`,
++L0[320]) automatically.  aarch64 splits the space: TTBR0 carries the user
++half, TTBR1 the kernel half, and `TCR_EL1.A1 == 0` selects TTBR0's ASID
++(0 for kernel/harness tasks).  Kernel-half VAs therefore translate via
++TTBR1 **regardless of task**, so a private kernel-half window is
++unreachable unless TTBR1 follows the task root too.
++
++Authoritative rules:
++1. Every applied context switch programs **both** TTBRs from the published
++   root (`scheduler_load_cr3_from`): TTBR0 verbatim, TTBR1 ASID-stripped
++   (`& 0x0000FFFFFFFFFFFF`), inside one `dsb sy; tlbi vmalle1; dsb sy`
++   window with the shared `isb` as the pairing point (`vectors.S`
++   `irq_context_switch_common`). No TTBR1 write may ever occur outside a
++   TLBI window; the full `vmalle1` is the isolation barrier (global
++   `nG=0` leaves must never alias across tasks).
++2. `arch::switch_address_space(root)` is the only API that changes both
++   halves (exec path, before freeing the old root — a stale TTBR1 over a
++   freed root is a use-after-free). Temporary peer user-half switches
++   keep the current kernel half and must NOT use it (grep-enforced).
++3. riscv64 needs no twin: a single `satp` already selects both halves.
++   Note: `CONFIG_KERNEL_PRIV_DATA_BASE` (`0xFFFFA00000000000`) is not a
++   canonical Sv39 VA, so the private window is unreachable on riscv64 for
++   an address-encoding reason — permanent arch limitation, no code owed.
++4. No targeted-TLBI or ASID-tagged optimization without making
++   private-window leaves `nG=1` first (tracked separately; the full flush
++   stays until then).
+diff --git a/linker/linker_aarch64.ld b/linker/linker_aarch64.ld
+index 77883a1a6..15ebeb8b1 100644
+--- a/linker/linker_aarch64.ld
++++ b/linker/linker_aarch64.ld
+@@ -47,6 +47,13 @@ SECTIONS
+         _stack_end_low = .;
+     } :boot_data
+ 
++    /* Issue #524: the aarch64 boot stack must bracket the live stack
++     * (_boot_stack lives in .boot_stack so the _stack_start.._stack_end
++     * span covers it; the span feeds is_boot_stack_rsp() and the
++     * integrity_stack_markers_span test). This ld rejects ASSERT() (see
++     * the riscv64 script), so the span is fail-stopped at runtime in
++     * boot.S instead of asserted here. */
++
+     . = ALIGN(., 4K);
+     boot_vma_end = .;
+     phys_lma = boot_vma_end;
+diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
+index a1c314673..dac915170 100644
+--- a/prompts/LEARNINGS.md
++++ b/prompts/LEARNINGS.md
+@@ -1838,3 +1838,9 @@
+ - **Learned:** `test_cleanup_all`'s terminate loop spared only BSP-idle/BSP-current, so on `-smp 2` it marked the AP idle (id 2, "apidle") TERMINATED and `reap_orphans` freed its stack while the AP was parked on it — next AP tick triple-faulted into a machine reset (no `-no-reboot` on the harness cmdline), rebooting identically every ~5.5s with no SUMMARY. Debug never calls the function (snapshot path) and 1-CPU release has no second runner, so only release+2-CPU looped. The loop's own comment ("non-idle, non-current") already stated the correct spare set — the code under-implemented it.
+ - **Adapted:** spare `is_idle_task(t)` (all CPUs) + `is_current_on_any_cpu(t)` in the loop, mirroring `terminate_err`'s remote-current refusal and `cleanup_test_tasks`' spare set. Gates: x86_64 release 24/24 (was 23/24), aarch64 release 28/28, riscv64 release 35/35, debug smp 21/21.
+ - **Style re-face:** every teardown path must check any-CPU currency, not just local current — `reap_orphans` still only spares calling-CPU `current` (its callers happen to be safe today); audit any new caller against `is_current_on_any_cpu` before wiring it up.
++
++### #524 — aarch64 core_memory: HHDM restore was x86-shaped, boot stack outside .boot_stack, TTBR1 never switched (FIXED, gates green)
++
++- **Learned:** (1) `test_isolate`'s HHDM save walked `L0[256]→L1[0]` (the MMIO L2 on aarch64, not the RAM L2) and the restore gated on the x86 boot-PD phys `0x5000` — every aarch64 rewind printed `[PD-RESTORE] CORRUPTED` and skipped, leaving split L3s dangling into level-3 translation faults (DFSC 0x07 at the exact split VA). Fix by arch arms (save L1 + children L2{0,1,256}, rewind with split-page reclaim + TLB flush). (2) `_boot_stack` was emitted into `.boot.data` while the span came from the empty `.boot_stack` section — test 55's span assert failed on a false premise; fix the layout (section move), not the assert; this ld rejects ASSERT() so the fail-stop lives in boot.S (riscv precedent). (3) Test-side x86 assumptions bite on aarch64: `split_now` used the PS bit (bit 7 is an address bit in a block descriptor) — gate per-arch (`(e&3)==1`), with doc-block update (systemically-wrong-test ritual). (4) The aarch64 trap epilogue switched only TTBR0, so private kernel-half windows (L0[320] PRIV_BASE) faulted at level 0 under the shared root — x86 switches the whole CR3. Fix: program TTBR1 (ASID-stripped) in the existing TLBI window + `switch_address_space` for exec; riscv needs no twin (single satp). Serial MAP-DROP absence ruled out a map failure before touching the switch path.
++- **Adapted:** aarch64 HHDM arms in `test_isolate.cpp` (+3-slot buffer via the symbolic `off_*` chain); `boot.S` span fail-stop; `vectors.S` TTBR1 switch; `switch_address_space` shims x3 + `elf.cpp` unconditional retarget before old-root free; `memory.md` §7.1.2 address-split contract (TTBR1-inside-TLBI-window, no foreign-root `switch_address_space`, no new publish slot). Gates: aa64 core_memory 125/125 (was FAIL@55 + STALL), x86 core_memory 129/129, aa64 proc_elf/core_task/ipc/hal/storage/drivers/process_lifecycle/testrunner/arch_aarch64 green, 3-arch release legs green, style Errors 0.
++- **Style re-face:** arch-neutral layout tables + per-arch capability checks beat shared-shape assumptions; when a trap epilogue touches one half of a split root, audit the other half the same cycle; `call`-free GDB commands only on the TCG stub (`tasks` plugin is x86-only); serial `[MAP-DROP]`/`CORRUPTED` lines are first-class evidence — read them before attaching GDB.
+diff --git a/src/kernel/arch/aarch64/boot.S b/src/kernel/arch/aarch64/boot.S
+index 8e8f3d0ce..3d8130748 100644
+--- a/src/kernel/arch/aarch64/boot.S
++++ b/src/kernel/arch/aarch64/boot.S
+@@ -96,6 +96,23 @@ _start:
+     ldr     x0, =_boot_stack_end
+     mov     sp, x0
+ 
++    // Issue #524: fail-stop if the link-time boot-stack span is
++    // degenerate. _boot_stack must live in .boot_stack so the
++    // _stack_start.._stack_end span brackets it (the span feeds
++    // is_boot_stack_rsp() and the integrity_stack_markers_span test).
++    // This ld rejects ASSERT(), so the check lives here (riscv64
++    // precedent: runtime fail-stop instead of link ASSERT).
++    ldr     x0, =_stack_start_low
++    ldr     x1, =_stack_end_low
++    sub     x2, x1, x0
++    cmp     x2, #16384
++    b.hs    .Lspan_ok
++.Lspan_park:
++    msr     daifset, #15
++    wfi
++    b       .Lspan_park
++.Lspan_ok:
++
+     // === Init PL011 UART ===
+     ldr     x0, =0x9000030
+     mov     w1, #0
+@@ -332,7 +349,7 @@ _start:
+     ldr     x2, =higherhalf_entry
+     br      x2
+ 
+-.section .boot.data, "aw"
++.section .boot_stack, "aw"
+ .balign 4096
+ _boot_stack:
+     .space  16384
+diff --git a/src/kernel/arch/aarch64/hal/io_impl.hpp b/src/kernel/arch/aarch64/hal/io_impl.hpp
+index 6776c24f5..6bccd69ea 100644
+--- a/src/kernel/arch/aarch64/hal/io_impl.hpp
++++ b/src/kernel/arch/aarch64/hal/io_impl.hpp
+@@ -305,7 +305,9 @@ inline void write_tpidr_el0(uint64_t v) {
+ inline void write_ttbr1_el1(uint64_t v) {
+     asm volatile("msr ttbr1_el1, %0" : : "r"(v) : "memory");
+ }
+-/// @brief Write CR3 alias (switches TTBR0_EL1) and invalidate TLB.
++/// @brief Write CR3 alias (switches TTBR0_EL1, the user half) and
++/// invalidate TLB. User-half-only by contract: kernel-half (TTBR1)
++/// selection is a separate decision owned by switch_address_space().
+ /// Safe after higher-half migration: kernel runs via TTBR1_EL1, so
+ /// TTBR0_EL1 can point to any user's page table without faulting.
+ /// @param[in] v Physical address of the user page table.
+@@ -318,6 +320,18 @@ inline void write_cr3(uint64_t v) {
+     system_barrier();
+     isb();
+ }
++/// @brief Switch the full address space to a task-private root
++/// (issue #524). Installs root_phys (ASID-stripped) in TTBR1 first so
++/// kernel-half translations bind before the user half, then switches
++/// TTBR0 via write_cr3 (which supplies dsb/tlbi_alle1/dsb/isb).
++/// Exec-only: temporary peer user-half switches keep the current
++/// kernel half and must NOT use this.
++/// @param[in] root_phys Physical address of the task-private root.
++inline void switch_address_space(uint64_t root_phys) {
++    constexpr uint64_t kPhys48Mask = 0x0000FFFFFFFFFFFFULL;
++    write_ttbr1_el1(root_phys & kPhys48Mask);
++    write_cr3(root_phys);
++}
+ /// @brief Read the kernel page-table root (TTBR1_EL1, issue #352).
+ /// @return Physical address of the kernel page table.
+ /// @note Distinct from read_cr3() (TTBR0/user) — callers that need the
+diff --git a/src/kernel/arch/aarch64/vectors.S b/src/kernel/arch/aarch64/vectors.S
+index aa280aad7..24fb47a0d 100644
+--- a/src/kernel/arch/aarch64/vectors.S
++++ b/src/kernel/arch/aarch64/vectors.S
+@@ -320,6 +320,16 @@ irq_context_switch_common:
+     ldr     x3, [x3, #:lo12:scheduler_load_cr3_from]
+     cbz     x3, .tls_apply
+     msr     ttbr0_el1, x3
++    // Issue #524: TTBR1 follows the same root (ASID-stripped; TCR_EL1.A1==0
++    // selects TTBR0's ASID, and read_ttbr1_el1() consumers expect a clean
++    // physical root). Kernel-half VAs always translate via TTBR1, so a
++    // per-task private kernel-half window (e.g. L0[320] PRIV_BASE) is
++    // unreachable without this. x5 is scratch here (post-save_all; every
++    // user GPR is in the frame and restore_all reloads them). Both writes
++    // stay inside the dsb/tlbi/dsb window below; the shared isb at
++    // .tls_apply pairs them.
++    ubfx    x5, x3, #0, #48
++    msr     ttbr1_el1, x5
+     // A TTBR0 change with ASID=0 requires an invalidation of the stale
+     // boot-context translations, otherwise stale identity-map entries are
+     // reused for user VAs.
+@@ -329,10 +339,10 @@ irq_context_switch_common:
+     adrp    x4, scheduler_load_cr3_from
+     str     xzr, [x4, #:lo12:scheduler_load_cr3_from]
+ .tls_apply:
+-    // Issue #74: apply the published TLS base (TPIDR_EL0 only — TTBR1/EL1
+-    // state untouched). x3/x4 reuse is safe (all user regs in the save
+-    // area); the isb below is the SHARED join point pairing both the TTBR0
+-    // switch above and the TPIDR_EL0 write here.
++    // Issue #74: apply the published TLS base (TPIDR_EL0 only — TTBR1
++    // follows the task root since issue #524). x3/x4 reuse is safe (all
++    // user regs in the save area); the isb below is the SHARED join point
++    // pairing the TTBR0+TTBR1 switch above and the TPIDR_EL0 write here.
+     adrp    x3, scheduler_load_tls_from
+     ldr     x3, [x3, #:lo12:scheduler_load_tls_from]
+     cbz     x3, 8f
+diff --git a/src/kernel/arch/riscv64/hal/io_impl.hpp b/src/kernel/arch/riscv64/hal/io_impl.hpp
+index 98d1f0ab5..7b5b079c3 100644
+--- a/src/kernel/arch/riscv64/hal/io_impl.hpp
++++ b/src/kernel/arch/riscv64/hal/io_impl.hpp
+@@ -214,6 +214,13 @@ inline uint64_t read_cr3() {
+ inline void write_cr3(uint64_t v) {
+     write_satp((8ULL << 60) | (v >> 12));
+ }
++/// @brief Switch the full address space to a task-private root
++/// (issue #524 parity shim). A single satp already selects both halves,
++/// so this is write_cr3 with identical behavior.
++/// @param root_phys Physical address of the task-private root.
++inline void switch_address_space(uint64_t root_phys) {
++    write_cr3(root_phys);
++}
+ /// @brief Read the kernel page-table root (issue #352).  Sv39 uses one
+ ///        shared root for both halves, so this equals the user root.
+ /// @return Physical address of the kernel page table.
+diff --git a/src/kernel/arch/x86_64/hal/io_impl.hpp b/src/kernel/arch/x86_64/hal/io_impl.hpp
+index 48e041f2e..b4a3e3f8a 100644
+--- a/src/kernel/arch/x86_64/hal/io_impl.hpp
++++ b/src/kernel/arch/x86_64/hal/io_impl.hpp
+@@ -62,6 +62,13 @@ inline uint64_t read_cr4() {
+ inline void write_cr3(uint64_t v) {
+     asm volatile("mov %0, %%cr3" : : "r"(v) : "memory");
+ }
++/// @brief Switch the full address space to a task-private root
++/// (issue #524 parity shim). A single CR3 already selects both halves,
++/// so this is write_cr3 with identical behavior.
++/// @param root_phys Physical address of the task-private root.
++inline void switch_address_space(uint64_t root_phys) {
++    write_cr3(root_phys);
++}
+ /// @brief Write CR0.
+ /// @param v Value to write to CR0.
+ inline void write_cr0(uint64_t v) {
+diff --git a/src/kernel/elf/elf.cpp b/src/kernel/elf/elf.cpp
+index 00f5f7ab1..fc6335f19 100644
+--- a/src/kernel/elf/elf.cpp
++++ b/src/kernel/elf/elf.cpp
+@@ -951,9 +951,12 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
+     regs[9] = 0;            // A0 = 0 (child/exec return value)
+ #endif
+ 
+-    if (arch::read_cr3() != new_pml4) {
+-        arch::write_cr3(new_pml4);
+-    }
++    // Issue #524: retarget the FULL address space (TTBR1 included on
++    // aarch64) before freeing the old root below — the old read_cr3 guard
++    // was TTBR0-only, so the kernel kept walking a freed root's kernel
++    // half (use-after-free). Unconditional: a stale TTBR1 must be
++    // retargeted even when TTBR0 already names the new root.
++    arch::switch_address_space(new_pml4);
+ 
+     // v0.4.0 MP-3: arm segment-boundary canaries in the new address space.
+     install_segment_canaries(tcb, hdr, data, file_size);
+diff --git a/src/kernel/test/test_isolate.cpp b/src/kernel/test/test_isolate.cpp
+index 9540e30d3..080cf4d8f 100644
+--- a/src/kernel/test/test_isolate.cpp
++++ b/src/kernel/test/test_isolate.cpp
+@@ -251,7 +251,14 @@ static size_t off_user_page_data() {
+ }
+ 
+ static constexpr size_t PML4_USER_BYTES = 256 * sizeof(uint64_t); // 2048
++// Issue #524: aarch64 HHDM restore needs the L1 table plus the child L2
++// tables it can rewind (slots 0/1/256: MMIO alias, RAM window, upper
++// HHDM): 4 pages. x86_64/riscv64 keep the single-table layout.
++#if defined(CONFIG_ARCH_AARCH64)
++static constexpr size_t HHDM_PD_BYTES = 4 * 512 * sizeof(uint64_t);
++#else
+ static constexpr size_t HHDM_PD_BYTES = 512 * sizeof(uint64_t); // 4096
++#endif
+ static constexpr size_t IDENTITY_PD_BYTES = 512 * sizeof(uint64_t); // 4096
+ 
+ #if defined(CONFIG_ARCH_RISCV64)
+@@ -679,16 +686,20 @@ bool snapshot_create() {
+         g_snapshot + off_kslot_snapshot(user_page_count, task_count));
+ 
+     // ---- HHDM PD save ----
+-    // Save PDPT[0]→PD (512 entries) so snapshot_restore can undo any
+-    // huge-page splits performed by kernel-space VMM tests.
+-    // Issue #29: x86/aarch64 4-level-MMU-shaped only (PML4[256] walk,
+-    // ~0xFFF PTE decode).  Sv39 has 3 levels and (pte>>10)<<12 decode —
+-    // this walk misdecodes L0 entries into unmapped HHDM (load fault).
+-    // Skipped on riscv64: its Sv39 map_page branch never sets the
+-    // hhdm/identity-modified flags, so the flag-gated restores below stay
+-    // unfired regardless; the real Sv39 save/restore backend is #152
+-    // follow-up work.
+-#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
++    // Save the HHDM tables so snapshot_restore can undo huge-page splits
++    // performed by kernel-space VMM tests.
++    // x86_64: save PDPT[0]→PD (512 entries, PD[256] block shape).
++    // aarch64 (issue #524): save the L0[256]→L1 table plus the child L2
++    // tables for slots 0/1/256 (MMIO alias, RAM window, upper HHDM) — the
++    // old x86-shaped walk saved L1[0] (the MMIO L2), missing every RAM
++    // split, and the restore gate below skipped it all as CORRUPTED.
++    // Issue #29: 4-level-MMU-shaped only (PML4[256] walk, ~0xFFF PTE
++    // decode).  Sv39 has 3 levels and (pte>>10)<<12 decode — this walk
++    // misdecodes L0 entries into unmapped HHDM (load fault).  Skipped on
++    // riscv64: its Sv39 map_page branch never sets the hhdm/identity-
++    // modified flags, so the flag-gated restores below stay unfired
++    // regardless; the real Sv39 save/restore backend is #152 follow-up.
++#if defined(CONFIG_ARCH_X86_64)
+     {
+         uint64_t pml4_phys = VMM::get_kernel_pml4();
+         if (pml4_phys) {
+@@ -708,6 +719,37 @@ bool snapshot_create() {
+         }
+     }
+ #endif
++#if defined(CONFIG_ARCH_AARCH64)
++    {
++        constexpr uint64_t kSlots[] = {0, 1, 256};
++        uint64_t pml4_phys = VMM::get_kernel_pml4();
++        if (pml4_phys) {
++            auto *l0 = reinterpret_cast<uint64_t *>(
++                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
++            if ((l0[256] & 3ULL) == 3ULL) {
++                auto *l1 = reinterpret_cast<uint64_t *>(
++                    arch::HHDM_OFFSET + (l0[256] & ~0xFFFULL));
++                uint8_t *dst =
++                    g_snapshot + off_hhdm_pd(user_page_count, task_count);
++                __builtin_memcpy(dst, l1, 512 * sizeof(uint64_t));
++                for (size_t si = 0; si < 3; ++si) {
++                    uint64_t e = l1[kSlots[si]];
++                    uint8_t *slot_dst =
++                        dst + (1 + si) * 512 * sizeof(uint64_t);
++                    if ((e & 3ULL) == 3ULL) {
++                        auto *l2 = reinterpret_cast<uint64_t *>(
++                            arch::HHDM_OFFSET + (e & ~0xFFFULL));
++                        __builtin_memcpy(slot_dst, l2,
++                                         512 * sizeof(uint64_t));
++                    } else {
++                        __builtin_memset(slot_dst, 0,
++                                         512 * sizeof(uint64_t));
++                    }
++                }
++            }
++        }
++    }
++#endif
+ 
+     // ---- Identity PD save ----
+     // Save PML4[0]→PDPT[0]→PD (PD_IDENTITY phys 0x3000, 512 entries) so
+@@ -987,14 +1029,20 @@ void snapshot_restore(const char *test_name) {
+ 
+     // ---- HHDM PD restore (before PMM restore) ----
+     // Only runs when a test actually modified HHDM page tables.
+-    // PD[1..511] are restored (PD[0] maps the PD page itself).
++    // x86_64: PD[1..511] are restored (PD[0] maps the PD page itself).
++    // aarch64 (issue #524): per-slot rewind of L1{0,1,256} child L2s
++    // (see the save side for the buffer layout). A live L2 entry that
++    // went block/absent→table is freed (split page reclaim, mirroring
++    // the x86 predicate) before the saved L2 is copied back; slots
++    // whose live L1 descriptor no longer matches the saved one are
++    // genuine corruption — logged and skipped, never memcpy'd blind.
+     // Issue #60: atomic take (not check-then-clear) — a set landing
+     // after the exchange stays set, so the next restore over-restores
+     // (safe) instead of skipping (stale mappings leak).
+-    // Issue #152: 4-level shape (pml4[256]/pdpt[0]/0x5000) — x86_64 and
+-    // aarch64 only.  On riscv64 these decodes misread Sv39 tables, so
+-    // this block is arch-gated and Sv39 has its own restore below.
+-#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
++    // Issue #152: x86 shape is pml4[256]/pdpt[0]/0x5000.  On riscv64
++    // these decodes misread Sv39 tables, so this block is arch-gated
++    // and Sv39 has its own restore below.
++#if defined(CONFIG_ARCH_X86_64)
+     if (VMM::take_hhdm_modified()) {
+         uint64_t pml4_phys = VMM::get_kernel_pml4();
+         if (pml4_phys) {
+@@ -1042,6 +1090,73 @@ void snapshot_restore(const char *test_name) {
+             }
+         }
+     }
++#endif
++#if defined(CONFIG_ARCH_AARCH64)
++    // Issue #524: aarch64 HHDM L2 rewind. Saved layout (see the save
++    // side) is [L1 copy][L2 slot0][L2 slot1][L2 slot256]. The L1 copy
++    // is the stability check: a live slot that no longer decodes to
++    // the saved child means genuine corruption (skip + log, same
++    // fail-closed direction as the x86 0x5000 gate).
++    if (VMM::take_hhdm_modified()) {
++        constexpr uint64_t kSlots[] = {0, 1, 256};
++        uint64_t pml4_phys = VMM::get_kernel_pml4();
++        if (pml4_phys) {
++            auto *nu_p = reinterpret_cast<uint64_t *>(
++                g_snapshot + off_user_page_count());
++            uint64_t nu = *nu_p;
++            // Read nk from kstack header (stable)
++            uint64_t nk = *reinterpret_cast<uint64_t *>(
++                g_snapshot + off_kstack_header(nu));
++            const uint8_t *saved_base = g_snapshot + off_hhdm_pd(nu, nk);
++            auto *saved_l1 = reinterpret_cast<const uint64_t *>(saved_base);
++            auto *l0 = reinterpret_cast<uint64_t *>(
++                arch::HHDM_OFFSET + (pml4_phys & ~0xFFFULL));
++            if ((l0[256] & 3ULL) == 3ULL) {
++                auto *l1 = reinterpret_cast<uint64_t *>(
++                    arch::HHDM_OFFSET + (l0[256] & ~0xFFFULL));
++                for (size_t si = 0; si < 3; ++si) {
++                    uint64_t saved_slot = saved_l1[kSlots[si]];
++                    uint64_t live_slot = l1[kSlots[si]];
++                    if (saved_slot != live_slot) {
++                        Logger::raw_write("[PD-RESTORE] aarch64 L1 slot ");
++                        Logger::print_dec(kSlots[si]);
++                        Logger::raw_write(" mismatch in test=\"");
++                        Logger::raw_write(test_name ? test_name : "?");
++                        Logger::raw_write("\"\n");
++                        continue;
++                    }
++                    if ((saved_slot & 3ULL) != 3ULL)
++                        continue;
++                    auto *saved_l2 =
++                        reinterpret_cast<const uint64_t *>(saved_base +
++                            (1 + si) * 512 * sizeof(uint64_t));
++                    auto *l2 = reinterpret_cast<uint64_t *>(
++                        arch::HHDM_OFFSET + (live_slot & ~0xFFFULL));
++                    for (size_t i = 0; i < 512; ++i) {
++                        uint64_t s = saved_l2[i];
++                        uint64_t c = l2[i];
++                        // Saved block/absent, live table: free the split
++                        // page the test allocated (mirrors the x86
++                        // saved-huge/live-split reclaim above).
++                        if ((s == 0 || (s & 3ULL) == 1ULL) &&
++                            (c & 3ULL) == 3ULL)
++                            PMM::free_page(c & 0xFFFFFFFFF000ULL);
++                    }
++                    __builtin_memcpy(l2, saved_l2,
++                                     512 * sizeof(uint64_t));
++                }
++                arch::ArchPageTable::tlb_flush_all();
++                arch::isb();
++            } else {
++                Logger::raw_write("[PD-RESTORE] CORRUPTED l0[256]=");
++                Logger::print_hex(l0[256]);
++                Logger::raw_write(" in test=\"");
++                Logger::raw_write(test_name ? test_name : "?");
++                Logger::raw_write("\"\n");
++            }
++        }
++    }
++#endif
+ 
+     // ---- Identity PD restore (before PMM restore) ----
+     // Undo huge-page splits in the LOW identity map (PML4[0]→PDPT[0]→PD,
+@@ -1052,6 +1167,7 @@ void snapshot_restore(const char *test_name) {
+     // later (off_pt_pool), so this block only restores the PD entries.
+     // (Issue #60: same take-instead-of-check-then-clear as above.)
+     // Issue #152: same 4-level gate as the HHDM block above.
++#if defined(CONFIG_ARCH_X86_64) || defined(CONFIG_ARCH_AARCH64)
+     if (VMM::take_identity_modified()) {
+         uint64_t pml4_phys = VMM::get_kernel_pml4();
+         if (pml4_phys) {
+diff --git a/src/kernel/test/test_no_dynamic_alloc_after_init.cpp b/src/kernel/test/test_no_dynamic_alloc_after_init.cpp
+index a3df32a53..bb53bdea8 100644
+--- a/src/kernel/test/test_no_dynamic_alloc_after_init.cpp
++++ b/src/kernel/test/test_no_dynamic_alloc_after_init.cpp
+@@ -85,7 +85,11 @@ static void kernel_pd_entry_restore(uint64_t va, uint64_t entry) {
+ //           show up as a free-count delta.  If the alias' 2 MB region is
+ //           still huge, the first map splits it (allocating a PT page);
+ //           the split is warm-up'ed and re-huged + freed here so the live
+-//           PD matches the snapshot.
++//           PD matches the snapshot.  Huge-page detection is arch-specific
++//           (issue #524): x86 checks the PS bit, aarch64 checks the block
++//           descriptor shape ((e & 3) == 1) — bit 7 is an output-address
++//           bit in a block descriptor, not a size flag, so the x86 check
++//           is address lottery there and the teardown is wrongly skipped.
+ // Input: Snapshot PMM::free_pages_ref(), run the cycle, re-count.
+ // Expect: before == after.
+ // Depends: kernel/memory/pmm.hpp, kernel/memory/mempool.hpp,
+@@ -104,8 +108,13 @@ JARVIS_TEST(no_dynamic_alloc_pmm_neutral_cycle,
+     // page; remember the huge entry to re-huge at the end.
+     // Issue #200: HHDM PD surgery is IRQ-critical — mask the timer ISR
+     // and task preemption across the warm-up split only.
++    // Issue #524: huge detection is arch-specific (see Testidea above).
+     uint64_t saved_huge = kernel_pd_entry(va);
++#if defined(CONFIG_ARCH_AARCH64)
++    bool split_now = (saved_huge & 3ULL) == 1ULL;
++#else
+     bool split_now = (saved_huge & (1ULL << 7)) != 0;
++#endif
+     if (split_now) {
+         arch::IrqGuard split_guard;
+         VMM::map_page(va, phys, false);
+diff --git a/test-history.txt b/test-history.txt
+index 6f2a4b35f..32ed14dd5 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -6343,3 +6343,110 @@ SUMMARY: total=28 ok=28 fail=0 ARCH=aarch64
+ 
+ SUMMARY: total=35 ok=35 fail=0 ARCH=riscv64
+ 2026-11-11 21:46:35 smp_multicpu PASSED: 21 FAILED: 0 TIME: 1503ms
++2026-11-11 22:43:18 core_memory PASSED: 0 FAILED: 0 TIME: 0ms STATUS: TIMEOUT
++2026-11-11 23:07:10 core_memory PASSED: 0 FAILED: 0 TIME: 0ms STATUS: TIMEOUT
++2026-11-11 23:29:03 core_memory PASSED: 0 FAILED: 0 TIME: 0ms STATUS: TIMEOUT
++2026-11-12 07:32:32 core_memory PASSED: 125 FAILED: 0 TIME: 6756ms
++2026-11-12 07:33:19 core_memory PASSED: 129 FAILED: 0 TIME: 13349ms
++2026-11-12 07:33:55 proc_elf PASSED: 104 FAILED: 0 TIME: 3545ms
++2026-11-12 07:34:05 core_task PASSED: 46 FAILED: 0 TIME: 1383ms
++2026-11-12 07:34:16 ipc PASSED: 92 FAILED: 0 TIME: 3304ms
++2026-11-12 07:34:26 hal PASSED: 83 FAILED: 0 TIME: 2320ms
++2026-11-12 07:34:56 storage PASSED: 167 FAILED: 0 TIME: 21987ms
++2026-11-12 07:35:08 drivers PASSED: 66 FAILED: 0 TIME: 2142ms
++2026-11-12 07:35:16 process_lifecycle PASSED: 16 FAILED: 0 TIME: 525ms
++2026-11-12 07:35:25 testrunner PASSED: 0 FAILED: 0 TIME: 0ms STATUS: EXPECTED_PANIC_PASS
++2026-11-12 07:35:35 arch_aarch64 PASSED: 38 FAILED: 0 TIME: 1181ms
++2026-11-12 07:36:00 core_basic PASSED: 17 FAILED: 0 TIME: 17ms
++2026-11-12 07:36:11 core_sync PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:36:22 core_sched PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:36:32 core_task PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:36:43 core_memory PASSED: 4 FAILED: 0 TIME: 5ms
++2026-11-12 07:36:53 core_syscall PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:37:04 core_tracing PASSED: 0 FAILED: 0 TIME: 2ms
++2026-11-12 07:37:14 ipc PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:37:25 capability PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:37:35 proc_elf PASSED: 1 FAILED: 0 TIME: 4ms
++2026-11-12 07:37:46 storage PASSED: 40 FAILED: 0 TIME: 49ms
++2026-11-12 07:37:56 servers PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:38:07 drivers PASSED: 8 FAILED: 0 TIME: 13ms
++2026-11-12 07:38:17 hal PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:38:28 smp PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:38:39 smp_multicpu PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:38:50 deadline PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:39:02 ui PASSED: 19 FAILED: 0 TIME: 2906ms
++2026-11-12 07:39:13 logging_debug PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:39:23 random PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:39:34 bench PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:39:44 task_tcb_log PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:43:54 task_fpu PASSED: 0 FAILED: 0 TIME: 249310ms STATUS: NO_TESTS_REGISTERED
++2026-11-12 07:44:04 testrunner PASSED: 0 FAILED: 0 TIME: 1ms
++
++SUMMARY: total=24 ok=24 fail=0 ARCH=x86_64
++2026-11-12 07:44:17 core_basic PASSED: 17 FAILED: 0 TIME: 7ms
++2026-11-12 07:44:20 core_sync PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:22 core_sched PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:25 core_task PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:27 core_memory PASSED: 4 FAILED: 0 TIME: 4ms
++2026-11-12 07:44:29 core_syscall PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:32 core_tracing PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:34 ipc PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:36 capability PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:39 proc_elf PASSED: 1 FAILED: 0 TIME: 4ms
++2026-11-12 07:44:41 storage PASSED: 40 FAILED: 0 TIME: 20ms
++2026-11-12 07:44:43 servers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:44:46 drivers PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:48 hal PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:50 deadline PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:53 ui PASSED: 19 FAILED: 0 TIME: 293ms
++2026-11-12 07:44:55 logging_debug PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:44:57 random PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:00 bench PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:02 task_tcb_log PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:04 task_fpu PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:07 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:45:09 task_core PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:11 process_lifecycle PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:14 shell_interaction PASSED: 19 FAILED: 0 TIME: 293ms
++2026-11-12 07:45:16 cap_irq PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:18 cap_irq_notify PASSED: 0 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:21 testrunner PASSED: 0 FAILED: 0 TIME: 3ms
++
++SUMMARY: total=28 ok=28 fail=0 ARCH=aarch64
++2026-11-12 07:45:34 core_basic PASSED: 17 FAILED: 0 TIME: 11ms
++2026-11-12 07:45:37 core_sync PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:45:39 core_sched PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:45:42 core_task PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:45:45 core_memory PASSED: 4 FAILED: 0 TIME: 3ms
++2026-11-12 07:45:47 core_syscall PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:45:50 core_tracing PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:45:52 ipc PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:45:55 capability PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:45:58 proc_elf PASSED: 1 FAILED: 0 TIME: 2ms
++2026-11-12 07:46:00 storage PASSED: 40 FAILED: 0 TIME: 33ms
++2026-11-12 07:46:03 servers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:05 drivers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:08 hal PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:11 deadline PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:13 ui PASSED: 19 FAILED: 0 TIME: 244ms
++2026-11-12 07:46:16 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:18 random PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:21 bench PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:24 task_tcb_log PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:46:26 task_fpu PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 07:46:29 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:32 scheduler_zombie PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:34 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:37 memory_vmm PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:39 memory_page_tables PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:42 timing_core PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:45 hal_timer PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:47 irq_early_std PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:50 shell_interaction PASSED: 19 FAILED: 0 TIME: 243ms
++2026-11-12 07:46:52 cap_irq PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:55 cap_irq_notify PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:46:58 task_core PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:47:00 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 07:47:03 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
++
++SUMMARY: total=35 ok=35 fail=0 ARCH=riscv64

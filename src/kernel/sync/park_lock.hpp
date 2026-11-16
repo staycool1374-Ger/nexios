@@ -46,6 +46,9 @@ enum class ParkDenyReason : uint8_t {
     NotRunning,   ///< Current task is not RUNNING (already blocked).
     NoTicks,      ///< CONFIG_TICK_HZ == 0 — a sleep arm could never fire.
     ArmFailed,    ///< PosixTime::sleep_arm failed (wheel full / non-BSP).
+    ForeignGuard, ///< Depth owned by a foreign context (diagnostic only:
+                  ///< never selects the pure-spin branch when
+                  ///< CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW == 1).
 };
 
 /// @brief INV-L1 park predicate (side-effect free): true iff the calling
@@ -81,6 +84,12 @@ uint64_t lock_spin_fallback_count() noexcept;
 uint64_t lock_park_exhausted_count() noexcept;
 /// @brief Last denial code (ParkDenyReason), sticky until reset.
 uint64_t lock_park_denied_reason() noexcept;
+/// @brief M2 follow-up (#545 FIRE): bounded denied-spin block escapes
+///        (each escape re-arms the bounded block and re-diagnoses).
+uint64_t lock_denied_escape_count() noexcept;
+/// @brief M2 follow-up (#545 FIRE): park acquisitions admitted on a
+///        foreign-owned IrqGuard depth (INV-L4).
+uint64_t lock_foreign_depth_count() noexcept;
 /// @brief Test-isolation reset (counters + denial code).
 void park_lock_reset_for_test() noexcept;
 

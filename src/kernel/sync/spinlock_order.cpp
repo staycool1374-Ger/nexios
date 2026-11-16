@@ -36,8 +36,11 @@ inline CpuHeldLocks &own_held() noexcept {
 }
 
 inline uint64_t resolve_owner_id() noexcept {
-    if (kernel::isr_nesting_own() != 0)
-        return 0; // ISR context owns as 0 (never a live task id).
+    // Owner is always the current task (0 when there is none, e.g. early
+    // boot).  Deliberately independent of isr_nesting/IF: the id is
+    // recorded at take time and matched at check time, and IF always flips
+    // in between (that is what a guard does), so any IF- or
+    // nesting-dependent rule mismatches itself across the pair.
     auto *cur = Scheduler::current_task();
     // Live task ids start at 1 (PID 1 = init); 0 means "no task context"
     // only when cur is null (early boot) — a taken lock then attributes
@@ -128,6 +131,25 @@ uint64_t spinlock_held_by_current_count() noexcept {
             ++count;
     }
     return count;
+}
+
+bool spinlock_find_holder(const void *addr, uint64_t *owner_out,
+                          uint64_t *rank_out) noexcept {
+    const CpuHeldLocks &held = own_held();
+    for (uint64_t i = held.depth; i > 0; --i) {
+        if (held.entries[i - 1].addr == addr) {
+            if (owner_out)
+                *owner_out = held.entries[i - 1].owner_id;
+            if (rank_out)
+                *rank_out = held.entries[i - 1].rank;
+            return true;
+        }
+    }
+    if (owner_out)
+        *owner_out = 0;
+    if (rank_out)
+        *rank_out = 0;
+    return false;
 }
 
 bool spinlock_contract_check_clean(const char *where) noexcept {

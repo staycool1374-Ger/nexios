@@ -40,6 +40,7 @@
 #include <kernel/memory/mempool.hpp>
 #include <kernel/iommu/iommu.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/task/admission_selftest.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -2770,6 +2771,10 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
 extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
                                     uint64_t arg1, uint64_t arg2, uint64_t arg3,
                                     uint64_t *regs) {
+    // M2 follow-up (#545 FIRE): mark the syscall-trap window so the
+    // lock-park predicate can exempt genuine trap context (task present,
+    // parkable) from the IsrContext deny (all three arches funnel here).
+    arch::SyscallTrapScope trap_scope{};
     // Issue #513 3.1: frame-consistency choke point. Every IPC handler's
     // syscall_task() keys off the published current — dispatching on a
     // misattributed current silently misbooks waits, queues and sender

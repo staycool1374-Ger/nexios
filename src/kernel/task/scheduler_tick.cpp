@@ -598,6 +598,56 @@ void Scheduler::on_tick() noexcept {
                              __ATOMIC_RELEASE);
         }
 
+#if CONFIG_IPC_WAKE_SWEEP_ENABLE == 1
+        // M2 follow-up (#545 SILENT): level-triggered IPC wake sweep.
+        // Structural net for ONE lost-wakeup channel: a BLOCKED
+        // recv-waiter whose own inbox is non-empty is re-READied.  Lock
+        // free by construction (is_empty is a relaxed atomic read; no
+        // queue lock is ever taken, so the ISR cannot spin behind an
+        // interrupted holder) and list-free (recv waiters are never
+        // linked anywhere, so set_task_ready is a complete wake: no
+        // unlink, no PI restore, nothing to leak).  Spurious wakes are
+        // impossible (own inbox: only this task consumes it).  Deliberately
+        // EXCLUDED channels: (a) reply-wait (has_from needs the queue lock
+        // — ParkLockGuard in the tick ISR could spin on the interrupted
+        // holder); covered by the death drain plus the publish-side
+        // re-checks.  (b) blocked senders: waking a LISTED waiter without
+        // unlinking it breaks the waiter-list invariant (stale links,
+        // double-link on re-block, priority-order violation — convicted
+        // live: the sweep's wake of lo collapsed IpcPriorityOrderedWake
+        // and cascaded into a teardown use-after-free), and unlinking
+        // needs the queue lock in ISR context; sender-side windows stay
+        // closed structurally (link-before-publish reorder, post-publish
+        // and post-wake re-checks, IF=0 rollback).  Detection-first:
+        // ipc_wake_rescue_count_ must stay 0 in a healthy run.
+        uint64_t ipc_sweep_count = 0;
+        for (auto *task = all_tasks_.first_ptr();
+             task != nullptr && ipc_sweep_count < STRANDED_RESCUE_SCAN_MAX;
+             task = all_tasks_.next_ptr(task)) {
+            ++ipc_sweep_count;
+            if (task->magic != TaskControlBlock::TCB_MAGIC)
+                continue;
+            if (is_idle_task(task) || task == current_task())
+                continue;
+            if (queue_target(*task) != sched_cpu())
+                continue; // issue #25 C1: own-CPU tasks only
+            if (task->state != TaskState::BLOCKED)
+                continue; // never clobber non-BLOCKED states (H2)
+            if (!task->blocked_in_recv || task->msg_queue.is_empty())
+                continue;
+            uint64_t rescue_no = ++ipc_wake_rescue_count_;
+            if (rescue_no == 1 ||
+                (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+                Logger::warn("sched: IPC wake rescued #%lx id=%lx",
+                             rescue_no, task->id);
+            }
+            Scheduler::set_task_ready(*task);
+            task->remaining_ticks = task->period_ticks;
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+        }
+#endif
+
         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
         // only tasks affine to this CPU (AP-affine tasks are not serviced).
         // Issue #154: executed_ticks is execution time — only the

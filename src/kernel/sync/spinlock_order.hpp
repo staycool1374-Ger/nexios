@@ -82,6 +82,15 @@ void spinlock_order_reset_for_test() noexcept;
 /// @brief Held-lock census for INV-L1 / INV-C1 predicates + diagnostics.
 uint64_t spinlock_held_by_current_count() noexcept;
 
+/// @brief Find a live order-stack entry by lock address (diagnostic only).
+///        Returns true with the recorded owner task id and rank when a
+///        matching take has no paired release — i.e. the holder that must
+///        release it.  Used by the park watchdog path to name an abandoned
+///        holder without GDB.  False when no entry matches (balanced or
+///        never-taken): the caller must not infer abandonment from false.
+bool spinlock_find_holder(const void *addr, uint64_t *owner_out,
+                          uint64_t *rank_out) noexcept;
+
 /// @brief Diagnostics accessors (per (outer,inner) pair, overflow,
 ///        unpaired-release, park/switch counters live in park_lock).
 uint64_t spinlock_violation_count(uint8_t outer_rank,
@@ -111,6 +120,15 @@ inline bool spinlock_contract_check_clean(const char *where) noexcept {
 inline void spinlock_order_reset_for_test() noexcept {}
 inline uint64_t spinlock_held_by_current_count() noexcept {
     return spinlock_held_depth_own();
+}
+inline bool spinlock_find_holder(const void *addr, uint64_t *owner_out,
+                                 uint64_t *rank_out) noexcept {
+    (void)addr;
+    if (owner_out)
+        *owner_out = 0;
+    if (rank_out)
+        *rank_out = 0;
+    return false;
 }
 inline uint64_t spinlock_violation_count(uint8_t outer_rank,
                                          uint8_t inner_rank) noexcept {

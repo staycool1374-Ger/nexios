@@ -29,6 +29,7 @@
 #include <kernel/arch/timer.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/io.hpp>
 
@@ -91,15 +92,28 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
             // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
             // BLOCKED transition so an arrival landing between the two stores
             // still observes the channel (old code woke on state alone).
-            cur->blocked_in_recv = true;
-            cur->state = TaskState::BLOCKED;
+            // M2 follow-up (#545 SILENT): the triple publishes atomically
+            // under IrqGuard (Dekker close against the sender's wake gate).
+            {
+                arch::IrqGuard publish_guard{};
+                cur->blocked_in_recv = true;
+                cur->state = TaskState::BLOCKED;
+                Scheduler::dequeue_ready(*cur);
+            }
             was_blocked = true;
-            // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must
-            // never be physically queued (INV-2/WEDGE invariant) — the
-            // block in ipc.cpp's send path declares this, and sys_receive
-            // was missing the dequeue.
-            Scheduler::dequeue_ready(*cur);
             Scheduler::reschedule();
+            // M2 follow-up (#545 SILENT): post-publish re-check.  A message
+            // that arrived between the loop-top empty check and the publish
+            // is consumed instead of slept through (self-rescue mirrors the
+            // timeout path's restoration, with ok=true).
+            if (IPC::recv(msg)) {
+                ok = true;
+                cur->blocked_in_recv = false;
+                IPC::recv_wait_cancel(*cur);
+                arch::sti();
+                cur->state = TaskState::RUNNING;
+                break;
+            }
             // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait
             // pattern; key on is_user_ (every task now owns a PML4).
             // Issue #513: the wait yields UNCONDITIONALLY.  A kernel-task

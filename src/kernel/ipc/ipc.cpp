@@ -35,6 +35,15 @@
 
 namespace kernel {
 
+namespace {
+// M2 follow-up evidence (#545 SILENT, CONFIG_DEBUG only): lost-wakeup
+// window probes.  Stores only; no behaviour change.
+#if defined(CONFIG_DEBUG)
+uint64_t g_ipc_wake_gate_missed = 0;
+uint64_t g_ipc_block_with_pending_inbox = 0;
+#endif
+} // namespace
+
 // ---------------------------------------------------------------------------
 // MessageQueue
 // ---------------------------------------------------------------------------
@@ -388,6 +397,15 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
         Scheduler::set_task_ready(*tcb);
         tcb->remaining_ticks = tcb->period_ticks;
     }
+#if defined(CONFIG_DEBUG)
+    // M2 follow-up evidence (#545 SILENT): a pushed message that leaves
+    // the destination BLOCKED with no wait flag set is a lost wakeup.
+    if (ok && tcb->state == TaskState::BLOCKED &&
+        !__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE) &&
+        tcb->blocked_on_queue == nullptr && !tcb->blocked_in_recv) {
+        __atomic_fetch_add(&g_ipc_wake_gate_missed, 1, __ATOMIC_RELAXED);
+    }
+#endif
     return ok;
 }
 
@@ -423,6 +441,11 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
     if (cur && ep->bound_receiver == cur)
         return false;
 
+    // M2 follow-up (#545 FIRE, INV-L4): the is_full_locked probe parks on
+    // a contended foreign-owned depth instead of spinning with IF=0, so
+    // the denied fallback below only triggers for genuine own-guard
+    // scopes (fail-closed) — unreachable-by-design on the syscall trap
+    // path, which holds no IrqGuard.
     if (ep->q.is_full_locked()) {
         if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
             return false;
@@ -588,14 +611,53 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
 
         // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag —
         // RELEASE order lets the death drain observe (tag, flag) atomically.
-        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
-                         __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-        cur->state = TaskState::BLOCKED;
-        Scheduler::dequeue_ready(*cur);
+#if defined(CONFIG_DEBUG)
+        // M2 follow-up evidence (#545 SILENT): publishing a reply wait
+        // while a matching reply is already queued is the
+        // publish-vs-arrival window (the loop-top fast path should have
+        // consumed it first).
+        if (cur->msg_queue.has_from(dest_id)) {
+            __atomic_fetch_add(&g_ipc_block_with_pending_inbox, 1,
+                               __ATOMIC_RELAXED);
+        }
+#endif
+        // M2 follow-up (#545 SILENT): the publish triple + BLOCKED +
+        // dequeue go out atomically under IrqGuard (Dekker close against
+        // the replier's wake gate).
+        {
+            arch::IrqGuard publish_guard{};
+            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+            cur->state = TaskState::BLOCKED;
+            Scheduler::dequeue_ready(*cur);
+        }
         was_blocked = true;
         Scheduler::reschedule();
+        // M2 follow-up (#545 SILENT): post-publish re-check.  A reply that
+        // arrived between the loop-top empty check and the publish is
+        // consumed instead of slept through (mirrors the loop-top consume
+        // path, with the was_blocked slow-path exit).
+        {
+            bool got_late =
+                (reply_max_size != 0)
+                    ? cur->msg_queue.pop_from_sender_clamped(
+                          reply, reply_max_size, dest_id)
+                    : cur->msg_queue.pop_from_sender(reply, dest_id);
+            if (got_late) {
+                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_id, 0,
+                                 __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
+                                 __ATOMIC_RELEASE);
+                cur->remaining_ticks = cur->period_ticks;
+                arch::sti();
+                cur->state = TaskState::RUNNING;
+                return errors::IPC_ERR_OK;
+            }
+        }
         // Issue #513 (face A/C hang): the wait yields UNCONDITIONALLY.
         // A kernel task reaching this loop with SIE=0 (inherited IRQ-off
         // window) would sleep through every wakeup source with a bare
@@ -692,14 +754,33 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             return errors::IPC_ERR_PEER_DIED;
         }
         // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag.
-        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
-                         __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-        cur->state = TaskState::BLOCKED;
-        Scheduler::dequeue_ready(*cur);
+        // M2 follow-up (#545 SILENT): atomic publish + post-publish
+        // re-check (same Dekker close as send_sync above; plain pop —
+        // the bounded loop has no clamp variant).
+        {
+            arch::IrqGuard publish_guard{};
+            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+            cur->state = TaskState::BLOCKED;
+            Scheduler::dequeue_ready(*cur);
+        }
         was_blocked = true;
         Scheduler::reschedule();
+        if (cur->msg_queue.pop_from_sender(reply, dest_id)) {
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            if (armed_here) {
+                recv_wait_cancel(*cur);
+            }
+            cur->remaining_ticks = cur->period_ticks;
+            arch::sti();
+            cur->state = TaskState::RUNNING;
+            return errors::IPC_ERR_OK;
+        }
         // Issue #513 (face A/C hang): unconditional yield (see send_sync
         // above — same SIE=0 wedge through the bounded wait below).
         arch::sti();
@@ -778,25 +859,26 @@ MessageQueue &IPC::queue(uint64_t task_id) {
 ///
 /// # WEDGE-avoidance summary
 ///
-/// Every transition to BLOCKED must be atomic with dequeue_ready:
-///   | code                                | invariant |
-///   |-------------------------------------|-----------|
-///   | state = BLOCKED; + dequeue_ready(); | OK        |
-///   | state = BLOCKED; (no dequeue)        | WEDGE     |
+/// Every transition to BLOCKED must be atomic with dequeue_ready, and
+/// every waiter-list link must precede the BLOCKED transition:
+///   | code                                              | invariant |
+///   |---------------------------------------------------|-----------|
+///   | link; state = BLOCKED; + dequeue_ready();         | OK        |
+///   | state = BLOCKED; (no dequeue)                      | WEDGE     |
+///   | state = BLOCKED; + dequeue, link after (racy)      | WEDGE     |
 ///
-/// This function implements the correct pattern.  Callers that set
+/// This function implements the correct pattern (link + BLOCKED +
+/// dequeue under q.lock_ + IrqGuard).  Callers that set
 /// `state = BLOCKED` independently (e.g., `monitor_task_entry`,
 /// `Scheduler::terminate`) must also dequeue first.
 bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
-    task.state = TaskState::BLOCKED;
-    kernel::Scheduler::dequeue_ready(task);
-
-    // Dequeue_ready must complete BEFORE taking q.lock_ (lock ordering:
-    // scheduler_lock_ first, then queue lock).  The queue lock protects
-    // the blocked_senders list and priority-inheritance boost.
+    // INV-C2 (M2 follow-up #545 SILENT): queue lock first, then the
+    // IRQ-atomic publish inside it.  Linking before the BLOCKED transition
+    // closes the pop-vs-link lost-wakeup window: dequeue_ready is lock-free
+    // (ledger S5), so no scheduler lock nests inside q.lock_.
+    sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
     {
-        sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
-
+        arch::IrqGuard irq_guard{};
         task.blocked_on_queue = &q;
         TaskControlBlock **pp = &q.blocked_senders_head;
         while (*pp && (*pp)->priority >= task.priority)
@@ -806,14 +888,17 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
         if (!task.blocked_next)
             q.blocked_senders_tail = &task;
 
+        task.state = TaskState::BLOCKED;
+        kernel::Scheduler::dequeue_ready(task);
+
         // Priority inheritance — boost owner when higher-priority sender
         // blocks. FIX(sched-race): the read-modify-write of q.owner->priority
-        // and the move_priority() re-index must be atomic against the timer
-        // ISR's deadline demote / sporadic priority changes.  q.lock_ is a
-        // plain spinlock (does not mask IRQs); IrqGuard excludes the ISR so
-        // old/new effective_priority snapshots stay consistent.
+        // and the move_priority() re-index stay atomic against the timer
+        // ISR's deadline demote / sporadic priority changes (same IrqGuard
+        // as the publish above).  q.lock_ is a plain spinlock (does not
+        // mask IRQs); IrqGuard excludes the ISR so old/new
+        // effective_priority snapshots stay consistent.
         if (q.owner && task.priority > q.owner->priority) {
-            arch::IrqGuard irq_guard{};
             // G2: q.owner is magic-guarded live here — bind a reference
             // (docs/irqguard-ledger.md §G2-A).  move_priority MUST stay
             // between the old/new effective_priority snapshots.
@@ -912,6 +997,22 @@ void IPC::wake_reply_waiters_of(TaskControlBlock &dead) noexcept {
         Scheduler::set_task_ready(*w);
         w->remaining_ticks = w->period_ticks;
     }
+}
+
+uint64_t IPC::ipc_wake_gate_missed_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_ipc_wake_gate_missed, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t IPC::ipc_block_with_pending_inbox_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_ipc_block_with_pending_inbox, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
 }
 
 /// @brief Roll back a block_sender() mutation when IPC::send() is called with

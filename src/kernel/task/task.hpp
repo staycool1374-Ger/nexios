@@ -341,6 +341,7 @@ struct TaskControlBlock {
           blocked_on_queue(nullptr), reply_wait(false),
           reply_wait_dest_id(0), reply_wait_dest_gen(0),
           blocked_in_recv(false),
+          irq_depth_save(0), irq_owner_save(0),
            waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
            blocked_on_pager_fault(nullptr), debugger_id(0),
@@ -917,6 +918,16 @@ struct TaskControlBlock {
     /// distinguish recv-waiters from tasks blocked in non-IPC channels
     /// (waitpid, pager, IRQ) and resumes them with stale wait state.
     bool blocked_in_recv;
+
+    /// @brief M2 follow-up (#545 Phase-1b): per-task IrqGuard depth/owner
+    ///        save slots.  The deferred-switch epilogue saves the outgoing
+    ///        task's live depth/owner here and restores the incoming task's,
+    ///        so the count travels with the task instead of leaking across
+    ///        abandoned stacks.  Transient switch state: never added to
+    ///        TaskFields (same treatment as reply_wait — the MemPool rewind
+    ///        covers it).  Zero means no suspended scope.
+    uint64_t irq_depth_save;
+    uint64_t irq_owner_save;
 
     /// @brief Pointer to the mutex this task is blocked on (as a waiter).
     /// Used for transitive priority inheritance propagation.

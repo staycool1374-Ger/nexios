@@ -26,6 +26,7 @@
 
 #include <kernel/core/global_state.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/gdt.hpp>
 #if defined(CONFIG_ARCH_AARCH64)
 #include <kernel/arch/aarch64/hal/fpu.hpp>
@@ -92,6 +93,20 @@ uint64_t scheduler_lock_depth[CONFIG_MAX_CPUS] = {};
 // contract check read it in release builds too.  Transitory by
 // construction, same reasoning as scheduler_lock_depth.
 uint64_t irq_guard_depth[CONFIG_MAX_CPUS] = {};
+// M2 follow-up (#545 FIRE): per-CPU IrqGuard owner attribution + 32-entry
+// transition ring (evidence only).  Owner stored on the 0->1 transition,
+// cleared on the 1->0 transition; ring records {depth, owner, cur, site}.
+uint64_t irq_guard_owner[CONFIG_MAX_CPUS] = {};
+uint64_t irq_guard_trace_idx[CONFIG_MAX_CPUS] = {};
+uint64_t irq_guard_trace_depth[CONFIG_MAX_CPUS][32] = {};
+uint64_t irq_guard_trace_owner[CONFIG_MAX_CPUS][32] = {};
+uint64_t irq_guard_trace_cur[CONFIG_MAX_CPUS][32] = {};
+uint64_t irq_guard_trace_site[CONFIG_MAX_CPUS][32] = {};
+// M2 follow-up (#545 FIRE): syscall-trap marker + trap-entry nesting
+// (see arch/hal/irq_guard.hpp).  Zero-initialised; slot [cpu] is nonzero
+// only while that CPU executes inside Syscall::handle.
+uint64_t in_syscall_trap[CONFIG_MAX_CPUS] = {};
+uint64_t syscall_trap_nesting[CONFIG_MAX_CPUS] = {};
 // Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
 // in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
 // Other architectures keep plain definitions here until their per-CPU
@@ -322,6 +337,20 @@ bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept {
 
 // ---------------------------------------------------------------------------
 
+/// @brief M2 follow-up (#545 ghost containment): a depth-1 scope owned by
+///        neither the task in question nor nobody cannot belong to that
+///        task — its own take would own the slot or nest to depth 2 — so
+///        the scope is an orphan with no live frame behind it.  Used on
+///        both ends of the 1b travel seam (save + load) so a singleton
+///        ghost converges out of the system within one switch per task
+///        instead of shuttling between slots forever.  (Owners are always
+///        task pointers or 0 — ISR takes attribute to the interrupted task
+///        and always unwind before the epilogue — so no ISR-owned case
+///        needs exempting.)
+static bool is_foreign_singleton(uint64_t depth, uint64_t owner,
+                                 uint64_t own_token) noexcept {
+    return (depth == 1) && (owner != 0) && (owner != own_token);
+}
 
 extern "C" void scheduler_on_context_switch() noexcept {
 
@@ -365,9 +394,82 @@ extern "C" void scheduler_on_context_switch() noexcept {
     }
 #endif
 
+    // M2 follow-up (#545 Phase-1b): the IrqGuard depth travels with the
+    // task.  Save the outgoing task's live depth/owner into its slots and
+    // restore the incoming task's.  Epilogue-only (isr_nesting != 0):
+    // test harnesses call this function directly in task context to
+    // exercise the switch mechanics, and must not disturb the live count.
+    // Runs with IF=0 in the ISR epilogue on all three arches (single C
+    // seam: x86 isr_stubs.asm, aarch64 vectors.S, riscv64 syscall_entry.S
+    // all funnel through here).  A suspended scope resumes with its owner
+    // intact; an abandoned stack is reaped by the self-heal in
+    // validate_pending_switch.
+    auto *outgoing_task = kernel::Scheduler::current_task();
     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
 
         kernel::Scheduler::set_current_task(t);
+
+    // M2 follow-up (#545 Phase-1b + ghost containment): the IrqGuard depth
+    // travels with the task, minus orphaned singletons on both ends.
+    // Epilogue-only (isr_nesting observed with interrupts masked):
+    // test harnesses call this function directly in task context to
+    // exercise the switch mechanics and must not disturb the live count.
+    // The IF conjunct keeps a stale nesting balance (rv64 suite baseline)
+    // from arming the seam in task context — interrupt gates clear IF.
+    // Runs with IF=0 in the ISR epilogue on all three arches (single C
+    // seam: x86 isr_stubs.asm, aarch64 vectors.S, riscv64
+    // syscall_entry.S all funnel through here).
+    // SAVE: a single-level foreign scope (depth==1, owner is neither the
+    // outgoing task nor nobody/ISR) cannot belong to the outgoing task —
+    // its own take would own the slot or nest to depth 2 — so it is an
+    // orphan (observed shape: depth 1 owned by the idle task with no live
+    // frame behind it).  Drop it and clear the slots instead of saving;
+    // a suspended own scope (owner == outgoing) still travels untouched.
+    // LOAD: same rule for the incoming slots — a stale singleton ghost in
+    // another task's slots is zeroed instead of published (converges the
+    // whole system within one switch per task; the incoming task holds
+    // nothing of its own at depth==1-foreign by the same argument).
+    // An abandoned stack is reaped by the self-heal in
+    // validate_pending_switch; the saturated dtor (irq_guard.hpp) makes a
+    // scope resumed after its count was dropped fail-safe instead of
+    // wrapping to UINT64_MAX.
+    if (kernel::isr_nesting_own() != 0 && !arch::interrupts_enabled()) {
+        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+        const bool incoming_valid =
+            (t != nullptr) && (t->magic == kernel::TaskControlBlock::TCB_MAGIC);
+        const bool outgoing_valid =
+            (outgoing_task != nullptr) &&
+            (outgoing_task->magic == kernel::TaskControlBlock::TCB_MAGIC);
+        // Paired save+load only: a null outgoing (boot transitory) leaves
+        // the live count untouched instead of dropping it.
+        if (outgoing_valid && incoming_valid && outgoing_task != t) {
+            const uint64_t live_depth = irq_guard_depth[cpu];
+            const uint64_t live_owner = irq_guard_owner[cpu];
+            const uint64_t outgoing_token =
+                reinterpret_cast<uint64_t>(outgoing_task);
+            if (!is_foreign_singleton(live_depth, live_owner,
+                                      outgoing_token)) {
+                outgoing_task->irq_depth_save = live_depth;
+                outgoing_task->irq_owner_save = live_owner;
+            } else {
+                outgoing_task->irq_depth_save = 0;
+                outgoing_task->irq_owner_save = 0;
+            }
+            const uint64_t saved_depth = t->irq_depth_save;
+            const uint64_t saved_owner = t->irq_owner_save;
+            const uint64_t incoming_token = reinterpret_cast<uint64_t>(t);
+            if (!is_foreign_singleton(saved_depth, saved_owner,
+                                      incoming_token)) {
+                irq_guard_depth[cpu] = saved_depth;
+                irq_guard_owner[cpu] = saved_owner;
+            } else {
+                t->irq_depth_save = 0;
+                t->irq_owner_save = 0;
+                irq_guard_depth[cpu] = 0;
+                irq_guard_owner[cpu] = 0;
+            }
+        }
+    }
 
     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC) {
 
@@ -672,6 +774,48 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
         drop_arm(nullptr);
         return 0;
     }
+#if CONFIG_LOCK_PARK_SELFHEAL == 1
+    // M2 follow-up (#545 FIRE): drop orphaned IrqGuard depth whose owner
+    // is gone.  A suspended scope on a live task's stack resumes and
+    // releases itself — only a dead/gone owner is cleared (a recycled
+    // address is still orphaned: the new task never took the scope).
+    // Runs with IF=0 (epilogue); the walk is lock-free magic-checked
+    // iteration (wake_reply_waiters_of precedent).
+    {
+        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+        if (irq_guard_depth[cpu] != 0) {
+            const uint64_t owner = irq_guard_owner[cpu];
+            bool owner_live = false;
+            kernel::TaskControlBlock *owner_task = nullptr;
+            if (!owner_live && owner != 0) {
+                kernel::Scheduler::TaskIter iter{};
+                for (auto *w = iter.next(); w != nullptr; w = iter.next()) {
+                    if (reinterpret_cast<uint64_t>(w) == owner &&
+                        w->state != kernel::TaskState::TERMINATED &&
+                        w->state != kernel::TaskState::REAPED) {
+                        owner_live = true;
+                        owner_task = w;
+                        break;
+                    }
+                }
+            }
+            // Idle-owned exception: the idle task never suspends a guard
+            // scope (ticks are masked under guards and idle never
+            // reschedules inside one), so idle-owned depth while another
+            // task runs is an orphaned misattribution, not a live
+            // suspended scope — clear it like a dead owner.
+            if (owner_live && owner_task != nullptr &&
+                kernel::Scheduler::is_idle_task(owner_task) &&
+                owner_task != kernel::Scheduler::current_task()) {
+                owner_live = false;
+            }
+            if (!owner_live) {
+                irq_guard_depth[cpu] = 0;
+                irq_guard_owner[cpu] = 0;
+            }
+        }
+    }
+#endif
     uint64_t rsp =
         __atomic_load_n(&Scheduler::SwSlots::load_rsp_from(), __ATOMIC_ACQUIRE);
     uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
