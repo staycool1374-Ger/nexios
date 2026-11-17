@@ -154,6 +154,10 @@ inline void spinlock_note_release(const void *addr) noexcept {
     spinlock_held_drop();
 }
 
+/// @brief Held-lock census (release definition lives below in this same
+///        branch: per-CPU take depth; issue #580).
+uint64_t spinlock_held_by_current_count() noexcept;
+
 inline bool spinlock_contract_check_clean(const char *where) noexcept {
     (void)where;
     return spinlock_held_by_current_count() == 0;
