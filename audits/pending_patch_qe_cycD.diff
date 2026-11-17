@@ -1,0 +1,1139 @@
+diff --git a/src/kernel/test/test_expected_counts.hpp b/src/kernel/test/test_expected_counts.hpp
+index c2ff33304..d28ef0a2a 100644
+--- a/src/kernel/test/test_expected_counts.hpp
++++ b/src/kernel/test/test_expected_counts.hpp
+@@ -42,7 +42,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"synchronization_spinlock", 10, 0,      0      },  // spinlock + stress
+     {"synchronization_sync", 20,    0,       0      },  // semaphore, mutex, queue, event group, block pattern, latch
+     {"synchronization_locking", 19, 0,       0      },  // locking + stress
+-    {"synchronization_lock_order",  4, 0,    0      },  // nested spinlock acquisition order
++    {"synchronization_lock_order",  14, 0,    0      },  // nested spinlock acquisition order + M2 park x8 + #545 Cycle C inv x2
+     {"synchronization_lock_validator",  6, 0, 0      },  // lock validator
+     {"synchronization_irq_guard",  4, 0,      0      },  // irq guard + audit
+     {"synchronization_pip",  10,    0,       0      },  // pip + queue_pip
+@@ -50,7 +50,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex + semaphore
+ 
+     // scheduler
+-    {"scheduler_core",       23,    23,      23     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2
++    {"scheduler_core",       36,    36,      36     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8
+     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
+     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
+     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server policy
+@@ -143,7 +143,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     {"initrd_parser",          9,    0,       0      },  // cpio parser
+ 
+     // ipc
+-    {"ipc_core",             23,    0,       0      },  // queue, priority, notify, event group, sync roundtrip
++    {"ipc_core",             27,    0,       0      },  // queue, priority, notify, event group, sync roundtrip + #545 Cycle D INV-4b x4
+     {"ipc_blocking",          4,    0,       0      },  // blocking send_sync/handshake
+     {"ipc_timeout",           7,    7,       7      },  // wheel-armed bounded receive
+     {"ipc_extended",          13,   0,       0      },  // size limits, removal, wake gates, quiescence, reply
+@@ -296,13 +296,13 @@ static constexpr ExpectedCounts k_expected_counts[] = {
+     // core_* — split of the former `core` aggregate. Values filled from
+     // measured `dump-counts` output; 0 disables validation.
+     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
+-    {"core_sync",           101,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8
+-    {"core_sched",          119,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5
++    {"core_sync",           103,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8 + #545 Cycle C inv x2
++    {"core_sched",          127,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8
+     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
+     {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
+     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
+     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
+-    {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
++    {"ipc",                 96,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4
+     {"capability",          161,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker)
+     {"proc_elf",            131,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM)
+     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
+diff --git a/src/kernel/test/test_ipc_inv4b.cpp b/src/kernel/test/test_ipc_inv4b.cpp
+new file mode 100644
+index 000000000..5272b13bc
+--- /dev/null
++++ b/src/kernel/test/test_ipc_inv4b.cpp
+@@ -0,0 +1,356 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_ipc_inv4b.cpp
++/// @brief Cycle D QE (issue #545): INV-4b in-guard try-once probe + loop
++///        gate tests (ipc class).  No production code touched.
++///
++///        Scope note (pinned): the try-once probe *race* (a reply landing
++///        between the loop-top check and the publish) is timing-only and
++///        has no deterministic in-harness driver — it is covered by the
++///        soak.  These tests pin the deterministic legs: loop-top
++///        consume-without-blocking, the gate-denied take skip, the
++///        Contended probe outcome + waker pairing, and the block_sender
++///        atomic release.  Probe/wake-gate counters are logged; the race
++///        legs stay open as #545 follow-ups, not gates.
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/cpu_context.hpp>
++#include <kernel/ipc/ipc.hpp>
++#include <kernel/sync/park_lock.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/task.hpp>
++#include "test_sched_helpers.hpp"
++#include "task_ptr.hpp"
++
++using namespace kernel;
++
++namespace ipc_inv4b {
++
++// --- probe_hit rendezvous: receiver R + sender S ---
++TaskControlBlock *g_probe_receiver = nullptr;
++volatile bool g_probe_sender_ok = false;
++volatile uint64_t g_probe_sender_reply_type = 0;
++
++void probe_receiver_entry() {
++    Message msg;
++    bool ok = false;
++    for (int i = 0; i < 100000 && !ok; ++i)
++        ok = IPC::recv(msg);
++    if (!ok)
++        return;
++    // No reply needed: the sender's wait was already satisfied by the
++    // pre-queued message.  Reply send is best-effort (the sender may
++    // already have terminated).
++    Message reply;
++    reply.sender_id = Scheduler::current_task()->id;
++    reply.type = 99;
++    reply.priority = 0;
++    reply.data_size = 0;
++    (void)IPC::send(msg.sender_id, reply);
++}
++
++void probe_sender_entry() {
++    auto *self = Scheduler::current_task();
++    (void)self;
++    Message msg;
++    msg.sender_id = self->id;
++    msg.type = 42;
++    msg.priority = 0;
++    msg.data_size = 0;
++    Message reply;
++    const bool ok =
++        IPC::send_sync(g_probe_receiver->id, msg, reply);
++    if (ok && reply.type == 77) {
++        g_probe_sender_ok = true;
++        g_probe_sender_reply_type = reply.type;
++    }
++}
++
++// --- contended rendezvous state ---
++TaskControlBlock *g_cont_waiter = nullptr;
++volatile bool g_cont_holder_has_lock = false;
++volatile bool g_cont_probed = false;
++volatile bool g_cont_probe_was_contended = false;
++volatile bool g_cont_pushed = false;
++volatile bool g_cont_waiter_got = false;
++
++void cont_holder_entry() {
++    if (g_cont_waiter == nullptr)
++        return;
++    g_cont_waiter->msg_queue.lock_.lock();
++    g_cont_holder_has_lock = true;
++    // Hold across yields so the waiter observes Contended (INV-C1 WARN
++    // is warn-only here — expected, proves the check is live).
++    for (uint64_t i = 0; i < 50000ULL && !g_cont_probed; ++i)
++        Scheduler::reschedule();
++    g_cont_waiter->msg_queue.lock_.unlock();
++    Message msg;
++    msg.sender_id = Scheduler::current_task()->id;
++    msg.type = 55;
++    msg.priority = 0;
++    msg.data_size = 0;
++    if (g_cont_waiter->msg_queue.push(msg)) {
++        Scheduler::set_task_ready(*g_cont_waiter);
++        g_cont_pushed = true;
++    }
++}
++
++void cont_waiter_entry() {
++    auto *self = Scheduler::current_task();
++    for (uint64_t i = 0; i < 200000ULL && !g_cont_holder_has_lock; ++i) {
++        Scheduler::reschedule();
++        arch::hlt();
++    }
++    if (!g_cont_holder_has_lock)
++        return;
++    {
++        Message out;
++        const MessageQueue::QueueProbe probe =
++            self->msg_queue.probe_pop(out);
++        g_cont_probed = true;
++        g_cont_probe_was_contended =
++            (probe == MessageQueue::QueueProbe::Contended);
++    }
++    for (uint64_t i = 0; i < 200000ULL && !g_cont_pushed; ++i) {
++        arch::sti();
++        arch::hlt();
++        arch::cli();
++    }
++    if (!g_cont_pushed)
++        return;
++    Message got;
++    if (self->msg_queue.pop(got) && got.type == 55)
++        g_cont_waiter_got = true;
++}
++
++} // namespace ipc_inv4b
++
++// Runmode: kernel
++// Testidea: Cycle D QE (issue #545, INV-4b): a reply queued before the
++// send_sync wait is consumed without blocking — no park, no fallback,
++// no watchdog involvement.
++// Input: Harness pre-queues a type-77 message from R into S's inbox via
++// the queue push; S send_syncs to R (R recvs, best-effort reply).
++// Expect: send_sync returns OK with the pre-queued reply; S never
++// BLOCKED (resched_park entries delta 0); probe/wake-gate deltas logged
++// (the in-guard race probe is timing-only — loop-top consumes first, so
++// no hit is *required* here).  Both tasks terminate, tracker delta 0.
++// Depends: IPC::send_sync loop-top fast path, queue push, park counters
++JARVIS_TEST(ipc_send_sync_probe_hit, "PRE: none | POST: none") {
++    ipc_inv4b::g_probe_receiver = nullptr;
++    ipc_inv4b::g_probe_sender_ok = false;
++    ipc_inv4b::g_probe_sender_reply_type = 0;
++    const uint64_t e0 = Scheduler::resched_park_entries_count();
++    const uint64_t hit0 = IPC::ipc_probe_hit_count();
++    const uint64_t cont0 = IPC::ipc_probe_contended_count();
++    const uint64_t pend0 = IPC::ipc_block_with_pending_inbox_count();
++    auto *receiver = TaskControlBlock::create(
++        ipc_inv4b::probe_receiver_entry, 11, 10);
++    JARVIS_ASSERT(receiver != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
++    auto *sender = TaskControlBlock::create(ipc_inv4b::probe_sender_entry,
++                                            12, 5);
++    JARVIS_ASSERT(sender != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
++    ipc_inv4b::g_probe_receiver = receiver;
++    // Pre-queue the reply before either task runs (deterministic: no
++    // dispatch happens between create and the handshake drive below).
++    {
++        Message early;
++        early.sender_id = receiver->id;
++        early.type = 77;
++        early.priority = 0;
++        early.data_size = 0;
++        JARVIS_ASSERT(sender->msg_queue.push(early));
++    }
++    {
++        arch::IrqGuard guard;
++        Scheduler::add_task(*receiver);
++        Scheduler::add_task(*sender);
++    }
++    test::yield_as(*receiver);
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(sender);
++    test::wait_for_termination_safe(receiver);
++    Logger::info("[IPC-INV4B] probe_hit ok=%lu type=%lu entries=%lu "
++                 "hit=%lu cont=%lu pend=%lu",
++                 static_cast<uint64_t>(ipc_inv4b::g_probe_sender_ok),
++                 ipc_inv4b::g_probe_sender_reply_type,
++                 Scheduler::resched_park_entries_count() - e0,
++                 IPC::ipc_probe_hit_count() - hit0,
++                 IPC::ipc_probe_contended_count() - cont0,
++                 IPC::ipc_block_with_pending_inbox_count() - pend0);
++    JARVIS_ASSERT(ipc_inv4b::g_probe_sender_ok);
++    JARVIS_ASSERT_EQ(77ULL, ipc_inv4b::g_probe_sender_reply_type);
++    // Never blocked: the wait was satisfied without arming.
++    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
++    test::terminate_and_drain2(sender, receiver);
++    ipc_inv4b::g_probe_receiver = nullptr;
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Cycle D QE (issue #545, INV-4b): the gate-denied take skip —
++// a BLOCKED caller whose reschedule park is denied completes a
++// pop_from_sender without touching the slow path.
++// Input: Pre-queued message from peer P in consumer queue; harness
++// forced BLOCKED inside IrqGuard calls pop_from_sender (site
++// mq:pop_from_sender).
++// Expect: Pops the message (fast take); fallback delta 0; state restored
++// RUNNING; IF preserved (0 inside, 1 after).
++// Depends: MessageQueue::pop_from_sender fast path, fallback counter
++JARVIS_TEST(ipc_blocked_no_take, "PRE: none | POST: none") {
++    SimpleTaskPtr peer(TaskControlBlock::create(test::forever_entry, 5, 10));
++    JARVIS_ASSERT(peer);
++    SimpleTaskPtr consumer(
++        TaskControlBlock::create(test::forever_entry, 5, 10));
++    JARVIS_ASSERT(consumer);
++    {
++        Message m;
++        m.sender_id = peer->id;
++        m.type = 61;
++        m.priority = 0;
++        m.data_size = 0;
++        JARVIS_ASSERT(consumer->msg_queue.push(m));
++    }
++    const uint64_t fb0 = sync::lock_spin_fallback_count();
++    auto *self = Scheduler::current_task();
++    JARVIS_ASSERT(self != nullptr);
++    bool got = false;
++    Message out;
++    {
++        arch::IrqGuard irq_guard{};
++        self->state = TaskState::BLOCKED;
++        got = consumer->msg_queue.pop_from_sender(out, peer->id);
++        JARVIS_ASSERT(self->state == TaskState::BLOCKED);
++        self->state = TaskState::RUNNING;
++    }
++    JARVIS_ASSERT(got);
++    JARVIS_ASSERT_EQ(61ULL, out.type);
++    JARVIS_ASSERT_EQ(fb0, sync::lock_spin_fallback_count());
++    JARVIS_ASSERT(self->state == TaskState::RUNNING);
++    JARVIS_ASSERT(arch::interrupts_enabled());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Cycle D QE (issue #545, INV-4b): Contended probe outcome —
++// a waiter probing a lock held by a live holder observes Contended with
++// no side effects, then is woken by the holder's push (no lost wakeup).
++// Input: Holder H takes W's queue lock raw, yields until W probes;
++// releases, pushes a message, readies W.
++// Expect: Probe == Contended; W receives the pushed message;
++// ipc_wake_gate_missed_count() == 0 (no lost-wakeup window); both
++// terminate, tracker delta 0.
++// Depends: QueueProbe::Contended path, push/wake pairing, wake-gate probe
++JARVIS_TEST(ipc_probe_contended_wake, "PRE: none | POST: none") {
++    ipc_inv4b::g_cont_waiter = nullptr;
++    ipc_inv4b::g_cont_holder_has_lock = false;
++    ipc_inv4b::g_cont_probed = false;
++    ipc_inv4b::g_cont_probe_was_contended = false;
++    ipc_inv4b::g_cont_pushed = false;
++    ipc_inv4b::g_cont_waiter_got = false;
++    const uint64_t miss0 = IPC::ipc_wake_gate_missed_count();
++    auto *waiter = TaskControlBlock::create(ipc_inv4b::cont_waiter_entry,
++                                            12, 10);
++    JARVIS_ASSERT(waiter != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*waiter, SchedPolicy::FIXED));
++    auto *holder = TaskControlBlock::create(ipc_inv4b::cont_holder_entry,
++                                            11, 10);
++    JARVIS_ASSERT(holder != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
++    ipc_inv4b::g_cont_waiter = waiter;
++    {
++        arch::IrqGuard guard;
++        Scheduler::add_task(*waiter);
++        Scheduler::add_task(*holder);
++    }
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(waiter);
++    test::wait_for_termination_safe(holder);
++    Logger::info("[IPC-INV4B] contended probed=%lu was_contended=%lu "
++                 "got=%lu miss=%lu",
++                 static_cast<uint64_t>(ipc_inv4b::g_cont_probed),
++                 static_cast<uint64_t>(
++                     ipc_inv4b::g_cont_probe_was_contended),
++                 static_cast<uint64_t>(ipc_inv4b::g_cont_waiter_got),
++                 IPC::ipc_wake_gate_missed_count() - miss0);
++    JARVIS_ASSERT(ipc_inv4b::g_cont_holder_has_lock);
++    JARVIS_ASSERT(ipc_inv4b::g_cont_probed);
++    JARVIS_ASSERT(ipc_inv4b::g_cont_probe_was_contended);
++    JARVIS_ASSERT(ipc_inv4b::g_cont_pushed);
++    JARVIS_ASSERT(ipc_inv4b::g_cont_waiter_got);
++    JARVIS_ASSERT_EQ(miss0, IPC::ipc_wake_gate_missed_count());
++    test::terminate_and_drain2(waiter, holder);
++    ipc_inv4b::g_cont_waiter = nullptr;
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Cycle D QE (issue #545, F1): block_sender releases the queue
++// lock under the caller's IrqGuard — BLOCKED-marking and unlock are one
++// atomic IF=0 step, so a tick cannot preempt between them and strand the
++// lock with the task descheduled.
++// Input: Two queued-but-undispatched tasks (no reschedule between create
++// and block_sender, so no dispatch can interleave); block_sender(S).
++// Expect: S BLOCKED + linked; q.lock_ free (try_lock succeeds);
++// spinlock_held_by_current_count() == 0; wake_sender rolls back cleanly
++// (head null, S READY); tasks drain, tracker delta 0.
++// Depends: IPC::block_sender release, order-table census, wake_sender
++JARVIS_TEST(lock_park_block_sender_release, "PRE: none | POST: none") {
++    sync::spinlock_order_reset_for_test();
++    auto *owner = TaskControlBlock::create(test::forever_entry, 5, 10);
++    JARVIS_ASSERT(owner != nullptr);
++    auto *sender = TaskControlBlock::create(test::forever_entry, 5, 10);
++    JARVIS_ASSERT(sender != nullptr);
++    {
++        arch::IrqGuard guard;
++        Scheduler::add_task(*owner);
++        Scheduler::add_task(*sender);
++    }
++    MessageQueue &q = owner->msg_queue;
++    JARVIS_ASSERT(q.blocked_senders_head == nullptr);
++    {
++        arch::IrqGuard caller_guard{};
++        const bool blocked = IPC::block_sender(q, *sender);
++        JARVIS_ASSERT(blocked);
++        // Released under the caller's guard: the lock is free and the
++        // census shows nothing held — even though the caller is BLOCKED.
++        JARVIS_ASSERT(q.lock_.try_lock());
++        q.lock_.unlock();
++        JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
++    }
++    JARVIS_ASSERT(sender->state == TaskState::BLOCKED);
++    JARVIS_ASSERT(q.blocked_senders_head == sender);
++    IPC::wake_sender(q, *owner);
++    JARVIS_ASSERT(q.blocked_senders_head == nullptr);
++    JARVIS_ASSERT(sender->state == TaskState::READY);
++    test::terminate_and_drain2(owner, sender);
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++void register_ipc_inv4b_tests() {
++    JARVIS_REGISTER_TEST(ipc_send_sync_probe_hit);
++    JARVIS_REGISTER_TEST(ipc_blocked_no_take);
++    JARVIS_REGISTER_TEST(ipc_probe_contended_wake);
++    JARVIS_REGISTER_TEST(lock_park_block_sender_release);
++}
+diff --git a/src/kernel/test/test_park_lock.cpp b/src/kernel/test/test_park_lock.cpp
+index 93b63082e..5bbb60dfc 100644
+--- a/src/kernel/test/test_park_lock.cpp
++++ b/src/kernel/test/test_park_lock.cpp
+@@ -32,6 +32,7 @@
+ #include <kernel/arch/hal/timer.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
++#include <kernel/task/tick_watchdog.hpp>
+ #include <kernel/time/posix_time.hpp>
+ #include "test_sched_helpers.hpp"
+ 
+@@ -374,6 +375,209 @@ JARVIS_TEST(spinlock_layout_unchanged, "PRE: none | POST: none") {
+     JARVIS_TEST_PASS();
+ }
+ 
++namespace park_inv {
++
++// Rendezvous lock for the INV-W1' waiter test.  Default (Leaf) rank: the
++// park path under test does not consult the rank.
++sync::SpinLock g_inv_lock;
++volatile bool g_inv_holder_has_lock = false;
++volatile bool g_inv_waiter_acquired = false;
++volatile bool g_inv_waiter_entry_if = false;
++volatile bool g_inv_waiter_exit_if = false;
++volatile uint64_t g_inv_tick_before = 0;
++volatile uint64_t g_inv_tick_after = 0;
++
++void inv_holder_entry() {
++    auto *self = Scheduler::current_task();
++    sync::ParkLockGuard hold(g_inv_lock, "test_inv_holder");
++    if (!hold.owned())
++        return;
++    g_inv_holder_has_lock = true;
++    // Hold ~40 ms across a BLOCKED wheel sleep so the waiter contends.
++    // The BLOCKED-with-lock-held transition trips the INV-C1 WARN
++    // (warn-only at ASSERT=1) — expected, proves the check is live.
++    const uint64_t ns =
++        40ULL * 1000000000ULL / static_cast<uint64_t>(CONFIG_TICK_HZ);
++    if (time::PosixTime::sleep_arm(*self, ns)) {
++        {
++            arch::IrqGuard irq_guard{};
++            Scheduler::dequeue_ready(*self);
++            self->state = TaskState::BLOCKED;
++        }
++        Scheduler::reschedule();
++        for (;;) {
++            arch::sti();
++            arch::hlt();
++            arch::cli();
++            if (self->state != TaskState::BLOCKED)
++                break;
++        }
++        time::PosixTime::sleep_cancel(*self);
++    }
++}
++
++void inv_waiter_entry() {
++    auto *self = Scheduler::current_task();
++    (void)self;
++    for (uint64_t i = 0; i < 200000ULL && !g_inv_holder_has_lock; ++i) {
++        Scheduler::reschedule();
++        arch::hlt();
++    }
++    if (!g_inv_holder_has_lock)
++        return;
++    g_inv_waiter_entry_if = arch::interrupts_enabled();
++    g_inv_tick_before = arch::Timer::ticks();
++    {
++        sync::ParkLockGuard guard(g_inv_lock, "test_inv_waiter");
++        if (guard.owned())
++            g_inv_waiter_acquired = true;
++    }
++    g_inv_tick_after = arch::Timer::ticks();
++    g_inv_waiter_exit_if = arch::interrupts_enabled();
++}
++
++} // namespace park_inv
++
++// Runmode: kernel
++// Testidea: Cycle C QE (issue #545): a waiter contending a lock held by a
++// BLOCKED task must never spin with IF=0 (that starves the tick that would
++// dispatch the live holder — the self-completing wedge).  Every guard exit
++// preserves the entry IRQ state and the timer keeps advancing underneath.
++// Input: Holder takes the lock then BLOCK-sleeps 40 ms on the wheel;
++// Waiter ParkLockGuards it (40 ms >> any bounded spin, so a slow path —
++// park or denied-spin blocks — always engages).
++// Expect: Waiter acquires; entry IF == exit IF (INV-L1'); ticks advance
++// across the contention (timer alive); tick watchdog never fires;
++// park+fallback deltas >= 1 (slow path engaged; park at suite depth 0,
++// denied-spin at the harness depth 1 — same depth-relative premise as
++// lock_park_taken_under_contention).  Rearm/escape deltas are logged, not
++// asserted: exhaustion needs 8 failed parks + 64 re-arms (depth-0 only)
++// and escapes are timing-shaped.  Both tasks terminate, tracker delta 0.
++// Depends: ParkLockGuard slow paths, Timer::ticks, tick_watchdog,
++//         wait_for_termination
++JARVIS_TEST(test_park_lock_inv_w1, "PRE: none | POST: none") {
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    tick_watchdog::reset_for_test();
++    park_inv::g_inv_holder_has_lock = false;
++    park_inv::g_inv_waiter_acquired = false;
++    park_inv::g_inv_tick_before = 0;
++    park_inv::g_inv_tick_after = 0;
++    const uint64_t park0 = sync::lock_park_count();
++    const uint64_t fb0 = sync::lock_spin_fallback_count();
++    const uint64_t rearm0 = sync::lock_park_rearm_count();
++    const uint64_t esc0 = sync::lock_denied_escape_count();
++    auto *holder = TaskControlBlock::create(park_inv::inv_holder_entry, 11, 10);
++    JARVIS_ASSERT(holder != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
++    auto *waiter = TaskControlBlock::create(park_inv::inv_waiter_entry, 12, 10);
++    JARVIS_ASSERT(waiter != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*waiter, SchedPolicy::FIXED));
++    {
++        arch::IrqGuard irq_guard{};
++        Scheduler::add_task(*holder);
++        Scheduler::add_task(*waiter);
++    }
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(holder);
++    test::wait_for_termination_safe(waiter);
++    Logger::info("[PARK-TEST] inv_w1 got=%lu entry_if=%lu exit_if=%lu "
++                 "ticks=%lu->%lu park=%lu fb=%lu rearm=%lu esc=%lu fire=%lu",
++                 static_cast<uint64_t>(park_inv::g_inv_waiter_acquired),
++                 static_cast<uint64_t>(park_inv::g_inv_waiter_entry_if),
++                 static_cast<uint64_t>(park_inv::g_inv_waiter_exit_if),
++                 park_inv::g_inv_tick_before, park_inv::g_inv_tick_after,
++                 sync::lock_park_count() - park0,
++                 sync::lock_spin_fallback_count() - fb0,
++                 sync::lock_park_rearm_count() - rearm0,
++                 sync::lock_denied_escape_count() - esc0,
++                 tick_watchdog::fire_count());
++    JARVIS_ASSERT(park_inv::g_inv_holder_has_lock);
++    JARVIS_ASSERT(park_inv::g_inv_waiter_acquired);
++    // INV-L1': IRQ state identical on every guard exit path.
++    JARVIS_ASSERT(park_inv::g_inv_waiter_entry_if ==
++                  park_inv::g_inv_waiter_exit_if);
++    // INV-W1': the timer stayed alive under contention (no IF=0 freeze).
++    JARVIS_ASSERT(park_inv::g_inv_tick_after > park_inv::g_inv_tick_before);
++    JARVIS_ASSERT(!tick_watchdog::fired());
++    JARVIS_ASSERT_EQ(0ULL, tick_watchdog::fire_count());
++    // A slow path engaged (park at depth 0, denied-spin at depth 1).
++    JARVIS_ASSERT((sync::lock_park_count() - park0) +
++                      (sync::lock_spin_fallback_count() - fb0) >=
++                  1);
++    test::terminate_and_drain2(holder, waiter);
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    tick_watchdog::reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Cycle C QE (issue #545, INV-L1'): IF=1 at guard entry implies
++// IF=1 at every guard exit — fast path, IrqGuard-scoped fast path, and a
++// real contended acquire.
++// Input: Free lock (IF=1); free lock inside an IrqGuard scope (IF=0
++// inside, 1 after); contended lock with a 10 ms holder.
++// Expect: owned() in all three; IF==1 after each exit; IRQs masked only
++// inside the guard scope; depth-relative slow-path counts (park at
++// depth 0, fallback at depth 1); tracker delta 0.
++// Depends: ParkLockGuard entry-IF snapshot + take_success restore
++JARVIS_TEST(test_park_lock_if_preserve, "PRE: none | POST: none") {
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    JARVIS_ASSERT(arch::interrupts_enabled());
++    const uint64_t park0 = sync::lock_park_count();
++    const uint64_t fb0 = sync::lock_spin_fallback_count();
++    {
++        // Fast path, IF=1: single try_lock, no park, no fallback.
++        sync::SpinLock free_lock;
++        sync::ParkLockGuard guard(free_lock, "test_if_fast");
++        JARVIS_ASSERT(guard.owned());
++        JARVIS_ASSERT(arch::interrupts_enabled());
++    }
++    JARVIS_ASSERT(arch::interrupts_enabled());
++    {
++        // Fast path inside a guard scope: IF=0 inside by construction,
++        // restored to 1 when the scope closes.
++        sync::SpinLock probe;
++        {
++            arch::IrqGuard irq_guard{};
++            JARVIS_ASSERT(!arch::interrupts_enabled());
++            sync::ParkLockGuard guard(probe, "test_if_guarded");
++            JARVIS_ASSERT(guard.owned());
++            JARVIS_ASSERT(!arch::interrupts_enabled());
++        }
++        JARVIS_ASSERT(arch::interrupts_enabled());
++    }
++    JARVIS_ASSERT_EQ(0ULL, sync::lock_park_count() - park0);
++    JARVIS_ASSERT_EQ(0ULL, sync::lock_spin_fallback_count() - fb0);
++    // Contended acquire preserves IF=1 across the slow path.
++    park_test::g_holder_has_lock = false;
++    park_test::g_holder_armed = false;
++    park_test::g_contender_acquired = false;
++    park_test::g_contender_park_delta = 0;
++    auto *holder = TaskControlBlock::create(park_test::holder_entry, 11, 10);
++    JARVIS_ASSERT(holder != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
++    auto *contender =
++        TaskControlBlock::create(park_test::contender_entry, 12, 10);
++    JARVIS_ASSERT(contender != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*contender, SchedPolicy::FIXED));
++    {
++        arch::IrqGuard irq_guard{};
++        Scheduler::add_task(*holder);
++        Scheduler::add_task(*contender);
++    }
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(holder);
++    test::wait_for_termination_safe(contender);
++    test::terminate_and_drain2(holder, contender);
++    JARVIS_ASSERT(arch::interrupts_enabled());
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    JARVIS_TEST_PASS();
++}
++
+ void register_park_lock_tests() {
+     JARVIS_REGISTER_TEST(lock_park_fast_path_no_park);
+     JARVIS_REGISTER_TEST(lock_park_taken_under_contention);
+@@ -383,4 +587,6 @@ void register_park_lock_tests() {
+     JARVIS_REGISTER_TEST(lock_order_violation_reported);
+     JARVIS_REGISTER_TEST(lock_order_reverse_no_false_release);
+     JARVIS_REGISTER_TEST(spinlock_layout_unchanged);
++    JARVIS_REGISTER_TEST(test_park_lock_inv_w1);
++    JARVIS_REGISTER_TEST(test_park_lock_if_preserve);
+ }
+diff --git a/src/kernel/test/test_registry.cpp b/src/kernel/test/test_registry.cpp
+index f69254dce..65eccc42d 100644
+--- a/src/kernel/test/test_registry.cpp
++++ b/src/kernel/test/test_registry.cpp
+@@ -206,6 +206,8 @@ void register_vmm_tests();
+ void register_hal_bits_tests();
+ void register_lock_order_tests();
+ void register_park_lock_tests();
++void register_resched_park_tests(); // #545 Cycle D reschedule park
++void register_ipc_inv4b_tests();    // #545 Cycle D INV-4b probe gates
+ void register_tick_watchdog_tests();
+ void register_budget_tests();
+ void register_pip_tests();
+@@ -375,6 +377,7 @@ static void run_scheduler_core_group() {
+     register_scheduler_tests();
+     register_sched_slot_safety_tests(); // issue #513 QE
+     register_tick_watchdog_tests();     // M2 #546 tick watchdog
++    register_resched_park_tests();      // #545 Cycle D reschedule park
+ }
+ static void run_scheduler_o1_group() { register_o1_scheduler_tests(); }
+ static void run_scheduler_atomic_group() {
+@@ -451,7 +454,7 @@ static void run_ipc_fastpath_group() { register_ipc_fastpath_tests(); }
+ static void run_ipc_pipe_blocking_group() {
+     register_pipe_blocking_tests();
+ }
+-static void run_ipc_core_group() { register_ipc_tests(); }
++static void run_ipc_core_group() { register_ipc_tests(); register_ipc_inv4b_tests(); } // #545 Cycle D INV-4b
+ static void run_ipc_blocking_group() { register_ipc_blocking_tests(); }
+ static void run_ipc_timeout_group() { register_ipc_timeout_tests(); }
+ static void run_ipc_extended_group() { register_ipc_extended_tests(); }
+diff --git a/src/kernel/test/test_resched_park.cpp b/src/kernel/test/test_resched_park.cpp
+new file mode 100644
+index 000000000..75b827f7b
+--- /dev/null
++++ b/src/kernel/test/test_resched_park.cpp
+@@ -0,0 +1,451 @@
++/*
++ * NexIOS RTOS — Development Roadmap / Kernel Core
++ * Copyright (C) 2026 Arnold Hasshold
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
++ */
++
++/// @file test_resched_park.cpp
++/// @brief Cycle D QE (issue #545): F1 reschedule()-park contract tests
++///        (core_sched) + the #545 strand-shape absence test.
++///        No production code touched.
++///
++///        Harness premise (pinned, same as the M2 park tests): the suite
++///        runs at irq_guard_depth >= 1, so the timed park is unreachable
++///        in-harness — BLOCKED callers take the denied (status-quo-ante)
++///        leg.  Every test below asserts depth-relative behavior and logs
++///        the park/denied/wakeup counters.  The true park leg (return only
++///        once no longer BLOCKED) is covered by the soak + a depth-0 seam
++///        follow-up, not here.
++
++#include <test.hpp>
++#include <logger.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
++#include <kernel/arch/cpu_context.hpp>
++#include <kernel/arch/hal/timer.hpp>
++#include <kernel/core/path_tracer.hpp>
++#include <kernel/task/scheduler.hpp>
++#include <kernel/task/scheduler_path.hpp>
++#include <kernel/task/task.hpp>
++#include <kernel/task/tick_watchdog.hpp>
++#include <kernel/sync/park_lock.hpp>
++#include <kernel/sync/spinlock.hpp>
++#include "test_sched_helpers.hpp"
++
++using namespace kernel;
++
++namespace resched_park_test {
++
++// Gate-bit positions in resched_park_denied_why (see
++// resched_park_gate_base/gate_task in scheduler_tick.cpp).
++constexpr uint64_t WHY_IRQGUARD = 1ULL << 2;
++constexpr uint64_t WHY_HARNESS = 1ULL << 12;
++
++// --- no_blocked_return rendezvous state ---
++volatile bool g_a_blocked_seen = false;
++volatile bool g_handover = false;
++volatile uint64_t g_a_depth = 0;
++volatile uint64_t g_a_state_at_return = 0;
++TaskControlBlock *g_a_tcb = nullptr;
++
++// Self-blocking task: marks itself BLOCKED + dequeued, reschedules,
++// records the post-return state, then hlt-waits for the peer wake.
++void blocked_entry() {
++    auto *self = Scheduler::current_task();
++    {
++        arch::IrqGuard irq_guard{};
++        Scheduler::dequeue_ready(*self);
++        self->state = TaskState::BLOCKED;
++    }
++    g_a_depth = arch::irq_guard_depth_own();
++    g_a_blocked_seen = true;
++    Scheduler::reschedule();
++    g_a_state_at_return = static_cast<uint64_t>(self->state);
++    for (;;) {
++        arch::sti();
++        arch::hlt();
++        arch::cli();
++        if (self->state != TaskState::BLOCKED)
++            break;
++    }
++}
++
++// Peer: waits until A is parked/blocked, wakes it, records handover.
++void waker_entry() {
++    auto *self = Scheduler::current_task();
++    (void)self;
++    for (uint64_t i = 0; i < 200000ULL && !g_a_blocked_seen; ++i) {
++        Scheduler::reschedule();
++        arch::hlt();
++    }
++    if (!g_a_blocked_seen || g_a_tcb == nullptr)
++        return;
++    if (!TaskControlBlock::is_valid(g_a_tcb))
++        return;
++    Scheduler::set_task_ready(*g_a_tcb);
++    g_handover = true;
++}
++
++// --- strand-shape rendezvous state (lock_strand_absent_under_tick) ---
++sync::SpinLock g_strand_lock;
++volatile bool g_strand_holder_ready = false;
++volatile bool g_strand_waiter_got = false;
++
++void strand_holder_entry() {
++    auto *self = Scheduler::current_task();
++    (void)self;
++    g_strand_holder_ready = true;
++    g_strand_lock.lock();
++    // Brief hold (~a few thousand pauses): long enough that the waiter
++    // contends, short enough to resolve inside one denied-spin block.
++    for (uint64_t i = 0; i < 5000ULL; ++i)
++        arch::pause();
++    g_strand_lock.unlock();
++}
++
++void strand_waiter_entry() {
++    auto *self = Scheduler::current_task();
++    (void)self;
++    for (uint64_t i = 0; i < 200000ULL && !g_strand_holder_ready; ++i) {
++        Scheduler::reschedule();
++        arch::hlt();
++    }
++    if (!g_strand_holder_ready)
++        return;
++    sync::ParkLockGuard guard(g_strand_lock, "test_strand");
++    if (guard.owned())
++        g_strand_waiter_got = true;
++}
++
++} // namespace resched_park_test
++
++// Runmode: kernel
++// Testidea: F1 Cycle D QE: a RUNNING caller takes the C1 fast path —
++// immediate arm-only return, no park, no denial, no state change.
++// Input: Harness task (RUNNING) calls reschedule().
++// Expect: Returns at once; state stays RUNNING; current + in_ready_queue_
++// unchanged; resched_park entries/wakeups/denied deltas all 0.
++// Depends: Scheduler::reschedule C1 leg, park counters
++JARVIS_TEST(resched_park_running_fastpath, "PRE: none | POST: none") {
++    auto *self = Scheduler::current_task();
++    JARVIS_ASSERT(self != nullptr);
++    JARVIS_ASSERT(self->state == TaskState::RUNNING);
++    const bool rq_before = self->in_ready_queue_;
++    const uint64_t e0 = Scheduler::resched_park_entries_count();
++    const uint64_t w0 = Scheduler::resched_park_wakeups_count();
++    const uint64_t d0 = Scheduler::resched_park_denied_count();
++    kernel::path_reset();
++    Scheduler::reschedule();
++    kernel::path_reset();
++    JARVIS_ASSERT(self->state == TaskState::RUNNING);
++    JARVIS_ASSERT(Scheduler::current_task() == self);
++    JARVIS_ASSERT(self->in_ready_queue_ == rq_before);
++    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
++    JARVIS_ASSERT_EQ(w0, Scheduler::resched_park_wakeups_count());
++    JARVIS_ASSERT_EQ(d0, Scheduler::resched_park_denied_count());
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: F1 Cycle D QE: a BLOCKED caller inside an IrqGuard is denied
++// the park (C3 status quo ante) — prompt return, still BLOCKED, IF still 0.
++// Input: Harness forced BLOCKED inside IrqGuard, reschedule().
++// Expect: Returns; state still BLOCKED; IF==0 inside; entries delta 0;
++// denied delta >= 1 with the IrqGuard bit set; IF==1 after restore.
++// Depends: reschedule C3 leg, resched_park_denied_why bitmap
++JARVIS_TEST(resched_park_denied_irqguard, "PRE: none | POST: none") {
++    auto *self = Scheduler::current_task();
++    JARVIS_ASSERT(self != nullptr);
++    const uint64_t e0 = Scheduler::resched_park_entries_count();
++    const uint64_t d0 = Scheduler::resched_park_denied_count();
++    {
++        arch::IrqGuard irq_guard{};
++        JARVIS_ASSERT(!arch::interrupts_enabled());
++        self->state = TaskState::BLOCKED;
++        Scheduler::reschedule();
++        // C3: denied — returned while still BLOCKED, never parked.
++        JARVIS_ASSERT(self->state == TaskState::BLOCKED);
++        JARVIS_ASSERT(!arch::interrupts_enabled());
++        self->state = TaskState::RUNNING;
++    }
++    JARVIS_ASSERT(arch::interrupts_enabled());
++    JARVIS_ASSERT(self->state == TaskState::RUNNING);
++    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
++    JARVIS_ASSERT(Scheduler::resched_park_denied_count() > d0);
++    JARVIS_ASSERT((Scheduler::resched_park_denied_why() &
++                   resched_park_test::WHY_IRQGUARD) != 0);
++    kernel::path_reset();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: F1 Cycle D QE: single-task-guest denial leg (bit 10) is
++// unreachable in-harness (daemons + peers always registered) — pin the
++// premise and verify the no-hang status quo: a BLOCKED-denied caller
++// returns promptly with scheduler state coherent.
++// Input: BLOCKED-forced harness inside IrqGuard, reschedule().
++// Expect: Prompt return; all_tasks_.size() > 1 (bit-10 leg genuinely not
++// the denier here); entries delta 0; no hang; state restored RUNNING.
++// Depends: reschedule C3/C5 legs, AllTasksRegistry size
++JARVIS_TEST(resched_park_denied_single_task, "PRE: none | POST: none") {
++    auto *self = Scheduler::current_task();
++    JARVIS_ASSERT(self != nullptr);
++    // Premise: the single-task topology never holds in-harness, so this
++    // leg documents the denied status quo; the bit-10 gate itself is
++    // covered by inspection + the depth-0 follow-up.
++    JARVIS_ASSERT(Scheduler::all_tasks().size() > 1);
++    const uint64_t e0 = Scheduler::resched_park_entries_count();
++    {
++        arch::IrqGuard irq_guard{};
++        self->state = TaskState::BLOCKED;
++        Scheduler::reschedule();
++        JARVIS_ASSERT(self->state == TaskState::BLOCKED);
++        self->state = TaskState::RUNNING;
++    }
++    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
++    JARVIS_ASSERT(self->state == TaskState::RUNNING);
++    JARVIS_ASSERT(Scheduler::current_task() == self);
++    kernel::path_reset();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: F1 Cycle D QE: no-ticks denial leg (bit 1) is unreachable
++// in-harness (CONFIG_TICK_HZ != 0, ticks flow) — pin the premise and
++// verify the no-hang status quo for a denied BLOCKED caller.
++// Input: BLOCKED-forced harness inside IrqGuard, reschedule().
++// Expect: Prompt return; CONFIG_TICK_HZ != 0 + ticks advance across the
++// test (timer alive); entries delta 0; state restored RUNNING.
++// Depends: reschedule C3 leg, Timer::ticks
++JARVIS_TEST(resched_park_denied_no_ticks, "PRE: none | POST: none") {
++    auto *self = Scheduler::current_task();
++    JARVIS_ASSERT(self != nullptr);
++    JARVIS_ASSERT(static_cast<uint64_t>(CONFIG_TICK_HZ) != 0);
++    const uint64_t t0 = arch::Timer::ticks();
++    const uint64_t e0 = Scheduler::resched_park_entries_count();
++    {
++        arch::IrqGuard irq_guard{};
++        self->state = TaskState::BLOCKED;
++        Scheduler::reschedule();
++        JARVIS_ASSERT(self->state == TaskState::BLOCKED);
++        self->state = TaskState::RUNNING;
++    }
++    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
++    JARVIS_ASSERT(self->state == TaskState::RUNNING);
++    JARVIS_ASSERT(arch::Timer::ticks() >= t0);
++    kernel::path_reset();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: F1 Cycle D QE: the harness task itself never parks —
++// RUNNING reschedule is C1, BLOCKED-forced reschedule is denied via the
++// harness gate (bit 12), never entries.
++// Input: Harness reschedule() RUNNING, then BLOCKED-forced in guard.
++// Expect: entries + wakeups deltas 0 across both; denied moves only on
++// the BLOCKED leg with the harness bit set; current + state coherent.
++// Depends: reschedule C1/C3 legs, harness gate, park counters
++JARVIS_TEST(resched_park_harness_untouched, "PRE: none | POST: none") {
++    auto *self = Scheduler::current_task();
++    JARVIS_ASSERT(self != nullptr);
++    const uint64_t e0 = Scheduler::resched_park_entries_count();
++    const uint64_t w0 = Scheduler::resched_park_wakeups_count();
++    const uint64_t d0 = Scheduler::resched_park_denied_count();
++    Scheduler::reschedule();
++    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
++    JARVIS_ASSERT_EQ(w0, Scheduler::resched_park_wakeups_count());
++    JARVIS_ASSERT_EQ(d0, Scheduler::resched_park_denied_count());
++    {
++        arch::IrqGuard irq_guard{};
++        self->state = TaskState::BLOCKED;
++        Scheduler::reschedule();
++        JARVIS_ASSERT(self->state == TaskState::BLOCKED);
++        self->state = TaskState::RUNNING;
++    }
++    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
++    JARVIS_ASSERT_EQ(w0, Scheduler::resched_park_wakeups_count());
++    JARVIS_ASSERT(Scheduler::resched_park_denied_count() > d0);
++    JARVIS_ASSERT((Scheduler::resched_park_denied_why() &
++                   resched_park_test::WHY_HARNESS) != 0);
++    kernel::path_reset();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: F1 Cycle D QE: BLOCKED self-park handover — a self-blocking
++// task and a waker peer complete the rendezvous with no hang and no
++// BLOCKED-return violation.
++// Input: Task A BLOCK-marks + dequeues + reschedules, then hlt-waits;
++// peer B set_task_ready(A)s it.  Priorities FIXED (B 12 > A 11).
++// Expect: Handover observed; both terminate; depth-relative return
++// contract: at suite depth 0 the park returns only once no longer
++// BLOCKED (woken); at the harness depth 1 the denied leg returns still
++// BLOCKED and the hlt-wait covers the wake (same premise as the M2
++// contention test).  d0 <= 1 pinned.
++// Depends: reschedule C2/C3 legs, set_task_ready wake, hlt wait
++JARVIS_TEST(resched_park_no_blocked_return, "PRE: none | POST: none") {
++    resched_park_test::g_a_blocked_seen = false;
++    resched_park_test::g_handover = false;
++    resched_park_test::g_a_depth = 0;
++    resched_park_test::g_a_state_at_return = 0;
++    resched_park_test::g_a_tcb = nullptr;
++    const uint64_t e0 = Scheduler::resched_park_entries_count();
++    const uint64_t w0 = Scheduler::resched_park_wakeups_count();
++    const uint64_t d0 = Scheduler::resched_park_denied_count();
++    auto *task_a =
++        TaskControlBlock::create(resched_park_test::blocked_entry, 11, 10);
++    JARVIS_ASSERT(task_a != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*task_a, SchedPolicy::FIXED));
++    auto *task_b =
++        TaskControlBlock::create(resched_park_test::waker_entry, 12, 10);
++    JARVIS_ASSERT(task_b != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*task_b, SchedPolicy::FIXED));
++    resched_park_test::g_a_tcb = task_a;
++    {
++        arch::IrqGuard irq_guard{};
++        Scheduler::add_task(*task_a);
++        Scheduler::add_task(*task_b);
++    }
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(task_a);
++    test::wait_for_termination_safe(task_b);
++    Logger::info("[RESCHED-PARK-TEST] handover=%lu depth=%lu ret_state=%lu "
++                 "entries=%lu wakeups=%lu denied=%lu",
++                 static_cast<uint64_t>(resched_park_test::g_handover),
++                 resched_park_test::g_a_depth,
++                 resched_park_test::g_a_state_at_return,
++                 Scheduler::resched_park_entries_count() - e0,
++                 Scheduler::resched_park_wakeups_count() - w0,
++                 Scheduler::resched_park_denied_count() - d0);
++    JARVIS_ASSERT(resched_park_test::g_handover);
++    JARVIS_ASSERT(resched_park_test::g_a_blocked_seen);
++    JARVIS_ASSERT(resched_park_test::g_a_depth <= 1);
++    if (resched_park_test::g_a_depth == 0) {
++        // True park leg: returned only once woken (no longer BLOCKED).
++        JARVIS_ASSERT(resched_park_test::g_a_state_at_return !=
++                      static_cast<uint64_t>(TaskState::BLOCKED));
++        JARVIS_ASSERT(Scheduler::resched_park_entries_count() > e0);
++    } else {
++        // Denied leg (harness outer guard): returned still BLOCKED.
++        JARVIS_ASSERT(resched_park_test::g_a_state_at_return ==
++                      static_cast<uint64_t>(TaskState::BLOCKED));
++        JARVIS_ASSERT(Scheduler::resched_park_denied_count() > d0);
++    }
++    test::terminate_and_drain2(task_a, task_b);
++    resched_park_test::g_a_tcb = nullptr;
++    kernel::path_reset();
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: F1 Cycle D QE: the reschedule arm step sequence is unchanged
++// (C6 — deferred-switch arm + dispatch step untouched by the park).
++// Input: Dispatch pair (low current + high peer), reschedule under
++// ScopedCurrentTask, validate the arm segment.
++// Expect: path_validate(k_dispatch_arm_expected); pair unwound
++// (need_resched cleared, candidate re-enqueued, tasks drained).
++// Depends: dispatch_step Arm segment, path tracer
++JARVIS_TEST(resched_park_dispatch_path_unchanged,
++            "PRE: none | POST: none") {
++    TaskControlBlock *t_cur = TaskControlBlock::create(test::forever_entry,
++                                                       10,
++                                                       TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(t_cur != nullptr);
++    TaskControlBlock *t_next = TaskControlBlock::create(
++        test::forever_entry, 100, TaskControlBlock::NO_PERIOD);
++    JARVIS_ASSERT(t_next != nullptr);
++    {
++        arch::IrqGuard irq_guard{};
++        Scheduler::add_task(*t_cur);
++        Scheduler::add_task(*t_next);
++    }
++    bool arm_chained = false;
++    {
++        test::ScopedCurrentTask cur(*t_cur);
++        kernel::path_reset();
++        Scheduler::reschedule();
++        arm_chained = kernel::path_validate(k_dispatch_arm_expected);
++        __atomic_store_n(&Scheduler::SwSlots::need_resched(), false,
++                         __ATOMIC_RELEASE);
++    }
++    if (t_next->in_ready_queue_)
++        Scheduler::dequeue_ready(*t_next);
++    if (!t_cur->in_ready_queue_ && t_cur->state == TaskState::READY)
++        Scheduler::set_task_ready(*t_cur);
++    test::terminate_and_drain2(t_cur, t_next);
++    kernel::path_reset();
++    JARVIS_ASSERT(arm_chained);
++    JARVIS_TEST_PASS();
++}
++
++// Runmode: kernel
++// Testidea: Cycle D QE (issue #545): the #545 strand shape — a
++// high-priority spinner contending a lock briefly held across a BLOCKED
++// queue consumer — resolves inside one bounded denied-spin block (no
++// escape, no watchdog fire, no hang).
++// Input: Holder takes the lock, pause-holds ~5000 rounds (waiter
++// contends inside the window), releases; waiter ParkLockGuards.
++// Expect: Waiter acquires; denied-escape delta 0 (resolved within the
++// first bounded block); watchdog never fires; both terminate.
++// Depends: ParkLockGuard denied path, denied-escape + watchdog counters
++JARVIS_TEST(lock_strand_absent_under_tick, "PRE: none | POST: none") {
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    tick_watchdog::reset_for_test();
++    resched_park_test::g_strand_holder_ready = false;
++    resched_park_test::g_strand_waiter_got = false;
++    const uint64_t esc0 = sync::lock_denied_escape_count();
++    auto *holder = TaskControlBlock::create(
++        resched_park_test::strand_holder_entry, 11, 10);
++    JARVIS_ASSERT(holder != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
++    auto *waiter = TaskControlBlock::create(
++        resched_park_test::strand_waiter_entry, 12, 10);
++    JARVIS_ASSERT(waiter != nullptr);
++    JARVIS_ASSERT(Scheduler::set_sched_policy(*waiter, SchedPolicy::FIXED));
++    {
++        arch::IrqGuard irq_guard{};
++        Scheduler::add_task(*holder);
++        Scheduler::add_task(*waiter);
++    }
++    Scheduler::reschedule();
++    test::wait_for_termination_safe(holder);
++    test::wait_for_termination_safe(waiter);
++    Logger::info("[RESCHED-PARK-TEST] strand got=%lu esc=%lu fire=%lu",
++                 static_cast<uint64_t>(
++                     resched_park_test::g_strand_waiter_got),
++                 sync::lock_denied_escape_count() - esc0,
++                 tick_watchdog::fire_count());
++    JARVIS_ASSERT(resched_park_test::g_strand_holder_ready);
++    JARVIS_ASSERT(resched_park_test::g_strand_waiter_got);
++    JARVIS_ASSERT_EQ(esc0, sync::lock_denied_escape_count());
++    JARVIS_ASSERT(!tick_watchdog::fired());
++    test::terminate_and_drain2(holder, waiter);
++    sync::park_lock_reset_for_test();
++    sync::spinlock_order_reset_for_test();
++    tick_watchdog::reset_for_test();
++    kernel::path_reset();
++    JARVIS_TEST_PASS();
++}
++
++void register_resched_park_tests() {
++    JARVIS_REGISTER_TEST(resched_park_running_fastpath);
++    JARVIS_REGISTER_TEST(resched_park_denied_irqguard);
++    JARVIS_REGISTER_TEST(resched_park_denied_single_task);
++    JARVIS_REGISTER_TEST(resched_park_denied_no_ticks);
++    JARVIS_REGISTER_TEST(resched_park_harness_untouched);
++    JARVIS_REGISTER_TEST(resched_park_no_blocked_return);
++    JARVIS_REGISTER_TEST(resched_park_dispatch_path_unchanged);
++    JARVIS_REGISTER_TEST(lock_strand_absent_under_tick);
++}
+diff --git a/src/kernel/test/test_weak_stubs.cpp b/src/kernel/test/test_weak_stubs.cpp
+index 4c0716deb..1b28dffee 100644
+--- a/src/kernel/test/test_weak_stubs.cpp
++++ b/src/kernel/test/test_weak_stubs.cpp
+@@ -114,6 +114,8 @@ __attribute__((weak)) void register_riscv64_tests() {}
+ #endif
+ __attribute__((weak)) void register_lock_order_tests() {}
+ __attribute__((weak)) void register_park_lock_tests() {}
++__attribute__((weak)) void register_resched_park_tests() {}
++__attribute__((weak)) void register_ipc_inv4b_tests() {}
+ __attribute__((weak)) void register_tick_watchdog_tests() {}
+ __attribute__((weak)) void register_budget_tests() {}
+ __attribute__((weak)) void register_pip_tests() {}

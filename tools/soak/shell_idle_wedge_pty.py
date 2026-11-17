@@ -220,6 +220,11 @@ def one_run(index, idle_s, probe_s, logdir):
     mon_sock = logdir / ("mon-%d.sock" % index)
     if mon_sock.exists():
         mon_sock.unlink()
+    try:
+        load = os.getloadavg()[0]
+    except OSError:
+        load = -1.0
+    print("soak run %d: start (host load %.2f)" % (index, load), flush=True)
     gdb_port = 11234 + (os.getpid() % 1000) + index
     elf_path = BUILD_DIR / "src" / "kernel-debug.elf"
     argv = build_argv(mon_sock, gdb_port, logdir)
@@ -237,7 +242,10 @@ def one_run(index, idle_s, probe_s, logdir):
         # or long-descheduled); the caller classifies via alive probe.
         time.sleep(settle_s)
         guest.send(text[0])
-        if guest.expect(text[0:1].encode(), 10) is None:
+        # Generous echo budget: under host load the whole guest can be
+        # descheduled for seconds while the shell stays healthy; a short
+        # wall timeout would misclassify that as input loss.
+        if guest.expect(text[0:1].encode(), 30) is None:
             return False
         guest.send(text[1:])
         return True
@@ -250,13 +258,20 @@ def one_run(index, idle_s, probe_s, logdir):
         return tag
 
     def alive_probe():
-        # Classify a command-stage miss: bare CR — prompt back means the
-        # shell is alive and the command bytes were lost; still dead
-        # means the shell itself is wedged.
+        # Echo-gated liveness. A bare CR's prompt can be faked by an
+        # async redraw (#245): the redraw reprints "$ " without reading
+        # anything. A space MUST be echoed first — readline echoes every
+        # consumed char, so echo proves the shell is actually reading
+        # (post-reset, post-deschedule). The space is erased with backspace
+        # (readline handles \b when pos > 0) so the line stays clean.
+        guest.send(" ")
+        if guest.expect(b" ", 30) is None:
+            return "shell-not-reading"
+        guest.send("\b")
         guest.send(CR)
-        if guest.expect(PROMPT, 3) is None:
+        if guest.expect(PROMPT, 5) is None:
             return "shell-dead"
-        return "shell-alive-bytes-lost"
+        return "shell-alive"
     try:
         if guest.expect(PROMPT, 120) is None:
             return (False, forensics("no shell prompt within 120 s of boot"))

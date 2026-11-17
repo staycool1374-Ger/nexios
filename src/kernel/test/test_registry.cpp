@@ -206,6 +206,8 @@ void register_vmm_tests();
 void register_hal_bits_tests();
 void register_lock_order_tests();
 void register_park_lock_tests();
+void register_resched_park_tests(); // #545 Cycle D reschedule park
+void register_ipc_inv4b_tests();    // #545 Cycle D INV-4b probe gates
 void register_tick_watchdog_tests();
 void register_budget_tests();
 void register_pip_tests();
@@ -375,6 +377,7 @@ static void run_scheduler_core_group() {
     register_scheduler_tests();
     register_sched_slot_safety_tests(); // issue #513 QE
     register_tick_watchdog_tests();     // M2 #546 tick watchdog
+    register_resched_park_tests();      // #545 Cycle D reschedule park
 }
 static void run_scheduler_o1_group() { register_o1_scheduler_tests(); }
 static void run_scheduler_atomic_group() {
@@ -451,7 +454,7 @@ static void run_ipc_fastpath_group() { register_ipc_fastpath_tests(); }
 static void run_ipc_pipe_blocking_group() {
     register_pipe_blocking_tests();
 }
-static void run_ipc_core_group() { register_ipc_tests(); }
+static void run_ipc_core_group() { register_ipc_tests(); register_ipc_inv4b_tests(); } // #545 Cycle D INV-4b
 static void run_ipc_blocking_group() { register_ipc_blocking_tests(); }
 static void run_ipc_timeout_group() { register_ipc_timeout_tests(); }
 static void run_ipc_extended_group() { register_ipc_extended_tests(); }
