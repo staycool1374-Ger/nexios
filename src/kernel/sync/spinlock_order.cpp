@@ -5,6 +5,7 @@
 #include <kernel/sync/spinlock_order.hpp>
 #include <kernel/arch/cpu_context.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/hal/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -31,6 +32,78 @@ CpuHeldLocks g_held[CONFIG_MAX_CPUS] = {};
 // monotonic, atomics for ISR/task shared increments).
 uint64_t g_violations[4][4] = {};
 bool g_violation_reported[4][4] = {};
+
+// Wedge hunt (#545): last-take / last-release record per lock.  Answers
+// "who took this lock last, and did a release run after" without trusting
+// the order stack (unreliable for one contended queue lock) and without
+// depending on global event recency.  32 hash slots, each holding the LAST
+// take and the LAST release for its address; collisions reset the slot
+// (addr-tagged, so a foreign record is never mistaken for this lock's).
+// Lock-free: writers only touch their hashed slot.  DEBUG-only, static
+// storage, no alloc.
+struct LockLastEvent {
+    uint64_t addr = 0;
+    uint64_t take_ord = 0;
+    uint64_t take_owner = 0;
+    uint64_t take_tick = 0;
+    uint8_t take_rank = 0;
+    uint8_t take_cpu = 0;
+    uint8_t take_if = 0;
+    uint64_t rel_ord = 0;
+    uint64_t rel_owner = 0;
+    uint64_t rel_tick = 0;
+    uint8_t rel_rank = 0;
+    uint8_t rel_cpu = 0;
+    uint8_t rel_if = 0;
+};
+
+inline constexpr uint64_t kLockLastSlots = 512;
+
+LockLastEvent g_lock_last[kLockLastSlots] = {};
+uint64_t g_lock_last_ord = 0;
+
+inline LockLastEvent &lock_last_slot(const void *addr) noexcept {
+    // Spread by bits 8..16: TCB-pool stride aligns the low bits, so a
+    // >>4 hash collides systematically for per-task queue locks.
+    return g_lock_last[(reinterpret_cast<uint64_t>(addr) >> 8) %
+                       kLockLastSlots];
+}
+
+inline void lock_last_take(const void *addr, uint64_t owner,
+                           uint8_t rank) noexcept {
+    LockLastEvent &slot = lock_last_slot(addr);
+    const uint64_t addr_val = reinterpret_cast<uint64_t>(addr);
+    if (slot.addr != addr_val) {
+        slot = LockLastEvent{};
+        slot.addr = addr_val;
+    }
+    slot.take_ord =
+        __atomic_fetch_add(&g_lock_last_ord, 1, __ATOMIC_RELAXED) + 1;
+    slot.take_owner = owner;
+    slot.take_rank = rank;
+    slot.take_tick = arch::Timer::ticks();
+    slot.take_cpu =
+        static_cast<uint8_t>(arch::cpu_index() % CONFIG_MAX_CPUS);
+    slot.take_if = arch::interrupts_enabled() ? 1 : 0;
+}
+
+inline void lock_last_release(const void *addr, uint64_t owner,
+                              uint8_t rank) noexcept {
+    LockLastEvent &slot = lock_last_slot(addr);
+    const uint64_t addr_val = reinterpret_cast<uint64_t>(addr);
+    if (slot.addr != addr_val) {
+        slot = LockLastEvent{};
+        slot.addr = addr_val;
+    }
+    slot.rel_ord =
+        __atomic_fetch_add(&g_lock_last_ord, 1, __ATOMIC_RELAXED) + 1;
+    slot.rel_owner = owner;
+    slot.rel_rank = rank;
+    slot.rel_tick = arch::Timer::ticks();
+    slot.rel_cpu =
+        static_cast<uint8_t>(arch::cpu_index() % CONFIG_MAX_CPUS);
+    slot.rel_if = arch::interrupts_enabled() ? 1 : 0;
+}
 
 inline CpuHeldLocks &own_held() noexcept {
     return g_held[arch::cpu_index() % CONFIG_MAX_CPUS];
@@ -104,6 +177,7 @@ void spinlock_note_acquire(const void *addr, uint8_t rank) noexcept {
     } else {
         __atomic_fetch_add(&held.overflow, 1, __ATOMIC_RELAXED);
     }
+    lock_last_take(addr, owner, rank);
 }
 
 void spinlock_note_release(const void *addr) noexcept {
@@ -111,10 +185,12 @@ void spinlock_note_release(const void *addr) noexcept {
     // Pop by address from the top (LIFO order not required by callers).
     for (uint64_t i = held.depth; i > 0; --i) {
         if (held.entries[i - 1].addr == addr) {
+            const uint8_t rank = held.entries[i - 1].rank;
             for (uint64_t j = i - 1; j + 1 < held.depth; ++j)
                 held.entries[j] = held.entries[j + 1];
             --held.depth;
             held.entries[held.depth] = HeldLock{};
+            lock_last_release(addr, resolve_owner_id(), rank);
             return;
         }
     }
@@ -126,6 +202,7 @@ void spinlock_note_release(const void *addr) noexcept {
         kernel::Logger::warn("lockorder: unpaired release (init-time unlock?)");
     }
     __atomic_fetch_add(&held.unpaired, 1, __ATOMIC_RELAXED);
+    lock_last_release(addr, resolve_owner_id(), 0xFF);
 }
 
 uint64_t spinlock_held_by_current_count() noexcept {
@@ -192,6 +269,83 @@ uint64_t spinlock_dump_held(uint64_t *addr_out, const char **site_out,
     return n;
 }
 
+/// @brief Copy the last take and the last release recorded for @p addr
+///        (all slots scanned; addr-tag disambiguates collisions).
+///        take_*_out describe the most recent take (take_ord==0 = none
+///        recorded); rel_*_out the most recent release.  If take_ord >
+///        rel_ord, a take is outstanding with no later release — the lock
+///        is held by take_owner and nobody unlocked it since.  Any
+///        out-pointer may be null.  Returns true when any slot holds this
+///        address at all.  evictor_out (may be null) receives the hashed
+///        slot's current occupant, or 0 when the slot is empty or still
+///        holds this address — distinguishes "evicted by a colliding
+///        lock" from "never taken".
+bool spinlock_lock_last(const void *addr, uint64_t *take_ord_out,
+                        uint64_t *take_owner_out, uint8_t *take_rank_out,
+                        uint8_t *take_cpu_out, uint8_t *take_if_out,
+                        uint64_t *take_tick_out,
+                        uint64_t *rel_ord_out, uint64_t *rel_owner_out,
+                        uint8_t *rel_rank_out, uint8_t *rel_cpu_out,
+                        uint8_t *rel_if_out, uint64_t *rel_tick_out,
+                        uint64_t *evictor_out) noexcept {
+    const uint64_t want = reinterpret_cast<uint64_t>(addr);
+    // Scan all slots: the hashed slot may have been claimed by a
+    // colliding address after this lock's take.  The addr tag
+    // disambiguates; on a miss, evictor_out reports the hashed slot's
+    // current occupant (distinguishes "evicted" from "never taken").
+    uint64_t evictor = 0;
+    {
+        const LockLastEvent &hashed =
+            g_lock_last[(want >> 8) % kLockLastSlots];
+        evictor = __atomic_load_n(&hashed.addr, __ATOMIC_ACQUIRE);
+    }
+    if (evictor_out)
+        *evictor_out = (evictor == want) ? 0 : evictor;
+    for (uint64_t s = 0; s < kLockLastSlots; ++s) {
+        const LockLastEvent &slot = g_lock_last[s];
+        if (__atomic_load_n(&slot.addr, __ATOMIC_ACQUIRE) != want)
+            continue;
+        if (take_ord_out)
+            *take_ord_out =
+                __atomic_load_n(&slot.take_ord, __ATOMIC_RELAXED);
+        if (take_owner_out)
+            *take_owner_out =
+                __atomic_load_n(&slot.take_owner, __ATOMIC_RELAXED);
+        if (take_rank_out)
+            *take_rank_out =
+                __atomic_load_n(&slot.take_rank, __ATOMIC_RELAXED);
+        if (take_cpu_out)
+            *take_cpu_out =
+                __atomic_load_n(&slot.take_cpu, __ATOMIC_RELAXED);
+        if (take_if_out)
+            *take_if_out =
+                __atomic_load_n(&slot.take_if, __ATOMIC_RELAXED);
+        if (take_tick_out)
+            *take_tick_out =
+                __atomic_load_n(&slot.take_tick, __ATOMIC_RELAXED);
+        if (rel_ord_out)
+            *rel_ord_out =
+                __atomic_load_n(&slot.rel_ord, __ATOMIC_RELAXED);
+        if (rel_owner_out)
+            *rel_owner_out =
+                __atomic_load_n(&slot.rel_owner, __ATOMIC_RELAXED);
+        if (rel_rank_out)
+            *rel_rank_out =
+                __atomic_load_n(&slot.rel_rank, __ATOMIC_RELAXED);
+        if (rel_cpu_out)
+            *rel_cpu_out =
+                __atomic_load_n(&slot.rel_cpu, __ATOMIC_RELAXED);
+        if (rel_if_out)
+            *rel_if_out =
+                __atomic_load_n(&slot.rel_if, __ATOMIC_RELAXED);
+        if (rel_tick_out)
+            *rel_tick_out =
+                __atomic_load_n(&slot.rel_tick, __ATOMIC_RELAXED);
+        return true;
+    }
+    return false;
+}
+
 bool spinlock_contract_check_clean(const char *where) noexcept {
     (void)where;
     return spinlock_held_by_current_count() == 0;
@@ -203,6 +357,9 @@ void spinlock_order_reset_for_test() noexcept {
         g_held[c] = CpuHeldLocks{};
         g_held_depth[c] = 0;
     }
+    for (uint64_t i = 0; i < kLockLastSlots; ++i)
+        g_lock_last[i] = LockLastEvent{};
+    g_lock_last_ord = 0;
     for (uint64_t o = 0; o < 4; ++o) {
         for (uint64_t i = 0; i < 4; ++i) {
             g_violations[o][i] = 0;

@@ -114,6 +114,25 @@ uint64_t spinlock_dump_held(uint64_t *addr_out, const char **site_out,
                             uint8_t *cpu_out, uint8_t *take_if_out,
                             size_t max) noexcept;
 
+/// @brief Copy the last take and the last release recorded for @p addr.
+///        take_*_out describe the most recent take (take_ord==0 = none
+///        recorded); rel_*_out the most recent release.  If take_ord >
+///        rel_ord, a take is outstanding with no later release — the lock
+///        is held by take_owner and nobody unlocked it since.  Addr-tagged:
+///        foreign-slot records can never match.  Any out-pointer may be
+///        null.  Returns true when any slot holds this address at all.
+///        evictor_out (may be null) receives the hashed slot's current
+///        occupant, or 0 when empty or still this address — distinguishes
+///        "evicted by a colliding lock" from "never taken".
+bool spinlock_lock_last(const void *addr, uint64_t *take_ord_out,
+                        uint64_t *take_owner_out, uint8_t *take_rank_out,
+                        uint8_t *take_cpu_out, uint8_t *take_if_out,
+                        uint64_t *take_tick_out,
+                        uint64_t *rel_ord_out, uint64_t *rel_owner_out,
+                        uint8_t *rel_rank_out, uint8_t *rel_cpu_out,
+                        uint8_t *rel_if_out, uint64_t *rel_tick_out,
+                        uint64_t *evictor_out) noexcept;
+
 /// @brief Diagnostics accessors (per (outer,inner) pair, overflow,
 ///        unpaired-release, park/switch counters live in park_lock).
 uint64_t spinlock_violation_count(uint8_t outer_rank,
@@ -170,6 +189,35 @@ inline uint64_t spinlock_dump_held(uint64_t *addr_out, const char **site_out,
     (void)take_if_out;
     (void)max;
     return 0;
+}
+inline bool spinlock_lock_last(const void *addr, uint64_t *take_ord_out,
+                                 uint64_t *take_owner_out,
+                                 uint8_t *take_rank_out,
+                                 uint8_t *take_cpu_out,
+                                 uint8_t *take_if_out,
+                                 uint64_t *take_tick_out,
+                                 uint64_t *rel_ord_out,
+                                 uint64_t *rel_owner_out,
+                                 uint8_t *rel_rank_out,
+                                 uint8_t *rel_cpu_out,
+                                 uint8_t *rel_if_out,
+                                 uint64_t *rel_tick_out,
+                                 uint64_t *evictor_out) noexcept {
+    (void)addr;
+    (void)take_ord_out;
+    (void)take_owner_out;
+    (void)take_rank_out;
+    (void)take_cpu_out;
+    (void)take_if_out;
+    (void)take_tick_out;
+    (void)rel_ord_out;
+    (void)rel_owner_out;
+    (void)rel_rank_out;
+    (void)rel_cpu_out;
+    (void)rel_if_out;
+    (void)rel_tick_out;
+    (void)evictor_out;
+    return false;
 }
 inline uint64_t spinlock_violation_count(uint8_t outer_rank,
                                          uint8_t inner_rank) noexcept {

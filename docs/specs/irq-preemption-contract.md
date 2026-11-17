@@ -74,6 +74,27 @@ prio, blocked-on-queue/recv, reply-wait, sleep-armed — decides A1 hold
 across BLOCKED vs A2 READY-but-starved vs A3 READY-not-queued), and
 `rearm=` on the TICKWD FIRE line plus `lock_park_rearm_count()`.
 
+INV-4b (new, binding): a task with `state == BLOCKED` takes **no
+spinlock**.  The dequeue + BLOCKED marking + (where needed) unlock happen
+as one atomic IF=0 step; every loop that can observe BLOCKED gates its
+lock-taking paths on `state != BLOCKED` and falls through to
+`reschedule()` + `hlt`-wait otherwise.  A BLOCKED task that runs anyway
+(gate-denied reschedule) must not take locks — a tick-tail preemption
+mid-take strands the holder with no INV-C1 warning, since the check
+lives only on the reschedule path.  Try-once Dekker rule for
+publish-then-wait loops: the post-publish recheck is a single non-blocking
+`try_lock` inside the publish `IrqGuard` (IF=0 atomic vs tick
+preemption); on Contended the waiter proceeds to block (the holder's
+wake-gate read observes the publish, so no retry is needed and no IF=0
+spin ever happens).
+
+P1 residual follow-ups (same shape, other subsystems — tracked, not fixed
+in this cycle): sync-queue/notify/eventgroup/semaphore take-while-BLOCKED
+windows, `dequeue_ready` with IF=1 (RQ splice vs tick), `syscall_handlers_irq`
+trap waits, `posix_time`/`devfs` sleep loops.  Same recipe applies: gate
+takes on `state != BLOCKED`, or move them inside an IF=0 publish guard
+with try-once semantics.
+
 Converted sites (all task-context-verified, no ISR caller exists — see §6):
 `MessageQueue::{push,pop,pop_clamped,pop_from_sender,pop_from_sender_clamped,
 has_from,is_full_locked}`, `block_sender` list section, `wake_sender`

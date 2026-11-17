@@ -77,6 +77,14 @@ class [[nodiscard]] ParkLockGuard {
     /// @brief True when the lock is held (destructor releases it).
     bool owned() const noexcept { return owned_; }
 
+    /// @brief Release the lock early without destroying the guard
+    ///        (F1 #545: lets block_sender make BLOCKED-marking and unlock
+    ///        one IF=0-atomic unit under a caller-owned IrqGuard — a
+    ///        preempted holder can no longer strand the queue lock while
+    ///        BLOCKED).  No-op when not owned.  Does not touch the
+    ///        entry-IF bookkeeping (no park happened).
+    void release() noexcept;
+
   private:
     SpinLock &lock_;
     bool owned_ = false;

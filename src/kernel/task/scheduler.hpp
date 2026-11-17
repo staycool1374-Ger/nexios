@@ -269,6 +269,19 @@ class Scheduler {
     /// otherwise); not callable from a hardware ISR (deny → C3).
     static void reschedule() noexcept;
 
+    /// @brief F1 diagnostics: reschedule() park denials of BLOCKED
+    ///        callers (cumulative) and the last denial's gate bitmap
+    ///        (bit N = gate condition N failed; task bits start at 8).
+    static uint64_t resched_park_denied_count() noexcept;
+    static uint64_t resched_park_denied_why() noexcept;
+    /// @brief F1 diagnostics: reschedule() park entries (a BLOCKED
+    ///        caller hlt-waited) and park wakeups (it observed a
+    ///        non-BLOCKED state).  Entries >> denials means the park
+    ///        engages; entries == 0 with denials > 0 means BLOCKED
+    ///        callers always run on (the zombie window is open).
+    static uint64_t resched_park_entries_count() noexcept;
+    static uint64_t resched_park_wakeups_count() noexcept;
+
     /// @brief Change a task's scheduling priority at runtime.
     /// Re-buckets the task in the O(1) ready queue (if queued) so the change
     /// takes effect on the next tick, and updates base_priority.  Task

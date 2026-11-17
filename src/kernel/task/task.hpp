@@ -118,6 +118,33 @@ struct MessageQueue {
     ///        arrived before the peer died must still be consumed).
     bool has_from(uint64_t sender_id);
 
+    /// @brief Try-once queue probe outcome (F1 #545, INV-4b).  A probe is a
+    ///        single try_lock: it never pauses, parks, spins, allocates
+    ///        or reschedules.  Contended = no side effect (the lock was
+    ///        never taken).  PresentOversized = a matching/any message
+    ///        exists but exceeds the clamp and was NOT removed.
+    ///        Must be called with IF=0 when the result feeds a BLOCKED
+    ///        decision (atomic vs tick preemption — a preempted take
+    ///        while BLOCKED strands the lock with no INV-C1 warning).
+    enum class QueueProbe : uint8_t {
+        Consumed,         ///< Message removed into @p out.
+        Empty,            ///< No (matching) message queued.
+        PresentOversized, ///< Matching/any message present but oversized.
+        Contended,        ///< Lock busy; nothing touched.
+    };
+
+    /// @brief Pop the highest-priority message only if the lock is free.
+    ///        Never waits.  See QueueProbe contract above.
+    QueueProbe probe_pop(Message &out);
+    /// @brief pop_pop with the issue #11 clamp, non-blocking.
+    QueueProbe probe_pop_clamped(Message &out, uint32_t max_size);
+    /// @brief pop_from_sender, non-blocking.
+    QueueProbe probe_pop_from_sender(Message &out, uint64_t sender_id);
+    /// @brief pop_from_sender_clamped, non-blocking.
+    QueueProbe probe_pop_from_sender_clamped(Message &out,
+                                             uint32_t max_size,
+                                             uint64_t sender_id);
+
     bool is_empty() const {
         return __atomic_load_n(&count, __ATOMIC_RELAXED) == 0;
     }

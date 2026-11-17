@@ -1221,50 +1221,77 @@ namespace {
 #if defined(CONFIG_DEBUG)
 uint64_t g_resched_park_entries = 0;
 uint64_t g_resched_park_wakeups = 0;
+// F1 follow-up (#545): gate-denial telemetry.  A BLOCKED caller that is
+// denied the park runs on while BLOCKED (status quo ante) — the zombie
+// window.  The bitmap records WHICH gate condition denied the last
+// BLOCKED caller (bit N = condition N failed), so the exhaustion dump
+// can tell a parked waiter from a zombie waiter apart.
+uint64_t g_resched_park_denied_count = 0;
+uint64_t g_resched_park_denied_why = 0;
 #endif
 
 // CPU-local gate: no scheduler state, safe to call before the arm.
-bool resched_park_gate_base(bool entry_if) noexcept {
+uint64_t resched_park_gate_base(bool entry_if) noexcept {
+    uint64_t why = 0;
     if (CONFIG_RESCHED_PARK_ON_BLOCKED == 0)
-        return false;
+        why |= 1ULL << 0;
     if (CONFIG_TICK_HZ == 0)
-        return false; // No ticks: hlt is uninterruptible, keep status quo.
+        why |= 1ULL << 1;
     if (arch::irq_guard_depth_own() != 0)
-        return false; // Live guard scope: re-enabling IRQs would break it.
+        why |= 1ULL << 2;
     if (sync::spinlock_held_by_current_count() != 0)
-        return false; // INV-C1 fail-safe: never park a lock holder.
+        why |= 1ULL << 3;
     if (kernel::isr_nesting_own() != 0 && !arch::in_syscall_trap_level())
-        return false; // Hardware ISR: no task to deschedule.
+        why |= 1ULL << 4;
     if (!entry_if && !arch::in_syscall_trap_level())
-        return false; // No IRQ entitlement: trap entry owns the IRQ state.
-    return true;
+        why |= 1ULL << 5;
+    if (why != 0)
+        return why;
+    return 0;
 }
 
 // Task gate: scheduler state, call only inside the arm's IrqGuard
 // (IRQ-off makes the size/current reads stable for the decision).
-bool resched_park_gate_task(TaskControlBlock *cur, bool base_ok) noexcept {
-    if (!base_ok || cur == nullptr)
+// Denials of a BLOCKED caller are tallied (DEBUG) with the failing
+// condition, so the exhaustion dump can tell a parked waiter from a
+// zombie waiter that was denied the park.
+bool resched_park_gate_task(TaskControlBlock *cur,
+                            uint64_t base_why) noexcept {
+    uint64_t why = base_why;
+    if (cur == nullptr || cur->magic != TaskControlBlock::TCB_MAGIC)
+        why |= 1ULL << 9;
+    else {
+        if (Scheduler::all_tasks().size() <= 1)
+            why |= 1ULL << 10;
+        if (Scheduler::is_idle_task(cur))
+            why |= 1ULL << 11;
+        if (Scheduler::is_test_active() &&
+            Scheduler::get_harness_task() != nullptr &&
+            cur == Scheduler::get_harness_task())
+            why |= 1ULL << 12;
+        if (Scheduler::is_test_active()) {
+            // Impersonation guard: a ScopedCurrentTask runs on the
+            // harness stack — its RSP is outside the impersonated TCB's
+            // kernel stack.
+            const uint64_t sp = current_sp();
+            if (sp < reinterpret_cast<uint64_t>(cur->kernel_stack) ||
+                sp >= cur->kernel_stack_top)
+                why |= 1ULL << 13;
+        }
+    }
+    if (why != 0) {
+#if defined(CONFIG_DEBUG)
+        if (cur != nullptr && cur->state == TaskState::BLOCKED) {
+            __atomic_fetch_add(&g_resched_park_denied_count, 1,
+                               __ATOMIC_RELAXED);
+            __atomic_store_n(&g_resched_park_denied_why, why,
+                             __ATOMIC_RELAXED);
+        }
+#endif
         return false;
-    if (cur->magic != TaskControlBlock::TCB_MAGIC)
-        return false;
-    if (Scheduler::all_tasks().size() <= 1)
-        return false; // Single-task guest must not hang.
+    }
     if (cur->state != TaskState::BLOCKED)
         return false; // RUNNING/READY callers return immediately (C1).
-    if (Scheduler::is_idle_task(cur))
-        return false;
-    if (Scheduler::is_test_active() &&
-        Scheduler::get_harness_task() != nullptr &&
-        cur == Scheduler::get_harness_task())
-        return false; // Test harness owns the clock.
-    if (Scheduler::is_test_active()) {
-        // Impersonation guard: a ScopedCurrentTask runs on the harness
-        // stack — its RSP is outside the impersonated TCB's kernel stack.
-        const uint64_t sp = current_sp();
-        if (sp < reinterpret_cast<uint64_t>(cur->kernel_stack) ||
-            sp >= cur->kernel_stack_top)
-            return false;
-    }
     return true;
 }
 
@@ -1336,7 +1363,8 @@ void Scheduler::reschedule() noexcept {
     // tick-tail switch, which has no INV-C1 check).  The park (after the
     // arm's guard closes) hlt-waits until dispatched instead.
     const bool resched_entry_if = arch::interrupts_enabled();
-    const bool resched_base_ok = resched_park_gate_base(resched_entry_if);
+    const uint64_t resched_base_why =
+        resched_park_gate_base(resched_entry_if);
     TaskControlBlock *resched_park_candidate = nullptr;
     // do/while(0): the arm's early exits below break to the park gate
     // instead of returning — a BLOCKED caller must park even when there
@@ -1364,10 +1392,10 @@ void Scheduler::reschedule() noexcept {
         break;
 
     // INV-4a candidate: validated while the guard above keeps the
-    // scheduler state stable.  The "nothing to arm" returns below keep
+    // scheduler state stable.  The "nothing to arm" breaks below keep
     // the candidate — a BLOCKED caller must park even when there is no
     // better task to switch to (running on while BLOCKED is the bug).
-    if (resched_park_gate_task(current, resched_base_ok))
+    if (resched_park_gate_task(current, resched_base_why))
         resched_park_candidate = current;
 
     // Peek the highest-priority ready task.  We do NOT dequeue here —
@@ -1417,5 +1445,37 @@ void Scheduler::reschedule() noexcept {
     if (resched_park_candidate != nullptr)
         resched_park_until_dispatched(*resched_park_candidate,
                                       resched_entry_if);
+}
+
+uint64_t Scheduler::resched_park_denied_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_resched_park_denied_count, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t Scheduler::resched_park_denied_why() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_resched_park_denied_why, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t Scheduler::resched_park_entries_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_resched_park_entries, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t Scheduler::resched_park_wakeups_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_resched_park_wakeups, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
 }
 }  // namespace kernel

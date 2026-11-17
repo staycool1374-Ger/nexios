@@ -250,6 +250,20 @@ class IPC {
     ///        publications that found a matching reply already queued — the
     ///        publish-vs-arrival window probe.  CONFIG_DEBUG only.
     static uint64_t ipc_block_with_pending_inbox_count() noexcept;
+    /// @brief F1 follow-up evidence (#545, INV-4b): in-guard try-once
+    ///        probe hits (consumed without blocking) and contended
+    ///        outcomes.  CONFIG_DEBUG only; hits must be > 0 in a healthy
+    ///        run (proves the Dekker path is live).
+    static uint64_t ipc_probe_hit_count() noexcept;
+    static uint64_t ipc_probe_contended_count() noexcept;
+#if defined(CONFIG_DEBUG)
+    /// @brief Record a try-once probe outcome (CONFIG_DEBUG only).
+    static void ipc_probe_hit_mark() noexcept;
+    static void ipc_probe_contended_mark() noexcept;
+#else
+    static void ipc_probe_hit_mark() noexcept {}
+    static void ipc_probe_contended_mark() noexcept {}
+#endif
 };
 
 } // namespace kernel

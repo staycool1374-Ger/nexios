@@ -83,7 +83,20 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     bool was_blocked = false;
     if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
         // Wheel-armed bounded wait (or 0 = forever, never armed).
-        while (!(ok = IPC::recv(msg))) {
+        while (!(ok = (cur->state != TaskState::BLOCKED)
+                           ? IPC::recv(msg)
+                           : false)) {
+            if (cur->state == TaskState::BLOCKED) {
+                // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+                // zombie window).  A denied reschedule returns with the
+                // marking intact; go straight back to reschedule +
+                // hlt-wait (paced, no hot spin) instead of taking.
+                Scheduler::reschedule();
+                arch::sti();
+                arch::hlt();
+                arch::cli();
+                continue;
+            }
             if (cur->get_sporadic_server()) {
                 kernel::ScopedRef ss_ref{cur->get_sporadic_server()};
                 cur->get_sporadic_server()->on_completion(
@@ -92,28 +105,45 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
             // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
             // BLOCKED transition so an arrival landing between the two stores
             // still observes the channel (old code woke on state alone).
-            // M2 follow-up (#545 SILENT): the triple publishes atomically
-            // under IrqGuard (Dekker close against the sender's wake gate).
+            // F1 (#545, INV-4b): the post-publish Dekker check as a
+            // try-once probe INSIDE the publish guard, AFTER the channel
+            // publish (Dekker order: publish then recheck — a probe
+            // placed before the publish misses a push+read landing
+            // between the two on SMP).  A message that arrived between
+            // the loop-top check and the publish is consumed instead of
+            // armed-and-slept-through — and with IF=0 the probe runs
+            // while still RUNNING, so a tick cannot preempt the take
+            // mid-critical-section (a preempted take while BLOCKED
+            // strands the lock with no INV-C1 warning).  Contended =
+            // live holder whose wake-gate read observes our publish
+            // above, so no retry is needed.  A hit unpublishes the
+            // channel (never BLOCKED — no waker can be owed one).
+            bool probe_hit = false;
             {
                 arch::IrqGuard publish_guard{};
                 cur->blocked_in_recv = true;
-                cur->state = TaskState::BLOCKED;
-                Scheduler::dequeue_ready(*cur);
+                using QP = MessageQueue::QueueProbe;
+                const QP probe = cur->msg_queue.probe_pop(msg);
+                if (probe == QP::Consumed) {
+                    IPC::ipc_probe_hit_mark();
+                    cur->blocked_in_recv = false;
+                    probe_hit = true;
+                } else {
+                    if (probe == QP::Contended)
+                        IPC::ipc_probe_contended_mark();
+                    cur->state = TaskState::BLOCKED;
+                    Scheduler::dequeue_ready(*cur);
+                }
             }
-            was_blocked = true;
-            // F1 (#545 SILENT): post-publish re-check BEFORE reschedule.
-            // A message that arrived between the loop-top empty check
-            // and the publish is consumed instead of armed-and-slept-
-            // through — the reschedule park (INV-4a) may not return
-            // until woken.  On a hit the arm is skipped entirely.
-            if (IPC::recv(msg)) {
+            // wake_sender half runs AFTER the guard (it takes the queue
+            // lock itself): mirrors IPC::recv's pop+wake pairing.
+            if (probe_hit) {
                 ok = true;
-                cur->blocked_in_recv = false;
-                IPC::recv_wait_cancel(*cur);
-                arch::sti();
-                cur->state = TaskState::RUNNING;
+                if (cur->msg_queue.blocked_senders_head)
+                    IPC::wake_sender(cur->msg_queue, *cur);
                 break;
             }
+            was_blocked = true;
             Scheduler::reschedule();
             // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait
             // pattern; key on is_user_ (every task now owns a PML4).
@@ -129,7 +159,10 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
             arch::cli();
             // Resume: recheck the inbox FIRST (delivery beats timeout),
             // then the timeout flag; otherwise re-block on the live arm.
-            if (IPC::recv(msg)) {
+            // INV-4b: skip the take while still BLOCKED (gate-denied
+            // reschedule + hlt wait) — the loop top re-checks after the
+            // next wake instead.
+            if (cur->state != TaskState::BLOCKED && IPC::recv(msg)) {
                 ok = true;
                 break;
             }
@@ -297,7 +330,19 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
     bool was_blocked = false;
     if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
         // Wheel-armed bounded wait (or 0 = forever, never armed).
-        while (!(ok = cur->msg_queue.pop_clamped(msg, clamp))) {
+        while (!(ok = (cur->state != TaskState::BLOCKED)
+                           ? cur->msg_queue.pop_clamped(msg, clamp)
+                           : false)) {
+            if (cur->state == TaskState::BLOCKED) {
+                // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+                // zombie window).  Go straight back to reschedule +
+                // hlt-wait instead of taking.
+                Scheduler::reschedule();
+                arch::sti();
+                arch::hlt();
+                arch::cli();
+                continue;
+            }
             // An oversized best match is NOT consumed (stays queued for a
             // full RECEIVE, INV-4) — disambiguate empty-vs-oversized with
             // is_empty().
@@ -323,40 +368,52 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             }
             // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
             // BLOCKED transition (same rationale as sys_receive above).
-            // F1 (#545): the publish triple goes out atomically under
-            // IrqGuard (Dekker close against the sender's wake gate —
-            // without it the new reschedule park can sleep through a
-            // message published in the unguarded window).
+            // F1 (#545, INV-4b): the post-publish Dekker check as a
+            // try-once probe INSIDE the publish guard, AFTER the channel
+            // publish (Dekker order: publish then recheck — a probe
+            // placed before the publish misses a push+read landing
+            // between the two on SMP).  Contended = live holder whose
+            // wake-gate read observes our publish above, so no retry is
+            // needed.  A hit/oversized outcome unpublishes the channel
+            // (never BLOCKED — no waker can be owed one).
+            bool probe_hit = false;
+            bool probe_oversized = false;
             {
                 arch::IrqGuard publish_guard{};
                 cur->blocked_in_recv = true;
-                cur->state = TaskState::BLOCKED;
-                Scheduler::dequeue_ready(*cur);
+                using QP = MessageQueue::QueueProbe;
+                const QP probe =
+                    cur->msg_queue.probe_pop_clamped(msg, clamp);
+                if (probe == QP::Consumed) {
+                    IPC::ipc_probe_hit_mark();
+                    cur->blocked_in_recv = false;
+                    probe_hit = true;
+                } else if (probe == QP::PresentOversized) {
+                    cur->blocked_in_recv = false;
+                    probe_oversized = true;
+                } else {
+                    if (probe == QP::Contended)
+                        IPC::ipc_probe_contended_mark();
+                    cur->state = TaskState::BLOCKED;
+                    Scheduler::dequeue_ready(*cur);
+                }
             }
-            was_blocked = true;
-            // F1 (#545 SILENT): post-publish re-check BEFORE reschedule.
-            // Oversized-or-present inbox states are resolved without
-            // arming a park the task might sleep through (same Dekker
-            // close as sys_receive above).
-            if (cur->msg_queue.pop_clamped(msg, clamp)) {
+            if (probe_hit) {
                 ok = true;
-                // F1 audit: restore the running wait-state (mirrors
-                // sys_receive above) — the arm was skipped, so no wake or
-                // dispatch will repair the BLOCKED marking.
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 arch::sti();
                 cur->state = TaskState::RUNNING;
                 break;
             }
-            if (!cur->msg_queue.is_empty()) {
+            if (probe_oversized) {
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
-                // Wait is over: restore RUNNING (see sys_receive above).
                 arch::sti();
                 cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
+            was_blocked = true;
             Scheduler::reschedule();
             // Issue #513: yield unconditionally (see sys_receive above).
             // The old bare-hlt else-branch slept forever when entered
@@ -367,7 +424,11 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             arch::cli();
             // Resume: recheck the inbox FIRST (delivery beats timeout),
             // then the oversized/timeout exits; otherwise re-block.
-            if (cur->msg_queue.pop_clamped(msg, clamp)) {
+            // INV-4b: skip the take while still BLOCKED (gate-denied
+            // reschedule + hlt wait) — the loop top re-checks after the
+            // next wake instead.
+            if (cur->state != TaskState::BLOCKED &&
+                cur->msg_queue.pop_clamped(msg, clamp)) {
                 ok = true;
                 break;
             }

@@ -309,9 +309,6 @@ static void note_exhaustion(const SpinLock &lock, const char *site,
             h_qcount = __atomic_load_n(&h->msg_queue.count, __ATOMIC_RELAXED);
         }
     }
-    // Owner-queue identity: is the contended lock the holder's own queue,
-    // the waiter's own queue, or a third queue?  Decides self-deadlock
-    // vs third-party stall without needing GDB.
     uint64_t w_mq_lock = 0;
     uint64_t w_qcount = 0;
     uint64_t waiter_id = 0;
@@ -350,6 +347,51 @@ static void note_exhaustion(const SpinLock &lock, const char *site,
             "cpu=%u take_if=%u",
             lock_addr, i, sites[i] != nullptr ? sites[i] : "?", owners[i],
             ranks[i], cpus[i], take_ifs[i]);
+    }
+    // Last take / last release for this lock: who took it last, and did
+    // a release run after.  take_ord > rel_ord means an unreleased take
+    // is outstanding — the lock is held by take_owner.  Record-based
+    // (not order-stack), so torn/missing stack entries cannot hide it.
+    {
+        uint64_t take_ord = 0;
+        uint64_t take_owner = 0;
+        uint8_t take_rank = 0;
+        uint8_t take_cpu = 0;
+        uint8_t take_if = 0;
+        uint64_t take_tick = 0;
+        uint64_t rel_ord = 0;
+        uint64_t rel_owner = 0;
+        uint8_t rel_rank = 0;
+        uint8_t rel_cpu = 0;
+        uint8_t rel_if = 0;
+        uint64_t rel_tick = 0;
+        uint64_t evictor = 0;
+        const bool last_known = sync::spinlock_lock_last(
+            &lock, &take_ord, &take_owner, &take_rank, &take_cpu, &take_if,
+            &take_tick, &rel_ord, &rel_owner, &rel_rank, &rel_cpu, &rel_if,
+            &rel_tick, &evictor);
+        kernel::Logger::error(
+            "[PARK] last lock=%lx known=%d take_ord=%lu take_owner=%lu "
+            "take_rank=%u take_cpu=%u take_if=%u take_tick=%lu rel_ord=%lu "
+            "rel_owner=%lu rel_rank=%u rel_cpu=%u rel_if=%u rel_tick=%lu "
+            "evictor=%lx now=%lu deny=%lu deny_why=%lx park_n=%lu "
+            "park_w=%lu",
+            lock_addr, last_known ? 1 : 0, take_ord, take_owner, take_rank,
+            take_cpu, take_if, take_tick, rel_ord, rel_owner, rel_rank,
+            rel_cpu, rel_if, rel_tick, evictor,
+            arch::Timer::ticks(),
+            Scheduler::resched_park_denied_count(),
+            Scheduler::resched_park_denied_why(),
+            Scheduler::resched_park_entries_count(),
+            Scheduler::resched_park_wakeups_count());
+        // Lock word ground truth: distinguishes poisoned/freed memory
+        // (0xDD…), an unpublished acquire (locked_=1, holder_=NULL —
+        // preempted between exchange and holder store), and a normal
+        // holder PC (always the guard ctor — identifies nothing further).
+        kernel::Logger::error(
+            "[PARK] word lock=%lx locked=%d holder=%lx",
+            lock_addr, lock.is_locked_for_debug(),
+            reinterpret_cast<uint64_t>(lock.holder_for_debug()));
     }
 #else
     (void)lock;
@@ -518,6 +560,13 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
 }
 
 ParkLockGuard::~ParkLockGuard() noexcept {
+    if (owned_) {
+        owned_ = false;
+        lock_.unlock();
+    }
+}
+
+void ParkLockGuard::release() noexcept {
     if (owned_) {
         owned_ = false;
         lock_.unlock();
