@@ -35,6 +35,18 @@
 
 namespace kernel {
 
+namespace {
+// M2 follow-up evidence (#545 SILENT, CONFIG_DEBUG only): lost-wakeup
+// window probes.  Stores only; no behaviour change.
+#if defined(CONFIG_DEBUG)
+uint64_t g_ipc_wake_gate_missed = 0;
+uint64_t g_ipc_block_with_pending_inbox = 0;
+// F1 (#545, INV-4b): in-guard try-once probe outcomes (diagnostic only).
+uint64_t g_ipc_probe_hit = 0;
+uint64_t g_ipc_probe_contended = 0;
+#endif
+} // namespace
+
 // ---------------------------------------------------------------------------
 // MessageQueue
 // ---------------------------------------------------------------------------
@@ -249,6 +261,86 @@ bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
     return true;
 }
 
+/// @brief Try-once probe bodies (F1 #545, INV-4b contract in task.hpp).
+///        Single try_lock; every path unlocks exactly once.  Selection
+///        reuses find_best_*/remove_at (single source with the blocking
+///        pops — no INV-P/#11 semantic drift).
+MessageQueue::QueueProbe MessageQueue::probe_pop(Message &out) {
+    if (!lock_.try_lock())
+        return QueueProbe::Contended;
+    sync::spinlock_annotate_site(&lock_, "mq:probe_pop");
+    QueueProbe result = QueueProbe::Empty;
+    if (!is_empty()) {
+        const size_t best_idx = find_best_index();
+        if (best_idx < IPC_MAX_QUEUE_MSG) {
+            out = msgs[best_idx];
+            remove_at(best_idx);
+            result = QueueProbe::Consumed;
+        }
+    }
+    lock_.unlock();
+    return result;
+}
+
+MessageQueue::QueueProbe MessageQueue::probe_pop_clamped(Message &out,
+                                                         uint32_t max_size) {
+    if (!lock_.try_lock())
+        return QueueProbe::Contended;
+    sync::spinlock_annotate_site(&lock_, "mq:probe_pop_clamped");
+    QueueProbe result = QueueProbe::Empty;
+    if (!is_empty()) {
+        const size_t best_idx = find_best_index();
+        if (best_idx < IPC_MAX_QUEUE_MSG) {
+            if (msgs[best_idx].data_size > max_size) {
+                result = QueueProbe::PresentOversized;
+            } else {
+                out = msgs[best_idx];
+                remove_at(best_idx);
+                result = QueueProbe::Consumed;
+            }
+        }
+    }
+    lock_.unlock();
+    return result;
+}
+
+MessageQueue::QueueProbe
+MessageQueue::probe_pop_from_sender(Message &out, uint64_t sender_id) {
+    if (!lock_.try_lock())
+        return QueueProbe::Contended;
+    sync::spinlock_annotate_site(&lock_, "mq:probe_pop_from_sender");
+    QueueProbe result = QueueProbe::Empty;
+    const size_t best_idx = find_best_from_sender(sender_id);
+    if (best_idx < IPC_MAX_QUEUE_MSG) {
+        out = msgs[best_idx];
+        remove_at(best_idx);
+        result = QueueProbe::Consumed;
+    }
+    lock_.unlock();
+    return result;
+}
+
+MessageQueue::QueueProbe MessageQueue::probe_pop_from_sender_clamped(
+    Message &out, uint32_t max_size, uint64_t sender_id) {
+    if (!lock_.try_lock())
+        return QueueProbe::Contended;
+    sync::spinlock_annotate_site(&lock_, "mq:probe_pop_from_sender_clamped");
+    QueueProbe result = QueueProbe::Empty;
+    const size_t best_idx = find_best_from_sender(sender_id);
+    if (best_idx < IPC_MAX_QUEUE_MSG) {
+        if (msgs[best_idx].data_size > max_size) {
+            result = QueueProbe::PresentOversized;
+        } else {
+            out = msgs[best_idx];
+            remove_at(best_idx);
+            result = QueueProbe::Consumed;
+        }
+    }
+    lock_.unlock();
+    return result;
+}
+
+
 /// @brief Non-destructive probe for a queued message from @p sender_id
 ///        (issue #296, send_sync dest-death path).
 bool MessageQueue::has_from(uint64_t sender_id) {
@@ -388,6 +480,15 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
         Scheduler::set_task_ready(*tcb);
         tcb->remaining_ticks = tcb->period_ticks;
     }
+#if defined(CONFIG_DEBUG)
+    // M2 follow-up evidence (#545 SILENT): a pushed message that leaves
+    // the destination BLOCKED with no wait flag set is a lost wakeup.
+    if (ok && tcb->state == TaskState::BLOCKED &&
+        !__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE) &&
+        tcb->blocked_on_queue == nullptr && !tcb->blocked_in_recv) {
+        __atomic_fetch_add(&g_ipc_wake_gate_missed, 1, __ATOMIC_RELAXED);
+    }
+#endif
     return ok;
 }
 
@@ -423,6 +524,11 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
     if (cur && ep->bound_receiver == cur)
         return false;
 
+    // M2 follow-up (#545 FIRE, INV-L4): the is_full_locked probe parks on
+    // a contended foreign-owned depth instead of spinning with IF=0, so
+    // the denied fallback below only triggers for genuine own-guard
+    // scopes (fail-closed) — unreachable-by-design on the syscall trap
+    // path, which holds no IrqGuard.
     if (ep->q.is_full_locked()) {
         if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
             return false;
@@ -510,6 +616,16 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
                     "ty=", msg.type, "q=", cur->msg_queue.count);
     for (;;) {
+        if (cur->state == TaskState::BLOCKED) {
+            // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+            // zombie window).  Go straight back to reschedule +
+            // hlt-wait instead of taking.
+            Scheduler::reschedule();
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+            continue;
+        }
         // Matching reply already queued (covers the reply-arrived-first
         // and peer-died-after-reply cases): consume it without blocking.
         // A clamped oversized match stays queued per the #11 contract.
@@ -588,12 +704,88 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
 
         // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag —
         // RELEASE order lets the death drain observe (tag, flag) atomically.
-        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
-                         __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-        cur->state = TaskState::BLOCKED;
-        Scheduler::dequeue_ready(*cur);
+#if defined(CONFIG_DEBUG)
+        // M2 follow-up evidence (#545 SILENT): publishing a reply wait
+        // while a matching reply is already queued is the
+        // publish-vs-arrival window (the loop-top fast path should have
+        // consumed it first).
+        if (cur->msg_queue.has_from(dest_id)) {
+            __atomic_fetch_add(&g_ipc_block_with_pending_inbox, 1,
+                               __ATOMIC_RELAXED);
+        }
+#endif
+        // F1 (#545 SILENT, INV-4b): the post-publish Dekker check as a
+        // try-once probe INSIDE the publish guard, AFTER the publish
+        // stores (Dekker order: publish then recheck — a probe placed
+        // before the publish misses a push+read landing between the two
+        // on SMP, losing the wake with no post-publish drain left to
+        // catch it).  A reply that arrived between the loop-top empty
+        // check and the publish is consumed instead of
+        // armed-and-slept-through — and because the probe runs with IF=0
+        // while still RUNNING, a tick cannot preempt it mid-take (a
+        // preempted take while BLOCKED strands the lock with no INV-C1
+        // warning).  A Contended probe means a live holder whose
+        // subsequent wake-gate read observes our publish above, so no
+        // retry is needed.  A hit unpublishes (never ARMED, never
+        // BLOCKED — no waker can be owed one).
+        bool late_hit = false;
+        bool late_oversized = false;
+        {
+            arch::IrqGuard publish_guard{};
+            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen,
+                             dest->generation, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+            using QP = MessageQueue::QueueProbe;
+            const QP probe =
+                (reply_max_size != 0)
+                    ? cur->msg_queue.probe_pop_from_sender_clamped(
+                          reply, reply_max_size, dest_id)
+                    : cur->msg_queue.probe_pop_from_sender(reply, dest_id);
+            if (probe == QP::Consumed)
+                IPC::ipc_probe_hit_mark();
+            else if (probe == QP::Contended)
+                IPC::ipc_probe_contended_mark();
+            if (probe == QP::Consumed) {
+                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_id, 0,
+                                 __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
+                                 __ATOMIC_RELEASE);
+                late_hit = true;
+            } else if (probe == QP::PresentOversized) {
+                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_id, 0,
+                                 __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
+                                 __ATOMIC_RELEASE);
+                late_oversized = true;
+            } else {
+                cur->state = TaskState::BLOCKED;
+                Scheduler::dequeue_ready(*cur);
+            }
+        }
+        if (late_hit) {
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            cur->remaining_ticks = cur->period_ticks;
+            arch::sti();
+            cur->state = TaskState::RUNNING;
+            return errors::IPC_ERR_OK;
+        }
+        if (late_oversized) {
+            // Clamped reply present but oversized (same as the loop-top
+            // has_from path): fail closed at once, never block.
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            cur->remaining_ticks = cur->period_ticks;
+            arch::sti();
+            cur->state = TaskState::RUNNING;
+            return errors::IPC_ERR_NO_REPLY;
+        }
         was_blocked = true;
         Scheduler::reschedule();
         // Issue #513 (face A/C hang): the wait yields UNCONDITIONALLY.
@@ -639,6 +831,16 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
     bool was_blocked = false;
     bool armed_here = (timeout_ticks != 0);
     for (;;) {
+        if (cur->state == TaskState::BLOCKED) {
+            // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+            // zombie window).  Go straight back to reschedule +
+            // hlt-wait instead of taking.
+            Scheduler::reschedule();
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+            continue;
+        }
         bool got = cur->msg_queue.pop_from_sender(reply, dest_id);
         if (got) {
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
@@ -692,12 +894,52 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             return errors::IPC_ERR_PEER_DIED;
         }
         // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag.
-        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
-                         __ATOMIC_RELEASE);
-        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-        cur->state = TaskState::BLOCKED;
-        Scheduler::dequeue_ready(*cur);
+        // F1 (#545, INV-4b): the post-publish Dekker check as a try-once
+        // probe INSIDE the publish guard, AFTER the publish stores
+        // (Dekker order: publish then recheck — a probe placed before
+        // the publish misses a push+read landing between the two on
+        // SMP).  Contended = live holder whose wake-gate read observes
+        // our publish above, so no retry is needed.  A hit unpublishes
+        // (never ARMED — no waker can be owed one).
+        bool late_hit = false;
+        {
+            arch::IrqGuard publish_guard{};
+            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen,
+                             dest->generation, __ATOMIC_RELAXED);
+            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+            using QP = MessageQueue::QueueProbe;
+            const QP probe =
+                cur->msg_queue.probe_pop_from_sender(reply, dest_id);
+            if (probe == QP::Consumed)
+                IPC::ipc_probe_hit_mark();
+            else if (probe == QP::Contended)
+                IPC::ipc_probe_contended_mark();
+            if (probe == QP::Consumed) {
+                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_id, 0,
+                                 __ATOMIC_RELEASE);
+                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
+                                 __ATOMIC_RELEASE);
+                late_hit = true;
+            } else {
+                cur->state = TaskState::BLOCKED;
+                Scheduler::dequeue_ready(*cur);
+            }
+        }
+        if (late_hit) {
+            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            if (armed_here) {
+                recv_wait_cancel(*cur);
+            }
+            cur->remaining_ticks = cur->period_ticks;
+            arch::sti();
+            cur->state = TaskState::RUNNING;
+            return errors::IPC_ERR_OK;
+        }
         was_blocked = true;
         Scheduler::reschedule();
         // Issue #513 (face A/C hang): unconditional yield (see send_sync
@@ -765,10 +1007,10 @@ MessageQueue &IPC::queue(uint64_t task_id) {
 ///     should ensure IRQ safety is managed externally (e.g., via
 ///     `arch::IrqGuard` in `IPC::send`).
 ///   - After return, the caller MUST invoke `Scheduler::reschedule()` to
-///     request a deferred context switch (INV-4).  Because of the deferred
-///     model, the caller continues executing with state=BLOCKED until the
-///     next timer tick applies the switch.  The spin-wait loop in
-///     `IPC::send()` handles this window.  Calling `reschedule()` without
+///     request a deferred context switch (INV-4).  A BLOCKED caller is
+///     parked by reschedule() until woken (INV-4a) instead of running on
+///     while BLOCKED.  The spin-wait loop in
+///     `IPC::send()` handles gate-denied contexts.  Calling `reschedule()` without
 ///     having dequeued the task first would leave it BLOCKED+inrq and
 ///     trigger the [WEDGE] invariant violation on the very next tick.
 ///   - When IPC::send's spin-wait is active, the task's state is temporarily
@@ -778,25 +1020,26 @@ MessageQueue &IPC::queue(uint64_t task_id) {
 ///
 /// # WEDGE-avoidance summary
 ///
-/// Every transition to BLOCKED must be atomic with dequeue_ready:
-///   | code                                | invariant |
-///   |-------------------------------------|-----------|
-///   | state = BLOCKED; + dequeue_ready(); | OK        |
-///   | state = BLOCKED; (no dequeue)        | WEDGE     |
+/// Every transition to BLOCKED must be atomic with dequeue_ready, and
+/// every waiter-list link must precede the BLOCKED transition:
+///   | code                                              | invariant |
+///   |---------------------------------------------------|-----------|
+///   | link; state = BLOCKED; + dequeue_ready();         | OK        |
+///   | state = BLOCKED; (no dequeue)                      | WEDGE     |
+///   | state = BLOCKED; + dequeue, link after (racy)      | WEDGE     |
 ///
-/// This function implements the correct pattern.  Callers that set
+/// This function implements the correct pattern (link + BLOCKED +
+/// dequeue under q.lock_ + IrqGuard).  Callers that set
 /// `state = BLOCKED` independently (e.g., `monitor_task_entry`,
 /// `Scheduler::terminate`) must also dequeue first.
 bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
-    task.state = TaskState::BLOCKED;
-    kernel::Scheduler::dequeue_ready(task);
-
-    // Dequeue_ready must complete BEFORE taking q.lock_ (lock ordering:
-    // scheduler_lock_ first, then queue lock).  The queue lock protects
-    // the blocked_senders list and priority-inheritance boost.
+    // INV-C2 (M2 follow-up #545 SILENT): queue lock first, then the
+    // IRQ-atomic publish inside it.  Linking before the BLOCKED transition
+    // closes the pop-vs-link lost-wakeup window: dequeue_ready is lock-free
+    // (ledger S5), so no scheduler lock nests inside q.lock_.
+    sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
     {
-        sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
-
+        arch::IrqGuard irq_guard{};
         task.blocked_on_queue = &q;
         TaskControlBlock **pp = &q.blocked_senders_head;
         while (*pp && (*pp)->priority >= task.priority)
@@ -806,14 +1049,17 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
         if (!task.blocked_next)
             q.blocked_senders_tail = &task;
 
+        task.state = TaskState::BLOCKED;
+        kernel::Scheduler::dequeue_ready(task);
+
         // Priority inheritance — boost owner when higher-priority sender
         // blocks. FIX(sched-race): the read-modify-write of q.owner->priority
-        // and the move_priority() re-index must be atomic against the timer
-        // ISR's deadline demote / sporadic priority changes.  q.lock_ is a
-        // plain spinlock (does not mask IRQs); IrqGuard excludes the ISR so
-        // old/new effective_priority snapshots stay consistent.
+        // and the move_priority() re-index stay atomic against the timer
+        // ISR's deadline demote / sporadic priority changes (same IrqGuard
+        // as the publish above).  q.lock_ is a plain spinlock (does not
+        // mask IRQs); IrqGuard excludes the ISR so old/new
+        // effective_priority snapshots stay consistent.
         if (q.owner && task.priority > q.owner->priority) {
-            arch::IrqGuard irq_guard{};
             // G2: q.owner is magic-guarded live here — bind a reference
             // (docs/irqguard-ledger.md §G2-A).  move_priority MUST stay
             // between the old/new effective_priority snapshots.
@@ -829,6 +1075,11 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
             if (old_prio != new_prio && owner.in_ready_queue_)
                 Scheduler::move_priority(owner, old_prio, new_prio);
         }
+        // F1 (#545, INV-4b): release the queue lock while still under the
+        // caller's IrqGuard, so BLOCKED-marking and unlock are one atomic,
+        // IF=0 step — a tick cannot preempt between them and strand the
+        // lock with the task descheduled (no INV-C1 check on that path).
+        guard.release();
     }
 
     return true;
@@ -913,6 +1164,48 @@ void IPC::wake_reply_waiters_of(TaskControlBlock &dead) noexcept {
         w->remaining_ticks = w->period_ticks;
     }
 }
+
+uint64_t IPC::ipc_wake_gate_missed_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_ipc_wake_gate_missed, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t IPC::ipc_block_with_pending_inbox_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_ipc_block_with_pending_inbox, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t IPC::ipc_probe_hit_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_ipc_probe_hit, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t IPC::ipc_probe_contended_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_ipc_probe_contended, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+#if defined(CONFIG_DEBUG)
+void IPC::ipc_probe_hit_mark() noexcept {
+    __atomic_fetch_add(&g_ipc_probe_hit, 1, __ATOMIC_RELAXED);
+}
+
+void IPC::ipc_probe_contended_mark() noexcept {
+    __atomic_fetch_add(&g_ipc_probe_contended, 1, __ATOMIC_RELAXED);
+}
+#endif
 
 /// @brief Roll back a block_sender() mutation when IPC::send() is called with
 ///        interrupts disabled and the deferred switch can never apply.

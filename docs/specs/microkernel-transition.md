@@ -332,9 +332,18 @@ enforced-priority rule above applies to every SDF row.
   when the receiver is blocked in receive and runnable on this core, the kernel
   switches to it inside the syscall, without waiting for a tick. No
   synchronous-SEND switch (deferred to a follow-up only with new evidence).
-- Per-hop bound and end-to-end overhead target: values frozen post-M0 against
-  the F17 baseline (Q3 numeric half open; TCG-relative only until HW numbers
-  exist); the measured record lives in `docs/specs/ipc-baseline.md` §4.
+- Per-hop bound and end-to-end overhead target (Q3 numbers frozen post-M0,
+  TCG-debug record; HW re-ratification required per §7.4 before any
+  certification claim): M0 (QE, #570, `docs/specs/ipc-baseline.md` §4)
+  measured slope_ticks_per_hop_x100 = 100 (exactly 1.00 tick/hop,
+  INV-MK-5 limit directly visible; p50 = p99 = pmax per depth, TCG debug).
+  Frozen: `per_hop_bound = ceil(3 × p99_hop) = 3 ticks` (3 ms at 1 kHz);
+  `end_to_end_overhead(depth) = depth × per_hop_bound + C_kernel`,
+  `C_kernel = 0` (hop=0 intercept of the M0 slope fit).
+  Structural gate (no measurement needed): a direct-switched M3 hop must
+  satisfy `slope_ticks_per_hop(M3) < 1.0` — reaching one full tick falsifies
+  "no tick wait". Split-core numbers excluded (unavailable single-CPU gate,
+  Q11; #525 owns the multi-hart record).
 
 ## 6. Preemption, IRQ and lock discipline (#545, #546)
 
@@ -850,7 +859,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 |---|---|
 | Q1 | DECIDED (owner, #512): transitive SchedContext donation, depth bound 4; enforced SDF priority rule as M5–M12 interim gate (§5.5) |
 | Q2 | DECIDED (owner, #512): generation-tagged reply id (kernel-held one-shot token); kernel stamps sender_id on the Call path; no-delegation note in §5.2; reply objects deferred until a protocol needs handoff |
-| Q3 | DECIDED scope (owner, #512): direct switch on Call + REPLY_RECV only (no synchronous-SEND switch); per-hop and end-to-end numeric targets frozen post-M0 against the F17 baseline |
+| Q3 | DECIDED scope + frozen numbers (owner, #512; M0 #570 landed): direct switch on Call + REPLY_RECV only; per_hop_bound = 3 ticks, end-to-end = depth × 3 ticks + 0 (TCG-debug, HW re-ratification per §7.4); structural gate slope_ticks_per_hop(M3) < 1.0. See §5.6 |
 | Q4 | DECIDED (owner, #512): latch synchronous at terminate funnel (all death causes); supervisor-observable ≤ 2 ticks given supervisor runnable at highest priority (see §9.1) |
 | Q5 | DECIDED mechanism (owner, #512): per-server SDF-declared RPC bounds, values set post-M0 (TCG-relative, ≥3× headroom); uniform 5000-tick guard stays as interim ceiling; per-operation-class refinement deferred to #574 (v1.1.0) |
 | Q6 | DECIDED closed list (owner, #512): byte-identity + tracker-0 + zero fallback hits, PLUS fault-injection parity, restart-in-flight proven pre-flip, performance ceiling (M3 budget × depth), soak + concurrency (3 consecutive greens). See §12 |

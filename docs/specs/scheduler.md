@@ -74,6 +74,8 @@ All "[IMPLEMENTED]" markers are code-verified in the current tree.
 | INV-2 | Single deferred-switch slot; exactly one writer (`switch_to_task`), exactly one applier (ISR epilogue) | binding |
 | INV-3 | ISR epilogue applies the switch gated on nesting depth ≤ 2 | binding |
 | INV-4 | Runnable set derived from `state`; ready queue is a **cache, not authority**. `next_task()` = `peek_highest()` + commit-dequeue | [IMPLEMENTED] |
+| INV-4a | `reschedule()` never returns to a still-BLOCKED caller: a BLOCKED caller hlt-waits (timer wakes every tick) until dispatched instead of running on while BLOCKED+dequeued (F1 #545) | [IMPLEMENTED] |
+| INV-4b | A task with `state == BLOCKED` takes **no spinlock**.  The dequeue + BLOCKED marking + (where needed) unlock happen as one atomic IF=0 step; loops gate lock-taking paths on `state != BLOCKED` (F1 #545) | [IMPLEMENTED] |
 | INV-5 | State-transition coherence: leaving runnable states ⇒ dequeue. `send_sync` is the historical exception (BLOCKED-in-runq, healed by the peek loop) | [PARTIALLY CHANGED] — see §5 |
 | INV-6 | Every priority change must re-index the ready queue via `move_priority()` | [IMPLEMENTED] |
 | INV-7 | Reaper/termination invariants (a-f): full unlink from RQ / AllTasks / DeadlineList / id_table / blocked_senders / current before free | binding |
@@ -93,6 +95,48 @@ return idle_task_;
 ```
 Peek is non-destructive; stale-state heads are drained, never orphaned.  The
 historical O(n) lazy-rebuild is dead code (removed).
+
+### INV-4a — reschedule() park contract (F1 #545) [IMPLEMENTED]
+
+`reschedule()` only arms the deferred switch (INV-4) and historically
+returned immediately — a caller that marked itself BLOCKED kept executing
+while BLOCKED+dequeued until the tick switched it.  Any lock taken in that
+zombie window stranded permanently when the tick-tail direct switch (which
+has no INV-C1 check) preempted mid-critical-section.  The park closes the
+window: when the caller is BLOCKED and the park gate holds, `reschedule()`
+hlt-waits (every tick wakes the hlt) until the caller is dispatched.
+
+Park gate (all must hold; otherwise status-quo-ante arm-only return):
+`CONFIG_RESCHED_PARK_ON_BLOCKED==1`, `CONFIG_TICK_HZ!=0`,
+`irq_guard_depth_own()==0`, no held tracked spinlock, not a hardware ISR
+(`isr_nesting==0` or in syscall-trap level), IRQ entitlement (entry IF==1
+or trap level), current valid + BLOCKED + non-idle + multi-task guest,
+not the test harness (plus RSP-inside-TCB-stack impersonation guard).
+
+Caller contract: C1 RUNNING/READY callers return immediately (zero
+behavioral change); C2 BLOCKED+gated callers return only when no longer
+BLOCKED; C3 BLOCKED+denied callers get the old arm-only return; C4 IRQ
+state at return == entry, no scheduler_lock_, no allocation;
+C5 single-task/null/no-tick/idle/harness never park; C6 the arm and
+dispatch steps are untouched.  The post-publish rechecks in
+`send_sync[_bounded]` and `sys_receive`/`recv_clamped` run as try-once
+probes INSIDE the publish `IrqGuard`, before the BLOCKED marking
+(a post-marking take strands on tick-tail preemption with no INV-C1
+warning, since the check lives only on the reschedule path).
+
+### INV-4b — no lock while BLOCKED (F1 #545) [IMPLEMENTED]
+
+A task with `state == BLOCKED` takes **no spinlock**.  The dequeue +
+BLOCKED marking + (where needed) unlock happen as one atomic IF=0 step;
+every loop that can observe BLOCKED gates its lock-taking paths on
+`state != BLOCKED` and falls through to `reschedule()` + `hlt`-wait.
+`block_sender` releases under the caller's IF=0 guard via
+`ParkLockGuard::release()`.  A `Contended` try-once probe proceeds to
+block (the holder's wake-gate read observes the publish, so no retry
+is needed and no IF=0 spin ever happens).
+
+F2 (follow-up, not fixed here): the tick-tail direct switch still has no
+INV-C1 check — diagnosis-only counter proposed, decision logic unchanged.
 
 ### INV-6 — `move_priority()` call sites [IMPLEMENTED]
 

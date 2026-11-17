@@ -1,1657 +1,1219 @@
-diff --git a/docs/irqguard-ledger.md b/docs/irqguard-ledger.md
-index 90ffba71f..9d9c24d44 100644
---- a/docs/irqguard-ledger.md
-+++ b/docs/irqguard-ledger.md
-@@ -142,3 +142,14 @@ reference-migratable only when the caller *provably holds a live object*
- `register_task(TaskControlBlock &)`, `unregister_task`-adjacent TCB APIs,
- `IPC::block_sender(MessageQueue &, TaskControlBlock &)`,
- `IPC::wake_sender(MessageQueue &, TaskControlBlock &)`.
-+
-+## Lock order and acquisition ranks (#546, M2)
-+
-+Full contract: `docs/specs/irq-preemption-contract.md` (normative instance
-+of the microkernel plan §6.2). Order outer → inner: `Sched(1)` → `Queue(2)`
-+→ `Leaf(3)`; Unranked locks are invisible to the order check and are
-+re-audited by M8. Rank table: `scheduler_lock_` (Sched),
-+`MessageQueue::lock_` + `sync::Queue::lock_` (Queue), `DeathNotify::s_lock_`
-++ `g_iopb_lock` (Leaf). Enforcement is report-only per (outer,inner) pair
-+(`sync/spinlock_order.*`); the reschedule-entry INV-C1 assertion is
-+warn-by-default (`CONFIG_IRQ_CONTRACT_ASSERT`), panic only at level 2.
-diff --git a/docs/specs/irq-preemption-contract.md b/docs/specs/irq-preemption-contract.md
-new file mode 100644
-index 000000000..11ac25643
---- /dev/null
-+++ b/docs/specs/irq-preemption-contract.md
-@@ -0,0 +1,112 @@
-+# Preemption, IRQ and Lock Contract (#546, implements §6.2 of the microkernel plan)
-+
-+**Status:** normative for M2. Every claim cites `path:line`; line numbers are advisory.
-+
-+## 1. Trap-entry interrupt state (per arch, verified)
-+
-+| Arch | Entry contract | Evidence |
-+|---|---|---|
-+| x86_64 | SYSCALL is `int $0x80` through interrupt gate `0xEE` ⇒ **IF=0 on entry**. No handler may depend on entry-IF except as stated below. | `arch/x86_64/hal/idt.cpp:69-71` |
-+| aarch64 | Exception vectors mask interrupts on entry (`msr daifset` in the fault/park paths; IRQ entry runs masked). No handler may assume DAIF clear. | `arch/aarch64/vectors.S:112,241` |
-+| riscv64 | First trap instruction is `csrci sstatus, 2` ⇒ **SIE=0 on entry**, before any state change. | `arch/riscv64/syscall_entry.S:62,71` |
-+
-+Rule: no path depends on entry-IF/DAIF/SIE except by declaring it. Interrupts are re-enabled only (a) by `arch::IrqGuard` scoping, or (b) by an explicit `arch::sti()` inside a declared wait loop that owns the IRQ state (syscall/trap entry with no locks held — #513).
-+
-+## 2. Lock order and acquisition ranks
-+
-+Outer → inner: `Sched(1)` → `Queue(2)` → `Leaf(3)`. Unranked locks are invisible to the order check (documented per site; M8 re-audits).
-+
-+| Lock | Rank | Declared at |
-+|---|---|---|
-+| `scheduler_lock_` | Sched | `task/scheduler.cpp:189` |
-+| `MessageQueue::lock_` | Queue | `ipc/ipc.cpp:85` (`MessageQueue::init`) |
-+| `sync::Queue::lock_` | Queue | `sync/queue.cpp:35` (`Queue::init`) |
-+| `DeathNotify::s_lock_` | Leaf | `ipc/death_notify.cpp:36` |
-+| `g_iopb_lock` | Leaf | `arch/x86_64/hal/iopb.cpp:53` (order already documented there) |
-+| `wake_mailbox_lock_[]`, `zombie_lock_`, pager/registry locks | Unranked | Deliberately unchecked in M2; re-audited by M8 x86 IRQ hardening |
-+
-+Enforcement: `sync::spinlock_order` records per-CPU acquire/release (owner-id matched, report-only, once per (outer,inner) pair). DEBUG-only stack; always-on depth counter (`spinlock_held_by_current_count`). Takes of `scheduler_lock_` itself are tracked by the separate per-CPU depth counter (`scheduler_lock_depth_own`), not the order stack, so Sched→* nesting is unchecked in M2 — the enforced invariant is the stronger one (no spinlock of any kind across `reschedule()` / BLOCKED), which INV-C1 asserts.
-+
-+## 3. INV-C1: no spinlock across a blocking point
-+
-+At every `Scheduler::reschedule()` entry (DEBUG, `CONFIG_IRQ_CONTRACT_ASSERT`):
-+no order-table spinlock may be held by the calling context
-+(`scheduler_tick.cpp`, INV-C1). Takes of `scheduler_lock_` itself are
-+tracked by the separate per-CPU depth counter with their own
-+no-reentrant-take ENSUREs (issue #369 T2b) — the on_tick adopted-guard
-+path legitimately calls `reschedule()` with it held. Level: warn +
-+dmesg by default (`SCHED+15`), `panic` only with
-+`CONFIG_IRQ_CONTRACT_ASSERT=2`. A preempted same-CPU holder is legal and
-+does not fire (owner-id, not per-CPU count).
-+
-+Consequence: every BLOCKED transition happens lock-free (dequeue first, then
-+state, then reschedule — see §4), and every queue acquire that can sleep
-+goes through `ParkLockGuard` (M2), which parks only when INV-L1 holds.
-+
-+## 4. INV-L1/L2/L3: bounded spin, then timed park
-+
-+`ParkLockGuard` (sync/park_lock.{hpp,cpp}): try → bounded pause-spin
-+(`CONFIG_LOCK_SPIN_ROUNDS=1024`, tick-watchdog checkpoint every 256) → timed
-+park (≤ `CONFIG_LOCK_PARK_MAX_ATTEMPTS=8` × `CONFIG_LOCK_PARK_TICKS=2`) →
-+pure-spin fallback. Park precondition (all must hold): park enabled, no ISR
-+nesting, no live `IrqGuard`, no held spinlock, current task live, non-idle,
-+RUNNING. The park wake is the existing level-triggered sleep-expiry scan
-+(no waiter registry, no unlock-side hooks — INV-L3). Resume restores
-+RUNNING after dequeue (INV-L2). A dead timer degrades to pure spin, never
-+to a wedge (INV-W1).
-+
-+Converted sites (all task-context-verified, no ISR caller exists — see §6):
-+`MessageQueue::{push,pop,pop_clamped,pop_from_sender,pop_from_sender_clamped,
-+has_from,is_full_locked}`, `block_sender` list section, `wake_sender`
-+pop + PI-restore sections, endpoint `bound_receiver` read. Explicitly NOT
-+converted: `unblock_sender_rollback` (fail-fast path must stay instant;
-+parking there would turn a bounded rollback into a multi-tick sleep).
-+
-+## 5. Tick watchdog (TSC domain)
-+
-+`task/tick_watchdog.{hpp,cpp}`: fires iff raw TSC advances past
-+`grace = CONFIG_TICK_WATCHDOG_GRACE_TICKS (500)` timer-ticks while the tick
-+count `Timer::ticks()` is frozen and the CPU is out of idle. Independent
-+clock domain (`raw_counter`, never snapshot-rewound). Disabled when either
-+frequency is 0, before the first tick, and while the test harness owns the
-+clock. Fire = dmesg ERROR (TIMING+8) + serial evidence + one-shot latch +
-+`fire_count`; action 2 (`panic`) exists for the Q12-A fail-safe hook but M2
-+never wires it. `note_tick()` at the end of the BSP `on_tick` body;
-+`checkpoint()` on park spins/resumes and syscall exits; `idle_checkpoint()`
-+resyncs only (idle-current implies no stranded work).
-+
-+Grace derivation for tuning: `grace = max(10 × largest measured IRQ-off
-+WCET tick-equivalent, 500 ticks)`. No measured WCET exists in-tree yet;
-+500 is the conservative default until `test_wcet_scheduler` produces one.
-+
-+## 6. Guard-site ISR-reachability audit (M2 evidence)
-+
-+All 12 converted sites live in `ipc.cpp` task-context paths (syscall
-+handlers `0x80`, `vfsd`/`iocd`/`ramdiskd`/`cap_broker`/`timer-srv`/`driver_pds`
-+task entries, reaper/test teardown). Verified absent: no `IPC::send`,
-+`MessageQueue`, `wake_sender` or `block_sender` use in `irq_delivery.cpp`
-+(own slot locks only), any `arch/*/hal/*isr*`, `interrupt_controller.cpp`
-+(all three arches), or driver ISR bodies. `Keyboard::try_forward_to_iocd`
-+(`arch/x86_64/keyboard.cpp:158-174`) is the fenced precedent: explicit
-+`isr_nesting_own()!=0` refusal + NONBLOCK send, so ISR keystrokes never
-+touch a queue lock. `virtio_net.cpp:464` uses the separate IRQ-disabling
-+`IrqSpinLockGuard` on a device lock (not converted, pure spin preserved).
-+
-+## 7. Spin/wait-loop audit (all known task-context waits)
-+
-+Convention per loop: `timer-driven/sti` (owns IF=0 entry, re-enables),
-+`bounded-poll` (trip cap, no deschedule), or `park` (reschedule-based).
-+The 13 syscall-adjacent sites plus sync-primitive, daemon, driver and
-+kernel-init loops are classified in the F8/M2 work notes on #545/#546;
-+any loop found with IF=0, no bound and no sti is a defect and gets its
-+own issue (not fixed inside M2 except the 12 converted sites).
-+
-+## 8. WCET bounds for IRQ-off regions
-+
-+No measured in-tree WCET exists yet (no unmeasured number is normative).
-+Recording method when `test_wcet_scheduler` lands: max cycles per region
-+→ ticks at `raw_counter_freq_hz` → ratchet `CONFIG_IRQ_STORM_LIMIT`,
-+`CONFIG_LOCK_SPIN_ROUNDS` and `CONFIG_TICK_WATCHDOG_GRACE_TICKS` against
-+it with ≥3× headroom. Until then the defaults above stand (conservative
-+by construction: park and watchdog both degrade to status-quo spinning,
-+never to new failure modes).
-diff --git a/docs/specs/microkernel-transition.md b/docs/specs/microkernel-transition.md
-index f4e95b5b6..731d64f9e 100644
---- a/docs/specs/microkernel-transition.md
-+++ b/docs/specs/microkernel-transition.md
-@@ -365,6 +365,18 @@ enforced-priority rule above applies to every SDF row.
- 7. Lock order (outer → inner): `scheduler_lock_` → endpoint / queue lock →
-    leaf locks. DEBUG builds SHALL record and check acquisition order.
- 
-+Landed for M2 (no semantic change to the contract above, code pointers
-+only): `ParkLockGuard` bounded-spin→timed-park (`sync/park_lock.*`),
-+lock ranks + per-CPU order bookkeeping (`sync/spinlock_order.*`,
-+ranks `Sched(1) > Queue(2) > Leaf(3)`), reschedule-entry INV-C1 check
-+(`scheduler_tick.cpp`), TSC tick watchdog (`task/tick_watchdog.*`,
-+TIMING+8), per-CPU `IrqGuard` depth + `irq_guard_depth_own()`
-+(`arch/hal/irq_guard.hpp`, `core/global_state.cpp`), 12-site
-+ISR-reachability audit (all task-context; `Keyboard::try_forward_to_iocd`
-+as the fenced precedent). Full instance:
-+`docs/specs/irq-preemption-contract.md`; ledger:
-+`docs/irqguard-ledger.md` §"Lock order and acquisition ranks".
-+
- ## 7. Static architecture, resources and budgets
- 
- ### 7.1 System description
 diff --git a/src/kernel/arch/hal/irq_guard.hpp b/src/kernel/arch/hal/irq_guard.hpp
-index 85fc0b050..379e42309 100644
+index 379e42309..5786eb975 100644
 --- a/src/kernel/arch/hal/irq_guard.hpp
 +++ b/src/kernel/arch/hal/irq_guard.hpp
-@@ -23,9 +23,26 @@
- /// destruction.
+@@ -34,6 +34,47 @@ namespace arch {
+ // test boundary or quiesce.
+ extern "C" uint64_t irq_guard_depth[CONFIG_MAX_CPUS];
  
- #include <kernel/arch/hal/io.hpp>
-+#include <kernel/arch/cpu_context.hpp>
- 
- namespace arch {
- 
-+// M2 (issues #545/#546): per-CPU IrqGuard nesting depth, defined in
-+// core/global_state.cpp next to scheduler_lock_depth.  Always maintained
-+// (not DEBUG-gated): the lock-park predicate gates on it in release
-+// builds too.  Transitory by construction — an IrqGuard never spans a
-+// test boundary or quiesce.
-+extern "C" uint64_t irq_guard_depth[CONFIG_MAX_CPUS];
++// M2 follow-up (#545 FIRE): per-CPU IrqGuard *owner* attribution + a
++// 32-entry transition ring per CPU (evidence only, no behaviour change).
++// Depth alone cannot distinguish an own scope from a foreign/leaked one:
++// the owner is stored on the 0->1 transition (ISR sentinel when taken in
++// ISR context, otherwise the current task pointer) and cleared on the
++// 1->0 transition.  Owner 0 means unknown/boot (fail-closed: deny park).
++extern "C" uint64_t irq_guard_owner[CONFIG_MAX_CPUS];
++extern "C" uint64_t irq_guard_trace_idx[CONFIG_MAX_CPUS];
++extern "C" uint64_t irq_guard_trace_depth[CONFIG_MAX_CPUS][32];
++extern "C" uint64_t irq_guard_trace_owner[CONFIG_MAX_CPUS][32];
++extern "C" uint64_t irq_guard_trace_cur[CONFIG_MAX_CPUS][32];
++extern "C" uint64_t irq_guard_trace_site[CONFIG_MAX_CPUS][32];
 +
-+/// @brief This CPU's IrqGuard nesting depth.  Returns 0 iff no IrqGuard
-+///        scope is live on this CPU (interrupts may or may not be enabled:
-+///
-+/// depth tracks scoping, not the IF bit — query arch::interrupts_enabled()
-+/// for the bit).
-+inline uint64_t irq_guard_depth_own() noexcept {
-+    return irq_guard_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
++/// @brief Syscall-trap marker (M2 follow-up #545 FIRE): set for the
++///        duration of Syscall::handle so the lock-park predicate can tell a
++///        syscall trap (task context, may park) from a hardware ISR (must
++///        never park).  All three arches funnel through the shared C++
++///        syscall_handler, so one guard covers x86_64/aarch64/riscv64.
++///        ALSO records the ISR nesting depth at trap entry: a nested
++///        hardware ISR inside the trap raises nesting above the entry
++///        value, which closes the exemption (nested ISRs must never park).
++///        Non-reentrant by construction (a trap never traps again on the
++///        same hart; a discarded trap stack cannot dtor — the next trap
++///        entry overwrites both slots, and a stale set is inert: task
++///        context runs at nesting 0 which never equals a trap entry ≥ 1).
++extern "C" uint64_t in_syscall_trap[CONFIG_MAX_CPUS];
++extern "C" uint64_t syscall_trap_nesting[CONFIG_MAX_CPUS];
++
++/// @brief True while the calling context is a syscall trap at its own
++///        nesting level (nested hardware ISRs excluded by the entry-depth
++///        match).  False in task context, in real ISRs, and under stale
++///        nesting counts (rv64).
++inline bool in_syscall_trap_level() noexcept {
++    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++    return (in_syscall_trap[cpu] != 0) &&
++           (kernel::isr_nesting_own() == syscall_trap_nesting[cpu]);
++}
++
++/// @brief 32-entry per-CPU transition ring length (power of two: idx & 31).
++inline constexpr uint64_t kIrqGuardTraceEntries = 32;
++
+ /// @brief This CPU's IrqGuard nesting depth.  Returns 0 iff no IrqGuard
+ ///        scope is live on this CPU (interrupts may or may not be enabled:
+ ///
+@@ -43,6 +84,29 @@ inline uint64_t irq_guard_depth_own() noexcept {
+     return irq_guard_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
+ }
+ 
++/// @brief This CPU's IrqGuard owner token: the task that performed the
++///        outermost take (0 when no scope is live).  Evidence only; the
++///        predicate compares it against the calling task to detect foreign
++///        (leaked or cross-task) scopes.
++inline uint64_t irq_guard_owner_own() noexcept {
++    return irq_guard_owner[arch::cpu_index() % CONFIG_MAX_CPUS];
++}
++
++/// @brief Owner token for the calling context: the current task pointer
++///        (or 0 when there is none, e.g. early boot).  Deliberately
++///        independent of isr_nesting/IF: the token is recorded at take time
++///        and compared at check time, and IF always flips in between (that
++///        is what a guard *does*), so any IF- or nesting-dependent token
++///        mismatches itself across the take/check pair and fabricates
++///        foreign owners (observed on rv64: take at IF=1 recorded the task,
++///        check at IF=0 computed the ISR sentinel).  ISR takes attribute to
++///        the interrupted task — harmless, as ISR scopes always unwind
++///        before the ISR returns (balanced, never observed by the
++///        predicate); the IsrContext arm guards real ISRs separately.
++inline uint64_t irq_guard_owner_token() noexcept {
++    return reinterpret_cast<uint64_t>(kernel::current_cpu().current);
 +}
 +
  /// @brief RAII guard that disables interrupts on construction and restores
  ///        the previous interrupt state on destruction.
  /// @note Use this to protect short critical sections from being interrupted.
-@@ -33,11 +50,13 @@ class [[nodiscard]] IrqGuard {
+@@ -50,13 +114,44 @@ class [[nodiscard]] IrqGuard {
    public:
      /// @brief Disable interrupts, saving the previous enabled state.
      IrqGuard() noexcept : irq_was_(interrupts_enabled()) {
-+        ++irq_guard_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
+-        ++irq_guard_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
++        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++        if (irq_guard_depth[cpu] == 0)
++            irq_guard_owner[cpu] = irq_guard_owner_token();
++        ++irq_guard_depth[cpu];
++        // Evidence ring (stores only; IF discipline unchanged).
++        const uint64_t slot = irq_guard_trace_idx[cpu]++ & 31U;
++        irq_guard_trace_depth[cpu][slot] = irq_guard_depth[cpu];
++        irq_guard_trace_owner[cpu][slot] = irq_guard_owner[cpu];
++        irq_guard_trace_cur[cpu][slot] =
++            reinterpret_cast<uint64_t>(kernel::current_cpu().current);
++        irq_guard_trace_site[cpu][slot] =
++            reinterpret_cast<uint64_t>(__builtin_return_address(0));
          cli();
      }
  
      /// @brief Restore the interrupt state that was saved at construction.
++    /// @note Saturating: a dtor observing depth 0 means its matching take
++    ///        was dropped by ghost containment (1b seam) or an abandoned
++    ///        stack; wrapping to UINT64_MAX would permanently deny every
++    ///        park predicate, so the count holds at 0 instead.  Monotonic
++    ///        by construction otherwise — balanced scopes never touch the
++    ///        floor, so a saturation always pairs with a ghost event that
++    ///        the watchdog/counters already diagnose.
      ~IrqGuard() noexcept {
-+        --irq_guard_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
+-        --irq_guard_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
++        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++        if (irq_guard_depth[cpu] <= 1)
++            irq_guard_owner[cpu] = 0;
++        // Evidence ring (stores only; IF discipline unchanged).
++        const uint64_t slot = irq_guard_trace_idx[cpu]++ & 31U;
++        irq_guard_trace_depth[cpu][slot] =
++            irq_guard_depth[cpu] != 0 ? irq_guard_depth[cpu] - 1 : 0;
++        irq_guard_trace_owner[cpu][slot] = irq_guard_owner[cpu];
++        irq_guard_trace_cur[cpu][slot] =
++            reinterpret_cast<uint64_t>(kernel::current_cpu().current);
++        irq_guard_trace_site[cpu][slot] =
++            reinterpret_cast<uint64_t>(__builtin_return_address(0));
++        if (irq_guard_depth[cpu] != 0)
++            --irq_guard_depth[cpu];
          if (irq_was_)
              sti();
      }
-diff --git a/src/kernel/arch/x86_64/hal/iopb.cpp b/src/kernel/arch/x86_64/hal/iopb.cpp
-index f8c39d165..8125871b7 100644
---- a/src/kernel/arch/x86_64/hal/iopb.cpp
-+++ b/src/kernel/arch/x86_64/hal/iopb.cpp
-@@ -49,8 +49,8 @@ static uint32_t g_iopb_claimed = 0;
- static const kernel::TaskControlBlock *g_iopb_owner = nullptr;
+@@ -71,4 +166,29 @@ class [[nodiscard]] IrqGuard {
+     bool irq_was_;
+ };
  
- /// @brief Serializes pool/owner/TSS-bitmap state.  Lock order:
--/// scheduler_lock_ -> g_iopb_lock (never the reverse).
--static kernel::sync::SpinLock g_iopb_lock{};
-+/// scheduler_lock_ -> g_iopb_lock (never the reverse).  M2 rank: Leaf.
-+static kernel::sync::SpinLock g_iopb_lock{kernel::sync::LockRank::Leaf};
- 
- // --- issue #8: capability-gated grant ledger ---
- // Records which granted port range was installed under which capability so a
++/// @brief RAII syscall-trap marker (M2 follow-up #545 FIRE).  Marks the
++///        calling CPU as inside a syscall trap at the current ISR nesting
++///        depth; the lock-park predicate uses it to exempt genuine trap
++///        context from the IsrContext deny (a trap runs on the calling
++///        task's stack with a task to deschedule, and the park path's own
++///        sti/hlt owns the IRQ state exactly like sys_receive's wait loop).
++///        Instantiated once per syscall_handler invocation (all arches).
++class [[nodiscard]] SyscallTrapScope {
++  public:
++    SyscallTrapScope() noexcept {
++        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++        in_syscall_trap[cpu] = 1;
++        syscall_trap_nesting[cpu] = kernel::isr_nesting_own();
++    }
++    ~SyscallTrapScope() noexcept {
++        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++        in_syscall_trap[cpu] = 0;
++    }
++
++    SyscallTrapScope(const SyscallTrapScope &) = delete;
++    SyscallTrapScope &operator=(const SyscallTrapScope &) = delete;
++    SyscallTrapScope(SyscallTrapScope &&) = delete;
++    SyscallTrapScope &operator=(SyscallTrapScope &&) = delete;
++};
++
+ } // namespace arch
 diff --git a/src/kernel/core/global_state.cpp b/src/kernel/core/global_state.cpp
-index e226a0bcf..c219965ac 100644
+index c219965ac..01960525e 100644
 --- a/src/kernel/core/global_state.cpp
 +++ b/src/kernel/core/global_state.cpp
-@@ -85,6 +85,13 @@ uint64_t scheduler_force_apply[CONFIG_MAX_CPUS] = {};
- // counts takes by that CPU not yet released.  Transitory by
- // construction — never held across test boundaries or quiesce.
- uint64_t scheduler_lock_depth[CONFIG_MAX_CPUS] = {};
-+// M1 follow-up / M2 (issues #545/#546): per-CPU arch::IrqGuard nesting
-+// depth (see arch/hal/irq_guard.hpp).  Zero-initialised; slot [cpu]
-+// counts live IrqGuard scopes on that CPU.  Always maintained (not
-+// DEBUG-gated): the lock-park predicate and the reschedule-entry
-+// contract check read it in release builds too.  Transitory by
-+// construction, same reasoning as scheduler_lock_depth.
-+uint64_t irq_guard_depth[CONFIG_MAX_CPUS] = {};
+@@ -26,6 +26,7 @@
+ 
+ #include <kernel/core/global_state.hpp>
+ #include <kernel/arch/timer.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
+ #include <kernel/arch/gdt.hpp>
+ #if defined(CONFIG_ARCH_AARCH64)
+ #include <kernel/arch/aarch64/hal/fpu.hpp>
+@@ -92,6 +93,20 @@ uint64_t scheduler_lock_depth[CONFIG_MAX_CPUS] = {};
+ // contract check read it in release builds too.  Transitory by
+ // construction, same reasoning as scheduler_lock_depth.
+ uint64_t irq_guard_depth[CONFIG_MAX_CPUS] = {};
++// M2 follow-up (#545 FIRE): per-CPU IrqGuard owner attribution + 32-entry
++// transition ring (evidence only).  Owner stored on the 0->1 transition,
++// cleared on the 1->0 transition; ring records {depth, owner, cur, site}.
++uint64_t irq_guard_owner[CONFIG_MAX_CPUS] = {};
++uint64_t irq_guard_trace_idx[CONFIG_MAX_CPUS] = {};
++uint64_t irq_guard_trace_depth[CONFIG_MAX_CPUS][32] = {};
++uint64_t irq_guard_trace_owner[CONFIG_MAX_CPUS][32] = {};
++uint64_t irq_guard_trace_cur[CONFIG_MAX_CPUS][32] = {};
++uint64_t irq_guard_trace_site[CONFIG_MAX_CPUS][32] = {};
++// M2 follow-up (#545 FIRE): syscall-trap marker + trap-entry nesting
++// (see arch/hal/irq_guard.hpp).  Zero-initialised; slot [cpu] is nonzero
++// only while that CPU executes inside Syscall::handle.
++uint64_t in_syscall_trap[CONFIG_MAX_CPUS] = {};
++uint64_t syscall_trap_nesting[CONFIG_MAX_CPUS] = {};
  // Issue #25 (Phase A): on x86_64, isr_nesting_depth / irq_entry_tsc live
  // in per_cpu[0] and are accessed by isr_stubs.asm via gs:0x20 / gs:0x28.
  // Other architectures keep plain definitions here until their per-CPU
-diff --git a/src/kernel/ipc/death_notify.cpp b/src/kernel/ipc/death_notify.cpp
-index 43fb6adfb..2fc53a4e8 100644
---- a/src/kernel/ipc/death_notify.cpp
-+++ b/src/kernel/ipc/death_notify.cpp
-@@ -33,7 +33,7 @@
- namespace kernel::ipc {
+@@ -322,6 +337,20 @@ bool try_set_fat32_partition(kernel::fat32::Fat32Partition *p) noexcept {
  
- DeathNotify::Slot DeathNotify::s_slots_[DeathNotify::kMaxWatches];
--sync::SpinLock DeathNotify::s_lock_{};
-+sync::SpinLock DeathNotify::s_lock_{sync::LockRank::Leaf};
+ // ---------------------------------------------------------------------------
  
- namespace {
++/// @brief M2 follow-up (#545 ghost containment): a depth-1 scope owned by
++///        neither the task in question nor nobody cannot belong to that
++///        task — its own take would own the slot or nest to depth 2 — so
++///        the scope is an orphan with no live frame behind it.  Used on
++///        both ends of the 1b travel seam (save + load) so a singleton
++///        ghost converges out of the system within one switch per task
++///        instead of shuttling between slots forever.  (Owners are always
++///        task pointers or 0 — ISR takes attribute to the interrupted task
++///        and always unwind before the epilogue — so no ISR-owned case
++///        needs exempting.)
++static bool is_foreign_singleton(uint64_t depth, uint64_t owner,
++                                 uint64_t own_token) noexcept {
++    return (depth == 1) && (owner != 0) && (owner != own_token);
++}
  
+ extern "C" void scheduler_on_context_switch() noexcept {
+ 
+@@ -365,10 +394,83 @@ extern "C" void scheduler_on_context_switch() noexcept {
+     }
+ #endif
+ 
++    // M2 follow-up (#545 Phase-1b): the IrqGuard depth travels with the
++    // task.  Save the outgoing task's live depth/owner into its slots and
++    // restore the incoming task's.  Epilogue-only (isr_nesting != 0):
++    // test harnesses call this function directly in task context to
++    // exercise the switch mechanics, and must not disturb the live count.
++    // Runs with IF=0 in the ISR epilogue on all three arches (single C
++    // seam: x86 isr_stubs.asm, aarch64 vectors.S, riscv64 syscall_entry.S
++    // all funnel through here).  A suspended scope resumes with its owner
++    // intact; an abandoned stack is reaped by the self-heal in
++    // validate_pending_switch.
++    auto *outgoing_task = kernel::Scheduler::current_task();
+     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC)
+ 
+         kernel::Scheduler::set_current_task(t);
+ 
++    // M2 follow-up (#545 Phase-1b + ghost containment): the IrqGuard depth
++    // travels with the task, minus orphaned singletons on both ends.
++    // Epilogue-only (isr_nesting observed with interrupts masked):
++    // test harnesses call this function directly in task context to
++    // exercise the switch mechanics and must not disturb the live count.
++    // The IF conjunct keeps a stale nesting balance (rv64 suite baseline)
++    // from arming the seam in task context — interrupt gates clear IF.
++    // Runs with IF=0 in the ISR epilogue on all three arches (single C
++    // seam: x86 isr_stubs.asm, aarch64 vectors.S, riscv64
++    // syscall_entry.S all funnel through here).
++    // SAVE: a single-level foreign scope (depth==1, owner is neither the
++    // outgoing task nor nobody/ISR) cannot belong to the outgoing task —
++    // its own take would own the slot or nest to depth 2 — so it is an
++    // orphan (observed shape: depth 1 owned by the idle task with no live
++    // frame behind it).  Drop it and clear the slots instead of saving;
++    // a suspended own scope (owner == outgoing) still travels untouched.
++    // LOAD: same rule for the incoming slots — a stale singleton ghost in
++    // another task's slots is zeroed instead of published (converges the
++    // whole system within one switch per task; the incoming task holds
++    // nothing of its own at depth==1-foreign by the same argument).
++    // An abandoned stack is reaped by the self-heal in
++    // validate_pending_switch; the saturated dtor (irq_guard.hpp) makes a
++    // scope resumed after its count was dropped fail-safe instead of
++    // wrapping to UINT64_MAX.
++    if (kernel::isr_nesting_own() != 0 && !arch::interrupts_enabled()) {
++        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++        const bool incoming_valid =
++            (t != nullptr) && (t->magic == kernel::TaskControlBlock::TCB_MAGIC);
++        const bool outgoing_valid =
++            (outgoing_task != nullptr) &&
++            (outgoing_task->magic == kernel::TaskControlBlock::TCB_MAGIC);
++        // Paired save+load only: a null outgoing (boot transitory) leaves
++        // the live count untouched instead of dropping it.
++        if (outgoing_valid && incoming_valid && outgoing_task != t) {
++            const uint64_t live_depth = irq_guard_depth[cpu];
++            const uint64_t live_owner = irq_guard_owner[cpu];
++            const uint64_t outgoing_token =
++                reinterpret_cast<uint64_t>(outgoing_task);
++            if (!is_foreign_singleton(live_depth, live_owner,
++                                      outgoing_token)) {
++                outgoing_task->irq_depth_save = live_depth;
++                outgoing_task->irq_owner_save = live_owner;
++            } else {
++                outgoing_task->irq_depth_save = 0;
++                outgoing_task->irq_owner_save = 0;
++            }
++            const uint64_t saved_depth = t->irq_depth_save;
++            const uint64_t saved_owner = t->irq_owner_save;
++            const uint64_t incoming_token = reinterpret_cast<uint64_t>(t);
++            if (!is_foreign_singleton(saved_depth, saved_owner,
++                                      incoming_token)) {
++                irq_guard_depth[cpu] = saved_depth;
++                irq_guard_owner[cpu] = saved_owner;
++            } else {
++                t->irq_depth_save = 0;
++                t->irq_owner_save = 0;
++                irq_guard_depth[cpu] = 0;
++                irq_guard_owner[cpu] = 0;
++            }
++        }
++    }
++
+     if (t && t->magic == kernel::TaskControlBlock::TCB_MAGIC) {
+ 
+         kernel::Scheduler::canary_check_in_scheduler_hooks(t, 0);
+@@ -672,6 +774,48 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
+         drop_arm(nullptr);
+         return 0;
+     }
++#if CONFIG_LOCK_PARK_SELFHEAL == 1
++    // M2 follow-up (#545 FIRE): drop orphaned IrqGuard depth whose owner
++    // is gone.  A suspended scope on a live task's stack resumes and
++    // releases itself — only a dead/gone owner is cleared (a recycled
++    // address is still orphaned: the new task never took the scope).
++    // Runs with IF=0 (epilogue); the walk is lock-free magic-checked
++    // iteration (wake_reply_waiters_of precedent).
++    {
++        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
++        if (irq_guard_depth[cpu] != 0) {
++            const uint64_t owner = irq_guard_owner[cpu];
++            bool owner_live = false;
++            kernel::TaskControlBlock *owner_task = nullptr;
++            if (!owner_live && owner != 0) {
++                kernel::Scheduler::TaskIter iter{};
++                for (auto *w = iter.next(); w != nullptr; w = iter.next()) {
++                    if (reinterpret_cast<uint64_t>(w) == owner &&
++                        w->state != kernel::TaskState::TERMINATED &&
++                        w->state != kernel::TaskState::REAPED) {
++                        owner_live = true;
++                        owner_task = w;
++                        break;
++                    }
++                }
++            }
++            // Idle-owned exception: the idle task never suspends a guard
++            // scope (ticks are masked under guards and idle never
++            // reschedules inside one), so idle-owned depth while another
++            // task runs is an orphaned misattribution, not a live
++            // suspended scope — clear it like a dead owner.
++            if (owner_live && owner_task != nullptr &&
++                kernel::Scheduler::is_idle_task(owner_task) &&
++                owner_task != kernel::Scheduler::current_task()) {
++                owner_live = false;
++            }
++            if (!owner_live) {
++                irq_guard_depth[cpu] = 0;
++                irq_guard_owner[cpu] = 0;
++            }
++        }
++    }
++#endif
+     uint64_t rsp =
+         __atomic_load_n(&Scheduler::SwSlots::load_rsp_from(), __ATOMIC_ACQUIRE);
+     uint64_t base = reinterpret_cast<uint64_t>(t->kernel_stack);
 diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
-index 0b2939117..38d044cdb 100644
+index 38d044cdb..c66bffc3d 100644
 --- a/src/kernel/ipc/ipc.cpp
 +++ b/src/kernel/ipc/ipc.cpp
-@@ -30,6 +30,7 @@
- #include <kernel/arch/io.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
- #include <kernel/sync/spinlock_guard.hpp>
-+#include <kernel/sync/park_lock.hpp>
- #include <assert.hpp>
+@@ -35,6 +35,15 @@
  
  namespace kernel {
-@@ -81,14 +82,23 @@ void MessageQueue::init() {
-     prio_bitmap = 0;
-     blocked_senders_head = nullptr;
-     blocked_senders_tail = nullptr;
-+    lock_.set_rank(sync::LockRank::Queue); // M2 §6.2: queue rank.
-     lock_.unlock(); // Ensure SpinLock is unlocked (constructor not called on
--                    // MemPool alloc)
-+                    // MemPool alloc).  Unpaired by design: note_release()
-+                    // treats an init-time unlock as a silent no-op.
-+}
+ 
++namespace {
++// M2 follow-up evidence (#545 SILENT, CONFIG_DEBUG only): lost-wakeup
++// window probes.  Stores only; no behaviour change.
++#if defined(CONFIG_DEBUG)
++uint64_t g_ipc_wake_gate_missed = 0;
++uint64_t g_ipc_block_with_pending_inbox = 0;
++#endif
++} // namespace
 +
-+/// @brief Locked fullness probe (M2: ParkLockGuard so a contended probe
-+///        parks instead of spinning behind a preempted holder).
-+bool MessageQueue::is_full_locked() {
-+    sync::ParkLockGuard guard(lock_, "mq:is_full_locked");
-+    return count >= IPC_MAX_QUEUE_MSG;
- }
- 
- /// @brief Insert a message at the tail of the queue.
- /// @return true on success, false if the queue is full.
- bool MessageQueue::push(const Message &msg) {
--    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    sync::ParkLockGuard guard(lock_, "mq:push");
-     if (is_full())
-         return false;
- 
-@@ -152,7 +162,7 @@ void MessageQueue::remove_at(size_t best_idx) {
- /// @brief Remove the highest-priority message (FIFO within same priority).
- /// @return true if a message was dequeued.
- bool MessageQueue::pop(Message &out) {
--    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    sync::ParkLockGuard guard(lock_, "mq:pop");
-     if (is_empty())
-         return false;
- 
-@@ -170,7 +180,7 @@ bool MessageQueue::pop(Message &out) {
- ///         empty OR the best match is oversized (NOT removed — fail-closed,
- ///         issue #11 paper §3.9).  Callers disambiguate with is_empty().
- bool MessageQueue::pop_clamped(Message &msg, uint32_t max_size) {
--    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    sync::ParkLockGuard guard(lock_, "mq:pop_clamped");
-     if (is_empty())
-         return false;
- 
-@@ -211,7 +221,7 @@ size_t MessageQueue::find_best_from_sender(uint64_t sender_id) const {
- ///        Non-matching messages are never touched.
- /// @return true with @p out filled; false when none is queued.
- bool MessageQueue::pop_from_sender(Message &out, uint64_t sender_id) {
--    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    sync::ParkLockGuard guard(lock_, "mq:pop_from_sender");
-     size_t best_idx = find_best_from_sender(sender_id);
-     if (best_idx >= IPC_MAX_QUEUE_MSG)
-         return false;
-@@ -227,7 +237,7 @@ bool MessageQueue::pop_from_sender(Message &out, uint64_t sender_id) {
- ///        consumed.
- bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
-                                             uint64_t sender_id) {
--    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    sync::ParkLockGuard guard(lock_, "mq:pop_from_sender_clamped");
-     size_t best_idx = find_best_from_sender(sender_id);
-     if (best_idx >= IPC_MAX_QUEUE_MSG)
-         return false;
-@@ -242,7 +252,7 @@ bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
- /// @brief Non-destructive probe for a queued message from @p sender_id
- ///        (issue #296, send_sync dest-death path).
- bool MessageQueue::has_from(uint64_t sender_id) {
--    SpinLockGuard<sync::SpinLock> guard(lock_);
-+    sync::ParkLockGuard guard(lock_, "mq:has_from");
-     return find_best_from_sender(sender_id) < IPC_MAX_QUEUE_MSG;
- }
- 
-@@ -444,7 +454,7 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
- 
-     TaskControlBlock *receiver = nullptr;
-     {
--        SpinLockGuard<sync::SpinLock> guard(ep->lock_);
-+        sync::ParkLockGuard guard(ep->lock_, "ep:bound_receiver");
-         receiver = ep->bound_receiver;
+ // ---------------------------------------------------------------------------
+ // MessageQueue
+ // ---------------------------------------------------------------------------
+@@ -388,6 +397,15 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
+         Scheduler::set_task_ready(*tcb);
+         tcb->remaining_ticks = tcb->period_ticks;
      }
-     // Issue #208: same gate as IPC::send — do not requeue a receiver
-@@ -785,7 +795,7 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
-     // scheduler_lock_ first, then queue lock).  The queue lock protects
-     // the blocked_senders list and priority-inheritance boost.
-     {
--        SpinLockGuard<sync::SpinLock> guard(q.lock_);
-+        sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
++#if defined(CONFIG_DEBUG)
++    // M2 follow-up evidence (#545 SILENT): a pushed message that leaves
++    // the destination BLOCKED with no wait flag set is a lost wakeup.
++    if (ok && tcb->state == TaskState::BLOCKED &&
++        !__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE) &&
++        tcb->blocked_on_queue == nullptr && !tcb->blocked_in_recv) {
++        __atomic_fetch_add(&g_ipc_wake_gate_missed, 1, __ATOMIC_RELAXED);
++    }
++#endif
+     return ok;
+ }
  
+@@ -423,6 +441,11 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
+     if (cur && ep->bound_receiver == cur)
+         return false;
+ 
++    // M2 follow-up (#545 FIRE, INV-L4): the is_full_locked probe parks on
++    // a contended foreign-owned depth instead of spinning with IF=0, so
++    // the denied fallback below only triggers for genuine own-guard
++    // scopes (fail-closed) — unreachable-by-design on the syscall trap
++    // path, which holds no IrqGuard.
+     if (ep->q.is_full_locked()) {
+         if ((flags & IpcFlags::NONBLOCK) != IpcFlags::NONE)
+             return false;
+@@ -588,14 +611,53 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
+ 
+         // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag —
+         // RELEASE order lets the death drain observe (tag, flag) atomically.
+-        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
+-        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
+-                         __ATOMIC_RELEASE);
+-        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+-        cur->state = TaskState::BLOCKED;
+-        Scheduler::dequeue_ready(*cur);
++#if defined(CONFIG_DEBUG)
++        // M2 follow-up evidence (#545 SILENT): publishing a reply wait
++        // while a matching reply is already queued is the
++        // publish-vs-arrival window (the loop-top fast path should have
++        // consumed it first).
++        if (cur->msg_queue.has_from(dest_id)) {
++            __atomic_fetch_add(&g_ipc_block_with_pending_inbox, 1,
++                               __ATOMIC_RELAXED);
++        }
++#endif
++        // M2 follow-up (#545 SILENT): the publish triple + BLOCKED +
++        // dequeue go out atomically under IrqGuard (Dekker close against
++        // the replier's wake gate).
++        {
++            arch::IrqGuard publish_guard{};
++            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
++                             __ATOMIC_RELEASE);
++            __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
++                             __ATOMIC_RELEASE);
++            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
++            cur->state = TaskState::BLOCKED;
++            Scheduler::dequeue_ready(*cur);
++        }
+         was_blocked = true;
+         Scheduler::reschedule();
++        // M2 follow-up (#545 SILENT): post-publish re-check.  A reply that
++        // arrived between the loop-top empty check and the publish is
++        // consumed instead of slept through (mirrors the loop-top consume
++        // path, with the was_blocked slow-path exit).
++        {
++            bool got_late =
++                (reply_max_size != 0)
++                    ? cur->msg_queue.pop_from_sender_clamped(
++                          reply, reply_max_size, dest_id)
++                    : cur->msg_queue.pop_from_sender(reply, dest_id);
++            if (got_late) {
++                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
++                __atomic_store_n(&cur->reply_wait_dest_id, 0,
++                                 __ATOMIC_RELEASE);
++                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
++                                 __ATOMIC_RELEASE);
++                cur->remaining_ticks = cur->period_ticks;
++                arch::sti();
++                cur->state = TaskState::RUNNING;
++                return errors::IPC_ERR_OK;
++            }
++        }
+         // Issue #513 (face A/C hang): the wait yields UNCONDITIONALLY.
+         // A kernel task reaching this loop with SIE=0 (inherited IRQ-off
+         // window) would sleep through every wakeup source with a bare
+@@ -692,14 +754,33 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
+             return errors::IPC_ERR_PEER_DIED;
+         }
+         // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag.
+-        __atomic_store_n(&cur->reply_wait_dest_id, dest_id, __ATOMIC_RELEASE);
+-        __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
+-                         __ATOMIC_RELEASE);
+-        __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+-        cur->state = TaskState::BLOCKED;
+-        Scheduler::dequeue_ready(*cur);
++        // M2 follow-up (#545 SILENT): atomic publish + post-publish
++        // re-check (same Dekker close as send_sync above; plain pop —
++        // the bounded loop has no clamp variant).
++        {
++            arch::IrqGuard publish_guard{};
++            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
++                             __ATOMIC_RELEASE);
++            __atomic_store_n(&cur->reply_wait_dest_gen, dest->generation,
++                             __ATOMIC_RELEASE);
++            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
++            cur->state = TaskState::BLOCKED;
++            Scheduler::dequeue_ready(*cur);
++        }
+         was_blocked = true;
+         Scheduler::reschedule();
++        if (cur->msg_queue.pop_from_sender(reply, dest_id)) {
++            __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
++            __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
++            __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
++            if (armed_here) {
++                recv_wait_cancel(*cur);
++            }
++            cur->remaining_ticks = cur->period_ticks;
++            arch::sti();
++            cur->state = TaskState::RUNNING;
++            return errors::IPC_ERR_OK;
++        }
+         // Issue #513 (face A/C hang): unconditional yield (see send_sync
+         // above — same SIE=0 wedge through the bounded wait below).
+         arch::sti();
+@@ -778,25 +859,26 @@ MessageQueue &IPC::queue(uint64_t task_id) {
+ ///
+ /// # WEDGE-avoidance summary
+ ///
+-/// Every transition to BLOCKED must be atomic with dequeue_ready:
+-///   | code                                | invariant |
+-///   |-------------------------------------|-----------|
+-///   | state = BLOCKED; + dequeue_ready(); | OK        |
+-///   | state = BLOCKED; (no dequeue)        | WEDGE     |
++/// Every transition to BLOCKED must be atomic with dequeue_ready, and
++/// every waiter-list link must precede the BLOCKED transition:
++///   | code                                              | invariant |
++///   |---------------------------------------------------|-----------|
++///   | link; state = BLOCKED; + dequeue_ready();         | OK        |
++///   | state = BLOCKED; (no dequeue)                      | WEDGE     |
++///   | state = BLOCKED; + dequeue, link after (racy)      | WEDGE     |
+ ///
+-/// This function implements the correct pattern.  Callers that set
++/// This function implements the correct pattern (link + BLOCKED +
++/// dequeue under q.lock_ + IrqGuard).  Callers that set
+ /// `state = BLOCKED` independently (e.g., `monitor_task_entry`,
+ /// `Scheduler::terminate`) must also dequeue first.
+ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
+-    task.state = TaskState::BLOCKED;
+-    kernel::Scheduler::dequeue_ready(task);
+-
+-    // Dequeue_ready must complete BEFORE taking q.lock_ (lock ordering:
+-    // scheduler_lock_ first, then queue lock).  The queue lock protects
+-    // the blocked_senders list and priority-inheritance boost.
++    // INV-C2 (M2 follow-up #545 SILENT): queue lock first, then the
++    // IRQ-atomic publish inside it.  Linking before the BLOCKED transition
++    // closes the pop-vs-link lost-wakeup window: dequeue_ready is lock-free
++    // (ledger S5), so no scheduler lock nests inside q.lock_.
++    sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
+     {
+-        sync::ParkLockGuard guard(q.lock_, "mq:block_sender");
+-
++        arch::IrqGuard irq_guard{};
          task.blocked_on_queue = &q;
          TaskControlBlock **pp = &q.blocked_senders_head;
-@@ -831,7 +841,7 @@ void IPC::wake_sender(MessageQueue &q, TaskControlBlock &receiver) {
-     // Pop sender from head under the queue lock.  set_task_ready and priority
-     // restore run outside the lock (they take scheduler_lock_ internally).
-     {
--        SpinLockGuard<sync::SpinLock> guard(q.lock_);
-+        sync::ParkLockGuard guard(q.lock_, "mq:wake_sender_pop");
+         while (*pp && (*pp)->priority >= task.priority)
+@@ -806,14 +888,17 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
+         if (!task.blocked_next)
+             q.blocked_senders_tail = &task;
  
-         if (!q.blocked_senders_head)
-             return;
-@@ -852,7 +862,7 @@ void IPC::wake_sender(MessageQueue &q, TaskControlBlock &receiver) {
-     // Priority inheritance — restore receiver priority after sender removal.
-     // FIX(sched-race): same IRQ-safety rationale as block_sender's boost.
-     {
--        SpinLockGuard<sync::SpinLock> guard(q.lock_);
-+        sync::ParkLockGuard guard(q.lock_, "mq:wake_sender_pi");
-         uint64_t max_prio = receiver.base_priority;
-         auto *cur_bs = q.blocked_senders_head;
-         while (cur_bs) {
-diff --git a/src/kernel/log/dmesg_catalog.hpp b/src/kernel/log/dmesg_catalog.hpp
-index 1cd0ba171..21499b3e2 100644
---- a/src/kernel/log/dmesg_catalog.hpp
-+++ b/src/kernel/log/dmesg_catalog.hpp
-@@ -233,6 +233,8 @@ constexpr DmesgRecord kDmesgCatalog_TIMING[] = {
-      "Timing: watchdog expired"},
-     {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 7, LogSeverity::WARN,
-      "Timing: stall suspected"},
-+    {ErrorSubsystem::TIMING, kDmesgBase_TIMING + 8, LogSeverity::ERROR,
-+     "Timing: tick stalled (TSC advanced, tick frozen)"},
- };
- 
- /// @brief PMM records (canonical base kDmesgBase_PMM): leak-suspect
-diff --git a/src/kernel/memory/integrity.cpp b/src/kernel/memory/integrity.cpp
-index b4bd44adc..485a11977 100644
---- a/src/kernel/memory/integrity.cpp
-+++ b/src/kernel/memory/integrity.cpp
-@@ -23,6 +23,7 @@
- #include <assert.hpp>
- #include <kernel/arch/io.hpp>
- #include <kernel/task/scheduler.hpp>
-+#include <kernel/task/tick_watchdog.hpp> // M2 §6.2: idle resync checkpoint
- #include <kernel/task/task.hpp>
- #include <kernel/elf/elf.hpp>
- #include <kernel/log/dmesg.hpp>
-@@ -193,6 +194,8 @@ void idle_task_main() {
-         // chunk-budgeted, noexcept, no alloc). Never skips hlt (M2).
-         idle_monitor_slice();
- #endif
-+        // M2 §6.2 item 6: idle resyncs (never fires) the tick watchdog.
-+        kernel::tick_watchdog::idle_checkpoint("idle");
-         arch::hlt();
++        task.state = TaskState::BLOCKED;
++        kernel::Scheduler::dequeue_ready(task);
++
+         // Priority inheritance — boost owner when higher-priority sender
+         // blocks. FIX(sched-race): the read-modify-write of q.owner->priority
+-        // and the move_priority() re-index must be atomic against the timer
+-        // ISR's deadline demote / sporadic priority changes.  q.lock_ is a
+-        // plain spinlock (does not mask IRQs); IrqGuard excludes the ISR so
+-        // old/new effective_priority snapshots stay consistent.
++        // and the move_priority() re-index stay atomic against the timer
++        // ISR's deadline demote / sporadic priority changes (same IrqGuard
++        // as the publish above).  q.lock_ is a plain spinlock (does not
++        // mask IRQs); IrqGuard excludes the ISR so old/new
++        // effective_priority snapshots stay consistent.
+         if (q.owner && task.priority > q.owner->priority) {
+-            arch::IrqGuard irq_guard{};
+             // G2: q.owner is magic-guarded live here — bind a reference
+             // (docs/irqguard-ledger.md §G2-A).  move_priority MUST stay
+             // between the old/new effective_priority snapshots.
+@@ -914,6 +999,22 @@ void IPC::wake_reply_waiters_of(TaskControlBlock &dead) noexcept {
      }
  }
+ 
++uint64_t IPC::ipc_wake_gate_missed_count() noexcept {
++#if defined(CONFIG_DEBUG)
++    return __atomic_load_n(&g_ipc_wake_gate_missed, __ATOMIC_RELAXED);
++#else
++    return 0;
++#endif
++}
++
++uint64_t IPC::ipc_block_with_pending_inbox_count() noexcept {
++#if defined(CONFIG_DEBUG)
++    return __atomic_load_n(&g_ipc_block_with_pending_inbox, __ATOMIC_RELAXED);
++#else
++    return 0;
++#endif
++}
++
+ /// @brief Roll back a block_sender() mutation when IPC::send() is called with
+ ///        interrupts disabled and the deferred switch can never apply.
+ ///        Removes @p task from @p q's blocked-senders list, restores its state
+diff --git a/src/kernel/ipc/ipc.hpp b/src/kernel/ipc/ipc.hpp
+index bcb65a6bb..f35936901 100644
+--- a/src/kernel/ipc/ipc.hpp
++++ b/src/kernel/ipc/ipc.hpp
+@@ -113,6 +113,10 @@ class IPC {
+     static void init();
+ 
+     /// @brief Sends a message to a destination task.
++    /// M2 follow-up (#545 FIRE, INV-L4): the is_full_locked probe parks on
++    /// a contended foreign-owned depth instead of spinning with IF=0; the
++    /// IF=0 rollback in send() only triggers for genuine own-guard scopes
++    /// (fail-closed) — unreachable-by-design on the syscall trap path.
+     [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, IpcFlags flags = IpcFlags::NONE) noexcept;
+ 
+     /// @brief Receives a message from the calling task's own queue.
+@@ -235,6 +239,17 @@ class IPC {
+     /// @brief Wakes the oldest blocked sender and
+     /// restores owner priority.
+     static void wake_sender(MessageQueue &q, TaskControlBlock &receiver);
++
++    /// @brief M2 follow-up evidence (#545 SILENT): pushes that found the
++    ///        destination BLOCKED with none of the three wait flags set
++    ///        (reply_wait / blocked_on_queue / blocked_in_recv) — the
++    ///        lost-wakeup window probe.  CONFIG_DEBUG only; always 0 in a
++    ///        healthy run.
++    static uint64_t ipc_wake_gate_missed_count() noexcept;
++    /// @brief M2 follow-up evidence (#545 SILENT): send_sync wait
++    ///        publications that found a matching reply already queued — the
++    ///        publish-vs-arrival window probe.  CONFIG_DEBUG only.
++    static uint64_t ipc_block_with_pending_inbox_count() noexcept;
+ };
+ 
+ } // namespace kernel
+diff --git a/src/kernel/kernel.cpp b/src/kernel/kernel.cpp
+index 0bfd82ba8..bca0051b5 100644
+--- a/src/kernel/kernel.cpp
++++ b/src/kernel/kernel.cpp
+@@ -40,6 +40,7 @@
+ #include <kernel/memory/mempool.hpp>
+ #include <kernel/iommu/iommu.hpp>
+ #include <kernel/task/scheduler.hpp>
++#include <kernel/arch/hal/irq_guard.hpp>
+ #include <kernel/task/admission_selftest.hpp>
+ #include <kernel/task/task.hpp>
+ #include <kernel/ipc/ipc.hpp>
+@@ -2770,6 +2771,10 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
+ extern "C" uint64_t syscall_handler(uint64_t number, uint64_t arg0,
+                                     uint64_t arg1, uint64_t arg2, uint64_t arg3,
+                                     uint64_t *regs) {
++    // M2 follow-up (#545 FIRE): mark the syscall-trap window so the
++    // lock-park predicate can exempt genuine trap context (task present,
++    // parkable) from the IsrContext deny (all three arches funnel here).
++    arch::SyscallTrapScope trap_scope{};
+     // Issue #513 3.1: frame-consistency choke point. Every IPC handler's
+     // syscall_task() keys off the published current — dispatching on a
+     // misattributed current silently misbooks waits, queues and sender
 diff --git a/src/kernel/nexios_config.h b/src/kernel/nexios_config.h
-index 8c5a6aa25..64e0664dc 100644
+index 64e0664dc..b7d4b9893 100644
 --- a/src/kernel/nexios_config.h
 +++ b/src/kernel/nexios_config.h
-@@ -1182,6 +1182,66 @@
- #define CONFIG_WATCHDOG_ACTION 3
+@@ -1210,6 +1210,47 @@
+ #define CONFIG_LOCK_PARK_MAX_ATTEMPTS 8
  #endif
  
-+/// M2 lock contract (issues #545/#546). Bounded spin-then-park knobs.
-+/// CONFIG_LOCK_SPIN_ROUNDS: pause-spin iterations before parking (0 =
-+/// park immediately after a failed try; watch the Q3 direct-switch
-+/// window — spinning holds no lock, parking deschedules).
-+/// Default: 1024.
-+#ifndef CONFIG_LOCK_SPIN_ROUNDS
-+#define CONFIG_LOCK_SPIN_ROUNDS 1024
++/// M2 follow-up (#545 FIRE): bounded iterations for the denied/exhausted
++/// pure-spin fallback.  The spin stays loud (tick_watchdog checkpoint every
++/// 256) and diagnosed (one ERROR on first escape); it never spins silently
++/// forever.  Default: 65536.
++#ifndef CONFIG_LOCK_DENIED_SPIN_ROUNDS
++#define CONFIG_LOCK_DENIED_SPIN_ROUNDS 65536
 +#endif
 +
-+/// Ticks to sleep per park attempt before re-checking the lock.
-+/// Default: 2 (bounded added latency per attempt, ≤ MAX_ATTEMPTS).
-+#ifndef CONFIG_LOCK_PARK_TICKS
-+#define CONFIG_LOCK_PARK_TICKS 2
++/// M2 follow-up (#545 FIRE, INV-L4): allow the timed park when the live
++/// IrqGuard depth is owned by a *foreign* context (depth > 0 but the owner
++/// token is neither the calling task nor the ISR sentinel).  The syscall
++/// trap path holds no IrqGuard, so any depth seen there is foreign/leaked
++/// and parking is safe.  0 restores the status-quo-ante deny.  Default: 1.
++#ifndef CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW
++#define CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW 1
 +#endif
 +
-+/// Master switch for timed park (1 = park when INV-L1 allows, 0 = pure
-+/// spin status quo ante).  Kill-switch for bisecting park regressions.
-+#ifndef CONFIG_LOCK_PARK_ENABLE
-+#define CONFIG_LOCK_PARK_ENABLE 1
++/// M2 follow-up (#545 FIRE): last-resort sti window inside the denied
++/// fallback.  A bare sti widens someone else's live IrqGuard scope (S1),
++/// so this stays 0 (diagnose-only loud spin) unless Phase-1 evidence
++/// demonstrates a genuine own-guard denial shape.  Default: 0.
++#ifndef CONFIG_LOCK_DENIED_SPIN_STI_ALLOW
++#define CONFIG_LOCK_DENIED_SPIN_STI_ALLOW 0
 +#endif
 +
-+/// Maximum park attempts per acquire before falling back to pure spin
-+/// (never blocks forever on a dead holder — the holder may be gone).
-+/// Default: 8.
-+#ifndef CONFIG_LOCK_PARK_MAX_ATTEMPTS
-+#define CONFIG_LOCK_PARK_MAX_ATTEMPTS 8
++/// M2 follow-up (#545 SILENT): drop orphaned IrqGuard depth whose owner
++/// task is dead (TERMINATED/REAPED/gone) at switch time.  A live owner's
++/// suspended scope is never cleared (its dtor still owns the count).
++/// Default: 1.
++#ifndef CONFIG_LOCK_PARK_SELFHEAL
++#define CONFIG_LOCK_PARK_SELFHEAL 1
 +#endif
 +
-+/// reschedule()-entry lock-hygiene assertion (issue #546 §6.2 item 2):
-+/// no order-table spinlock may be held at reschedule() or a BLOCKED
-+/// transition (scheduler_lock_ itself is covered by its own T2b depth
-+/// ENSUREs). 0 = check compiled out; 1 = dmesg + warn on violation
-+/// (default, DEBUG only); 2 = panic.  Release builds: no-op (the park
-+/// predicate gates on depth counters instead — see
-+/// irq_guard_depth_own/scheduler_lock_depth_own).
-+#ifndef CONFIG_IRQ_CONTRACT_ASSERT
-+#define CONFIG_IRQ_CONTRACT_ASSERT 1
++/// M2 follow-up (#545 SILENT): level-triggered IPC wake sweep (recv
++/// channel only — BLOCKED recv-waiter with non-empty own inbox). Sender
++/// and reply channels are deliberately excluded (see sweep comment for
++/// the convicted reasons).  Default: 1.
++#ifndef CONFIG_IPC_WAKE_SWEEP_ENABLE
++#define CONFIG_IPC_WAKE_SWEEP_ENABLE 1
 +#endif
 +
-+/// TSC-domain tick watchdog (issue #546 §6.2 item 6): fires when raw TSC
-+/// advances past grace while the tick count is frozen (stalled tick with
-+/// the CPU out of idle). 1 = enabled (default). 0 = compiled out.
-+#ifndef CONFIG_TICK_WATCHDOG_ENABLE
-+#define CONFIG_TICK_WATCHDOG_ENABLE 1
-+#endif
-+
-+/// Grace period for the tick watchdog, in ticks (converted with
-+/// raw_counter_freq_hz at init; disabled when either frequency is 0).
-+/// Default: 500.
-+#ifndef CONFIG_TICK_WATCHDOG_GRACE_TICKS
-+#define CONFIG_TICK_WATCHDOG_GRACE_TICKS 500
-+#endif
-+
-+/// Tick-watchdog fire action: 0 = dmesg ERROR + serial evidence + one-shot
-+/// latch (default; Q4-A fail-safe hook, never panic here). 1 = reserved.
-+/// 2 = panic (Q12-A reboot hook; M2 forbids wiring it — policy lands M3+).
-+#ifndef CONFIG_TICK_WATCHDOG_ACTION
-+#define CONFIG_TICK_WATCHDOG_ACTION 0
-+#endif
-+
- /// Boot-time admission self-test (issue #24): read-only probes of the
- /// frozen LUB/WCET/budget gate math + miss-action range check, run once
- /// after Scheduler::init (zero alloc, zero table mutation, one success
-@@ -1589,6 +1649,30 @@ extern "C" void panic(const char *msg);
- #if CONFIG_WATCHDOG_ACTION < 0 || CONFIG_WATCHDOG_ACTION > 4
- #error "CONFIG_WATCHDOG_ACTION must be in [0..4] (default 3)"
+ /// reschedule()-entry lock-hygiene assertion (issue #546 §6.2 item 2):
+ /// no order-table spinlock may be held at reschedule() or a BLOCKED
+ /// transition (scheduler_lock_ itself is covered by its own T2b depth
+@@ -1661,6 +1702,21 @@ extern "C" void panic(const char *msg);
+ #if CONFIG_LOCK_PARK_MAX_ATTEMPTS < 1
+ #error "CONFIG_LOCK_PARK_MAX_ATTEMPTS must be >= 1 (default 8)"
  #endif
-+#if CONFIG_LOCK_SPIN_ROUNDS < 0
-+#error "CONFIG_LOCK_SPIN_ROUNDS must be >= 0 (default 1024)"
++#if CONFIG_LOCK_DENIED_SPIN_ROUNDS < 1024
++#error "CONFIG_LOCK_DENIED_SPIN_ROUNDS must be >= 1024 (default 65536)"
 +#endif
-+#if CONFIG_LOCK_PARK_TICKS < 1
-+#error "CONFIG_LOCK_PARK_TICKS must be >= 1 (default 2)"
++#if CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW != 0 && CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW != 1
++#error "CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW must be 0 or 1 (default 1)"
 +#endif
-+#if CONFIG_LOCK_PARK_ENABLE != 0 && CONFIG_LOCK_PARK_ENABLE != 1
-+#error "CONFIG_LOCK_PARK_ENABLE must be 0 or 1 (default 1)"
++#if CONFIG_LOCK_DENIED_SPIN_STI_ALLOW != 0 && CONFIG_LOCK_DENIED_SPIN_STI_ALLOW != 1
++#error "CONFIG_LOCK_DENIED_SPIN_STI_ALLOW must be 0 or 1 (default 0)"
 +#endif
-+#if CONFIG_LOCK_PARK_MAX_ATTEMPTS < 1
-+#error "CONFIG_LOCK_PARK_MAX_ATTEMPTS must be >= 1 (default 8)"
++#if CONFIG_LOCK_PARK_SELFHEAL != 0 && CONFIG_LOCK_PARK_SELFHEAL != 1
++#error "CONFIG_LOCK_PARK_SELFHEAL must be 0 or 1 (default 1)"
 +#endif
-+#if CONFIG_IRQ_CONTRACT_ASSERT < 0 || CONFIG_IRQ_CONTRACT_ASSERT > 2
-+#error "CONFIG_IRQ_CONTRACT_ASSERT must be in [0..2] (default 1)"
++#if CONFIG_IPC_WAKE_SWEEP_ENABLE != 0 && CONFIG_IPC_WAKE_SWEEP_ENABLE != 1
++#error "CONFIG_IPC_WAKE_SWEEP_ENABLE must be 0 or 1 (default 1)"
 +#endif
-+#if CONFIG_TICK_WATCHDOG_ENABLE != 0 && CONFIG_TICK_WATCHDOG_ENABLE != 1
-+#error "CONFIG_TICK_WATCHDOG_ENABLE must be 0 or 1 (default 1)"
-+#endif
-+#if CONFIG_TICK_WATCHDOG_GRACE_TICKS < 1
-+#error "CONFIG_TICK_WATCHDOG_GRACE_TICKS must be >= 1 (default 500)"
-+#endif
-+#if CONFIG_TICK_WATCHDOG_ACTION < 0 || CONFIG_TICK_WATCHDOG_ACTION > 2
-+#error "CONFIG_TICK_WATCHDOG_ACTION must be in [0..2] (default 0)"
-+#endif
- #if CONFIG_OOM_POLICY != 0 && CONFIG_OOM_POLICY != 1
- #error "CONFIG_OOM_POLICY must be 0 or 1 (default 0)"
+ #if CONFIG_IRQ_CONTRACT_ASSERT < 0 || CONFIG_IRQ_CONTRACT_ASSERT > 2
+ #error "CONFIG_IRQ_CONTRACT_ASSERT must be in [0..2] (default 1)"
  #endif
 diff --git a/src/kernel/sync/park_lock.cpp b/src/kernel/sync/park_lock.cpp
-new file mode 100644
-index 000000000..057e75c20
---- /dev/null
+index 057e75c20..409884a7f 100644
+--- a/src/kernel/sync/park_lock.cpp
 +++ b/src/kernel/sync/park_lock.cpp
-@@ -0,0 +1,198 @@
-+/// @file park_lock.cpp
-+/// @brief Bounded spin → timed park acquisition (M2, issues #545/#546).
-+
-+#include <kernel/sync/park_lock.hpp>
-+#include <kernel/sync/spinlock.hpp>
-+#include <kernel/sync/spinlock_order.hpp>
-+#include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/arch/cpu_context.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/arch/hal/timer.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/time/posix_time.hpp>
-+#include <kernel/task/tick_watchdog.hpp>
-+#if defined(CONFIG_DEBUG)
-+#include <lib/logger.hpp>
-+#endif
-+
-+namespace kernel {
-+namespace sync {
-+namespace {
-+
-+uint64_t g_park_count = 0;
-+uint64_t g_spin_fallback_count = 0;
-+uint64_t g_park_exhausted_count = 0;
-+uint64_t g_park_denied_reason =
-+    static_cast<uint64_t>(ParkDenyReason::None);
-+
-+void note_denied(ParkDenyReason reason) noexcept {
-+    __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
-+    g_park_denied_reason = static_cast<uint64_t>(reason);
-+}
-+
-+} // namespace
-+
+@@ -25,6 +25,10 @@ uint64_t g_spin_fallback_count = 0;
+ uint64_t g_park_exhausted_count = 0;
+ uint64_t g_park_denied_reason =
+     static_cast<uint64_t>(ParkDenyReason::None);
++// M2 follow-up (#545 FIRE): bounded denied-spin block escapes + foreign
++// depths admitted to the park (INV-L4).  Diagnostic only.
++uint64_t g_denied_escape_count = 0;
++uint64_t g_foreign_depth_count = 0;
+ 
+ void note_denied(ParkDenyReason reason) noexcept {
+     __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
+@@ -33,38 +37,42 @@ void note_denied(ParkDenyReason reason) noexcept {
+ 
+ } // namespace
+ 
+-bool lock_park_allowed(const SpinLock &lock) noexcept {
+-    (void)lock;
+-    if (CONFIG_LOCK_PARK_ENABLE == 0)
+-        return false;
+-    // ISR context never parks (no task to deschedule; try_lock only).
+-    if (kernel::isr_nesting_own() != 0)
+-        return false;
+-    // An IrqGuard scope is live: sti/hlt would widen its IRQ-off window.
+-    if (arch::irq_guard_depth_own() != 0)
+-        return false;
+-    // Never nest a park inside a held spinlock (cross-lock deadlock).
+-    if (spinlock_held_by_current_count() != 0)
+-        return false;
+-    auto *task = Scheduler::current_task();
+-    if (task == nullptr || task->magic != TaskControlBlock::TCB_MAGIC)
+-        return false;
+-    if (Scheduler::is_idle_task(task))
+-        return false;
+-    if (task->state != TaskState::RUNNING)
+-        return false;
+-    if (CONFIG_TICK_HZ == 0)
+-        return false; // No tick source: park_ns divisor + wheel both dead.
+-    return true;
+-}
++// Note: the own-scope token is arch::irq_guard_owner_token() (current
++// task, unconditionally — see irq_guard.hpp for why it must not depend on
++// isr_nesting/IF: the token is recorded at take time and compared at check
++// time, and IF always flips in between).  No local copy is kept: take and
++// check must use the identical source or the comparison fabricates
++// foreign owners (observed on rv64).
+ 
+ static ParkDenyReason deny_reason() noexcept {
+     if (CONFIG_LOCK_PARK_ENABLE == 0)
+         return ParkDenyReason::Disabled;
+-    if (kernel::isr_nesting_own() != 0)
++    // IsrContext arm (M2 §6.2 + #545 FIRE): a hardware ISR must never park
++    // (no task to deschedule).  Two precision carve-outs, both fail-closed:
++    // (a) genuine syscall-trap level (in_syscall_trap_level): the trap runs
++    // on the calling task's stack with a task to deschedule, and the park
++    // path's own sti/hlt owns the IRQ state exactly like sys_receive's
++    // wait loop — without this, every syscall would deny (all traps bump
++    // isr_nesting) and the FIRE shape could never park; (b) stale nesting
++    // with interrupts enabled: isr_nesting is observably wrong then
++    // (rv64 suite baseline), and IF==1 proves we are not inside a hardware
++    // ISR (interrupt gates clear IF; our ISRs never re-enable), so the
++    // count must not deny.  IF==0 keeps the deny (fail-closed direction,
++    // covering the QE manual-nesting test which holds IF=0 via IrqGuard).
++    if (kernel::isr_nesting_own() != 0 && !arch::in_syscall_trap_level() &&
++        !arch::interrupts_enabled())
+         return ParkDenyReason::IsrContext;
+-    if (arch::irq_guard_depth_own() != 0)
++    if (arch::irq_guard_depth_own() != 0) {
++        // INV-L4 (#545 FIRE, convicted H1a/V1): a depth owned by a foreign
++        // context is diagnostic-only, never a denial when allowed — the
++        // syscall trap path holds no IrqGuard, so any depth seen there is
++        // foreign/leaked.  Owner 0 (unknown/boot) and the own token stay
++        // denied (fail-closed).
++        const uint64_t owner = arch::irq_guard_owner_own();
++        if (owner != 0 && owner != arch::irq_guard_owner_token())
++            return ParkDenyReason::ForeignGuard;
+         return ParkDenyReason::IrqGuarded;
++    }
+     if (spinlock_held_by_current_count() != 0)
+         return ParkDenyReason::LockHeld;
+     auto *task = Scheduler::current_task();
+@@ -79,9 +87,59 @@ static ParkDenyReason deny_reason() noexcept {
+     return ParkDenyReason::None;
+ }
+ 
 +bool lock_park_allowed(const SpinLock &lock) noexcept {
 +    (void)lock;
-+    if (CONFIG_LOCK_PARK_ENABLE == 0)
-+        return false;
-+    // ISR context never parks (no task to deschedule; try_lock only).
-+    if (kernel::isr_nesting_own() != 0)
-+        return false;
-+    // An IrqGuard scope is live: sti/hlt would widen its IRQ-off window.
-+    if (arch::irq_guard_depth_own() != 0)
-+        return false;
-+    // Never nest a park inside a held spinlock (cross-lock deadlock).
-+    if (spinlock_held_by_current_count() != 0)
-+        return false;
-+    auto *task = Scheduler::current_task();
-+    if (task == nullptr || task->magic != TaskControlBlock::TCB_MAGIC)
-+        return false;
-+    if (Scheduler::is_idle_task(task))
-+        return false;
-+    if (task->state != TaskState::RUNNING)
-+        return false;
-+    if (CONFIG_TICK_HZ == 0)
-+        return false; // No tick source: park_ns divisor + wheel both dead.
-+    return true;
++    const ParkDenyReason reason = deny_reason();
++    if (reason == ParkDenyReason::None)
++        return true;
++#if CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW == 1
++    if (reason == ParkDenyReason::ForeignGuard)
++        return true;
++#endif
++    return false;
 +}
 +
-+static ParkDenyReason deny_reason() noexcept {
-+    if (CONFIG_LOCK_PARK_ENABLE == 0)
-+        return ParkDenyReason::Disabled;
-+    if (kernel::isr_nesting_own() != 0)
-+        return ParkDenyReason::IsrContext;
-+    if (arch::irq_guard_depth_own() != 0)
-+        return ParkDenyReason::IrqGuarded;
-+    if (spinlock_held_by_current_count() != 0)
-+        return ParkDenyReason::LockHeld;
-+    auto *task = Scheduler::current_task();
-+    if (task == nullptr || task->magic != TaskControlBlock::TCB_MAGIC)
-+        return ParkDenyReason::NotTask;
-+    if (Scheduler::is_idle_task(task))
-+        return ParkDenyReason::IdleTask;
-+    if (task->state != TaskState::RUNNING)
-+        return ParkDenyReason::NotRunning;
-+    if (CONFIG_TICK_HZ == 0)
-+        return ParkDenyReason::NoTicks;
-+    return ParkDenyReason::None;
-+}
-+
-+ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
-+    : lock_(lock) {
-+    (void)site; // Reserved for the DEBUG one-shot park line.
-+    if (lock_.try_lock()) {
-+        owned_ = true;
-+        return;
-+    }
-+    // Bounded pause-spin (fast path unchanged: uncontended try_lock).
-+    for (uint64_t i = 0; i < CONFIG_LOCK_SPIN_ROUNDS; ++i) {
++/// @brief Bounded, loud denied-spin block: pause-spins up to
++///        CONFIG_LOCK_DENIED_SPIN_ROUNDS with watchdog checkpoints, then
++///        returns false so the caller re-diagnoses and re-arms.  Never
++///        spins silently forever — the TSC watchdog FIRES on the overrun.
++static bool denied_spin_block(SpinLock &lock, const char *where) noexcept {
++    for (uint64_t i = 0; i < CONFIG_LOCK_DENIED_SPIN_ROUNDS; ++i) {
 +        arch::pause();
 +        if ((i & 255U) == 255U)
-+            tick_watchdog::checkpoint("lock_spin");
-+        if (lock_.try_lock()) {
-+            owned_ = true;
-+            return;
-+        }
++            tick_watchdog::checkpoint(where);
++        if (lock.try_lock())
++            return true;
 +    }
-+    if (!lock_park_allowed(lock_)) {
-+        // Status quo: pure spin (never worse than today).  INV-L1 denial
-+        // recorded; checkpoint cadence keeps the tick watchdog informed.
-+        note_denied(deny_reason());
-+        for (;;) {
-+            arch::pause();
-+            tick_watchdog::checkpoint("lock_spin_denied");
-+            if (lock_.try_lock()) {
-+                owned_ = true;
-+                return;
-+            }
-+        }
++    return false;
++}
++
++/// @brief First-escape diagnostic: one ERROR per lock site so the soak
++///        log convicts the shape without serial spam.
++static void note_escape(const SpinLock &lock, const char *site,
++                        const char *where, ParkDenyReason reason) noexcept {
++    const uint64_t escapes =
++        __atomic_fetch_add(&g_denied_escape_count, 1, __ATOMIC_RELAXED) + 1;
++#if defined(CONFIG_DEBUG)
++    if (escapes == 1) {
++        kernel::Logger::error(
++            "[PARK] denied-spin escape lock=%lx site=%s where=%s if=%d "
++            "irqd=%lu owner=%lx reason=%lu",
++            reinterpret_cast<uint64_t>(&lock), site, where,
++            arch::interrupts_enabled() ? 1 : 0, arch::irq_guard_depth_own(),
++            arch::irq_guard_owner_own(), static_cast<uint64_t>(reason));
 +    }
-+    __atomic_fetch_add(&g_park_count, 1, __ATOMIC_RELAXED);
-+    auto *task = Scheduler::current_task();
-+    // ns per park cycle, saturating (grace ~ms fits u64 trivially).
-+    uint64_t park_ns = static_cast<uint64_t>(CONFIG_LOCK_PARK_TICKS);
-+    park_ns *= 1000000000ULL;
-+    park_ns /= static_cast<uint64_t>(CONFIG_TICK_HZ);
-+    for (uint64_t attempt = 0;
-+         attempt < CONFIG_LOCK_PARK_MAX_ATTEMPTS; ++attempt) {
-+        if (!time::PosixTime::sleep_arm(*task, park_ns)) {
-+            note_denied(ParkDenyReason::ArmFailed);
-+            break; // Arm failed: fall through to pure spin below.
-+        }
-+        {
-+            arch::IrqGuard irq_guard{};
-+            Scheduler::dequeue_ready(*task);
-+            task->state = TaskState::BLOCKED;
-+        }
-+        Scheduler::reschedule();
-+        // sys_receive shape (unconditional sti/hlt/cli): trap entry owns
-+        // the IRQ state (SIE=0, no locks held), so sti is safe here —
-+        // and mandatory, since IF=0 sleeps through the wheel timeout.
-+        for (;;) {
-+            arch::sti();
-+            arch::hlt();
-+            arch::cli();
-+            if (task->state != TaskState::BLOCKED)
-+                break;
-+        }
-+        time::PosixTime::sleep_cancel(*task);
-+        // INV-L2 resume: the tick scan READY+enqueued us; resuming on-CPU
-+        // without a dispatch would leave RUNNING+queued, so unlink first
-+        // (dequeue_ready is a safe no-op when not queued), then RUNNING.
-+        Scheduler::dequeue_ready(*task);
-+        task->state = TaskState::RUNNING;
-+        tick_watchdog::checkpoint("lock_park_resume");
-+        if (lock_.try_lock()) {
-+            owned_ = true;
-+            return;
-+        }
-+        // Still contended: next attempt re-arms (fresh wheel timeout).
++#else
++    (void)lock;
++    (void)site;
++    (void)where;
++    (void)escapes;
++    (void)reason;
++#endif
++}
++
+ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
+     : lock_(lock) {
+-    (void)site; // Reserved for the DEBUG one-shot park line.
+     if (lock_.try_lock()) {
+         owned_ = true;
+         return;
+@@ -97,19 +155,51 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
+         }
+     }
+     if (!lock_park_allowed(lock_)) {
+-        // Status quo: pure spin (never worse than today).  INV-L1 denial
+-        // recorded; checkpoint cadence keeps the tick watchdog informed.
+-        note_denied(deny_reason());
+-        for (;;) {
+-            arch::pause();
+-            tick_watchdog::checkpoint("lock_spin_denied");
+-            if (lock_.try_lock()) {
+-                owned_ = true;
+-                return;
++        // Status-quo denial: bounded loud spin (never silent).  Each block
++        // is bounded; escapes re-diagnose and re-arm so the TSC watchdog
++        // FIRES on a true wedge instead of freezing silently.  A
++        // ForeignGuard reason here is a predicate/deny TOCTOU (the owner
++        // changed between the two same-thread reads): fall through to the
++        // park below instead of spinning on a foreign depth.
++        const ParkDenyReason reason = deny_reason();
++        if (reason == ParkDenyReason::ForeignGuard) {
++            __atomic_fetch_add(&g_foreign_depth_count, 1, __ATOMIC_RELAXED);
++        } else {
++            note_denied(reason);
++            for (;;) {
++#if CONFIG_LOCK_DENIED_SPIN_STI_ALLOW == 1
++                // Last resort (default OFF): sti window heals a genuine
++                // own-guard denial shape.  Never taken for ISR context,
++                // held spinlocks, or interrupts-already-on.
++                if (reason != ParkDenyReason::IsrContext &&
++                    spinlock_held_by_current_count() == 0 &&
++                    !arch::interrupts_enabled()) {
++                    arch::sti();
++                    const bool got =
++                        denied_spin_block(lock_, "lock_spin_denied_sti");
++                    arch::cli();
++                    if (got) {
++                        owned_ = true;
++                        return;
++                    }
++                    note_escape(lock_, site, "lock_spin_denied", reason);
++                    continue;
++                }
++#endif
++                if (denied_spin_block(lock_, "lock_spin_denied")) {
++                    owned_ = true;
++                    return;
++                }
++                note_escape(lock_, site, "lock_spin_denied", reason);
+             }
+         }
+     }
+     __atomic_fetch_add(&g_park_count, 1, __ATOMIC_RELAXED);
++    if (arch::irq_guard_depth_own() != 0) {
++        // Admitted on a foreign-owned depth (INV-L4): the depth check in
++        // the predicate already proved foreign (allowed + depth live).
++        __atomic_fetch_add(&g_foreign_depth_count, 1, __ATOMIC_RELAXED);
 +    }
-+    __atomic_fetch_add(&g_park_exhausted_count, 1, __ATOMIC_RELAXED);
-+    __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
-+    // Reason untouched: exhaustion is not a denial (keeps the last
-+    // real deny code for diagnosis).
-+    for (;;) {
-+        arch::pause();
-+        tick_watchdog::checkpoint("lock_spin_exhausted");
-+        if (lock_.try_lock()) {
-+            owned_ = true;
-+            return;
-+        }
-+    }
+     auto *task = Scheduler::current_task();
+     // ns per park cycle, saturating (grace ~ms fits u64 trivially).
+     uint64_t park_ns = static_cast<uint64_t>(CONFIG_LOCK_PARK_TICKS);
+@@ -153,14 +243,14 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
+     __atomic_fetch_add(&g_park_exhausted_count, 1, __ATOMIC_RELAXED);
+     __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
+     // Reason untouched: exhaustion is not a denial (keeps the last
+-    // real deny code for diagnosis).
++    // real deny code for diagnosis).  Bounded loud spin (same discipline
++    // as the denied path): never silent, watchdog FIRES on a true wedge.
+     for (;;) {
+-        arch::pause();
+-        tick_watchdog::checkpoint("lock_spin_exhausted");
+-        if (lock_.try_lock()) {
++        if (denied_spin_block(lock_, "lock_spin_exhausted")) {
+             owned_ = true;
+             return;
+         }
++        note_escape(lock_, site, "lock_spin_exhausted", deny_reason());
+     }
+ }
+ 
+@@ -187,11 +277,21 @@ uint64_t lock_park_denied_reason() noexcept {
+     return g_park_denied_reason;
+ }
+ 
++uint64_t lock_denied_escape_count() noexcept {
++    return __atomic_load_n(&g_denied_escape_count, __ATOMIC_RELAXED);
 +}
 +
-+ParkLockGuard::~ParkLockGuard() noexcept {
-+    if (owned_) {
-+        owned_ = false;
-+        lock_.unlock();
-+    }
++uint64_t lock_foreign_depth_count() noexcept {
++    return __atomic_load_n(&g_foreign_depth_count, __ATOMIC_RELAXED);
 +}
 +
-+uint64_t lock_park_count() noexcept {
-+    return __atomic_load_n(&g_park_count, __ATOMIC_RELAXED);
-+}
-+
-+uint64_t lock_spin_fallback_count() noexcept {
-+    return __atomic_load_n(&g_spin_fallback_count, __ATOMIC_RELAXED);
-+}
-+
-+uint64_t lock_park_exhausted_count() noexcept {
-+    return __atomic_load_n(&g_park_exhausted_count, __ATOMIC_RELAXED);
-+}
-+
-+uint64_t lock_park_denied_reason() noexcept {
-+    return g_park_denied_reason;
-+}
-+
-+void park_lock_reset_for_test() noexcept {
-+    g_park_count = 0;
-+    g_spin_fallback_count = 0;
-+    g_park_exhausted_count = 0;
-+    g_park_denied_reason = static_cast<uint64_t>(ParkDenyReason::None);
-+}
-+
-+} // namespace sync
-+} // namespace kernel
+ void park_lock_reset_for_test() noexcept {
+     g_park_count = 0;
+     g_spin_fallback_count = 0;
+     g_park_exhausted_count = 0;
+     g_park_denied_reason = static_cast<uint64_t>(ParkDenyReason::None);
++    g_denied_escape_count = 0;
++    g_foreign_depth_count = 0;
+ }
+ 
+ } // namespace sync
 diff --git a/src/kernel/sync/park_lock.hpp b/src/kernel/sync/park_lock.hpp
-new file mode 100644
-index 000000000..115f62c14
---- /dev/null
+index 115f62c14..0e4320a59 100644
+--- a/src/kernel/sync/park_lock.hpp
 +++ b/src/kernel/sync/park_lock.hpp
-@@ -0,0 +1,88 @@
-+#pragma once
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file park_lock.hpp
-+/// @brief Bounded spin → timed park acquisition (M2, issues #545/#546).
-+/// Try-first, then a bounded pause-spin, then a timed park (BLOCKED +
-+/// dequeue + reschedule + sti/hlt, self-wake on the sleep-wheel timeout),
-+/// then retry; pure spin only when parking is denied or exhausted.
-+/// Wake-only: no waiter registry, no unlock-side hooks — the existing
-+/// level-triggered sleep-expiry scan is the sole waker (INV-L3).
-+
-+#include <types.hpp>
-+#include <kernel/nexios_config.h>
-+
-+namespace kernel {
-+namespace sync {
-+
-+class SpinLock;
-+
-+/// @brief Why the last park was denied (diagnostic, sticky until reset).
-+enum class ParkDenyReason : uint8_t {
-+    None = 0,     ///< Last acquisition parked (or never attempted).
-+    Disabled,     ///< CONFIG_LOCK_PARK_ENABLE == 0.
-+    IsrContext,   ///< isr_nesting_own() != 0 — ISR paths keep pure spin.
-+    IrqGuarded,   ///< An IrqGuard scope is live — sti/hlt would break it.
-+    LockHeld,     ///< Caller already holds a spinlock (nesting ⇒ no park).
-+    NotTask,      ///< No current task (early boot / idle-adjacent path).
-+    IdleTask,     ///< Idle task never parks (would strand the hart).
-+    NotRunning,   ///< Current task is not RUNNING (already blocked).
-+    NoTicks,      ///< CONFIG_TICK_HZ == 0 — a sleep arm could never fire.
-+    ArmFailed,    ///< PosixTime::sleep_arm failed (wheel full / non-BSP).
-+};
-+
-+/// @brief INV-L1 park predicate (side-effect free): true iff the calling
-+///        task context may park on @p lock.  Evaluated before arming.
-+bool lock_park_allowed(const SpinLock &lock) noexcept;
-+
-+/// @brief RAII timed-park acquisition.  Fast path is a single try_lock;
-+///        slow paths park and retry, then fall back to pure spin.
-+class [[nodiscard]] ParkLockGuard {
-+  public:
-+    explicit ParkLockGuard(SpinLock &lock,
-+                           const char *site = "park") noexcept;
-+    ~ParkLockGuard() noexcept;
-+
-+    ParkLockGuard(const ParkLockGuard &) = delete;
-+    ParkLockGuard &operator=(const ParkLockGuard &) = delete;
-+    ParkLockGuard(ParkLockGuard &&) = delete;
-+    ParkLockGuard &operator=(ParkLockGuard &&) = delete;
-+
-+    /// @brief True when the lock is held (destructor releases it).
-+    bool owned() const noexcept { return owned_; }
-+
-+  private:
-+    SpinLock &lock_;
-+    bool owned_ = false;
-+};
-+
-+/// @brief Park entries (diagnostic counters, QE assertions).
-+uint64_t lock_park_count() noexcept;
-+/// @brief Pure-spin fallbacks: denied parks + exhausted attempts.
-+uint64_t lock_spin_fallback_count() noexcept;
-+/// @brief Attempts that ran out of park cycles (then pure-spun).
-+uint64_t lock_park_exhausted_count() noexcept;
-+/// @brief Last denial code (ParkDenyReason), sticky until reset.
-+uint64_t lock_park_denied_reason() noexcept;
-+/// @brief Test-isolation reset (counters + denial code).
-+void park_lock_reset_for_test() noexcept;
-+
-+} // namespace sync
-+} // namespace kernel
-diff --git a/src/kernel/sync/queue.cpp b/src/kernel/sync/queue.cpp
-index 62f8a93bf..f260165fc 100644
---- a/src/kernel/sync/queue.cpp
-+++ b/src/kernel/sync/queue.cpp
-@@ -33,6 +33,7 @@ namespace sync {
- 
- /// @brief Initialise the message queue to empty.
- void Queue::init() {
-+    lock_.set_rank(LockRank::Queue); // M2 §6.2: queue rank.
-     head_ = 0;
-     tail_ = 0;
-     count_ = 0;
-diff --git a/src/kernel/sync/queue.hpp b/src/kernel/sync/queue.hpp
-index 796277792..62be9d89e 100644
---- a/src/kernel/sync/queue.hpp
-+++ b/src/kernel/sync/queue.hpp
-@@ -48,9 +48,10 @@ class Queue {
- 
-     // NOTE: mem-initializers are kept in declaration order (-Wreorder).
-     Queue()
--        : head_(0), tail_(0), count_(0), send_waiters_{}, send_waiter_gens_{},
--          send_waiters_count_(0), recv_waiters_{}, recv_waiter_gens_{},
--          recv_waiters_count_(0), last_sender_(nullptr), last_receiver_(nullptr),
-+        : lock_(LockRank::Queue), head_(0), tail_(0), count_(0),
-+          send_waiters_{}, send_waiter_gens_{}, send_waiters_count_(0),
-+          recv_waiters_{}, recv_waiter_gens_{}, recv_waiters_count_(0),
-+          last_sender_(nullptr), last_receiver_(nullptr),
-           last_sender_gen_(0), last_receiver_gen_(0), send_holder_prio_(0),
-           recv_holder_prio_(0) {
-     }
-diff --git a/src/kernel/sync/spinlock.hpp b/src/kernel/sync/spinlock.hpp
-index ca905ef1c..59cf87bff 100644
---- a/src/kernel/sync/spinlock.hpp
-+++ b/src/kernel/sync/spinlock.hpp
-@@ -29,6 +29,7 @@
- 
- #include <kernel/arch/io.hpp>
- #include <lib/atomic.hpp>
-+#include <kernel/sync/spinlock_order.hpp>
- 
- namespace kernel {
- namespace sync {
-@@ -38,6 +39,11 @@ class SpinLock {
-   public:
-     SpinLock() = default;
- 
-+    /// @brief Ranked construction (M2, #546 §6.2): the rank feeds the
-+    ///        lock-order check.  Unranked by default (invisible to it).
-+    constexpr explicit SpinLock(LockRank rank) noexcept
-+        : rank_(static_cast<uint8_t>(rank)) {};
-+
-     SpinLock(const SpinLock &) = delete;
-     SpinLock &operator=(const SpinLock &) = delete;
-     SpinLock(SpinLock &&) = delete;
-@@ -50,10 +56,12 @@ class SpinLock {
-         }
-         __atomic_store_n(&holder_, __builtin_return_address(0),
-                          __ATOMIC_RELAXED);
-+        spinlock_note_acquire(this, rank_);
-     }
- 
-     /// @brief Release the lock.
-     void unlock() noexcept {
-+        spinlock_note_release(this);
-         atomic_store(&locked_, 0, __ATOMIC_RELEASE);
-         __atomic_store_n(&holder_, nullptr, __ATOMIC_RELAXED);
-     }
-@@ -63,6 +71,11 @@ class SpinLock {
-     void reset() noexcept {
-         locked_ = 0;
-         holder_ = nullptr;
-+        // NOTE: rank_ survives reset (set once at declaration/init).
-+        // NOTE: no order-bookkeeping update — reset() runs on locks
-+        // that are not held (fresh or recycled blocks, never a live
-+        // critical section); an init-time unlock() of a never-locked
-+        // lock is an unpaired no-op by design (see spinlock_order).
-     }
- 
-     /// @brief Attempt to acquire without blocking.
-@@ -72,6 +85,7 @@ class SpinLock {
-         if (acquired) {
-             __atomic_store_n(&holder_, __builtin_return_address(0),
-                              __ATOMIC_RELAXED);
-+            spinlock_note_acquire(this, rank_);
-         }
-         return acquired;
-     }
-@@ -80,10 +94,27 @@ class SpinLock {
-         return __atomic_load_n(&holder_, __ATOMIC_RELAXED);
-     }
- 
-+    /// @brief Assign the lock-order rank (M2, #546).  Set once at
-+    ///        declaration/init; never mutated while contended.
-+    void set_rank(LockRank rank) noexcept {
-+        rank_ = static_cast<uint8_t>(rank);
-+    }
-+
-+    /// @brief The lock-order rank (Unranked = invisible to the check).
-+    LockRank rank() const noexcept {
-+        return static_cast<LockRank>(rank_);
-+    }
-+
-   private:
-     int locked_ = 0; ///< 0 = unlocked, 1 = locked.
-+    // M2 (issue #546): rank byte lives in the existing padding —
-+    // sizeof(SpinLock) stays 16 (static_assert below).
-+    uint8_t rank_ = static_cast<uint8_t>(LockRank::Unranked);
-     const void *holder_ = nullptr;
+@@ -46,6 +46,9 @@ enum class ParkDenyReason : uint8_t {
+     NotRunning,   ///< Current task is not RUNNING (already blocked).
+     NoTicks,      ///< CONFIG_TICK_HZ == 0 — a sleep arm could never fire.
+     ArmFailed,    ///< PosixTime::sleep_arm failed (wheel full / non-BSP).
++    ForeignGuard, ///< Depth owned by a foreign context (diagnostic only:
++                  ///< never selects the pure-spin branch when
++                  ///< CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW == 1).
  };
  
-+static_assert(sizeof(sync::SpinLock) == 16,
-+              "SpinLock layout: rank_ must fit the existing padding (#546)");
-+
- } // namespace sync
- } // namespace kernel
+ /// @brief INV-L1 park predicate (side-effect free): true iff the calling
+@@ -81,6 +84,12 @@ uint64_t lock_spin_fallback_count() noexcept;
+ uint64_t lock_park_exhausted_count() noexcept;
+ /// @brief Last denial code (ParkDenyReason), sticky until reset.
+ uint64_t lock_park_denied_reason() noexcept;
++/// @brief M2 follow-up (#545 FIRE): bounded denied-spin block escapes
++///        (each escape re-arms the bounded block and re-diagnoses).
++uint64_t lock_denied_escape_count() noexcept;
++/// @brief M2 follow-up (#545 FIRE): park acquisitions admitted on a
++///        foreign-owned IrqGuard depth (INV-L4).
++uint64_t lock_foreign_depth_count() noexcept;
+ /// @brief Test-isolation reset (counters + denial code).
+ void park_lock_reset_for_test() noexcept;
+ 
 diff --git a/src/kernel/sync/spinlock_order.cpp b/src/kernel/sync/spinlock_order.cpp
-new file mode 100644
-index 000000000..a3c513317
---- /dev/null
+index a3c513317..6627f3529 100644
+--- a/src/kernel/sync/spinlock_order.cpp
 +++ b/src/kernel/sync/spinlock_order.cpp
-@@ -0,0 +1,179 @@
-+/// @file spinlock_order.cpp
-+/// @brief Lock-rank table + per-CPU held-lock bookkeeping (M2, #546).
-+/// The only TU that may resolve lock owners (needs Scheduler/task types).
-+
-+#include <kernel/sync/spinlock_order.hpp>
-+#include <kernel/arch/cpu_context.hpp>
+@@ -36,8 +36,11 @@ inline CpuHeldLocks &own_held() noexcept {
+ }
+ 
+ inline uint64_t resolve_owner_id() noexcept {
+-    if (kernel::isr_nesting_own() != 0)
+-        return 0; // ISR context owns as 0 (never a live task id).
++    // Owner is always the current task (0 when there is none, e.g. early
++    // boot).  Deliberately independent of isr_nesting/IF: the id is
++    // recorded at take time and matched at check time, and IF always flips
++    // in between (that is what a guard does), so any IF- or
++    // nesting-dependent rule mismatches itself across the pair.
+     auto *cur = Scheduler::current_task();
+     // Live task ids start at 1 (PID 1 = init); 0 means "no task context"
+     // only when cur is null (early boot) — a taken lock then attributes
+diff --git a/src/kernel/syscall/syscall_handlers_ipc.cpp b/src/kernel/syscall/syscall_handlers_ipc.cpp
+index 8d4aee66b..26e8b08a4 100644
+--- a/src/kernel/syscall/syscall_handlers_ipc.cpp
++++ b/src/kernel/syscall/syscall_handlers_ipc.cpp
+@@ -29,6 +29,7 @@
+ #include <kernel/arch/timer.hpp>
+ #include <kernel/ipc/ipc.hpp>
+ #include <kernel/ipc/buffer_pool.hpp>
 +#include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <lib/logger.hpp>
-+
-+namespace kernel {
-+namespace sync {
-+namespace {
-+
-+// Always-on per-CPU take depth (both builds).  See header.
-+uint64_t g_held_depth[CONFIG_MAX_CPUS] = {};
-+
-+#if defined(CONFIG_DEBUG)
-+// Per-CPU held-lock stack (own slot touched only; ISR-serialized on UP).
-+struct CpuHeldLocks {
-+    HeldLock entries[kMaxHeldLocks] = {};
-+    uint64_t depth = 0;
-+    uint64_t overflow = 0;
-+    uint64_t unpaired = 0;
-+};
-+
-+CpuHeldLocks g_held[CONFIG_MAX_CPUS] = {};
-+// Report-once per (outer,inner) rank pair + event counters (diagnostic;
-+// monotonic, atomics for ISR/task shared increments).
-+uint64_t g_violations[4][4] = {};
-+bool g_violation_reported[4][4] = {};
-+
-+inline CpuHeldLocks &own_held() noexcept {
-+    return g_held[arch::cpu_index() % CONFIG_MAX_CPUS];
-+}
-+
-+inline uint64_t resolve_owner_id() noexcept {
-+    if (kernel::isr_nesting_own() != 0)
-+        return 0; // ISR context owns as 0 (never a live task id).
-+    auto *cur = Scheduler::current_task();
-+    // Live task ids start at 1 (PID 1 = init); 0 means "no task context"
-+    // only when cur is null (early boot) — a taken lock then attributes
-+    // to 0, which the contract check treats as owned, never clean.
-+    return cur != nullptr ? cur->id : 0;
-+}
-+#endif // CONFIG_DEBUG
-+
-+} // namespace
-+
-+uint64_t spinlock_held_depth_own() noexcept {
-+    return g_held_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
-+}
-+
-+void spinlock_held_bump() noexcept {
-+    ++g_held_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
-+}
-+
-+void spinlock_held_drop() noexcept {
-+    uint64_t &slot = g_held_depth[arch::cpu_index() % CONFIG_MAX_CPUS];
-+    if (slot != 0)
-+        --slot; // Unpaired release is a no-op (never negative).
-+}
-+
-+#if defined(CONFIG_DEBUG)
-+
-+void spinlock_note_acquire(const void *addr, uint8_t rank) noexcept {
-+    CpuHeldLocks &held = own_held();
-+    const uint64_t owner = resolve_owner_id();
-+    // Report-only order check over the locks already held (outer → inner
-+    // must be strictly increasing rank numbers: Sched(1) → Queue(2) →
-+    // Leaf(3); Unranked locks are invisible).  Runs BEFORE the push so a
-+    // take never flags itself; on overflow the full stack is scanned.
-+    if (rank != static_cast<uint8_t>(LockRank::Unranked)) {
-+        for (uint64_t i = 0; i < held.depth; ++i) {
-+            const uint8_t outer = held.entries[i].rank;
-+            if (outer == static_cast<uint8_t>(LockRank::Unranked) ||
-+                outer < rank)
-+                continue;
-+            // outer >= inner with both ranked: order violation.
-+            __atomic_fetch_add(&g_violations[outer][rank], 1, __ATOMIC_RELAXED);
-+            if (!g_violation_reported[outer][rank]) {
-+                g_violation_reported[outer][rank] = true;
-+                kernel::Logger::warn(
-+                    "lockorder: rank inversion outer=%u inner=%u (report-only)",
-+                    static_cast<unsigned>(outer), static_cast<unsigned>(rank));
+ #include <kernel/memory/checked_ptr.hpp>
+ #include <kernel/arch/io.hpp>
+ 
+@@ -91,15 +92,28 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
+             // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
+             // BLOCKED transition so an arrival landing between the two stores
+             // still observes the channel (old code woke on state alone).
+-            cur->blocked_in_recv = true;
+-            cur->state = TaskState::BLOCKED;
++            // M2 follow-up (#545 SILENT): the triple publishes atomically
++            // under IrqGuard (Dekker close against the sender's wake gate).
++            {
++                arch::IrqGuard publish_guard{};
++                cur->blocked_in_recv = true;
++                cur->state = TaskState::BLOCKED;
++                Scheduler::dequeue_ready(*cur);
 +            }
-+        }
-+    }
-+    if (held.depth < kMaxHeldLocks) {
-+        held.entries[held.depth].addr = addr;
-+        held.entries[held.depth].owner_id = owner;
-+        held.entries[held.depth].rank = rank;
-+        ++held.depth;
-+    } else {
-+        __atomic_fetch_add(&held.overflow, 1, __ATOMIC_RELAXED);
-+    }
-+}
-+
-+void spinlock_note_release(const void *addr) noexcept {
-+    CpuHeldLocks &held = own_held();
-+    // Pop by address from the top (LIFO order not required by callers).
-+    for (uint64_t i = held.depth; i > 0; --i) {
-+        if (held.entries[i - 1].addr == addr) {
-+            for (uint64_t j = i - 1; j + 1 < held.depth; ++j)
-+                held.entries[j] = held.entries[j + 1];
-+            --held.depth;
-+            held.entries[held.depth] = HeldLock{};
-+            return;
-+        }
-+    }
-+    // Unpaired release (e.g. init-time unlock of a never-locked lock):
-+    // silent no-op + one-shot note.  Depth counter untouched (see header).
-+    static bool noted_once = false;
-+    if (!noted_once) {
-+        noted_once = true;
-+        kernel::Logger::warn("lockorder: unpaired release (init-time unlock?)");
-+    }
-+    __atomic_fetch_add(&held.unpaired, 1, __ATOMIC_RELAXED);
-+}
-+
-+uint64_t spinlock_held_by_current_count() noexcept {
-+    const CpuHeldLocks &held = own_held();
-+    const uint64_t owner = resolve_owner_id();
-+    uint64_t count = 0;
-+    for (uint64_t i = 0; i < held.depth; ++i) {
-+        if (held.entries[i].owner_id == owner)
-+            ++count;
-+    }
-+    return count;
-+}
-+
-+bool spinlock_contract_check_clean(const char *where) noexcept {
-+    (void)where;
-+    return spinlock_held_by_current_count() == 0;
-+}
-+
-+void spinlock_order_reset_for_test() noexcept {
-+    arch::IrqGuard irq_guard{};
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
-+        g_held[c] = CpuHeldLocks{};
-+        g_held_depth[c] = 0;
-+    }
-+    for (uint64_t o = 0; o < 4; ++o) {
-+        for (uint64_t i = 0; i < 4; ++i) {
-+            g_violations[o][i] = 0;
-+            g_violation_reported[o][i] = false;
-+        }
-+    }
-+}
-+
-+uint64_t spinlock_violation_count(uint8_t outer_rank,
-+                                  uint8_t inner_rank) noexcept {
-+    if (outer_rank >= 4 || inner_rank >= 4)
-+        return 0;
-+    return __atomic_load_n(&g_violations[outer_rank][inner_rank],
-+                           __ATOMIC_RELAXED);
-+}
-+
-+uint64_t spinlock_overflow_count() noexcept {
-+    uint64_t total = 0;
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
-+        total += __atomic_load_n(&g_held[c].overflow, __ATOMIC_RELAXED);
-+    }
-+    return total;
-+}
-+
-+uint64_t spinlock_unpaired_release_count() noexcept {
-+    uint64_t total = 0;
-+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
-+        total += __atomic_load_n(&g_held[c].unpaired, __ATOMIC_RELAXED);
-+    }
-+    return total;
-+}
-+
-+#endif // CONFIG_DEBUG
-+
-+} // namespace sync
-+} // namespace kernel
-diff --git a/src/kernel/sync/spinlock_order.hpp b/src/kernel/sync/spinlock_order.hpp
-new file mode 100644
-index 000000000..0f5e812bd
---- /dev/null
-+++ b/src/kernel/sync/spinlock_order.hpp
-@@ -0,0 +1,127 @@
-+#pragma once
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file spinlock_order.hpp
-+/// @brief Lock-rank table + per-CPU held-lock bookkeeping (M2, #546 §6.2).
-+/// Lightweight on purpose: includable from spinlock.hpp with no scheduler
-+/// or task dependency (owner resolution lives in spinlock_order.cpp).
-+
-+#include <types.hpp>
-+#include <kernel/nexios_config.h>
-+
-+namespace kernel {
-+namespace sync {
-+
-+/// @brief Lock rank, outer → inner.  Unranked locks are invisible to the
-+///        order check (documented per site; M8 re-audits the set).
-+enum class LockRank : uint8_t {
-+    Unranked = 0,
-+    Sched = 1, // scheduler_lock_ (outermost)
-+    Queue = 2, // MessageQueue / sync::Queue (endpoint/queue lock)
-+    Leaf = 3,  // DeathNotify::s_lock_, g_iopb_lock, ... (innermost)
-+};
-+
-+/// @brief Always-on per-CPU held-lock depth (both builds).  SpinLock
-+///        take/release paths bump/drop it so the M2 park predicate and
-+///        the INV-C1 check work in release builds where the HeldLock
-+///        stack is compiled out.  Balanced pairs only: an unpaired
-+///        release is a no-op (never drives the counter negative).
-+///        Defined in spinlock_order.cpp (TU-static storage).
-+uint64_t spinlock_held_depth_own() noexcept;
-+void spinlock_held_bump() noexcept;
-+void spinlock_held_drop() noexcept;
-+
-+#if defined(CONFIG_DEBUG)
-+
-+/// @brief One held-lock record (own CPU slot only, ISR-serialized).
-+struct HeldLock {
-+    const void *addr = nullptr;
-+    uint64_t owner_id = 0;
-+    uint8_t rank = 0;
-+};
-+
-+inline constexpr size_t kMaxHeldLocks = 8;
-+
-+/// @brief Record a successful take (push).  Report-only order check:
-+///        taking rank R while a higher-or-equal rank is held logs once
-+///        per (outer, inner) pair; never panics, never blocks.
-+void spinlock_note_acquire(const void *addr, uint8_t rank) noexcept;
-+
-+/// @brief Record a release (pop by address from the top).  An unpaired
-+///        release (e.g. init-time unlock of a never-locked lock) is a
-+///        silent no-op plus a one-shot DEBUG note — it must not corrupt
-+///        the stack or the always-on depth counter.
-+void spinlock_note_release(const void *addr) noexcept;
-+
-+/// @brief INV-C1 entry check for reschedule()/BLOCKED transitions:
-+///        true iff the calling context holds no spinlock (owner-id
-+///        matched, not per-CPU counted — a preempted holder on the same
-+///        CPU is legal and must not fire).
-+bool spinlock_contract_check_clean(const char *where) noexcept;
-+
-+/// @brief Test-isolation reset (clears stacks, counters, violations).
-+void spinlock_order_reset_for_test() noexcept;
-+
-+/// @brief Held-lock census for INV-L1 / INV-C1 predicates + diagnostics.
-+uint64_t spinlock_held_by_current_count() noexcept;
-+
-+/// @brief Diagnostics accessors (per (outer,inner) pair, overflow,
-+///        unpaired-release, park/switch counters live in park_lock).
-+uint64_t spinlock_violation_count(uint8_t outer_rank,
-+                                  uint8_t inner_rank) noexcept;
-+uint64_t spinlock_overflow_count() noexcept;
-+uint64_t spinlock_unpaired_release_count() noexcept;
-+
-+#else // !CONFIG_DEBUG
-+
-+inline void spinlock_note_acquire(const void *addr,
-+                                  uint8_t rank) noexcept {
-+    (void)addr;
-+    (void)rank;
-+    spinlock_held_bump();
-+}
-+
-+inline void spinlock_note_release(const void *addr) noexcept {
-+    (void)addr;
-+    spinlock_held_drop();
-+}
-+
-+inline bool spinlock_contract_check_clean(const char *where) noexcept {
-+    (void)where;
-+    return spinlock_held_by_current_count() == 0;
-+}
-+
-+inline void spinlock_order_reset_for_test() noexcept {}
-+inline uint64_t spinlock_held_by_current_count() noexcept {
-+    return spinlock_held_depth_own();
-+}
-+inline uint64_t spinlock_violation_count(uint8_t outer_rank,
-+                                         uint8_t inner_rank) noexcept {
-+    (void)outer_rank;
-+    (void)inner_rank;
-+    return 0;
-+}
-+inline uint64_t spinlock_overflow_count() noexcept { return 0; }
-+inline uint64_t spinlock_unpaired_release_count() noexcept { return 0; }
-+
-+#endif // CONFIG_DEBUG
-+
-+} // namespace sync
-+} // namespace kernel
-diff --git a/src/kernel/syscall/syscall.cpp b/src/kernel/syscall/syscall.cpp
-index 876152e4b..e9b123fdc 100644
---- a/src/kernel/syscall/syscall.cpp
-+++ b/src/kernel/syscall/syscall.cpp
-@@ -23,6 +23,7 @@
- #include <kernel/syscall/syscall.hpp>
- #include <kernel/syscall/syscall_errors.hpp>
- #include <kernel/syscall/syscall_helpers.hpp>
-+#include <kernel/task/tick_watchdog.hpp> // M2 §6.2: syscall-exit checkpoint
- #include <kernel/core/global_state.hpp>
- #include <kernel/task/scheduler.hpp>
- #include <kernel/task/task.hpp>
-@@ -135,8 +136,10 @@ int syscall_path_open(const char *path, uint64_t flags) {
- 
- uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
-                          uint64_t arg2, uint64_t arg3, uint64_t *regs) {
--    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
-+    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL)) {
-+        kernel::tick_watchdog::checkpoint("syscall_exit");
-         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-+    }
- 
-     // Issue #225: every syscall proves a user-mode trap frame exists for
-     // the caller (monotonic has_utrap_frame for debugger register reads).
-@@ -161,8 +164,10 @@ uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
-     // syscalls keep the canary verify (see canary_check_on_full_path below).
-     // Bounds are already checked above — exactly one check before indexing.
-     if (s_fastpath_enabled_ &&
--        (SYSCALL_FAST_MASK & ((__uint128_t)1 << number)))
-+        (SYSCALL_FAST_MASK & ((__uint128_t)1 << number))) {
-+        kernel::tick_watchdog::checkpoint("syscall_exit");
-         return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
-+    }
- 
-     // FULL path: MP-3 canary verify of user segments (page-table reads, no
-     // locks). Mismatch → controlled panic in production; test mode latches
-@@ -171,16 +176,21 @@ uint64_t Syscall::handle(uint64_t number, uint64_t arg0, uint64_t arg1,
-     // Canary relocation (issue #92): this check now runs ONLY on the FULL
-     // path; FAST members are covered by the context-switch / timer-tick
-     // sampling in the scheduler (canary_check_in_scheduler_hooks).
--    if (!canary_check_on_full_path(regs))
-+    if (!canary_check_on_full_path(regs)) {
-+        kernel::tick_watchdog::checkpoint("syscall_exit");
-         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-+    }
- 
-+    kernel::tick_watchdog::checkpoint("syscall_exit");
-     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
- }
- 
- uint64_t Syscall::handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
-                               uint64_t arg2, uint64_t arg3, uint64_t *regs) {
--    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL))
-+    if (number >= static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL)) {
-+        kernel::tick_watchdog::checkpoint("syscall_exit");
-         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-+    }
-     // Issue #225: same U-trap proof as handle() (fast-path syscalls trap
-     // identically; a yield-only spinner must still become readable).
-     // Atomic: debugger data calls on other tasks load this flag (cf. S2).
-@@ -188,6 +198,7 @@ uint64_t Syscall::handle_fast(uint64_t number, uint64_t arg0, uint64_t arg1,
-         __atomic_store_n(&t->has_utrap_frame, true, __ATOMIC_RELEASE);
-     // Lean path: bounds check only, then direct table dispatch.  The caller
-     // guarantees `number` is a FAST member (no user-pointer dereference).
-+    kernel::tick_watchdog::checkpoint("syscall_exit");
-     return syscall_table_[number](arg0, arg1, arg2, arg3, regs);
- }
- 
-diff --git a/src/kernel/task/scheduler.cpp b/src/kernel/task/scheduler.cpp
-index efd78a90c..43726a586 100644
---- a/src/kernel/task/scheduler.cpp
-+++ b/src/kernel/task/scheduler.cpp
-@@ -186,7 +186,7 @@ sync::SpinLock Scheduler::zombie_lock_;
- constinit TaskControlBlock *Scheduler::zombie_head_ = nullptr;
- constinit TaskControlBlock *Scheduler::zombie_tail_ = nullptr;
- constinit uint64_t Scheduler::zombie_count_ = 0;
--sync::SpinLock Scheduler::scheduler_lock_;
-+sync::SpinLock Scheduler::scheduler_lock_{sync::LockRank::Sched};
- 
- 
- // ---------------------------------------------------------------------------
+             was_blocked = true;
+-            // M-5 (audit-ipc-cap-syscalls-v0.4.2): a BLOCKED task must
+-            // never be physically queued (INV-2/WEDGE invariant) — the
+-            // block in ipc.cpp's send path declares this, and sys_receive
+-            // was missing the dequeue.
+-            Scheduler::dequeue_ready(*cur);
+             Scheduler::reschedule();
++            // M2 follow-up (#545 SILENT): post-publish re-check.  A message
++            // that arrived between the loop-top empty check and the publish
++            // is consumed instead of slept through (self-rescue mirrors the
++            // timeout path's restoration, with ok=true).
++            if (IPC::recv(msg)) {
++                ok = true;
++                cur->blocked_in_recv = false;
++                IPC::recv_wait_cancel(*cur);
++                arch::sti();
++                cur->state = TaskState::RUNNING;
++                break;
++            }
+             // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait
+             // pattern; key on is_user_ (every task now owns a PML4).
+             // Issue #513: the wait yields UNCONDITIONALLY.  A kernel-task
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index 751b666d1..4c4a00895 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -1224,7 +1224,18 @@ struct SwSlots {
+     ///        reset_stuck_rescue_count_for_test().
+     static uint64_t stuck_rescue_count_;
+     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
++    ///        Shared by the stranded-READY and IPC-wake sweeps.
+     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
++    /// @brief IPC-wake rescues since reset (M2 follow-up #545 SILENT).
++    ///        Detection-first: must stay 0 in a healthy run — every firing
++    ///        proves a lost wakeup on an IPC wait channel.  Monotonic like
++    ///        stuck_rescue_count_ (never rewound by snapshot restore);
++    ///        reset_ipc_wake_rescue_count_for_test() re-establishes 0.
++    static uint64_t ipc_wake_rescue_count_;
++    /// @brief For-test reset of the IPC-wake rescue detector.
++    static void reset_ipc_wake_rescue_count_for_test() noexcept;
++    /// @brief IPC-wake rescues since reset (QE diagnostic).
++    static uint64_t ipc_wake_rescue_count() noexcept;
+     /// @brief Starvation-breaker trigger (issue #242): consecutive ticks the
+     ///        top READY level may be picked while lower non-idle READY levels
+     ///        wait before exactly one dispatch below the top is forced.  Fixed
 diff --git a/src/kernel/task/scheduler_registry.cpp b/src/kernel/task/scheduler_registry.cpp
-index 295f28204..a4abacf32 100644
+index a4abacf32..759fafdce 100644
 --- a/src/kernel/task/scheduler_registry.cpp
 +++ b/src/kernel/task/scheduler_registry.cpp
-@@ -38,6 +38,7 @@
- #include <kernel/arch/msr.hpp>
- #include <kernel/arch/io.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/task/tick_watchdog.hpp> // M2 §6.2 item 6
- #include <kernel/sync/spinlock_guard.hpp>
- #include <lib/logger.hpp>
- #include <assert.hpp>
-@@ -516,6 +517,10 @@ void Scheduler::init(const SchedulerConfig &cfg) {
-     // idle band on every CPU).
-     reset_starvation_breaker();
+@@ -84,6 +84,8 @@ TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
  
-+    // M2 §6.2 item 6: TSC-domain tick watchdog (fail-closed when the raw
-+    // counter is not calibrated yet; note_tick() retries enablement).
-+    tick_watchdog::init();
+ uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
+ uint64_t Scheduler::stuck_rescue_count_ = {};
++// M2 follow-up (#545 SILENT): IPC-wake rescue detector (see hpp contract).
++uint64_t Scheduler::ipc_wake_rescue_count_ = {};
+ uint64_t Scheduler::loadavg_1min_ = 0;
+ uint64_t Scheduler::loadavg_5min_ = 0;
+ uint64_t Scheduler::loadavg_15min_ = 0;
+@@ -339,6 +341,14 @@ void Scheduler::reset_stuck_rescue_count_for_test() noexcept {
+     __atomic_store_n(&stuck_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+ }
+ 
++uint64_t Scheduler::ipc_wake_rescue_count() noexcept {
++    return __atomic_load_n(&ipc_wake_rescue_count_, __ATOMIC_RELAXED);
++}
 +
- #if CONFIG_DEADLINE_MONITOR_TASK
-     ensure_monitor();
- #endif
++void Scheduler::reset_ipc_wake_rescue_count_for_test() noexcept {
++    __atomic_store_n(&ipc_wake_rescue_count_, 0ULL, __ATOMIC_RELAXED);
++}
++
+ void Scheduler::balancer_tick() noexcept {
+     // BSP-only cadence point (AP ticks are dispatch-only, spec §3.4.4).
+     if (sched_cpu() != 0)
 diff --git a/src/kernel/task/scheduler_tick.cpp b/src/kernel/task/scheduler_tick.cpp
-index 04ddc9300..c62859974 100644
+index c62859974..fca8528ef 100644
 --- a/src/kernel/task/scheduler_tick.cpp
 +++ b/src/kernel/task/scheduler_tick.cpp
-@@ -39,6 +39,8 @@
- #include <kernel/arch/io.hpp>
- #include <kernel/arch/hal/irq_guard.hpp>
- #include <kernel/sync/spinlock_guard.hpp>
-+#include <kernel/sync/spinlock_order.hpp> // M2 §6.2 INV-C1 contract check
-+#include <kernel/task/tick_watchdog.hpp>  // M2 §6.2 item 6
- #include <kernel/time/timer_wheel.hpp>
- #include <kernel/memory/tlb_shootdown.hpp>
- #include <kernel/memory/mempool.hpp>
-@@ -955,6 +957,10 @@ void Scheduler::on_tick() noexcept {
-     TlbShootdown::on_tick(arch::Timer::ticks());
+@@ -598,6 +598,56 @@ void Scheduler::on_tick() noexcept {
+                              __ATOMIC_RELEASE);
+         }
  
-     rate_monotonic_schedule();
++#if CONFIG_IPC_WAKE_SWEEP_ENABLE == 1
++        // M2 follow-up (#545 SILENT): level-triggered IPC wake sweep.
++        // Structural net for ONE lost-wakeup channel: a BLOCKED
++        // recv-waiter whose own inbox is non-empty is re-READied.  Lock
++        // free by construction (is_empty is a relaxed atomic read; no
++        // queue lock is ever taken, so the ISR cannot spin behind an
++        // interrupted holder) and list-free (recv waiters are never
++        // linked anywhere, so set_task_ready is a complete wake: no
++        // unlink, no PI restore, nothing to leak).  Spurious wakes are
++        // impossible (own inbox: only this task consumes it).  Deliberately
++        // EXCLUDED channels: (a) reply-wait (has_from needs the queue lock
++        // — ParkLockGuard in the tick ISR could spin on the interrupted
++        // holder); covered by the death drain plus the publish-side
++        // re-checks.  (b) blocked senders: waking a LISTED waiter without
++        // unlinking it breaks the waiter-list invariant (stale links,
++        // double-link on re-block, priority-order violation — convicted
++        // live: the sweep's wake of lo collapsed IpcPriorityOrderedWake
++        // and cascaded into a teardown use-after-free), and unlinking
++        // needs the queue lock in ISR context; sender-side windows stay
++        // closed structurally (link-before-publish reorder, post-publish
++        // and post-wake re-checks, IF=0 rollback).  Detection-first:
++        // ipc_wake_rescue_count_ must stay 0 in a healthy run.
++        uint64_t ipc_sweep_count = 0;
++        for (auto *task = all_tasks_.first_ptr();
++             task != nullptr && ipc_sweep_count < STRANDED_RESCUE_SCAN_MAX;
++             task = all_tasks_.next_ptr(task)) {
++            ++ipc_sweep_count;
++            if (task->magic != TaskControlBlock::TCB_MAGIC)
++                continue;
++            if (is_idle_task(task) || task == current_task())
++                continue;
++            if (queue_target(*task) != sched_cpu())
++                continue; // issue #25 C1: own-CPU tasks only
++            if (task->state != TaskState::BLOCKED)
++                continue; // never clobber non-BLOCKED states (H2)
++            if (!task->blocked_in_recv || task->msg_queue.is_empty())
++                continue;
++            uint64_t rescue_no = ++ipc_wake_rescue_count_;
++            if (rescue_no == 1 ||
++                (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
++                Logger::warn("sched: IPC wake rescued #%lx id=%lx",
++                             rescue_no, task->id);
++            }
++            Scheduler::set_task_ready(*task);
++            task->remaining_ticks = task->period_ticks;
++            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
++                             __ATOMIC_RELEASE);
++        }
++#endif
 +
-+    // M2 §6.2 item 6: TSC-domain tick watchdog notes every completed BSP
-+    // tick.  Lock-free snapshot (atomics only); a no-op until calibrated.
-+    kernel::tick_watchdog::note_tick();
- }
- 
- // ---------------------------------------------------------------------------
-@@ -1153,6 +1159,31 @@ void Scheduler::rate_monotonic_schedule() noexcept {
- }
- 
- void Scheduler::reschedule() noexcept {
-+#if defined(CONFIG_DEBUG) && CONFIG_IRQ_CONTRACT_ASSERT != 0
-+    // M2 §6.2 item 2 (INV-C1): no tracked spinlock may be held across
-+    // reschedule() or a BLOCKED transition.  Owner-id matched: a task
-+    // preempted on this CPU while holding a lock is legal (its waiter
-+    // continues after the ISR); only the calling context's own holdings
-+    // trip this.  Boundary: only order-table locks are visible here.
-+    // scheduler_lock_ takes use the separate per-CPU depth counter with
-+    // their own no-reentrant-take ENSUREs (issue #369 T2b) — including the
-+    // on_tick adopted-guard path, which legitimately calls reschedule()
-+    // with scheduler_lock_ held and must not trip this check.
-+    // Lock-free check (per-CPU depth reads only) — safe at entry.
-+    if (!sync::spinlock_contract_check_clean("reschedule")) {
-+#if CONFIG_IRQ_CONTRACT_ASSERT >= 2
-+        panic("sched: spinlock held across reschedule()");
-+#else
-+        // SCHED +15: uncatalogued (SCHED has no catalog array; follows the
-+        // +1/+14 precedent) — WARN-severity per default_severity_for.
-+        log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
-+                            log::kDmesgBase_SCHED + 15, log::LogSeverity::WARN,
-+                            "lock held across reschedule",
-+                            current_task() ? current_task()->id : 0);
-+        kernel::Logger::warn("sched: spinlock held across reschedule");
-+#endif
-+    }
-+#endif
-     // Single-core UP: read-only ready-queue peek needs only IRQ-safety,
-     // not the full scheduler_lock_ (issue #369 T4b: it is IF=0 — not a
-     // held lock — that prevents the timer ISR from running at all here,
+         // Accounting, WCET, alarms — common to both paths.  Issue #25 C1:
+         // only tasks affine to this CPU (AP-affine tasks are not serviced).
+         // Issue #154: executed_ticks is execution time — only the
 diff --git a/src/kernel/task/task.hpp b/src/kernel/task/task.hpp
-index 1e9455081..677251b21 100644
+index 677251b21..3e9b0f897 100644
 --- a/src/kernel/task/task.hpp
 +++ b/src/kernel/task/task.hpp
-@@ -124,10 +124,7 @@ struct MessageQueue {
-     bool is_full() const {
-         return __atomic_load_n(&count, __ATOMIC_RELAXED) >= IPC_MAX_QUEUE_MSG;
-     }
--    bool is_full_locked() {
--        SpinLockGuard<sync::SpinLock> guard(lock_);
--        return count >= IPC_MAX_QUEUE_MSG;
--    }
-+    bool is_full_locked();
+@@ -341,6 +341,7 @@ struct TaskControlBlock {
+           blocked_on_queue(nullptr), reply_wait(false),
+           reply_wait_dest_id(0), reply_wait_dest_gen(0),
+           blocked_in_recv(false),
++          irq_depth_save(0), irq_owner_save(0),
+            waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
+            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
+            blocked_on_pager_fault(nullptr), debugger_id(0),
+@@ -918,6 +919,16 @@ struct TaskControlBlock {
+     /// (waitpid, pager, IRQ) and resumes them with stale wait state.
+     bool blocked_in_recv;
  
-     size_t highest_priority() const;
- 
++    /// @brief M2 follow-up (#545 Phase-1b): per-task IrqGuard depth/owner
++    ///        save slots.  The deferred-switch epilogue saves the outgoing
++    ///        task's live depth/owner here and restores the incoming task's,
++    ///        so the count travels with the task instead of leaking across
++    ///        abandoned stacks.  Transient switch state: never added to
++    ///        TaskFields (same treatment as reply_wait — the MemPool rewind
++    ///        covers it).  Zero means no suspended scope.
++    uint64_t irq_depth_save;
++    uint64_t irq_owner_save;
++
+     /// @brief Pointer to the mutex this task is blocked on (as a waiter).
+     /// Used for transitive priority inheritance propagation.
+     /// Non-null only while the task is in a Mutex's waiter array.
 diff --git a/src/kernel/task/tick_watchdog.cpp b/src/kernel/task/tick_watchdog.cpp
-new file mode 100644
-index 000000000..fb8d75701
---- /dev/null
+index fb8d75701..99a09629a 100644
+--- a/src/kernel/task/tick_watchdog.cpp
 +++ b/src/kernel/task/tick_watchdog.cpp
-@@ -0,0 +1,142 @@
-+/// @file tick_watchdog.cpp
-+/// @brief TSC-domain tick watchdog (M2, issue #546 §6.2 item 6).
-+
-+#include <kernel/task/tick_watchdog.hpp>
-+#include <kernel/arch/hal/timer.hpp>
-+#include <kernel/arch/hal/irq_guard.hpp>
-+#include <kernel/arch/cpu_context.hpp>
-+#include <kernel/arch/io.hpp>
-+#include <kernel/task/scheduler.hpp>
-+#include <kernel/task/task.hpp>
-+#include <kernel/log/dmesg.hpp>
-+#include <kernel/log/dmesg_catalog.hpp>
-+#include <lib/logger.hpp>
-+#include <lib/assert.hpp>
-+
-+namespace kernel {
-+namespace tick_watchdog {
-+namespace {
-+
-+bool g_usable = false; // raw_counter_freq_hz() != 0 observed at least once
-+uint64_t g_grace_cycles = 0;
-+uint64_t g_last_counter = 0;
-+uint64_t g_last_ticks = 0;
-+bool g_fired = false;
-+uint64_t g_fire_count = 0;
-+uint64_t g_overrun_cycles = 0;
-+bool g_enabled_cached = false;
-+
-+inline void try_enable() noexcept {
-+    if (g_enabled_cached)
-+        return;
-+    if (CONFIG_TICK_WATCHDOG_ENABLE == 0)
-+        return;
-+    const uint64_t freq = arch::Timer::raw_counter_freq_hz();
-+    if (freq == 0 || CONFIG_TICK_HZ == 0)
-+        return; // Fail closed until the counter is calibrated.
-+    // Saturating multiply-then-divide (grace 500 × GHz-scale fits u64
-+    // with orders of margin; order chosen to keep full precision).
-+    uint64_t grace = CONFIG_TICK_WATCHDOG_GRACE_TICKS;
-+    if (grace > ~0ULL / freq)
-+        grace = ~0ULL / (freq != 0 ? freq : 1);
-+    grace *= freq;
-+    grace /= static_cast<uint64_t>(CONFIG_TICK_HZ);
-+    if (grace == 0)
-+        grace = 1;
-+    g_grace_cycles = grace;
-+    g_enabled_cached = true;
-+    g_usable = true;
-+}
-+
-+inline void fire(const char *where, uint64_t elapsed) noexcept {
-+    g_fired = true;
-+    ++g_fire_count;
-+    g_overrun_cycles = elapsed;
-+    const auto *cur = Scheduler::current_task();
-+    const uint64_t cur_id = cur != nullptr ? cur->id : 0;
-+    const uint64_t cur_state =
-+        cur != nullptr ? static_cast<uint64_t>(cur->state) : 99ULL;
-+    kernel::Logger::error(
-+        "[TICKWD] FIRE where=%s overrun_cyc=%lu ticks=%lu cur=%lu st=%lu "
-+        "if=%d irqd=%lu isr=%lu",
-+        where, elapsed, g_last_ticks, cur_id, cur_state,
-+        arch::interrupts_enabled() ? 1 : 0, arch::irq_guard_depth_own(),
-+        kernel::isr_nesting_own());
-+    log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
-+                        log::kDmesgBase_TIMING + 8, log::LogSeverity::ERROR,
-+                        "tick_watchdog", cur_id);
-+#if CONFIG_TICK_WATCHDOG_ACTION == 2
-+    panic("[TICKWD] tick stalled");
-+#endif
-+}
-+
-+} // namespace
-+
-+void init() noexcept {
-+    try_enable();
-+}
-+
-+void note_tick() noexcept {
-+    try_enable(); // Late calibration enables on first measurable tick.
-+    if (!g_usable)
-+        return;
-+    g_last_counter = arch::Timer::raw_counter();
-+    g_last_ticks = arch::Timer::ticks();
-+}
-+
-+void checkpoint(const char *where) noexcept {
-+    if (!g_usable || Scheduler::is_test_active())
-+        return;
-+    if (g_last_counter == 0)
-+        return; // No tick observed yet — nothing to compare against.
-+    const uint64_t now = arch::Timer::raw_counter();
-+    const uint64_t ticks_now = arch::Timer::ticks();
-+    if (ticks_now != g_last_ticks)
-+        return; // Tick advanced since the last note — alive.
-+    const uint64_t elapsed =
-+        now >= g_last_counter ? now - g_last_counter : 0;
-+    if (elapsed > g_grace_cycles && !g_fired)
-+        fire(where, elapsed);
-+}
-+
-+void idle_checkpoint(const char *where) noexcept {
-+    (void)where;
-+    // Resync only, never fire: idle-current implies no schedulable work
-+    // is stranded (any READY task would have been dispatched instead).
-+    if (!g_usable || Scheduler::is_test_active())
-+        return;
-+    g_last_counter = arch::Timer::raw_counter();
-+    g_last_ticks = arch::Timer::ticks();
-+}
-+
-+bool fired() noexcept {
-+    return g_fired;
-+}
-+
-+uint64_t fire_count() noexcept {
-+    return g_fire_count;
-+}
-+
-+uint64_t last_evidence() noexcept {
-+    return g_overrun_cycles;
-+}
-+
-+void reset_for_test() noexcept {
-+    g_last_counter = 0;
-+    g_last_ticks = 0;
-+    g_fired = false;
-+    g_fire_count = 0;
-+    g_overrun_cycles = 0;
-+}
-+
-+void note_tick_override() noexcept {
-+    // A deliberate tick rewind (test seam) is not a stall: resync the
-+    // snapshot so the next checkpoint compares against fresh values.
-+    if (!g_usable)
-+        return;
-+    g_last_counter = arch::Timer::raw_counter();
-+    g_last_ticks = arch::Timer::ticks();
-+}
-+
-+} // namespace tick_watchdog
-+} // namespace kernel
-diff --git a/src/kernel/task/tick_watchdog.hpp b/src/kernel/task/tick_watchdog.hpp
-new file mode 100644
-index 000000000..f182ffb9d
---- /dev/null
-+++ b/src/kernel/task/tick_watchdog.hpp
-@@ -0,0 +1,70 @@
-+#pragma once
-+
-+/*
-+ * NexIOS RTOS — Development Roadmap / Kernel Core
-+ * Copyright (C) 2026 Arnold Hasshold
-+ *
-+ * This program is free software: you can redistribute it and/or modify
-+ * it under the terms of the GNU General Public License as published by
-+ * the Free Software Foundation, either version 3 of the License, or
-+ * (at your option) any later version.
-+ *
-+ * This program is distributed in the hope that it will be useful,
-+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ * GNU General Public License for more details.
-+ *
-+ * You should have received a copy of the GNU General Public License
-+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-+ */
-+
-+/// @file tick_watchdog.hpp
-+/// @brief TSC-domain tick watchdog (M2, issue #546 §6.2 item 6).
-+/// Fires when the raw TSC advances past grace while the timer tick count is
-+/// frozen and the CPU is out of idle.  Independent clock domain from the
-+/// tick it watches (raw_counter never rewinds, unlike snapshot-rewound
-+/// ticks_).  Fire policy is log/latch only (CONFIG_TICK_WATCHDOG_ACTION,
-+/// default 0); a panic arm exists for the Q12-A reboot hook but M2 never
-+/// wires it.  No allocation, no locks, no scheduler services on any path.
-+
-+#include <types.hpp>
-+
-+namespace kernel {
-+namespace tick_watchdog {
-+
-+/// @brief Initialise from raw_counter_freq_hz (called once from
-+///        Scheduler::init).  Disabled when either frequency is 0.
-+void init() noexcept;
-+
-+/// @brief Record a live tick (called at the end of the BSP on_tick body).
-+void note_tick() noexcept;
-+
-+/// @brief Check for a stalled tick from task context.  No-op when disabled,
-+///        before the first tick, or while the test harness owns the clock.
-+/// @param where Static tag naming the call site (serial/dmesg evidence).
-+void checkpoint(const char *where) noexcept;
-+
-+/// @brief Idle-loop checkpoint: resync only, never fires (idle-current
-+///        implies no schedulable work is stranded by a dead tick).
-+/// @param where Static tag naming the call site.
-+void idle_checkpoint(const char *where) noexcept;
-+
-+/// @brief True once the watchdog has fired (latched, one-shot).
-+bool fired() noexcept;
-+
-+/// @brief Number of fire events (0 or 1 — one-shot latch).
-+uint64_t fire_count() noexcept;
-+
-+/// @brief Raw TSC value at the last fire (0 if never fired).
-+uint64_t last_evidence() noexcept;
-+
-+/// @brief Test-isolation reset (clears snapshots, latch, counters).
-+void reset_for_test() noexcept;
-+
-+/// @brief Pretend a tick happened (test seam for set_ticks_for_test:
-+///        callers that rewind the tick count must call this so a
-+///        deliberate rewind is not misread as a stall).
-+void note_tick_override() noexcept;
-+
-+} // namespace tick_watchdog
-+} // namespace kernel
-diff --git a/tools/validate_style.py b/tools/validate_style.py
-index 887e0c71e..78ebfa25b 100644
---- a/tools/validate_style.py
-+++ b/tools/validate_style.py
-@@ -929,8 +929,13 @@ class DescriptiveNamesChecker(Checker):
-             ch = m.group(1)
-             if ch not in allow_loop:
-                 loop_line = get_line(text, m.start(1))
--                # Count lines in loop body
--                body_start = text.index("{", m.end()) + 1
-+                # Count lines in loop body.  Braceless single-statement
-+                # tails have no measurable body — skip instead of crashing
-+                # the whole gate (ValueError on missing "{" blocked M2).
-+                try:
-+                    body_start = text.index("{", m.end()) + 1
-+                except ValueError:
-+                    continue
-                 body_end = self._find_brace_end(text, body_start - 1)
-                 body_lines = text[body_start:body_end - 1].count("\n")
-                 if body_lines > max_loop_lines:
+@@ -8,6 +8,7 @@
+ #include <kernel/arch/io.hpp>
+ #include <kernel/task/scheduler.hpp>
+ #include <kernel/task/task.hpp>
++#include <kernel/sync/park_lock.hpp>
+ #include <kernel/log/dmesg.hpp>
+ #include <kernel/log/dmesg_catalog.hpp>
+ #include <lib/logger.hpp>
+@@ -58,10 +59,12 @@ inline void fire(const char *where, uint64_t elapsed) noexcept {
+         cur != nullptr ? static_cast<uint64_t>(cur->state) : 99ULL;
+     kernel::Logger::error(
+         "[TICKWD] FIRE where=%s overrun_cyc=%lu ticks=%lu cur=%lu st=%lu "
+-        "if=%d irqd=%lu isr=%lu",
++        "if=%d irqd=%lu isr=%lu deny=%lu park=%lu denied=%lu foreign=%lu",
+         where, elapsed, g_last_ticks, cur_id, cur_state,
+         arch::interrupts_enabled() ? 1 : 0, arch::irq_guard_depth_own(),
+-        kernel::isr_nesting_own());
++        kernel::isr_nesting_own(), sync::lock_park_denied_reason(),
++        sync::lock_park_count(), sync::lock_denied_escape_count(),
++        sync::lock_foreign_depth_count());
+     log::dmesg_push_sev(log::ErrorSubsystem::TIMING,
+                         log::kDmesgBase_TIMING + 8, log::LogSeverity::ERROR,
+                         "tick_watchdog", cur_id);

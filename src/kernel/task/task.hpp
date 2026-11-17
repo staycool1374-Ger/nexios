@@ -118,6 +118,33 @@ struct MessageQueue {
     ///        arrived before the peer died must still be consumed).
     bool has_from(uint64_t sender_id);
 
+    /// @brief Try-once queue probe outcome (F1 #545, INV-4b).  A probe is a
+    ///        single try_lock: it never pauses, parks, spins, allocates
+    ///        or reschedules.  Contended = no side effect (the lock was
+    ///        never taken).  PresentOversized = a matching/any message
+    ///        exists but exceeds the clamp and was NOT removed.
+    ///        Must be called with IF=0 when the result feeds a BLOCKED
+    ///        decision (atomic vs tick preemption — a preempted take
+    ///        while BLOCKED strands the lock with no INV-C1 warning).
+    enum class QueueProbe : uint8_t {
+        Consumed,         ///< Message removed into @p out.
+        Empty,            ///< No (matching) message queued.
+        PresentOversized, ///< Matching/any message present but oversized.
+        Contended,        ///< Lock busy; nothing touched.
+    };
+
+    /// @brief Pop the highest-priority message only if the lock is free.
+    ///        Never waits.  See QueueProbe contract above.
+    QueueProbe probe_pop(Message &out);
+    /// @brief pop_pop with the issue #11 clamp, non-blocking.
+    QueueProbe probe_pop_clamped(Message &out, uint32_t max_size);
+    /// @brief pop_from_sender, non-blocking.
+    QueueProbe probe_pop_from_sender(Message &out, uint64_t sender_id);
+    /// @brief pop_from_sender_clamped, non-blocking.
+    QueueProbe probe_pop_from_sender_clamped(Message &out,
+                                             uint32_t max_size,
+                                             uint64_t sender_id);
+
     bool is_empty() const {
         return __atomic_load_n(&count, __ATOMIC_RELAXED) == 0;
     }
@@ -341,6 +368,7 @@ struct TaskControlBlock {
           blocked_on_queue(nullptr), reply_wait(false),
           reply_wait_dest_id(0), reply_wait_dest_gen(0),
           blocked_in_recv(false),
+          irq_depth_save(0), irq_owner_save(0),
            waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
            blocked_on_pager_fault(nullptr), debugger_id(0),
@@ -917,6 +945,16 @@ struct TaskControlBlock {
     /// distinguish recv-waiters from tasks blocked in non-IPC channels
     /// (waitpid, pager, IRQ) and resumes them with stale wait state.
     bool blocked_in_recv;
+
+    /// @brief M2 follow-up (#545 Phase-1b): per-task IrqGuard depth/owner
+    ///        save slots.  The deferred-switch epilogue saves the outgoing
+    ///        task's live depth/owner here and restores the incoming task's,
+    ///        so the count travels with the task instead of leaking across
+    ///        abandoned stacks.  Transient switch state: never added to
+    ///        TaskFields (same treatment as reply_wait — the MemPool rewind
+    ///        covers it).  Zero means no suspended scope.
+    uint64_t irq_depth_save;
+    uint64_t irq_owner_save;
 
     /// @brief Pointer to the mutex this task is blocked on (as a waiter).
     /// Used for transitive priority inheritance propagation.

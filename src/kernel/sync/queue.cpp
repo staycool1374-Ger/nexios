@@ -230,9 +230,9 @@ bool Queue::send(const uint8_t *data, size_t size) {
         Scheduler::dequeue_ready(*task);
         Scheduler::reschedule();
 
-        // reschedule() is deferred (INV-4): the current task keeps running
-        // with state=BLOCKED until the timer ISR applies the switch and the
-        // receiver drains + wakes us.  Spin-wait (mirrors IPC::send).  If
+        // reschedule() parks a BLOCKED caller until woken (INV-4a); the
+        // spin below is a no-op on that path and stays mandatory for
+        // gate-denied contexts.  Spin-wait (mirrors IPC::send).  If
         // interrupts are off the ISR can't fire — roll back and fail.
         if (arch::interrupts_enabled()) {
             while (task->state == TaskState::BLOCKED) {
@@ -381,8 +381,9 @@ bool Queue::receive(uint8_t *buf, size_t *size) {
         Scheduler::dequeue_ready(*task);
         Scheduler::reschedule();
 
-        // reschedule() is deferred (INV-4): spin-wait until the timer ISR
-        // applies the switch and the sender enqueues + wakes us.  If
+        // reschedule() is deferred (INV-4): spin-wait until woken (INV-4a
+        // parks a BLOCKED caller; the spin below is then a no-op and stays
+        // mandatory for gate-denied contexts).  If
         // interrupts are off the ISR can't fire — roll back and fail.
         if (arch::interrupts_enabled()) {
             while (task->state == TaskState::BLOCKED) {

@@ -592,8 +592,9 @@ bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
     Scheduler::dequeue_ready(*cur);
     Scheduler::reschedule();
 
-    // reschedule() is deferred: the task physically continues until the
-    // timer ISR applies the switch.  Spin on BLOCKED — the ISR completion
+    // reschedule() parks a BLOCKED caller until woken (INV-4a); the
+    // spin below is a no-op on that path and stays mandatory for
+    // gate-denied contexts.  Spin on BLOCKED — the ISR completion
     // wake (set_task_ready) or the scheduler's timeout-apply walk restores
     // READY.  With interrupts off no wake can arrive: roll back and poll.
     if (arch::interrupts_enabled()) {

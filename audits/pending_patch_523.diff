@@ -1,0 +1,383 @@
+diff --git a/prompts/LEARNINGS.md b/prompts/LEARNINGS.md
+index dac915170..9f04e688f 100644
+--- a/prompts/LEARNINGS.md
++++ b/prompts/LEARNINGS.md
+@@ -1839,6 +1839,12 @@
+ - **Adapted:** spare `is_idle_task(t)` (all CPUs) + `is_current_on_any_cpu(t)` in the loop, mirroring `terminate_err`'s remote-current refusal and `cleanup_test_tasks`' spare set. Gates: x86_64 release 24/24 (was 23/24), aarch64 release 28/28, riscv64 release 35/35, debug smp 21/21.
+ - **Style re-face:** every teardown path must check any-CPU currency, not just local current — `reap_orphans` still only spares calling-CPU `current` (its callers happen to be safe today); audit any new caller against `is_current_on_any_cpu` before wiring it up.
+ 
++### #523 — aarch64 pager tests: no delegation (hang) + trap kill skipped release_zombie (PMM+45 leak) (FIXED, gates green)
++
++- **Learned:** (1) The only production `delegate_fault` call site was x86 (`kernel.cpp:2573`) — aarch64/riscv64 EL0/U-mode fault handlers killed unconditionally, so pager probes SIGSEGV'd before delegating: `pending_fault` never true → assert FAIL → leaked TERMINATED probe → next test's `drive_until(pending)` spun forever (STALL). One missing hook explained FAIL + leak + hang. (2) The fault-kill shape (`TERMINATED` + wake + `switch_away`) skipped `release_zombie`, so `terminate_and_drain` on an already-TERMINATED task just drained an empty zombie list — PMM+45/Tasks+1/MQ+1 leaked per fault-killed task on aa64/rv64 while x86 (full `terminate_err` via signal delivery) stayed clean. Fix is the shared `terminate_err_from_trap` prefix (dequeue + join-note + wake + `release_zombie` + reaper poke, NO `switch_to_task`) called before the existing deferred switch — zombie-before-arm order is load-bearing. (3) `[[nodiscard]]` + `-Werror=unused-result` forces consuming the helper's return even when refusal is impossible — capture + `(void)` with the reason. (4) Parity work exposes latent arch bugs: riscv64 probe VA 0x10000000 aliases the UART identity window (test-6 assert premise wrong, same class as #352) and split-L2 pages leak on teardown (riscv64-only) — both filed as follow-ups (#526/#527), not fixed in the pager change.
++- **Adapted:** ESR whitelist decode (EC 0x24/0x25 + translation DFSC → x86 #PF-shaped code) on aa64, scause {13,15} on rv64, both placed BEFORE debugger routing/kill with no-registration ⇒ byte-identical kill (existing EL0-fault tests unaffected: arch_aa64 38/38, arch_rv64 31/31). Trip-kill legs also release (same corpse problem) but keep the discard variant; x86 untouched (already full-terminates).
++- **Style re-face:** when a whole symptom triple (FAIL + leak + hang) shares one trigger (no delegation), fix the trigger first and re-measure before theorizing about the parts; a kill path that marks TERMINATED without zombie-listing is a leak by construction — audit every TERMINATED write for its release; parity mirrors go in the same cycle with per-arch decode, verified per-arch, and newly exposed arch bugs get filed issues (#526/#527/#528), not scope-creep fixes.
++
+ ### #524 — aarch64 core_memory: HHDM restore was x86-shaped, boot stack outside .boot_stack, TTBR1 never switched (FIXED, gates green)
+ 
+ - **Learned:** (1) `test_isolate`'s HHDM save walked `L0[256]→L1[0]` (the MMIO L2 on aarch64, not the RAM L2) and the restore gated on the x86 boot-PD phys `0x5000` — every aarch64 rewind printed `[PD-RESTORE] CORRUPTED` and skipped, leaving split L3s dangling into level-3 translation faults (DFSC 0x07 at the exact split VA). Fix by arch arms (save L1 + children L2{0,1,256}, rewind with split-page reclaim + TLB flush). (2) `_boot_stack` was emitted into `.boot.data` while the span came from the empty `.boot_stack` section — test 55's span assert failed on a false premise; fix the layout (section move), not the assert; this ld rejects ASSERT() so the fail-stop lives in boot.S (riscv precedent). (3) Test-side x86 assumptions bite on aarch64: `split_now` used the PS bit (bit 7 is an address bit in a block descriptor) — gate per-arch (`(e&3)==1`), with doc-block update (systemically-wrong-test ritual). (4) The aarch64 trap epilogue switched only TTBR0, so private kernel-half windows (L0[320] PRIV_BASE) faulted at level 0 under the shared root — x86 switches the whole CR3. Fix: program TTBR1 (ASID-stripped) in the existing TLBI window + `switch_address_space` for exec; riscv needs no twin (single satp). Serial MAP-DROP absence ruled out a map failure before touching the switch path.
+diff --git a/src/kernel/arch/aarch64/interrupt_controller.cpp b/src/kernel/arch/aarch64/interrupt_controller.cpp
+index ae89f580c..7ec707689 100644
+--- a/src/kernel/arch/aarch64/interrupt_controller.cpp
++++ b/src/kernel/arch/aarch64/interrupt_controller.cpp
+@@ -12,6 +12,7 @@
+ #include <kernel/task/idle_monitor.hpp>
+ #include <kernel/debug/debug_stop.hpp>
+ #include <kernel/debug/crash_dump.hpp>
++#include <kernel/ipc/pager_registry.hpp>
+ #include <signal.hpp>
+ 
+ #include <kernel/arch/hal/irq_storm.hpp>
+@@ -360,14 +361,52 @@ extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
+                 return 1;
+             }
+             auto *t = kernel::Scheduler::current_task();
+-            t->state = kernel::TaskState::TERMINATED;
+-            t->exit_code = static_cast<uint64_t>(
+-                -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+-            kernel::Scheduler::wake_waiting_parent(*t);
++            // Issue #523: full trap-safe termination (dequeue + join-note +
++            // zombie release) so the drain reaps the corpse; the discard
++            // switch below stays the trap-safe mechanism.  Refusal is
++            // impossible here (task == current) — the switch runs regardless.
++            const auto trap_term_err =
++                kernel::Scheduler::terminate_err_from_trap(
++                    *t, static_cast<uint64_t>(-static_cast<int64_t>(
++                            kernel::Signal::SIGSEGV)));
++            (void)trap_term_err;
+             kernel::Scheduler::switch_away_from_terminating_discard(*t);
+             return 1;
+         }
+     }
++    // Issue #523: user-mode data-abort delegation to a designated pager
++    // (mirrors the x86 #PF arm in kernel.cpp). The classifier runs BEFORE
++    // debugger routing and the SIGSEGV kill below; a delegated client
++    // blocks inside delegate_fault and the vectors epilogue switches away
++    // with the trap frame preserved for retry. Whitelist-only ESR decode:
++    // EC 0x24/0x25 (data abort; 0x25 is unreachable from EL0 but kept so
++    // the two EC arms stay textually identical) with a translation-fault
++    // DFSC (0b0001xx = not-present). Permission, access-flag, address-size
++    // and external faults, instruction aborts, and kernel-half FARs fall
++    // through to the existing kill (the classifier's F3/F5/F6/F7 reject
++    // them the same way). No registration -> delegate returns false ->
++    // kill path byte-identical, so the existing EL0-fault tests (which
++    // register no pager) are unaffected.
++    {
++        kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
++        if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
++            t->state != kernel::TaskState::TERMINATED) {
++            const uint64_t ec = (esr >> 26) & 0x3FULL;
++            if (ec == 0x24 || ec == 0x25) {
++                const uint64_t dfsc = esr & 0x3FULL;
++                if ((dfsc & 0x3CU) == 0x04U) {
++                    const uint64_t wnr = (esr >> 6) & 1ULL;
++                    // x86 #PF code shape: P=0 (not-present), W=ISS WnR,
++                    // U/S=1 (EL0 fault), RSVD=0, I/D=0 (data).
++                    const uint64_t pf_code = (wnr << 1) | (1ULL << 2);
++                    if (kernel::ipc::PagerRegistry::delegate_fault(
++                            *t, pf_code, frame, far)) {
++                        return 1;
++                    }
++                }
++            }
++        }
++    }
+     kernel::TaskControlBlock *t = kernel::Scheduler::current_task();
+     if (t != nullptr && kernel::TaskControlBlock::is_valid(t) &&
+         t->state != kernel::TaskState::TERMINATED) {
+@@ -427,13 +466,18 @@ extern "C" uint64_t aarch64_el0_fault_handler(uint64_t *frame) {
+ #endif
+             }
+         }
+-        t->state = kernel::TaskState::TERMINATED;
+-        t->exit_code = static_cast<uint64_t>(
+-            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+         // Issue #217: wake a parent blocked in waitpid BEFORE switching
+         // away (wake needs parent_id, which it clears) so the woken
+         // parent can be selected as the switch successor.
+-        kernel::Scheduler::wake_waiting_parent(*t);
++        // Issue #523: full trap-safe termination (dequeue + join-note +
++        // zombie release) so the drain reaps the corpse; the deferred
++        // switch below stays the trap-safe mechanism.  Refusal is
++        // impossible here (task == current) — the switch runs regardless.
++        const auto trap_term_err =
++            kernel::Scheduler::terminate_err_from_trap(
++                *t, static_cast<uint64_t>(
++                        -static_cast<int64_t>(kernel::Signal::SIGSEGV)));
++        (void)trap_term_err;
+         kernel::Scheduler::switch_away_from_terminating(*t);
+         return 1;
+     }
+diff --git a/src/kernel/arch/riscv64/interrupt_controller.cpp b/src/kernel/arch/riscv64/interrupt_controller.cpp
+index 6e4a296c1..eb2c30ddb 100644
+--- a/src/kernel/arch/riscv64/interrupt_controller.cpp
++++ b/src/kernel/arch/riscv64/interrupt_controller.cpp
+@@ -13,6 +13,7 @@
+ #include <kernel/core/global_state.hpp>
+ #include <kernel/debug/debug_stop.hpp>
+ #include <kernel/debug/crash_dump.hpp>
++#include <kernel/ipc/pager_registry.hpp>
+ #include <kernel/arch/irq_guard.hpp>
+ #include <signal.hpp>
+ 
+@@ -236,10 +237,35 @@ extern "C" uint64_t riscv64_u_fault_handler(uint64_t *frame) {
+                 return 1;
+             }
+         }
+-        t->state = kernel::TaskState::TERMINATED;
+-        t->exit_code = static_cast<uint64_t>(
+-            -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+-        kernel::Scheduler::wake_waiting_parent(*t);
++        // Issue #523: user-mode page-fault delegation to a designated pager
++        // (mirrors the x86 #PF arm and the aarch64 EL0 arm). The classifier
++        // runs BEFORE the SIGSEGV kill below; a delegated client blocks
++        // inside delegate_fault and the asm epilogue switches away with the
++        // trap frame preserved for retry. Whitelist-only scause decode:
++        // 13 (load page fault) / 15 (store/AMO page fault). Instruction
++        // page faults (12), misaligned, illegal-instruction and S-mode
++        // traps fall through to the existing kill (the classifier's F6
++        // rejects instruction fetches the same way). No registration ->
++        // delegate returns false -> kill path byte-identical.
++        if (scause == 13 || scause == 15) {
++            // x86 #PF code shape: P=0 (not-present), W=(store?1:0),
++            // U/S=1 (U-mode fault), RSVD=0, I/D=0 (data).
++            const uint64_t pf_code =
++                ((scause == 15) ? (1ULL << 1) : 0ULL) | (1ULL << 2);
++            if (kernel::ipc::PagerRegistry::delegate_fault(*t, pf_code,
++                                                           frame, stval)) {
++                return 1;
++            }
++        }
++        // Issue #523: full trap-safe termination (dequeue + join-note +
++        // zombie release) so the drain reaps the corpse; the deferred
++        // switch below stays the trap-safe mechanism.  Refusal is
++        // impossible here (task == current) — the switch runs regardless.
++        const auto trap_term_err =
++            kernel::Scheduler::terminate_err_from_trap(
++                *t, static_cast<uint64_t>(
++                        -static_cast<int64_t>(kernel::Signal::SIGSEGV)));
++        (void)trap_term_err;
+         kernel::Scheduler::switch_away_from_terminating(*t);
+         return 1;
+     }
+@@ -303,10 +329,15 @@ extern "C" uint64_t riscv64_exception_dispatch(uint64_t *frame,
+                 return 1;
+             }
+             auto *t = kernel::Scheduler::current_task();
+-            t->state = kernel::TaskState::TERMINATED;
+-            t->exit_code = static_cast<uint64_t>(
+-                -static_cast<int64_t>(kernel::Signal::SIGSEGV));
+-            kernel::Scheduler::wake_waiting_parent(*t);
++            // Issue #523: full trap-safe termination (dequeue + join-note +
++            // zombie release) so the drain reaps the corpse; the discard
++            // switch below stays the trap-safe mechanism.  Refusal is
++            // impossible here (task == current) — the switch runs regardless.
++            const auto trap_term_err =
++                kernel::Scheduler::terminate_err_from_trap(
++                    *t, static_cast<uint64_t>(-static_cast<int64_t>(
++                            kernel::Signal::SIGSEGV)));
++            (void)trap_term_err;
+             kernel::Scheduler::switch_away_from_terminating_discard(*t);
+             return 1;
+         }
+diff --git a/src/kernel/task/scheduler.hpp b/src/kernel/task/scheduler.hpp
+index ec458626c..34552c6f1 100644
+--- a/src/kernel/task/scheduler.hpp
++++ b/src/kernel/task/scheduler.hpp
+@@ -541,6 +541,16 @@ class Scheduler {
+     ///        terminate() above delegates and warns on refusal.
+     [[nodiscard]] static errors::SchedulerError terminate_err(TaskControlBlock &task,
+                                                 uint64_t exit_code) noexcept;
++    /// @brief Trap-safe termination prefix (issue #523): everything
++    ///        terminate_err does EXCEPT the self-current switch_to_task.
++    ///        For fault handlers (traps masked): call this, then
++    ///        switch_away_from_terminating[_discard] — the zombie-before-arm
++    ///        order is load-bearing (release_zombie invalidates pending arms
++    ///        before the new arm is published).  Precondition: task live
++    ///        (release_zombie has no idempotency guard); hold no scheduler
++    ///        lock.
++    [[nodiscard]] static errors::SchedulerError terminate_err_from_trap(
++        TaskControlBlock &task, uint64_t exit_code) noexcept;
+     /// @brief Result of one idle authenticity re-verify slice (issue #46).
+     enum class AuthStepResult : uint8_t {
+         NONE = 0,    ///< No verifiable user image found.
+diff --git a/src/kernel/task/scheduler_terminate.cpp b/src/kernel/task/scheduler_terminate.cpp
+index b7288368d..95f81b76f 100644
+--- a/src/kernel/task/scheduler_terminate.cpp
++++ b/src/kernel/task/scheduler_terminate.cpp
+@@ -150,6 +150,58 @@ Scheduler::terminate_err(TaskControlBlock &task,
+     return errors::SCHED_ERR_OK;
+ }
+ 
++/// @brief Trap-safe termination prefix (issue #523): everything
++///        terminate_err does EXCEPT the self-current switch_to_task.
++///        Fault handlers (aarch64 EL0, riscv64 U-mode) run with traps masked
++///        and must leave via the deferred-switch arm published by
++///        switch_away_from_terminating — a direct switch_to_task from trap
++///        context would publish the trap frame as the resume point.
++///        The pre-existing fault-kill shape (TERMINATED + wake + switch_away)
++///        skipped release_zombie, so fault-killed tasks were never
++///        zombie-listed and drain_zombie_list reaped nothing (PMM/Tasks/MQ
++///        leak, e.g. the pager probes).  This helper restores the full
++///        prefix: dequeue, TERMINATED mark, join-note, parent wake,
++///        release_zombie, reaper poke.
++///        Caller contract (mirrors switch_away_from_terminating): hold no
++///        scheduler lock; the task must be live (not already TERMINATED —
++///        release_zombie has no idempotency guard); call
++///        switch_away_from_terminating[_discard] AFTER this returns, so the
++///        zombie-before-arm ordering holds (release_zombie's
++///        invalidate_pending_switch_to runs before the arm is published).
++errors::SchedulerError Scheduler::terminate_err_from_trap(
++    TaskControlBlock &task, uint64_t exit_code) noexcept {
++    ENSURE(validate_task_ptr(&task, "terminate_err_from_trap"));
++    arch::IrqGuard irq_guard{};
++    // Issue #197: same fail-closed remote-current refusal as terminate_err.
++    if (is_current_on_any_cpu(&task) && &task != current_task()) [[unlikely]] {
++        kernel::Logger::warn("sched: trap-terminate id=%u refused "
++                             "(remote-current)",
++                             static_cast<unsigned>(task.id));
++        return errors::SCHED_ERR_REMOTE_CURRENT;
++    }
++    ENSURE(scheduler_lock_depth_own() == 0); // issue #369 T2b: no reentrant take
++    SchedulerLockGuard guard(scheduler_lock_);
++    charge_exec(task); // issue #21: bill the final partial quantum
++    dequeue_ready(task);
++    task.state = TaskState::TERMINATED;
++    task.exit_code = exit_code;
++    // Issue #53: join-rendezvous handoff (mirrors terminate_err).
++    TaskControlBlock::thread_join_note_termination(task);
++    // Issue #217: wake a waitpid-blocked parent before switching away.
++    wake_waiting_parent(task);
++    teardown_step(SchedTeardownSteps::Terminate);
++    // Zombie-list the corpse for the deferred drain (idle cleanup_step or
++    // the harness's drain_zombie_list) — the step the trap kill skipped.
++    release_zombie(task);
++    // Issue #155: prompt the PID 1 reaper (same placement as terminate_err:
++    // after the list push so wake-then-miss is impossible).
++    if (task.id != 1) {
++        if (auto *reaper = Scheduler::find_task(1))
++            reaper->notify.notify(1);
++    }
++    return errors::SCHED_ERR_OK;
++}
++
+ void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+     // Void legacy wrapper: refusal is fail-closed warn-only (all existing
+     // callers are own-CPU paths where refusal is unreachable). Fallible
+diff --git a/test-history.txt b/test-history.txt
+index 32ed14dd5..860b29c1d 100644
+--- a/test-history.txt
++++ b/test-history.txt
+@@ -6450,3 +6450,113 @@ SUMMARY: total=28 ok=28 fail=0 ARCH=aarch64
+ 2026-11-12 07:47:03 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
+ 
+ SUMMARY: total=35 ok=35 fail=0 ARCH=riscv64
++2026-11-12 09:29:42 cap_pager PASSED: 0 FAILED: 0 TIME: 0ms STATUS: TIMEOUT
++2026-11-12 09:32:14 cap_pager PASSED: 15 FAILED: 0 TIME: 495ms
++2026-11-12 09:32:32 capability PASSED: 142 FAILED: 6 TIME: 4444ms
++2026-11-12 09:36:59 capability PASSED: 0 FAILED: 0 TIME: 0ms STATUS: TIMEOUT
++2026-11-12 09:37:43 arch_aarch64 PASSED: 38 FAILED: 0 TIME: 1157ms
++2026-11-12 09:38:29 cap_pager PASSED: 14 FAILED: 1 TIME: 559ms
++2026-11-12 09:42:17 cap_pager PASSED: 15 FAILED: 0 TIME: 1049ms
++2026-11-12 09:42:28 cap_pager PASSED: 15 FAILED: 0 TIME: 507ms
++2026-11-12 09:45:37 cap_pager PASSED: 15 FAILED: 0 TIME: 489ms
++2026-11-12 09:45:49 cap_pager PASSED: 14 FAILED: 1 TIME: 527ms
++2026-11-12 09:46:20 memory_page_tables PASSED: 13 FAILED: 0 TIME: 430ms
++2026-11-12 09:46:42 arch_aarch64 PASSED: 38 FAILED: 0 TIME: 1166ms
++2026-11-12 09:46:59 core_task PASSED: 46 FAILED: 0 TIME: 1369ms
++2026-11-12 09:47:05 proc_elf PASSED: 104 FAILED: 0 TIME: 3510ms
++2026-11-12 09:47:30 capability PASSED: 169 FAILED: 0 TIME: 11208ms
++2026-11-12 09:47:41 capability PASSED: 142 FAILED: 6 TIME: 4474ms
++2026-11-12 09:48:03 arch_riscv64 PASSED: 31 FAILED: 0 TIME: 956ms
++2026-11-12 09:49:12 core_basic PASSED: 17 FAILED: 0 TIME: 15ms
++2026-11-12 09:49:23 core_sync PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:49:33 core_sched PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:49:44 core_task PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:49:54 core_memory PASSED: 4 FAILED: 0 TIME: 4ms
++2026-11-12 09:50:05 core_syscall PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:50:16 core_tracing PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:50:26 ipc PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:50:37 capability PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:50:47 proc_elf PASSED: 1 FAILED: 0 TIME: 3ms
++2026-11-12 09:50:58 storage PASSED: 40 FAILED: 0 TIME: 46ms
++2026-11-12 09:51:08 servers PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:51:19 drivers PASSED: 8 FAILED: 0 TIME: 14ms
++2026-11-12 09:51:30 hal PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:51:40 smp PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:51:52 smp_multicpu PASSED: 0 FAILED: 0 TIME: 5ms
++2026-11-12 09:52:02 deadline PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:52:15 ui PASSED: 19 FAILED: 0 TIME: 2802ms
++2026-11-12 09:52:26 logging_debug PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:52:36 random PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:52:47 bench PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:52:57 task_tcb_log PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:57:07 task_fpu PASSED: 0 FAILED: 0 TIME: 249176ms STATUS: NO_TESTS_REGISTERED
++2026-11-12 09:57:17 testrunner PASSED: 0 FAILED: 0 TIME: 1ms
++
++SUMMARY: total=24 ok=24 fail=0 ARCH=x86_64
++2026-11-12 09:57:30 core_basic PASSED: 17 FAILED: 0 TIME: 4ms
++2026-11-12 09:57:32 core_sync PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:34 core_sched PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:37 core_task PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:39 core_memory PASSED: 4 FAILED: 0 TIME: 1ms
++2026-11-12 09:57:41 core_syscall PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:44 core_tracing PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:46 ipc PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:48 capability PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:51 proc_elf PASSED: 1 FAILED: 0 TIME: 1ms
++2026-11-12 09:57:53 storage PASSED: 40 FAILED: 0 TIME: 16ms
++2026-11-12 09:57:56 servers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:57:58 drivers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:00 hal PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:03 deadline PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:05 ui PASSED: 19 FAILED: 0 TIME: 283ms
++2026-11-12 09:58:08 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:10 random PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:12 bench PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:15 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:17 task_fpu PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:20 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:22 task_core PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:24 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:27 shell_interaction PASSED: 19 FAILED: 0 TIME: 286ms
++2026-11-12 09:58:29 cap_irq PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:31 cap_irq_notify PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:34 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
++
++SUMMARY: total=28 ok=28 fail=0 ARCH=aarch64
++2026-11-12 09:58:44 core_basic PASSED: 17 FAILED: 0 TIME: 11ms
++2026-11-12 09:58:47 core_sync PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:50 core_sched PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:52 core_task PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:58:55 core_memory PASSED: 4 FAILED: 0 TIME: 3ms
++2026-11-12 09:58:58 core_syscall PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:00 core_tracing PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:03 ipc PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:05 capability PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:08 proc_elf PASSED: 1 FAILED: 0 TIME: 2ms
++2026-11-12 09:59:11 storage PASSED: 40 FAILED: 0 TIME: 33ms
++2026-11-12 09:59:13 servers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:16 drivers PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:19 hal PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:21 deadline PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:24 ui PASSED: 19 FAILED: 0 TIME: 236ms
++2026-11-12 09:59:27 logging_debug PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:29 random PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:32 bench PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:59:34 task_tcb_log PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:37 task_fpu PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:40 arch_riscv64 PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:59:42 scheduler_zombie PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:45 configuration_build PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:48 memory_vmm PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:50 memory_page_tables PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:53 timing_core PASSED: 0 FAILED: 0 TIME: 1ms
++2026-11-12 09:59:56 hal_timer PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 09:59:58 irq_early_std PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 10:00:01 shell_interaction PASSED: 19 FAILED: 0 TIME: 242ms
++2026-11-12 10:00:04 cap_irq PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 10:00:06 cap_irq_notify PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 10:00:09 task_core PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 10:00:12 process_lifecycle PASSED: 0 FAILED: 0 TIME: 0ms
++2026-11-12 10:00:14 testrunner PASSED: 0 FAILED: 0 TIME: 0ms
++
++SUMMARY: total=35 ok=35 fail=0 ARCH=riscv64

@@ -113,6 +113,10 @@ class IPC {
     static void init();
 
     /// @brief Sends a message to a destination task.
+    /// M2 follow-up (#545 FIRE, INV-L4): the is_full_locked probe parks on
+    /// a contended foreign-owned depth instead of spinning with IF=0; the
+    /// IF=0 rollback in send() only triggers for genuine own-guard scopes
+    /// (fail-closed) — unreachable-by-design on the syscall trap path.
     [[nodiscard]] static bool send(uint64_t dest_id, const Message &msg, IpcFlags flags = IpcFlags::NONE) noexcept;
 
     /// @brief Receives a message from the calling task's own queue.
@@ -235,6 +239,31 @@ class IPC {
     /// @brief Wakes the oldest blocked sender and
     /// restores owner priority.
     static void wake_sender(MessageQueue &q, TaskControlBlock &receiver);
+
+    /// @brief M2 follow-up evidence (#545 SILENT): pushes that found the
+    ///        destination BLOCKED with none of the three wait flags set
+    ///        (reply_wait / blocked_on_queue / blocked_in_recv) — the
+    ///        lost-wakeup window probe.  CONFIG_DEBUG only; always 0 in a
+    ///        healthy run.
+    static uint64_t ipc_wake_gate_missed_count() noexcept;
+    /// @brief M2 follow-up evidence (#545 SILENT): send_sync wait
+    ///        publications that found a matching reply already queued — the
+    ///        publish-vs-arrival window probe.  CONFIG_DEBUG only.
+    static uint64_t ipc_block_with_pending_inbox_count() noexcept;
+    /// @brief F1 follow-up evidence (#545, INV-4b): in-guard try-once
+    ///        probe hits (consumed without blocking) and contended
+    ///        outcomes.  CONFIG_DEBUG only; hits must be > 0 in a healthy
+    ///        run (proves the Dekker path is live).
+    static uint64_t ipc_probe_hit_count() noexcept;
+    static uint64_t ipc_probe_contended_count() noexcept;
+#if defined(CONFIG_DEBUG)
+    /// @brief Record a try-once probe outcome (CONFIG_DEBUG only).
+    static void ipc_probe_hit_mark() noexcept;
+    static void ipc_probe_contended_mark() noexcept;
+#else
+    static void ipc_probe_hit_mark() noexcept {}
+    static void ipc_probe_contended_mark() noexcept {}
+#endif
 };
 
 } // namespace kernel

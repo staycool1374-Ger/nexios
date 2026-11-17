@@ -251,7 +251,36 @@ class Scheduler {
 
     /// @brief Forces a reschedule — selects the next task and sets
     /// up context switch.
+    /// Post-condition contract (F1 #545, INV-4a):
+    /// - C1 (RUNNING/READY/TERMINATED caller): arm-only return, zero
+    ///   additional latency.  Yield loops (e.g. ipc_blocking's
+    ///   `while (state != TERMINATED) reschedule();`) are unchanged.
+    /// - C2 (BLOCKED caller, park gate satisfied): returns only when the
+    ///   caller is no longer BLOCKED (woken, possibly after dispatches).
+    ///   Never returns to a caller that is still BLOCKED and the runner.
+    /// - C3 (BLOCKED caller, gate denied): status-quo-ante arm-only
+    ///   return; the caller handles it exactly as before.
+    /// - C4: IRQ state at return == entry; no scheduler_lock_; no
+    ///   allocation; `in_ready_queue_` untouched by the park.
+    /// - C5: single-task guest, null/invalid current, CONFIG_TICK_HZ==0,
+    ///   idle task, test harness: never park.
+    /// - C6: the deferred-switch arm and dispatch step are untouched.
+    /// Requires: no held tracked spinlock, no live IrqGuard (park denied
+    /// otherwise); not callable from a hardware ISR (deny → C3).
     static void reschedule() noexcept;
+
+    /// @brief F1 diagnostics: reschedule() park denials of BLOCKED
+    ///        callers (cumulative) and the last denial's gate bitmap
+    ///        (bit N = gate condition N failed; task bits start at 8).
+    static uint64_t resched_park_denied_count() noexcept;
+    static uint64_t resched_park_denied_why() noexcept;
+    /// @brief F1 diagnostics: reschedule() park entries (a BLOCKED
+    ///        caller hlt-waited) and park wakeups (it observed a
+    ///        non-BLOCKED state).  Entries >> denials means the park
+    ///        engages; entries == 0 with denials > 0 means BLOCKED
+    ///        callers always run on (the zombie window is open).
+    static uint64_t resched_park_entries_count() noexcept;
+    static uint64_t resched_park_wakeups_count() noexcept;
 
     /// @brief Change a task's scheduling priority at runtime.
     /// Re-buckets the task in the O(1) ready queue (if queued) so the change
@@ -1224,7 +1253,18 @@ struct SwSlots {
     ///        reset_stuck_rescue_count_for_test().
     static uint64_t stuck_rescue_count_;
     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
+    ///        Shared by the stranded-READY and IPC-wake sweeps.
     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
+    /// @brief IPC-wake rescues since reset (M2 follow-up #545 SILENT).
+    ///        Detection-first: must stay 0 in a healthy run — every firing
+    ///        proves a lost wakeup on an IPC wait channel.  Monotonic like
+    ///        stuck_rescue_count_ (never rewound by snapshot restore);
+    ///        reset_ipc_wake_rescue_count_for_test() re-establishes 0.
+    static uint64_t ipc_wake_rescue_count_;
+    /// @brief For-test reset of the IPC-wake rescue detector.
+    static void reset_ipc_wake_rescue_count_for_test() noexcept;
+    /// @brief IPC-wake rescues since reset (QE diagnostic).
+    static uint64_t ipc_wake_rescue_count() noexcept;
     /// @brief Starvation-breaker trigger (issue #242): consecutive ticks the
     ///        top READY level may be picked while lower non-idle READY levels
     ///        wait before exactly one dispatch below the top is forced.  Fixed

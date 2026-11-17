@@ -46,6 +46,9 @@ enum class ParkDenyReason : uint8_t {
     NotRunning,   ///< Current task is not RUNNING (already blocked).
     NoTicks,      ///< CONFIG_TICK_HZ == 0 — a sleep arm could never fire.
     ArmFailed,    ///< PosixTime::sleep_arm failed (wheel full / non-BSP).
+    ForeignGuard, ///< Depth owned by a foreign context (diagnostic only:
+                  ///< never selects the pure-spin branch when
+                  ///< CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW == 1).
 };
 
 /// @brief INV-L1 park predicate (side-effect free): true iff the calling
@@ -53,7 +56,13 @@ enum class ParkDenyReason : uint8_t {
 bool lock_park_allowed(const SpinLock &lock) noexcept;
 
 /// @brief RAII timed-park acquisition.  Fast path is a single try_lock;
-///        slow paths park and retry, then fall back to pure spin.
+///        slow paths park and retry, then re-arm the park (never an
+///        unbounded IF=0 spin — that starves the tick that would dispatch
+///        a live holder, #545 wedge hunt).
+///        INV-L1': every exit path returns with the caller's IRQ-enable
+///        state restored.  INV-W1': no unbounded wait runs with interrupts
+///        disabled while a live holder exists — the park (timer alive) is
+///        the only unbounded wait.
 class [[nodiscard]] ParkLockGuard {
   public:
     explicit ParkLockGuard(SpinLock &lock,
@@ -68,9 +77,20 @@ class [[nodiscard]] ParkLockGuard {
     /// @brief True when the lock is held (destructor releases it).
     bool owned() const noexcept { return owned_; }
 
+    /// @brief Release the lock early without destroying the guard
+    ///        (F1 #545: lets block_sender make BLOCKED-marking and unlock
+    ///        one IF=0-atomic unit under a caller-owned IrqGuard — a
+    ///        preempted holder can no longer strand the queue lock while
+    ///        BLOCKED).  No-op when not owned.  Does not touch the
+    ///        entry-IF bookkeeping (no park happened).
+    void release() noexcept;
+
   private:
     SpinLock &lock_;
     bool owned_ = false;
+    /// @brief IRQ-enable state at entry (INV-L1'): all exit paths and
+    ///        every park-window boundary restore this.
+    bool entry_if_ = true;
 };
 
 /// @brief Park entries (diagnostic counters, QE assertions).
@@ -81,6 +101,19 @@ uint64_t lock_spin_fallback_count() noexcept;
 uint64_t lock_park_exhausted_count() noexcept;
 /// @brief Last denial code (ParkDenyReason), sticky until reset.
 uint64_t lock_park_denied_reason() noexcept;
+/// @brief M2 follow-up (#545 FIRE): bounded denied-spin block escapes
+///        (each escape re-arms the bounded block and re-diagnoses).
+uint64_t lock_denied_escape_count() noexcept;
+/// @brief M2 follow-up (#545 FIRE): park acquisitions admitted on a
+///        foreign-owned IrqGuard depth (INV-L4).
+uint64_t lock_foreign_depth_count() noexcept;
+/// @brief Wedge hunt (#545): park re-arm iterations taken by the exhausted
+///        fallback (each re-arm keeps the timer alive; the tick watchdog
+///        FIRE line reports this so the amplifier is visible in-row).
+uint64_t lock_park_rearm_count() noexcept;
+/// @brief Wedge hunt (#545): park attempts that observed an IRQ state
+///        different from the guard-entry state (INV-L1' repairs, DEBUG).
+uint64_t lock_park_if_clobber_count() noexcept;
 /// @brief Test-isolation reset (counters + denial code).
 void park_lock_reset_for_test() noexcept;
 

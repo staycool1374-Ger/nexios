@@ -258,11 +258,13 @@ uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
     }
     if (!skip_park) {
         Scheduler::reschedule();
-        // Re-check on the same dispatch (the switch above is deferred —
-        // still on CPU): a signal that landed after the guard dropped
-        // but before parking would otherwise sleep unobserved (delivery
-        // saw RUNNING and skipped its wake). set_task_ready is idempotent
-        // and deferral-safe; the spin below re-checks in all cases.
+        // Re-check on wake (the switch above parks a BLOCKED caller
+        // until woken — INV-4a — or returns immediately for
+        // gate-denied contexts): a signal that landed after the guard
+        // dropped but before parking would otherwise sleep unobserved
+        // (delivery saw RUNNING and skipped its wake). set_task_ready
+        // is idempotent and deferral-safe; the spin below re-checks
+        // in all cases.
         if (__atomic_load_n(&cur->pending_signals, __ATOMIC_ACQUIRE) !=
                 0 &&
             cur->state == TaskState::BLOCKED)

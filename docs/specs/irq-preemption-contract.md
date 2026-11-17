@@ -43,17 +43,57 @@ Consequence: every BLOCKED transition happens lock-free (dequeue first, then
 state, then reschedule — see §4), and every queue acquire that can sleep
 goes through `ParkLockGuard` (M2), which parks only when INV-L1 holds.
 
-## 4. INV-L1/L2/L3: bounded spin, then timed park
+## 4. INV-L1/L2/L3: bounded spin, then timed park, then re-arm
 
 `ParkLockGuard` (sync/park_lock.{hpp,cpp}): try → bounded pause-spin
 (`CONFIG_LOCK_SPIN_ROUNDS=1024`, tick-watchdog checkpoint every 256) → timed
 park (≤ `CONFIG_LOCK_PARK_MAX_ATTEMPTS=8` × `CONFIG_LOCK_PARK_TICKS=2`) →
-pure-spin fallback. Park precondition (all must hold): park enabled, no ISR
-nesting, no live `IrqGuard`, no held spinlock, current task live, non-idle,
-RUNNING. The park wake is the existing level-triggered sleep-expiry scan
-(no waiter registry, no unlock-side hooks — INV-L3). Resume restores
-RUNNING after dequeue (INV-L2). A dead timer degrades to pure spin, never
-to a wedge (INV-W1).
+park re-arm (≤ `CONFIG_LOCK_PARK_REARM_BUDGET=64` windows, one loud line
+per site when the budget is spent, then re-arming continues). Park
+precondition (all must hold): park enabled, no ISR nesting, no live
+`IrqGuard`, no held spinlock, current task live, non-idle, RUNNING. The
+park wake is the existing level-triggered sleep-expiry scan (no waiter
+registry, no unlock-side hooks — INV-L3). Resume restores RUNNING after
+dequeue (INV-L2).
+
+INV-L1' (wedge hunt, #545): the guard returns with the caller's
+IRQ-enable state restored on **every** exit path (entry snapshot in the
+ctor; `take_success` repairs after park windows). INV-W1' (strengthened):
+no unbounded wait may run with interrupts disabled while a live holder
+exists — parking (timer alive) is the only unbounded wait, so the
+exhausted fallback re-arms instead of spinning with IF=0. An IF=0 spin
+starves the tick that would dispatch the holder (observed:
+`lock_spin_exhausted` + `if=0` + frozen ticks → self-completing wedge).
+A dead timer degrades to an entry-IF-preserving bounded loud spin
+(`ArmFailed` bridge), never to an unbounded IF=0 spin.
+
+Conviction diagnostics (DEBUG, serial): per-site one-shot `denied-spin
+escape` (order-stack holder task/rank), one-shot `exhausted` dump
+(holder take site/cpu/take-IF + `find_task` snapshot: state, in-rq,
+prio, blocked-on-queue/recv, reply-wait, sleep-armed — decides A1 hold
+across BLOCKED vs A2 READY-but-starved vs A3 READY-not-queued), and
+`rearm=` on the TICKWD FIRE line plus `lock_park_rearm_count()`.
+
+INV-4b (new, binding): a task with `state == BLOCKED` takes **no
+spinlock**.  The dequeue + BLOCKED marking + (where needed) unlock happen
+as one atomic IF=0 step; every loop that can observe BLOCKED gates its
+lock-taking paths on `state != BLOCKED` and falls through to
+`reschedule()` + `hlt`-wait otherwise.  A BLOCKED task that runs anyway
+(gate-denied reschedule) must not take locks — a tick-tail preemption
+mid-take strands the holder with no INV-C1 warning, since the check
+lives only on the reschedule path.  Try-once Dekker rule for
+publish-then-wait loops: the post-publish recheck is a single non-blocking
+`try_lock` inside the publish `IrqGuard` (IF=0 atomic vs tick
+preemption); on Contended the waiter proceeds to block (the holder's
+wake-gate read observes the publish, so no retry is needed and no IF=0
+spin ever happens).
+
+P1 residual follow-ups (same shape, other subsystems — tracked, not fixed
+in this cycle): sync-queue/notify/eventgroup/semaphore take-while-BLOCKED
+windows, `dequeue_ready` with IF=1 (RQ splice vs tick), `syscall_handlers_irq`
+trap waits, `posix_time`/`devfs` sleep loops.  Same recipe applies: gate
+takes on `state != BLOCKED`, or move them inside an IF=0 publish guard
+with try-once semantics.
 
 Converted sites (all task-context-verified, no ISR caller exists — see §6):
 `MessageQueue::{push,pop,pop_clamped,pop_from_sender,pop_from_sender_clamped,

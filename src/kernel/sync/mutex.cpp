@@ -327,13 +327,14 @@ void Mutex::lock() {
 
         task->state = TaskState::BLOCKED;
         Scheduler::reschedule();
-        // INV-4 (deferred switch): reschedule() returns immediately and the
-        // context switch is applied on the NEXT timer tick.  Do NOT re-enter
+        // INV-4a: reschedule() parks a BLOCKED caller until woken and
+        // returns immediately otherwise.  Do NOT re-enter
         // the retry loop here — the task would burn the PCP retry budget
         // spinning for the switch (observed panic "Mutex::lock() exhausted
-        // PCP retry budget" in priority_inheritance).  Wait until the deferred
-        // switch actually puts us away (state stays BLOCKED); unlock/transfer
-        // wakes us (state != BLOCKED) with ownership ours.
+        // PCP retry budget" in priority_inheritance).  Wait until woken
+        // (state != BLOCKED); unlock/transfer wakes us with ownership ours.
+        // The loop below is a no-op on the park path and stays mandatory
+        // for gate-denied contexts.
         while (Scheduler::current_task()->state == TaskState::BLOCKED)
             arch::pause();
         lock_.lock();
@@ -424,13 +425,14 @@ errors::SyncError Mutex::lock_err() {
 
         task->state = TaskState::BLOCKED;
         Scheduler::reschedule();
-        // INV-4 (deferred switch): reschedule() returns immediately and the
-        // context switch is applied on the NEXT timer tick.  Do NOT re-enter
+        // INV-4a: reschedule() parks a BLOCKED caller until woken and
+        // returns immediately otherwise.  Do NOT re-enter
         // the retry loop here — the task would burn the PCP retry budget
         // spinning for the switch (observed panic "Mutex::lock() exhausted
-        // PCP retry budget" in priority_inheritance).  Wait until the deferred
-        // switch actually puts us away (state stays BLOCKED); unlock/transfer
-        // wakes us (state != BLOCKED) with ownership ours.
+        // PCP retry budget" in priority_inheritance).  Wait until woken
+        // (state != BLOCKED); unlock/transfer wakes us with ownership ours.
+        // The loop below is a no-op on the park path and stays mandatory
+        // for gate-denied contexts.
         while (Scheduler::current_task()->state == TaskState::BLOCKED)
             arch::pause();
         lock_.lock();

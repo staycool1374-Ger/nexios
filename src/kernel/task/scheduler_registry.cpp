@@ -84,6 +84,8 @@ TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
 
 uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
 uint64_t Scheduler::stuck_rescue_count_ = {};
+// M2 follow-up (#545 SILENT): IPC-wake rescue detector (see hpp contract).
+uint64_t Scheduler::ipc_wake_rescue_count_ = {};
 uint64_t Scheduler::loadavg_1min_ = 0;
 uint64_t Scheduler::loadavg_5min_ = 0;
 uint64_t Scheduler::loadavg_15min_ = 0;
@@ -337,6 +339,14 @@ uint64_t Scheduler::stuck_rescue_count() noexcept {
 
 void Scheduler::reset_stuck_rescue_count_for_test() noexcept {
     __atomic_store_n(&stuck_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::ipc_wake_rescue_count() noexcept {
+    return __atomic_load_n(&ipc_wake_rescue_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_ipc_wake_rescue_count_for_test() noexcept {
+    __atomic_store_n(&ipc_wake_rescue_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
 void Scheduler::balancer_tick() noexcept {

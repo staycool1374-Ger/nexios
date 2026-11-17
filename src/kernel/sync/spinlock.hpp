@@ -94,6 +94,18 @@ class SpinLock {
         return __atomic_load_n(&holder_, __ATOMIC_RELAXED);
     }
 
+    /// @brief Diagnostic reads of the lock word (wedge hunt, #545).
+    ///        Lock-free atomic loads; no state change.  Lets the park
+    ///        exhaustion dump distinguish a poisoned/freed word (0xDD…),
+    ///        an unpublished acquire (locked + holder NULL), and a
+    ///        normally held lock.
+    int is_locked_for_debug() const noexcept {
+        return __atomic_load_n(&locked_, __ATOMIC_RELAXED);
+    }
+    const void *holder_for_debug() const noexcept {
+        return __atomic_load_n(&holder_, __ATOMIC_RELAXED);
+    }
+
     /// @brief Assign the lock-order rank (M2, #546).  Set once at
     ///        declaration/init; never mutated while contended.
     void set_rank(LockRank rank) noexcept {
