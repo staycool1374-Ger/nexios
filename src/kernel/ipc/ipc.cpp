@@ -545,11 +545,16 @@ enum class DeliverRule : uint8_t {
 ///        Caller must hold NO locks; the rule + push run under the
 ///        destination queue lock.  The sender id must already be stamped
 ///        by the caller (kernel current task id — unforgeable).
-///        Rule: a live ticket naming this sender is consumed and the
-///        token stamped into the parallel reply_tok slot (the reply
-///        path); anything else pushes untokened (legacy traffic, grants,
-///        pulses, new requests — the token lives only in tickets and
-///        stamps, never on the wire, so there is nothing to forge).
+///        Rule: a live ticket naming this sender — kernel-stamped
+///        sender_id plus the sender TCB's generation still equal to the
+///        recorded wait tag — is consumed and the token stamped into the
+///        parallel reply_tok slot (the reply path); anything else pushes
+///        untokened (legacy traffic, grants, pulses, new requests — the
+///        token lives only in tickets and stamps, never on the wire, so
+///        there is nothing to forge).  Identity is proven on
+///        find_task(m.sender_id) — never on dest: dest is the reply
+///        recipient (the waiter) while the wait tag was captured from the
+///        Call destination (the server) — see INV-MK-3, issue #581.
 /// @param dest  Recipient TCB (owns the queue and the ticket).
 /// @param m     Message to deliver (never mutated).
 /// @return Pushed (pushed untokened), PushedReply (pushed + stamped) or
@@ -563,16 +568,30 @@ DeliverRule deliver_with_reply_rule(TaskControlBlock &dest,
         const uint64_t cur_id = m.sender_id;
         const uint64_t want_id =
             __atomic_load_n(&dest.reply_wait_dest_id, __ATOMIC_ACQUIRE);
-        const uint32_t want_gen =
-            __atomic_load_n(&dest.reply_wait_dest_gen, __ATOMIC_ACQUIRE);
-        if (cur_id == want_id && dest.generation == want_gen) {
-            const uint32_t old =
-                __atomic_exchange_n(&dest.reply_ticket, 0, __ATOMIC_ACQ_REL);
-            if (old == seen) {
-                const uint32_t tok = seen & ~kReplyTicketLive;
-                if (!dest.msg_queue.push_locked(m, tok))
-                    return DeliverRule::Full;
-                return DeliverRule::PushedReply;
+        if (cur_id != 0 && cur_id == want_id) {
+            const uint32_t want_gen =
+                __atomic_load_n(&dest.reply_wait_dest_gen, __ATOMIC_ACQUIRE);
+            // #581: the waiter (dest) and the server are distinct tasks,
+            // so dest.generation can never equal the server-side wait
+            // tag — resolve the sender and compare ITS generation.
+            // find_task is a lock-free id-table read (no new lock edge
+            // under the queue lock).  Null sender (server reaped) or a
+            // generation mismatch falls through to legacy untokened
+            // delivery below; the ticket stays live for the sweep-stamp
+            // recovery, never a forged stamp.
+            auto *sender = Scheduler::find_task(cur_id);
+            if (sender != nullptr &&
+                __atomic_load_n(&sender->generation, __ATOMIC_ACQUIRE) ==
+                    want_gen) {
+                const uint32_t old =
+                    __atomic_exchange_n(&dest.reply_ticket, 0,
+                                        __ATOMIC_ACQ_REL);
+                if (old == seen) {
+                    const uint32_t tok = seen & ~kReplyTicketLive;
+                    if (!dest.msg_queue.push_locked(m, tok))
+                        return DeliverRule::Full;
+                    return DeliverRule::PushedReply;
+                }
             }
         }
     }

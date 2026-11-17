@@ -74,7 +74,10 @@ Entry guard: `ENSURE(task.blocked_on_queue == &q)`.
   carries a kernel-minted generation-tagged token; the server's reply is
   stamped at delivery only when a live ticket names that sender
   (`reply_ticket` consumed atomically, `sender_id` kernel-stamped so a
-  peer cannot forge it). A reply without a live token is dropped, never
+  peer cannot forge it, and the sender task's generation still equals the
+  waiter's recorded wait tag — identity is proven on the sender TCB, never
+  on the waiter; an unresolvable sender falls back to untokened delivery,
+  issue #581). A reply without a live token is dropped, never
   queued (counter `ipc_reply_dropped_count`); a consumed token never
   matches again. Closes the same-sender-stale residual above for Calls.
 - **Spin-wait:** the reply wait is a `hlt()` loop (not a bare pause-spin).
