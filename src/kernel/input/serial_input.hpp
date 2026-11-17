@@ -77,6 +77,16 @@ size_t dropped_count();
 ///        monotonic, throttled-logged at the push site).
 size_t overrun_count();
 
+/// @brief Bytes destroyed by reset() since boot (#545 follow-up
+///        input-loss hunt).  Diagnostic, monotonic, never zeroed by
+///        reset() (unlike dropped/overrun, whose zeroing tests assert).
+size_t discarded_on_reset();
+
+/// @brief Readable bytes currently queued (diagnostic-only queue-depth
+///        query; never mutates state).  The view is valid only until the
+///        next consume/pop/pump; consume strictly last.
+size_t readable();
+
 /// @brief Enter the MCR loopback window (riscv64 debug builds only).
 /// Fail-closed: false on other arches, in release, when already
 /// active, on a foreign LOOP bit, or on read-back mismatch.

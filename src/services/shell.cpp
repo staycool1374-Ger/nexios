@@ -878,6 +878,15 @@ void Shell::shell_task_main() {
     Terminal::set_fg(COLOR_DEFAULT);
     Terminal::write("Type 'help' for available commands\n\n");
 
+    // Boot-only RX drain (#545 follow-up input-loss hunt): the prompt path
+    // never resets RX (type-ahead typed during a command survives to the
+    // next readline — POSIX line discipline).  Boot is the single quiescent
+    // point where a drain is safe.
+    arch::Keyboard::flush();
+#if defined(CONFIG_ARCH_X86_64)
+    kernel::input::serial::reset();
+#endif
+
     char line[BUF_SIZE];
 
     while (true) {
@@ -898,15 +907,6 @@ void Shell::shell_task_main() {
         (void)flush_urcs();
         draw_prompt(last_exit_code_);
 
-        arch::Keyboard::flush();
-#if defined(CONFIG_ARCH_X86_64)
-        // Issue #407: x86 prompt-time type-ahead parity. Non-x86
-        // flush() already resets the ring through the Keyboard facade;
-        // x86 owns the i8042 Keyboard, so reset the serial ring here
-        // explicitly (matches the pre-#407 raw-COM1 behavior where each
-        // prompt started with a drained UART).
-        kernel::input::serial::reset();
-#endif
         if (readline(line, BUF_SIZE, last_exit_code_)) {
             last_exit_code_ = parse_and_exec(line);
             update_status_bar();

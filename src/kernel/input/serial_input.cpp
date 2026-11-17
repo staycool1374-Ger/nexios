@@ -43,6 +43,9 @@ namespace {
 static SPSCRing<char, kRingSize> s_ring;
 static size_t s_dropped = 0;
 static size_t s_overrun = 0;
+// #545 follow-up input-loss hunt: bytes destroyed by reset() since boot
+// (monotonic; reset() never zeroes this one, unlike dropped/overrun).
+static size_t s_discarded_on_reset = 0;
 static bool s_loopback_active = false;
 #if defined(CONFIG_DEBUG) && defined(CONFIG_ARCH_RISCV64)
 static uint8_t s_mcr_saved = 0;
@@ -87,6 +90,13 @@ void push_decoded(uint8_t byte) {
 } // namespace
 
 void reset() {
+    // #545 follow-up input-loss hunt: count what the reset destroys
+    // (monotonic; the existing dropped/overrun zeroing below is unchanged
+    // and still asserted by tests).
+    const char *queued_data = nullptr;
+    size_t queued_len = 0;
+    peek_slice(queued_data, queued_len);
+    s_discarded_on_reset += queued_len;
     s_ring.reset();
     s_dropped = 0;
     s_overrun = 0;
@@ -132,6 +142,17 @@ size_t dropped_count() {
 
 size_t overrun_count() {
     return s_overrun;
+}
+
+size_t discarded_on_reset() {
+    return s_discarded_on_reset;
+}
+
+size_t readable() {
+    const char *data = nullptr;
+    size_t len = 0;
+    peek_slice(data, len);
+    return len;
 }
 
 bool peek_slice(const char *&data, size_t &len) {

@@ -597,7 +597,11 @@ counter; single producer (shell pump or harness inject); polling
 only. Ordering at `shell_try_get_key_impl`: decoder (pump + ring)
 first on aarch64/riscv64, raw Serial poll as fail-open fallback,
 then iocd, then the hardware ring. `Terminal::readline` has no pump
-(no second UART consumer).
+(no second UART consumer). The prompt path never resets the RX ring;
+type-ahead typed during a command survives to the next `readline`
+(POSIX line discipline). `Keyboard::flush()`/`serial::reset()` are
+boot-time/test hygiene only and remain QUIESCENT-ONLY (#545 follow-up
+input-loss hunt: the prompt-time reset destroyed coalesced type-ahead).
 
 ## 11. Driver PD externalization (issue #48, strangler step a)
 
