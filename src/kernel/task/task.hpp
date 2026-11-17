@@ -73,6 +73,13 @@ struct Message {
 /// @brief Priority-ordered circular message queue embedded in each TCB.
 struct MessageQueue {
     Message msgs[IPC_MAX_QUEUE_MSG];
+    /// @brief M3 one-shot reply tokens, parallel to msgs[] (same ring
+    ///        indices; 0 = untokened).  Sidecar instead of a Message
+    ///        field: keeps sizeof(Message) (and the 16-slot queue) at the
+    ///        pool8 budget.  Mutated only under lock_ via push_locked /
+    ///        remove_at (which compact both arrays identically) and
+    ///        init() (which clears both).
+    uint32_t reply_tok[IPC_MAX_QUEUE_MSG] = {};
     uint64_t prio_bitmap;
     volatile size_t head;
     volatile size_t tail;
@@ -95,6 +102,11 @@ struct MessageQueue {
 
     void init();
     bool push(const Message &msg);
+    /// @brief push() body for a caller already holding lock_ (M3 token
+    ///        rule needs rule+push atomicity).  Caller MUST hold lock_.
+    ///        @p tok is stored in the parallel reply_tok slot (0 =
+    ///        untokened ordinary message).
+    bool push_locked(const Message &msg, uint32_t tok = 0);
     bool pop(Message &msg);
     /// @brief Pop the highest-priority message only if it fits @p max_size.
     ///        Fail-closed for the IPC fastpath (issue #11, paper §3.9):
@@ -117,6 +129,18 @@ struct MessageQueue {
     ///        queued? Used for the send_sync dest-death path (a reply that
     ///        arrived before the peer died must still be consumed).
     bool has_from(uint64_t sender_id);
+    /// @brief Stamp every queued message from @p sender_id with @p token
+    ///        (M3 one-shot reply).  Closes the send→publish race: a reply
+    ///        pushed before the waiter armed its ticket lands unstamped
+    ///        and would otherwise never match pop_reply_from (tick-spin
+    ///        until peer death).  Stamping is legacy-equivalent: the old
+    ///        pop_from_sender consumed the same messages as replies
+    ///        (the accepted #296 staleness residual).
+    ///        Non-blocking try: returns false without touching anything
+    ///        when contended (the next tick recheck retries — the park
+    ///        hlt wakes every tick, so a skip self-heals).
+    /// @return true when the sweep ran, false when contended.
+    bool stamp_from_try(uint64_t sender_id, uint32_t token);
 
     /// @brief Try-once queue probe outcome (F1 #545, INV-4b).  A probe is a
     ///        single try_lock: it never pauses, parks, spins, allocates
@@ -144,6 +168,24 @@ struct MessageQueue {
     QueueProbe probe_pop_from_sender_clamped(Message &out,
                                              uint32_t max_size,
                                              uint64_t sender_id);
+    /// @brief probe_pop_from_sender restricted to @p token (M3 one-shot
+    ///        reply).  Non-blocking; see QueueProbe contract above.
+    QueueProbe probe_pop_reply_from(Message &out, uint64_t sender_id,
+                                    uint32_t token);
+    /// @brief probe_pop_from_sender_clamped restricted to @p token.
+    QueueProbe probe_pop_reply_from_clamped(Message &out, uint32_t max_size,
+                                            uint64_t sender_id,
+                                            uint32_t token);
+    /// @brief Pop the best message from @p sender_id carrying @p token
+    ///        (M3 one-shot reply).  Non-matching senders and token-less or
+    ///        wrong-token messages are never touched.
+    bool pop_reply_from(Message &out, uint64_t sender_id, uint32_t token);
+    /// @brief pop_reply_from with the issue #11 clamp.
+    bool pop_reply_from_clamped(Message &out, uint32_t max_size,
+                                uint64_t sender_id, uint32_t token);
+    /// @brief Non-destructive probe: is a message from @p sender_id with
+    ///        @p token queued?
+    bool has_reply_from(uint64_t sender_id, uint32_t token);
 
     bool is_empty() const {
         return __atomic_load_n(&count, __ATOMIC_RELAXED) == 0;
@@ -166,6 +208,10 @@ struct MessageQueue {
     ///        selective removal cannot reorder or invert INV-P.
     ///        Caller MUST hold lock_.  Returns IPC_MAX_QUEUE_MSG when none.
     size_t find_best_from_sender(uint64_t sender_id) const;
+    /// @brief find_best_from_sender additionally restricted to @p token
+    ///        (M3 one-shot reply).  Same order; token-less/wrong-token
+    ///        messages never match.  Caller MUST hold lock_.
+    size_t find_best_reply_from(uint64_t sender_id, uint32_t token) const;
     /// @brief Remove the message at @p best_idx (compaction + prio_bitmap
     ///        rebuild).  Caller MUST hold lock_.
     void remove_at(size_t best_idx);
@@ -329,7 +375,7 @@ struct TaskControlBlock {
            in_edf_queue_(false), wcet_ticks(0), wcet_overrun_fired(false),
           wcet_observed_ns(0),
           ss_state_on_deadline_miss(0), ss_budget_on_deadline_miss(0),
-          exit_code(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
+          exit_code(0), death_cause(0), context({}), kernel_stack(nullptr), kernel_stack_top(0),
            stack_phys_(0), kstack_slot_va_(0), kstack_slot_size_(0),
            page_table_(0), pcid_(0), stack_pdpt_phys_(0), user_stack_(0),
            user_stack_size_(0), user_stack_va_(0), thread_group_(0),
@@ -369,6 +415,9 @@ struct TaskControlBlock {
           reply_wait_dest_id(0), reply_wait_dest_gen(0),
           blocked_in_recv(false),
           irq_depth_save(0), irq_owner_save(0),
+          reply_ticket(0),
+          last_caller_id(0), last_caller_gen(0),
+          ipc_direct_attempts(0),
            waiting_on_mutex(nullptr), waiting_on_semaphore(nullptr),
            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
            blocked_on_pager_fault(nullptr), debugger_id(0),
@@ -455,6 +504,14 @@ struct TaskControlBlock {
     uint64_t ss_budget_on_deadline_miss; ///< captured remaining_budget() at
                                          ///< deadline miss
     uint64_t exit_code;
+
+    /// @brief Why this task died (M1 record identity, INV-MK-6).
+    ///        Plain uint64_t holding a DeathCause (freestanding POD TCB:
+    ///        no enum type here).  0 = None.  Written once by the first
+    ///        publish_task_death caller (first writer wins); read by the
+    ///        DeathNotify latch.  Zero-initialised with the TCB (memset
+    ///        sites + init list cover all creation paths).
+    uint64_t death_cause;
 
     TaskContext context;
     uint8_t *kernel_stack;
@@ -955,6 +1012,19 @@ struct TaskControlBlock {
     ///        covers it).  Zero means no suspended scope.
     uint64_t irq_depth_save;
     uint64_t irq_owner_save;
+
+    /// @brief M3 one-shot reply token state (F3/Q2, INV-MK-3/INV-MK-11).
+    ///        reply_ticket: 0 = none, else token|kReplyTicketLive (single
+    ///        u32 atomic word; consumed by one __atomic_exchange_n(&ticket,
+    ///        0)).  Tokens are 31-bit, single-outstanding per waiter, so
+    ///        they never alias a live token.  last_caller_*: recorded by
+    ///        note_delivered_request for the server's REPLY_RECV.
+    ///        ipc_direct_attempts: bounded direct-switch retries per wait.
+    ///        Packed tail to respect the pool8 static_assert.
+    uint32_t reply_ticket = 0;
+    uint64_t last_caller_id = 0;
+    uint32_t last_caller_gen = 0;
+    uint8_t ipc_direct_attempts = 0;
 
     /// @brief Pointer to the mutex this task is blocked on (as a waiter).
     /// Used for transitive priority inheritance propagation.

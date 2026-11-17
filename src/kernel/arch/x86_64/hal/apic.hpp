@@ -161,6 +161,18 @@ public:
     ///        §1 frozen (ABI v1, issue #67); 0x71 TPR probe / 0x72 batch
     ///        probe are test-only (test_ipi_batching/test_apic_tpr).
     static constexpr uint8_t SHOOTDOWN_BATCH_VECTOR = 0x73;
+    /// @brief Self-triggered deferred-switch apply vector (M3, F3/Q3):
+    ///        a FIXED self-IPI (ICR destination-shorthand = self) that
+    ///        traps into the depth-2 nested-apply path (isr_stubs.asm
+    ///        allowlist).  Unregistered C++ handler by design: the vector
+    ///        exists only to take the trap; IDT::handle_interrupt no-ops.
+    ///        Free (class 0xE, alongside 0xE0/0xEC; above TPR_CLASS_MAX).
+    static constexpr uint8_t SCHED_APPLY_VECTOR = 0xE1;
+    /// @brief Send a self-IPI (M3 apply trigger): ICR destination
+    ///        shorthand = self (bits 18-19 = 01), FIXED delivery.
+    ///        Bounded delivery-status poll like send_ipi; loss degrades
+    ///        to the tick path (at-most-once, never retried here).
+    static void send_self_ipi(uint8_t vector);
 
 private:
     // ─── MMIO base addresses ──────────────────────────────────────────────

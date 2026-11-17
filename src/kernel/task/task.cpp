@@ -203,7 +203,7 @@ _task_trampoline(void (*entry)()) {
     entry();
     auto *self = Scheduler::current_task();
     if (self)
-        Scheduler::terminate(*self, 0);
+        Scheduler::terminate(*self, 0, kernel::ipc::DeathCause::Exit);
     // Issue #513: a parked corpse must never blackout the hart.  The
     // self-termination above normally switches away (terminate_err arms
     // idle on empty runq), but if this park is ever reached with SIE=0
@@ -410,6 +410,10 @@ void init_task_common(TaskControlBlock &tcb) {
     tcb.reply_wait = false;
     tcb.reply_wait_dest_id = 0;
     tcb.reply_wait_dest_gen = 0;
+    tcb.reply_ticket = 0;
+    tcb.last_caller_id = 0;
+    tcb.last_caller_gen = 0;
+    tcb.ipc_direct_attempts = 0;
     tcb.waiting_on_semaphore = nullptr;
     tcb.waiting_on_eventgroup = nullptr;
     tcb.waiting_on_queue = nullptr;
@@ -2742,7 +2746,8 @@ void TaskControlBlock::complete_teardown() noexcept {
     // latch first; this is the backstop for destroy()-driven and
     // reaper-driven deaths.  Exactly-once is guaranteed by the
     // ACTIVE→PENDING slot transition in DeathNotify::on_task_death.
-    Scheduler::publish_task_death(*this);
+    Scheduler::publish_task_death(*this,
+                                  kernel::ipc::DeathCause::Teardown);
 
     // Issue #226: debugger stop routing — publish the task-death stop
     // event (reserved slot, never dropped) while bindings, Notify, and

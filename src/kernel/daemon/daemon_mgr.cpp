@@ -38,6 +38,22 @@ namespace daemon {
 
 /// Registered daemon entries.
 static DaemonEntry entries_[MAX_DAEMONS] = {};
+
+/// @brief True when @p pid names a live task (M1/F6 #516 self-heal:
+///        distinguishes a live daemon from a stale PID cell without
+///        trusting the id alone — a recycled TCB id must not suppress
+///        a restart).  Lock-free id-table read; no scheduler lock.
+static bool daemon_task_live(uint64_t pid) {
+    if (pid == 0) {
+        return false;
+    }
+    auto *task = Scheduler::find_task(pid);
+    if (task == nullptr || task->magic != TaskControlBlock::TCB_MAGIC) {
+        return false;
+    }
+    return task->state != TaskState::TERMINATED &&
+           task->state != TaskState::REAPED;
+}
 /// Number of registered daemons.
 static uint64_t num_daemons_ = 0;
 /// Suppress [DAEMON] died serial output (e.g. during reboot_from_table
@@ -159,8 +175,23 @@ void restore_state(const DaemonEntry *entries_in, uint64_t num_in) {
 /// Respects MAX_RESTART_COUNT per daemon; logs warnings on failure.
 void restart_stale_daemons() {
     for (uint64_t i = 0; i < num_daemons_; ++i) {
-        if (entries_[i].pid != 0)
-            continue;
+        if (entries_[i].pid != 0) {
+            // M1/F6 (#516): PID cell liveness self-heal.  A funnel death
+            // clears the cell synchronously, but anything that ever missed
+            // the funnel (pre-M1 corpses, direct TERMINATED marks) leaves
+            // a stale PID that would suppress the restart forever.  A dead
+            // id heals the cell (bounded serial + dmesg row) and falls
+            // through into the restart body below; a live id keeps the
+            // skip.  Restart-count semantics unchanged.
+            if (daemon_task_live(entries_[i].pid)) {
+                continue;
+            }
+            log::dmesg_push_sev(log::ErrorSubsystem::DAEMON,
+                                log::kDmesgBase_DAEMON + 12,
+                                log::LogSeverity::WARN, entries_[i].name,
+                                entries_[i].pid);
+            notify_death(entries_[i].pid);
+        }
 
         // Check restart limit
         if (entries_[i].restart_count >= MAX_RESTART_COUNT) {
@@ -433,7 +464,8 @@ void terminate(const char *name) {
             // M1/F6 (issue #559): interim supervisor path never reaches a
             // terminate funnel — latch synchronously so the restart loop
             // observes the death without a reaper pass.
-            Scheduler::publish_task_death(*task);
+            Scheduler::publish_task_death(*task,
+                                          kernel::ipc::DeathCause::Admin);
         }
 
         notify_death(entries_[i].pid); // clears PID + calls set_pid_fn(0)

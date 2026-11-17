@@ -1491,7 +1491,8 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         // retry on the next OOM tick instead of draining a live task.
         const kernel::errors::SchedulerError oom_err =
             kernel::Scheduler::terminate_err(*victim,
-                static_cast<uint64_t>(-static_cast<int64_t>(9)));
+                static_cast<uint64_t>(-static_cast<int64_t>(9)),
+                kernel::ipc::DeathCause::Kill);
         if (oom_err != kernel::errors::SCHED_ERR_OK) {
             return false;
         }
@@ -2279,7 +2280,10 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
         // re-deliver in a tight loop (caller backs off).
         const kernel::errors::SchedulerError fatal_err =
             kernel::Scheduler::terminate_err(*task,
-                static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+                static_cast<uint64_t>(-static_cast<int64_t>(sig)),
+                kernel::signal_is_fault_class(sig)
+                    ? kernel::ipc::DeathCause::Fault
+                    : kernel::ipc::DeathCause::Kill);
         if (fatal_err != kernel::errors::SCHED_ERR_OK) {
             return false;
         }
@@ -2315,7 +2319,10 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
                                   task->id);
             const kernel::errors::SchedulerError frame_err =
                 kernel::Scheduler::terminate_err(
-                    *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+                    *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)),
+                    kernel::signal_is_fault_class(sig)
+                        ? kernel::ipc::DeathCause::Fault
+                        : kernel::ipc::DeathCause::Kill);
             (void)frame_err;
             return false;
         }
@@ -2373,7 +2380,10 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
     // (the owning CPU's own exit path terminates it).
     const kernel::errors::SchedulerError default_err =
         kernel::Scheduler::terminate_err(
-            *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)));
+            *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)),
+            kernel::signal_is_fault_class(sig)
+                ? kernel::ipc::DeathCause::Fault
+                : kernel::ipc::DeathCause::Kill);
     (void)default_err;
     return false;
 #elif defined(CONFIG_ARCH_AARCH64)
@@ -2383,8 +2393,14 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
     kernel::Logger::error("Task %x: signal %x (aarch64 stub, terminating)",
                           task->id, sig);
     report_user_task_end(*task, false, sig, 0);
-    task->state = kernel::TaskState::TERMINATED;
-    task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
+    // M1/F6: funnel through terminate_err (was a direct TERMINATED mark
+    // with no dequeue, no record latch, no waiter drain).  Fault-class
+    // signals latch as Fault, plain kills as Kill.
+    (void)kernel::Scheduler::terminate_err(
+        *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)),
+        kernel::signal_is_fault_class(sig)
+            ? kernel::ipc::DeathCause::Fault
+            : kernel::ipc::DeathCause::Kill);
     return false;
 #elif defined(CONFIG_ARCH_RISCV64)
     (void)vector;
@@ -2393,8 +2409,12 @@ static bool deliver_signal_to_user(kernel::TaskControlBlock *task, uint64_t sig,
     kernel::Logger::error("Task %x: signal %x (riscv64 stub, terminating)",
                           task->id, sig);
     report_user_task_end(*task, false, sig, 0);
-    task->state = kernel::TaskState::TERMINATED;
-    task->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
+    // M1/F6: same funnel fix as the aarch64 stub above.
+    (void)kernel::Scheduler::terminate_err(
+        *task, static_cast<uint64_t>(-static_cast<int64_t>(sig)),
+        kernel::signal_is_fault_class(sig)
+            ? kernel::ipc::DeathCause::Fault
+            : kernel::ipc::DeathCause::Kill);
     return false;
 #endif
 }

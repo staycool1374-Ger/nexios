@@ -114,6 +114,23 @@ static inline bool signal_is_fatal(uint64_t sig) {
     return sig == static_cast<uint64_t>(Signal::SIGKILL);
 }
 
+/// @brief Returns true if a signal is a fault-class signal (M1 death-cause
+///        classification, issue #559: such kills latch DeathCause::Fault;
+///        all other fatal signals latch DeathCause::Kill).
+static inline bool signal_is_fault_class(uint64_t sig) {
+    switch (static_cast<Signal>(sig)) {
+    case Signal::SIGILL:
+    case Signal::SIGTRAP:
+    case Signal::SIGABRT:
+    case Signal::SIGBUS:
+    case Signal::SIGFPE:
+    case Signal::SIGSEGV:
+        return true;
+    default:
+        return false;
+    }
+}
+
 /// @brief Default signal action dispatcher.
 static inline SignalAction default_signal_action(uint64_t sig) {
     switch (static_cast<Signal>(sig)) {

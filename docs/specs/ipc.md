@@ -70,6 +70,13 @@ Entry guard: `ENSURE(task.blocked_on_queue == &q)`.
   matching reply stays queued with immediate `false` (issue #11 rule,
   no block); dest death with nothing matching returns `false` with the
   queue intact; spurious wakeups on non-matching arrivals re-block.
+- **Reply matching by one-shot token (M3, F3/Q2, IMPLEMENTED):** a Call
+  carries a kernel-minted generation-tagged token; the server's reply is
+  stamped at delivery only when a live ticket names that sender
+  (`reply_ticket` consumed atomically, `sender_id` kernel-stamped so a
+  peer cannot forge it). A reply without a live token is dropped, never
+  queued (counter `ipc_reply_dropped_count`); a consumed token never
+  matches again. Closes the same-sender-stale residual above for Calls.
 - **Spin-wait:** the reply wait is a `hlt()` loop (not a bare pause-spin).
 - **Userspace reply buffer (issue #317 option b, IMPLEMENTED):** the
   `SYS_SEND_SYNC` syscall threads a real reply-buffer address through the 5th

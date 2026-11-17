@@ -37,7 +37,10 @@ namespace kernel::errors {
     X(INVALID_MSG, 7, "Invalid message format")                                \
     X(NO_BUFFER, 8, "No buffer available for zero-copy")                       \
     X(INVALID_ARGS, 9, "Invalid arguments")                                    \
-    X(PEER_DIED, 10, "Destination task died before replying")
+    X(PEER_DIED, 10, "Destination task died before replying")                  \
+    X(REPLY_STALE, 11, "Reply token already consumed or mismatched")           \
+    X(REPLY_NO_TOKEN, 12, "No live reply token for this server")              \
+    X(REPLY_BAD_ARGS, 13, "Bad reply_recv arguments")
 
 /// @brief IPC subsystem error codes.
 // NOLINTNEXTLINE(performance-enum-size)

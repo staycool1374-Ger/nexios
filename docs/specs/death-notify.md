@@ -34,8 +34,11 @@ user memory; see syscall-fastpath.md §4 discipline).
 ```c
 struct DeathRecord {
     uint64_t dead_id;    // task that died
+    uint64_t dead_gen;   // TCB generation at death (recycled-id guard)
     uint64_t exit_code;  // exit code, or sign-extended signal on crash
     uint64_t flags;      // DEATH_FLAG_SIGNAL = 1 on abnormal (crash) death
+    uint64_t cause;      // DeathCause: None/Exit/Fault/Kill/Watchdog/Admin/Teardown
+    uint64_t die_tick;   // Timer::ticks() at the latch
 };
 ```
 
@@ -46,15 +49,20 @@ semantics.
 
 ## Registry Semantics (`ipc/death_notify.{hpp,cpp}`)
 
-- Static bounded table, `CONFIG_CAP_MAX_DEATH_WATCHES` (16) slots — no dynamic
+- Static bounded table, `CONFIG_CAP_MAX_DEATH_WATCHES` (32) slots — no dynamic
   allocation on RT paths (CODING_STYLE §4).  Registration **fails closed** when
   full.
 - Slot lifecycle: `ACTIVE` (watch installed) → `PENDING` (watched task died,
   record latched) → `FREE` (supervisor consumed via recv, or drain freed it).
-- **Exactly-once:** records latch only from `TaskControlBlock::cleanup()`
-  (the single death funnel, REAPED + magic idempotency guards).  A task that
-  dies through self-exit, signal-death, or daemon teardown produces exactly one
-  record; repeated `drain_zombie_list()` cannot duplicate it.
+- **Exactly-once:** records latch at the terminate funnel
+  (`Scheduler::publish_task_death`, first writer wins via the ACTIVE→PENDING
+  slot transition) with `complete_teardown` as the backstop for
+  destroy-driven and reaper-driven deaths.  A task that dies through
+  self-exit, signal-death, fault kill, watchdog, or daemon teardown
+  produces exactly one record; repeated `drain_zombie_list()` cannot
+  duplicate it.  The daemon PID cell is cleared at the same funnel
+  (`daemon::notify_death`, idempotent), so the supervisor never rots on a
+  stale PID (#516).
 - **Asynchronous, non-blocking:** `on_task_death` never blocks the dying task's
   cleanup; `SYS_DEATH_RECV` never blocks the supervisor.  A crashed or stalled
   supervisor can never wedge the kernel.
@@ -119,7 +127,8 @@ cleared the dead task's PTEs.  The ring itself is untouched by the death path.
   drain pending records before registering more.
 - **Unwatch before death:** the watch is removed; the eventual death produces no
   record.
-- **Exactly-once:** guaranteed by the cleanup() single funnel + the atomic
+- **Exactly-once:** guaranteed by the terminate-funnel single latch
+  (`publish_task_death`, funnel-first + teardown backstop) + the atomic
   ACTIVE→PENDING transition under the lock.
 
 ## Invariants

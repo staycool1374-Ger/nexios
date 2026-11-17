@@ -124,7 +124,8 @@ enum class SyscallNumber : uint8_t {
     THREAD_EXIT = 94,     ///< terminate the calling thread (issue #53): arg0 = exit status; self-only, thread-only, never returns
     THREAD_JOIN = 95,     ///< join/detach a thread (issue #53): arg0 = Task-cap handle naming the target (never a raw tid), arg1 = 0 join (blocks, status to arg2) | 1 detach, arg2 = user status out-pointer (join only, nullable), arg3 = reserved, must be 0
     THREAD_WRAP = 96,     ///< mint a ThreadCap for a thread (issue #53, option Y): arg0 = tid of a live child thread (or self), arg1 = Task-cap handle with SHARE (cross-task wrap only, 0 = child-or-self); returns the generation-tagged cap handle (never a raw index)
-    MAX_SYSCALL = 97,
+    REPLY_RECV = 97,      ///< reply to the recorded caller and wait for the next request (M3, F3/Q2, issue #556): arg0 = reply buffer, arg1 = reply type, arg2 = reply len, arg3 = next-request buffer, arg4(regs) = next_cap (reserved, 0); dest+token implicit kernel-held; returns reply code or next request type
+    MAX_SYSCALL = 98,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -422,6 +423,11 @@ class Syscall {
                                     uint64_t *);
     static uint64_t sys_thread_wrap(uint64_t, uint64_t, uint64_t, uint64_t,
                                     uint64_t *);
+    /// @brief REPLY_RECV handler (M3, F3/Q2, issue #556).  Five-arg form:
+    ///        arg4 arrives via regs (x86 regs[5] / aa64 x4 / rv64 a4) —
+    ///        see sys_send_sync_fast precedent for the arg4 plumbing.
+    static uint64_t sys_reply_recv(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -542,6 +548,7 @@ class Syscall {
             &Syscall::sys_thread_exit,     // 94 THREAD_EXIT (issue #53)
             &Syscall::sys_thread_join,     // 95 THREAD_JOIN (issue #53)
             &Syscall::sys_thread_wrap,     // 96 THREAD_WRAP (issue #53, Y)
+            &Syscall::sys_reply_recv,      // 97 REPLY_RECV (M3, F3/Q2 #556)
     };
 };
 

@@ -325,8 +325,12 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
             t->state = TaskState::TERMINATED;
             t->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
             // M1/F6 (issue #559): the self-fatal leg never reaches a
-            // terminate funnel — latch synchronously here.
-            Scheduler::publish_task_death(*t);
+            // terminate funnel — latch synchronously here.  Fault-class
+            // signals latch as Fault, plain kills as Kill.
+            Scheduler::publish_task_death(
+                *t, signal_is_fault_class(sig)
+                        ? kernel::ipc::DeathCause::Fault
+                        : kernel::ipc::DeathCause::Kill);
         } else {
             t->pending_signals |= (1ULL << sig);
         }

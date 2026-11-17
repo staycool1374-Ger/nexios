@@ -26,6 +26,7 @@
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
 #include <kernel/task/scheduler_lock_guard.hpp>  // scheduler_lock_depth_own
+#include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/ipc/death_notify.hpp>           // M1/F6 death latch
 #include <kernel/ipc/ipc.hpp>                    // M1/F7 waiter drains
 #include <assert.hpp>                              // issue #369 T1b ENSURE
@@ -42,7 +43,8 @@ using sched_verify::validate_task_ptr;
 
 /// @brief Latch a death record + wake the dead task's IPC waiters
 ///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).
-void Scheduler::publish_task_death(TaskControlBlock &dead) noexcept {
+void Scheduler::publish_task_death(TaskControlBlock &dead,
+                                   ipc::DeathCause cause) noexcept {
     ENSURE(validate_task_ptr(&dead, "publish_task_death"));
     // Wake path takes scheduler_lock_ on the not-own-CPU branch
     // (set_task_ready): publishing under the global lock would panic a
@@ -50,6 +52,14 @@ void Scheduler::publish_task_death(TaskControlBlock &dead) noexcept {
     // before calling here; the deferred complete_teardown backstop never
     // holds it either.
     ENSURE(scheduler_lock_depth_own() == 0);
+    // M1/F6 (#516): clear the supervisor PID cell BEFORE the IRQ-off
+    // window.  Idempotent (pid==0 after the first clear is a silent
+    // no-op); bounded serial emit; needs no lock and no atomicity with
+    // the latch below.
+    if (dead.death_cause == 0) {
+        dead.death_cause = static_cast<uint64_t>(cause);
+    }
+    kernel::daemon::notify_death(dead.id);
     arch::IrqGuard irq_guard{};
     // Exactly-once by construction: on_task_death only transitions
     // ACTIVE→PENDING, so a repeat call finds no slot and emits no poke;
@@ -71,7 +81,8 @@ void Scheduler::publish_task_death(TaskControlBlock &dead) noexcept {
 
 errors::SchedulerError
 Scheduler::terminate_err(TaskControlBlock &task,
-                         uint64_t exit_code) noexcept {
+                         uint64_t exit_code,
+                         ipc::DeathCause cause) noexcept {
 
     ENSURE(validate_task_ptr(&task, "terminate_err"));
     arch::IrqGuard irq_guard{};
@@ -154,7 +165,7 @@ Scheduler::terminate_err(TaskControlBlock &task,
     // M1/F6/F7: latch the death record + drain IPC waiters with NO
     // scheduler lock held (publish_task_death ENSUREs this — the wake
     // path retakes the lock on the not-own-CPU branch).
-    publish_task_death(task);
+    publish_task_death(task, cause);
 
     // M1 scope B: successor selection + deferred-switch arm under a fresh
     // lock (peek helpers read scheduler state).  The peek runs after the
@@ -253,15 +264,16 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
     // (switch_away_from_terminating) arms the deferred switch AFTER this
     // returns — publish never arms, so the zombie-before-arm ordering the
     // caller contract requires is preserved.
-    publish_task_death(task);
+    publish_task_death(task, ipc::DeathCause::Fault);
     return errors::SCHED_ERR_OK;
 }
 
-void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code) noexcept {
+void Scheduler::terminate(TaskControlBlock &task, uint64_t exit_code,
+                          ipc::DeathCause cause) noexcept {
     // Void legacy wrapper: refusal is fail-closed warn-only (all existing
     // callers are own-CPU paths where refusal is unreachable). Fallible
     // callers use terminate_err directly.
-    const errors::SchedulerError err = terminate_err(task, exit_code);
+    const errors::SchedulerError err = terminate_err(task, exit_code, cause);
     // Issue #324 Tick 14: refusal leg is cold (own-CPU callers never refuse).
     if (err != errors::SCHED_ERR_OK) [[unlikely]] {
         kernel::Logger::warn("sched: terminate id=%u refused (err=%u)",

@@ -254,12 +254,17 @@ check_depth:
     li t2, 2
     blt t1, t2, 7f
 nested_timer:
-    # Depth >= 2: allow the s_timer nested tick only (scause[63]=1,
-    # cause 5); all other nested sources preserve the arm and skip.
+    # Depth >= 2: allow the s_timer nested tick (scause[63]=1, cause 5)
+    # and the M3 self-triggered SSIP apply (cause 1); all other nested
+    # sources preserve the arm and skip.  SSIP is cleared by the C
+    # handler before this point (level-like until cleared), so a
+    # self-trigger reaches here exactly once per arm.
     ld t0, OFF_SCAUSE(sp)
     bge t0, zero, 7f
     andi t0, t0, 0x7ff
     li t1, 5
+    beq t0, t1, apply
+    li t1, 1
     bne t0, t1, 7f
 apply:
     # H2 generation-lock (mirrors x86_64 isr_stubs .depth_ok): capture the

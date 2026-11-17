@@ -169,8 +169,35 @@ class IPC {
     ///        reply_wait clear and re-checks dest liveness at loop top, so a
     ///        reply queued before the death is still consumed first (#296).
     ///        Wake-only: never arms a switch, never changes BLOCKED state.
-    ///        Caller must hold no scheduler lock.
+    ///        Caller must hold no scheduler lock.  The waiter's park loop
+    ///        (resched_park_until_dispatched) observes the state flip as
+    ///        its wake; the send_sync[_bounded] exit arms dequeue first if
+    ///        queued so the RUNNING restore cannot strand a queued task.
+    ///        Queue-full senders are intentionally left to the queue
+    ///        destructor drain (F6 bisection: an early sender wake collapses
+    ///        the BLOCKED window the handshake depends on).
     static void wake_reply_waiters_of(TaskControlBlock &dead) noexcept;
+
+    /// @brief Record a delivered request's caller identity for REPLY_RECV
+    ///        (M3, F3/Q2).  Stores sender id + generation (last-caller
+    ///        pair).  Called on every consumed inbound message.  No locks
+    ///        (caller owns its own TCB fields).
+    static void note_delivered_request(TaskControlBlock &receiver,
+                                       const Message &msg) noexcept;
+
+    /// @brief Reply to the recorded caller and wait for the next request
+    ///        (M3, N5 = syscall 97).  Requires a live last-caller pair
+    ///        (else REPLY_NO_TOKEN) whose generation still matches and
+    ///        whose ticket is still live (else REPLY_STALE, never blocks).
+    ///        On success the reply is stamped with the one-shot token and
+    ///        the waiter blocks for the next request exactly like a bounded
+    ///        sys_receive wait (direct-switch entry included).
+    /// @return IPC_ERR_OK (reply queued, next request consumed into @p msg),
+    ///         REPLY_NO_TOKEN, REPLY_STALE, REPLY_BAD_ARGS, or the bounded
+    ///         wait's dispositions.
+    static errors::IpcError
+    reply_recv_err(Message &reply, uint32_t reply_type, uint32_t reply_len,
+                   Message &msg, uint64_t next_cap) noexcept;
 
     /// @brief Returns the message queue for a given task ID.
     static MessageQueue &queue(uint64_t task_id);

@@ -110,7 +110,7 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
         // record would wait for the deferred complete_teardown backstop.
         // Idempotent: the terminate_err leg below re-enters publish
         // harmlessly (ACTIVE→PENDING is the exactly-once mechanism).
-        Scheduler::publish_task_death(*t);
+        Scheduler::publish_task_death(*t, kernel::ipc::DeathCause::Exit);
 
         // If the exiting task is the current running task (the normal case for
         // sys_exit), we must switch the CPU off it BEFORE returning to user

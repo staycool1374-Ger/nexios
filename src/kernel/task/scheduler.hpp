@@ -23,6 +23,7 @@
 
 #include <types.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/ipc/death_notify.hpp>
 #include <kernel/task/scheduler_config.hpp>
 #include <kernel/task/test_context.hpp>
 #include <kernel/arch/cpu_context.hpp>
@@ -268,6 +269,18 @@ class Scheduler {
     /// Requires: no held tracked spinlock, no live IrqGuard (park denied
     /// otherwise); not callable from a hardware ISR (deny → C3).
     static void reschedule() noexcept;
+
+    /// @brief Attempt a direct switch to the highest-priority ready task
+    ///        (M3, F3/Q3: Call/REPLY_RECV fast path).  Arms ONLY via the
+    ///        single publisher switch_to_task() (H2 single-writer); never
+    ///        publishes slots itself.  Fail-closed: returns false on any
+    ///        unsatisfied precondition (arm in flight, ISR/trap context,
+    ///        live caller guard, held scheduler or tracked lock, no
+    ///        dispatchable candidate) and the caller keeps the tick path.
+    ///        The caller (BLOCKED+dequeued, no locks held — INV-C1/INV-4b)
+    ///        fires the arch apply trigger after a true return; the trap
+    ///        epilogue applies the arm at depth 2 (INV-MK-5).
+    static bool try_direct_switch(TaskControlBlock &cur) noexcept;
 
     /// @brief F1 diagnostics: reschedule() park denials of BLOCKED
     ///        callers (cumulative) and the last denial's gate bitmap
@@ -562,14 +575,16 @@ class Scheduler {
     /// @brief Transitions a task to TERMINATED state and removes it from the
     ///        ready queue.  Call this instead of directly setting
     ///        `task.state = TERMINATED` to keep the ready queue consistent.
-    static void terminate(TaskControlBlock &task, uint64_t exit_code) noexcept;
+    static void terminate(TaskControlBlock &task, uint64_t exit_code,
+                          ipc::DeathCause cause = ipc::DeathCause::Kill) noexcept;
     /// @brief Fallible terminate (issue #197): refuses with
     ///        SCHED_ERR_REMOTE_CURRENT (zero mutation) when the target is
     ///        current on ANOTHER CPU — freeing an AP-live stack poisons the
     ///        running task. Self-termination always succeeds. The void
     ///        terminate() above delegates and warns on refusal.
     [[nodiscard]] static errors::SchedulerError terminate_err(TaskControlBlock &task,
-                                                uint64_t exit_code) noexcept;
+                                                uint64_t exit_code,
+                                                ipc::DeathCause cause = ipc::DeathCause::Kill) noexcept;
     /// @brief Trap-safe termination prefix (issue #523): everything
     ///        terminate_err does EXCEPT the self-current switch_to_task.
     ///        For fault handlers (traps masked): call this, then
@@ -925,7 +940,10 @@ class Scheduler {
     ///        Caller must hold NO scheduler lock (the wake path takes it
     ///        on the not-own-CPU branch).  Safe to call from every death
     ///        funnel site; repeat calls are idempotent no-ops.
-    static void publish_task_death(TaskControlBlock &dead) noexcept;
+    ///        The cause is recorded once (first writer wins); pass the
+    ///        funnel's cause explicitly — no default (every site auditable).
+    static void publish_task_death(TaskControlBlock &dead,
+                                   ipc::DeathCause cause) noexcept;
 
     /// @brief Invalidate the pending deferred-switch arm (clear all switch
     ///        atoms + bump the switch generation).  Used by the apply-side

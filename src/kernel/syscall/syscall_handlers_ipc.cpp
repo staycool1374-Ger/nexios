@@ -139,6 +139,8 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
             // lock itself): mirrors IPC::recv's pop+wake pairing.
             if (probe_hit) {
                 ok = true;
+                // M3 (F3/Q2): probe consumption recorded for REPLY_RECV.
+                IPC::note_delivered_request(*cur, msg);
                 if (cur->msg_queue.blocked_senders_head)
                     IPC::wake_sender(cur->msg_queue, *cur);
                 break;
@@ -400,6 +402,8 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             }
             if (probe_hit) {
                 ok = true;
+                // M3 (F3/Q2): record the delivered request for REPLY_RECV.
+                IPC::note_delivered_request(*cur, msg);
                 cur->blocked_in_recv = false;
                 IPC::recv_wait_cancel(*cur);
                 arch::sti();
@@ -430,6 +434,8 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             if (cur->state != TaskState::BLOCKED &&
                 cur->msg_queue.pop_clamped(msg, clamp)) {
                 ok = true;
+                // M3 (F3/Q2): record the delivered request for REPLY_RECV.
+                IPC::note_delivered_request(*cur, msg);
                 break;
             }
             if (!cur->msg_queue.is_empty()) {
@@ -448,6 +454,11 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                 cur->state = TaskState::RUNNING;
                 return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
             }
+        }
+        if (ok) {
+            // M3 (F3/Q2): loop-top consumption recorded for REPLY_RECV
+            // (probe and post-hlt breaks record at their own sites).
+            IPC::note_delivered_request(*cur, msg);
         }
         arch::sti(); // wait over via delivery-break: same IF restore.
         cur->blocked_in_recv = false;
@@ -475,6 +486,8 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
             arch::pause();
         }
     }
+    // M3 (F3/Q2): fallback-loop consumption recorded for REPLY_RECV.
+    IPC::note_delivered_request(*cur, msg);
     if (was_blocked) {
         cur->remaining_ticks = cur->period_ticks;
         if (cur->get_sporadic_server()) {
@@ -515,6 +528,63 @@ uint64_t Syscall::sys_send_sync_fast(uint64_t arg0, uint64_t arg1,
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     fast_msg_to_regs(reply, regs);
     return reply.type;
+}
+
+// ---------------------------------------------------------------------------
+// M3 — REPLY_RECV (syscall 97, F3/Q2, issue #556).
+// ---------------------------------------------------------------------------
+
+uint64_t Syscall::sys_reply_recv(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+                                 uint64_t arg3, uint64_t *regs) {
+    // arg0 = reply buffer (reply_len bytes), arg1 = reply type,
+    // arg2 = reply len, arg3 = next-request buffer (IPC_MAX_MSG_SIZE),
+    // arg4 (regs) = next_cap, reserved, must be 0 (fail-closed).
+    const uint64_t next_cap = syscall_arg4(regs);
+    if (next_cap != 0)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    auto *cur = syscall_task();
+    if (!cur)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    // Issue #513 INV-NO-BLOCK-DEAD: a TERMINATED task must never block.
+    if (cur->state != TaskState::RUNNING)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    const uint64_t reply_len = arg2;
+    if (reply_len > IPC_MAX_MSG_SIZE)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    Message reply_out{};
+    if (reply_len != 0) {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        auto data = checked(reinterpret_cast<const uint8_t *>(arg0),
+                            reply_len);
+        if (!data.valid())
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+        reply_out.type = arg1;
+        reply_out.data_size = reply_len;
+        for (uint64_t i = 0; i < reply_len; ++i)
+            reply_out.data[i] = data.read(static_cast<size_t>(i));
+    } else {
+        reply_out.type = arg1;
+        reply_out.data_size = 0;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto next_buf =
+        checked(reinterpret_cast<uint8_t *>(arg3), IPC_MAX_MSG_SIZE);
+    if (!next_buf.valid())
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    Message next_req{};
+    const errors::IpcError err = IPC::reply_recv_err(
+        reply_out, static_cast<uint32_t>(arg1),
+        static_cast<uint32_t>(reply_len), next_req, next_cap);
+    if (err != errors::IPC_ERR_OK)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    uint64_t copy_size = next_req.data_size;
+    if (copy_size > IPC_MAX_MSG_SIZE)
+        copy_size = IPC_MAX_MSG_SIZE;
+    for (uint64_t i = 0; i < copy_size; ++i) {
+        if (!next_buf.write(next_req.data[i], static_cast<size_t>(i)))
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+    return next_req.type;
 }
 
 uint64_t Syscall::sys_create_mailbox(uint64_t, uint64_t, uint64_t, uint64_t,

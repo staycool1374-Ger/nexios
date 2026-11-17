@@ -35,6 +35,7 @@
 #include <kernel/arch/msr.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/spinlock_order.hpp> // M3: INV-C1 gate for try_direct_switch
 #include <kernel/arch/hal/iopb.hpp>
 #include <lib/logger.hpp>
 #include <assert.hpp>
@@ -1099,6 +1100,42 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         arch::write_cr0(cr0);
 #endif
     }
+}
+
+/// @brief Attempt a direct (synchronous-path) switch to the highest-priority
+///        ready task (M3, F3: Call/REPLY_RECV fast path).  The ONLY direct-arm
+///        entry point: arms via the single publisher switch_to_task(), never
+///        publishes slots itself (H2 single-writer rule).
+///        Fail-closed: any unsatisfied precondition returns false and the
+///        caller keeps the classic deferred (tick-applied) path.
+///        Preconditions (all must hold):
+///        - no arm already in flight (save_rsp_to == 0);
+///        - not in an ISR (own nesting == 0) and no live caller IrqGuard;
+///        - the caller holds no tracked spinlock, no scheduler_lock_
+///          (INV-C1/INV-4b: the caller is BLOCKED+dequeued here);
+///        - a READY (or RUNNING) non-current candidate exists.
+///        The arch-specific apply trigger (self-IPI/SGI/SSIP) is the
+///        caller's job after a true return; the trap epilogue applies the
+///        arm at depth 2 (INV-MK-5: never applied inline here).
+bool Scheduler::try_direct_switch(TaskControlBlock &cur) noexcept {
+    if (__atomic_load_n(&SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0)
+        return false; // Arm in flight: never publish a second one (H2).
+    if (kernel::isr_nesting_own() != 0)
+        return false; // ISR context: the tick owns dispatch.
+    if (arch::irq_guard_depth_own() != 0)
+        return false; // Caller guard live: arming would widen its window.
+    if (scheduler_lock_depth_own() != 0)
+        return false; // Scheduler lock held: never arm under it.
+    if (!sync::spinlock_contract_check_clean("direct switch"))
+        return false; // INV-C1: a lock holder must never direct-switch.
+    SchedulerLockGuard guard(scheduler_lock_);
+    TaskControlBlock *next = next_task();
+    if (next == nullptr || next == &cur)
+        return false; // Nothing (new) to switch to: keep the tick path.
+    if (next->state != TaskState::READY && next->state != TaskState::RUNNING)
+        return false; // Not dispatchable (BLOCKED/TERMINATED/...).
+    switch_to_task(&cur, *next, nullptr);
+    return __atomic_load_n(&SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0;
 }
 
 }  // namespace kernel

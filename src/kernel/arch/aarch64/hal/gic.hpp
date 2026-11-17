@@ -154,12 +154,19 @@ inline constexpr uint32_t SMP_SHOOTDOWN_SGI = 10;
 /// @brief SGI INTID for the boot-time loopback probe + QE use (#351 s2).
 /// Kept registered after boot (slice-5 owns the test text).
 inline constexpr uint32_t SMP_LOOPBACK_SGI = 8;
+/// @brief SGI INTID for the M3 self-triggered apply (F3/Q3): the direct
+/// switch's trap trigger.  Unregistered C++ handler by design (dispatches
+/// through the IDT table to a null slot = no-op); the apply gate in the
+/// trap epilogue validates the pending arm, so a stray SGI is harmless.
+/// Lands on free IDT vector 11 (not 0/1/2 TIMER/KEYBOARD/SYSCALL, not 30).
+inline constexpr uint32_t M3_APPLY_SGI = 11;
 
-/// @brief SGI INTIDs the kernel uses (loopback + scheduler + shootdown).
-/// Shared enable mask for distributor (v2) / redistributor (v3) PPI banks.
+/// @brief SGI INTIDs the kernel uses (loopback + scheduler + shootdown +
+/// M3 apply). Shared enable mask for distributor (v2) / redistributor
+/// (v3) PPI banks.
 inline constexpr uint32_t SMP_SGI_ENABLE_MASK =
     (1U << SMP_LOOPBACK_SGI) | (1U << SMP_SCHED_SGI) |
-    (1U << SMP_SHOOTDOWN_SGI);
+    (1U << SMP_SHOOTDOWN_SGI) | (1U << M3_APPLY_SGI);
 
 /// @brief GICR_TYPER register offset (64-bit affinity + processor number).
 inline constexpr uint32_t GICR_TYPER = 0x0008;
@@ -229,8 +236,9 @@ inline bool gic_send_sgi(uint32_t target_cpu, uint32_t intid) {
     }
     // Only the kernel SGI set may be programmed (INTIDs 8/9/10 land on
     // free IDT vectors; 0/1/2 would alias TIMER/KEYBOARD/SYSCALL).
+    // M3_APPLY_SGI (11) added for the M3 self-triggered apply (F3/Q3).
     if (intid != SMP_LOOPBACK_SGI && intid != SMP_SCHED_SGI &&
-        intid != SMP_SHOOTDOWN_SGI) {
+        intid != SMP_SHOOTDOWN_SGI && intid != M3_APPLY_SGI) {
         return false;
     }
     if (gic_version() >= 3U) {

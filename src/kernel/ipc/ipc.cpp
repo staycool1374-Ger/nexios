@@ -24,6 +24,7 @@
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/arch/hal/sched_trigger.hpp>
 #include <kernel/cap/endpoint.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/debug/ipc_sched_trace.hpp>
@@ -92,6 +93,8 @@ void MessageQueue::init() {
     tail = 0;
     count = 0;
     prio_bitmap = 0;
+    for (size_t i = 0; i < IPC_MAX_QUEUE_MSG; ++i)
+        reply_tok[i] = 0;
     blocked_senders_head = nullptr;
     blocked_senders_tail = nullptr;
     lock_.set_rank(sync::LockRank::Queue); // M2 §6.2: queue rank.
@@ -111,10 +114,16 @@ bool MessageQueue::is_full_locked() {
 /// @return true on success, false if the queue is full.
 bool MessageQueue::push(const Message &msg) {
     sync::ParkLockGuard guard(lock_, "mq:push");
+    return push_locked(msg);
+}
+
+/// @brief push() body with the lock already held (see header contract).
+bool MessageQueue::push_locked(const Message &msg, uint32_t tok) {
     if (is_full())
         return false;
 
     msgs[tail] = msg;
+    reply_tok[tail] = tok;
     prio_bitmap |= (1ULL << msg.priority);
     tail = (tail + 1) % IPC_MAX_QUEUE_MSG;
     count = count + 1;
@@ -142,6 +151,7 @@ size_t MessageQueue::find_best_index() const {
 ///        rebuild).  Caller MUST hold lock_.
 void MessageQueue::remove_at(size_t best_idx) {
     if (best_idx == head) {
+        reply_tok[head] = 0;
         head = (head + 1) % IPC_MAX_QUEUE_MSG;
     } else {
         size_t pos = best_idx;
@@ -151,6 +161,7 @@ void MessageQueue::remove_at(size_t best_idx) {
             if (next == tail)
                 break;
             msgs[pos] = msgs[next];
+            reply_tok[pos] = reply_tok[next];
             pos = next;
         }
         ENSURE(iter < IPC_MAX_QUEUE_MSG && "queue compaction: tail not found");
@@ -261,6 +272,80 @@ bool MessageQueue::pop_from_sender_clamped(Message &out, uint32_t max_size,
     return true;
 }
 
+/// @brief M3 one-shot reply selectors (F3/Q2): best match additionally
+///        requires the one-shot token (sidecar reply_tok == token).
+///        Token-less or wrong-token messages from the same sender are
+///        never touched — they stay queued for their real consumer.
+size_t MessageQueue::find_best_reply_from(uint64_t sender_id,
+                                          uint32_t token) const {
+    size_t best_prio = IPC_PRIORITY_LEVELS + 1;
+    size_t best_idx = IPC_MAX_QUEUE_MSG;
+    for (size_t i = 0; i < count; ++i) {
+        const size_t idx = (head + i) % IPC_MAX_QUEUE_MSG;
+        if (msgs[idx].sender_id != sender_id)
+            continue;
+        if (reply_tok[idx] != token)
+            continue;
+        if (msgs[idx].priority < best_prio) {
+            best_prio = msgs[idx].priority;
+            best_idx = idx;
+            if (best_prio == 0)
+                break;
+        }
+    }
+    return best_idx;
+}
+
+bool MessageQueue::pop_reply_from(Message &out, uint64_t sender_id,
+                                  uint32_t token) {
+    sync::ParkLockGuard guard(lock_, "mq:pop_reply_from");
+    size_t best_idx = find_best_reply_from(sender_id, token);
+    if (best_idx >= IPC_MAX_QUEUE_MSG)
+        return false;
+
+    out = msgs[best_idx];
+    remove_at(best_idx);
+    return true;
+}
+
+bool MessageQueue::pop_reply_from_clamped(Message &out, uint32_t max_size,
+                                          uint64_t sender_id,
+                                          uint32_t token) {
+    sync::ParkLockGuard guard(lock_, "mq:pop_reply_from_clamped");
+    size_t best_idx = find_best_reply_from(sender_id, token);
+    if (best_idx >= IPC_MAX_QUEUE_MSG)
+        return false;
+    if (msgs[best_idx].data_size > max_size)
+        return false;
+
+    out = msgs[best_idx];
+    remove_at(best_idx);
+    return true;
+}
+
+bool MessageQueue::has_reply_from(uint64_t sender_id, uint32_t token) {
+    sync::ParkLockGuard guard(lock_, "mq:has_reply_from");
+    return find_best_reply_from(sender_id, token) < IPC_MAX_QUEUE_MSG;
+}
+
+/// @brief Stamp sweep body (M3): every queued message from @p sender_id
+///        gets @p token, so a reply that arrived before the waiter armed
+///        its ticket still matches pop_reply_from (legacy-equivalent:
+///        the old pop_from_sender consumed the same messages as replies).
+///        Non-blocking try: Contended leaves everything untouched.
+bool MessageQueue::stamp_from_try(uint64_t sender_id, uint32_t token) {
+    if (!lock_.try_lock())
+        return false;
+    sync::spinlock_annotate_site(&lock_, "mq:stamp_from_try");
+    for (size_t i = 0; i < count; ++i) {
+        const size_t idx = (head + i) % IPC_MAX_QUEUE_MSG;
+        if (msgs[idx].sender_id == sender_id)
+            reply_tok[idx] = token;
+    }
+    lock_.unlock();
+    return true;
+}
+
 /// @brief Try-once probe bodies (F1 #545, INV-4b contract in task.hpp).
 ///        Single try_lock; every path unlocks exactly once.  Selection
 ///        reuses find_best_*/remove_at (single source with the blocking
@@ -340,6 +425,45 @@ MessageQueue::QueueProbe MessageQueue::probe_pop_from_sender_clamped(
     return result;
 }
 
+/// @brief M3 one-shot reply probes (F3/Q2): probe_pop_from_sender[clamped]
+///        additionally restricted to @p token.  Single try_lock; every path
+///        unlocks exactly once.
+MessageQueue::QueueProbe MessageQueue::probe_pop_reply_from(
+    Message &out, uint64_t sender_id, uint32_t token) {
+    if (!lock_.try_lock())
+        return QueueProbe::Contended;
+    sync::spinlock_annotate_site(&lock_, "mq:probe_pop_reply_from");
+    QueueProbe result = QueueProbe::Empty;
+    const size_t best_idx = find_best_reply_from(sender_id, token);
+    if (best_idx < IPC_MAX_QUEUE_MSG) {
+        out = msgs[best_idx];
+        remove_at(best_idx);
+        result = QueueProbe::Consumed;
+    }
+    lock_.unlock();
+    return result;
+}
+
+MessageQueue::QueueProbe MessageQueue::probe_pop_reply_from_clamped(
+    Message &out, uint32_t max_size, uint64_t sender_id, uint32_t token) {
+    if (!lock_.try_lock())
+        return QueueProbe::Contended;
+    sync::spinlock_annotate_site(&lock_, "mq:probe_pop_reply_from_clamped");
+    QueueProbe result = QueueProbe::Empty;
+    const size_t best_idx = find_best_reply_from(sender_id, token);
+    if (best_idx < IPC_MAX_QUEUE_MSG) {
+        if (msgs[best_idx].data_size > max_size) {
+            result = QueueProbe::PresentOversized;
+        } else {
+            out = msgs[best_idx];
+            remove_at(best_idx);
+            result = QueueProbe::Consumed;
+        }
+    }
+    lock_.unlock();
+    return result;
+}
+
 
 /// @brief Non-destructive probe for a queued message from @p sender_id
 ///        (issue #296, send_sync dest-death path).
@@ -372,6 +496,93 @@ static void unblock_sender_rollback(MessageQueue &q,
 
 /// @brief Send a message to a destination task (blocks if queue is full, unless
 /// IpcFlags::NONBLOCK).
+// ---------------------------------------------------------------------------
+// M3 (F3/Q3): cap on direct-switch attempts per wait.  A refused or
+// lost trigger falls through to the tick path; the cap bounds trap
+// traffic (no unbounded self-IPI loop if the receiver never becomes
+// dispatchable).
+inline constexpr uint64_t kDirectMaxAttempts = 3;
+
+// M3 one-shot reply tokens (F3/Q2)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// M3 (F3/Q2): token sequence, seeded at 1 (0 = no token).  u32: tokens
+// are single-outstanding per waiter (a second Call mints only after the
+// first resolves), so 32 bits never alias a live token.  Functional in
+// all builds (not CONFIG_DEBUG-gated): release builds enforce tokens too.
+uint32_t g_reply_token_seq = 1;
+
+uint32_t mint_reply_token() noexcept {
+    uint32_t token =
+        __atomic_fetch_add(&g_reply_token_seq, 1, __ATOMIC_RELAXED) &
+        0x7FFFFFFFu;
+    if (token == 0) {
+        // 0 is reserved for "no token"; skip it.
+        token = (__atomic_fetch_add(&g_reply_token_seq, 1,
+                                    __ATOMIC_RELAXED) &
+                 0x7FFFFFFFu);
+        if (token == 0)
+            token = 1;
+    }
+    return token;
+}
+
+// M3 ticket word: high bit = live, low 31 = token.  u32 keeps the TCB
+// inside pool8 (see the static_assert); the single atomic word still
+// gives one-shot consume semantics via exchange(0).
+inline constexpr uint32_t kReplyTicketLive = 0x80000000u;
+
+/// @brief Outcome of the M3 reply-token rule applied to one delivery.
+enum class DeliverRule : uint8_t {
+    Pushed,      ///< No live ticket naming this sender: pushed untokened.
+    PushedReply, ///< Live ticket names this sender: consumed, stamped, pushed.
+    Full,        ///< Queue full under the lock: nothing pushed.
+};
+
+/// @brief Apply the M3 reply-token rule and push atomically (M3/F3/Q2).
+///        Caller must hold NO locks; the rule + push run under the
+///        destination queue lock.  The sender id must already be stamped
+///        by the caller (kernel current task id — unforgeable).
+///        Rule: a live ticket naming this sender is consumed and the
+///        token stamped into the parallel reply_tok slot (the reply
+///        path); anything else pushes untokened (legacy traffic, grants,
+///        pulses, new requests — the token lives only in tickets and
+///        stamps, never on the wire, so there is nothing to forge).
+/// @param dest  Recipient TCB (owns the queue and the ticket).
+/// @param m     Message to deliver (never mutated).
+/// @return Pushed (pushed untokened), PushedReply (pushed + stamped) or
+///         Full (queue full — nothing pushed).
+DeliverRule deliver_with_reply_rule(TaskControlBlock &dest,
+                                    Message &m) noexcept {
+    sync::ParkLockGuard guard(dest.msg_queue.lock_, "mq:deliver");
+    const uint32_t seen =
+        __atomic_load_n(&dest.reply_ticket, __ATOMIC_ACQUIRE);
+    if (seen != 0) {
+        const uint64_t cur_id = m.sender_id;
+        const uint64_t want_id =
+            __atomic_load_n(&dest.reply_wait_dest_id, __ATOMIC_ACQUIRE);
+        const uint32_t want_gen =
+            __atomic_load_n(&dest.reply_wait_dest_gen, __ATOMIC_ACQUIRE);
+        if (cur_id == want_id && dest.generation == want_gen) {
+            const uint32_t old =
+                __atomic_exchange_n(&dest.reply_ticket, 0, __ATOMIC_ACQ_REL);
+            if (old == seen) {
+                const uint32_t tok = seen & ~kReplyTicketLive;
+                if (!dest.msg_queue.push_locked(m, tok))
+                    return DeliverRule::Full;
+                return DeliverRule::PushedReply;
+            }
+        }
+    }
+    if (!dest.msg_queue.push_locked(m, 0))
+        return DeliverRule::Full;
+    return DeliverRule::Pushed;
+}
+
+} // namespace
+
 bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     auto *tcb = Scheduler::find_task(dest_id);
     if (!tcb || tcb->state == TaskState::TERMINATED)
@@ -420,6 +631,12 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     }
 
     Message m = msg;
+    // M3 (F3/Q2): the sender id is kernel-stamped — unforgeable by a local
+    // peer — so token + stamped identity is a sound reply authenticator.
+    {
+        auto *stamp_cur = Scheduler::current_task();
+        m.sender_id = stamp_cur ? stamp_cur->id : 0;
+    }
     bool transferred = false;
     if (msg.buf_handle != 0) {
         auto *cur = Scheduler::current_task();
@@ -430,18 +647,23 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
         }
     }
 
-    bool ok = tcb->msg_queue.push(m);
-    if (!ok) {
-        if (transferred) {
-            auto *cur = Scheduler::current_task();
-            // Best-effort rollback (issue #348-A): on failure the buffer
-            // stays with tcb and is reclaimed at task teardown
-            // (BufferPool::unmap_all) — never leaked, never double-owned.
-            if (cur)
-                (void)BufferPool::transfer(msg.buf_handle, *tcb, *cur);
+    // M3 (F3/Q2): reply-token rule + push atomically under the queue
+    // lock.  A full queue fails as before.
+    {
+        const DeliverRule rule = deliver_with_reply_rule(*tcb, m);
+        if (rule == DeliverRule::Full) {
+            if (transferred) {
+                auto *cur = Scheduler::current_task();
+                // Best-effort rollback (issue #348-A): on failure the buffer
+                // stays with tcb and is reclaimed at task teardown
+                // (BufferPool::unmap_all) — never leaked, never double-owned.
+                if (cur)
+                    (void)BufferPool::transfer(msg.buf_handle, *tcb, *cur);
+            }
+            return false;
         }
-        return false;
     }
+    const bool ok = true;
 
     IPC_SCHED_TRACE(
         "[SEND]", "to=", dest_id, "from=",
@@ -499,10 +721,27 @@ bool IPC::recv(Message &msg) noexcept {
         return false;
 
     bool ok = cur->msg_queue.pop(msg);
-    if (ok && cur->msg_queue.blocked_senders_head) {
-        wake_sender(cur->msg_queue, *cur);
+    if (ok) {
+        // M3 (F3/Q2): record the delivered request's caller identity +
+        // token for REPLY_RECV (implicit dest + token, kernel-held).
+        note_delivered_request(*cur, msg);
+        if (cur->msg_queue.blocked_senders_head) {
+            wake_sender(cur->msg_queue, *cur);
+        }
     }
     return ok;
+}
+
+/// @brief Record a delivered request's caller identity (M3, F3/Q2).
+///        No token travels in messages (tokens live only in tickets and
+///        sidecar stamps); ticket-liveness plus generation discriminate
+///        at REPLY_RECV time.
+void IPC::note_delivered_request(TaskControlBlock &receiver,
+                                 const Message &msg) noexcept {
+    auto *sender = Scheduler::find_task(msg.sender_id);
+    receiver.last_caller_id = msg.sender_id;
+    receiver.last_caller_gen =
+        (sender != nullptr) ? sender->generation : 0;
 }
 
 /// @brief Send through a capability-gated endpoint.  The endpoint's message
@@ -555,8 +794,25 @@ bool IPC::send_via_cap(cap::Endpoint *ep, const Message &msg, IpcFlags flags) no
 
     Message m = msg;
     m.sender_id = cur ? cur->id : 0;
-    if (!ep->q.push(m))
-        return false;
+    {
+        // M3 (F3/Q2): same token rule as IPC::send, applied against the
+        // bound receiver (null receiver: no ticket can exist — strip and
+        // push).  Drop is not a sender failure.
+        TaskControlBlock *rule_recv = nullptr;
+        {
+            sync::ParkLockGuard guard(ep->lock_, "ep:bound_receiver_rule");
+            rule_recv = ep->bound_receiver;
+        }
+        bool pushed = false;
+        if (rule_recv != nullptr) {
+            const DeliverRule rule = deliver_with_reply_rule(*rule_recv, m);
+            pushed = (rule != DeliverRule::Full);
+        } else {
+            pushed = ep->q.push(m);
+        }
+        if (!pushed)
+            return false;
+    }
 
     TaskControlBlock *receiver = nullptr;
     {
@@ -585,6 +841,10 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
         return false;
     if (!ep->q.pop(msg))
         return false;
+    // M3 (F3/Q2): endpoint delivery still records the caller for
+    // REPLY_RECV (the reply itself goes by task id).
+    if (auto *cur = Scheduler::current_task())
+        note_delivered_request(*cur, msg);
     if (ep->q.blocked_senders_head) {
         auto *cur = Scheduler::current_task();
         if (cur)
@@ -603,9 +863,18 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
 errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
                                      Message &reply,
                                      uint32_t reply_max_size) noexcept {
+    // M3 (F3/Q2): mint the one-shot reply token.  It is armed on the
+    // publish below; the request itself carries no token (the token
+    // lives only in tickets and sidecar stamps).
+    const uint32_t token = mint_reply_token();
     // Send the request message
-    if (!send(dest_id, msg))
+    if (!send(dest_id, msg)) {
+        auto *fail_cur = Scheduler::current_task();
+        if (fail_cur) {
+            __atomic_store_n(&fail_cur->reply_ticket, 0, __ATOMIC_RELEASE);
+        }
         return errors::IPC_ERR_NO_REPLY;
+    }
 
     // Block waiting for a reply on our own queue
     auto *cur = Scheduler::current_task();
@@ -615,6 +884,10 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
     bool was_blocked = false;
     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
                     "ty=", msg.type, "q=", cur->msg_queue.count);
+    // M3 audit (S2): the direct-switch cap is per wait — reset the
+    // attempt counter on wait entry.  Nothing else clears it, so
+    // without this the fast path dies after three lifetime waits.
+    cur->ipc_direct_attempts = 0;
     for (;;) {
         if (cur->state == TaskState::BLOCKED) {
             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
@@ -628,15 +901,24 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
         }
         // Matching reply already queued (covers the reply-arrived-first
         // and peer-died-after-reply cases): consume it without blocking.
-        // A clamped oversized match stays queued per the #11 contract.
+        // M3 (F3/Q2): only the one-shot token match counts — other
+        // senders' traffic (grants, pulses, stale replies) is never
+        // touched.  A clamped oversized match stays queued per #11.
+        // M3 sweep: stamp same-sender messages first — a reply pushed
+        // between send() and the ticket publish below would otherwise
+        // land unstamped and never match (tick-spin until peer death).
+        // Try-only: a skip self-heals on the next tick recheck.
+        (void)cur->msg_queue.stamp_from_try(dest_id, token);
         bool got = (reply_max_size != 0)
-                       ? cur->msg_queue.pop_from_sender_clamped(
-                             reply, reply_max_size, dest_id)
-                       : cur->msg_queue.pop_from_sender(reply, dest_id);
+                       ? cur->msg_queue.pop_reply_from_clamped(
+                             reply, reply_max_size, dest_id, token)
+                       : cur->msg_queue.pop_reply_from(reply, dest_id,
+                                                       token);
         if (got) {
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             if (was_blocked) {
                 cur->remaining_ticks = cur->period_ticks;
                 // Issue #513: the wait loop below ends each sleep with
@@ -653,10 +935,14 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
         // Clamped with a matching-but-oversized reply queued: fail closed
         // at once (no block) so the fastpath caller falls back to a full
         // RECEIVE — the pre-#296 immediate-false contract, preserved.
-        if (reply_max_size != 0 && cur->msg_queue.has_from(dest_id)) {
+        // M3: the oversized test is token-scoped (a non-token oversized
+        // message is somebody else's, never a fail-closed trigger).
+        if (reply_max_size != 0 && cur->msg_queue.has_reply_from(dest_id,
+                                                                 token)) {
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             if (was_blocked) {
                 cur->remaining_ticks = cur->period_ticks;
                 arch::sti(); // Issue #513: restore IRQ-on (see above).
@@ -682,7 +968,8 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
              dest->generation !=
                  __atomic_load_n(&cur->reply_wait_dest_gen, __ATOMIC_ACQUIRE));
         if (dest_gone) {
-            if (reply_max_size == 0 && cur->msg_queue.has_from(dest_id)) {
+            if (reply_max_size == 0 &&
+                cur->msg_queue.has_reply_from(dest_id, token)) {
                 continue; // unclamped match present: consume next iteration
             }
             IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone cur=", cur->id,
@@ -695,6 +982,15 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
+            // M1/F7 park-wake bookkeeping (SMP): a cross-CPU
+            // wake_reply_waiters_of can READY-mark + enqueue us between
+            // the wake observation in reschedule() and this arm — writing
+            // RUNNING while still queued would strand a RUNNING task in
+            // the runq (briefing §1).  Dequeue first if queued.
+            if (was_blocked && cur->in_ready_queue_) {
+                Scheduler::dequeue_ready(*cur);
+            }
             cur->state = TaskState::RUNNING;
             if (was_blocked) {
                 arch::sti(); // Issue #513: restore IRQ-on (see above).
@@ -708,8 +1004,9 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
         // M2 follow-up evidence (#545 SILENT): publishing a reply wait
         // while a matching reply is already queued is the
         // publish-vs-arrival window (the loop-top fast path should have
-        // consumed it first).
-        if (cur->msg_queue.has_from(dest_id)) {
+        // consumed it first).  M3: token-scoped (a non-token message from
+        // the peer is somebody else's traffic, not our reply).
+        if (cur->msg_queue.has_reply_from(dest_id, token)) {
             __atomic_fetch_add(&g_ipc_block_with_pending_inbox, 1,
                                __ATOMIC_RELAXED);
         }
@@ -737,12 +1034,23 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
             __atomic_store_n(&cur->reply_wait_dest_gen,
                              dest->generation, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+            // M3 (F3/Q2): arm the one-shot ticket AFTER the tag publish
+            // (same RELEASE-ordered window; a delivering reply observes
+            // tag + flag + ticket atomically w.r.t. the tick), then sweep
+            // (covers the loop-top-check to publish gap).
+            __atomic_store_n(&cur->reply_ticket,
+                             token | kReplyTicketLive,
+                             __ATOMIC_RELEASE);
+            (void)cur->msg_queue.stamp_from_try(dest_id, token);
             using QP = MessageQueue::QueueProbe;
+            // M3: the Dekker probe is token-scoped — only the one-shot
+            // reply counts as a late hit.
             const QP probe =
                 (reply_max_size != 0)
-                    ? cur->msg_queue.probe_pop_from_sender_clamped(
-                          reply, reply_max_size, dest_id)
-                    : cur->msg_queue.probe_pop_from_sender(reply, dest_id);
+                    ? cur->msg_queue.probe_pop_reply_from_clamped(
+                          reply, reply_max_size, dest_id, token)
+                    : cur->msg_queue.probe_pop_reply_from(reply, dest_id,
+                                                          token);
             if (probe == QP::Consumed)
                 IPC::ipc_probe_hit_mark();
             else if (probe == QP::Contended)
@@ -753,14 +1061,16 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
                                  __ATOMIC_RELEASE);
                 __atomic_store_n(&cur->reply_wait_dest_gen, 0,
                                  __ATOMIC_RELEASE);
-                late_hit = true;
+                __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
+                    late_hit = true;
             } else if (probe == QP::PresentOversized) {
                 __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
                 __atomic_store_n(&cur->reply_wait_dest_id, 0,
                                  __ATOMIC_RELEASE);
                 __atomic_store_n(&cur->reply_wait_dest_gen, 0,
                                  __ATOMIC_RELEASE);
-                late_oversized = true;
+                __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
+                    late_oversized = true;
             } else {
                 cur->state = TaskState::BLOCKED;
                 Scheduler::dequeue_ready(*cur);
@@ -770,6 +1080,7 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             cur->remaining_ticks = cur->period_ticks;
             arch::sti();
             cur->state = TaskState::RUNNING;
@@ -777,16 +1088,34 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
         }
         if (late_oversized) {
             // Clamped reply present but oversized (same as the loop-top
-            // has_from path): fail closed at once, never block.
+            // has_reply_from path): fail closed at once, never block.
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             cur->remaining_ticks = cur->period_ticks;
             arch::sti();
             cur->state = TaskState::RUNNING;
             return errors::IPC_ERR_NO_REPLY;
         }
         was_blocked = true;
+        // M3 (F3/Q3): direct-switch fast path.  The caller is BLOCKED +
+        // dequeued with no locks held (INV-C1/INV-4b: the publish guard
+        // closed above).  On success the trap applies the arm (no tick
+        // wait); on refusal (or a lost trigger) fall through to the
+        // classic tick-applied park below.  Bounded attempts, then the
+        // tick path unconditionally (no spin, no unbounded trap loop).
+        if (cur->ipc_direct_attempts < kDirectMaxAttempts) {
+            ++cur->ipc_direct_attempts;
+            if (Scheduler::try_direct_switch(*cur)) {
+                arch::sti();
+                arch::sched_apply_trigger();
+                arch::pause();
+            }
+        }
+        if (cur->state != TaskState::BLOCKED) {
+            continue; // Direct switch applied (or a wake won the race).
+        }
         Scheduler::reschedule();
         // Issue #513 (face A/C hang): the wait yields UNCONDITIONALLY.
         // A kernel task reaching this loop with SIE=0 (inherited IRQ-off
@@ -816,7 +1145,15 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
                                             const Message &msg,
                                             Message &reply,
                                             uint64_t timeout_ticks) noexcept {
+    // M3 (F3/Q2): mint the token here so the publish below always has
+    // one, even when the send itself fails closed early.  The request
+    // carries no token (the token lives only in tickets and stamps).
+    const uint32_t token = mint_reply_token();
     if (!send(dest_id, msg)) {
+        auto *fail_cur = Scheduler::current_task();
+        if (fail_cur) {
+            __atomic_store_n(&fail_cur->reply_ticket, 0, __ATOMIC_RELEASE);
+        }
         return errors::IPC_ERR_NO_REPLY;
     }
     auto *cur = Scheduler::current_task();
@@ -825,11 +1162,15 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
     }
     if (timeout_ticks != 0) {
         if (!recv_wait_arm(*cur, timeout_ticks)) {
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             return errors::IPC_ERR_NO_REPLY; // fail-closed: no arm, no block
         }
     }
     bool was_blocked = false;
     bool armed_here = (timeout_ticks != 0);
+    // M3 audit (S2): per-wait attempt budget — reset on wait entry
+    // (see send_sync_err; same lifetime-saturation hazard here).
+    cur->ipc_direct_attempts = 0;
     for (;;) {
         if (cur->state == TaskState::BLOCKED) {
             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
@@ -841,11 +1182,14 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             arch::cli();
             continue;
         }
-        bool got = cur->msg_queue.pop_from_sender(reply, dest_id);
+        // M3 sweep (same send-to-publish race as send_sync).
+        (void)cur->msg_queue.stamp_from_try(dest_id, token);
+        bool got = cur->msg_queue.pop_reply_from(reply, dest_id, token);
         if (got) {
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             if (armed_here) {
                 recv_wait_cancel(*cur);
             }
@@ -859,9 +1203,16 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             cur->recv_timed_out = false;
             recv_wait_cancel(*cur);
             // Wait over: caller resumes running (see above).
+            // M1/F7 park-wake bookkeeping (SMP): dequeue first if a
+            // cross-CPU death-drain wake queued us after our own wake
+            // observation (same RUNNING-in-runq hazard as send_sync).
+            if (was_blocked && cur->in_ready_queue_) {
+                Scheduler::dequeue_ready(*cur);
+            }
             cur->state = TaskState::RUNNING;
             if (was_blocked) {
                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
@@ -877,16 +1228,22 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
              dest->generation !=
                  __atomic_load_n(&cur->reply_wait_dest_gen, __ATOMIC_ACQUIRE));
         if (dest_gone) {
-            if (cur->msg_queue.has_from(dest_id)) {
+            if (cur->msg_queue.has_reply_from(dest_id, token)) {
                 continue; // unclamped match present: consume next iteration
             }
             if (armed_here) {
                 recv_wait_cancel(*cur);
             }
             // Wait is over (see above): clear the channel, restore RUNNING.
+            // M1/F7 park-wake bookkeeping (SMP): dequeue first if queued
+            // (same RUNNING-in-runq hazard as the send_sync dest-gone arm).
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
+            if (was_blocked && cur->in_ready_queue_) {
+                Scheduler::dequeue_ready(*cur);
+            }
             cur->state = TaskState::RUNNING;
             if (was_blocked) {
                 arch::sti(); // Issue #513: restore IRQ-on (see send_sync).
@@ -909,9 +1266,16 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             __atomic_store_n(&cur->reply_wait_dest_gen,
                              dest->generation, __ATOMIC_RELAXED);
             __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
+            // M3 (F3/Q2): arm the one-shot ticket with the publish, then
+            // sweep (covers the loop-top-check to publish gap).
+            __atomic_store_n(&cur->reply_ticket,
+                             token | kReplyTicketLive,
+                             __ATOMIC_RELEASE);
+            (void)cur->msg_queue.stamp_from_try(dest_id, token);
             using QP = MessageQueue::QueueProbe;
+            // M3: token-scoped probe (only the one-shot reply counts).
             const QP probe =
-                cur->msg_queue.probe_pop_from_sender(reply, dest_id);
+                cur->msg_queue.probe_pop_reply_from(reply, dest_id, token);
             if (probe == QP::Consumed)
                 IPC::ipc_probe_hit_mark();
             else if (probe == QP::Contended)
@@ -922,7 +1286,8 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
                                  __ATOMIC_RELEASE);
                 __atomic_store_n(&cur->reply_wait_dest_gen, 0,
                                  __ATOMIC_RELEASE);
-                late_hit = true;
+                __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
+                    late_hit = true;
             } else {
                 cur->state = TaskState::BLOCKED;
                 Scheduler::dequeue_ready(*cur);
@@ -932,6 +1297,7 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
             __atomic_store_n(&cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&cur->reply_ticket, 0, __ATOMIC_RELEASE);
             if (armed_here) {
                 recv_wait_cancel(*cur);
             }
@@ -941,6 +1307,20 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
             return errors::IPC_ERR_OK;
         }
         was_blocked = true;
+        // M3 (F3/Q3): direct-switch fast path (same shape as send_sync;
+        // the wheel timeout armed above is NOT re-armed here, so a failed
+        // direct attempt can never extend the bounded wait).
+        if (cur->ipc_direct_attempts < kDirectMaxAttempts) {
+            ++cur->ipc_direct_attempts;
+            if (Scheduler::try_direct_switch(*cur)) {
+                arch::sti();
+                arch::sched_apply_trigger();
+                arch::pause();
+            }
+        }
+        if (cur->state != TaskState::BLOCKED) {
+            continue; // Direct switch applied (or a wake won the race).
+        }
         Scheduler::reschedule();
         // Issue #513 (face A/C hang): unconditional yield (see send_sync
         // above — same SIE=0 wedge through the bounded wait below).
@@ -956,6 +1336,161 @@ bool IPC::send_sync_bounded(uint64_t dest_id, const Message &msg,
                             uint64_t timeout_ticks) noexcept {
     return send_sync_bounded_err(dest_id, msg, reply, timeout_ticks) ==
            errors::IPC_ERR_OK;
+}
+
+/// @brief Reply to the recorded caller and wait for the next request
+///        (M3, N5: REPLY_RECV fast path body).
+///        The reply is validated against the kernel-held triple, stamped
+///        with the one-shot token, and delivered through the same
+///        token rule as a plain send (atomic consume + stamp + push).
+///        The caller triple is NOT cleared on success: a second reply
+///        without an intervening new request finds the consumed token
+///        and fails REPLY_STALE (one-shot).  A new request overwrites
+///        the triple via note_delivered_request.
+errors::IpcError IPC::reply_recv_err(Message &reply, uint32_t reply_type,
+                                     uint32_t reply_len, Message &msg,
+                                     uint64_t next_cap) noexcept {
+    (void)next_cap; // Reserved for the cap-gated variant (always 0 today).
+    auto *cur = Scheduler::current_task();
+    if (!cur)
+        return errors::IPC_ERR_REPLY_BAD_ARGS;
+    if (reply_len > IPC_MAX_MSG_SIZE)
+        return errors::IPC_ERR_REPLY_BAD_ARGS;
+    // Validate the kernel-held triple (implicit dest: the server cannot
+    // name a foreign caller; the live ticket is the token).
+    if (cur->last_caller_id == 0)
+        return errors::IPC_ERR_REPLY_NO_TOKEN;
+    auto *caller = Scheduler::find_task(cur->last_caller_id);
+    if (caller == nullptr || caller->generation != cur->last_caller_gen ||
+        __atomic_load_n(&caller->reply_ticket, __ATOMIC_ACQUIRE) == 0) {
+        return errors::IPC_ERR_REPLY_STALE;
+    }
+    // Build the outbound reply and deliver through the token rule (which
+    // atomically consumes the ticket, stamps, and pushes; the wake gates
+    // run inside deliver's caller path as for a plain send).
+    Message out{};
+    out.type = reply_type;
+    out.data_size = reply_len;
+    for (uint32_t i = 0; i < reply_len; ++i)
+        out.data[i] = reply.data[i];
+    out.sender_id = cur->id;
+    {
+        const DeliverRule rule = deliver_with_reply_rule(*caller, out);
+        if (rule != DeliverRule::PushedReply)
+            return errors::IPC_ERR_REPLY_STALE;
+    }
+    // Wake the caller exactly like a plain-send arrival (reply-wait flag
+    // + #208 channel rule).  deliver_with_reply_rule only queued; the
+    // wake gates live in send() — mirror them here (no buffer involved).
+    if (__atomic_load_n(&caller->reply_wait, __ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&caller->reply_wait, false, __ATOMIC_RELEASE);
+        if (caller->state == TaskState::BLOCKED) {
+            Scheduler::set_task_ready(*caller);
+            caller->remaining_ticks = caller->period_ticks;
+        }
+    }
+    if (caller->state == TaskState::BLOCKED &&
+        (__atomic_load_n(&caller->reply_wait, __ATOMIC_ACQUIRE) ||
+         caller->blocked_on_queue != nullptr ||
+         caller->blocked_in_recv)) {
+        Scheduler::set_task_ready(*caller);
+        caller->remaining_ticks = caller->period_ticks;
+    }
+    // Wait for the next request: the sys_receive forever-leg shape
+    // (bounded hlt-wait, INV-4b gated takes, direct-switch entry).
+    bool was_blocked = false;
+    // M3 audit (S2): per-wait attempt budget — reset on wait entry.
+    // A REPLY_RECV server loop would otherwise lose the fast path
+    // after three served requests.
+    cur->ipc_direct_attempts = 0;
+    for (;;) {
+        if (cur->state == TaskState::BLOCKED) {
+            // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+            // zombie window).  Go straight back to reschedule +
+            // hlt-wait instead of taking.
+            Scheduler::reschedule();
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+            continue;
+        }
+        {
+            bool got = cur->msg_queue.pop(msg);
+            if (got) {
+                note_delivered_request(*cur, msg);
+                if (cur->msg_queue.blocked_senders_head)
+                    wake_sender(cur->msg_queue, *cur);
+                if (was_blocked) {
+                    cur->remaining_ticks = cur->period_ticks;
+                    arch::sti();
+                }
+                cur->state = TaskState::RUNNING;
+                return errors::IPC_ERR_OK;
+            }
+        }
+        bool probe_hit = false;
+        {
+            arch::IrqGuard publish_guard{};
+            cur->blocked_in_recv = true;
+            using QP = MessageQueue::QueueProbe;
+            const QP probe = cur->msg_queue.probe_pop(msg);
+            if (probe == QP::Consumed) {
+                IPC::ipc_probe_hit_mark();
+                cur->blocked_in_recv = false;
+                probe_hit = true;
+            } else {
+                if (probe == QP::Contended)
+                    IPC::ipc_probe_contended_mark();
+                cur->state = TaskState::BLOCKED;
+                Scheduler::dequeue_ready(*cur);
+            }
+        }
+        // wake_sender half runs AFTER the guard (it takes the queue
+        // lock itself): mirrors IPC::recv's pop+wake pairing.
+        if (probe_hit) {
+            note_delivered_request(*cur, msg);
+            if (cur->msg_queue.blocked_senders_head)
+                wake_sender(cur->msg_queue, *cur);
+            if (was_blocked) {
+                cur->remaining_ticks = cur->period_ticks;
+                arch::sti();
+            }
+            cur->state = TaskState::RUNNING;
+            return errors::IPC_ERR_OK;
+        }
+        was_blocked = true;
+        // M3 (F3/Q3): direct-switch fast path (same shape as send_sync;
+        // the waiter owns no timeout arm here — the wait is forever, so
+        // no re-arm discipline applies).
+        if (cur->ipc_direct_attempts < kDirectMaxAttempts) {
+            ++cur->ipc_direct_attempts;
+            if (Scheduler::try_direct_switch(*cur)) {
+                arch::sti();
+                arch::sched_apply_trigger();
+                arch::pause();
+            }
+        }
+        if (cur->state != TaskState::BLOCKED) {
+            continue; // Direct switch applied (or a wake won the race).
+        }
+        Scheduler::reschedule();
+        arch::sti();
+        arch::hlt();
+        arch::cli();
+        // Resume: recheck the inbox first, gated on non-BLOCKED (INV-4b).
+        if (cur->state != TaskState::BLOCKED) {
+            bool got2 = cur->msg_queue.pop(msg);
+            if (got2) {
+                note_delivered_request(*cur, msg);
+                if (cur->msg_queue.blocked_senders_head)
+                    wake_sender(cur->msg_queue, *cur);
+                cur->remaining_ticks = cur->period_ticks;
+                arch::sti();
+                cur->state = TaskState::RUNNING;
+                return errors::IPC_ERR_OK;
+            }
+        }
+    }
 }
 
 /// @brief Return a reference to a task's message queue (asserts existence).

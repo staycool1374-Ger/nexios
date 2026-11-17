@@ -304,6 +304,7 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_THREAD_EXIT     94
 #define SYS_THREAD_JOIN     95
 #define SYS_THREAD_WRAP     96
+#define SYS_REPLY_RECV      97
 
 static inline long sys_watchdog_create(unsigned long period_ticks) {
     return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
@@ -336,6 +337,16 @@ static inline long sys_thread_join(unsigned long cap_handle,
 static inline long sys_thread_wrap(unsigned long tid,
                                     unsigned long share_token) {
     return __syscall5(SYS_THREAD_WRAP, (long)tid, (long)share_token, 0, 0);
+}
+
+// M3 (F3/Q2, issue #556): reply to the recorded caller and wait for the
+// next request.  arg4 (next_cap) rides the 5th register, reserved 0.
+static inline long sys_reply_recv(unsigned long reply_buf,
+                                  unsigned long reply_type,
+                                  unsigned long reply_len,
+                                  unsigned long next_buf) {
+    return __syscall5r(SYS_REPLY_RECV, (long)reply_buf, (long)reply_type,
+                       (long)reply_len, (long)next_buf, 0);
 }
 
 // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==

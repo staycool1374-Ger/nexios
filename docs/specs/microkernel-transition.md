@@ -75,13 +75,13 @@ tracking issue; it is never presented as already true.
 | INV-MK-2 | Every scarce resource SHALL have a compile-time bound, and the composed system description SHALL be checked against it at compose time. | `task/boot_sdf.hpp:sdf_compose` | PARTIAL: bounds exist (§7.3); demand-vs-bound check absent |
 | INV-MK-3 | Every client-visible server RPC SHALL have a finite, documented bound. Unbounded `send_sync` SHALL NOT appear on any server path. | proxy call sites | PARTIAL: proxies use `kRpcGuardTicks = 5000` (5 s at `CONFIG_TICK_HZ 1000`) in `log/log_srv.cpp`, `time/timer_srv.cpp`, `cap/cap_broker.cpp`, `term/term_srv.cpp`, `vfs/procfs_srv.cpp`, `vfs/vfs_srv.cpp`, `driver/block_srv.cpp`, `driver/driver_pds.hpp`, `watchdog/wdog_mon.cpp`; per-server bounds `TBD at API freeze` (Q5) |
 | INV-MK-4 | Task context runs with IF=1 except inside an explicit `IrqGuard`; syscall entry owns IF=0 until the handler blocks or returns; no spinlock SHALL be held across a blocking point or `reschedule()`; every IRQ-off region SHALL be bounded. | debug assertions (§6) | VIOLATED (#545 S1, #546 S2); contract currently implicit |
-| INV-MK-5 | A context switch is applied only at an ISR epilogue at nesting depth 1, or a nested timer (vector `0xE0`) at depth 2. A blocking IPC hop therefore costs up to one tick until a direct-switch path exists (§5.6). | `arch/x86_64/isr_stubs.asm` epilogue, `arch/aarch64/vectors.S`, `arch/riscv64/syscall_entry.S` + `interrupt_controller.cpp` (§11); `ipc.md` §4 | TRUE today; is the latency limit, removed by M3 |
-| INV-MK-6 | Exactly one death record per task, latched at a single funnel, visible to a watching supervisor within a bounded number of ticks. | `ipc/death_notify.cpp:DeathNotify::on_task_death` | VIOLATED (#516 + F6): latch only in `TaskControlBlock::complete_teardown()` (reached via `cleanup()` / `destroy()`); for `Scheduler::terminate` deaths (kill, fault, watchdog) that runs from priority-0 deferred drains only (§9.1) |
+| INV-MK-5 | A context switch is applied only at an ISR epilogue at nesting depth 1, at a nested timer epilogue at depth 2, or at a nested self-triggered apply epilogue at depth 2 (M3 `sched_apply_trigger`: x86_64 vector 0xE1, aarch64 SGI 11, riscv64 SSIP). | `arch/x86_64/isr_stubs.asm` epilogue, `arch/aarch64/vectors.S`, `arch/riscv64/syscall_entry.S` + `interrupt_controller.cpp` (§11); `ipc.md` §4 | TRUE; fast path removes the tick wait per hop (M3 structural gate slope < 1.0), tick remains the fallback |
+| INV-MK-6 | Exactly one death record per task, latched at a single funnel, visible to a watching supervisor within a bounded number of ticks. | `ipc/death_notify.cpp:DeathNotify::on_task_death` | SATISFIED (M1: funnel latch at `Scheduler::publish_task_death` for every terminate path incl. fault kills, `complete_teardown` backstop; daemon PID cell cleared at the same funnel, #516; record carries id + generation + cause + tick) |
 | INV-MK-7 | Capabilities SHALL be non-amplifying. Revoke SHALL invalidate derivations only; deleting one's own cap SHALL NOT invalidate other holders. | `cap/cap.cpp` | VIOLATED (F2): `cap::revoke` clears the slot and calls the object's `revoke()` (object-wide); no `CAP_DELETE` exists |
 | INV-MK-8 | Bulk channels SHALL be single-producer / single-consumer: `head` written only by the producer, `tail` only by the consumer. | `ipc/shm_ring.hpp` | TRUE; ring header lacks an epoch (§5.4) |
 | INV-MK-9 | An absent mechanism SHALL deny, never degrade silently: no IOMMU domain ⇒ no DMA cap; stale IRQ slot ⇒ refuse; missing cap ⇒ typed error. | `syscall_handlers_iommu.cpp`, `syscall_handlers_irq.cpp` | TRUE for IOMMU/IRQ arm paths |
 | INV-MK-10 | Every mechanism SHALL exist on x86_64, aarch64 and riscv64, or carry a documented arch-equivalent and a tracked issue (§11). | per-arch matrix | PARTIAL (§11) |
-| INV-MK-11 | A server death SHALL wake or error-reply every client blocked on it, including reply waiters. | death funnel + IPC teardown | VIOLATED (F7): `MessageQueue::~MessageQueue` wakes queue-full senders only (§9.2) |
+| INV-MK-11 | A server death SHALL wake or error-reply every client blocked on it, including reply waiters. | death funnel + IPC teardown | SATISFIED for reply waiters (M1: `IPC::wake_reply_waiters_of` READY-marks at the funnel; waiter exits with typed PEER_DIED; queue-full senders intentionally left to the queue-destructor drain, bounded by the zombie-starvation trigger, §9.2) |
 | INV-MK-12 | Priority boosts and donations SHALL be revertible and symmetric, mutated only through scheduler helpers, and bounded in chain depth. | `Scheduler::move_priority` | PARTIAL: single-level boost in `IPC::block_sender` only; not transitive (§8.1) |
 
 ## 2. Kernel mechanism boundary (current vs end state)
@@ -100,7 +100,7 @@ tracking issue; it is never presented as already true.
 | Supervision | in-kernel `daemon_mgr` (`MAX_RESTART_COUNT = 10`, no backoff, polled from `on_tick`); death notify syscalls 66–68 | supervisor PD with restart policy, cap re-derive, client rebind | #191, #516 |
 | Caps | `CapType` {Null, Task, Endpoint, Frame, CNode, Untyped, Mmio, Irq, IoMmuDma, Msix, Wdog} | add TCB, VSpace, PageTable, Notification, SchedContext; split delete/revoke | #50, F1, F2 |
 | Process mgmt | `FORK/EXEC/WAITPID/KILL/GETPID` in kernel | proc-mgr PD over TCB/VSpace mechanisms | F11 |
-| Syscalls | `MAX_SYSCALL = 97` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
+| Syscalls | `MAX_SYSCALL = 98` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
 
 ## 3. Target kernel API
 
@@ -186,6 +186,7 @@ number retired · **RETIRE** number retired without replacement ·
 | 91 | WATCHDOG_CREATE | live, WdogCap-gated | KEEP |
 | 92 | WATCHDOG_KICK | live | KEEP |
 | 93–96 | THREAD_CREATE, THREAD_EXIT, THREAD_JOIN, THREAD_WRAP | live (#52, #53) | KEEP |
+| 97 | REPLY_RECV | live (M3, F3/Q2 #556) | KEEP |
 
 ### 3.3 New entries (numbers `TBD at API freeze`)
 
@@ -195,7 +196,7 @@ number retired · **RETIRE** number retired without replacement ·
 | N2 | TCB_SUSPEND | supervisor must stop a hung PD; no mechanism exists (KILL is signal delivery) |
 | N3 | TCB_RESUME | counterpart of N2; also starts a retyped TCB |
 | N4 | VSPACE_MAP | map a PageTable object into a VSpace; proc-mgr and mem-mgr cannot build address spaces without it |
-| N5 | REPLY_RECV | reply to the current caller and receive the next request in one entry; today a reply is `SEND` + sender-id filter (`ipc.cpp:IPC::send_sync`) |
+| N5 | REPLY_RECV | RESOLVED at M3 as syscall 97 (F3/Q2 #556): reply to the recorded caller and receive the next request, dest + token implicit kernel-held |
 | N6 | CAP_DELETE | delete one's own slot without invalidating other holders |
 | N7 | SC_BIND | bind a SchedContext to a TCB |
 | N8 | SC_UNBIND | counterpart of N7 |
@@ -207,10 +208,10 @@ pointer-free rule of `syscall-fastpath.md` §0.
 ### 3.4 Derived counts (informative; the set in T-1 is normative)
 
 KEEP: 0, 1, 2, 3, 5, 6, 27, 28 (8), 49, 50 (2), 51–62 (12), 64–79 (16),
-84, 85 (2), 91–96 (6) = 46.
-New: N1–N9 = 9. Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
+84, 85 (2), 91–97 (7) = 47.
+New: N1–N4, N6–N9 = 8 (N5 resolved to 97 at M3). Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
 MOVE/RETIRE/GATED: 4 (1), 7–26 (20), 29–48 (20), 63 (1), 80–83 (4) = 46.
-46 + 5 + 46 = 97 =
+47 + 5 + 46 = 98 =
 `MAX_SYSCALL`, so every existing number has exactly one disposition.
 
 ### 3.5 Affinity and accounting split
@@ -332,6 +333,12 @@ enforced-priority rule above applies to every SDF row.
   when the receiver is blocked in receive and runnable on this core, the kernel
   switches to it inside the syscall, without waiting for a tick. No
   synchronous-SEND switch (deferred to a follow-up only with new evidence).
+  IMPLEMENTED (M3): the Call publish arms a one-shot reply ticket; the waiter
+  attempts `Scheduler::try_direct_switch` (single publisher
+  `switch_to_task`, H2 single-writer; refusal falls through to the tick
+  path); the arch trigger (x86_64 self-IPI 0xE1, aarch64 SGI 11, riscv64
+  SSIP) applies the arm at a nested depth-2 epilogue. At-most-once, loss
+  degrades to one tick — never a strand.
 - Per-hop bound and end-to-end overhead target (Q3 numbers frozen post-M0,
   TCG-debug record; HW re-ratification required per §7.4 before any
   certification claim): M0 (QE, #570, `docs/specs/ipc-baseline.md` §4)
@@ -671,6 +678,13 @@ transition to zombie) for every death cause including fault kills (#516);
 resource teardown may stay deferred. Visibility bound (Q4 DECIDED, owner,
 #512): synchronous latch; supervisor-observable ≤ 2 ticks given the
 supervisor is runnable at highest priority.
+IMPLEMENTED (M1): `Scheduler::publish_task_death(dead, cause)` runs at every
+terminate funnel (kill/fault/signal paths, trap prefix, self-exit, thread
+exit, self-fatal kill, daemon terminate, arch post-syscall stubs) plus the
+`complete_teardown` backstop; first-writer-wins `death_cause` (Exit/Fault/
+Kill/Admin/Teardown) + generation + tick in the record; daemon PID cell
+cleared at the same funnel with a stale-cell self-heal in
+`restart_stale_daemons` (+12 dmesg row).
 
 ### 9.2 DEATH-2 — reply waiters
 
@@ -678,6 +692,12 @@ supervisor is runnable at highest priority.
 `reply_wait` on a dead server is not woken and waits until its own bound
 (or forever on plain `send_sync`). REQUIRED (F7): on server death the kernel
 wakes every reply waiter targeting that server with a typed error.
+IMPLEMENTED (M1): `IPC::wake_reply_waiters_of` READY-marks waiters whose
+published (id, generation) tag names the dead task; the waiter exits with
+typed `PEER_DIED` (reply already queued still wins, #296); parked callers
+resume via the park's state-flip observation with queue-membership repair
+in the exit arms. Queue-full senders stay on the destructor drain
+(deliberate, handshake-preserving).
 
 ### 9.3 Restart classes
 

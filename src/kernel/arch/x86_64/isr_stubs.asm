@@ -191,6 +191,12 @@ isr_common:
     ; §1 freeze (issue #67): 0xE0 is THE scheduler tick (64 ordinary
     ; since #26); nested-timer apply rule unchanged.
     cmp rax, 0xE0
+    je .apply_allowed
+    ; M3 (F3/Q3): self-triggered apply (SCHED_APPLY_VECTOR 0xE1) takes
+    ; the same depth-2 nested-apply path.  Unregistered C++ handler by
+    ; design (the vector exists only to take the trap); the apply gate
+    ; below validates the pending arm, so a stray 0xE1 is a no-op.
+    cmp rax, 0xE1
     jne .restore
 .apply_allowed:
     lea rax, [rel scheduler_save_rsp_to]

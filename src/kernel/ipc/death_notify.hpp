@@ -37,9 +37,24 @@ namespace kernel::ipc {
 
 /// @brief A single task-death record delivered to a supervisor.
 struct DeathRecord {
-    uint64_t dead_id = 0;  ///< id of the task that died
+    uint64_t dead_id = 0;   ///< id of the task that died
+    uint64_t dead_gen = 0;  ///< TCB generation at death (recycled-id guard)
     uint64_t exit_code = 0; ///< exit code / signal delivered at death
-    uint64_t flags = 0;    ///< DEATH_FLAG_* bitmask
+    uint64_t flags = 0;     ///< DEATH_FLAG_* bitmask
+    uint64_t cause = 0;     ///< DeathCause (M1 record identity)
+    uint64_t die_tick = 0;  ///< Timer::ticks() at the latch
+};
+
+/// @brief Why a task died (M1 record identity, INV-MK-6 completeness).
+///        Stored as uint64_t in the TCB (freestanding POD rule); 0 = None.
+enum class DeathCause : uint64_t {
+    None = 0,
+    Exit = 1,     ///< sys_exit / thread exit / clean self-termination
+    Fault = 2,    ///< fault kill (SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGTRAP class)
+    Kill = 3,     ///< signal kill / OOM kill / default terminate funnel
+    Watchdog = 4, ///< reserved: watchdog kill (no producer yet)
+    Admin = 5,    ///< interim supervisor terminate
+    Teardown = 6, ///< deferred complete_teardown backstop
 };
 
 /// @brief Death record flag: the death was an abnormal termination (a signal /

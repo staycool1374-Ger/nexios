@@ -174,7 +174,7 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     // M1/F6 (issue #559): synchronous death latch (see sys_exit — the
     // self-exit path never reaches release_zombie; idempotent with the
     // terminate_err leg below).
-    Scheduler::publish_task_death(*t);
+    Scheduler::publish_task_death(*t, kernel::ipc::DeathCause::Exit);
     if (Scheduler::current_task() == t) {
         Scheduler::switch_away_from_terminating(*t);
     } else {

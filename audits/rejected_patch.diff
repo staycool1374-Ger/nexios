@@ -1,212 +1,36 @@
---- a/src/kernel/ipc/ipc.cpp	2026-11-16 19:48:23
-+++ b/src/kernel/ipc/ipc.cpp	2026-11-16 20:54:29
-@@ -715,17 +715,28 @@
-         }
- #endif
-         // F1 (#545 SILENT, INV-4b): the post-publish Dekker check as a
--        // try-once probe INSIDE the publish guard.  A reply that arrived
--        // between the loop-top empty check and the publish is consumed
--        // instead of armed-and-slept-through — and because the probe runs
--        // with IF=0, a tick cannot preempt it mid-take (a preempted take
--        // while BLOCKED strands the lock with no INV-C1 warning).  A
--        // Contended probe means a live holder whose subsequent wake-gate
--        // read observes our publish below, so no retry is needed.
-+        // try-once probe INSIDE the publish guard, AFTER the publish
-+        // stores (Dekker order: publish then recheck — a probe placed
-+        // before the publish misses a push+read landing between the two
-+        // on SMP, losing the wake with no post-publish drain left to
-+        // catch it).  A reply that arrived between the loop-top empty
-+        // check and the publish is consumed instead of
-+        // armed-and-slept-through — and because the probe runs with IF=0
-+        // while still RUNNING, a tick cannot preempt it mid-take (a
-+        // preempted take while BLOCKED strands the lock with no INV-C1
-+        // warning).  A Contended probe means a live holder whose
-+        // subsequent wake-gate read observes our publish above, so no
-+        // retry is needed.  A hit unpublishes (never ARMED, never
-+        // BLOCKED — no waker can be owed one).
-         bool late_hit = false;
-         bool late_oversized = false;
-         {
-             arch::IrqGuard publish_guard{};
-+            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
-+                             __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen,
-+                             dest->generation, __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-             using QP = MessageQueue::QueueProbe;
-             const QP probe =
-                 (reply_max_size != 0)
-@@ -737,15 +748,20 @@
-             else if (probe == QP::Contended)
-                 IPC::ipc_probe_contended_mark();
-             if (probe == QP::Consumed) {
-+                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+                __atomic_store_n(&cur->reply_wait_dest_id, 0,
-+                                 __ATOMIC_RELEASE);
-+                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
-+                                 __ATOMIC_RELEASE);
-                 late_hit = true;
-             } else if (probe == QP::PresentOversized) {
-+                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+                __atomic_store_n(&cur->reply_wait_dest_id, 0,
-+                                 __ATOMIC_RELEASE);
-+                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
-+                                 __ATOMIC_RELEASE);
-                 late_oversized = true;
-             } else {
--                __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
--                                 __ATOMIC_RELEASE);
--                __atomic_store_n(&cur->reply_wait_dest_gen,
--                                 dest->generation, __ATOMIC_RELEASE);
--                __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-                 cur->state = TaskState::BLOCKED;
-                 Scheduler::dequeue_ready(*cur);
-             }
-@@ -878,12 +894,21 @@
-             return errors::IPC_ERR_PEER_DIED;
-         }
-         // M1/F7 (§11.6): publish the wait tag BEFORE the reply_wait flag.
--        // F1 (#545, INV-4b): the Dekker check as a try-once probe INSIDE
--        // the publish guard (IF=0 atomic vs tick preemption; Contended =
--        // live holder whose wake-gate read observes our publish below).
-+        // F1 (#545, INV-4b): the post-publish Dekker check as a try-once
-+        // probe INSIDE the publish guard, AFTER the publish stores
-+        // (Dekker order: publish then recheck — a probe placed before
-+        // the publish misses a push+read landing between the two on
-+        // SMP).  Contended = live holder whose wake-gate read observes
-+        // our publish above, so no retry is needed.  A hit unpublishes
-+        // (never ARMED — no waker can be owed one).
-         bool late_hit = false;
-         {
-             arch::IrqGuard publish_guard{};
-+            __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
-+                             __ATOMIC_RELEASE);
-+            __atomic_store_n(&cur->reply_wait_dest_gen,
-+                             dest->generation, __ATOMIC_RELAXED);
-+            __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-             using QP = MessageQueue::QueueProbe;
-             const QP probe =
-                 cur->msg_queue.probe_pop_from_sender(reply, dest_id);
-@@ -892,13 +917,13 @@
-             else if (probe == QP::Contended)
-                 IPC::ipc_probe_contended_mark();
-             if (probe == QP::Consumed) {
-+                __atomic_store_n(&cur->reply_wait, false, __ATOMIC_RELEASE);
-+                __atomic_store_n(&cur->reply_wait_dest_id, 0,
-+                                 __ATOMIC_RELEASE);
-+                __atomic_store_n(&cur->reply_wait_dest_gen, 0,
-+                                 __ATOMIC_RELEASE);
-                 late_hit = true;
-             } else {
--                __atomic_store_n(&cur->reply_wait_dest_id, dest_id,
--                                 __ATOMIC_RELEASE);
--                __atomic_store_n(&cur->reply_wait_dest_gen,
--                                 dest->generation, __ATOMIC_RELAXED);
--                __atomic_store_n(&cur->reply_wait, true, __ATOMIC_RELEASE);
-                 cur->state = TaskState::BLOCKED;
-                 Scheduler::dequeue_ready(*cur);
-             }
---- a/src/kernel/syscall/syscall_handlers_ipc.cpp	2026-11-16 19:48:23
-+++ b/src/kernel/syscall/syscall_handlers_ipc.cpp	2026-11-16 20:54:29
-@@ -105,26 +105,32 @@
-             // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
-             // BLOCKED transition so an arrival landing between the two stores
-             // still observes the channel (old code woke on state alone).
--            // F1 (#545, INV-4b): the Dekker check as a try-once probe
--            // INSIDE the publish guard.  A message that arrived between the
--            // loop-top check and the publish is consumed instead of
--            // armed-and-slept-through — and with IF=0 a tick cannot
--            // preempt the take mid-critical-section (a preempted take
--            // while BLOCKED strands the lock with no INV-C1 warning).
--            // Contended = live holder whose wake-gate read observes our
--            // publish below, so no retry is needed.
-+            // F1 (#545, INV-4b): the post-publish Dekker check as a
-+            // try-once probe INSIDE the publish guard, AFTER the channel
-+            // publish (Dekker order: publish then recheck — a probe
-+            // placed before the publish misses a push+read landing
-+            // between the two on SMP).  A message that arrived between
-+            // the loop-top check and the publish is consumed instead of
-+            // armed-and-slept-through — and with IF=0 the probe runs
-+            // while still RUNNING, so a tick cannot preempt the take
-+            // mid-critical-section (a preempted take while BLOCKED
-+            // strands the lock with no INV-C1 warning).  Contended =
-+            // live holder whose wake-gate read observes our publish
-+            // above, so no retry is needed.  A hit unpublishes the
-+            // channel (never BLOCKED — no waker can be owed one).
-             bool probe_hit = false;
-             {
-                 arch::IrqGuard publish_guard{};
-+                cur->blocked_in_recv = true;
-                 using QP = MessageQueue::QueueProbe;
-                 const QP probe = cur->msg_queue.probe_pop(msg);
-                 if (probe == QP::Consumed) {
-                     IPC::ipc_probe_hit_mark();
-+                    cur->blocked_in_recv = false;
-                     probe_hit = true;
-                 } else {
-                     if (probe == QP::Contended)
-                         IPC::ipc_probe_contended_mark();
--                    cur->blocked_in_recv = true;
-                     cur->state = TaskState::BLOCKED;
-                     Scheduler::dequeue_ready(*cur);
-                 }
-@@ -362,24 +368,32 @@
-             }
-             // Issue #208 audit (S3): publish the IPC wait channel BEFORE the
-             // BLOCKED transition (same rationale as sys_receive above).
--            // F1 (#545, INV-4b): the Dekker check as a try-once probe
--            // INSIDE the publish guard (IF=0 atomic vs tick preemption).
--            // Contended = live holder whose wake-gate read observes our
--            // publish below, so no retry is needed.
-+            // F1 (#545, INV-4b): the post-publish Dekker check as a
-+            // try-once probe INSIDE the publish guard, AFTER the channel
-+            // publish (Dekker order: publish then recheck — a probe
-+            // placed before the publish misses a push+read landing
-+            // between the two on SMP).  Contended = live holder whose
-+            // wake-gate read observes our publish above, so no retry is
-+            // needed.  A hit/oversized outcome unpublishes the channel
-+            // (never BLOCKED — no waker can be owed one).
-             bool probe_hit = false;
-             bool probe_oversized = false;
-             {
-                 arch::IrqGuard publish_guard{};
-+                cur->blocked_in_recv = true;
-                 using QP = MessageQueue::QueueProbe;
-                 const QP probe =
-                     cur->msg_queue.probe_pop_clamped(msg, clamp);
-                 if (probe == QP::Consumed) {
-                     IPC::ipc_probe_hit_mark();
-+                    cur->blocked_in_recv = false;
-                     probe_hit = true;
-                 } else if (probe == QP::PresentOversized) {
-+                    cur->blocked_in_recv = false;
-                     probe_oversized = true;
-                 } else {
--                    cur->blocked_in_recv = true;
-+                    if (probe == QP::Contended)
-+                        IPC::ipc_probe_contended_mark();
-                     cur->state = TaskState::BLOCKED;
-                     Scheduler::dequeue_ready(*cur);
-                 }
---- a/src/kernel/task/scheduler_tick.cpp	2026-11-16 19:48:23
-+++ b/src/kernel/task/scheduler_tick.cpp	2026-11-16 20:54:29
-@@ -1448,11 +1448,19 @@
- }
- 
- uint64_t Scheduler::resched_park_denied_count() noexcept {
-+#if defined(CONFIG_DEBUG)
-     return __atomic_load_n(&g_resched_park_denied_count, __ATOMIC_RELAXED);
-+#else
-+    return 0;
-+#endif
- }
- 
- uint64_t Scheduler::resched_park_denied_why() noexcept {
-+#if defined(CONFIG_DEBUG)
-     return __atomic_load_n(&g_resched_park_denied_why, __ATOMIC_RELAXED);
-+#else
-+    return 0;
-+#endif
- }
- 
- uint64_t Scheduler::resched_park_entries_count() noexcept {
+diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
+--- a/src/kernel/ipc/ipc.cpp
++++ b/src/kernel/ipc/ipc.cpp
+@@ -884,6 +884,10 @@ IPC::send_sync_err(uint64_t dest_id, const Message &msg,
+     bool was_blocked = false;
+     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
+                     "ty=", msg.type, "q=", cur->msg_queue.count);
++    // M3 audit (S2): the direct-switch cap is per wait — reset the
++    // attempt counter on wait entry.  Nothing else clears it, so
++    // without this the fast path dies after three lifetime waits.
++    cur->ipc_direct_attempts = 0;
+     for (;;) {
+         if (cur->state == TaskState::BLOCKED) {
+             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+@@ -1164,6 +1168,9 @@ IPC::send_sync_bounded_err(uint64_t dest_id,
+     }
+     bool was_blocked = false;
+     bool armed_here = (timeout_ticks != 0);
++    // M3 audit (S2): per-wait attempt budget — reset on wait entry
++    // (see send_sync_err; same lifetime-saturation hazard here).
++    cur->ipc_direct_attempts = 0;
+     for (;;) {
+         if (cur->state == TaskState::BLOCKED) {
+             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+@@ -1391,7 +1398,11 @@ IPC::reply_recv_err(Message &reply, uint32_t reply_type,
+     }
+     // Wait for the next request: the sys_receive forever-leg shape
+     // (bounded hlt-wait, INV-4b gated takes, direct-switch entry).
+     bool was_blocked = false;
++    // M3 audit (S2): per-wait attempt budget — reset on wait entry.
++    // A REPLY_RECV server loop would otherwise lose the fast path
++    // after three served requests.
++    cur->ipc_direct_attempts = 0;
+     for (;;) {
+         if (cur->state == TaskState::BLOCKED) {
+             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied

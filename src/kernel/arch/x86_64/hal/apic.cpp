@@ -324,6 +324,34 @@ bool APIC::send_ipi(uint32_t lapic_id, uint8_t vector, IpiMode mode) {
     return false;
 }
 
+/// @brief Send a self-IPI (M3 apply trigger): ICR destination shorthand
+///        = self (bits 18-19 = 01), FIXED delivery.  Bounded poll mirrors
+///        send_ipi; a false return degrades to the tick path.
+void APIC::send_self_ipi(uint8_t vector) {
+    if (!enabled_)
+        return;
+    // ICR_LOW layout: [7:0] vector, [10:8] FIXED (000), [19:18] dest
+    // shorthand 01 = self, [15] trigger edge 0, [14] level 1 = assert.
+    constexpr uint32_t kSelfShorthand = 1U << 18;
+    const uint32_t low =
+        static_cast<uint32_t>(vector) | kSelfShorthand | (1U << 14);
+    if (mode_ == MODE_X2) {
+        wrmsr(x2apic_msr(REG_ICR_LOW), static_cast<uint64_t>(low));
+    } else {
+        lapic_wr(REG_ICR_HIGH, 0);
+        lapic_wr(REG_ICR_LOW, low);
+    }
+    for (int i = 0; i < 10000; ++i) {
+        uint32_t status = (mode_ == MODE_X2)
+                              ? static_cast<uint32_t>(
+                                    rdmsr(x2apic_msr(REG_ICR_LOW)))
+                              : lapic_rd(REG_ICR_LOW);
+        if ((status & (1U << 12)) == 0)
+            return;
+        asm volatile("pause");
+    }
+}
+
 void APIC::init_ap() {
     if (!enabled_) return;
     // IA32_APIC_BASE is PER-CPU: the AP comes out of INIT in reset state

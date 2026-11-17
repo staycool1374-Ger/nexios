@@ -25,6 +25,7 @@
 /// -> FREE (supervisor consumed it via recv, or drain freed it).
 
 #include <kernel/ipc/death_notify.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -145,9 +146,12 @@ void DeathNotify::on_task_death(kernel::TaskControlBlock &dead) {
             if (sl.watched_id == dead.id && sl.watched_gen == dead.generation) {
                 sl.state = SlotState::PENDING;
                 sl.record.dead_id = dead.id;
+                sl.record.dead_gen = dead.generation;
                 sl.record.exit_code = dead.exit_code;
                 sl.record.flags =
                     (dead.exit_code & (1ULL << 63)) ? DEATH_FLAG_SIGNAL : 0;
+                sl.record.cause = dead.death_cause;
+                sl.record.die_tick = arch::Timer::ticks();
                 if (sl.supervisor_id != dead.id) {
                     pokes[n_pokes].id = sl.supervisor_id;
                     pokes[n_pokes].gen = sl.supervisor_gen;
