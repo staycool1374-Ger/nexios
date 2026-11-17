@@ -42,7 +42,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_spinlock", 10, 0,      0      },  // spinlock + stress
     {"synchronization_sync", 20,    0,       0      },  // semaphore, mutex, queue, event group, block pattern, latch
     {"synchronization_locking", 19, 0,       0      },  // locking + stress
-    {"synchronization_lock_order",  4, 0,    0      },  // nested spinlock acquisition order
+    {"synchronization_lock_order",  14, 0,    0      },  // nested spinlock acquisition order + M2 park x8 + #545 Cycle C inv x2
     {"synchronization_lock_validator",  6, 0, 0      },  // lock validator
     {"synchronization_irq_guard",  4, 0,      0      },  // irq guard + audit
     {"synchronization_pip",  10,    0,       0      },  // pip + queue_pip
@@ -50,7 +50,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex + semaphore
 
     // scheduler
-    {"scheduler_core",       23,    23,      23     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2
+    {"scheduler_core",       36,    36,      36     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8
     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server policy
@@ -143,7 +143,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"initrd_parser",          9,    0,       0      },  // cpio parser
 
     // ipc
-    {"ipc_core",             23,    0,       0      },  // queue, priority, notify, event group, sync roundtrip
+    {"ipc_core",             27,    0,       0      },  // queue, priority, notify, event group, sync roundtrip + #545 Cycle D INV-4b x4
     {"ipc_blocking",          4,    0,       0      },  // blocking send_sync/handshake
     {"ipc_timeout",           7,    7,       7      },  // wheel-armed bounded receive
     {"ipc_extended",          13,   0,       0      },  // size limits, removal, wake gates, quiescence, reply
@@ -296,13 +296,13 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // core_* — split of the former `core` aggregate. Values filled from
     // measured `dump-counts` output; 0 disables validation.
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
-    {"core_sync",           101,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8
-    {"core_sched",          119,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5
+    {"core_sync",           103,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8 + #545 Cycle C inv x2
+    {"core_sched",          127,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8
     {"core_task",           52,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu
     {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
-    {"ipc",                 87,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking
+    {"ipc",                 96,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4
     {"capability",          161,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker)
     {"proc_elf",            131,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM)
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)

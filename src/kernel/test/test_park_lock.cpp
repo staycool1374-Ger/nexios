@@ -32,6 +32,7 @@
 #include <kernel/arch/hal/timer.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/task/tick_watchdog.hpp>
 #include <kernel/time/posix_time.hpp>
 #include "test_sched_helpers.hpp"
 
@@ -374,6 +375,209 @@ JARVIS_TEST(spinlock_layout_unchanged, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+namespace park_inv {
+
+// Rendezvous lock for the INV-W1' waiter test.  Default (Leaf) rank: the
+// park path under test does not consult the rank.
+sync::SpinLock g_inv_lock;
+volatile bool g_inv_holder_has_lock = false;
+volatile bool g_inv_waiter_acquired = false;
+volatile bool g_inv_waiter_entry_if = false;
+volatile bool g_inv_waiter_exit_if = false;
+volatile uint64_t g_inv_tick_before = 0;
+volatile uint64_t g_inv_tick_after = 0;
+
+void inv_holder_entry() {
+    auto *self = Scheduler::current_task();
+    sync::ParkLockGuard hold(g_inv_lock, "test_inv_holder");
+    if (!hold.owned())
+        return;
+    g_inv_holder_has_lock = true;
+    // Hold ~40 ms across a BLOCKED wheel sleep so the waiter contends.
+    // The BLOCKED-with-lock-held transition trips the INV-C1 WARN
+    // (warn-only at ASSERT=1) — expected, proves the check is live.
+    const uint64_t ns =
+        40ULL * 1000000000ULL / static_cast<uint64_t>(CONFIG_TICK_HZ);
+    if (time::PosixTime::sleep_arm(*self, ns)) {
+        {
+            arch::IrqGuard irq_guard{};
+            Scheduler::dequeue_ready(*self);
+            self->state = TaskState::BLOCKED;
+        }
+        Scheduler::reschedule();
+        for (;;) {
+            arch::sti();
+            arch::hlt();
+            arch::cli();
+            if (self->state != TaskState::BLOCKED)
+                break;
+        }
+        time::PosixTime::sleep_cancel(*self);
+    }
+}
+
+void inv_waiter_entry() {
+    auto *self = Scheduler::current_task();
+    (void)self;
+    for (uint64_t i = 0; i < 200000ULL && !g_inv_holder_has_lock; ++i) {
+        Scheduler::reschedule();
+        arch::hlt();
+    }
+    if (!g_inv_holder_has_lock)
+        return;
+    g_inv_waiter_entry_if = arch::interrupts_enabled();
+    g_inv_tick_before = arch::Timer::ticks();
+    {
+        sync::ParkLockGuard guard(g_inv_lock, "test_inv_waiter");
+        if (guard.owned())
+            g_inv_waiter_acquired = true;
+    }
+    g_inv_tick_after = arch::Timer::ticks();
+    g_inv_waiter_exit_if = arch::interrupts_enabled();
+}
+
+} // namespace park_inv
+
+// Runmode: kernel
+// Testidea: Cycle C QE (issue #545): a waiter contending a lock held by a
+// BLOCKED task must never spin with IF=0 (that starves the tick that would
+// dispatch the live holder — the self-completing wedge).  Every guard exit
+// preserves the entry IRQ state and the timer keeps advancing underneath.
+// Input: Holder takes the lock then BLOCK-sleeps 40 ms on the wheel;
+// Waiter ParkLockGuards it (40 ms >> any bounded spin, so a slow path —
+// park or denied-spin blocks — always engages).
+// Expect: Waiter acquires; entry IF == exit IF (INV-L1'); ticks advance
+// across the contention (timer alive); tick watchdog never fires;
+// park+fallback deltas >= 1 (slow path engaged; park at suite depth 0,
+// denied-spin at the harness depth 1 — same depth-relative premise as
+// lock_park_taken_under_contention).  Rearm/escape deltas are logged, not
+// asserted: exhaustion needs 8 failed parks + 64 re-arms (depth-0 only)
+// and escapes are timing-shaped.  Both tasks terminate, tracker delta 0.
+// Depends: ParkLockGuard slow paths, Timer::ticks, tick_watchdog,
+//         wait_for_termination
+JARVIS_TEST(test_park_lock_inv_w1, "PRE: none | POST: none") {
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    tick_watchdog::reset_for_test();
+    park_inv::g_inv_holder_has_lock = false;
+    park_inv::g_inv_waiter_acquired = false;
+    park_inv::g_inv_tick_before = 0;
+    park_inv::g_inv_tick_after = 0;
+    const uint64_t park0 = sync::lock_park_count();
+    const uint64_t fb0 = sync::lock_spin_fallback_count();
+    const uint64_t rearm0 = sync::lock_park_rearm_count();
+    const uint64_t esc0 = sync::lock_denied_escape_count();
+    auto *holder = TaskControlBlock::create(park_inv::inv_holder_entry, 11, 10);
+    JARVIS_ASSERT(holder != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
+    auto *waiter = TaskControlBlock::create(park_inv::inv_waiter_entry, 12, 10);
+    JARVIS_ASSERT(waiter != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*waiter, SchedPolicy::FIXED));
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*holder);
+        Scheduler::add_task(*waiter);
+    }
+    Scheduler::reschedule();
+    test::wait_for_termination_safe(holder);
+    test::wait_for_termination_safe(waiter);
+    Logger::info("[PARK-TEST] inv_w1 got=%lu entry_if=%lu exit_if=%lu "
+                 "ticks=%lu->%lu park=%lu fb=%lu rearm=%lu esc=%lu fire=%lu",
+                 static_cast<uint64_t>(park_inv::g_inv_waiter_acquired),
+                 static_cast<uint64_t>(park_inv::g_inv_waiter_entry_if),
+                 static_cast<uint64_t>(park_inv::g_inv_waiter_exit_if),
+                 park_inv::g_inv_tick_before, park_inv::g_inv_tick_after,
+                 sync::lock_park_count() - park0,
+                 sync::lock_spin_fallback_count() - fb0,
+                 sync::lock_park_rearm_count() - rearm0,
+                 sync::lock_denied_escape_count() - esc0,
+                 tick_watchdog::fire_count());
+    JARVIS_ASSERT(park_inv::g_inv_holder_has_lock);
+    JARVIS_ASSERT(park_inv::g_inv_waiter_acquired);
+    // INV-L1': IRQ state identical on every guard exit path.
+    JARVIS_ASSERT(park_inv::g_inv_waiter_entry_if ==
+                  park_inv::g_inv_waiter_exit_if);
+    // INV-W1': the timer stayed alive under contention (no IF=0 freeze).
+    JARVIS_ASSERT(park_inv::g_inv_tick_after > park_inv::g_inv_tick_before);
+    JARVIS_ASSERT(!tick_watchdog::fired());
+    JARVIS_ASSERT_EQ(0ULL, tick_watchdog::fire_count());
+    // A slow path engaged (park at depth 0, denied-spin at depth 1).
+    JARVIS_ASSERT((sync::lock_park_count() - park0) +
+                      (sync::lock_spin_fallback_count() - fb0) >=
+                  1);
+    test::terminate_and_drain2(holder, waiter);
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    tick_watchdog::reset_for_test();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: Cycle C QE (issue #545, INV-L1'): IF=1 at guard entry implies
+// IF=1 at every guard exit — fast path, IrqGuard-scoped fast path, and a
+// real contended acquire.
+// Input: Free lock (IF=1); free lock inside an IrqGuard scope (IF=0
+// inside, 1 after); contended lock with a 10 ms holder.
+// Expect: owned() in all three; IF==1 after each exit; IRQs masked only
+// inside the guard scope; depth-relative slow-path counts (park at
+// depth 0, fallback at depth 1); tracker delta 0.
+// Depends: ParkLockGuard entry-IF snapshot + take_success restore
+JARVIS_TEST(test_park_lock_if_preserve, "PRE: none | POST: none") {
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    const uint64_t park0 = sync::lock_park_count();
+    const uint64_t fb0 = sync::lock_spin_fallback_count();
+    {
+        // Fast path, IF=1: single try_lock, no park, no fallback.
+        sync::SpinLock free_lock;
+        sync::ParkLockGuard guard(free_lock, "test_if_fast");
+        JARVIS_ASSERT(guard.owned());
+        JARVIS_ASSERT(arch::interrupts_enabled());
+    }
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    {
+        // Fast path inside a guard scope: IF=0 inside by construction,
+        // restored to 1 when the scope closes.
+        sync::SpinLock probe;
+        {
+            arch::IrqGuard irq_guard{};
+            JARVIS_ASSERT(!arch::interrupts_enabled());
+            sync::ParkLockGuard guard(probe, "test_if_guarded");
+            JARVIS_ASSERT(guard.owned());
+            JARVIS_ASSERT(!arch::interrupts_enabled());
+        }
+        JARVIS_ASSERT(arch::interrupts_enabled());
+    }
+    JARVIS_ASSERT_EQ(0ULL, sync::lock_park_count() - park0);
+    JARVIS_ASSERT_EQ(0ULL, sync::lock_spin_fallback_count() - fb0);
+    // Contended acquire preserves IF=1 across the slow path.
+    park_test::g_holder_has_lock = false;
+    park_test::g_holder_armed = false;
+    park_test::g_contender_acquired = false;
+    park_test::g_contender_park_delta = 0;
+    auto *holder = TaskControlBlock::create(park_test::holder_entry, 11, 10);
+    JARVIS_ASSERT(holder != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
+    auto *contender =
+        TaskControlBlock::create(park_test::contender_entry, 12, 10);
+    JARVIS_ASSERT(contender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*contender, SchedPolicy::FIXED));
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*holder);
+        Scheduler::add_task(*contender);
+    }
+    Scheduler::reschedule();
+    test::wait_for_termination_safe(holder);
+    test::wait_for_termination_safe(contender);
+    test::terminate_and_drain2(holder, contender);
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    JARVIS_TEST_PASS();
+}
+
 void register_park_lock_tests() {
     JARVIS_REGISTER_TEST(lock_park_fast_path_no_park);
     JARVIS_REGISTER_TEST(lock_park_taken_under_contention);
@@ -383,4 +587,6 @@ void register_park_lock_tests() {
     JARVIS_REGISTER_TEST(lock_order_violation_reported);
     JARVIS_REGISTER_TEST(lock_order_reverse_no_false_release);
     JARVIS_REGISTER_TEST(spinlock_layout_unchanged);
+    JARVIS_REGISTER_TEST(test_park_lock_inv_w1);
+    JARVIS_REGISTER_TEST(test_park_lock_if_preserve);
 }
