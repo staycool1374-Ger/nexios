@@ -143,7 +143,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"initrd_parser",          9,    0,       0      },  // cpio parser
 
     // ipc
-    {"ipc_core",             31,    0,       0      },  // queue, priority, notify, event group, sync roundtrip + #545 INV-4b x4 + M3 reply x4 (6 parked for PushedReply fix)
+    {"ipc_core",             37,    0,       0      },  // queue, priority, notify, event group, sync roundtrip + #545 INV-4b x4 + M3 reply x10
     {"ipc_blocking",          4,    0,       0      },  // blocking send_sync/handshake
     {"ipc_timeout",           7,    7,       7      },  // wheel-armed bounded receive
     {"ipc_extended",          13,   0,       0      },  // size limits, removal, wake gates, quiescence, reply
@@ -302,7 +302,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
-    {"ipc",                100,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x4 (6 parked for PushedReply fix)
+    {"ipc",                106,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10
     {"capability",          161,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker)
     {"proc_elf",            131,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM)
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)

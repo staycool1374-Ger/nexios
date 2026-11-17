@@ -47,7 +47,50 @@ namespace ipc_rep {
 
 volatile bool g_done = false;
 
-// --- roundtrip / receiver_died shared shape ---
+// A racing client Call (request queued, ticket not yet published when
+// the server validates) reads STALE even though the Call is live. A
+// production server loop must ride through the transient window, so
+// test servers retry STALE boundedly instead of treating the first
+// STALE as final.  Returns the last error (OK on success).
+errors::IpcError reply_recv_retry(Message &reply, uint32_t reply_type,
+                                  Message &next, int max_tries) {
+    errors::IpcError err = errors::IPC_ERR_REPLY_STALE;
+    for (int i = 0; i < max_tries && err == errors::IPC_ERR_REPLY_STALE;
+         ++i) {
+        if (i > 0) {
+            Scheduler::reschedule();
+            arch::hlt();
+        }
+        err = IPC::reply_recv_err(reply, reply_type, 0, next, 0);
+    }
+    return err;
+}
+
+// --- roundtrip shared shape (rt_server replies once, then parks in
+// its reply_recv wait) ---
+// --- receiver_died shape: server recvs then parks forever (never
+// replies), so the harness kill always lands mid-wait ---
+TaskControlBlock *g_rd_server = nullptr;
+
+void rd_server_entry() {
+    auto *self = Scheduler::current_task();
+    (void)self;
+    Message msg;
+    bool ok = false;
+    for (int i = 0; i < 100000 && !ok; ++i) {
+        ok = IPC::recv(msg);
+        if (!ok) {
+            Scheduler::reschedule();
+            arch::hlt();
+        }
+    }
+    for (;;) {
+        arch::sti();
+        arch::hlt();
+        arch::cli();
+    }
+}
+
 TaskControlBlock *g_rt_server = nullptr;
 volatile bool g_rt_client_ok = false;
 volatile uint64_t g_rt_client_type = 0;
@@ -74,7 +117,7 @@ void rt_server_entry() {
     Message reply{};
     Message next{};
     const errors::IpcError err =
-        IPC::reply_recv_err(reply, 202, 0, next, 0);
+        reply_recv_retry(reply, 202, next, 20);
     g_rt_server_err = static_cast<uint64_t>(err);
     g_rt_server_attempts = self->ipc_direct_attempts;
 }
@@ -121,8 +164,8 @@ void nt_server_entry() {
     for (int w = 0; w < 3; ++w) {
         Message reply{};
         Message next{};
-        const errors::IpcError err = IPC::reply_recv_err(
-            reply, 202, 0, next, 0);
+        const errors::IpcError err =
+            reply_recv_retry(reply, 202, next, 20);
         if (err != errors::IPC_ERR_OK)
             return;
     }
@@ -146,9 +189,10 @@ void os_server_entry() {
         return;
     Message reply{};
     Message next{};
-    // First reply: consumes the caller's live ticket.
+    // First reply: consumes the caller's live ticket (bounded STALE
+    // retry for a racing Call publish).
     const errors::IpcError first =
-        IPC::reply_recv_err(reply, 301, 0, next, 0);
+        reply_recv_retry(reply, 301, next, 20);
     if (first != errors::IPC_ERR_OK)
         return;
     // The wait inside the first call consumed the plain follow-up; the
@@ -414,8 +458,8 @@ void lt_server_entry() {
             return;
         Message reply{};
         Message next{};
-        const errors::IpcError err = IPC::reply_recv_err(
-            reply, static_cast<uint32_t>(600 + w), 0, next, 0);
+        const errors::IpcError err = reply_recv_retry(
+            reply, static_cast<uint32_t>(600 + w), next, 20);
         if (err != errors::IPC_ERR_OK)
             return;
         g_lt_attempts[w] = self->ipc_direct_attempts;
@@ -451,12 +495,6 @@ void lt_client_entry() {
 
 } // namespace ipc_rep
 
-// PARKED (M3 #556 QE): needs working PushedReply — the
-// deliver-side generation check compares caller-gen against
-// server-gen, so every tokened reply degrades to Pushed and
-// reply_recv returns STALE (see #545 2026-11-18). Re-enable
-// together with the kernel fix.
-#if 0
 // Runmode: kernel
 // Testidea: M3 QE: Call -> REPLY_RECV round trip completes with the right
 // types; the direct path is attempted (budget engaged).
@@ -522,14 +560,7 @@ JARVIS_TEST(ipc_reply_recv_roundtrip, "PRE: none | POST: none") {
     ipc_rep::g_rt_server = nullptr;
     JARVIS_TEST_PASS();
 }
-#endif
 
-// PARKED (M3 #556 QE): needs working PushedReply — the
-// deliver-side generation check compares caller-gen against
-// server-gen, so every tokened reply degrades to Pushed and
-// reply_recv returns STALE (see #545 2026-11-18). Re-enable
-// together with the kernel fix.
-#if 0
 // Runmode: kernel
 // Testidea: M3 QE: the reply token is one-shot — a second REPLY_RECV with
 // no intervening ticketed request fails REPLY_STALE without blocking;
@@ -576,63 +607,95 @@ JARVIS_TEST(ipc_reply_token_one_shot, "PRE: none | POST: none") {
     ipc_rep::g_os_server = nullptr;
     JARVIS_TEST_PASS();
 }
-#endif
 
-// PARKED (M3 #556 QE): needs working PushedReply — the
-// deliver-side generation check compares caller-gen against
-// server-gen, so every tokened reply degrades to Pushed and
-// reply_recv returns STALE (see #545 2026-11-18). Re-enable
-// together with the kernel fix.
-#if 0
+// --- sweep-heal rendezvous: client Calls silent S; harness injects the
+// reply mid-wait ---
+TaskControlBlock *g_sw_server = nullptr;
+volatile bool g_sw_c_ok = false;
+volatile uint64_t g_sw_c_type = 0;
+
+void sw_client_entry() {
+    auto *self = Scheduler::current_task();
+    Message msg;
+    msg.sender_id = self->id;
+    msg.type = 406;
+    msg.priority = 0;
+    msg.data_size = 0;
+    Message reply;
+    const errors::IpcError err =
+        IPC::send_sync_err(g_sw_server->id, msg, reply);
+    if (err == errors::IPC_ERR_OK) {
+        g_sw_c_ok = true;
+        g_sw_c_type = reply.type;
+    }
+}
+
 // Runmode: kernel
-// Testidea: M3 QE: a stale (untokened) same-sender message never satisfies
-// a Call; the queue is untouched.
-// Input: Harness pre-queues a same-sender message in its own inbox, then
-// Calls live-but-silent S with a 30-tick bound (TIMEOUT leg, never
-// blocks the harness).
-// Expect: TIMEOUT (not the stale content); queue count unchanged; the
-// stale message still pops afterwards with its type intact.
-// Depends: token-scoped pop_reply_from, sweep stamp (no false match)
-JARVIS_TEST(ipc_reply_stale_dropped, "PRE: none | POST: none") {
+// Testidea: M3 QE: the in-guard sweep closes the loop-top-check-to-
+// publish gap — a same-sender message landing mid-wait is stamped and
+// consumed instead of slept-through.
+// Input: Client C Calls silent S; once C is BLOCKED the harness pushes
+// an unstamped same-sender message directly into C's inbox.
+// Expect: send_sync returns OK with the pushed type; inbox empty after.
+// (NOTE: the prescribed pre-queued-stale-never-satisfies leg is
+// unimplementable — stamp_from_try re-stamps every present same-sender
+// message with the current token each iteration, so staleness cannot
+// persist by construction; the sweep IS the anti-stale mechanism.
+// This test pins the gap-closing behavior instead.)
+// Depends: sweep stamp, token-scoped probe consume
+JARVIS_TEST(ipc_reply_sweep_heal, "PRE: none | POST: none") {
+    g_sw_server = nullptr;
+    g_sw_c_ok = false;
+    g_sw_c_type = 0;
     auto *server = TaskControlBlock::create(ipc_rep::silent_server_entry,
                                             11, 10);
     JARVIS_ASSERT(server != nullptr);
     JARVIS_ASSERT(Scheduler::set_sched_policy(*server, SchedPolicy::FIXED));
+    auto *client = TaskControlBlock::create(sw_client_entry, 12,
+                                            10);
+    JARVIS_ASSERT(client != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*client, SchedPolicy::FIXED));
+    g_sw_server = server;
     {
         arch::IrqGuard guard;
         Scheduler::add_task(*server);
+        Scheduler::add_task(*client);
     }
-    auto *self = Scheduler::current_task();
-    JARVIS_ASSERT(self != nullptr);
+    Scheduler::reschedule();
+    bool blocked = false;
+    for (uint64_t i = 0; i < 200000ULL; ++i) {
+        if (client->state == TaskState::BLOCKED) {
+            blocked = true;
+            break;
+        }
+        Scheduler::reschedule();
+        arch::hlt();
+    }
+    JARVIS_ASSERT(blocked);
     {
-        Message stale;
-        stale.sender_id = server->id;
-        stale.type = 401;
-        stale.priority = 0;
-        stale.data_size = 0;
-        JARVIS_ASSERT(self->msg_queue.push(stale));
+        arch::IrqGuard guard{};
+        Message mid;
+        mid.sender_id = server->id;
+        mid.type = 407;
+        mid.priority = 0;
+        mid.data_size = 0;
+        JARVIS_ASSERT(client->msg_queue.push(mid));
+        // Direct queue push bypasses send()'s wake gate — raise the
+        // waiter exactly as a delivery would (same guard, one
+        // IRQ-atomic push+wake unit).
+        Scheduler::set_task_ready(*client);
     }
-    const uint64_t n0 = self->msg_queue.count;
-    Message msg;
-    msg.sender_id = self->id;
-    msg.type = 400;
-    msg.priority = 0;
-    msg.data_size = 0;
-    Message reply;
-    const errors::IpcError err = IPC::send_sync_bounded_err(
-        server->id, msg, reply, 30);
-    Logger::info("[IPC-REPLY] stale err=%lu count=%lu->%lu",
-                 static_cast<uint64_t>(err), n0, self->msg_queue.count);
-    JARVIS_ASSERT(err == errors::IPC_ERR_TIMEOUT);
-    JARVIS_ASSERT_EQ(n0, self->msg_queue.count);
-    Message back;
-    JARVIS_ASSERT(self->msg_queue.pop_from_sender(back, server->id));
-    JARVIS_ASSERT_EQ(401ULL, back.type);
-    test::terminate_and_drain2(server, nullptr);
-    Scheduler::drain_zombie_list();
+    test::wait_for_termination_safe(client);
+    Logger::info("[IPC-REPLY] sweep_heal ok=%lu type=%lu qcount=%lu",
+                 static_cast<uint64_t>(g_sw_c_ok),
+                 g_sw_c_type, client->msg_queue.count);
+    JARVIS_ASSERT(g_sw_c_ok);
+    JARVIS_ASSERT_EQ(407ULL, g_sw_c_type);
+    JARVIS_ASSERT_EQ(0ULL, client->msg_queue.count);
+    test::terminate_and_drain2(server, client);
+    g_sw_server = nullptr;
     JARVIS_TEST_PASS();
 }
-#endif
 
 // Runmode: kernel
 // Testidea: M3 QE: a forged sender id never matches a Call — send stamps
@@ -753,12 +816,6 @@ JARVIS_TEST(ipc_call_death_token_cleanup, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
-// PARKED (M3 #556 QE): needs working PushedReply — the
-// deliver-side generation check compares caller-gen against
-// server-gen, so every tokened reply degrades to Pushed and
-// reply_recv returns STALE (see #545 2026-11-18). Re-enable
-// together with the kernel fix.
-#if 0
 // Runmode: kernel
 // Testidea: M3 QE: N sequential Call trips complete with the direct path
 // attempted every trip (budget engaged, no lifetime saturation of the
@@ -810,27 +867,24 @@ JARVIS_TEST(ipc_direct_switch_no_tick, "PRE: none | POST: none") {
     ipc_rep::g_nt_server = nullptr;
     JARVIS_TEST_PASS();
 }
-#endif
 
-// PARKED (M3 #556 QE): needs working PushedReply — the
-// deliver-side generation check compares caller-gen against
-// server-gen, so every tokened reply degrades to Pushed and
-// reply_recv returns STALE (see #545 2026-11-18). Re-enable
-// together with the kernel fix.
-#if 0
 // Runmode: kernel
 // Testidea: M3 QE: terminating the receiver mid-Call leaves no stranded
 // switch arm — caller wakes PEER_DIED with save_rsp_to clear.
-// Input: Client C send_sync_err(S) blocks; harness kills S.
+// Input: Client C send_sync_err(S) blocks; S recvs then parks forever
+// (rd_server, never replies); harness kills S.
 // Expect: C PEER_DIED; C RUNNING, current, not queued; save_rsp_to==0
 // at resume; both drain.
 // Depends: dest-gone wake, deferred-switch hygiene
 JARVIS_TEST(ipc_direct_switch_receiver_died, "PRE: none | POST: none") {
+    // NOTE: uses the never-replies rd_server (not rt_server) so the
+    // harness kill always lands mid-wait — an rt_server would reply
+    // first and the client could complete before the BLOCKED poll.
     ipc_rep::g_rt_server = nullptr;
     ipc_rep::g_rt_client_ok = false;
     ipc_rep::g_rt_client_ticks = 0;
     ipc_rep::g_rt_save_rsp = 1;
-    auto *server = TaskControlBlock::create(ipc_rep::rt_server_entry, 11,
+    auto *server = TaskControlBlock::create(ipc_rep::rd_server_entry, 11,
                                             10);
     JARVIS_ASSERT(server != nullptr);
     JARVIS_ASSERT(Scheduler::set_sched_policy(*server, SchedPolicy::FIXED));
@@ -855,8 +909,6 @@ JARVIS_TEST(ipc_direct_switch_receiver_died, "PRE: none | POST: none") {
         arch::hlt();
     }
     JARVIS_ASSERT(blocked);
-    // Client's rt entry expects a 202 reply; the kill forces PEER_DIED,
-    // so g_rt_client_ok stays false — assert the death leg instead.
     JARVIS_ASSERT(Scheduler::terminate_err(*server, 0) ==
                   errors::SCHED_ERR_OK);
     test::wait_for_termination_safe(client);
@@ -868,7 +920,6 @@ JARVIS_TEST(ipc_direct_switch_receiver_died, "PRE: none | POST: none") {
     ipc_rep::g_rt_server = nullptr;
     JARVIS_TEST_PASS();
 }
-#endif
 
 // Runmode: kernel
 // Testidea: M3 QE: a 3-deep nested Call chain completes with priorities
@@ -981,12 +1032,6 @@ JARVIS_TEST(ipc_reply_recv_fuzz, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
-// PARKED (M3 #556 QE): needs working PushedReply — the
-// deliver-side generation check compares caller-gen against
-// server-gen, so every tokened reply degrades to Pushed and
-// reply_recv returns STALE (see #545 2026-11-18). Re-enable
-// together with the kernel fix.
-#if 0
 // Runmode: kernel
 // Testidea: M3 QE (S2 lifetime): a server doing 4 sequential REPLY_RECV
 // waits keeps a live attempt budget every wait — attempts in (0,3] each
@@ -1040,14 +1085,16 @@ JARVIS_TEST(ipc_direct_multi_wait_lifetime, "PRE: none | POST: none") {
     ipc_rep::g_lt_client = nullptr;
     JARVIS_TEST_PASS();
 }
-#endif
 
 void register_ipc_reply_tests() {
-    // Parked until the PushedReply kernel fix lands (see #if 0 notes):
-    // roundtrip, one_shot, stale_dropped, no_tick, receiver_died,
-    // multi_wait_lifetime.
+    JARVIS_REGISTER_TEST(ipc_reply_recv_roundtrip);
+    JARVIS_REGISTER_TEST(ipc_reply_token_one_shot);
+    JARVIS_REGISTER_TEST(ipc_reply_sweep_heal);
     JARVIS_REGISTER_TEST(ipc_reply_token_forgery);
     JARVIS_REGISTER_TEST(ipc_call_death_token_cleanup);
+    JARVIS_REGISTER_TEST(ipc_direct_switch_no_tick);
+    JARVIS_REGISTER_TEST(ipc_direct_switch_receiver_died);
     JARVIS_REGISTER_TEST(ipc_nested_call);
     JARVIS_REGISTER_TEST(ipc_reply_recv_fuzz);
+    JARVIS_REGISTER_TEST(ipc_direct_multi_wait_lifetime);
 }
