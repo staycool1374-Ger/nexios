@@ -143,7 +143,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"initrd_parser",          9,    0,       0      },  // cpio parser
 
     // ipc
-    {"ipc_core",             27,    0,       0      },  // queue, priority, notify, event group, sync roundtrip + #545 Cycle D INV-4b x4
+    {"ipc_core",             31,    0,       0      },  // queue, priority, notify, event group, sync roundtrip + #545 INV-4b x4 + M3 reply x4 (6 parked for PushedReply fix)
     {"ipc_blocking",          4,    0,       0      },  // blocking send_sync/handshake
     {"ipc_timeout",           7,    7,       7      },  // wheel-armed bounded receive
     {"ipc_extended",          13,   0,       0      },  // size limits, removal, wake gates, quiescence, reply
@@ -162,7 +162,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers_vfsd",         18,   0,       0      },  // VFS daemon kernel-bypass ops/auth
     {"servers_vfsd_auth",    27,   27,      27     },  // daemon auth, dup/pipe, fs handlers, gates
     {"servers_iocd",          7,   0,       0      },  // IOCD daemon boot/IRQ/MMIO/affinity
-    {"servers_daemon_restart", 2,    0,       0      },  // unknown-daemon rejection, terminate/resurrect
+    {"servers_daemon_restart", 10,   0,       0      },  // unknown-daemon rejection, terminate/resurrect + M1 death funnel x8
     {"servers_health",        5,    0,       0      },  // health status metrics/procfs
 
     // memory
@@ -302,7 +302,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
-    {"ipc",                 96,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4
+    {"ipc",                100,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x4 (6 parked for PushedReply fix)
     {"capability",          161,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker)
     {"proc_elf",            131,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM)
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
@@ -313,7 +313,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"libc_syscall",          4,    0,       0      },  // image size, getpid, write-cross, no-corruption
     {"cross_boundary",        3,    0,       0      },  // ring3 vfsd/iocd chains + keyboard delivery (x86_64 only)
     {"storage",             167,  0,       0      },  // vfs_* + initrd_parser + ramdisk + fat32 pins + readdir overlay
-    {"servers",             66,   66,      66     },  // servers_* + services_framework
+    {"servers",             74,   74,      74     },  // servers_* + services_framework + M1 death funnel x8
     {"drivers",             111,   66,      66     },  // drivers_* + virtio_blk_req + ahci_deep + net + #51 shm-tx ring x2 (+4 knob-gated: 3 serial-SHM + fb_bounded_render under CONFIG_DRIVER_PD_FB)
     {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb

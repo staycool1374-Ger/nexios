@@ -134,6 +134,10 @@ static void relay_entry() {
     Message msg{};
     Message inner{};
     Message reply{};
+    // NOTE (M3 #556 QE): the server-side REPLY_RECV conversion is parked
+    // until the deliver-side generation-check kernel fix lands (see #545
+    // 2026-11-18: PushedReply unreachable, reply_recv always STALE). The
+    // classic recv + trailing send shape below is the pre-M3 baseline.
     for (uint64_t trip = 0; trip < ctx->trips; ++trip) {
         bool got = false;
         for (int wait = 0; wait < 500; ++wait) {
@@ -365,6 +369,9 @@ JARVIS_TEST(mk_baseline_hop_latency, "PRE: none | POST: none") {
         "[MK-BASELINE] slope_ticks_per_hop_x100=%lu median_d1=%lu "
         "median_d4=%lu",
         slope_x100, medians[0], medians[3]);
+    // NOTE (M3 #556 QE): the slope_ticks_per_hop_x100 < 100 structural
+    // gate rides with the parked REPLY_RECV relay (see relay_entry);
+    // re-enable together with it once PushedReply works.
     JARVIS_TEST_PASS();
 }
 

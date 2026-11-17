@@ -190,6 +190,7 @@ void register_locking_stress_tests();
 void register_preemption_tests();
 void register_ipc_extended_tests();
 void register_daemon_restart_crash_tests();
+void register_mk_death_tests(); // M1 #545/#516 death funnel + daemon cells
 void register_irqguard_audit_tests();
 void register_memory_safety_tests();
 void register_memory_determinism_tests();
@@ -208,6 +209,7 @@ void register_lock_order_tests();
 void register_park_lock_tests();
 void register_resched_park_tests(); // #545 Cycle D reschedule park
 void register_ipc_inv4b_tests();    // #545 Cycle D INV-4b probe gates
+void register_ipc_reply_tests();    // M3 #556 reply token + direct switch
 void register_tick_watchdog_tests();
 void register_budget_tests();
 void register_pip_tests();
@@ -454,7 +456,7 @@ static void run_ipc_fastpath_group() { register_ipc_fastpath_tests(); }
 static void run_ipc_pipe_blocking_group() {
     register_pipe_blocking_tests();
 }
-static void run_ipc_core_group() { register_ipc_tests(); register_ipc_inv4b_tests(); } // #545 Cycle D INV-4b
+static void run_ipc_core_group() { register_ipc_tests(); register_ipc_inv4b_tests(); register_ipc_reply_tests(); } // #545 Cycle D INV-4b + M3
 static void run_ipc_blocking_group() { register_ipc_blocking_tests(); }
 static void run_ipc_timeout_group() { register_ipc_timeout_tests(); }
 static void run_ipc_extended_group() { register_ipc_extended_tests(); }
@@ -487,6 +489,7 @@ static void run_servers_vfsd_auth_group() {
 static void run_servers_iocd_group() { register_iocd_tests(); }
 static void run_servers_daemon_restart_group() {
     register_daemon_restart_crash_tests();
+    register_mk_death_tests(); // M1 #545/#516
 }
 static void run_servers_health_group() { register_health_tests(); }
 static void run_services_framework_group() {
