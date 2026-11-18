@@ -56,6 +56,16 @@ void Scheduler::release_memory_pages(uint64_t count) noexcept {
 uint64_t Scheduler::remaining_memory_budget() noexcept {
     return __atomic_load_n(&memory_budget_pages_, __ATOMIC_RELAXED);
 }
+
+void Scheduler::apply_boot_handover(uint64_t pages) noexcept {
+    // Boot-time single-threaded (called from end of composition before
+    // the AP gate); keep the atomic sub for §11.6 uniformity.
+    uint64_t cur = __atomic_load_n(&memory_budget_pages_, __ATOMIC_RELAXED);
+    if (pages > cur) {
+        pages = cur; // clamp: never underflow into a huge budget
+    }
+    __atomic_fetch_sub(&memory_budget_pages_, pages, __ATOMIC_RELAXED);
+}
 #endif
 bool Scheduler::charge_task_memory(uint64_t pages) {
     auto *cur = current_task();

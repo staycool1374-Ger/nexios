@@ -68,9 +68,13 @@ match the active arch block.
 `CONFIG_MAX_DAEMONS` (16) · `CONFIG_MAX_PROGRAMS` (32) ·
 `CONFIG_BUFFER_POOL_PAGES` (128) · `CONFIG_MAX_PROCESS_PAGES` (512) ·
 `CONFIG_PAGE_TABLE_POOL_SIZE` (4096) · `CONFIG_VFS_MAX_PATH` (256) ·
-`CONFIG_TASK_NAME_LEN` (16) · `CONFIG_MEMPOOL_NUM_POOLS` (9) ·
-`CONFIG_MEMPOOL_BLOCK_SIZES` (16..4096) · `CONFIG_MEMPOOL_BLOCK_COUNTS`
-(256..1).
+`CONFIG_TASK_NAME_LEN` (16).
+MemPool classes are hard-coded in `mempool.cpp` (F21: the
+`CONFIG_MEMPOOL_*` macros were dead and are deleted).
+M4 handover: `CONFIG_MEM_MGR_BOOTSTRAP` (0) ·
+`CONFIG_MEM_HANDOVER_MAX_RUNS` (64) ·
+`CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES` (512, Q-M4-3) ·
+`CONFIG_MEM_PRESSURE_THRESHOLD_PCT` (90, M5 policy input).
 
 ### 1.5 IPC & Sync
 `CONFIG_IPC_MAX_MSG_SIZE` (64 — fixed; the vfsd `Msg` is exactly this) ·
@@ -125,7 +129,7 @@ feeds must be re-validated** (check-config cross-check).
 |---|---|---|
 | `CONFIG_CSLOT_COUNT` | 64 | slots per CNode (the task's root CNode is its CSpace); power of two preferred — slot-index bits are carved from the capability handle |
 | `CONFIG_CAP_MAX_DEPTH` | 8 | cascade-revoke depth bound; the revoke walk is iterative (explicit work list), never unbounded recursion |
-| `CONFIG_CAP_MAX_UNTYPED` | 16 | live Untyped memory objects (TU-local counter in untyped.cpp) |
+| `CONFIG_CAP_MAX_UNTYPED` | 64 | live Untyped memory objects — raised for the M4 handover (each free run mints one; TU-local counter in untyped.cpp) |
 | `CONFIG_CAP_MAX_MMIO` | 16 | live MmioCap objects (TU-local counter in mmio.cpp; issue #3) |
 | `CONFIG_CAP_MAX_IRQ` | 16 | live IrqCap objects + IRQ delivery-table slots (TU-local counter in irq.cpp; static table in irq_delivery.cpp, no RT-path allocation; issue #2) |
 | `CONFIG_CAP_MAX_MSIX` | 8 | live MsixCap objects (TU-local counter in cap/msix.cpp; per-(BDF,entry) single-owner claim registry; shares the IRQ delivery table, issue #10) |

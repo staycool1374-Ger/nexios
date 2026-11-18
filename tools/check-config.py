@@ -309,17 +309,25 @@ def validate(cfg: dict[str, int]):
         W(f"CONFIG_DMESG_CAPACITY={dmesg} is not a power of 2")
 
     # ═══════════════════════════════════════════════════════════════════════
-    # 6. MemPool Configuration
+    # 6. MemPool Configuration (F21, #573 — table lives in mempool.cpp)
     # ═══════════════════════════════════════════════════════════════════════
-    num_pools = cfg.get("CONFIG_MEMPOOL_NUM_POOLS", 9)
-    check_range("CONFIG_MEMPOOL_NUM_POOLS", num_pools, 1, 32)
+    # The CONFIG_MEMPOOL_* macros were deleted (dead, referenced nowhere);
+    # the pool table is hard-coded in mempool.cpp and pinned by the TCB
+    # static_assert in task.hpp. Flag a resurrection as an error — the
+    # single-source rule must not silently fork.
+    if cfg.get("CONFIG_MEMPOOL_NUM_POOLS") is not None:
+        E("CONFIG_MEMPOOL_NUM_POOLS is dead (F21); size the table in mempool.cpp")
 
-    # Parse block sizes and counts (from raw header line, approximate)
-    # We can't easily parse the comma list without running the preprocessor,
-    # so we check the NUM_POOLS <= defined counts from the header.
-    # The actual C compiler enforces the array sizing.
-    if num_pools < 1:
-        E("CONFIG_MEMPOOL_NUM_POOLS must be >= 1")
+    # ── Mem-mgr bootstrap M4 (#563) ──
+    check_bool("CONFIG_MEM_MGR_BOOTSTRAP",
+               cfg.get("CONFIG_MEM_MGR_BOOTSTRAP", 0))
+    check_ge("CONFIG_MEM_HANDOVER_MAX_RUNS",
+             cfg.get("CONFIG_MEM_HANDOVER_MAX_RUNS", 64), 1)
+    check_ge("CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES",
+             cfg.get("CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES", 512), 0)
+    pct = cfg.get("CONFIG_MEM_PRESSURE_THRESHOLD_PCT", 90)
+    if not (1 <= pct <= 100):
+        E("CONFIG_MEM_PRESSURE_THRESHOLD_PCT must be 1..100")
 
     # ═══════════════════════════════════════════════════════════════════════
     # 7. Priority Inheritance & Ceiling Protocol

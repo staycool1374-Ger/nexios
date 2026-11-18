@@ -18,6 +18,7 @@
 
 #include <kernel/memory/pmm.hpp>
 #include <kernel/log/dmesg.hpp>
+#include <kernel/memory/mem_pressure.hpp>
 #include <kernel/test/test_isolate.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
@@ -32,6 +33,20 @@
 namespace kernel {
 
 static sync::SpinLock pmm_lock_{};
+
+// M4 (#563): post-freeze denial diagnostic. Emits one dmesg row per
+// denial (fixed ring, bounded) + the one-shot pressure latch. Called
+// BEFORE the ASSERT so release builds (ASSERT compiled out) keep the
+// identical fail-closed return with the same evidence. Only referenced
+// from CONFIG_STATIC_POOLS_ONLY deny legs (compiled out otherwise).
+#if CONFIG_STATIC_POOLS_ONLY
+static void note_frozen_deny() noexcept {
+    mem_pressure::latch(mem_pressure::MemPressureReason::PMM_FROZEN_DENY);
+    log::dmesg_push_sev(log::ErrorSubsystem::PMM,
+                        log::kDmesgBase_PMM + 2, log::LogSeverity::ERROR,
+                        "PMM: post-freeze allocation denied", 0);
+}
+#endif
 
 constinit uint64_t PMM::total_pages_ = 0;
 constinit uint64_t PMM::free_pages_ = 0;
@@ -61,9 +76,20 @@ static uint8_t s_post_snap_overlay_[(CONFIG_PAGE_TABLE_POOL_SIZE + 7) / 8] = {
     0};
 constinit uint64_t PMM::color_cursor_[cache::NUM_COLORS] = {};
 
-#if CONFIG_STATIC_POOLS_ONLY
-static bool g_pmm_init_done = false;
-#endif
+// M4 (#563): the freeze flag is meaningful in all builds — under
+// CONFIG_STATIC_POOLS_ONLY it gates the post-freeze denies; always, it
+// gates handover accounting (handover_pages/run table below).
+static bool g_pmm_frozen = false;
+
+// M4 handover run table (fixed capacity, no allocation): maximal free
+// runs claimed at freeze(), ascending by address. free_page() refuses
+// frames inside these runs so a handed-over frame can never be
+// re-allocated as PMM memory (double-ownership guard).
+static uint64_t g_handover_phys[CONFIG_MEM_HANDOVER_MAX_RUNS] = {};
+static uint64_t g_handover_pages[CONFIG_MEM_HANDOVER_MAX_RUNS] = {};
+static uint32_t g_handover_runs = 0;
+static uint64_t g_handover_pages_total = 0;
+static uint64_t g_handover_retained_total = 0;
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 /// @brief Initialise the PMM bitmap and mark kernel/reserved pages as
@@ -425,8 +451,9 @@ void PMM::reset_color_cursor() noexcept {
 /// @return Physical address, or 0 (asserts on persistent OOM).
 uint64_t PMM::alloc_page() {
 #if CONFIG_STATIC_POOLS_ONLY
-    if (g_pmm_init_done) {
-        ASSERT(false && "alloc_page after init with CONFIG_STATIC_POOLS_ONLY");
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        ASSERT(errors::PmmError::PMM_ERR_FROZEN_DENY);
         return 0;
     }
 #endif
@@ -466,9 +493,184 @@ uint64_t PMM::alloc_page() {
 }
 
 void PMM::mark_init_done() {
-#if CONFIG_STATIC_POOLS_ONLY
-    g_pmm_init_done = true;
-#endif
+    freeze_pools();
+}
+
+/// @brief Freeze kernel pools at end of composition (M4, #563).
+/// Single pass over the window: collects maximal free runs, keeps the
+/// largest CONFIG_MEM_HANDOVER_MAX_RUNS (top-N by size, insertion into
+/// the fixed table), sorts ascending, withholds the kernel reserve from
+/// the low end, marks every handed run allocated in the bitmap (no
+/// longer PMM-free) and records it. Surplus/small runs stay kernel-
+/// retained (bitmap-free). Idempotent: a second call changes nothing.
+void PMM::freeze_pools() noexcept {
+    sync::IrqSpinLockGuard lock(pmm_lock_);
+    if (g_pmm_frozen) {
+        return;
+    }
+    g_pmm_frozen = true;
+#if CONFIG_MEM_MGR_BOOTSTRAP
+    // Handover discovery + marking (switch-gated): only a BOOTSTRAP build
+    // transfers frames out of the PMM pool. With the switch off the walk
+    // below is compiled out — the bitmap is untouched and every free page
+    // stays PMM-handable (unconditional marking here would leak the pool
+    // in default builds: marked-but-never-minted frames).
+    // Collect maximal free runs (address order; bounded by window size,
+    // O(pages) once at boot — never on a real-time path).
+    struct Run {
+        uint64_t phys;
+        uint64_t pages;
+    };
+    // Top-N reservoir, descending by size (largest first); insertion
+    // keeps it sorted so the smallest (tail) is the eviction candidate.
+    Run top[CONFIG_MEM_HANDOVER_MAX_RUNS] = {};
+    uint32_t top_count = 0;
+    uint64_t run_start = 0;
+    uint64_t run_pages = 0;
+    const auto commit_run = [&](uint64_t start_page, uint64_t pages) {
+        if (pages == 0) {
+            return;
+        }
+        Run cand{start_page * PAGE_SIZE, pages};
+        if (top_count < CONFIG_MEM_HANDOVER_MAX_RUNS) {
+            top[top_count] = cand;
+            ++top_count;
+        } else if (pages <= top[top_count - 1].pages) {
+            return; // smaller than everything kept — retained by kernel
+        } else {
+            top[top_count - 1] = cand;
+        }
+        // Insertion sort step (descending by pages; N <= 64, boot-only).
+        for (uint32_t i = top_count; i > 1; --i) {
+            if (top[i - 1].pages > top[i - 2].pages) {
+                const Run tmp = top[i - 1];
+                top[i - 1] = top[i - 2];
+                top[i - 2] = tmp;
+            } else {
+                break;
+            }
+        }
+    };
+    // Seed the scan below the window so a run starting at the window
+    // base is opened by the same transition logic (no special case).
+    bool prev_free = false;
+    for (uint64_t idx = window_base_page_; idx < window_end_page_; ++idx) {
+        const bool free = !bitmap_test(idx);
+        if (free && !prev_free) {
+            run_start = idx;
+            run_pages = 0;
+        }
+        if (free) {
+            ++run_pages;
+        }
+        if (!free && prev_free) {
+            commit_run(run_start, run_pages);
+            run_pages = 0;
+        }
+        prev_free = free;
+    }
+    if (prev_free) {
+        commit_run(run_start, run_pages);
+    }
+    // Sort ascending by address for the reserve carve + table order.
+    for (uint32_t i = 0; i < top_count; ++i) {
+        for (uint32_t j = i + 1; j < top_count; ++j) {
+            if (top[j].phys < top[i].phys) {
+                const Run tmp = top[i];
+                top[i] = top[j];
+                top[j] = tmp;
+            }
+        }
+    }
+    uint64_t reserve =
+        static_cast<uint64_t>(CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES);
+    for (uint32_t i = 0; i < top_count && g_handover_runs < CONFIG_MEM_HANDOVER_MAX_RUNS; ++i) {
+        uint64_t phys = top[i].phys;
+        uint64_t pages = top[i].pages;
+        // Withhold the kernel reserve from the low end first.
+        if (reserve > 0) {
+            if (pages <= reserve) {
+                reserve -= pages;
+                continue; // whole run retained by the kernel
+            }
+            phys += reserve * PAGE_SIZE;
+            pages -= reserve;
+            reserve = 0;
+        }
+        // Mark handed-over: allocated in the bitmap (no longer PMM-free),
+        // USER-owned (VMM user mappings ENSURE is_user_page; these frames
+        // are destined for userspace grants via the Untyped derivation).
+        for (uint64_t p = 0; p < pages; ++p) {
+            bitmap_set((phys / PAGE_SIZE) + p);
+            owner_set_user((phys / PAGE_SIZE) + p);
+            --free_pages_;
+        }
+        g_handover_phys[g_handover_runs] = phys;
+        g_handover_pages[g_handover_runs] = pages;
+        ++g_handover_runs;
+        g_handover_pages_total += pages;
+    }
+#endif // CONFIG_MEM_MGR_BOOTSTRAP
+    // Retained = free-but-kernel-owned remainder (reserve carve + surplus
+    // runs): still PMM-handable, never handed over.
+    g_handover_retained_total = free_pages_;
+}
+
+bool PMM::is_frozen() noexcept {
+    return __atomic_load_n(&g_pmm_frozen, __ATOMIC_RELAXED);
+}
+
+uint64_t PMM::handover_pages() noexcept {
+    return __atomic_load_n(&g_handover_pages_total, __ATOMIC_RELAXED);
+}
+
+uint64_t PMM::handover_bytes() noexcept {
+    return handover_pages() * PAGE_SIZE;
+}
+
+uint64_t PMM::handover_retained_pages() noexcept {
+    return __atomic_load_n(&g_handover_retained_total, __ATOMIC_RELAXED);
+}
+
+uint32_t PMM::handover_run_count() noexcept {
+    return __atomic_load_n(&g_handover_runs, __ATOMIC_RELAXED);
+}
+
+uint64_t PMM::handover_run_phys(uint32_t idx) noexcept {
+    if (idx >= __atomic_load_n(&g_handover_runs, __ATOMIC_RELAXED)) {
+        return 0;
+    }
+    return __atomic_load_n(&g_handover_phys[idx], __ATOMIC_RELAXED);
+}
+
+uint64_t PMM::handover_run_pages(uint32_t idx) noexcept {
+    if (idx >= __atomic_load_n(&g_handover_runs, __ATOMIC_RELAXED)) {
+        return 0;
+    }
+    return __atomic_load_n(&g_handover_pages[idx], __ATOMIC_RELAXED);
+}
+
+/// @brief True when @p index lies in a handed-over run (M4 double-
+/// ownership guard). Runs are ascending; early-out on overshoot.
+/// Lock-free read; the table is written once at freeze (boot, single
+/// thread) and never mutated after.
+static bool handover_owns(uint64_t index) noexcept {
+    const uint32_t runs =
+        __atomic_load_n(&g_handover_runs, __ATOMIC_RELAXED);
+    for (uint32_t i = 0; i < runs; ++i) {
+        const uint64_t start =
+            __atomic_load_n(&g_handover_phys[i], __ATOMIC_RELAXED) /
+            arch::PAGE_SIZE;
+        const uint64_t pages =
+            __atomic_load_n(&g_handover_pages[i], __ATOMIC_RELAXED);
+        if (index < start) {
+            return false;
+        }
+        if (index < start + pages) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /// @brief Allocate contiguous KERNEL pages.  Invokes OOM handler on failure.
@@ -476,8 +678,9 @@ void PMM::mark_init_done() {
 /// @return Physical address, or 0 (asserts on persistent OOM).
 uint64_t PMM::alloc_contiguous(size_t count) {
 #if CONFIG_STATIC_POOLS_ONLY
-    if (g_pmm_init_done) {
-        ASSERT(false && "alloc_contiguous after init with CONFIG_STATIC_POOLS_ONLY");
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        ASSERT(errors::PmmError::PMM_ERR_FROZEN_DENY);
         return 0;
     }
 #endif
@@ -518,21 +721,38 @@ uint64_t PMM::alloc_contiguous(size_t count) {
 /// @brief Allocate a single USER page.  Invokes OOM handler on failure.
 /// @return Physical address, or 0 (asserts on persistent OOM).
 uint64_t PMM::alloc_user_page() {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        ASSERT(errors::PmmError::PMM_ERR_FROZEN_DENY);
+        return 0;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, 1)) {
+        return 0;
+    }
+#endif
     uint64_t result = try_alloc_user(1);
     if (result) {
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
     bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
+        cur = Scheduler::current_task();
         result = try_alloc_user(1);
     }
     if (!result) {
         ASSERT(errors::PmmError::PMM_ERR_USER_OOM);
     }
-    if (result)
+    if (result) {
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+    }
     return result;
 }
 
@@ -542,9 +762,9 @@ uint64_t PMM::alloc_user_page() {
 /// @return Physical address, or 0 (asserts on persistent OOM).
 uint64_t PMM::alloc_page_colored(uint64_t color) {
 #if CONFIG_STATIC_POOLS_ONLY
-    if (g_pmm_init_done) {
-        ASSERT(false && "alloc_page_colored after init with "
-                        "CONFIG_STATIC_POOLS_ONLY");
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        ASSERT(errors::PmmError::PMM_ERR_FROZEN_DENY);
         return 0;
     }
 #endif
@@ -583,6 +803,12 @@ uint64_t PMM::alloc_page_colored(uint64_t color) {
 /// @brief Colored KERNEL alloc with error code (issue #62).
 errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
                                              uint64_t &out_phys_addr) {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        return errors::PMM_ERR_OOM;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
     uint64_t result = try_alloc_colored_kernel(color);
     if (result) {
@@ -606,30 +832,60 @@ errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
 ///        ownership, issue #62).  Mirrors alloc_user_page.
 /// @return Physical address, or 0 (asserts on persistent OOM).
 uint64_t PMM::alloc_user_page_colored(uint64_t color) {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        ASSERT(errors::PmmError::PMM_ERR_FROZEN_DENY);
+        return 0;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, 1)) {
+        return 0;
+    }
+#endif
     uint64_t result = try_alloc_colored_user(color);
     if (result) {
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return result;
     }
     bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
+        cur = Scheduler::current_task();
         result = try_alloc_colored_user(color);
     }
     if (!result) {
         ASSERT(errors::PmmError::PMM_ERR_USER_OOM);
     }
-    if (result)
+    if (result) {
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
+    }
     return result;
 }
 
 /// @brief Colored USER alloc with error code (issue #62).
 errors::PmmError PMM::alloc_user_page_colored_err(uint64_t color,
                                                   uint64_t &out_phys_addr) {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        return errors::PMM_ERR_USER_OOM;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, 1)) {
+        return errors::PMM_ERR_USER_OOM;
+    }
+#endif
     uint64_t result = try_alloc_colored_user(color);
     if (result) {
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
@@ -650,23 +906,40 @@ errors::PmmError PMM::alloc_user_page_colored_err(uint64_t color,
 /// @param count Number of pages.
 /// @return Physical address, or 0 (asserts on persistent OOM).
 uint64_t PMM::alloc_user_contiguous(size_t count) {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        ASSERT(errors::PmmError::PMM_ERR_FROZEN_DENY);
+        return 0;
+    }
+#endif
     if (count == 0 || count > total_pages_)
         return 0;
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, count)) {
+        return 0;
+    }
+#endif
     uint64_t result = try_alloc_user(count);
     if (result) {
+        attribute_alloc_to_current(cur, count);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
         return result;
     }
     bool oom_retry = run_oom_handler_locked(lock).retry;
     if (oom_retry) {
+        cur = Scheduler::current_task();
         result = try_alloc_user(count);
     }
     if (!result) {
         ASSERT(errors::PmmError::PMM_ERR_USER_OOM);
     }
-    if (result)
+    if (result) {
+        attribute_alloc_to_current(cur, count);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
+    }
     return result;
 }
 
@@ -714,6 +987,14 @@ void PMM::free_page(uint64_t phys_addr) {
     uint64_t index = phys_addr / PAGE_SIZE;
     if (index >= total_pages_ || index < window_base_page_)
         return;
+    // M4 (#563): a handed-over frame is owned by the mem-mgr Untyped set,
+    // not by the PMM free pool. Freeing it would resurrect it as PMM memory
+    // while a cap still names it (double ownership). Refuse with no state
+    // change (the caller holds a stale reference — fail-closed, counted
+    // by the M4 handover test via the unchanged bitmap).
+    if (handover_owns(index)) {
+        return;
+    }
     if (bitmap_test(index)) {
         bitmap_clear(index);
         ++free_pages_;
@@ -934,9 +1215,22 @@ errors::PmmError PMM::init_err(uint64_t mem_size, uint64_t kernel_start,
 /// @param[out] out_phys_addr Physical address on success.
 /// @return PmmError code.
 errors::PmmError PMM::alloc_page_err(uint64_t &out_phys_addr) {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        return errors::PMM_ERR_OOM;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, 1)) {
+        return errors::PMM_ERR_OOM;
+    }
+#endif
     uint64_t result = try_alloc_kernel(1);
     if (result) {
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
@@ -962,9 +1256,22 @@ errors::PmmError PMM::alloc_contiguous_err(size_t count,
     if (count == 0 || count > total_pages_) {
         return errors::PMM_ERR_INVALID;
     }
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        return errors::PMM_ERR_OOM;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, count)) {
+        return errors::PMM_ERR_OOM;
+    }
+#endif
     uint64_t result = try_alloc_kernel(count);
     if (result) {
+        attribute_alloc_to_current(cur, count);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
@@ -985,9 +1292,22 @@ errors::PmmError PMM::alloc_contiguous_err(size_t count,
 /// @param[out] out_phys_addr Physical address on success.
 /// @return PmmError code.
 errors::PmmError PMM::alloc_user_page_err(uint64_t &out_phys_addr) {
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        return errors::PMM_ERR_USER_OOM;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, 1)) {
+        return errors::PMM_ERR_USER_OOM;
+    }
+#endif
     uint64_t result = try_alloc_user(1);
     if (result) {
+        attribute_alloc_to_current(cur, 1);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
@@ -1013,9 +1333,22 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
     if (count == 0 || count > total_pages_) {
         return errors::PMM_ERR_INVALID;
     }
+#if CONFIG_STATIC_POOLS_ONLY
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        return errors::PMM_ERR_USER_OOM;
+    }
+#endif
     sync::IrqSpinLockGuard lock(pmm_lock_);
+    auto *cur = Scheduler::current_task(); // issue #284: always-on read
+#if CONFIG_MEMORY_BUDGET
+    if (is_over_budget(cur, count)) {
+        return errors::PMM_ERR_USER_OOM;
+    }
+#endif
     uint64_t result = try_alloc_user(count);
     if (result) {
+        attribute_alloc_to_current(cur, count);
         kernel::test::ResourceTracker::instance().track_pmm_alloc(count);
         out_phys_addr = result;
         return errors::PMM_ERR_OK;
@@ -1069,6 +1402,10 @@ errors::PmmError PMM::free_page_err(uint64_t phys_addr) {
     sync::IrqSpinLockGuard lock(pmm_lock_);
     uint64_t index = phys_addr / PAGE_SIZE;
     if (index >= total_pages_ || index < window_base_page_) {
+        return errors::PMM_ERR_INVALID;
+    }
+    // M4 (#563): handover-owned frames are not PMM memory (see free_page).
+    if (handover_owns(index)) {
         return errors::PMM_ERR_INVALID;
     }
     if (bitmap_test(index)) {

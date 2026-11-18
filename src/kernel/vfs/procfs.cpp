@@ -861,9 +861,16 @@ static Vnode *proc_get_root() {
     np = num;
     while (*np)
         tmp[pos++] = *np++;
-    const char *s3 = " kB\n";
+    const char *s3 = " kB\nMemHandover: ";
     while (*s3)
         tmp[pos++] = *s3++;
+    uint64_to_str(num, PMM::handover_bytes() / 1024);
+    np = num;
+    while (*np)
+        tmp[pos++] = *np++;
+    const char *s4 = " kB\n";
+    while (*s4)
+        tmp[pos++] = *s4++;
     tmp[pos] = '\0';
 
     memcpy(meminfo_vnode.content, tmp, pos);

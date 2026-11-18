@@ -603,7 +603,12 @@ uint64_t Syscall::sys_buf_alloc(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     if (!cur)
         return static_cast<uint64_t>(errors::SYS_ERR_OK);
     uint64_t va = arg0;
-    return BufferPool::alloc(*cur, va);
+    // M4 (#563): typed path underneath (exhaustion latches pressure
+    // inside alloc_err); the syscall ABI stays handle-or-0.
+    uint64_t handle = 0;
+    return BufferPool::alloc_err(*cur, va, handle) == errors::BUF_ERR_OK
+               ? handle
+               : static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t Syscall::sys_buf_free(uint64_t arg0, uint64_t, uint64_t, uint64_t,

@@ -37,6 +37,7 @@
 #include <kernel/sync/eventgroup.hpp>
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/memory/kernel_object.hpp>
+#include <kernel/memory/mempool.hpp>
 #include <kernel/task/sporadic_server.hpp>
 #include <signal.hpp>
 
@@ -1395,6 +1396,12 @@ struct TaskControlBlock {
     /// @brief Finds a child by PID.
     TaskControlBlock *find_child(uint64_t pid) noexcept;
 };
+
+// F21 (#573): the TCB must fit the largest MemPool class on every arch
+// (x86_64 8064 B, aarch64 8256 B). A TCB that outgrows the pool cannot be
+// allocated and would fail boot — fail at compile time instead.
+static_assert(sizeof(TaskControlBlock) <= kernel::kMemPoolMaxBlockSize,
+              "TaskControlBlock exceeds largest MemPool class");
 
 // Issue #353: FPU save area must exactly fit the arch save layout and
 // stay 64-byte aligned (the switch asm stores 16-byte vectors).

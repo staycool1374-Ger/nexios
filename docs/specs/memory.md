@@ -159,6 +159,19 @@ Constraints:
   `TaskFields` (a stray write zeroes it permanently) — see `specs/scheduler.md`
   gaps.
 
+### 6.1 Freeze & handover (M4, #563)
+
+- After end-of-composition `PMM::freeze_pools()`, the PMM free pool is
+  closed: post-freeze allocation denies under `CONFIG_STATIC_POOLS_ONLY`
+  (typed errors on the `_err` paths, ASSERT + 0 on the uint64 paths).
+- Handed-over runs stay marked allocated in the bitmap with the handover
+  bit set (see `PMM::handover_owns`); `PMM::free_page` refuses them so a
+  stale free can never resurrect a mem-mgr frame (double-ownership guard).
+- Freeze state + handover table live OUTSIDE the snapshot buffer: the
+  suite baseline is captured post-boot (handover bits already set), so
+  every restore returns to the handed-over state — never to a free pool.
+  `freeze_pools()` is idempotent; tests never trigger a freeze.
+
 ## 7. Memory-Protection Requirements (0.4.x, OPEN)
 
 | Req | Semantics | Status |

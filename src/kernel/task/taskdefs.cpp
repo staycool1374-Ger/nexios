@@ -43,6 +43,8 @@
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/memory/pmm.hpp>
+#include <kernel/memory/untyped_handover.hpp>
 #if defined(CONFIG_ARCH_X86_64)
 #include <kernel/arch/x86_64/hal/smp.hpp>
 #endif
@@ -857,6 +859,23 @@ void reboot_from_table() {
     debug_write_hex(Scheduler::task_count());
     debug_write("\n");
 #endif
+
+    // M4 (#563): freeze kernel pools at end of composition and hand free
+    // memory to the root task as Untyped caps. Single-threaded here (APs
+    // still parked pre-gate); the IrqGuard scope keeps the freeze walk +
+    // cap minting free of timer-ISR PMM interleavings. Handover itself is
+    // switch-gated (CONFIG_MEM_MGR_BOOTSTRAP); the freeze always lands so
+    // CONFIG_STATIC_POOLS_ONLY gets a correct end-of-composition point.
+    {
+        arch::IrqGuard freeze_guard{};
+        kernel::PMM::freeze_pools();
+#if CONFIG_MEM_MGR_BOOTSTRAP
+        if (auto *root = Scheduler::find_task(1)) {
+            (void)kernel::untyped_handover::boot_handover(*root);
+            Scheduler::apply_boot_handover(kernel::PMM::handover_pages());
+        }
+#endif
+    }
 
 #if defined(CONFIG_ARCH_X86_64)
     // Issue #25 C1: publish the AP scheduler start-gate AFTER spawning

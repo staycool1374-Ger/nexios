@@ -1945,6 +1945,14 @@ void Shell::cmd_meminfo(int, const char**) {
     Terminal::write("Total: "); print_size(total); Terminal::putchar('\n');
     Terminal::write("Used: "); print_size(used); Terminal::putchar('\n');
     Terminal::write("Free:   "); print_size(free); Terminal::putchar('\n');
+    // M4 (#563, Q-M4-4 option A): handed-over frames are owned by the
+    // mem-mgr Untyped set, not the PMM — report them separately instead
+    // of redefining Free.
+    uint64_t handed = kernel::PMM::handover_bytes();
+    if (handed > 0) {
+        Terminal::write("Handover: "); print_size(handed);
+        Terminal::write(" (mem-mgr Untyped)\n");
+    }
 
     // Page-table pool
     uint64_t pt_start = kernel::PMM::pool_start();

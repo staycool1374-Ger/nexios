@@ -68,6 +68,12 @@ class BufferPool {
     /// task's address space.
     /// @return handle, or 0 on failure.
     [[nodiscard]] static uint64_t alloc(TaskControlBlock &task, uint64_t virt_addr) noexcept;
+    /// @brief Allocate a buffer with a typed error (M4, #563). Same contract
+    ///        as alloc(); 0-handle failures report the BufPoolError instead
+    ///        of collapsing to 0. The ABI stays handle-or-0.
+    [[nodiscard]] static errors::BufPoolError
+    alloc_err(TaskControlBlock &task, uint64_t virt_addr,
+              uint64_t &out_handle) noexcept;
 
     /// @brief Free a buffer: unmap, deref, return to pool.
     [[nodiscard]] static bool free(TaskControlBlock &task, uint64_t handle) noexcept;

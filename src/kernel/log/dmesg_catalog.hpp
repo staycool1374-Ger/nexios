@@ -244,6 +244,19 @@ constexpr DmesgRecord kDmesgCatalog_TIMING[] = {
 constexpr DmesgRecord kDmesgCatalog_PMM[] = {
     {ErrorSubsystem::PMM, kDmesgBase_PMM + 1, LogSeverity::WARN,
      "Memory: leak suspected"},
+    {ErrorSubsystem::PMM, kDmesgBase_PMM + 2, LogSeverity::ERROR,
+     "Memory: post-freeze allocation denied (STATIC_POOLS_ONLY)"},
+    {ErrorSubsystem::PMM, kDmesgBase_PMM + 3, LogSeverity::INFO,
+     "Memory: Untyped handover complete"},
+    {ErrorSubsystem::PMM, kDmesgBase_PMM + 4, LogSeverity::ERROR,
+     "Memory: unstable-state pressure latch (R-MEM)"},
+};
+
+/// @brief BufferPool records (canonical base kDmesgBase_BUFPOOL): M4
+/// handover-era exhaustion reports (no PMM fallback path remains).
+constexpr DmesgRecord kDmesgCatalog_BUFPOOL[] = {
+    {ErrorSubsystem::BUFPOOL, kDmesgBase_BUFPOOL + 1, LogSeverity::ERROR,
+     "BufferPool: cache exhausted, no PMM fallback"},
 };
 
 /// @brief Selftest records (canonical base kDmesgBase_TEST): leak and
@@ -303,6 +316,11 @@ inline const DmesgRecord *catalog_lookup(ErrorSubsystem subsys,
     case ErrorSubsystem::PMM:
         table = kDmesgCatalog_PMM;
         count = sizeof(kDmesgCatalog_PMM) / sizeof(kDmesgCatalog_PMM[0]);
+        break;
+    case ErrorSubsystem::BUFPOOL:
+        table = kDmesgCatalog_BUFPOOL;
+        count = sizeof(kDmesgCatalog_BUFPOOL) /
+                sizeof(kDmesgCatalog_BUFPOOL[0]);
         break;
     default:
         return nullptr;

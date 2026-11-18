@@ -64,7 +64,30 @@ class PMM {
     /// @brief Mark the PMM as fully initialized (post-boot).
     /// After this call, alloc_page() checks CONFIG_STATIC_POOLS_ONLY
     /// and panics/returns 0 if a dynamic allocation is attempted.
+    /// Deprecated alias of freeze_pools() (M4 moved the freeze point to
+    /// the end of composition; kept one milestone for out-of-tree users).
     static void mark_init_done();
+
+    /// @brief Freeze kernel pools at end of composition (M4, #563).
+    /// Idempotent; refuses a second invocation's state change. Takes
+    /// pmm_lock_ internally; never nests with mempool/CNode locks.
+    /// Under CONFIG_STATIC_POOLS_ONLY every post-freeze entry point
+    /// denies; handover accounting is live in all builds.
+    static void freeze_pools() noexcept;
+    /// @brief True once freeze_pools() has run.
+    static bool is_frozen() noexcept;
+    /// @brief Pages handed over to the mem-mgr Untyped set (0 pre-freeze).
+    static uint64_t handover_pages() noexcept;
+    /// @brief Handover bytes (pages × PAGE_SIZE), for meminfo/shell rows.
+    static uint64_t handover_bytes() noexcept;
+    /// @brief Free-but-kernel-retained pages at freeze (reserve + surplus).
+    static uint64_t handover_retained_pages() noexcept;
+    /// @brief Handover run count (capped at CONFIG_MEM_HANDOVER_MAX_RUNS).
+    static uint32_t handover_run_count() noexcept;
+    /// @brief Physical address of handover run @p idx (0 if out of range).
+    static uint64_t handover_run_phys(uint32_t idx) noexcept;
+    /// @brief Page count of handover run @p idx (0 if out of range).
+    static uint64_t handover_run_pages(uint32_t idx) noexcept;
 
     /// @brief Allocates a single 4 KiB page (KERNEL ownership).
     static uint64_t alloc_page();
