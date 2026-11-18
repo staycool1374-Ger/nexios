@@ -350,6 +350,19 @@ void Scheduler::reset_orphan_rescue_count_for_test() noexcept {
     __atomic_store_n(&orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
+void Scheduler::clear_park_test_members() noexcept {
+    SchedulerLockGuard guard(scheduler_lock_);
+    uint64_t scanned = 0;
+    for (auto *t = all_tasks_.first_ptr();
+         t != nullptr && scanned < CONFIG_MAX_TASKS;
+         t = all_tasks_.next_ptr(t)) {
+        ++scanned;
+        if (t->magic != TaskControlBlock::TCB_MAGIC)
+            continue;
+        t->park_test_member = false;
+    }
+}
+
 uint64_t Scheduler::ipc_wake_rescue_count() noexcept {
     return __atomic_load_n(&ipc_wake_rescue_count_, __ATOMIC_RELAXED);
 }

@@ -177,6 +177,13 @@ bool g_filter_bench = false;
 bool g_class_auto_shutdown = false;
 bool g_vfs_touched = false;
 uint64_t g_kernel_entry_ns = 0;
+// #578 park-test seam storage (DEBUG-only; absent in release so the
+// release ELF carries no seam state — accessors are constants there).
+#if defined(CONFIG_DEBUG)
+bool g_park_test_ctx[CONFIG_MAX_CPUS] = {};
+uint64_t g_park_test_ctx_waive_count = 0;
+uint64_t g_park_test_ctx_unexpected_count = 0;
+#endif
 } // namespace test
 
 } // namespace kernel
@@ -304,6 +311,60 @@ uint64_t get_kernel_entry_ns() noexcept {
 
 void set_kernel_entry_ns() noexcept {
     test::g_kernel_entry_ns = arch::Timer::ns();
+}
+
+bool get_park_test_ctx() noexcept {
+#if defined(CONFIG_DEBUG)
+    return test::g_park_test_ctx[arch::cpu_index() % CONFIG_MAX_CPUS];
+#else
+    return false;
+#endif
+}
+
+bool set_park_test_ctx(bool value) noexcept {
+#if defined(CONFIG_DEBUG)
+    // The flag is meaningless outside an active suite: setting it there
+    // would arm waiver checks with no scope owning the teardown.
+    if (!Scheduler::is_test_active())
+        return false;
+    test::g_park_test_ctx[arch::cpu_index() % CONFIG_MAX_CPUS] = value;
+    return true;
+#else
+    (void)value;
+    return false;
+#endif
+}
+
+uint64_t park_test_ctx_waive_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&test::g_park_test_ctx_waive_count,
+                           __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+void note_park_test_ctx_waive() noexcept {
+#if defined(CONFIG_DEBUG)
+    __atomic_fetch_add(&test::g_park_test_ctx_waive_count, 1,
+                       __ATOMIC_RELAXED);
+#endif
+}
+
+uint64_t park_test_ctx_unexpected_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&test::g_park_test_ctx_unexpected_count,
+                           __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+void note_park_test_ctx_unexpected() noexcept {
+#if defined(CONFIG_DEBUG)
+    __atomic_fetch_add(&test::g_park_test_ctx_unexpected_count, 1,
+                       __ATOMIC_RELAXED);
+#endif
 }
 
 // ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@
 #include <kernel/memory/tlb_shootdown.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/test/resource_tracker.hpp>
+#include <kernel/test/park_seam.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <signal.hpp>
 #include <lib/logger.hpp>
@@ -1257,11 +1258,23 @@ uint64_t resched_park_gate_base(bool entry_if) noexcept {
         why |= 1ULL << 0;
     if (CONFIG_TICK_HZ == 0)
         why |= 1ULL << 1;
-    if (arch::irq_guard_depth_own() != 0)
+    // #578 test-context waiver: evaluated pre-guard (the arm below takes an
+    // IrqGuard, so gate_task can no longer observe the entry depth). The
+    // waiver excuses bits 2 (harness-phantom depth) and 4 (stale nesting
+    // at IF==1) for a marked task under an armed seam — every other bit,
+    // and gate_task's task checks (harness/impersonation denials intact),
+    // still applies. See park_ctx_waivable() for the full conjunction.
+    auto *gate_task_cur = Scheduler::current_task();
+    const bool waived =
+        gate_task_cur != nullptr &&
+        gate_task_cur->magic == TaskControlBlock::TCB_MAGIC &&
+        test::park_ctx_waivable(*gate_task_cur);
+    if (arch::irq_guard_depth_own() != 0 && !waived)
         why |= 1ULL << 2;
     if (sync::spinlock_held_by_current_count() != 0)
         why |= 1ULL << 3;
-    if (kernel::isr_nesting_own() != 0 && !arch::in_syscall_trap_level())
+    if (kernel::isr_nesting_own() != 0 && !arch::in_syscall_trap_level() &&
+        !waived)
         why |= 1ULL << 4;
     if (!entry_if && !arch::in_syscall_trap_level())
         why |= 1ULL << 5;
@@ -1327,6 +1340,15 @@ void resched_park_until_dispatched(TaskControlBlock &t,
 #endif
 #if defined(CONFIG_DEBUG)
     __atomic_fetch_add(&g_resched_park_entries, 1, __ATOMIC_RELAXED);
+    // #578 seam accounting. A marked task parking under an armed seam is
+    // the expected waiver (waive count). A park under an open window by
+    // an UNMARKED task falsifies the per-TCB narrowing (OQ3) — count it
+    // (the park itself stays correct; the counter is the tripwire and
+    // must stay 0).
+    if (test::park_ctx_waivable(t))
+        gs::note_park_test_ctx_waive();
+    else if (!t.park_test_member && test::park_ctx_window_open())
+        gs::note_park_test_ctx_unexpected();
 #endif
     for (;;) {
         if (t.state != TaskState::BLOCKED)

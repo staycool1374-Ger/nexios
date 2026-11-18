@@ -24,6 +24,8 @@
 #include <string.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/test/park_seam.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/test/test_isolate.hpp>
@@ -354,7 +356,38 @@ static void run_one(const TestCase& tc, const char* test_class, size_t test_num,
     kernel::test::ResourceTracker::instance().capture(before_rsrc);
     size_t before_fail = Registry::failed();
 
-    if (tc.factory) {
+    // #578 park-test seam (DEBUG-only opt-in per test). The scope arms
+    // before the body and disarms before the after_rsrc capture; the
+    // armed window never crosses a test boundary (snapshot_restore
+    // asserts the same). A flagged test in a build without the seam
+    // (release) is a harness error, recorded — never silently skipped.
+    const bool want_seam =
+        (tc.flags & kernel::test::TF_PARK_DEPTH0) != 0;
+    if (want_seam && !kernel::test::park_seam_supported()) {
+        Registry::record_failure("run_one", 0, "TF_PARK_DEPTH0 without seam");
+    } else if (want_seam) {
+        const uint64_t seam_depth_entry = arch::irq_guard_depth_own();
+        {
+            kernel::test::ParkSeamScope seam;
+            if (!seam.armed()) {
+                Registry::record_failure("run_one", 0,
+                                         "park seam failed to arm");
+            } else if (tc.factory) {
+                TestBase* t = tc.factory();
+                t->execute();
+                delete t;
+            } else {
+                tc.func();
+            }
+        } // dtor disarms here, before the after_rsrc capture below
+        if (kernel::test::park_seam_active()) {
+            Registry::record_failure("run_one", 0, "park seam leaked armed");
+        }
+        if (arch::irq_guard_depth_own() != seam_depth_entry) {
+            Registry::record_failure("run_one", 0,
+                                     "park seam depth not restored");
+        }
+    } else if (tc.factory) {
         TestBase* t = tc.factory();
         t->execute();
         delete t;

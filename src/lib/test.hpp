@@ -39,6 +39,10 @@ enum TestFlags : uint8_t {
     TF_RELEASE  = 1 << 0,
     TF_USER     = 1 << 1,
     TF_BENCH    = 1 << 2,
+    // #578 park-test seam: run the body inside an armed ParkSeamScope
+    // (depth-0 timed-park coverage). DEBUG-only; never combined with
+    // class/aggregate semantics — per-test opt-in, asserted by run_one.
+    TF_PARK_DEPTH0 = 1 << 3,
 };
 
 class TestBase;

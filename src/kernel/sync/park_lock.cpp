@@ -2,6 +2,7 @@
 /// @brief Bounded spin → timed park acquisition (M2, issues #545/#546).
 
 #include <kernel/sync/park_lock.hpp>
+#include <kernel/test/park_seam.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_order.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
@@ -160,15 +161,27 @@ static ParkDenyReason deny_reason() noexcept {
         !arch::interrupts_enabled())
         return ParkDenyReason::IsrContext;
     if (arch::irq_guard_depth_own() != 0) {
-        // INV-L4 (#545 FIRE, convicted H1a/V1): a depth owned by a foreign
-        // context is diagnostic-only, never a denial when allowed — the
-        // syscall trap path holds no IrqGuard, so any depth seen there is
-        // foreign/leaked.  Owner 0 (unknown/boot) and the own token stay
-        // denied (fail-closed).
-        const uint64_t owner = arch::irq_guard_owner_own();
-        if (owner != 0 && owner != arch::irq_guard_owner_token())
-            return ParkDenyReason::ForeignGuard;
-        return ParkDenyReason::IrqGuarded;
+        // #578 test-context waiver: a harness-phantom depth (the suite's
+        // outer IrqGuard, not a live critical section — IF==1 proves it)
+        // does not deny a marked task under an armed seam. Every other arm
+        // below still runs and still denies. Falls through (no early
+        // return) so LockHeld + task-validity arms are always enforced.
+        auto *waive_task = Scheduler::current_task();
+        const bool waived =
+            waive_task != nullptr &&
+            waive_task->magic == TaskControlBlock::TCB_MAGIC &&
+            test::park_ctx_waivable(*waive_task);
+        if (!waived) {
+            // INV-L4 (#545 FIRE, convicted H1a/V1): a depth owned by a
+            // foreign context is diagnostic-only, never a denial when
+            // allowed — the syscall trap path holds no IrqGuard, so any
+            // depth seen there is foreign/leaked.  Owner 0 (unknown/boot)
+            // and the own token stay denied (fail-closed).
+            const uint64_t owner = arch::irq_guard_owner_own();
+            if (owner != 0 && owner != arch::irq_guard_owner_token())
+                return ParkDenyReason::ForeignGuard;
+            return ParkDenyReason::IrqGuarded;
+        }
     }
     if (spinlock_held_by_current_count() != 0)
         return ParkDenyReason::LockHeld;
@@ -489,7 +502,16 @@ ParkLockGuard::ParkLockGuard(SpinLock &lock, const char *site) noexcept
     if (arch::irq_guard_depth_own() != 0) {
         // Admitted on a foreign-owned depth (INV-L4): the depth check in
         // the predicate already proved foreign (allowed + depth live).
-        __atomic_fetch_add(&g_foreign_depth_count, 1, __ATOMIC_RELAXED);
+        // #578: a waived harness phantom is not a foreign scope — the
+        // g_foreign_depth_count diagnostic must not absorb it (it would
+        // hide the #545 FIRE signal behind seam traffic).
+        auto *park_task = Scheduler::current_task();
+        const bool waived =
+            park_task != nullptr &&
+            park_task->magic == TaskControlBlock::TCB_MAGIC &&
+            test::park_ctx_waivable(*park_task);
+        if (!waived)
+            __atomic_fetch_add(&g_foreign_depth_count, 1, __ATOMIC_RELAXED);
     }
     auto *task = Scheduler::current_task();
     // ns per park cycle, saturating (grace ~ms fits u64 trivially).

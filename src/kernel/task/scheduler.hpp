@@ -404,6 +404,9 @@ class Scheduler {
     static uint64_t orphan_rescue_count() noexcept;
     /// @brief Reset the flagged-orphan rescue counter (test isolation).
     static void reset_orphan_rescue_count_for_test() noexcept;
+    /// @brief Clear every task's #578 park-test membership (seam teardown).
+    ///        Bounded validity-guarded walk under scheduler_lock_.
+    static void clear_park_test_members() noexcept;
     /// @brief Depth spread that triggers migration (issue #61).
     static constexpr uint64_t BALANCER_THRESHOLD = 2;
     /// @brief Migration cap per tick (issue #61, RT budget bound).

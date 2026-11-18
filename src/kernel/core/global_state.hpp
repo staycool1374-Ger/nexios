@@ -248,6 +248,25 @@ void mark_vfs_touched(bool v) noexcept;
 /// @brief Timer::ns() snapshot at kernel entry (timing printout).
 uint64_t get_kernel_entry_ns() noexcept;
 void set_kernel_entry_ns() noexcept;
+/// @brief #578 park-test seam flag (own CPU). True while a ParkSeamScope
+///        is armed on this CPU. DEBUG-only; always false in release.
+///        Per project rule this is the single definition point for the
+///        cross-TU flag — production files must not define their own.
+bool get_park_test_ctx() noexcept;
+/// @brief Set the own-CPU park-test seam flag. Rejected (returns false)
+///        unless the test suite is active; the flag is meaningful only
+///        inside an armed ParkSeamScope on the arming CPU.
+bool set_park_test_ctx(bool value) noexcept;
+/// @brief Park-test seizures: parks entered through the seam waiver.
+///        Detection-first telemetry; must read 0 outside flagged tests.
+uint64_t park_test_ctx_waive_count() noexcept;
+void note_park_test_ctx_waive() noexcept;
+/// @brief Park attempts that reached the seam window while unmarked
+///        (OQ3 per-TCB narrowing): gate bits waived cpu-wide but the
+///        parking task carries no membership. Fail-closed denials stay
+///        invisible; only actual unmarked parks count here.
+uint64_t park_test_ctx_unexpected_count() noexcept;
+void note_park_test_ctx_unexpected() noexcept;
 
 // ---------------------------------------------------------------------------
 // VfsState — cross-module FAT32 partition pointer

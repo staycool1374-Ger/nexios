@@ -891,6 +891,16 @@ void snapshot_restore(const char *test_name) {
         Logger::raw_write(test_name ? test_name : "?");
         Logger::raw_write("\"\n");
     }
+    // Issue #578: the park-test seam must never cross a test boundary. An
+    // armed flag here means a ParkSeamScope leaked past run_one (its dtor
+    // disarms + the scope asserts post-conditions). Log-only, same shape
+    // as the IF=0 invariant above — restore rewinds the flag storage
+    // regardless, so this is detection, not enforcement.
+    if (kernel::gs::get_park_test_ctx()) {
+        Logger::raw_write("[IRQ-INV] snapshot_restore with park seam armed at \"");
+        Logger::raw_write(test_name ? test_name : "?");
+        Logger::raw_write("\"\n");
+    }
 #endif
 
     // Check canaries around nu field — corruption means a stray write

@@ -392,6 +392,10 @@ ISR-reachability audit (all task-context; `Keyboard::try_forward_to_iocd`
 as the fenced precedent). Full instance:
 `docs/specs/irq-preemption-contract.md`; ledger:
 `docs/irqguard-ledger.md` §"Lock order and acquisition ranks".
+Park legs are QE-reachable under the #578 test context (waiver predicate
+in `kernel/test/park_seam.hpp`; per-TCB marked members only; depth-1
+suite premise unchanged for unflagged tests): timed-park entry asserts
+`park_seam_active()`, gate-negative legs keep their denied counters.
 
 ## 7. Static architecture, resources and budgets
 
