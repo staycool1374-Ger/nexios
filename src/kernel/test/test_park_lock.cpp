@@ -291,44 +291,51 @@ JARVIS_TEST(irq_contract_no_spinlock_at_reschedule, "PRE: none | POST: none") {
 //        Sched(1)->Queue(2)->Leaf(3) nested (clean).
 // Expect: violations[Queue][Sched]==1; all legal-pair counters 0.
 // Depends: spinlock_note_acquire order check, violation accessors + reset
+// Note (#584): the reset->assert window runs under IrqGuard so timer-tick
+// ISRs (scheduler_lock_ try_lock, rank Sched) cannot bump viol[Queue][Sched]
+// mid-window; without the guard x86_64 TCG alignment lands 2 ticks in the
+// window (count 3, not 1).
 JARVIS_TEST(lock_order_violation_reported, "PRE: none | POST: none") {
     sync::spinlock_order_reset_for_test();
     {
-        // Illegal: outer Queue(2) taken before inner Sched(1).
-        sync::SpinLock outer(sync::LockRank::Queue);
-        sync::SpinLock inner(sync::LockRank::Sched);
-        outer.lock();
-        inner.lock();
-        JARVIS_ASSERT_EQ(
-            1ULL, sync::spinlock_violation_count(
-                      static_cast<uint8_t>(sync::LockRank::Queue),
-                      static_cast<uint8_t>(sync::LockRank::Sched)));
-        inner.unlock();
-        outer.unlock();
-    }
-    {
-        // Legal: strictly increasing Sched(1) -> Queue(2) -> Leaf(3).
-        sync::SpinLock sched(sync::LockRank::Sched);
-        sync::SpinLock queue(sync::LockRank::Queue);
-        sync::SpinLock leaf(sync::LockRank::Leaf);
-        sched.lock();
-        queue.lock();
-        leaf.lock();
-        JARVIS_ASSERT_EQ(
-            0ULL, sync::spinlock_violation_count(
-                      static_cast<uint8_t>(sync::LockRank::Sched),
-                      static_cast<uint8_t>(sync::LockRank::Queue)));
-        JARVIS_ASSERT_EQ(
-            0ULL, sync::spinlock_violation_count(
-                      static_cast<uint8_t>(sync::LockRank::Queue),
-                      static_cast<uint8_t>(sync::LockRank::Leaf)));
-        JARVIS_ASSERT_EQ(
-            0ULL, sync::spinlock_violation_count(
-                      static_cast<uint8_t>(sync::LockRank::Sched),
-                      static_cast<uint8_t>(sync::LockRank::Leaf)));
-        leaf.unlock();
-        queue.unlock();
-        sched.unlock();
+        arch::IrqGuard irq_guard{};
+        {
+            // Illegal: outer Queue(2) taken before inner Sched(1).
+            sync::SpinLock outer(sync::LockRank::Queue);
+            sync::SpinLock inner(sync::LockRank::Sched);
+            outer.lock();
+            inner.lock();
+            JARVIS_ASSERT_EQ(
+                1ULL, sync::spinlock_violation_count(
+                          static_cast<uint8_t>(sync::LockRank::Queue),
+                          static_cast<uint8_t>(sync::LockRank::Sched)));
+            inner.unlock();
+            outer.unlock();
+        }
+        {
+            // Legal: strictly increasing Sched(1) -> Queue(2) -> Leaf(3).
+            sync::SpinLock sched(sync::LockRank::Sched);
+            sync::SpinLock queue(sync::LockRank::Queue);
+            sync::SpinLock leaf(sync::LockRank::Leaf);
+            sched.lock();
+            queue.lock();
+            leaf.lock();
+            JARVIS_ASSERT_EQ(
+                0ULL, sync::spinlock_violation_count(
+                          static_cast<uint8_t>(sync::LockRank::Sched),
+                          static_cast<uint8_t>(sync::LockRank::Queue)));
+            JARVIS_ASSERT_EQ(
+                0ULL, sync::spinlock_violation_count(
+                          static_cast<uint8_t>(sync::LockRank::Queue),
+                          static_cast<uint8_t>(sync::LockRank::Leaf)));
+            JARVIS_ASSERT_EQ(
+                0ULL, sync::spinlock_violation_count(
+                          static_cast<uint8_t>(sync::LockRank::Sched),
+                          static_cast<uint8_t>(sync::LockRank::Leaf)));
+            leaf.unlock();
+            queue.unlock();
+            sched.unlock();
+        }
     }
     JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
     JARVIS_ASSERT_EQ(0ULL, sync::spinlock_unpaired_release_count());
