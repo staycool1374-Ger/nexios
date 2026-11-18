@@ -56,6 +56,7 @@ using sched_admission::LIU_LEYLAND_BOUNDS;
 using sched_admission::LIU_LEYLAND_LIMIT;
 using sched_admission::LIU_LEYLAND_MAX_TASKS;
 using sched_admission::server_budget_for_admission;
+using sched_queue::edf_detach;
 using sched_queue::edf_remove;
 using sched_verify::validate_task_ptr;
 
@@ -85,6 +86,12 @@ TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
 uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
 uint64_t Scheduler::stuck_rescue_count_ = {};
 uint64_t Scheduler::orphan_rescue_count_ = {};
+// Issue #582 INV-RQ-3 oracles + §5.5 miss-path counters (see hpp).
+uint64_t Scheduler::runq_link_flag_desync_count_ = {};
+uint64_t Scheduler::runq_desync_forced_clear_ = {};
+uint64_t Scheduler::restore_drop_rebuilt_ = {};
+uint64_t Scheduler::rqm_enqueue_refused_already_ = {};
+uint64_t Scheduler::rqm_enqueue_refused_invalid_ = {};
 // M2 follow-up (#545 SILENT): IPC-wake rescue detector (see hpp contract).
 uint64_t Scheduler::ipc_wake_rescue_count_ = {};
 uint64_t Scheduler::loadavg_1min_ = 0;
@@ -350,6 +357,54 @@ void Scheduler::reset_orphan_rescue_count_for_test() noexcept {
     __atomic_store_n(&orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
+uint64_t Scheduler::runq_link_flag_desync_count() noexcept {
+    return __atomic_load_n(&runq_link_flag_desync_count_, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::runq_desync_forced_clear_count() noexcept {
+    return __atomic_load_n(&runq_desync_forced_clear_, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::restore_drop_rebuilt_count() noexcept {
+    return __atomic_load_n(&restore_drop_rebuilt_, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::rqm_enqueue_refused_already_count() noexcept {
+    return __atomic_load_n(&rqm_enqueue_refused_already_, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::rqm_enqueue_refused_invalid_count() noexcept {
+    return __atomic_load_n(&rqm_enqueue_refused_invalid_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::note_rqm_enqueue_refused_already() noexcept {
+    __atomic_fetch_add(&rqm_enqueue_refused_already_, 1ULL, __ATOMIC_RELAXED);
+}
+
+void Scheduler::note_rqm_enqueue_refused_invalid() noexcept {
+    __atomic_fetch_add(&rqm_enqueue_refused_invalid_, 1ULL, __ATOMIC_RELAXED);
+}
+
+void Scheduler::note_runq_desync_forced_clear() noexcept {
+    __atomic_fetch_add(&runq_desync_forced_clear_, 1ULL, __ATOMIC_RELAXED);
+}
+
+void Scheduler::note_restore_drop_rebuilt() noexcept {
+    __atomic_fetch_add(&restore_drop_rebuilt_, 1ULL, __ATOMIC_RELAXED);
+}
+
+void Scheduler::note_runq_link_flag_desync() noexcept {
+    __atomic_fetch_add(&runq_link_flag_desync_count_, 1ULL, __ATOMIC_RELAXED);
+}
+
+void Scheduler::runq_desync_reset_for_test() noexcept {
+    __atomic_store_n(&runq_link_flag_desync_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&runq_desync_forced_clear_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&restore_drop_rebuilt_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&rqm_enqueue_refused_already_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&rqm_enqueue_refused_invalid_, 0ULL, __ATOMIC_RELAXED);
+}
+
 void Scheduler::clear_park_test_members() noexcept {
     SchedulerLockGuard guard(scheduler_lock_);
     uint64_t scanned = 0;
@@ -502,14 +557,16 @@ void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
             }
             if (task.in_ready_queue_) {
                 rq_for(target).remove(task, task.rq_priority_);
-                task.in_ready_queue_ = false;
             }
             if (task.in_edf_queue_)
                 edf_remove(task, target);
             return;
         }
-        task.in_ready_queue_ = false;
-        rq_for(target).enqueue(task, effective_priority(&task));
+        // Typed commit (remove cleared flag+links+prio internally):
+        // refusals are counted + reported, never silent.
+        note_runq_enqueue_outcome(
+            rq_for(target).enqueue(task, effective_priority(&task)), task,
+            target);
         return;
     }
     enqueue_ready(task);
@@ -593,9 +650,9 @@ void Scheduler::register_task(TaskControlBlock &task) {
     if (task.period_ticks > 0 && task.deadline_ticks > 0) {
         deadline_list_.insert(task);
     }
-    task.in_ready_queue_ = false;
-    task.runq_next_ = nullptr;
-    task.runq_prev_ = nullptr;
+    // Issue #582: typed detach (fresh TCB — splice no-ops, membership
+    // cleared as one unit) instead of raw field writes.
+    rq_for(queue_target(task)).detach(task);
     // Issue #542: no track_task_add here — birth accounting lives in the
     // TCB factories (init_task_common/clone/spawn_thread); registration
     // is not accounting.
@@ -615,12 +672,10 @@ void Scheduler::add_task(TaskControlBlock &task) {
     // Issue #19: route through enqueue_ready so EDF-eligible tasks land in
     // the deadline-ordered list.  A direct bitmap enqueue here would make
     // every new deadline task priority-dispatched (EDF silently dead).
-    task.in_ready_queue_ = false;
-    task.runq_next_ = nullptr;
-    task.runq_prev_ = nullptr;
-    task.in_edf_queue_ = false;
-    task.edf_next_ = nullptr;
-    task.edf_prev_ = nullptr;
+    // Issue #582: typed detaches (fresh TCB — splices no-op, membership
+    // cleared as one unit) instead of raw field writes.
+    rq_for(queue_target(task)).detach(task);
+    edf_detach(task);
     enqueue_ready(task);
     // Issue #542: no track_task_add here (see register_task).
 
@@ -834,12 +889,9 @@ SchedulerError Scheduler::add_task_err(TaskControlBlock &task) {
     // Issue #19/#20: single routing point via enqueue_ready (the old direct
     // bitmap enqueue was EDF-blind — every deadline task dispatched by
     // priority).  id_table_ membership precedes enqueue (H2 orphan guard).
-    task.in_ready_queue_ = false;
-    task.runq_next_ = nullptr;
-    task.runq_prev_ = nullptr;
-    task.in_edf_queue_ = false;
-    task.edf_next_ = nullptr;
-    task.edf_prev_ = nullptr;
+    // Issue #582: typed detaches (fresh TCB) instead of raw field writes.
+    rq_for(queue_target(task)).detach(task);
+    edf_detach(task);
     enqueue_ready(task);
     // Issue #542: no track_task_add here (see register_task).
     return SCHED_ERR_OK;

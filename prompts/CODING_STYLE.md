@@ -236,6 +236,28 @@ context — mixing plain reads with `atomic_store` on the same index is UB
 (data race), even when "one side is the only writer". SPSC rings: declare
 indices atomic everywhere or document single-threaded ownership explicitly.
 
+### 11.7 Deferred-Switch Apply Gate & Park Latch (issue #582)
+- **INV-APPLY-1:** an ISR epilogue may apply a deferred switch only when the
+  interrupted context holds no `scheduler_lock_` take — both
+  `scheduler_lock_depth_own() == 0` AND `Scheduler::scheduler_lock_held()`
+  must hold (each conjunct alone leaves an unmarked-but-locked window).
+  Fail direction is **defer** (return 2, arm untouched), never apply and
+  never cancel. Per-arch branch widenings route a 2 to the arm-preserving
+  restore path; no new calls, no new preserved registers.
+- **INV-APPLY-3:** `force_apply` never overrides a deny. Deny-and-rearm
+  keeps the arm AND the force bit; all force clears are C-side (apply,
+  validator abort, RMS CLR, AP reset).
+- **INV-PARK-2:** no context owning a `scheduler_lock_` take may enter
+  either park (`ParkDenyReason::SchedLock` + latch in `deny_reason()`).
+  A BLOCKED runner that `reschedule()` does not park is latched; service
+  is hook-at-release (plain task context) or tick-only; the escalation
+  clock is monotonic (rearm can never restart it) and 8 covered instants
+  fail closed (SCHED+17 + bounded dump + panic).
+- **INV-RQ-1/2:** link/flag/prio writes live only in `TaskQueue`, each one
+  IRQ-atomic unit; enqueue refusals are typed and leave the TCB
+  byte-identical. A latch/queue class tag used only for diagnostics must
+  never be read by any gate/service/escalation/panic path.
+
 ## 12. Shared Resource & TCB Lifecycles
 
 ### 12.1 Dead-State Filter: REAPED and TERMINATED

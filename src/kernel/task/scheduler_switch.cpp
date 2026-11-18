@@ -277,10 +277,10 @@ void Scheduler::set_current(TaskControlBlock &task) noexcept {
         // unowned TCB stays current-resumable via set_current_ptr below
         // but never enters dispatch.
         if (Scheduler::find_task(old->id) != old) {
-            old->in_ready_queue_ = false;
+            // Issue #582 INV-RQ-2: the refusal leaves the TCB byte-identical
+            // (no defensive flag write — the TCB is not owned here).  A
+            // stale flag trips the typed AlreadyQueued refusal + sweep.
         } else {
-            old->in_ready_queue_ = false;
-            old->rq_priority_ = 0;
             old->ready_deferred_ = false;
             enqueue_ready_inner(*old);
         }
@@ -483,8 +483,10 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         // INV-4 leftover cannot strand it.
         if (current == &next) {
             next.state = TaskState::RUNNING;
-            next.in_ready_queue_ = false;
-            next.rq_priority_ = 0;
+            // Issue #582: typed detach (splices when contained, then
+            // clears flag+links+prio as one unit) instead of raw field
+            // writes — a merely-flag-cleared node would desync.
+            Scheduler::rq_task(next).detach(next);
             release_lock();
             return;
         }
@@ -698,8 +700,9 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
                 // the timer ISR sets it via set_current_task after the real swap
                 // lands.
                 next.state = TaskState::RUNNING;
-                next.in_ready_queue_ = false;
-                next.rq_priority_ = 0;
+                // Issue #582: typed detach (see the owner-resolved
+                // no-op above) instead of raw field writes.
+                Scheduler::rq_task(next).detach(next);
             } else {
                 // D2 fix (INV-2 / VIOL-5): next_task() already dequeued `next`
                 // from the runq.  The old comment claimed "the bad task stays
@@ -1091,6 +1094,30 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
         }
         __atomic_store_n(&Scheduler::SwSlots::save_rsp_to(), save_target,
                          __ATOMIC_RELEASE);
+        // Issue #582 B.3 / INV-APPLY-3: arm-time detection (detection ONLY).
+        // Publishing a terminate-driven arm while a scheduler_lock_ take is
+        // outstanding means the B window is open on this path.  Count it
+        // with a one-shot line — no recovery (SpinLock::holder_ carries no
+        // TCB identity), no fatal here; the apply-side deadline escalation
+        // (INV-APPLY-2) owns the bound.
+        if (scheduler_lock_depth_own() != 0) {
+            gs::note_apply_term_hold();
+            if (!gs::apply_term_hold_announced_swap()) {
+                kernel::Logger::raw_write("[S582-TERM-HOLD] id=");
+                kernel::Logger::print_dec(next->id);
+                kernel::Logger::raw_write(" st=");
+                kernel::Logger::print_dec(
+                    static_cast<uint64_t>(exiting.state));
+                kernel::Logger::raw_write(" depth=");
+                kernel::Logger::print_dec(scheduler_lock_depth_own());
+                kernel::Logger::raw_write(" tick=");
+                kernel::Logger::print_dec(arch::Timer::ticks());
+                kernel::Logger::raw_write(" ra=0x");
+                kernel::Logger::print_hex(reinterpret_cast<uint64_t>(
+                    __builtin_return_address(0)));
+                kernel::Logger::raw_write("\n");
+            }
+        }
         // Issue #221: terminate-driven arms force-apply (see SwSlots doc).
         __atomic_store_n(&Scheduler::SwSlots::force_apply(), (uint64_t)1,
                          __ATOMIC_RELEASE);
@@ -1117,6 +1144,16 @@ void Scheduler::switch_away_from_terminating(TaskControlBlock &exiting) noexcept
 ///        The arch-specific apply trigger (self-IPI/SGI/SSIP) is the
 ///        caller's job after a true return; the trap epilogue applies the
 ///        arm at depth 2 (INV-MK-5: never applied inline here).
+///        Issue #582 INV-APPLY-1: the arm below is published while this
+///        function's own SchedulerLockGuard is alive (the guard must stay
+///        taken across switch_to_task's IRQ-off publish — releasing first
+///        would open the T4b nested-tick overwrite window).  That window is
+///        legal and counted (note_arm_under_lock); the danger is only an
+///        ISR applying the arm while the holder is still suspended, which
+///        the epilogue gate refuses (defer, never apply).  Rationale for
+///        mark-after-take / clear-before-release: an observer must never
+///        see a taken-but-unmarked slot (a same-CPU re-take then trips the
+///        entry ENSUREs deterministically instead of deadlocking).
 bool Scheduler::try_direct_switch(TaskControlBlock &cur) noexcept {
     if (__atomic_load_n(&SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0)
         return false; // Arm in flight: never publish a second one (H2).
@@ -1135,6 +1172,10 @@ bool Scheduler::try_direct_switch(TaskControlBlock &cur) noexcept {
     if (next->state != TaskState::READY && next->state != TaskState::RUNNING)
         return false; // Not dispatchable (BLOCKED/TERMINATED/...).
     switch_to_task(&cur, *next, nullptr);
+    // Issue #582 B.3: the arm above was published under this function's
+    // guard (depth != 0 here by construction) — count the legal window.
+    if (scheduler_lock_depth_own() != 0)
+        Scheduler::note_arm_under_lock();
     return __atomic_load_n(&SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE) != 0;
 }
 

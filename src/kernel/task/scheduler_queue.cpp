@@ -23,6 +23,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
+#include <kernel/task/scheduler_debug_internal.hpp> // issue #582 A1 op-ring
 #include <assert.hpp>                              // issue #369 T1b ENSURE
 #include <kernel/debug/ipc_sched_trace.hpp> // CONFIG_DEBUG_IPC_SCHED
 #include <kernel/arch/timer.hpp>
@@ -75,7 +76,10 @@ bool edf_earlier(const TaskControlBlock &a,
 
 /// @brief Ordered insert into CPU c's EDF list.  Caller guarantees the task
 ///        is not already queued (guarded anyway — never double-link).
+///        Issue #582: own op tags + IRQ-atomic body (the EDF list is separate
+///        from the ready queue with its own discipline; no cross-list claim).
 void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept {
+    arch::IrqGuard irq_guard{};
     if (t.in_edf_queue_)
         return;
     EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
@@ -96,10 +100,13 @@ void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept {
     if (t.edf_next_ != nullptr)
         t.edf_next_->edf_prev_ = &t;
     t.in_edf_queue_ = true;
+    sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfInsert, t.id,
+                                  0, 1, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
 }
 
 /// @brief Unlink from CPU c's EDF list (no-op when not queued).
 void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept {
+    arch::IrqGuard irq_guard{};
     if (!t.in_edf_queue_)
         return;
     EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
@@ -112,6 +119,8 @@ void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept {
     t.edf_next_ = nullptr;
     t.edf_prev_ = nullptr;
     t.in_edf_queue_ = false;
+    sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfRemove, t.id,
+                                  1, 0, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
 }
 
 /// @brief Re-sort a queued EDF task after its key changed (deadline re-arm,
@@ -122,6 +131,22 @@ void edf_resort(TaskControlBlock &t) noexcept {
     uint64_t cpu = Scheduler::queue_target(t);
     edf_remove(t, cpu);
     edf_insert(t, cpu);
+    sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfResort, t.id,
+                                  1, 1, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
+}
+
+/// @brief Forced EDF membership detach (issue #582): clears flag+links as
+///        one IRQ-atomic unit WITHOUT splicing — for the documented
+///        whole-list reset sites where the heads are reset wholesale.
+void edf_detach(TaskControlBlock &t) noexcept {
+    arch::IrqGuard irq_guard{};
+    if (!t.in_edf_queue_ && t.edf_next_ == nullptr && t.edf_prev_ == nullptr)
+        return;
+    t.in_edf_queue_ = false;
+    t.edf_next_ = nullptr;
+    t.edf_prev_ = nullptr;
+    sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfRemove, t.id,
+                                  1, 0, 0, 0, 0, UINT64_MAX);
 }
 
 /// @brief Re-home a queued task after an eligibility change
@@ -135,8 +160,8 @@ void migrate_dispatch_queue(TaskControlBlock &t) noexcept {
         return;
     bool was_queued = t.in_ready_queue_ || t.in_edf_queue_;
     if (t.in_ready_queue_) {
+        // Typed detach (remove clears flag+links+prio internally).
         Scheduler::rq_task(t).remove(t, t.rq_priority_);
-        t.in_ready_queue_ = false;
     }
     if (t.in_edf_queue_)
         edf_remove(t, Scheduler::queue_target(t));
@@ -230,6 +255,7 @@ using sched_queue::edf_insert;
 using sched_queue::edf_peek_valid_own;
 using sched_queue::edf_preempt_candidate;
 using sched_queue::edf_ready_;
+using sched_queue::edf_detach;
 using sched_queue::edf_remove;
 using sched_queue::edf_resort;
 using sched_queue::invalidate_pending_switch_to;
@@ -294,7 +320,8 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
             kernel::Logger::raw_write("\n");
 #endif
             // Refuse the enqueue: the scheduler no longer owns this TCB.
-            task.in_ready_queue_ = false;
+            // INV-RQ-2: the refusal leaves the TCB byte-identical (no
+            // defensive flag write — the TCB is not owned here).
             return;
         }
     }
@@ -313,9 +340,9 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
             task.state = TaskState::READY;
             task.ready_deferred_ = true;
         }
+        // Typed detach (remove clears flag+links+prio internally).
         if (task.in_ready_queue_) {
             rq_for(queue_target(task)).remove(task, task.rq_priority_);
-            task.in_ready_queue_ = false;
         }
         if (task.in_edf_queue_)
             edf_remove(task, queue_target(task));
@@ -345,16 +372,19 @@ void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
     // list, never the bitmap.  Single routing point — a task is in at
     // most one queue; cross-queue moves unlink first (S2 guard).
     if (edf_eligible(task)) {
+        // Typed detach (remove clears flag+links+prio internally).
         if (task.in_ready_queue_) {
             rq_for(target).remove(task, task.rq_priority_);
-            task.in_ready_queue_ = false;
         }
         edf_insert(task, target);
         return;
     }
     if (task.in_edf_queue_)
         edf_remove(task, target);
-    rq_for(target).enqueue(task, effective_priority(&task));
+    // Typed commit: refusals are counted + reported, never silent.
+    Scheduler::note_runq_enqueue_outcome(
+        rq_for(target).enqueue(task, effective_priority(&task)), task,
+        target);
 }
 
 void Scheduler::dequeue_ready(TaskControlBlock &task) noexcept {
@@ -491,15 +521,63 @@ void Scheduler::rebuild_ready_queue() noexcept {
         // Issue #19: route through enqueue_ready so EDF-eligible tasks
         // land in the deadline list, not the bitmap (direct bitmap
         // enqueue here would corrupt dispatch).
-        t->in_ready_queue_ = false;
-        t->in_edf_queue_ = false;
-        t->runq_next_ = nullptr;
-        t->runq_prev_ = nullptr;
-        t->edf_next_ = nullptr;
-        t->edf_prev_ = nullptr;
+        // Issue #582: typed detaches (runq flag+links+prio as one unit;
+        // EDF flag+links without splicing — the heads above were nulled
+        // wholesale) instead of raw field writes.
+        rq_task(*t).detach(*t);
+        edf_detach(*t);
+        sched_debug::sched_runq_trace(
+            sched_debug::RunqTraceTag::RebuildLevel, t->id, 0, 0, 0, 0, 0,
+            queue_target(*t));
         if (t->state == TaskState::READY) {
             enqueue_ready(*t);
         }
+    }
+}
+
+namespace {
+// One-shot latch for the invalid-enqueue ERROR (issue #582 §5.5).
+bool s_enqueue_invalid_warned = false;
+} // namespace
+
+void Scheduler::note_runq_enqueue_outcome(
+    ReadyQueueManager::RunqEnqueueResult result, const TaskControlBlock &tcb,
+    uint64_t prio) noexcept {
+    using Outcome = ReadyQueueManager::RunqEnqueueResult;
+    if (result == Outcome::Linked)
+        return;
+    if (result == Outcome::AlreadyQueued) {
+        note_rqm_enqueue_refused_already();
+#if defined(CONFIG_DEBUG)
+        // DEBUG membership assert: an already-queued node must be
+        // physically present somewhere, or the flag/link pair desynced
+        // (the sweep then rescues + counts it as an orphan).
+        bool phys = false;
+        for (uint64_t q = 0; q <= CONFIG_PRIORITY_CEILING && !phys; ++q) {
+            if (rq_for(q).queue(q).contains(tcb))
+                phys = true;
+        }
+        if (!phys) {
+            kernel::Logger::error(
+                "[RUNQ] already-queued but nowhere linked id=%lu",
+                tcb.id);
+        }
+#else
+        (void)tcb;
+        (void)prio;
+#endif
+        return;
+    }
+    // RefusedInvalid: the TCB is byte-identical (API guarantee); count +
+    // one-shot ERROR with caller ra; the tick sweep rescues + counts.
+    note_rqm_enqueue_refused_invalid();
+    if (!s_enqueue_invalid_warned) {
+        s_enqueue_invalid_warned = true;
+        kernel::Logger::error(
+            "[RUNQ] enqueue refused (invalid TCB) id=%lu prio=%lu ra=0x%lx",
+            tcb.id, prio,
+            reinterpret_cast<uint64_t>(__builtin_return_address(0)));
+        sched_debug::sched_runq_trace_dump(tcb.id, 8);
     }
 }
 

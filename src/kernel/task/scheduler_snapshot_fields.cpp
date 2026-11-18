@@ -29,11 +29,13 @@
 #include <kernel/daemon/daemon_mgr.hpp>              // issue #323 daemon::is_managed
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/task/scheduler_debug_internal.hpp> // issue #582 A1 op-ring
 #include <assert.hpp>
 
 namespace kernel {
 
 using sched_switch::current_sp;
+using sched_queue::edf_detach;
 using sched_queue::edf_insert;
 using sched_verify::task_stack_ptr;
 using sched_verify::validate_task_ptr;
@@ -145,13 +147,40 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
             bool keep_cspace =
                 daemon::is_managed(t->id) || t == harness;
             t->detach_all_objects(keep_cspace);
-            t->runq_next_ = saved[j].runq_next;
-            t->runq_prev_ = saved[j].runq_prev;
-            t->in_ready_queue_ = saved[j].in_ready_queue;
-            t->rq_priority_ = saved[j].rq_priority;
-            t->edf_next_ = saved[j].edf_next;
-            t->edf_prev_ = saved[j].edf_prev;
-            t->in_edf_queue_ = saved[j].in_edf_queue;
+            // Issue #582 §5.4: validated runq-membership restore.  The saved
+            // flag/links apply only when the level is in range and the links
+            // are valid-or-null; otherwise the membership is cleared (the
+            // sweep/drop machinery re-establishes live READY tasks).  EDF
+            // flags restore the same way (the ordered insert below
+            // re-derives the heads deterministically).
+            const bool runq_fields_ok =
+                (saved[j].runq_next == nullptr ||
+                 TaskControlBlock::is_valid(saved[j].runq_next)) &&
+                (saved[j].runq_prev == nullptr ||
+                 TaskControlBlock::is_valid(saved[j].runq_prev));
+            const bool runq_ok =
+                saved[j].in_ready_queue && runq_fields_ok &&
+                saved[j].rq_priority <= CONFIG_PRIORITY_CEILING;
+            t->runq_next_ = runq_ok ? saved[j].runq_next : nullptr;
+            t->runq_prev_ = runq_ok ? saved[j].runq_prev : nullptr;
+            t->in_ready_queue_ = runq_ok;
+            t->rq_priority_ = runq_ok ? saved[j].rq_priority : 0;
+            const bool edf_ok =
+                saved[j].in_edf_queue &&
+                (saved[j].edf_next == nullptr ||
+                 TaskControlBlock::is_valid(saved[j].edf_next)) &&
+                (saved[j].edf_prev == nullptr ||
+                 TaskControlBlock::is_valid(saved[j].edf_prev));
+            t->edf_next_ = edf_ok ? saved[j].edf_next : nullptr;
+            t->edf_prev_ = edf_ok ? saved[j].edf_prev : nullptr;
+            t->in_edf_queue_ = edf_ok;
+            sched_debug::sched_runq_trace(
+                sched_debug::RunqTraceTag::SnapFieldWrite, t->id,
+                saved[j].in_ready_queue ? 1u : 0u,
+                t->in_ready_queue_ ? 1u : 0u,
+                reinterpret_cast<uint64_t>(t->runq_next_),
+                reinterpret_cast<uint64_t>(t->runq_prev_), t->rq_priority_,
+                UINT64_MAX);
             t->ready_deferred_ = saved[j].ready_deferred;
             t->sched_policy = saved[j].sched_policy;
             t->edf_exempt = saved[j].edf_exempt;
@@ -170,9 +199,9 @@ void Scheduler::restore_task_fields(const TaskFields *saved) {
          t = all_tasks_.next_ptr(t)) {
         if (t->magic != TaskControlBlock::TCB_MAGIC || !t->in_edf_queue_)
             continue;
-        t->in_edf_queue_ = false; // edf_insert refuses flagged nodes
-        t->edf_next_ = nullptr;
-        t->edf_prev_ = nullptr;
+        // Issue #582: typed EDF detach (no splice — heads were nulled
+        // above) instead of raw field writes.
+        edf_detach(*t);
         edf_insert(*t, queue_target(*t));
     }
 }

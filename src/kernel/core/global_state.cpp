@@ -27,7 +27,16 @@
 #include <kernel/core/global_state.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/hal/io.hpp>
 #include <kernel/arch/gdt.hpp>
+#include <kernel/arch/cpu_context.hpp>
+#include <kernel/log/dmesg.hpp>
+#include <kernel/sync/spinlock_order.hpp>
+#include <kernel/task/scheduler_lock_guard.hpp>
+#include <kernel/task/scheduler_debug_internal.hpp>
+#include <kernel/nexios_config.h>
+#include <lib/logger.hpp>
+#include <assert.hpp>
 #if defined(CONFIG_ARCH_AARCH64)
 #include <kernel/arch/aarch64/hal/fpu.hpp>
 #elif defined(CONFIG_ARCH_RISCV64)
@@ -366,6 +375,93 @@ void note_park_test_ctx_unexpected() noexcept {
                        __ATOMIC_RELAXED);
 #endif
 }
+
+// ---------------------------------------------------------------------------
+// SchedGateState — issue #582 apply-gate defer windows + park latch.
+// Named (not anonymous) so the kernel::-scope gate below and the
+// Scheduler:: accessors can name it as gs::s582::.
+// ---------------------------------------------------------------------------
+namespace s582 {
+
+// Thresholds (issue #582 INV-APPLY-2 / INV-PARK-2).
+inline constexpr uint64_t kApplyDeferWarnTicks = 1;
+inline constexpr uint64_t kApplyDeferFailClosedTicks = 8;
+inline constexpr uint64_t kLockParkCoveredLimit = 8;
+inline constexpr uint64_t kLockParkWarnTicks = 1;
+inline constexpr uint64_t kFailClosedCensusMax = 8;
+
+// Apply-gate per-CPU defer windows: since_tick == 0 means no streak.
+uint64_t s_apply_defer_since_tick[CONFIG_MAX_CPUS] = {};
+uint64_t s_apply_defer_warned[CONFIG_MAX_CPUS] = {};
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_apply_defer_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_apply_defer_warn_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_apply_defer_rearm_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_apply_defer_failclosed_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_apply_term_hold_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_apply_arm_under_lock_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_apply_force_denied_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+bool s_apply_defer_announced = false;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+bool s_apply_term_hold_announced = false;
+
+// Per-CPU lock-park latch (issue #582 §4.3).  task_id == UINT64_MAX means
+// unarmed.  covered_ticks is monotonic per latch lifetime; a same-task
+// re-arm preserves it (rearm can never restart the clock, §4.5).
+struct LockParkLatch {
+    uint64_t task_id = UINT64_MAX;
+    uint64_t generation = 0;
+    uint8_t latch_class = 0;
+    uint64_t since_tick = 0;
+    uint32_t covered_ticks = 0;
+    bool warned = false;
+};
+
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+LockParkLatch s_lockpark_latch[CONFIG_MAX_CPUS] = {};
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_arm_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_covered_max = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_serviced_hook = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_serviced_tick = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_stale_cleared = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_woke_cleared = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_escalated = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_warn_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_rearm_count = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_pending = 0;
+
+// Pre-RMS delivery watch (issue #582 §4.4 S2): the pre-RMS clear stashes
+// the record; the post-RMS check confirms dispatch or restores it.
+struct LockParkWatch {
+    bool armed = false;
+    uint64_t task_id = UINT64_MAX;
+    uint64_t generation = 0;
+    uint8_t latch_class = 0;
+    uint32_t covered_ticks = 0;
+    bool warned = false;
+};
+
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+LockParkWatch s_lockpark_watch[CONFIG_MAX_CPUS] = {};
+
+} // namespace s582
 
 // ---------------------------------------------------------------------------
 // VfsState definitions
@@ -763,6 +859,117 @@ extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
 ///        or the harness boot stack) with IRQs disabled — so no task-context
 ///        removal can interleave — and aborts (clear atoms + bump generation) on
 ///        any mismatch.
+/// @brief Issue #582 §4.9 FailClosed dump: single bounded dump + panic.
+///        <=10 unconditional lines (fatal + <=8 census + lock state) +
+///        <=8 DEBUG-only lines (held-stack + H2/op-ring tails).
+///        ISR-safe (raw_write only, then panic() cli+hlts).
+/// @param tag Fatal-line tag (apply vs park path marker).
+/// @param id Arm id (apply path) or latched task id (park path).
+/// @param streak Ticks deferred (apply) or covered ticks (park).
+/// @param own_held True when the own-depth conjunct held (apply path).
+/// @note Runs with IRQs disabled (interrupt gate); must not re-enable IRQs.
+[[noreturn]] void s582_failclosed(const char *tag, uint64_t id,
+                                  uint64_t streak, bool own_held) noexcept {
+    using namespace gs::s582;
+    const uint64_t now = arch::Timer::ticks();
+    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+    const uint64_t force =
+        __atomic_load_n(&kernel::Scheduler::SwSlots::force_apply(),
+                        __ATOMIC_ACQUIRE);
+    kernel::log::dmesg_push_sev(
+        kernel::log::ErrorSubsystem::SCHED,
+        kernel::log::kDmesgBase_SCHED + 17, kernel::log::LogSeverity::FATAL,
+        "sched: scheduler_lock_ unreleased (fail-closed)", id);
+    auto *cur = kernel::Scheduler::current_task();
+    const bool cur_ok =
+        (cur != nullptr && cur->magic == kernel::TaskControlBlock::TCB_MAGIC);
+    kernel::Logger::raw_write(tag);
+    kernel::Logger::raw_write(" tick=");
+    kernel::Logger::print_dec(now);
+    kernel::Logger::raw_write(" arm=");
+    kernel::Logger::print_dec(id);
+    kernel::Logger::raw_write(" slock_depth=");
+    kernel::Logger::print_dec(kernel::scheduler_lock_depth_own());
+    kernel::Logger::raw_write(" irq_depth=");
+    kernel::Logger::print_dec(arch::irq_guard_depth_own());
+    kernel::Logger::raw_write(" spl_depth=");
+    kernel::Logger::print_dec(sync::spinlock_held_depth_own());
+    kernel::Logger::raw_write(" is_locked=");
+    kernel::Logger::print_dec(kernel::Scheduler::scheduler_lock_held() ? 1u
+                                                                       : 0u);
+    kernel::Logger::raw_write(" holder=0x");
+    kernel::Logger::print_hex(reinterpret_cast<uint64_t>(
+        kernel::Scheduler::scheduler_lock_holder()));
+    kernel::Logger::raw_write(" if=");
+    kernel::Logger::print_dec(arch::interrupts_enabled() ? 1u : 0u);
+    kernel::Logger::raw_write(" isr_nesting=");
+    kernel::Logger::print_dec(
+        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
+    kernel::Logger::raw_write(" streak=");
+    kernel::Logger::print_dec(streak);
+    kernel::Logger::raw_write(" force=");
+    kernel::Logger::print_dec(force);
+    kernel::Logger::raw_write(" own=");
+    kernel::Logger::print_dec(own_held ? 1u : 0u);
+    kernel::Logger::raw_write(" cur=");
+    kernel::Logger::print_dec(cur_ok ? cur->id : 0u);
+    kernel::Logger::raw_write("\n");
+    uint64_t shown = 0;
+    for (auto *t = kernel::Scheduler::all_tasks().first_ptr();
+         t != nullptr && shown < kFailClosedCensusMax;
+         t = kernel::Scheduler::all_tasks().next_ptr(t)) {
+        if (t->magic != kernel::TaskControlBlock::TCB_MAGIC)
+            continue;
+        if (kernel::Scheduler::is_idle_task(t))
+            continue;
+        if (kernel::Scheduler::queue_target(*t) != cpu)
+            continue;
+        kernel::Logger::raw_write("[S582-CENSUS] id=");
+        kernel::Logger::print_dec(t->id);
+        kernel::Logger::raw_write(" st=");
+        kernel::Logger::print_dec(static_cast<uint64_t>(t->state));
+        kernel::Logger::raw_write(" inrq=");
+        kernel::Logger::print_dec(t->in_ready_queue_ ? 1u : 0u);
+        kernel::Logger::raw_write(" rq=");
+        kernel::Logger::print_dec(t->rq_priority_);
+        kernel::Logger::raw_write(" eff=");
+        kernel::Logger::print_dec(kernel::Scheduler::effective_priority(t));
+        kernel::Logger::raw_write("\n");
+        ++shown;
+    }
+    kernel::Logger::raw_write("[S582-LOCK] depth=");
+    kernel::Logger::print_dec(kernel::scheduler_lock_depth_own());
+    kernel::Logger::raw_write(" holder=0x");
+    kernel::Logger::print_hex(reinterpret_cast<uint64_t>(
+        kernel::Scheduler::scheduler_lock_holder()));
+    kernel::Logger::raw_write("\n");
+#if defined(CONFIG_DEBUG)
+    {
+        uint64_t addrs[8] = {};
+        const char *sites[8] = {};
+        uint64_t owners[8] = {};
+        uint8_t ranks[8] = {};
+        uint8_t cpus[8] = {};
+        uint8_t take_ifs[8] = {};
+        const uint64_t n = sync::spinlock_dump_held(
+            addrs, sites, owners, ranks, cpus, take_ifs, 8);
+        for (uint64_t i = 0; i < n; ++i) {
+            kernel::Logger::raw_write("[S582-HELD] lock=0x");
+            kernel::Logger::print_hex(addrs[i]);
+            kernel::Logger::raw_write(" site=");
+            kernel::Logger::raw_write(sites[i] != nullptr ? sites[i] : "?");
+            kernel::Logger::raw_write(" owner=");
+            kernel::Logger::print_dec(owners[i]);
+            kernel::Logger::raw_write("\n");
+        }
+    }
+    kernel::sched_debug::h2_dump_tail(4);
+    kernel::sched_debug::sched_runq_trace_dump(UINT64_MAX, 4);
+#endif
+    panic("sched: scheduler_lock_ unreleased");
+    __builtin_unreachable();
+}
+
 /// @return 1 = apply the switch, 0 = abort it (atoms already invalidated).
 /// @note Runs with IRQs disabled (interrupt gate); must not re-enable IRQs.
 extern "C" int scheduler_validate_pending_switch() noexcept {
@@ -781,6 +988,7 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
     // [APPLY a=0]).  IF=0 here (interrupt gate) — the runq is not concurrently
     // modified, and dequeue_ready/set_task_ready are lock-free.
     auto drop_arm = [&](kernel::TaskControlBlock *target) {
+        using namespace gs::s582;
         // Issue #25 C1: on APs, SKIP the drop (leave the arm pending).
         // The drop mutates the own queue lock-free, racing BSP task-context
         // writers of queue[1] (which hold the global lock the AP must not
@@ -791,6 +999,20 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
         // BSP path unchanged (single-core IF=0 rules).
         if (arch::cpu_index() != 0)
             return;
+        // Issue #582: an aborted arm ends any defer streak on this CPU.
+        {
+            const uint64_t dcpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+            if (__atomic_load_n(&s_apply_defer_since_tick[dcpu],
+                                __ATOMIC_ACQUIRE) != 0) {
+                __atomic_store_n(&s_apply_defer_since_tick[dcpu], (uint64_t)0,
+                                 __ATOMIC_RELEASE);
+            }
+            if (__atomic_load_n(&s_apply_defer_warned[dcpu],
+                                __ATOMIC_ACQUIRE) != 0) {
+                __atomic_store_n(&s_apply_defer_warned[dcpu], (uint64_t)0,
+                                 __ATOMIC_RELEASE);
+            }
+        }
         kernel::Scheduler::cancel_pending_switch();
         auto *cur = kernel::Scheduler::current_task();
         if (cur && cur->magic == kernel::TaskControlBlock::TCB_MAGIC) {
@@ -909,6 +1131,123 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
         return 0;
     }
 
+    // Issue #582 INV-APPLY-1/2/3: the interrupted context must hold no
+    // scheduler_lock_ take for the apply to proceed.  Both conjuncts are
+    // required (mark-after-take / clear-before-release leaves an
+    // unmarked-but-locked window for each alone).  Fail direction is defer:
+    // the arm AND the force bit are left untouched for the next epilogue
+    // (deny-and-rearm, INV-APPLY-3 — force never overrides the deny).
+    // Return ABI: 1 = apply, 0 = abort/clear (existing reasons only),
+    // 2 = defer (leave the arm untouched).
+    {
+        using namespace gs::s582;
+        const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+        const bool own_held = (kernel::scheduler_lock_depth_own() != 0);
+        const bool word_held = kernel::Scheduler::scheduler_lock_held();
+        const uint64_t now = arch::Timer::ticks();
+        if (own_held || word_held) {
+            __atomic_fetch_add(&s_apply_defer_count, 1ULL, __ATOMIC_RELAXED);
+            if (__atomic_load_n(&kernel::Scheduler::SwSlots::force_apply(),
+                                __ATOMIC_ACQUIRE) != 0) {
+                __atomic_fetch_add(&s_apply_force_denied_count, 1ULL,
+                                   __ATOMIC_RELAXED);
+            }
+            // One-shot first-defer line: reason 1 = own depth,
+            // 2 = lock word.  No logging on the allow path.
+            if (!__atomic_exchange_n(&s_apply_defer_announced, true,
+                                     __ATOMIC_RELAXED)) {
+                auto *cur = kernel::Scheduler::current_task();
+                const bool cur_ok =
+                    (cur != nullptr &&
+                     cur->magic == kernel::TaskControlBlock::TCB_MAGIC);
+                kernel::Logger::raw_write("[S582-APPLY-DEFER] id=");
+                kernel::Logger::print_dec(id);
+                kernel::Logger::raw_write(" reason=");
+                kernel::Logger::print_dec(own_held ? 1u : 2u);
+                kernel::Logger::raw_write(" cur=");
+                kernel::Logger::print_dec(cur_ok ? cur->id : 0u);
+                kernel::Logger::raw_write(" st=");
+                kernel::Logger::print_dec(
+                    cur_ok ? static_cast<uint64_t>(cur->state) : 99u);
+                kernel::Logger::raw_write(" inrq=");
+                kernel::Logger::print_dec(
+                    (cur_ok && cur->in_ready_queue_) ? 1u : 0u);
+                kernel::Logger::raw_write(" depth=");
+                kernel::Logger::print_dec(
+                    kernel::scheduler_lock_depth_own());
+                kernel::Logger::raw_write(" tick=");
+                kernel::Logger::print_dec(now);
+                kernel::Logger::raw_write("\n");
+            }
+            uint64_t since = __atomic_load_n(&s_apply_defer_since_tick[cpu],
+                                             __ATOMIC_ACQUIRE);
+            if (since == 0) {
+                __atomic_store_n(&s_apply_defer_since_tick[cpu], now,
+                                 __ATOMIC_RELEASE);
+                since = now;
+            }
+            const uint64_t streak = (now >= since) ? (now - since) : 0;
+            if (streak >= kApplyDeferFailClosedTicks) {
+                __atomic_fetch_add(&s_apply_defer_failclosed_count, 1ULL,
+                                   __ATOMIC_RELAXED);
+                s582_failclosed("[S582-APPLY-FAILCLOSED]", id, streak,
+                                own_held);
+            }
+            if (streak >= kApplyDeferWarnTicks &&
+                __atomic_load_n(&s_apply_defer_warned[cpu],
+                                __ATOMIC_ACQUIRE) == 0) {
+                __atomic_store_n(&s_apply_defer_warned[cpu], (uint64_t)1,
+                                 __ATOMIC_RELEASE);
+                __atomic_fetch_add(&s_apply_defer_warn_count, 1ULL,
+                                   __ATOMIC_RELAXED);
+                kernel::Logger::raw_write("[S582-APPLY-DEFER-STUCK] id=");
+                kernel::Logger::print_dec(id);
+                kernel::Logger::raw_write(" streak=");
+                kernel::Logger::print_dec(streak);
+                kernel::Logger::raw_write(" tick=");
+                kernel::Logger::print_dec(now);
+                kernel::Logger::raw_write("\n");
+            }
+            return 2;
+        }
+        // Lock free with a stale pending streak: unreachable in health
+        // (the RMS CLR path clears/republishes pending arms every tick
+        // with a free lock).  Re-arm loudly and keep the arm (the
+        // rollback tripwire, §11): never cancel on a deferral streak.
+        const uint64_t since = __atomic_load_n(
+            &s_apply_defer_since_tick[cpu], __ATOMIC_ACQUIRE);
+        if (since != 0 &&
+            ((now >= since) ? (now - since) : 0) >=
+                kApplyDeferFailClosedTicks) {
+            __atomic_fetch_add(&s_apply_defer_rearm_count, 1ULL,
+                               __ATOMIC_RELAXED);
+            __atomic_store_n(&s_apply_defer_since_tick[cpu], (uint64_t)0,
+                             __ATOMIC_RELEASE);
+            __atomic_store_n(&s_apply_defer_warned[cpu], (uint64_t)0,
+                             __ATOMIC_RELEASE);
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::SCHED,
+                kernel::log::kDmesgBase_SCHED + 19,
+                kernel::log::LogSeverity::WARN,
+                "sched: apply defer re-armed (lock free)", id);
+            kernel::Logger::warn("sched: apply defer re-armed id=%lu", id);
+            return 2;
+        }
+        // Healthy apply: end any streak, clear the one-shot force (C-side
+        // clear #1 of §B.5 — the arm is consumed), apply.
+        if (since != 0) {
+            __atomic_store_n(&s_apply_defer_since_tick[cpu], (uint64_t)0,
+                             __ATOMIC_RELEASE);
+        }
+        if (__atomic_load_n(&s_apply_defer_warned[cpu], __ATOMIC_ACQUIRE) !=
+            0) {
+            __atomic_store_n(&s_apply_defer_warned[cpu], (uint64_t)0,
+                             __ATOMIC_RELEASE);
+        }
+        __atomic_store_n(&kernel::Scheduler::SwSlots::force_apply(),
+                         (uint64_t)0, __ATOMIC_RELEASE);
+    }
+
     return 1;
 }
 
@@ -986,5 +1325,497 @@ void audit_write(const char *name, bool accepted) noexcept {
 }
 #endif
 
+// ---------------------------------------------------------------------------
+// SchedGateState definitions — issue #582 (production).  This region is
+// already inside kernel::gs (the function-scope } above closes a function,
+// not gs — the stale comment is pre-existing); s582 below reopens the
+// state block, and the gs:: API follows unqualified.
+namespace s582 {
+
+// Clear one latch (stale/woke/delivered): disarm + zero the clock.
+void s582_latch_clear(uint64_t cpu) noexcept {
+    LockParkLatch &latch = s_lockpark_latch[cpu % CONFIG_MAX_CPUS];
+    latch.task_id = UINT64_MAX;
+    latch.generation = 0;
+    latch.latch_class = 0;
+    latch.since_tick = 0;
+    latch.covered_ticks = 0;
+    latch.warned = false;
+}
+
+// Rule 4/5/6 accounting for one unserviced instant (§4.5): covered++ with
+// the max witness, rearm (since = now, clock preserved), then the
+// escalation pair — FailClosed at the limit (rule 5, SCHED+17 + dump +
+// panic) or the one-shot stuck Warn (rule 6, SCHED+18).  Warn reads the
+// pre-rearm since so a latch pending >= 1 tick warns on its first
+// unserviced instant.
+void s582_cover_instant(uint64_t cpu) noexcept {
+    LockParkLatch &latch = s_lockpark_latch[cpu % CONFIG_MAX_CPUS];
+    const uint32_t covered = latch.covered_ticks + 1;
+    latch.covered_ticks = covered;
+    const uint64_t now = arch::Timer::ticks();
+    const uint64_t since = latch.since_tick;
+    const uint64_t pending =
+        (latch.task_id == UINT64_MAX) ? 0 : latch.task_id;
+    const uint64_t covered64 = covered;
+    const uint64_t mx =
+        __atomic_load_n(&s_lockpark_covered_max, __ATOMIC_RELAXED);
+    if (covered64 > mx) {
+        __atomic_store_n(&s_lockpark_covered_max, covered64,
+                         __ATOMIC_RELAXED);
+    }
+    __atomic_fetch_add(&s_lockpark_rearm_count, 1ULL, __ATOMIC_RELAXED);
+    if (covered >= kLockParkCoveredLimit) {
+        __atomic_fetch_add(&s_lockpark_escalated, 1ULL, __ATOMIC_RELAXED);
+        s582_failclosed("[S582-LOCKPARK-FAILCLOSED]", pending, covered64,
+                        false);
+    }
+    if (!latch.warned && now >= since &&
+        (now - since) >= kLockParkWarnTicks) {
+        latch.warned = true;
+        __atomic_fetch_add(&s_lockpark_warn_count, 1ULL, __ATOMIC_RELAXED);
+        kernel::log::dmesg_push_sev(
+            kernel::log::ErrorSubsystem::SCHED,
+            kernel::log::kDmesgBase_SCHED + 18,
+            kernel::log::LogSeverity::WARN, "sched: lock-park latch stuck",
+            pending);
+        kernel::Logger::warn("sched: lock-park latch stuck id=%lu covered=%lu",
+                             pending, covered64);
+    }
+    latch.since_tick = now;
+}
+
+} // namespace s582
+
+uint64_t apply_gate_defer_count() noexcept {
+    return __atomic_load_n(&s582::s_apply_defer_count, __ATOMIC_RELAXED);
+}
+
+uint64_t apply_gate_warn_count() noexcept {
+    return __atomic_load_n(&s582::s_apply_defer_warn_count, __ATOMIC_RELAXED);
+}
+
+uint64_t apply_gate_rearm_count() noexcept {
+    return __atomic_load_n(&s582::s_apply_defer_rearm_count,
+                           __ATOMIC_RELAXED);
+}
+
+uint64_t apply_gate_failclosed_count() noexcept {
+    return __atomic_load_n(&s582::s_apply_defer_failclosed_count,
+                           __ATOMIC_RELAXED);
+}
+
+uint64_t apply_gate_term_hold_count() noexcept {
+    return __atomic_load_n(&s582::s_apply_term_hold_count, __ATOMIC_RELAXED);
+}
+
+uint64_t apply_gate_arm_under_lock_count() noexcept {
+    return __atomic_load_n(&s582::s_apply_arm_under_lock_count,
+                           __ATOMIC_RELAXED);
+}
+
+uint64_t apply_gate_force_denied_count() noexcept {
+    return __atomic_load_n(&s582::s_apply_force_denied_count,
+                           __ATOMIC_RELAXED);
+}
+
+void note_arm_under_lock() noexcept {
+    __atomic_fetch_add(&s582::s_apply_arm_under_lock_count, 1ULL,
+                       __ATOMIC_RELAXED);
+}
+
+void note_apply_term_hold() noexcept {
+    __atomic_fetch_add(&s582::s_apply_term_hold_count, 1ULL,
+                       __ATOMIC_RELAXED);
+}
+
+bool apply_term_hold_announced_swap() noexcept {
+    return !__atomic_exchange_n(&s582::s_apply_term_hold_announced, true,
+                                __ATOMIC_RELAXED);
+}
+
+void apply_gate_reset_for_test() noexcept {
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+        __atomic_store_n(&s582::s_apply_defer_since_tick[c], (uint64_t)0,
+                         __ATOMIC_RELAXED);
+        __atomic_store_n(&s582::s_apply_defer_warned[c], (uint64_t)0,
+                         __ATOMIC_RELAXED);
+    }
+    __atomic_store_n(&s582::s_apply_defer_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_apply_defer_warn_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_apply_defer_rearm_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_apply_defer_failclosed_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_apply_term_hold_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_apply_arm_under_lock_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_apply_force_denied_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_apply_defer_announced, false,
+                     __ATOMIC_RELAXED);
+}
+
+void lockpark_latch_arm(uint64_t task_id, uint64_t generation,
+                         uint8_t cls) noexcept {
+    if (task_id == UINT64_MAX)
+        return;
+    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+    s582::LockParkLatch &latch = s582::s_lockpark_latch[cpu];
+    // Same-task re-arm preserves the monotonic clock (rearm can never
+    // restart it, §4.5); a new task starts a fresh lifetime.
+    const bool same = (latch.task_id == task_id &&
+                       latch.generation == generation);
+    const uint32_t covered = same ? latch.covered_ticks : 0;
+    const bool warned = same ? latch.warned : false;
+    latch.task_id = task_id;
+    latch.generation = generation;
+    latch.latch_class = cls;
+    latch.since_tick = arch::Timer::ticks();
+    latch.covered_ticks = covered;
+    latch.warned = warned;
+    __atomic_fetch_add(&s582::s_lockpark_arm_count, 1ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_arm_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_arm_count, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_covered_ticks(uint64_t cpu) noexcept {
+    return s582::s_lockpark_latch[cpu % CONFIG_MAX_CPUS].covered_ticks;
+}
+
+uint64_t lockpark_covered_ticks_max() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_covered_max, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_serviced_hook_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_serviced_hook, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_serviced_tick_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_serviced_tick, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_stale_cleared_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_stale_cleared, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_woke_cleared_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_woke_cleared, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_escalated_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_escalated, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_warn_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_warn_count, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_rearm_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_rearm_count, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_pending_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_pending, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_class_of(uint64_t cpu) noexcept {
+    return s582::s_lockpark_latch[cpu % CONFIG_MAX_CPUS].latch_class;
+}
+
+LockParkAction lockpark_service_hook() noexcept {
+    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+    s582::LockParkLatch &latch = s582::s_lockpark_latch[cpu];
+    if (latch.task_id == UINT64_MAX)
+        return LockParkAction::None;
+    auto *latched = kernel::Scheduler::find_task(latch.task_id);
+    // Rules 1-2 run here (post-release, pre-warn/park): silent clears.
+    if (latched == nullptr ||
+        latched->magic != kernel::TaskControlBlock::TCB_MAGIC ||
+        latched->generation != latch.generation) {
+        s582::s582_latch_clear(cpu);
+        __atomic_fetch_add(&s582::s_lockpark_stale_cleared, 1ULL,
+                           __ATOMIC_RELAXED);
+        return LockParkAction::None;
+    }
+    if (latched->state != kernel::TaskState::BLOCKED) {
+        s582::s582_latch_clear(cpu);
+        __atomic_fetch_add(&s582::s_lockpark_woke_cleared, 1ULL,
+                           __ATOMIC_RELAXED);
+        return LockParkAction::None;
+    }
+    // Five-term discriminator (§4.4 S1): all must hold to park in place.
+    // Never reads the latch class (§4.3): service keys on {id,generation}
+    // matching the current BLOCKED runner, which the SelfLock shape is.
+    auto *cur = kernel::Scheduler::current_task();
+    const bool admitted =
+        (kernel::isr_nesting_own() == 0 ||
+         arch::in_syscall_trap_level()) &&
+        arch::interrupts_enabled() &&
+        (arch::irq_guard_depth_own() == 0) &&
+        (sync::spinlock_held_depth_own() == 0) &&
+        (CONFIG_TICK_HZ != 0) && (cur != nullptr) &&
+        (cur->magic == kernel::TaskControlBlock::TCB_MAGIC) &&
+        !kernel::Scheduler::is_idle_task(cur) && (cur == latched) &&
+        (cur->state == kernel::TaskState::BLOCKED) &&
+        (cur->generation == latch.generation);
+    if (!admitted) {
+        // Retained for the tick; counted so a stuck retain is visible.
+        __atomic_fetch_add(&s582::s_lockpark_pending, 1ULL,
+                           __ATOMIC_RELAXED);
+        return LockParkAction::None;
+    }
+    s582::s582_latch_clear(cpu);
+    __atomic_fetch_add(&s582::s_lockpark_serviced_hook, 1ULL,
+                       __ATOMIC_RELAXED);
+    return LockParkAction::ParkCurrent;
+}
+
+void lockpark_service_tick_pre() noexcept {
+    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+    s582::LockParkLatch &latch = s582::s_lockpark_latch[cpu];
+    if (latch.task_id == UINT64_MAX)
+        return;
+    auto *latched = kernel::Scheduler::find_task(latch.task_id);
+    if (latched == nullptr ||
+        latched->magic != kernel::TaskControlBlock::TCB_MAGIC ||
+        latched->generation != latch.generation) {
+        s582::s582_latch_clear(cpu);
+        __atomic_fetch_add(&s582::s_lockpark_stale_cleared, 1ULL,
+                           __ATOMIC_RELAXED);
+        s582::s_lockpark_watch[cpu].armed = false;
+        return;
+    }
+    if (latched->state != kernel::TaskState::BLOCKED) {
+        s582::s582_latch_clear(cpu);
+        __atomic_fetch_add(&s582::s_lockpark_woke_cleared, 1ULL,
+                           __ATOMIC_RELAXED);
+        s582::s_lockpark_watch[cpu].armed = false;
+        return;
+    }
+    // Rule 3 vs 4: deliverable when the lock looks free enough for the
+    // immediately following RMS to take it and dispatch (word free and
+    // no own take outstanding).
+    const bool deliverable =
+        !kernel::Scheduler::scheduler_lock_held() &&
+        (kernel::scheduler_lock_depth_own() == 0);
+    if (deliverable) {
+        // Clear for the RMS dispatch; stash for the post-RMS confirm.
+        s582::LockParkWatch &watch = s582::s_lockpark_watch[cpu];
+        watch.armed = true;
+        watch.task_id = latch.task_id;
+        watch.generation = latch.generation;
+        watch.latch_class = latch.latch_class;
+        watch.covered_ticks = latch.covered_ticks;
+        watch.warned = latch.warned;
+        s582::s582_latch_clear(cpu);
+        __atomic_fetch_add(&s582::s_lockpark_serviced_tick, 1ULL,
+                           __ATOMIC_RELAXED);
+        return;
+    }
+    s582::s582_cover_instant(cpu);
+}
+
+void lockpark_service_tick_post() noexcept {
+    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+    s582::LockParkWatch &watch = s582::s_lockpark_watch[cpu];
+    if (!watch.armed)
+        return;
+    watch.armed = false;
+    const uint64_t wid = watch.task_id;
+    const uint64_t wgen = watch.generation;
+    auto *t = kernel::Scheduler::find_task(wid);
+    const bool live =
+        (t != nullptr && t->magic == kernel::TaskControlBlock::TCB_MAGIC &&
+         t->generation == wgen);
+    if (!live || t->state != kernel::TaskState::BLOCKED) {
+        // Dispatched-and-progressed, woken, or gone: rule 1/2 equivalent,
+        // silent (serviced_tick was already counted pre-RMS).
+        return;
+    }
+    if (t == kernel::Scheduler::current_task()) {
+        // On CPU now (running while BLOCKED is the §4.8 F1 shape, not a
+        // dispatch freeze): progress, keep the pre-RMS clear.
+        return;
+    }
+    // Not delivered (RMS try_lock skipped after the clear): restore the
+    // record with rules 4/5/6 — unless a newer arm already won the slot.
+    s582::LockParkLatch &latch = s582::s_lockpark_latch[cpu];
+    if (latch.task_id != UINT64_MAX)
+        return;
+    latch.task_id = wid;
+    latch.generation = wgen;
+    latch.latch_class = watch.latch_class;
+    latch.since_tick = arch::Timer::ticks();
+    latch.covered_ticks = watch.covered_ticks;
+    latch.warned = watch.warned;
+    s582::s582_cover_instant(cpu);
+}
+
+void lockpark_service_tick_miss() noexcept {
+    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+    // Double-read stability (§S3.6): proceed only when both reads agree —
+    // 64-bit aligned loads are single-copy-atomic on all three arches, so
+    // agreement implies no concurrent rewrite mid-read.
+    const uint64_t id_a = __atomic_load_n(
+        &s582::s_lockpark_latch[cpu].task_id, __ATOMIC_ACQUIRE);
+    const uint64_t gen_a = __atomic_load_n(
+        &s582::s_lockpark_latch[cpu].generation, __ATOMIC_ACQUIRE);
+    const uint64_t gen_b = __atomic_load_n(
+        &s582::s_lockpark_latch[cpu].generation, __ATOMIC_ACQUIRE);
+    const uint64_t id_b = __atomic_load_n(
+        &s582::s_lockpark_latch[cpu].task_id, __ATOMIC_ACQUIRE);
+    if (id_a == UINT64_MAX || id_a != id_b || gen_a != gen_b)
+        return;
+    auto *t = kernel::Scheduler::find_task(id_a);
+    // Re-read before any clear: a concurrent arm must never be cleared.
+    const uint64_t id_c = __atomic_load_n(
+        &s582::s_lockpark_latch[cpu].task_id, __ATOMIC_ACQUIRE);
+    const uint64_t gen_c = __atomic_load_n(
+        &s582::s_lockpark_latch[cpu].generation, __ATOMIC_ACQUIRE);
+    const bool same_record = (id_c == id_a && gen_c == gen_a);
+    if (t == nullptr || t->magic != kernel::TaskControlBlock::TCB_MAGIC ||
+        t->generation != gen_a) {
+        if (same_record) {
+            s582::s582_latch_clear(cpu);
+            __atomic_fetch_add(&s582::s_lockpark_stale_cleared, 1ULL,
+                               __ATOMIC_RELAXED);
+        }
+        return;
+    }
+    if (t->state != kernel::TaskState::BLOCKED) {
+        if (same_record) {
+            s582::s582_latch_clear(cpu);
+            __atomic_fetch_add(&s582::s_lockpark_woke_cleared, 1ULL,
+                               __ATOMIC_RELAXED);
+        }
+        return;
+    }
+    // No delivery from the miss path (rule 3 unreachable): rules 4/5/6.
+    s582::s582_cover_instant(cpu);
+}
+
+void lockpark_reset_for_test() noexcept {
+    for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
+        s582::s582_latch_clear(c);
+        s582::s_lockpark_watch[c].armed = false;
+    }
+    __atomic_store_n(&s582::s_lockpark_arm_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_covered_max, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_serviced_hook, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_serviced_tick, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_stale_cleared, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_woke_cleared, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_escalated, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_warn_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_rearm_count, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_pending, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+}
+
 } // namespace gs
+
+// Scheduler:: #582 accessors (state owned by gs::s582 above).
+void Scheduler::note_arm_under_lock() noexcept {
+    gs::note_arm_under_lock();
+}
+
+uint64_t Scheduler::apply_defer_count() noexcept {
+    return gs::apply_gate_defer_count();
+}
+
+uint64_t Scheduler::apply_defer_warn_count() noexcept {
+    return gs::apply_gate_warn_count();
+}
+
+uint64_t Scheduler::apply_defer_rearm_count() noexcept {
+    return gs::apply_gate_rearm_count();
+}
+
+uint64_t Scheduler::apply_defer_failclosed_count() noexcept {
+    return gs::apply_gate_failclosed_count();
+}
+
+uint64_t Scheduler::term_hold_count() noexcept {
+    return gs::apply_gate_term_hold_count();
+}
+
+uint64_t Scheduler::arm_under_lock_count() noexcept {
+    return gs::apply_gate_arm_under_lock_count();
+}
+
+uint64_t Scheduler::force_denied_count() noexcept {
+    return gs::apply_gate_force_denied_count();
+}
+
+uint64_t Scheduler::lockpark_arm_count() noexcept {
+    return gs::lockpark_arm_count();
+}
+
+uint64_t Scheduler::lockpark_covered_ticks(uint64_t cpu) noexcept {
+    return gs::lockpark_covered_ticks(cpu);
+}
+
+uint64_t Scheduler::lockpark_covered_ticks_max() noexcept {
+    return gs::lockpark_covered_ticks_max();
+}
+
+uint64_t Scheduler::lockpark_serviced_hook_count() noexcept {
+    return gs::lockpark_serviced_hook_count();
+}
+
+uint64_t Scheduler::lockpark_serviced_tick_count() noexcept {
+    return gs::lockpark_serviced_tick_count();
+}
+
+uint64_t Scheduler::lockpark_stale_cleared_count() noexcept {
+    return gs::lockpark_stale_cleared_count();
+}
+
+uint64_t Scheduler::lockpark_woke_cleared_count() noexcept {
+    return gs::lockpark_woke_cleared_count();
+}
+
+uint64_t Scheduler::lockpark_escalated_count() noexcept {
+    return gs::lockpark_escalated_count();
+}
+
+uint64_t Scheduler::lockpark_warn_count() noexcept {
+    return gs::lockpark_warn_count();
+}
+
+uint64_t Scheduler::lockpark_rearm_count() noexcept {
+    return gs::lockpark_rearm_count();
+}
+
+uint64_t Scheduler::lockpark_pending_count() noexcept {
+    return gs::lockpark_pending_count();
+}
+
+uint64_t Scheduler::lockpark_latch_class(uint64_t cpu) noexcept {
+    return gs::lockpark_class_of(cpu);
+}
+
+void Scheduler::scheduler_apply_gate_reset_for_test() noexcept {
+    gs::apply_gate_reset_for_test();
+}
+
+void Scheduler::lockpark_reset_for_test() noexcept {
+    gs::lockpark_reset_for_test();
+}
+
 } // namespace kernel

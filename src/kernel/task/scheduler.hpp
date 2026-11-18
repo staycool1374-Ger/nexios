@@ -83,6 +83,16 @@ struct SchedPerCpuPod {
 
 /// @brief Preemptive, rate-monotonic scheduler managing up to MAX_TASKS tasks.
 /// @note Scheduler is tick-driven and supports periodic and aperiodic tasks.
+/// @brief Release-hook park service (issue #582 §4.4 S1, INV-PARK-2).
+///        Called from SchedulerLockGuard's dtor/unlock AFTER lock_.unlock(),
+///        only when the decremented depth reached 0.  Never runs a park
+///        body unless the full five-term discriminator admits; otherwise
+///        the latch is retained for the tick.  Defined in scheduler_tick.cpp
+///        (needs resched_park_until_dispatched); declared here (ahead of the
+///        guard's use sites below) so the guard header sees it without an
+///        include cycle.
+void scheduler_park_service_latch() noexcept;
+
 class Scheduler {
   public:
     /// @brief Initialises the scheduler and creates the idle task.
@@ -294,6 +304,104 @@ class Scheduler {
     ///        callers always run on (the zombie window is open).
     static uint64_t resched_park_entries_count() noexcept;
     static uint64_t resched_park_wakeups_count() noexcept;
+    /// @brief True while this CPU holds scheduler_lock_ (issue #582
+    ///        INV-APPLY-1 diagnostic conjunct: ISR epilogues must defer,
+    ///        never apply, while set).  Always compiled (release-safe).
+    static bool scheduler_lock_held() noexcept {
+        return scheduler_lock_.is_locked_for_debug() != 0;
+    }
+    /// @brief Current scheduler_lock_ holder return address (issue #582
+    ///        FailClosed dump; always-on diagnostic, null when free).
+    static const void *scheduler_lock_holder() noexcept {
+        return scheduler_lock_.holder_for_debug();
+    }
+    /// @brief Counts a legal arm-under-lock window (issue #582 B.3: the
+    ///        try_direct_switch guard stays alive across switch_to_task's
+    ///        IRQ-off publish).  Detection only — the arm itself is valid.
+    static void note_arm_under_lock() noexcept;
+    /// @brief Apply-gate deferrals since boot (issue #582 INV-APPLY-2).
+    static uint64_t apply_defer_count() noexcept;
+    /// @brief Apply-gate stuck warnings since boot (one-shot per arm).
+    static uint64_t apply_defer_warn_count() noexcept;
+    /// @brief Apply-gate lock-free re-arms since boot (INV-APPLY-2 r5).
+    static uint64_t apply_defer_rearm_count() noexcept;
+    /// @brief Apply-gate fail-closed trips since boot (INV-APPLY-2 r2).
+    static uint64_t apply_defer_failclosed_count() noexcept;
+    /// @brief Terminate-path publishes under a held lock (issue #582 B.3,
+    ///        detection only — no recovery, never fatal here).
+    static uint64_t term_hold_count() noexcept;
+    /// @brief Legal direct-switch arms published under the guard (#582 B.3).
+    static uint64_t arm_under_lock_count() noexcept;
+    /// @brief Denies that hit a force-armed arm (issue #582 INV-APPLY-3,
+    ///        deny-and-rearm — the force bit is kept, never overridden).
+    static uint64_t force_denied_count() noexcept;
+    /// @brief BLOCKED reschedule() calls observed holding scheduler_lock_
+    ///        (issue #582 §4.8, DEBUG-only log+count, never a panic).
+    static uint64_t resched_lock_blocked_count() noexcept;
+    /// @brief Latch arms since boot (issue #582 INV-PARK-2).
+    static uint64_t lockpark_arm_count() noexcept;
+    /// @brief Live covered-tick count on @p cpu (monotonic per latch).
+    static uint64_t lockpark_covered_ticks(uint64_t cpu) noexcept;
+    /// @brief Max observed covered-ticks (issue #582 §4.6 witness).
+    static uint64_t lockpark_covered_ticks_max() noexcept;
+    /// @brief Hook-delivered parks (release-path service, issue #582 S1).
+    static uint64_t lockpark_serviced_hook_count() noexcept;
+    /// @brief Tick-delivered dispatches (issue #582 S2, pre-RMS clear).
+    static uint64_t lockpark_serviced_tick_count() noexcept;
+    /// @brief Silent stale clears (rule 1: dead/recycled target).
+    static uint64_t lockpark_stale_cleared_count() noexcept;
+    /// @brief Silent woke clears (rule 2: target left BLOCKED).
+    static uint64_t lockpark_woke_cleared_count() noexcept;
+    /// @brief FailClosed trips (rule 5: covered >= limit, SCHED+17).
+    static uint64_t lockpark_escalated_count() noexcept;
+    /// @brief Stuck warnings (rule 6: SCHED+18, one-shot per latch).
+    static uint64_t lockpark_warn_count() noexcept;
+    /// @brief Tick re-arms (rule 4: retained, clock preserved).
+    static uint64_t lockpark_rearm_count() noexcept;
+    /// @brief Hook retains (discriminator failed, latch kept for the tick).
+    static uint64_t lockpark_pending_count() noexcept;
+    /// @brief Latch class on @p cpu (diagnostic-only, issue #582 §4.3:
+    ///        never read by any gate/service/escalation/panic path).
+    static uint64_t lockpark_latch_class(uint64_t cpu) noexcept;
+    /// @brief Ready link/flag desync observations (issue #582 INV-RQ-3).
+    static uint64_t runq_link_flag_desync_count() noexcept;
+    /// @brief Hint-miss forced clears (issue #582 §5.5, flag+prio reset).
+    static uint64_t runq_desync_forced_clear_count() noexcept;
+    /// @brief restore_level failures rebuilt from all_tasks_ (#582 §5.5).
+    static uint64_t restore_drop_rebuilt_count() noexcept;
+    /// @brief Enqueue refusals: already-queued (issue #582 §5.5).
+    static uint64_t rqm_enqueue_refused_already_count() noexcept;
+    /// @brief Enqueue refusals: invalid TCB (issue #582 §5.5).
+    static uint64_t rqm_enqueue_refused_invalid_count() noexcept;
+    /// @brief Test-isolation reset for the apply-gate state (issue #582
+    ///        B.2: defer windows, warned latches, all §B counters).
+    ///        QE-owned wiring in test_isolate.cpp; defined here (production).
+    static void scheduler_apply_gate_reset_for_test() noexcept;
+    /// @brief Test-isolation reset for the park latch + counters (#582 §4).
+    static void lockpark_reset_for_test() noexcept;
+    /// @brief Test-isolation reset for the runq desync counters (#582 §5).
+    static void runq_desync_reset_for_test() noexcept;
+    /// @brief Count one already-queued enqueue refusal (issue #582 §5.5).
+    ///        Called from the typed enqueue refusal path (RQM or Scheduler).
+    static void note_rqm_enqueue_refused_already() noexcept;
+    /// @brief Count one invalid-TCB enqueue refusal (issue #582 §5.5).
+    static void note_rqm_enqueue_refused_invalid() noexcept;
+    /// @brief Count one hint-miss forced clear (issue #582 §5.5).
+    static void note_runq_desync_forced_clear() noexcept;
+    /// @brief Count one restore_level failure rebuilt from all_tasks_.
+    static void note_restore_drop_rebuilt() noexcept;
+    /// @brief Count one ready link/flag desync observation (INV-RQ-3).
+    static void note_runq_link_flag_desync() noexcept;
+    /// @brief Typed enqueue-refusal handling (issue #582 INV-RQ-2): the TCB
+    ///        is byte-identical (API guarantee).  Counts + one-shot ERROR
+    ///        with caller ra; the tick sweep rescues + counts.  No-op when
+    ///        the result is Linked.  Called from every RQM::enqueue site.
+    /// @param result The typed enqueue outcome.
+    /// @param tcb The refused (untouched) task.
+    /// @param prio The attempted level (for the diagnostic line).
+    static void note_runq_enqueue_outcome(
+        ReadyQueueManager::RunqEnqueueResult result,
+        const TaskControlBlock &tcb, uint64_t prio) noexcept;
 
     /// @brief Change a task's scheduling priority at runtime.
     /// Re-buckets the task in the O(1) ready queue (if queued) so the change
@@ -1267,6 +1375,30 @@ struct SwSlots {
     ///        leaf→global: spinlocks are non-recursive).  holder() returns
     ///        the locker RA or nullptr — use it for held/not-held checks,
     ///        not cross-CPU owner identity.
+    /// @brief Deferred-switch apply gate (issue #582, binding):
+    ///        INV-APPLY-1 — an ISR epilogue may apply a deferred switch only
+    ///        when the interrupted context holds no scheduler_lock_ take:
+    ///        scheduler_lock_depth_own() == 0 AND scheduler_lock_held() ==
+    ///        false.  Both conjuncts are required: SchedulerLockGuard marks
+    ///        depth AFTER lock() and clears it BEFORE unlock(), so each
+    ///        conjunct alone leaves an unmarked-but-locked window.  Fail
+    ///        direction: defer (never apply, never cancel).
+    ///        INV-APPLY-1a — stated over LIVE contexts only.  A TERMINATED /
+    ///        REAPED context cannot resume its critical section; that is
+    ///        unrecoverable state, never a suspension risk.  There is NO
+    ///        lock-recovery mechanism (SpinLock::holder_ is a return address
+    ///        with no TCB identity); such state is caught fail-closed by the
+    ///        deadline escalations (INV-APPLY-2 / INV-PARK-2), never repaired.
+    ///        INV-APPLY-2 — deferral is non-destructive (no writes to the arm
+    ///        atoms) and tick-deadline bounded: >=1 tick warns once
+    ///        ([S582-APPLY-DEFER-STUCK]), >=8 ticks with the lock still held
+    ///        fails closed (dump + panic), >=8 ticks with the lock free
+    ///        re-arms (SCHED+19, arm retained).  No arm is ever cancelled
+    ///        because of a deferral streak.
+    ///        INV-APPLY-3 — deny is absolute; force_apply (terminate-driven,
+    ///        issue #221) is a selector to attempt an apply, never an
+    ///        override of INV-APPLY-1.  On deny the arm AND the force bit are
+    ///        retained (deny-and-rearm); the next epilogue retries.
     // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
     static sync::SpinLock scheduler_lock_;
     /// @brief Per-CPU O(1) ready queues (issue #25 C1).  Queue[CPU] holds
@@ -1291,6 +1423,23 @@ struct SwSlots {
     ///        ownership/discipline as stuck_rescue_count_; reset by
     ///        reset_orphan_rescue_count_for_test().
     static uint64_t orphan_rescue_count_;
+    /// @brief Ready link/flag desync observations since boot (issue #582
+    ///        INV-RQ-3 oracle: link/flag mismatches seen by the typed API).
+    ///        Same ownership/discipline as stuck_rescue_count_; reset by
+    ///        runq_desync_reset_for_test().
+    static uint64_t runq_link_flag_desync_count_;
+    /// @brief Hint-miss forced clears (issue #582 §5.5: flag+prio reset on
+    ///        a provably unlinked node).  Same discipline; same reset.
+    static uint64_t runq_desync_forced_clear_;
+    /// @brief restore_level failures rebuilt from all_tasks_ (#582 §5.5).
+    ///        Same ownership/discipline; same reset.
+    static uint64_t restore_drop_rebuilt_;
+    /// @brief Enqueue refusals: already-queued (issue #582 §5.5, no-op +
+    ///        DEBUG membership assert).  Same discipline; same reset.
+    static uint64_t rqm_enqueue_refused_already_;
+    /// @brief Enqueue refusals: invalid TCB (issue #582 §5.5, byte-identical
+    ///        + one-shot ERROR + sweep rescue).  Same discipline; same reset.
+    static uint64_t rqm_enqueue_refused_invalid_;
     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
     ///        Shared by the stranded-READY and IPC-wake sweeps.
     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;

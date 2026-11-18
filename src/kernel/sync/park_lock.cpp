@@ -5,6 +5,8 @@
 #include <kernel/test/park_seam.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_order.hpp>
+#include <kernel/task/scheduler_lock_guard.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/cpu_context.hpp>
 #include <kernel/arch/io.hpp>
@@ -185,6 +187,23 @@ static ParkDenyReason deny_reason() noexcept {
     }
     if (spinlock_held_by_current_count() != 0)
         return ParkDenyReason::LockHeld;
+    // Issue #582 INV-PARK-2: no context owning a scheduler_lock_ take may
+    // enter either park (the tick cannot take the lock, so a parked holder
+    // could never be dispatched).  Deny + latch the runner for the release
+    // hook / tick service points.  Placed ahead of the task-validity arms:
+    // a BLOCKED holder must latch (SelfLock service), not fall into the
+    // generic NotRunning refusal.  Class is SelfLock by construction here
+    // (depth != 0); diagnostic-only, never decided upon (§4.3).
+    if (scheduler_lock_depth_own() != 0) {
+        auto *deny_task = Scheduler::current_task();
+        if (deny_task != nullptr &&
+            deny_task->magic == TaskControlBlock::TCB_MAGIC) {
+            gs::lockpark_latch_arm(deny_task->id, deny_task->generation,
+                                   static_cast<uint8_t>(
+                                       gs::LockParkClass::SelfLock));
+        }
+        return ParkDenyReason::SchedLock;
+    }
     auto *task = Scheduler::current_task();
     if (task == nullptr || task->magic != TaskControlBlock::TCB_MAGIC)
         return ParkDenyReason::NotTask;

@@ -29,6 +29,12 @@
 
 namespace kernel {
 
+/// @brief Release-hook park service (issue #582 §4.4 S1, INV-PARK-2).
+///        Declared here so the guard dtor/unlock can call it without
+///        including scheduler.hpp (include cycle); canonical declaration
+///        lives in scheduler.hpp, single definition in scheduler_tick.cpp.
+void scheduler_park_service_latch() noexcept;
+
 /// @brief Per-CPU scheduler_lock_ take depth (#417; defined in
 ///        core/global_state.cpp, zero-initialised).  Slot [cpu] counts
 ///        takes of scheduler_lock_ by that CPU not yet released.
@@ -86,6 +92,11 @@ class SchedulerLockGuard {
             // fails — the lock itself is still held here).
             --scheduler_lock_depth[arch::cpu_index()];
             lock_.unlock();
+            // Issue #582 §4.4 S1: release hook — only now (depth 0, lock
+            // free) may a latched BLOCKED runner be parked in place.  The
+            // hook re-validates everything; a retained latch is harmless.
+            if (scheduler_lock_depth[arch::cpu_index()] == 0)
+                scheduler_park_service_latch();
         }
     }
     /// @brief True while this guard holds the lock and will release it.
@@ -96,6 +107,9 @@ class SchedulerLockGuard {
             owns_ = false;
             --scheduler_lock_depth[arch::cpu_index()];
             lock_.unlock();
+            // Issue #582 §4.4 S1: same release hook as the destructor.
+            if (scheduler_lock_depth[arch::cpu_index()] == 0)
+                scheduler_park_service_latch();
         }
     }
     SchedulerLockGuard(const SchedulerLockGuard &) = delete;

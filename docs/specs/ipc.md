@@ -152,6 +152,19 @@ orphan re-enqueue; `4bf751b4` — owner-resolution self-switch no-op;
 `b85ba27d` — elf_loader `lock_` held across a timer-ISR preemption).  Debug
 `all` gates pass with the trace OFF (873/873 ×2, 932/932, 942/942).
 
+**APPLY GATE — ADDED issue #582 (INV-APPLY-1/2/3).** The deferred-switch
+apply path is gated on the interrupted context holding no
+`scheduler_lock_` take (per-CPU depth AND lock word — both conjuncts,
+mark-after-take / clear-before-release). A gated deny defers (return 2):
+the arm and the terminate-driven `force_apply` bit are retained for the
+next epilogue (deny-and-rearm; force never overrides). Deferral is
+tick-deadline bounded (>=1 warn once, >=8 + held fail-closed with dump +
+panic, >=8 + free re-arm with SCHED+19). Per-arch epilogues widen only
+the return-value branch (x86 `cmp eax,2 / je .restore`, aa64
+`cmp w0,#2 / b.eq .restore`, rv64 `li t1,2 / beq a0,t1,8f`); no new
+calls, no new preserved registers; riscv64 force is peek-only (the C-side
+clears own the bit on apply/abort/RMS-CLR/AP-reset).
+
 ## 5. Sync Audit Findings (status ledger)
 
 | ID | Finding | Status |

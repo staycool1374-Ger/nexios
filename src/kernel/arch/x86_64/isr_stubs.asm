@@ -336,6 +336,14 @@ isr_common:
     pop rsi
     pop rdx
     pop rcx
+    ; Issue #582 INV-APPLY-1: the gate returns 2 (defer) when the
+    ; interrupted context holds scheduler_lock_.  A bare test-then-jump
+    ; would mis-apply a deferral; widen the branch so a deferral returns
+    ; to .restore with the arm (and the force bit) left pending.
+    ; .restore never clears scheduler_save_rsp_to.  rax holds the return;
+    ; rbx still holds the abort RSP; r11 (per-CPU index) survives.
+    cmp eax, 2
+    je .restore
     test rax, rax
     jz .abort_switch
 
