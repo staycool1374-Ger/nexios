@@ -292,7 +292,13 @@ JARVIS_TEST(buffer_pool_no_pmm_fallback, "PRE: none | POST: none") {
         JARVIS_ASSERT(task != nullptr);
 
         uint64_t handles[BufferPool::POOL_PAGES];
-        uint64_t va = 0x7000000000ULL;
+        // Sibling-test VA window (0x40200000, PD[1]): the tables above it
+        // already exist (stub + stack share the region), so the alloc loop
+        // only grows one PT page, which cleanup frees. A far VA (e.g.
+        // 0x7000000000) forces FRESH top-level tables on riscv64 (L1+L2 =
+        // +2 PMM pages the user-half teardown does not reclaim) and breaks
+        // the net-zero assert there while x86_64/aarch64 stay green.
+        uint64_t va = 0x40200000ULL;
         for (size_t i = 0; i < kExpect; ++i) {
             uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
             JARVIS_ASSERT_FMT(h != 0, "pool alloc %lu must succeed", i);
