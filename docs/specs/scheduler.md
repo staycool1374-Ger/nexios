@@ -76,6 +76,13 @@ All "[IMPLEMENTED]" markers are code-verified in the current tree.
 | INV-4 | Runnable set derived from `state`; ready queue is a **cache, not authority**. `next_task()` = `peek_highest()` + commit-dequeue | [IMPLEMENTED] |
 | INV-4a | `reschedule()` never returns to a still-BLOCKED caller: a BLOCKED caller hlt-waits (timer wakes every tick) until dispatched instead of running on while BLOCKED+dequeued (F1 #545) | [IMPLEMENTED] |
 | INV-4b | A task with `state == BLOCKED` takes **no spinlock**.  The dequeue + BLOCKED marking + (where needed) unlock happen as one atomic IF=0 step; loops gate lock-taking paths on `state != BLOCKED` (F1 #545) | [IMPLEMENTED] |
+| INV-APPLY-1 | An ISR epilogue may apply a deferred switch only when the interrupted context holds no `scheduler_lock_` take (`scheduler_lock_depth_own() == 0` AND `scheduler_lock_held() == false`; both conjuncts required). Fail direction: defer, never apply, never cancel (#582) | [IMPLEMENTED] |
+| INV-APPLY-2 | Deferral is non-destructive and tick-deadline bounded: >=1 tick warns once, >=8 ticks with the lock held fails closed (dump + panic), >=8 ticks with the lock free re-arms (SCHED+19). No arm is ever cancelled on a deferral streak (#582) | [IMPLEMENTED] |
+| INV-APPLY-3 | Deny is absolute; `force_apply` (terminate-driven) is a selector to attempt an apply, never an override. On deny the arm AND the force bit are retained (deny-and-rearm) (#582) | [IMPLEMENTED] |
+| INV-PARK-2 | No context owning a `scheduler_lock_` take may enter either park; a BLOCKED runner that was not parked is latched (`SelfLock` = holds the lock, `ExternalDenial` otherwise — class is diagnostic-only). Service is hook-at-release for SelfLock in plain task context, tick-only otherwise; uncovered 8 consecutive instants fail closed (SCHED+17) (#582) | [IMPLEMENTED] |
+| INV-RQ-1 | `in_ready_queue_`, `runq_next_`, `runq_prev_` and `rq_priority_` are written only inside `TaskQueue`, each mutation one IRQ-atomic unit. At every ISR boundary each TCB is physically linked in exactly one level queue, except the documented `ready_deferred_` current-task deferral (#582) | [IMPLEMENTED] |
+| INV-RQ-2 | Every enqueue refusal is typed (`Linked`/`AlreadyQueued`/`RefusedInvalid`) and reported; the TCB is byte-identical. No caller sets `in_ready_queue_`/`rq_priority_` itself (#582) | [IMPLEMENTED] |
+| INV-RQ-3 | `orphan_rescue_count_`, `stuck_rescue_count_` and `runq_link_flag_desync_count_` are the violation oracles; all read 0 in a healthy run (#582) | [IMPLEMENTED] |
 | INV-5 | State-transition coherence: leaving runnable states ⇒ dequeue. `send_sync` is the historical exception (BLOCKED-in-runq, healed by the peek loop) | [PARTIALLY CHANGED] — see §5 |
 | INV-6 | Every priority change must re-index the ready queue via `move_priority()` | [IMPLEMENTED] |
 | INV-7 | Reaper/termination invariants (a-f): full unlink from RQ / AllTasks / DeadlineList / id_table / blocked_senders / current before free | binding |
@@ -137,6 +144,45 @@ is needed and no IF=0 spin ever happens).
 
 F2 (follow-up, not fixed here): the tick-tail direct switch still has no
 INV-C1 check — diagnosis-only counter proposed, decision logic unchanged.
+
+### INV-APPLY-1/2/3 + INV-PARK-2 — issue #582 [IMPLEMENTED]
+
+Two intertwined defects: (B) a task suspended while holding
+`scheduler_lock_` freezes the scheduler (the timer path needs the lock);
+(A) READY + `in_ready_queue_==1` + linked-nowhere from a non-atomic
+flag/links write. Sequencing is mandatory: B first (turns A's silent
+freeze into a counted rescue), then A.
+
+Apply gate (`scheduler_validate_pending_switch`, return ABI 1 = apply,
+0 = abort/clear, 2 = defer): deny is fail-closed toward defer — never
+toward apply or cancel. Per-arch branch widenings route a 2 to the
+arm-preserving restore path (x86 `.restore`, aa64 `.restore`, rv64 `8f`
+depth-dec only). `force_apply` (riscv64 peeks only; all clears are
+C-side) is retained on deny. Escalation: >=1 tick warns once
+(`[S582-APPLY-DEFER-STUCK]` + census), >=8 ticks with the lock held fails
+closed (SCHED+17 + §4.9 dump + panic), >=8 ticks with the lock free
+re-arms (SCHED+19, arm retained).
+
+Park latch (INV-PARK-2): a BLOCKED runner that `reschedule()` does not
+park latches `{task_id, generation, class, since_tick, covered_ticks}`
+(class is diagnostic-only — no decision predicate reads it). Service:
+release hook (`SchedulerLockGuard` dtor/`unlock`, post-unlock at depth 0,
+five-term discriminator) parks in place for SelfLock in plain task
+context; the pre-RMS tick point clears (RMS dispatches right after) or
+counts a covered instant with rearm; a `:165` try_lock miss counts
+lock-free. Covered >= 8 fails closed (SCHED+17); pending >= 1 tick warns
+once (SCHED+18). Monotonic clock: rearm can never restart it.
+
+Holder-bounds recount (main at implementation time): **35** static
+`SchedulerLockGuard` constructions (**33** in release;
+`tick.cpp:86,:105` are `CONFIG_DEBUG_IPC_SCHED`-gated), **7** adopting a
+preceding `try_lock` (**5** in release), `registry.cpp:354` excluded
+(test helper). The audited 26-row table's row 21
+(`scheduler_lifecycle.cpp:816`) names an `ENSURE`, not a guard
+construction — folded into the grouped rows; IF=1 task-context rows are
+#1 (`try_direct_switch`) and #3 (queue setters), each O(1)+O(MAX_TASKS),
+>=80x under the 8-tick deadline. Chained holders across 8 instants are
+covered by the monotonic aggregate rule (fail-safe, availability-only).
 
 ### INV-6 — `move_priority()` call sites [IMPLEMENTED]
 

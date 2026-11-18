@@ -268,6 +268,26 @@ constexpr DmesgRecord kDmesgCatalog_TEST[] = {
      "Selftest: test count drift"},
 };
 
+/// @brief Scheduler gate records (canonical base kDmesgBase_SCHED, issue
+///        #582): the apply-gate / park-latch / reschedule diagnostics.
+///        Collision-checked: +1 (lifecycle ERROR), +14 (terminate WARN) and
+///        +15 (reschedule WARN) predate this table and stay uncatalogued;
+///        +16..+19 are free.  NOTE: no static_assert below — the shared
+///        catalog_table_valid() requires error_nr in [7000, 19000), which
+///        excludes the whole 4000-window SCHED base, so a SCHED table can
+///        never satisfy it.  Registration here feeds catalog_text(); the
+///        severities are mirrored in lookup_severity's SCHED arm.
+constexpr DmesgRecord kDmesgCatalog_SCHED[] = {
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 16, LogSeverity::WARN,
+     "Sched: BLOCKED reschedule under scheduler_lock_"},
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 17, LogSeverity::FATAL,
+     "Sched: scheduler_lock_ unreleased (fail-closed)"},
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 18, LogSeverity::WARN,
+     "Sched: lock-park latch stuck"},
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 19, LogSeverity::WARN,
+     "Sched: apply defer re-armed (lock free)"},
+};
+
 /// @brief Resolve a canonical (subsystem, error-nr) pair to its record.
 /// @return Pointer to the matching record, or nullptr when the pair is not
 ///         catalogued (caller falls back to ERROR/unknown-text).
@@ -312,6 +332,13 @@ inline const DmesgRecord *catalog_lookup(ErrorSubsystem subsys,
     case ErrorSubsystem::TASK:
         table = kDmesgCatalog_TASK;
         count = sizeof(kDmesgCatalog_TASK) / sizeof(kDmesgCatalog_TASK[0]);
+        break;
+    case ErrorSubsystem::SCHED:
+        // Issue #582: registered for catalog_text(); severities mirrored
+        // in lookup_severity (the shared validator excludes the 4000
+        // window, so no static_assert — see the table comment).
+        table = kDmesgCatalog_SCHED;
+        count = sizeof(kDmesgCatalog_SCHED) / sizeof(kDmesgCatalog_SCHED[0]);
         break;
     case ErrorSubsystem::PMM:
         table = kDmesgCatalog_PMM;
@@ -387,7 +414,19 @@ inline LogSeverity lookup_severity(ErrorSubsystem subsys,
             return LogSeverity::ERROR;
         }
     case ErrorSubsystem::SCHED:
-        return raw == 12 ? LogSeverity::WARN : LogSeverity::ERROR;
+        // Issue #582: +16..+19 registered severities (see
+        // kDmesgCatalog_SCHED); raw 12 keeps its historic WARN.
+        switch (raw) {
+        case 12:
+        case 16:
+        case 18:
+        case 19:
+            return LogSeverity::WARN;
+        case 17:
+            return LogSeverity::FATAL;
+        default:
+            return LogSeverity::ERROR;
+        }
     case ErrorSubsystem::IPC:
         return raw == 3 ? LogSeverity::WARN : LogSeverity::ERROR;
     case ErrorSubsystem::SYSCALL:

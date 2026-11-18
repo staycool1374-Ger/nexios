@@ -23,11 +23,19 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_snapshot_internal.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
+#include <kernel/task/scheduler_debug_internal.hpp> // issue #582 A1 op-ring
 #include <kernel/sync/spinlock_guard.hpp>
+#include <lib/logger.hpp>
 
 namespace kernel {
 
+using sched_queue::edf_eligible;
 using sched_queue::edf_ready_;
+
+namespace {
+// One-shot latch for the restore-drop ERROR (issue #582 §5.5).
+bool s_restore_drop_warned = false;
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Test-isolation helpers
@@ -62,7 +70,41 @@ void Scheduler::capture_rqpod(ReadyQueuePOD &out, uint64_t cpu) noexcept {
 }
 
 void Scheduler::restore_rqpod(const ReadyQueuePOD &src, uint64_t cpu) noexcept {
-    rq_for(cpu).restore_pod(src);
+    const uint64_t failed = rq_for(cpu).restore_pod(src);
+    if (failed == 0)
+        return;
+    // Issue #582 §5.5: a restore_level failure referencing live READY tasks
+    // is fail-closed per level (dropped, see restore_pod), then that level
+    // is rebuilt from all_tasks_ (detach_out_of_band + enqueue_ready, the
+    // same membership path as the normal rebuild).  One-shot ERROR with an
+    // op-ring dump; the sweep stays clean because the rebuild re-links.
+    note_restore_drop_rebuilt();
+    if (!s_restore_drop_warned) {
+        s_restore_drop_warned = true;
+        kernel::Logger::error(
+            "[RUNQ] restore_pod dropped %lu level(s) on cpu %lu, rebuilt",
+            failed, cpu);
+        sched_debug::sched_runq_trace_dump(UINT64_MAX, 8);
+    }
+    for (auto *t = all_tasks_.first_ptr(); t; t = all_tasks_.next_ptr(t)) {
+        if (t->magic != TaskControlBlock::TCB_MAGIC)
+            continue;
+        if (t->state != TaskState::READY)
+            continue;
+        if (queue_target(*t) != cpu)
+            continue;
+        if (edf_eligible(*t))
+            continue;
+        bool phys = false;
+        for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING && !phys; ++p) {
+            if (rq_for(cpu).queue(p).contains(*t))
+                phys = true;
+        }
+        if (phys)
+            continue;
+        rq_task(*t).detach(*t);
+        enqueue_ready(*t);
+    }
 }
 
 void Scheduler::capture_percpu(SchedPerCpuPod &out) noexcept {

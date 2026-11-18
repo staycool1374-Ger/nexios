@@ -27,14 +27,27 @@ struct alignas(64) ReadyQueuePOD {
 /// @brief O(1) priority-ordered ready queue.
 /// Uses a bitmap (PriorityMap) to track non-empty priority levels and a
 /// per-priority TaskQueue array. Enqueue/dequeue by priority are O(1).
+/// Issue #582 INV-RQ-1/2: all flag/link writes go through TaskQueue's
+/// IRQ-atomic typed API; only RQM::enqueue sets rq_priority_/flag, and
+/// only inside a successful try_link.  Refusals are typed
+/// (RunqEnqueueResult) and leave the TCB byte-identical.
 class ReadyQueueManager {
     PriorityMap bitmap_; ///< Bitmap tracking non-empty priority levels.
     TaskQueue queues_[CONFIG_PRIORITY_CEILING +
                       1]; ///< One FIFO queue per priority level.
 
   public:
+    /// @brief Typed enqueue outcome (issue #582 INV-RQ-2).
+    enum class RunqEnqueueResult : uint8_t {
+        Linked = 0,        ///< Committed: flag+links+prio set via try_link.
+        AlreadyQueued = 1, ///< Refused: flag already set (untouched).
+        RefusedInvalid = 2, ///< Refused: invalid TCB (byte-identical).
+    };
     /// @brief Enqueues a TCB at the given priority level.
-    void enqueue(TaskControlBlock &tcb, uint64_t priority) noexcept;
+    /// @return Linked on commit; any refusal leaves the TCB untouched and
+    ///         is reported (no silent drops — the caller counts + warns).
+    RunqEnqueueResult enqueue(TaskControlBlock &tcb,
+                              uint64_t priority) noexcept;
     /// @brief Dequeues and returns the highest-priority ready TCB.
     TaskControlBlock *dequeue_highest() noexcept;
     /// @brief Dequeues and returns the head TCB at one priority level
@@ -47,6 +60,11 @@ class ReadyQueueManager {
     TaskControlBlock *peek_highest() noexcept;
     /// @brief Removes a specific TCB from its priority queue.
     void remove(TaskControlBlock &tcb, uint64_t priority) noexcept;
+    /// @brief Level-agnostic typed detach (issue #582 §5.4): splices from
+    ///        the hint level when contained, then clears flag+links+prio
+    ///        as one unit.  For sites that proved absence (sweep) or own
+    ///        a fresh TCB (register/add) and want no level walk.
+    void detach(TaskControlBlock &tcb) noexcept;
     /// @brief Moves a TCB from one priority queue to another.
     void move_priority(TaskControlBlock &tcb, uint64_t old_prio,
                        uint64_t new_prio) noexcept;
@@ -75,7 +93,12 @@ class ReadyQueueManager {
     /// @brief Captures full state into a POD for snapshot/restore.
     void capture_pod(ReadyQueuePOD &out) const noexcept;
     /// @brief Restores full state from a previously captured POD.
-    void restore_pod(const ReadyQueuePOD &src) noexcept;
+    ///        Every level chain is validated via TaskQueue::restore_level;
+    ///        invalid levels are dropped (bitmap cleared, node membership
+    ///        force-cleared own-fields-only) and counted in the return.
+    /// @return Number of dropped levels (0 = all levels validated).  The
+    ///         caller rebuilds the failed levels from all_tasks_ (§5.5).
+    uint64_t restore_pod(const ReadyQueuePOD &src) noexcept;
     /// @brief Empties all per-priority queues (draining each via pop_front).
     void clear_all() noexcept;
     /// @brief Resets all queues and bitmap to empty state.

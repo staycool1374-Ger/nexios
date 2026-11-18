@@ -49,6 +49,7 @@ enum class ParkDenyReason : uint8_t {
     ForeignGuard, ///< Depth owned by a foreign context (diagnostic only:
                   ///< never selects the pure-spin branch when
                   ///< CONFIG_LOCK_PARK_FOREIGN_OWNER_ALLOW == 1).
+    SchedLock,    ///< Own scheduler_lock_ take (issue #582 INV-PARK-2).
 };
 
 /// @brief INV-L1 park predicate (side-effect free): true iff the calling

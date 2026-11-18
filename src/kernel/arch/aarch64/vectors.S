@@ -316,6 +316,13 @@ irq_context_switch_common:
     // Returns 1 = apply, 0 = abort (validator cleared the atoms and
     // undid the publish side effects).
     bl      scheduler_validate_pending_switch
+    // Issue #582 INV-APPLY-1: the gate returns 2 (defer) when the
+    // interrupted context holds scheduler_lock_.  Widen the branch so a
+    // deferral takes .restore with the arm (and the force bit) pending.
+    // Defer target .restore leaves the arm pending.  w0 holds the
+    // return; arm/slot registers are reloaded after.
+    cmp     w0, #2
+    b.eq    .restore
     cbz     w0, .Lswitch_abort
 
     // Load new SP from scheduler_load_rsp_from

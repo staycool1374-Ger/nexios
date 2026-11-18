@@ -596,14 +596,21 @@ void Scheduler::on_tick() noexcept {
             task->ready_deferred_ = false;
             uint64_t rescue_no = 0;
             if (task->in_ready_queue_) {
-                task->in_ready_queue_ = false;
-                task->rq_priority_ = 0;
+                // Issue #582 §5.4: typed detach (the scan above proved
+                // absence under scheduler_lock_, so the splice no-ops and
+                // the membership clears as one unit) instead of raw field
+                // writes.  First detection also dumps the op-ring for the
+                // interleaving that produced the desync.
+                rq_task(*task).detach(*task);
                 rescue_no = ++orphan_rescue_count_;
                 if (rescue_no == 1 ||
                     (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
                     Logger::warn(
                         "sched: flagged-orphan READY rescued #%lx id=%lx eff=%lx",
                         rescue_no, task->id, effective_priority(task));
+                    if (rescue_no == 1) {
+                        sched_debug::sched_runq_trace_dump(task->id, 8);
+                    }
                 }
             } else {
                 rescue_no = ++stuck_rescue_count_;
@@ -612,6 +619,9 @@ void Scheduler::on_tick() noexcept {
                     Logger::warn(
                         "sched: stranded READY rescued #%lx id=%lx eff=%lx",
                         rescue_no, task->id, effective_priority(task));
+                    if (rescue_no == 1) {
+                        sched_debug::sched_runq_trace_dump(task->id, 8);
+                    }
                 }
             }
             enqueue_ready(*task);
@@ -813,6 +823,14 @@ void Scheduler::on_tick() noexcept {
 #if !CONFIG_DEADLINE_MONITOR_TASK
         __atomic_fetch_add(&deadline_detection_integrity, 1, __ATOMIC_RELEASE);
 #endif
+    } else {
+        // Issue #582 §4.4 S2b: the :165 try_lock failed, so the held
+        // region above was never entered.  Count a covered instant against
+        // a live latched runner here (lock-free-safe double-read + rule
+        // core).  In task-context on_tick reentrancy (the caller's own
+        // body holds the lock) this also fires harmlessly in production;
+        // the R7 resets cover the latch and SCHED+16..19 rows.
+        gs::lockpark_service_tick_miss();
     }
 
     // FIX(sched-race): The deferred-kill flush, sporadic budget management,
@@ -1027,7 +1045,14 @@ void Scheduler::on_tick() noexcept {
     // try-locked + bounded, safe to call every tick; no-op when empty).
     TlbShootdown::on_tick(arch::Timer::ticks());
 
+    // Issue #582 §4.4 S2: tick service point — immediately before the
+    // RMS call below (same tick => same-tick dispatch after the clear).
+    // The pre-RMS core runs rules 1-2, then rule 3 (clear + stash for the
+    // post-RMS confirm) when deliverable, else rules 4/5/6.  All actions
+    // are lock-free-safe (atomics + re-validated reads).
+    gs::lockpark_service_tick_pre();
     rate_monotonic_schedule();
+    gs::lockpark_service_tick_post();
 
     // M2 §6.2 item 6: TSC-domain tick watchdog notes every completed BSP
     // tick.  Lock-free snapshot (atomics only); a no-op until calibrated.
@@ -1249,6 +1274,10 @@ uint64_t g_resched_park_wakeups = 0;
 // can tell a parked waiter from a zombie waiter apart.
 uint64_t g_resched_park_denied_count = 0;
 uint64_t g_resched_park_denied_why = 0;
+// Issue #582 §4.8: BLOCKED reschedule() calls observed holding
+// scheduler_lock_ (DEBUG-only log+count, never a panic, no control-flow
+// divergence between builds).
+uint64_t g_resched_lock_blocked_count = 0;
 #endif
 
 // CPU-local gate: no scheduler state, safe to call before the arm.
@@ -1327,12 +1356,16 @@ bool resched_park_gate_task(TaskControlBlock *cur,
         return false; // RUNNING/READY callers return immediately (C1).
     return true;
 }
+} // namespace (gate helpers above; park body below needs kernel scope)
 
 // Halt until dispatched (woken).  Never touches task state, the ready
 // queue, or any lock: wake bookkeeping stays 100% with the waker and
 // the dispatch path.  Bounded by the tick: every hlt exits on the next
 // timer interrupt, and a wake delivered inside an ISR is consumed before
 // the next hlt (no lost wake, no spin-out).
+// Issue #582: at kernel:: scope (not anonymous) so the S1 release hook
+// below — which must have external linkage per its scheduler.hpp
+// declaration — can park through it.
 void resched_park_until_dispatched(TaskControlBlock &t,
                                    bool entry_if) noexcept {
 #if defined(CONFIG_DEBUG_IPC_SCHED)
@@ -1370,7 +1403,21 @@ void resched_park_until_dispatched(TaskControlBlock &t,
     else
         arch::cli();
 }
-} // namespace
+
+// Issue #582 §4.4 S1: release-hook park service.  Called from
+// SchedulerLockGuard's dtor/unlock AFTER lock_.unlock(), only when the
+// decremented depth reached 0.  Runs the gs rule core; on ParkCurrent
+// the current task (re-validated inside) parks in place via the same
+// body reschedule() uses.  Every other outcome retains or clears the
+// latch for the tick — the hook never spins, never takes a lock.
+void scheduler_park_service_latch() noexcept {
+    if (gs::lockpark_service_hook() != gs::LockParkAction::ParkCurrent)
+        return;
+    auto *cur = Scheduler::current_task();
+    if (cur == nullptr || cur->magic != TaskControlBlock::TCB_MAGIC)
+        return;
+    resched_park_until_dispatched(*cur, arch::interrupts_enabled());
+}
 
 void Scheduler::reschedule() noexcept {
 #if defined(CONFIG_DEBUG) && CONFIG_IRQ_CONTRACT_ASSERT != 0
@@ -1396,6 +1443,29 @@ void Scheduler::reschedule() noexcept {
                             current_task() ? current_task()->id : 0);
         kernel::Logger::warn("sched: spinlock held across reschedule");
 #endif
+    }
+#endif
+#if defined(CONFIG_DEBUG)
+    // Issue #582 §4.8: a BLOCKED caller holding scheduler_lock_ across
+    // reschedule() is the SelfLock latch class (INV-PARK-2).  Log-only
+    // (SCHED+16) + count — no panic, no control-flow divergence between
+    // builds.  The latch + release-hook/tick service below owns the fix.
+    if (scheduler_lock_depth_own() != 0) {
+        if (auto *diag_cur = current_task();
+            diag_cur != nullptr &&
+            diag_cur->magic == TaskControlBlock::TCB_MAGIC &&
+            diag_cur->state == TaskState::BLOCKED) {
+            __atomic_fetch_add(&g_resched_lock_blocked_count, 1ULL,
+                               __ATOMIC_RELAXED);
+            log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
+                                log::kDmesgBase_SCHED + 16,
+                                log::LogSeverity::WARN,
+                                "sched: BLOCKED reschedule under lock",
+                                diag_cur->id);
+            kernel::Logger::warn(
+                "sched: BLOCKED reschedule under scheduler_lock_ id=%lu",
+                diag_cur->id);
+        }
     }
 #endif
     // F1 (#545 wedge hunt, INV-4a): capture the IRQ state and the park
@@ -1481,6 +1551,27 @@ void Scheduler::reschedule() noexcept {
     __atomic_store_n(&Scheduler::SwSlots::need_resched(), true, __ATOMIC_RELEASE);
     kernel::dispatch_step(kernel::SchedDispatchSteps::Arm); // issue #347
     } while (0); // End arm scope: guard closes, IRQs restored.
+    // Issue #582 §4.2 (INV-PARK-2): every non-park of a BLOCKED runner
+    // latches it for the release hook / tick service points.  Covers all
+    // non-park shapes (gate-denied bits, nothing-to-arm, EDF arm,
+    // pre-candidate breaks).  Arming is a hint: every decision happens at
+    // the service points under the lock with {id, generation, state}
+    // re-validated.  current_task() is stable here (no switch applied
+    // between the arm scope above and this check).
+    if (resched_park_candidate == nullptr) {
+        auto *latch_cur = current_task();
+        if (latch_cur != nullptr &&
+            latch_cur->magic == TaskControlBlock::TCB_MAGIC &&
+            latch_cur->state == TaskState::BLOCKED) {
+            const uint8_t arm_cls = (scheduler_lock_depth_own() != 0)
+                                        ? static_cast<uint8_t>(
+                                              gs::LockParkClass::SelfLock)
+                                        : static_cast<uint8_t>(
+                                              gs::LockParkClass::ExternalDenial);
+            gs::lockpark_latch_arm(latch_cur->id, latch_cur->generation,
+                                   arm_cls);
+        }
+    }
     // INV-4a: a BLOCKED caller must not run on.  The park hlt-waits
     // (timer wakes every tick) until dispatched; RUNNING callers and
     // gate-denied contexts skip it (candidate is null).
@@ -1516,6 +1607,14 @@ uint64_t Scheduler::resched_park_entries_count() noexcept {
 uint64_t Scheduler::resched_park_wakeups_count() noexcept {
 #if defined(CONFIG_DEBUG)
     return __atomic_load_n(&g_resched_park_wakeups, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
+}
+
+uint64_t Scheduler::resched_lock_blocked_count() noexcept {
+#if defined(CONFIG_DEBUG)
+    return __atomic_load_n(&g_resched_lock_blocked_count, __ATOMIC_RELAXED);
 #else
     return 0;
 #endif

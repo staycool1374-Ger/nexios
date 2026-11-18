@@ -435,7 +435,9 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
     // (parent_id cleared) and fail an already-satisfied wait.
     const bool waiter_collects = (p->state == TaskState::BLOCKED);
     if (p->state == TaskState::BLOCKED) {
-        p->in_ready_queue_ = false;
+        // Issue #582: typed paths (dequeue clears both queues +
+        // deferral + stale arms; set_task_ready routes EDF-aware).
+        Scheduler::dequeue_ready(*p);
         Scheduler::set_task_ready(*p);
         if (task_stack_ptr(p)) {
             // NOLINTNEXTLINE(performance-no-int-to-ptr)

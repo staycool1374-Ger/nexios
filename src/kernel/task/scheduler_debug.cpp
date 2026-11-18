@@ -23,6 +23,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_debug_internal.hpp>
 #include <kernel/core/global_state.hpp>
+#include <kernel/arch/timer.hpp>
 #include <lib/logger.hpp>
 #include <assert.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
@@ -245,6 +246,115 @@ constinit uint64_t g_diag_rms_count = 0;
 constinit uint64_t g_diag_switch_count = 0;
 constinit uint64_t g_diag_tick_count = 0;
 #endif
+
+#if defined(CONFIG_DEBUG)
+// Issue #582 A1: per-CPU ready-queue op ring (permanent CONFIG_DEBUG
+// instrumentation).  Single-producer (own CPU writes its own slot),
+// relaxed index, no allocation, ISR-safe.  Records every typed
+// link/flag mutation so the tick sweep can dump the interleaving that
+// produced an orphan/desync on first detection.
+inline constexpr size_t kRunqTraceDepth = 64;
+struct RunqTraceEntry {
+    uint64_t tag = 0;
+    uint64_t task_id = 0;
+    uint64_t flag_before = 0;
+    uint64_t flag_after = 0;
+    uint64_t next = 0;
+    uint64_t prev = 0;
+    uint64_t rq_prio = 0;
+    uint64_t level = 0;
+    uint64_t ra = 0;
+    uint64_t tick = 0;
+};
+static constinit RunqTraceEntry
+    g_runq_trace[CONFIG_MAX_CPUS][kRunqTraceDepth] = {};
+static constinit uint64_t g_runq_trace_idx[CONFIG_MAX_CPUS] = {};
+
+void sched_runq_trace(RunqTraceTag tag, uint64_t task_id,
+                      uint64_t flag_before, uint64_t flag_after,
+                      uint64_t next, uint64_t prev, uint64_t rq_prio,
+                      uint64_t level) noexcept {
+    const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
+    const uint64_t idx = g_runq_trace_idx[cpu]++ % kRunqTraceDepth;
+    RunqTraceEntry &e = g_runq_trace[cpu][idx];
+    e.tag = static_cast<uint64_t>(tag);
+    e.task_id = task_id;
+    e.flag_before = flag_before;
+    e.flag_after = flag_after;
+    e.next = next;
+    e.prev = prev;
+    e.rq_prio = rq_prio;
+    e.level = level;
+    e.ra = reinterpret_cast<uint64_t>(__builtin_return_address(0));
+    e.tick = arch::Timer::ticks();
+}
+
+void sched_runq_trace_dump(uint64_t task_id,
+                            uint64_t max_entries) noexcept {
+    if (max_entries == 0)
+        return;
+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu) {
+        const uint64_t total = g_runq_trace_idx[cpu];
+        const uint64_t window =
+            (total < kRunqTraceDepth ? total : kRunqTraceDepth);
+        const uint64_t shown =
+            (window < max_entries ? window : max_entries);
+        const uint64_t start = total - shown;
+        for (uint64_t i = start; i < total; ++i) {
+            const RunqTraceEntry &e = g_runq_trace[cpu][i % kRunqTraceDepth];
+            if (task_id != UINT64_MAX && e.task_id != task_id)
+                continue;
+            Logger::raw_write("[RUNQ] cpu=");
+            Logger::print_dec(cpu);
+            Logger::raw_write(" tag=");
+            Logger::print_dec(e.tag);
+            Logger::raw_write(" id=");
+            Logger::print_dec(e.task_id);
+            Logger::raw_write(" fb=");
+            Logger::print_dec(e.flag_before);
+            Logger::raw_write(" fa=");
+            Logger::print_dec(e.flag_after);
+            Logger::raw_write(" next=0x");
+            Logger::print_hex(e.next);
+            Logger::raw_write(" prev=0x");
+            Logger::print_hex(e.prev);
+            Logger::raw_write(" prio=");
+            Logger::print_dec(e.rq_prio);
+            Logger::raw_write(" lvl=");
+            Logger::print_dec(e.level);
+            Logger::raw_write(" ra=0x");
+            Logger::print_hex(e.ra);
+            Logger::raw_write(" tick=");
+            Logger::print_dec(e.tick);
+            Logger::raw_write("\n");
+        }
+    }
+}
+
+void h2_dump_tail(uint64_t max_entries) noexcept {
+    if (max_entries == 0)
+        return;
+    const uint64_t total = debug::g_h2_idx;
+    const uint64_t window =
+        (total < debug::H2_RING_SIZE ? total : debug::H2_RING_SIZE);
+    const uint64_t shown = (window < max_entries ? window : max_entries);
+    const uint64_t start = total - shown;
+    for (uint64_t i = start; i < total; ++i) {
+        const debug::H2Event &e = debug::g_h2_ring[i % debug::H2_RING_SIZE];
+        Logger::raw_write("[H2TAIL] i=");
+        Logger::print_dec(i);
+        Logger::raw_write(" ev=");
+        Logger::print_dec(e.ev);
+        Logger::raw_write(" a=0x");
+        Logger::print_hex(e.a);
+        Logger::raw_write(" gen=");
+        Logger::print_dec(e.gen);
+        Logger::raw_write(" depth=");
+        Logger::print_dec(e.depth);
+        Logger::raw_write("\n");
+    }
+}
+#endif // CONFIG_DEBUG
 
 }  // namespace sched_debug
 

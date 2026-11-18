@@ -140,10 +140,9 @@ void Scheduler::mailbox_drain() noexcept {
         // Issue #19: route through enqueue_ready so EDF-eligible tasks
         // land in the deadline list (a direct bitmap enqueue here would
         // strand an EDF task in the wrong queue).
-        task->in_ready_queue_ = false;
-        task->in_edf_queue_ = false;
-        task->edf_next_ = nullptr;
-        task->edf_prev_ = nullptr;
+        // Issue #582: typed paths (dequeue clears both queues + deferral
+        // + stale arms) instead of raw field writes.
+        Scheduler::dequeue_ready(*task);
         enqueue_ready(*task);
     }
 }

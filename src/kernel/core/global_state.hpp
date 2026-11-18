@@ -269,6 +269,103 @@ uint64_t park_test_ctx_unexpected_count() noexcept;
 void note_park_test_ctx_unexpected() noexcept;
 
 // ---------------------------------------------------------------------------
+// SchedGateState — issue #582 apply-gate + park-latch state (production)
+// ---------------------------------------------------------------------------
+
+/// @brief Lock-park latch class (issue #582 §4.3).  DIAGNOSTIC-ONLY: no
+///        decision predicate — arm, service, clear, escalation or panic —
+///        may read it.  Grep-able acceptance: this enumerator's uses are
+///        the arming writers, the latch struct, the QE getter and the
+///        DEBUG-only formatter only.
+enum class LockParkClass : uint8_t {
+    ExternalDenial = 0, ///< Park refused (or no candidate) with depth == 0.
+    SelfLock = 1,       ///< Runner itself owns a scheduler_lock_ take.
+};
+
+/// @brief Park-latch service outcome (issue #582 §4.4-4.5).  Returned by
+///        the gs service cores; the call-site TU executes the park body.
+enum class LockParkAction : uint8_t {
+    None = 0,        ///< Nothing to do (unlatched, retained, or cleared).
+    ParkCurrent = 1, ///< Latch delivered: park the current task in place.
+};
+
+/// @brief Apply-gate deferrals since boot (issue #582 INV-APPLY-2).
+uint64_t apply_gate_defer_count() noexcept;
+/// @brief Apply-gate stuck warnings since boot (one-shot per arm).
+uint64_t apply_gate_warn_count() noexcept;
+/// @brief Apply-gate lock-free re-arms since boot (INV-APPLY-2 rule 5).
+uint64_t apply_gate_rearm_count() noexcept;
+/// @brief Apply-gate fail-closed trips since boot (INV-APPLY-2 rule 2).
+uint64_t apply_gate_failclosed_count() noexcept;
+/// @brief Terminate-path publishes under a held lock (issue #582 B.3).
+uint64_t apply_gate_term_hold_count() noexcept;
+/// @brief Legal direct-switch arms published under the guard (#582 B.3).
+uint64_t apply_gate_arm_under_lock_count() noexcept;
+/// @brief Denies that hit a force-armed arm (issue #582 INV-APPLY-3).
+uint64_t apply_gate_force_denied_count() noexcept;
+/// @brief Count one legal arm-under-lock window (issue #582 B.3).
+void note_arm_under_lock() noexcept;
+/// @brief Count one terminate-path publish under a held lock (#582 B.3,
+///        detection only).
+void note_apply_term_hold() noexcept;
+/// @brief One-shot latch swap for the [S582-TERM-HOLD] line (issue #582
+///        B.3).  Returns true exactly once (the caller then emits the line).
+bool apply_term_hold_announced_swap() noexcept;
+/// @brief Reset apply-gate windows, warned latches and all §B counters.
+///        Production definition; QE wires the call in test_isolate.cpp.
+void apply_gate_reset_for_test() noexcept;
+/// @brief Latch a BLOCKED runner that was not parked (issue #582 §4.2).
+///        Always overwrites; a same-{id,generation} re-arm preserves the
+///        monotonic covered clock (rearm can never restart it).
+/// @param task_id Task id + generation of the latched runner.
+/// @param cls Arming-time class (diagnostic-only, never decided upon).
+void lockpark_latch_arm(uint64_t task_id, uint64_t generation,
+                         uint8_t cls) noexcept;
+/// @brief Latch arms since boot (issue #582 INV-PARK-2).
+uint64_t lockpark_arm_count() noexcept;
+/// @brief Live covered-tick count on @p cpu (monotonic per latch).
+uint64_t lockpark_covered_ticks(uint64_t cpu) noexcept;
+/// @brief Max observed covered-ticks (issue #582 §4.6 witness).
+uint64_t lockpark_covered_ticks_max() noexcept;
+/// @brief Hook-delivered parks (release-path service, issue #582 S1).
+uint64_t lockpark_serviced_hook_count() noexcept;
+/// @brief Tick-delivered dispatches (issue #582 S2, pre-RMS clear).
+uint64_t lockpark_serviced_tick_count() noexcept;
+/// @brief Silent stale clears (rule 1: dead/recycled target).
+uint64_t lockpark_stale_cleared_count() noexcept;
+/// @brief Silent woke clears (rule 2: target left BLOCKED).
+uint64_t lockpark_woke_cleared_count() noexcept;
+/// @brief FailClosed trips (rule 5: covered >= limit, SCHED+17).
+uint64_t lockpark_escalated_count() noexcept;
+/// @brief Stuck warnings (rule 6: SCHED+18, one-shot per latch).
+uint64_t lockpark_warn_count() noexcept;
+/// @brief Tick re-arms (rule 4: retained, clock preserved).
+uint64_t lockpark_rearm_count() noexcept;
+/// @brief Hook retains (discriminator failed, latch kept for the tick).
+uint64_t lockpark_pending_count() noexcept;
+/// @brief Latch class on @p cpu (diagnostic-only, QE getter).
+uint64_t lockpark_class_of(uint64_t cpu) noexcept;
+/// @brief S1 release-hook service core (issue #582 §4.4).  Runs rules 1-2
+///        always; delivers (ParkCurrent) or retains+counts otherwise.
+///        Never reads the latch class (§4.3).  The caller parks current
+///        on ParkCurrent and does nothing otherwise.
+LockParkAction lockpark_service_hook() noexcept;
+/// @brief S2 pre-RMS service core (issue #582 §4.4).  Runs rules 1-2, then
+///        rule 3 (clear + stash for the post-RMS check) when deliverable,
+///        else rules 4/5/6.  Lock-free-safe (atomics only).
+void lockpark_service_tick_pre() noexcept;
+/// @brief S2 post-RMS resolution (issue #582 §4.4).  Confirms or restores
+///        the stashed pre-RMS clear: a still-BLOCKED, never-dispatched
+///        target is restored with rule 4/5/6 accounting.
+void lockpark_service_tick_post() noexcept;
+/// @brief S2b :165-fail service (issue #582 §4.4).  Double-read latch;
+///        rules 1-2 when readable, else rules 4/5/6 (no delivery here).
+void lockpark_service_tick_miss() noexcept;
+/// @brief Reset the park latch array + all §4 counters.  Production
+///        definition; QE wires the call in test_isolate.cpp.
+void lockpark_reset_for_test() noexcept;
+
+// ---------------------------------------------------------------------------
 // VfsState — cross-module FAT32 partition pointer
 // ---------------------------------------------------------------------------
 

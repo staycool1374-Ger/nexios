@@ -23,6 +23,11 @@ bool edf_earlier(const TaskControlBlock &a,
 void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept;
 void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept;
 void edf_resort(TaskControlBlock &t) noexcept;
+/// @brief Forced EDF membership detach (issue #582): clears flag+links as
+///        one IRQ-atomic unit WITHOUT splicing — for the documented
+///        whole-list reset sites (rebuild/snapshot/smp drain) where the
+///        heads are reset wholesale and there is nothing to splice from.
+void edf_detach(TaskControlBlock &t) noexcept;
 void migrate_dispatch_queue(TaskControlBlock &t) noexcept;
 TaskControlBlock *edf_peek_valid_own() noexcept;
 TaskControlBlock *edf_preempt_candidate() noexcept;

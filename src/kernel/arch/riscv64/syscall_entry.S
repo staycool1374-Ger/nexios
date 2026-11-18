@@ -241,10 +241,13 @@ syscall_entry:
     # the dead task re-faults with the task TERMINATED (double-fault
     # park, IRQs masked). Set by switch_away_from_terminating; cleared
     # here on consume (save_rsp_to==0 still skips below, harmlessly).
+    # Issue #582 INV-APPLY-3: peek ONLY — the one-shot sd-clear is
+    # deleted. Force is a selector to attempt an apply, never an
+    # override of the INV-APPLY-1 deny; all clears are C-side so a
+    # deny-and-rearm keeps the bit (deny path retains arm AND force).
     la t0, scheduler_force_apply
     ld t1, 0(t0)
     beqz t1, check_depth
-    sd zero, 0(t0)
     j apply
 check_depth:
     la t0, isr_nesting_depth
@@ -323,8 +326,16 @@ apply:
     call scheduler_validate_pending_switch
     ld ra, 0(sp)
     addi sp, sp, 64
-    # a0 = 1 apply / 0 abort (the validator already invalidated the atoms
-    # and undid the publish side effects on abort).
+    # a0 = 1 apply / 0 abort / 2 defer (the validator already invalidated
+    # the atoms on abort; on defer the arm AND the force bit are untouched).
+    # Issue #582 INV-APPLY-1: widen the branch — a defer (2) must take 8f
+    # (depth-dec) ONLY, leaving the arm pending. NOT gen_skip (t3/a0 are
+    # clobbered by the C call — garbage scheduler_record_skip args) and
+    # NOT 7f (~:420 steals the pending arm's TLS slot into OFF_TP).
+    # t1 is freshly loaded below after the C call, so clobbering it here
+    # is safe; ra stays stashed as today.
+    li t1, 2
+    beq a0, t1, 8f
     beqz a0, abort_switch
 
     # Re-derive per-hart offset: t2 (x7) is caller-saved and the
