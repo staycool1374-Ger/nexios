@@ -205,6 +205,30 @@ the guard keeps it that way.
 - **Harness exemption (BUGS.md#021):** init (PID 1) is raised to priority 10
   for the suite (base 0 = background reaper).
 
+### 5.1 Park-test seam (issue #578)
+
+- The suite runs at `irq_guard_depth >= 1` everywhere, so the timed-park
+  path is unreachable in-harness (only denied legs are covered). Tests that
+  opt in with `TF_PARK_DEPTH0` run inside an armed `ParkSeamScope`.
+- The seam is a **waiver, never a depth mutation**: no depth/owner/save
+  slot is ever written. Waiver predicate (single definition,
+  `kernel/test/park_seam.hpp::park_ctx_waivable`): `CONFIG_DEBUG` +
+  armed on this CPU + suite active + live RUNNING non-idle task + marked
+  member (`TCB::park_test_member`: harness + tasks created while armed) +
+  depth exactly 1 + non-own owner + IF==1 + no held spinlock + not in a
+  syscall-trap level. Any conjunct failing => fail-closed denial.
+- Membership is creation-time state (`init_task_common`/clone/
+  `spawn_thread`/elf finalize read the armed flag); the scope marks the
+  harness on arm and unmarks everything on teardown. Snapshot restore
+  rewinds the rest. `snapshot_restore` asserts seam-inactive (log-only,
+  same shape as the IF=0 invariant).
+- The depth-1 suite premise is **unchanged for every unflagged test**; gate
+  bits 10 (`all_tasks().size() <= 1`) and 1 (`CONFIG_TICK_HZ == 0`) stay
+  premise-pinning negatives (deviation recorded on #578, OQ2).
+- OQ1 deviation: `resched_park_gate_base()` bit 4 (stale rv64 nesting) is
+  waived test-side under the same IF==1 proof; the production
+  IF-carve-out inconsistency is tracked separately (#583).
+
 ## 6. Watchdog & QEMU Verdict
 
 - `watchdog_arm(ms, name)`: TSC deadline + PIT channel-0 elapsed baseline +

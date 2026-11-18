@@ -55,6 +55,7 @@
 #include <kernel/sync/mutex.hpp>
 #include <kernel/sync/queue.hpp>
 #include <kernel/test/resource_tracker.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
@@ -450,6 +451,13 @@ void init_task_common(TaskControlBlock &tcb) {
     // stale claim or completion from its previous occupant.
     tcb.teardown_claimed_ = false;
     tcb.teardown_completed_ = false;
+
+    // Issue #578: park-test membership — a task created while the seam is
+    // armed on this CPU joins the test window (harness + test-spawned
+    // tasks only). memset already zeroed the field; set the live value
+    // here so clone/spawn_thread/elf paths (below) share the rule.
+    tcb.park_test_member = gs::get_park_test_ctx() &&
+                           Scheduler::is_test_active();
 
     // Signal handlers all default to nullptr (SIG_DFL)
     for (size_t i = 0; i < MAX_SIGNAL_HANDLERS; ++i) {
@@ -1825,6 +1833,12 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     // Buffer pool starts empty — buffers are NOT inherited on fork
     tcb->buf_list_head = -1;
 
+    // Issue #578: same membership rule as init_task_common (clone does not
+    // route through it).  Never inherit the parent's marker: membership is
+    // creation-time state, and the parent may outlive the armed window.
+    tcb->park_test_member = gs::get_park_test_ctx() &&
+                            Scheduler::is_test_active();
+
 #if defined(CONFIG_ARCH_X86_64)
     // Save parent's FPU state if it's currently in this CPU's registers
     // (issue #151: ownership is per-CPU; the cloning CPU's slot decides).
@@ -2218,6 +2232,11 @@ TaskControlBlock *TaskControlBlock::spawn_thread(TaskControlBlock &owner,
     vfs::vnode_ref_inc(tcb->cwd_vnode);
 
     tcb->buf_list_head = -1;
+
+    // Issue #578: same membership rule as init_task_common (spawn_thread
+    // does not route through it).
+    tcb->park_test_member = gs::get_park_test_ctx() &&
+                            Scheduler::is_test_active();
 
     // Fresh thread: no inherited FP state (unlike clone's copy) and no
     // trap-time flush needed — the thread never ran.  memset already

@@ -426,7 +426,7 @@ struct TaskControlBlock {
            debug_rearm_va(0),
            held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
             next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
-            generation(0) {
+            generation(0), park_test_member(false) {
      }
 
     uint64_t magic;
@@ -1126,6 +1126,14 @@ struct TaskControlBlock {
     ///        every task creation.  Stored in waiter arrays alongside the
     ///        task pointer to detect stale references (use-after-reuse).
     uint32_t generation;
+
+    /// @brief #578 park-test membership (DEBUG test seam only; always false
+    ///        in production).  Set for the harness task by ParkSeamScope and
+    ///        for tasks created while the seam is armed; gates the timed-park
+    ///        waiver together with the per-CPU seam flag.  Plain bool with a
+    ///        memset-zero default; cleared by scope teardown and by snapshot
+    ///        restore (baseline rewind).
+    bool park_test_member;
 
     /// @brief Checks if the task has a handler registered for a signal.
     bool has_signal_handler(uint64_t sig) const {
