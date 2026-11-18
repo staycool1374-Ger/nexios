@@ -546,7 +546,11 @@ void Scheduler::on_tick() noexcept {
         // clears in_ready_queue_; the unconditional dequeue_ready in
         // Notify::wait cannot repair a loss that happens after the last
         // dequeue, and the orphan detector above requires inrq==1 so it
-        // is blind to this signature). Wake paths that strand a task do
+        // is blind to this signature). Issue #582: the mirror signature
+        // (READY + in_ready_queue_==1 + linked nowhere, from a refused
+        // re-enqueue on a stale flag) is rescued here too — the physical
+        // scan proves absence under scheduler_lock_ before any flag is
+        // cleared. Wake paths that strand a task do
         // not recur, so re-apply level-triggered every tick until the
         // task dispatches or dies. Detection-first: count + warn per
         // rescue (H2-ENQDEAD precedent) so a recurring wake-loss can never
@@ -569,8 +573,8 @@ void Scheduler::on_tick() noexcept {
                 continue; // EDF path owns these (edf_peek_valid_own)
             if (task->state != TaskState::READY)
                 continue; // never clobber RUNNING/BLOCKED/etc (H2)
-            if (task->in_ready_queue_ || task->in_edf_queue_)
-                continue; // only the wedge signature
+            if (task->in_edf_queue_)
+                continue; // EDF path owns these (edf_peek_valid_own)
             bool phys = false;
             for (uint64_t prio_idx = 0;
                  prio_idx <= CONFIG_PRIORITY_CEILING && !phys; ++prio_idx) {
@@ -578,20 +582,36 @@ void Scheduler::on_tick() noexcept {
                     phys = true;
             }
             if (phys)
-                continue; // flag/link desync the other way — not ours
+                continue; // physically queued — nothing to rescue
             // Issue #250: a legitimately-deferred task is always current
             // while flagged (wake-side mirror), and the sweep already
             // skips current — so non-current + flagged is a lost-consume
             // bug, not a valid deferral. Clear and rescue anyway (never
             // skip: skipping on flag would reintroduce the wedge on flag
-            // loss).
+            // loss). Issue #582: the same holds for flagged-but-unlinked
+            // (refused re-enqueue on a stale flag); the physical scan
+            // above ran under scheduler_lock_, so absence is proven and
+            // clearing the stale flag cannot orphan a linked node.
             task->ready_deferred_ = false;
-            uint64_t rescue_no = ++stuck_rescue_count_;
-            if (rescue_no == 1 ||
-                (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
-                Logger::warn(
-                    "sched: stranded READY rescued #%lx id=%lx eff=%lx",
-                    rescue_no, task->id, effective_priority(task));
+            uint64_t rescue_no = 0;
+            if (task->in_ready_queue_) {
+                task->in_ready_queue_ = false;
+                task->rq_priority_ = 0;
+                rescue_no = ++orphan_rescue_count_;
+                if (rescue_no == 1 ||
+                    (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+                    Logger::warn(
+                        "sched: flagged-orphan READY rescued #%lx id=%lx eff=%lx",
+                        rescue_no, task->id, effective_priority(task));
+                }
+            } else {
+                rescue_no = ++stuck_rescue_count_;
+                if (rescue_no == 1 ||
+                    (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+                    Logger::warn(
+                        "sched: stranded READY rescued #%lx id=%lx eff=%lx",
+                        rescue_no, task->id, effective_priority(task));
+                }
             }
             enqueue_ready(*task);
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
