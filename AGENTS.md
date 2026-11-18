@@ -7,6 +7,16 @@ safety, and error-handling rules defined there apply unconditionally.
 
 For any non-trivial code modification or user request, you MUST adhere strictly to the following 3-step execution pipeline:
 
+Scope: Phase 3 (SIL 3 audit) covers production kernel code only. A change is
+test-only iff every changed file is under `src/kernel/test/`, is
+`src/lib/test.hpp` / `src/lib/test.cpp`, is `initrd` test config, or is a
+`test_expected_counts` row. Test-only changes run Phases 1–2 only (plan +
+implement + gates) with no auditor call. Any change touching production
+paths (`src/kernel/**` outside `test/`, `src/services/`, `src/lib` outside
+`test.*`, `src/userspace/`, or build/tooling that affects the kernel binary)
+runs the full chain including Phase 3. Prior audit reports (including on
+test-only diffs) remain valid evidence; this scoping applies going forward.
+
 1. **PHASE 1: PLANNING (Implicit Mandatory Step)**
    - Do NOT write or edit code directly.
    - Every non-trivial task corresponds to a GitHub Issue (see "GitHub Issue
@@ -19,7 +29,7 @@ For any non-trivial code modification or user request, you MUST adhere strictly 
 2. **PHASE 2: IMPLEMENTATION**
    - Execute the code changes strictly adhering to the plan generated in Phase 1.
 
-3. **PHASE 3: SIL 3 AUDIT (Implicit Mandatory Step)**
+3. **PHASE 3: SIL 3 AUDIT (Implicit Mandatory Step, production changes only)**
    - Invoke the `auditor` subagent (see `PROMPT-audit.md`) to review the modified files against safety rules.
    - Fix any rejected code immediately if the auditor finds flaws.
    - **Diff-patch protocol (minimize exchange):** hand the auditor `git diff main -- <files> > audits/pending_patch.diff` (NOT pasted contents); on REJECT the auditor writes a `git apply`-able `audits/rejected_patch.diff` which you apply verbatim, then re-verify and re-audit. See PROMPT-dev.md §PARALLEL AUDIT TRIGGER RULE.
@@ -35,7 +45,7 @@ After `AGENTS.md` routes a session to a role, that role drives the pipeline:
   `planner → developer → auditor`.
   1. Developer calls the `planner` subagent with the task (Phase 1).
   2. Developer implements the plan itself (Phase 2).
-  3. Developer calls the `auditor` subagent on the resulting diff (Phase 3).
+  3. Developer calls the `auditor` subagent on the resulting diff (Phase 3, production changes; test-only changes end at Phase 2).
 - The planner and auditor are pure subagents: they never call each other and
   never call the developer; they return their result to the developer only.
 
@@ -81,7 +91,7 @@ each file read in the first response.
   - When starting an issue, assign yourself and comment that work has begun (with branch name).
   - Post progress notes on the issue (audit decision, test results with counts) instead of editing local files.
   - Reference issues in commits: include `#<n>` in the commit message; `fixes #<n>` / `closes #<n>` auto-closes the issue on push to main.
-  - Only close an issue when: implementation done + audit APPROVED + relevant test classes pass 0 failures.
+  - Only close an issue when: implementation done + relevant test classes pass 0 failures (+ audit APPROVED for production changes; test-only changes close without audit).
 - Labels taxonomy: `bug`, `feature`, `kernel:<subsystem>`, `severity:S1|S2|S3`, `sil3-relevant`.
 - Issue templates live in `.github/ISSUE_TEMPLATE/` — new bugs/features reported by the user are filed via these schemas.
 - **Roadmap handling:** `prompts/ROADMAP.md` contains pointers only (guardrails, issue
