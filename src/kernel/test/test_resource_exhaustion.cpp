@@ -158,46 +158,63 @@ TEST_CLASS(TaskLimitReached) {
 };
 
 // Runmode: kernel
-// Testidea: Allocate all 1024 BufferPool entries, verify 1025th fails,
+// Testidea: Allocate all BufferPool cache pages (POOL_PAGES=128), verify
+// next alloc fails closed with typed BUF_ERR_OOM (M4 #563, no PMM fallback),
 // then free one and verify realloc recycles the entry.
-// Input: Alloc MAX_BUFFERS in a user task.
-// Expect: Alloc MAX_BUFFERS+1 returns 0; free + realloc recycles idx.
+// Input: Alloc POOL_PAGES in a user task via alloc(); overflow via alloc_err.
+// Expect: POOL_PAGES succeed; overflow handle 0 + BUF_ERR_OOM; free +
+// realloc recycles idx; tracker delta 0 via isolation.
+// Depends: kernel::BufferPool, kernel::TaskControlBlock (M4 contract)
 TEST_CLASS(MaxBuffersExhaustion) {
     auto *task = TaskControlBlock::create_user([]() {}, 5, 10, 64_KiB);
     CT_ASSERT(task != nullptr);
 
-    uint64_t handles[BufferPool::MAX_BUFFERS];
+    // M4 (#563): the pool is a 128-page cache, not a 1024-entry PMM
+    // backstopped pool. Expect POOL_PAGES successes, then fail-closed.
+    static constexpr size_t kExpect =
+        BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+            ? BufferPool::POOL_PAGES
+            : BufferPool::MAX_BUFFERS;
+    uint64_t handles[BufferPool::POOL_PAGES];
     uint64_t va = 0x100000000ULL;
 
     int alloc_count = 0;
-    for (size_t i = 0; i < BufferPool::MAX_BUFFERS + 5; ++i) {
+    for (size_t i = 0; i < kExpect + 5; ++i) {
         uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
         if (h == 0)
             break;
-        handles[alloc_count++] = h;
+        if (static_cast<size_t>(alloc_count) <
+            static_cast<size_t>(BufferPool::POOL_PAGES))
+            handles[alloc_count] = h;
+        alloc_count++;
     }
-    CT_ASSERT(alloc_count <= static_cast<int>(BufferPool::MAX_BUFFERS));
+    CT_ASSERT(alloc_count == static_cast<int>(kExpect));
 
-    // Should have gotten exactly MAX_BUFFERS
-    bool all_allocated =
-        (static_cast<size_t>(alloc_count) == BufferPool::MAX_BUFFERS);
-    CT_ASSERT(all_allocated);
+    // Typed overflow: alloc_err reports BUF_ERR_OOM (not MAX_BUFFERS).
+    {
+        uint64_t overflow_handle = 0;
+        auto overflow_err = BufferPool::alloc_err(
+            *task, va + kExpect * arch::PAGE_SIZE, overflow_handle);
+        CT_ASSERT(overflow_handle == 0);
+        CT_ASSERT(overflow_err == errors::BUF_ERR_OOM);
+    }
 
     // Free one from middle
-    CT_ASSERT(BufferPool::free(*task, handles[512]));
+    CT_ASSERT(BufferPool::free(*task, handles[kExpect / 2]));
 
     // Realloc — should recycle the freed entry
-    uint64_t h = BufferPool::alloc(*task, va + 512 * arch::PAGE_SIZE);
+    uint64_t h = BufferPool::alloc(*task, va + (kExpect / 2) * arch::PAGE_SIZE);
     CT_ASSERT(h != 0);
     uint32_t new_idx = static_cast<uint32_t>(h & 0xFFFFFFFFULL);
-    uint32_t old_idx = static_cast<uint32_t>(handles[512] & 0xFFFFFFFFULL);
+    uint32_t old_idx =
+        static_cast<uint32_t>(handles[kExpect / 2] & 0xFFFFFFFFULL);
     CT_ASSERT(new_idx == old_idx);
 
     CT_ASSERT(BufferPool::free(*task, h));
 
     // Cleanup all remaining
-    for (int i = 0; i < alloc_count; ++i) {
-        if (i == 512)
+    for (size_t i = 0; i < kExpect; ++i) {
+        if (i == kExpect / 2)
             continue;
         if (handles[i] != 0) {
             CT_ASSERT(BufferPool::free(*task, handles[i]));

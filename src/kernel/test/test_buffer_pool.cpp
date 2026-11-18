@@ -134,6 +134,12 @@ JARVIS_TEST(buffer_pool_invalid_handle, "PRE: none | POST: none") {
 }
 
 JARVIS_TEST(buffer_pool_exhaustion, "PRE: none | POST: none") {
+    // M4 (#563): pool-bounded — POOL_PAGES successes then fail-closed 0 +
+    // BUF_ERR_OOM (no PMM fallback). v0.3.11 leak-pin instrumentation kept.
+    static constexpr size_t kExpect =
+        BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+            ? BufferPool::POOL_PAGES
+            : BufferPool::MAX_BUFFERS;
     // v0.3.11 leak-pin instrumentation (TUI delta run):
     // 1. Snapshot the PMM allocation bitmap + record every buffer's phys page
     //    IMMEDIATELY BEFORE / DURING this test.
@@ -159,7 +165,7 @@ JARVIS_TEST(buffer_pool_exhaustion, "PRE: none | POST: none") {
         // 0x40000000 collided with kUserYieldStubVa (task.cpp) and orphaned
         // the stub page (Root Cause 2).
         uint64_t va = 0x1000000000;
-        for (size_t i = 0; i < BufferPool::MAX_BUFFERS + 1; ++i) {
+        for (size_t i = 0; i < kExpect + 1; ++i) {
             uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
             if (h == 0)
                 break;
@@ -168,7 +174,15 @@ JARVIS_TEST(buffer_pool_exhaustion, "PRE: none | POST: none") {
                     .phys_addr;
             alloc_count++;
         }
-        JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+        JARVIS_ASSERT_EQ(static_cast<int>(kExpect), alloc_count);
+        // M4 typed overflow: the (kExpect+1)th page fails with BUF_ERR_OOM.
+        {
+            uint64_t overflow_handle = 0;
+            auto overflow_err = BufferPool::alloc_err(
+                *task, va + kExpect * arch::PAGE_SIZE, overflow_handle);
+            JARVIS_ASSERT_EQ(0ULL, overflow_handle);
+            JARVIS_ASSERT(overflow_err == errors::BUF_ERR_OOM);
+        }
 
         // Free all
         int32_t idx = task->buf_list_head;
@@ -918,20 +932,33 @@ JARVIS_TEST(buffer_pool_alloc_after_exhaustion_and_free,
         SimpleTaskPtr task(TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB));
         JARVIS_ASSERT(task != nullptr);
 
-        uint64_t handles[BufferPool::MAX_BUFFERS];
+        // M4 (#563): pool-bounded — kExpect successes, overflow typed OOM.
+        static constexpr size_t kExpect =
+            BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+                ? BufferPool::POOL_PAGES
+                : BufferPool::MAX_BUFFERS;
+        uint64_t handles[BufferPool::POOL_PAGES];
         uint64_t va = 0x6000000000ULL;
         int alloc_count = 0;
-        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
+        for (size_t i = 0; i < kExpect; ++i) {
             uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
             if (h == 0)
                 break;
             handles[i] = h;
             alloc_count++;
         }
-    JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+    JARVIS_ASSERT_EQ(static_cast<int>(kExpect), alloc_count);
+    {
+        uint64_t overflow_handle = 0;
+        auto overflow_err = BufferPool::alloc_err(
+            *task, va + kExpect * arch::PAGE_SIZE, overflow_handle);
+        JARVIS_ASSERT_EQ(0ULL, overflow_handle);
+        JARVIS_ASSERT(overflow_err == errors::BUF_ERR_OOM);
+    }
 
-    // Free the middle entry (index 512)
-    uint64_t freed = handles[512];
+    // Free the middle entry (index kExpect/2)
+    const size_t kMid = kExpect / 2;
+    uint64_t freed = handles[kMid];
     uint32_t freed_idx = static_cast<uint32_t>(freed & 0xFFFFFFFFULL);
     s_e512_orig = BufferPool::entries[freed_idx].phys_addr;
     {
@@ -1006,15 +1033,15 @@ JARVIS_TEST(buffer_pool_alloc_after_exhaustion_and_free,
     }
 
         // Alloc again - should reuse the freed entry
-        uint64_t h = BufferPool::alloc(*task, va + 512 * arch::PAGE_SIZE);
+        uint64_t h = BufferPool::alloc(*task, va + kMid * arch::PAGE_SIZE);
         JARVIS_ASSERT(h != 0);
         uint32_t new_idx = static_cast<uint32_t>(h & 0xFFFFFFFFULL);
         JARVIS_ASSERT_EQ(freed_idx, new_idx);
         s_e512_new = BufferPool::entries[new_idx].phys_addr;
 
         // Cleanup
-        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
-            if (i != 512 && handles[i] != 0) {
+        for (size_t i = 0; i < kExpect; ++i) {
+            if (i != kMid && handles[i] != 0) {
                 JARVIS_ASSERT(BufferPool::free(*task, handles[i]));
             }
         }
@@ -1483,14 +1510,14 @@ static size_t count_pt_pages_under_pdpt(uint64_t pml4_phys, size_t pml4_idx,
 }
 
 // Runmode: kernel
-// Testidea: B1 — after pool-overflow free (owner → KERNEL) and re-map, the
-// PT page owner bit stays USER so free_user_pages never skips it.  A user
-// task mapping 1024 buffers under PDPT[1] (4 MB, PD[1..2]) must leave every
-// present PT page USER-owned, including the yield-stub (PD[0]) and stack
-// (PD[384]) pages sharing the same PDPT.
-// Input: create_user task; alloc MAX_BUFFERS buffers at 0x40200000; walk
+// Testidea: B1 — after pool free and re-map, the PT page owner bit stays
+// USER so free_user_pages never skips it. A user task mapping POOL_PAGES
+// buffers under PDPT[1] (512 KB, M4 #563) must leave every present PT page
+// USER-owned, including the yield-stub (PD[0]) and stack (PD[384]) pages
+// sharing the same PDPT.
+// Input: create_user task; alloc POOL_PAGES buffers at 0x40200000; walk
 // PDPT[1] before cleanup.
-// Expect: exactly 2 new PT pages (PD[1], PD[2]); every PT page under PDPT[1]
+// Expect: exactly 1 new PT page (PD[1]); every PT page under PDPT[1]
 // is USER-owned; PMM free count net-zero after free + cleanup.
 // Depends: kernel::BufferPool, kernel::TaskControlBlock, kernel::VMM,
 //          kernel::PMM
@@ -1507,25 +1534,30 @@ JARVIS_TEST(buffer_pool_pt_owner_bit_stays_user, "PRE: none | POST: none") {
         size_t pre = count_pt_pages_under_pdpt(task->get_page_table(), 0, 1,
                                                nullptr);
 
-        // Allocate MAX_BUFFERS buffers spanning 2 PT pages under PDPT[1]:
-        // 0x40200000 + 4 MB covers PD[1]..PD[2], clear of the stub
+        // Allocate pool-bounded buffers spanning 1 PT page under PDPT[1]:
+        // 0x40200000 + 512 KB covers part of PD[1], clear of the stub
         // (0x40000000, PD[0]) and the user stack (0x70000000, PD[384]).
+        // M4 (#563): POOL_PAGES=128, not MAX_BUFFERS=1024 (4 MB).
         uint64_t va = 0x40200000;
         int alloc_count = 0;
-        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
+        static constexpr size_t kExpect =
+            BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+                ? BufferPool::POOL_PAGES
+                : BufferPool::MAX_BUFFERS;
+        for (size_t i = 0; i < kExpect; ++i) {
             uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
             if (h == 0)
                 break;
             ++alloc_count;
         }
-        JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+        JARVIS_ASSERT_EQ(static_cast<int>(kExpect), alloc_count);
 
         // Walk every present PD entry under PDPT[1] and pin the owner bit.
         size_t post = count_pt_pages_under_pdpt(task->get_page_table(), 0, 1,
                                                 &first_non_user);
-        JARVIS_ASSERT_FMT(pre + 2 == post,
-                          "allocating 4 MB under PDPT[1] must add exactly 2 "
-                          "PT pages (pre=%lu post=%lu)",
+        JARVIS_ASSERT_FMT(pre + 1 == post,
+                          "allocating 512 KB under PDPT[1] must add exactly 1 "
+                          "PT page (pre=%lu post=%lu)",
                           pre, post);
         JARVIS_ASSERT_FMT(first_non_user == 0,
                           "PT page 0x%lx under a user mapping is NOT "
@@ -1552,12 +1584,12 @@ JARVIS_TEST(buffer_pool_pt_owner_bit_stays_user, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: B2 — stack and buffers share PDPT[1]; the free_user_pages walk
-// must cover ALL present PD entries (stub, buffer PTs, stack) so no PT page
-// survives cleanup.  Exhaustion alloc + free loop + cleanup leaves a
-// net-zero PMM delta.
-// Input: create_user task; alloc MAX_BUFFERS under PDPT[1]; free all; count
+// must cover ALL present PD entries (stub, buffer PT, stack) so no PT page
+// survives cleanup. Pool-bounded alloc (M4 #563, 128 pages) + free loop +
+// cleanup leaves a net-zero PMM delta.
+// Input: create_user task; alloc POOL_PAGES under PDPT[1]; free all; count
 // PT pages before cleanup; destroy task; recount PMM free pages.
-// Expect: PT-page count grows by exactly 2 and PMM free count is unchanged
+// Expect: PT-page count grows by exactly 1 and PMM free count is unchanged
 // (alloc-count == freed-count, net_new_pages == 0).
 // Depends: kernel::BufferPool, kernel::TaskControlBlock, kernel::VMM,
 //          kernel::PMM
@@ -1572,13 +1604,17 @@ JARVIS_TEST(buffer_pool_shared_pdpt_walk_frees_all,
 
         uint64_t va = 0x40200000;
         int alloc_count = 0;
-        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
+        static constexpr size_t kExpect =
+            BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+                ? BufferPool::POOL_PAGES
+                : BufferPool::MAX_BUFFERS;
+        for (size_t i = 0; i < kExpect; ++i) {
             uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
             if (h == 0)
                 break;
             ++alloc_count;
         }
-        JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+        JARVIS_ASSERT_EQ(static_cast<int>(kExpect), alloc_count);
 
         // Free all buffers (exhaustion free loop).
         int32_t idx = task->buf_list_head;
@@ -1593,9 +1629,10 @@ JARVIS_TEST(buffer_pool_shared_pdpt_walk_frees_all,
 
         // Count PT pages under the shared PDPT[1] (stub + buffers + stack)
         // before cleanup — every one must be freed by free_user_pages.
+        // M4 (#563): 128 buffers (512 KB) need 1 PT, not 2 (4 MB).
         pt_before_cleanup =
             count_pt_pages_under_pdpt(task->get_page_table(), 0, 1, nullptr);
-        JARVIS_ASSERT_FMT(pt_before_cleanup >= 4,
+        JARVIS_ASSERT_FMT(pt_before_cleanup >= 3,
                           "expected stub+buffers+stack PT pages under PDPT[1] "
                           "(got %lu)",
                           pt_before_cleanup);
@@ -1607,10 +1644,10 @@ JARVIS_TEST(buffer_pool_shared_pdpt_walk_frees_all,
 }
 
 // Runmode: kernel
-// Testidea: B3 — a 4 MB buffer range spanning 2 PT pages must balance
-// exactly: every PMM page allocated by the alloc loop is freed by the free
-// loop + cleanup (new_alloc == new_free via PMM free-page count).
-// Input: create_user task; alloc MAX_BUFFERS (4 MB) at 0x40200000; free all;
+// Testidea: B3 — a 512 KB pool-bounded buffer range (M4 #563, 128 pages)
+// must balance exactly: every PMM page allocated by the alloc loop is freed
+// by the free loop + cleanup (new_alloc == new_free via PMM free-page count).
+// Input: create_user task; alloc POOL_PAGES (512 KB) at 0x40200000; free all;
 // destroy task; compare PMM free count before/after.
 // Expect: pmm_before == pmm_after (net-zero balance).
 // Depends: kernel::BufferPool, kernel::TaskControlBlock, kernel::PMM
@@ -1624,20 +1661,25 @@ JARVIS_TEST(buffer_pool_4mb_walk_balance, "PRE: none | POST: none") {
 
         uint64_t va = 0x40200000;
         int alloc_count = 0;
-        for (size_t i = 0; i < BufferPool::MAX_BUFFERS; ++i) {
+        static constexpr size_t kExpect =
+            BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+                ? BufferPool::POOL_PAGES
+                : BufferPool::MAX_BUFFERS;
+        for (size_t i = 0; i < kExpect; ++i) {
             uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
             if (h == 0)
                 break;
             ++alloc_count;
         }
-        JARVIS_ASSERT_EQ(static_cast<int>(BufferPool::MAX_BUFFERS), alloc_count);
+        JARVIS_ASSERT_EQ(static_cast<int>(kExpect), alloc_count);
         JARVIS_ASSERT_FMT(
-            va + alloc_count * arch::PAGE_SIZE - va == 4ULL * 1024 * 1024,
-            "MAX_BUFFERS allocs must span exactly 4 MB");
+            va + alloc_count * arch::PAGE_SIZE - va ==
+                static_cast<uint64_t>(kExpect) * 4096ULL,
+            "pool-bounded allocs must span kExpect pages");
 
         pt_count = count_pt_pages_under_pdpt(task->get_page_table(), 0, 1, nullptr);
-        JARVIS_ASSERT_FMT(pt_count >= 4,
-                          "expected 4 PT pages under PDPT[1] for the 4 MB "
+        JARVIS_ASSERT_FMT(pt_count >= 3,
+                          "expected 1 PT page for the 512 KB "
                           "range + stub + stack (got %lu)",
                           pt_count);
 

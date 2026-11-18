@@ -68,23 +68,41 @@ JARVIS_TEST(buffer_pool_deterministic_no_dynamic_alloc,
 // Depends: BufferPool, TaskControlBlock
 JARVIS_TEST(buffer_pool_deterministic_exhaustion_returns_zero,
             "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   alloc POOL_PAGES buffers (128-page cache, M4 #563 fail-closed);
+     *   assert next alloc returns 0 + alloc_err BUF_ERR_OOM;
+     *   free all, assert tracker delta 0 via isolation.
+     */
     SimpleTaskPtr task(TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB));
     JARVIS_ASSERT(task != nullptr);
     uint64_t va = 0x200000000;
 
-    uint64_t handles[BufferPool::MAX_BUFFERS];
+    // M4 (#563): pool-bounded — POOL_PAGES successes, not MAX_BUFFERS.
+    static constexpr size_t kExpect =
+        BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+            ? BufferPool::POOL_PAGES
+            : BufferPool::MAX_BUFFERS;
+    uint64_t handles[BufferPool::POOL_PAGES];
     uint64_t n_alloced = 0;
-    for (; n_alloced < BufferPool::MAX_BUFFERS; ++n_alloced) {
+    for (; n_alloced < kExpect; ++n_alloced) {
         handles[n_alloced] = BufferPool::alloc(*task, va + n_alloced * arch::PAGE_SIZE);
         if (handles[n_alloced] == 0)
             break;
     }
-    JARVIS_ASSERT_FMT(n_alloced == BufferPool::MAX_BUFFERS,
-                      "Only allocated %lu of %u buffers before exhaustion",
-                      n_alloced, BufferPool::MAX_BUFFERS);
+    JARVIS_ASSERT_FMT(n_alloced == kExpect,
+                      "Only allocated %lu of %lu buffers before exhaustion",
+                      n_alloced, kExpect);
 
-    uint64_t overflow = BufferPool::alloc(*task, va + BufferPool::MAX_BUFFERS * arch::PAGE_SIZE);
+    // Overflow via raw alloc (0) + typed alloc_err (BUF_ERR_OOM).
+    uint64_t overflow = BufferPool::alloc(*task, va + kExpect * arch::PAGE_SIZE);
     JARVIS_ASSERT_EQ(0ULL, overflow);
+    {
+        uint64_t overflow_handle = 0;
+        auto overflow_err = BufferPool::alloc_err(
+            *task, va + (kExpect + 1) * arch::PAGE_SIZE, overflow_handle);
+        JARVIS_ASSERT_EQ(0ULL, overflow_handle);
+        JARVIS_ASSERT(overflow_err == errors::BUF_ERR_OOM);
+    }
 
     for (uint64_t i = 0; i < n_alloced; ++i) {
         uint32_t idx = static_cast<uint32_t>(handles[i] & 0xFFFFFFFFULL);
