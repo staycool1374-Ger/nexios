@@ -27,6 +27,8 @@
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/park_lock.hpp>
 #include <kernel/sync/spinlock_order.hpp>
+#include <kernel/core/global_state.hpp>
+#include <kernel/test/park_seam.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/arch/cpu_context.hpp>
 #include <kernel/arch/hal/timer.hpp>
@@ -578,6 +580,242 @@ JARVIS_TEST(test_park_lock_if_preserve, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+namespace park_d0 {
+
+// Rendezvous lock for the at0 arm/block/wake/retry waiter test.  Default
+// (Leaf) rank: the park path under test does not consult the rank.
+sync::SpinLock g_retry_lock;
+volatile bool g_retry_holder_has_lock = false;
+volatile bool g_retry_contender_owned = false;
+volatile bool g_retry_holder_saw_blocked = false;
+volatile uint64_t g_retry_tick_before = 0;
+volatile uint64_t g_retry_tick_after = 0;
+TaskControlBlock *g_retry_contender_tcb = nullptr;
+
+void retry_holder_entry() {
+    auto *self = Scheduler::current_task();
+    (void)self;
+    sync::ParkLockGuard hold(g_retry_lock, "test_at0_holder");
+    if (!hold.owned())
+        return;
+    g_retry_holder_has_lock = true;
+    // Release as soon as the contender is observed BLOCKED inside its park
+    // window (bounded poll); the contender then wakes on its wheel timeout
+    // and retries into a free lock.  No fixed sleep: fully deterministic.
+    for (uint64_t i = 0; i < 200000ULL; ++i) {
+        auto *cont = g_retry_contender_tcb;
+        if (cont != nullptr && TaskControlBlock::is_valid(cont) &&
+            cont->state == TaskState::BLOCKED) {
+            g_retry_holder_saw_blocked = true;
+            break;
+        }
+        Scheduler::reschedule();
+        arch::hlt();
+    }
+    // Guard dtor releases on return; entry return terminates the task.
+}
+
+void retry_contender_entry() {
+    for (uint64_t i = 0;
+         i < 200000ULL && !g_retry_holder_has_lock; ++i) {
+        Scheduler::reschedule();
+        arch::hlt();
+    }
+    if (!g_retry_holder_has_lock)
+        return;
+    g_retry_tick_before = arch::Timer::ticks();
+    {
+        sync::ParkLockGuard guard(g_retry_lock, "test_at0_contender");
+        if (guard.owned())
+            g_retry_contender_owned = true;
+    }
+    g_retry_tick_after = arch::Timer::ticks();
+}
+
+} // namespace park_d0
+
+// Runmode: kernel
+// Testidea: #578 QE: contended ParkLockGuard under the depth-0 seam parks
+// (never denied-spins) then acquires; seam-active + zero rescue/unexpected.
+// Input: Holder task holds a Queue-ranked rendezvous lock across a 10 ms
+// wheel sleep; contender ParkLockGuards it (TF_PARK_DEPTH0, seam armed by
+// run_one so the contender is marked at creation).
+// Expect: seam active; contender acquires; park delta >= 1 — or the
+// documented bounded ArmFailed fallback (sleep_arm failed: wheel full or
+// non-BSP; still acquires via a bounded spin), never a bare park>=1
+// assert; exhausted/foreign/escape deltas 0; clobber >= 1 on the park path
+// (INV-L1' repair proves a park window exited); stuck/orphan rescue
+// deltas 0; seam unexpected delta 0; tracker delta 0.
+// Depends: ParkLockGuard slow paths, park seam, rescue counters,
+//         wait_for_termination
+JARVIS_TEST(lock_park_at0_contention, "PRE: none | POST: none") {
+    JARVIS_ASSERT(test::park_seam_active());
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    Scheduler::reset_stuck_rescue_count_for_test();
+    Scheduler::reset_orphan_rescue_count_for_test();
+    const uint64_t park0 = sync::lock_park_count();
+    const uint64_t exh0 = sync::lock_park_exhausted_count();
+    const uint64_t fb0 = sync::lock_spin_fallback_count();
+    const uint64_t esc0 = sync::lock_denied_escape_count();
+    const uint64_t for0 = sync::lock_foreign_depth_count();
+    const uint64_t clob0 = sync::lock_park_if_clobber_count();
+    const uint64_t u0 = gs::park_test_ctx_unexpected_count();
+    park_test::g_holder_has_lock = false;
+    park_test::g_holder_armed = false;
+    park_test::g_contender_acquired = false;
+    park_test::g_contender_park_delta = 0;
+    auto *holder = TaskControlBlock::create(park_test::holder_entry, 11, 10);
+    JARVIS_ASSERT(holder != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
+    auto *contender =
+        TaskControlBlock::create(park_test::contender_entry, 12, 10);
+    JARVIS_ASSERT(contender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*contender, SchedPolicy::FIXED));
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*holder);
+        Scheduler::add_task(*contender);
+    }
+    Scheduler::reschedule();
+    test::wait_for_termination_safe(holder);
+    test::wait_for_termination_safe(contender);
+    Logger::info("[PARK-TEST] at0_contention have=%lu got=%lu "
+                 "parkdelta=%lu park=%lu fb=%lu exh=%lu esc=%lu for=%lu "
+                 "clob=%lu stuck=%lu orph=%lu unexp=%lu",
+                 static_cast<uint64_t>(park_test::g_holder_has_lock),
+                 static_cast<uint64_t>(park_test::g_contender_acquired),
+                 park_test::g_contender_park_delta,
+                 sync::lock_park_count() - park0,
+                 sync::lock_spin_fallback_count() - fb0,
+                 sync::lock_park_exhausted_count() - exh0,
+                 sync::lock_denied_escape_count() - esc0,
+                 sync::lock_foreign_depth_count() - for0,
+                 sync::lock_park_if_clobber_count() - clob0,
+                 Scheduler::stuck_rescue_count(),
+                 Scheduler::orphan_rescue_count(),
+                 gs::park_test_ctx_unexpected_count() - u0);
+    JARVIS_ASSERT(park_test::g_holder_has_lock);
+    JARVIS_ASSERT(park_test::g_contender_acquired);
+    // Park path engaged — or the documented bounded ArmFailed fallback
+    // (wheel arm failed: still acquires via a bounded spin, never hangs).
+    // Never a bare park>=1 assert: the fallback leg is explicit.
+    const bool arm_failed =
+        sync::lock_park_denied_reason() ==
+        static_cast<uint64_t>(sync::ParkDenyReason::ArmFailed);
+    const uint64_t park_d = sync::lock_park_count() - park0;
+    JARVIS_ASSERT(park_d >= 1 || arm_failed);
+    if (!arm_failed) {
+        JARVIS_ASSERT(sync::lock_park_exhausted_count() == exh0);
+        JARVIS_ASSERT(sync::lock_spin_fallback_count() == fb0);
+        JARVIS_ASSERT(sync::lock_denied_escape_count() == esc0);
+        JARVIS_ASSERT(sync::lock_foreign_depth_count() == for0);
+        JARVIS_ASSERT(sync::lock_park_if_clobber_count() > clob0);
+    } else {
+        // Bounded fallback: still acquired, still no escape wedge and no
+        // foreign-depth absorption (fail-closed diagnostics stay clean).
+        JARVIS_ASSERT(sync::lock_denied_escape_count() == esc0);
+        JARVIS_ASSERT(sync::lock_foreign_depth_count() == for0);
+    }
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::orphan_rescue_count());
+    JARVIS_ASSERT(gs::park_test_ctx_unexpected_count() == u0);
+    test::terminate_and_drain2(holder, contender);
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #578 QE: a contended ParkLockGuard under the seam blocks in a
+// park window, wakes on its wheel timeout, retries into the freed lock and
+// owns it — bounded park engagement, never exhaustion.
+// Input: Holder takes the lock, releases the moment it observes the
+// contender BLOCKED (deterministic, no fixed sleep); contender guards once
+// (TF_PARK_DEPTH0, marked at creation). Wheel window = CONFIG_LOCK_PARK_TICKS.
+// Expect: seam active; holder observed the contender BLOCKED; contender
+// owns; ticks advanced across the block (timer alive = wakeup happened);
+// 1 <= park delta <= CONFIG_LOCK_PARK_MAX_ATTEMPTS; rearm/exhausted/
+// fallback/escape/foreign deltas 0; stuck/orphan rescue deltas 0; seam
+// unexpected delta 0; tracker delta 0.
+// Depends: ParkLockGuard park windows, wheel wakeup, park seam,
+//         wait_for_termination
+JARVIS_TEST(lock_park_at0_arm_block_wake_retry, "PRE: none | POST: none") {
+    JARVIS_ASSERT(test::park_seam_active());
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    Scheduler::reset_stuck_rescue_count_for_test();
+    Scheduler::reset_orphan_rescue_count_for_test();
+    const uint64_t park0 = sync::lock_park_count();
+    const uint64_t exh0 = sync::lock_park_exhausted_count();
+    const uint64_t fb0 = sync::lock_spin_fallback_count();
+    const uint64_t esc0 = sync::lock_denied_escape_count();
+    const uint64_t for0 = sync::lock_foreign_depth_count();
+    const uint64_t rearm0 = sync::lock_park_rearm_count();
+    const uint64_t u0 = gs::park_test_ctx_unexpected_count();
+    park_d0::g_retry_holder_has_lock = false;
+    park_d0::g_retry_contender_owned = false;
+    park_d0::g_retry_holder_saw_blocked = false;
+    park_d0::g_retry_tick_before = 0;
+    park_d0::g_retry_tick_after = 0;
+    park_d0::g_retry_contender_tcb = nullptr;
+    auto *holder =
+        TaskControlBlock::create(park_d0::retry_holder_entry, 11, 10);
+    JARVIS_ASSERT(holder != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*holder, SchedPolicy::FIXED));
+    auto *contender =
+        TaskControlBlock::create(park_d0::retry_contender_entry, 12, 10);
+    JARVIS_ASSERT(contender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*contender, SchedPolicy::FIXED));
+    park_d0::g_retry_contender_tcb = contender;
+    {
+        arch::IrqGuard irq_guard{};
+        Scheduler::add_task(*holder);
+        Scheduler::add_task(*contender);
+    }
+    Scheduler::reschedule();
+    test::wait_for_termination_safe(holder);
+    test::wait_for_termination_safe(contender);
+    Logger::info("[PARK-TEST] at0_retry sawblocked=%lu owned=%lu "
+                 "ticks=%lu->%lu parkdelta=%lu rearm=%lu fb=%lu exh=%lu "
+                 "esc=%lu for=%lu stuck=%lu orph=%lu unexp=%lu",
+                 static_cast<uint64_t>(park_d0::g_retry_holder_saw_blocked),
+                 static_cast<uint64_t>(park_d0::g_retry_contender_owned),
+                 park_d0::g_retry_tick_before, park_d0::g_retry_tick_after,
+                 sync::lock_park_count() - park0,
+                 sync::lock_park_rearm_count() - rearm0,
+                 sync::lock_spin_fallback_count() - fb0,
+                 sync::lock_park_exhausted_count() - exh0,
+                 sync::lock_denied_escape_count() - esc0,
+                 sync::lock_foreign_depth_count() - for0,
+                 Scheduler::stuck_rescue_count(),
+                 Scheduler::orphan_rescue_count(),
+                 gs::park_test_ctx_unexpected_count() - u0);
+    // BLOCKED observed by the holder, woken by the wheel, retry owns.
+    JARVIS_ASSERT(park_d0::g_retry_holder_has_lock);
+    JARVIS_ASSERT(park_d0::g_retry_holder_saw_blocked);
+    JARVIS_ASSERT(park_d0::g_retry_contender_owned);
+    JARVIS_ASSERT(park_d0::g_retry_tick_after >
+                  park_d0::g_retry_tick_before);
+    // Bounded park engagement: at least one window, never exhaustion.
+    const uint64_t park_d = sync::lock_park_count() - park0;
+    JARVIS_ASSERT(park_d >= 1 &&
+                  park_d <= static_cast<uint64_t>(CONFIG_LOCK_PARK_MAX_ATTEMPTS));
+    JARVIS_ASSERT(sync::lock_park_rearm_count() == rearm0);
+    JARVIS_ASSERT(sync::lock_park_exhausted_count() == exh0);
+    JARVIS_ASSERT(sync::lock_spin_fallback_count() == fb0);
+    JARVIS_ASSERT(sync::lock_denied_escape_count() == esc0);
+    JARVIS_ASSERT(sync::lock_foreign_depth_count() == for0);
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::orphan_rescue_count());
+    JARVIS_ASSERT(gs::park_test_ctx_unexpected_count() == u0);
+    park_d0::g_retry_contender_tcb = nullptr;
+    test::terminate_and_drain2(holder, contender);
+    sync::park_lock_reset_for_test();
+    sync::spinlock_order_reset_for_test();
+    JARVIS_TEST_PASS();
+}
+
 void register_park_lock_tests() {
     JARVIS_REGISTER_TEST(lock_park_fast_path_no_park);
     JARVIS_REGISTER_TEST(lock_park_taken_under_contention);
@@ -589,4 +827,10 @@ void register_park_lock_tests() {
     JARVIS_REGISTER_TEST(spinlock_layout_unchanged);
     JARVIS_REGISTER_TEST(test_park_lock_inv_w1);
     JARVIS_REGISTER_TEST(test_park_lock_if_preserve);
+    JARVIS_REGISTER_TEST_FLAGS(lock_park_at0_contention,
+                               kernel::test::TF_KERNEL |
+                                   kernel::test::TF_PARK_DEPTH0);
+    JARVIS_REGISTER_TEST_FLAGS(lock_park_at0_arm_block_wake_retry,
+                               kernel::test::TF_KERNEL |
+                                   kernel::test::TF_PARK_DEPTH0);
 }
