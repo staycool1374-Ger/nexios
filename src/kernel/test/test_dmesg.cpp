@@ -778,8 +778,9 @@ JARVIS_TEST(dmesg_render_format, "PRE: none | POST: none") {
 // for code 0 and its max code, canonical numbers strip to the same text,
 // the panic code decodes, and unknown pairs stay UNKNOWN/ERROR.
 // Catalog records take precedence over stripping (dmesg.hpp): the strip
-// probe must use a code with no catalog record — PMM base+1 is owned by
-// the #284 leak-suspect record, so the probe uses base+2 (raw USER_OOM).
+// probe must use a code with no catalog record — PMM base+1..+4 are owned
+// by the #284 leak-suspect record and the #563 frozen-deny / handover /
+// pressure-latch records, so the probe uses base+5 (raw FROZEN_DENY).
 // Input: code 0 / max / canonical / huge codes across all 19 subsystems
 // Expect: real texts for defined codes, UNKNOWN only for undefined
 // Depends: error_string, strip_canonical, lookup_severity, base codes
@@ -791,11 +792,36 @@ JARVIS_TEST(dmesg_full_taxonomy, "PRE: none | POST: none") {
             == 0,
         "PMM OOM text");
     JARVIS_ASSERT_FMT(
-        __builtin_strcmp("Out of memory — no free user physical pages",
+        __builtin_strcmp("Post-freeze allocation denied",
+                         log::error_string(log::ErrorSubsystem::PMM,
+                                           log::kDmesgBase_PMM + 5))
+            == 0,
+        "PMM canonical strip");
+    // M4 (#563) catalog records take precedence over stripping.
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Memory: post-freeze allocation denied (STATIC_POOLS_ONLY)",
                          log::error_string(log::ErrorSubsystem::PMM,
                                            log::kDmesgBase_PMM + 2))
             == 0,
-        "PMM canonical strip");
+        "PMM frozen-deny catalog record");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Memory: Untyped handover complete",
+                         log::error_string(log::ErrorSubsystem::PMM,
+                                           log::kDmesgBase_PMM + 3))
+            == 0,
+        "PMM handover catalog record");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("Memory: unstable-state pressure latch (R-MEM)",
+                         log::error_string(log::ErrorSubsystem::PMM,
+                                           log::kDmesgBase_PMM + 4))
+            == 0,
+        "PMM pressure-latch catalog record");
+    JARVIS_ASSERT_FMT(
+        __builtin_strcmp("BufferPool: cache exhausted, no PMM fallback",
+                         log::error_string(log::ErrorSubsystem::BUFPOOL,
+                                           log::kDmesgBase_BUFPOOL + 1))
+            == 0,
+        "BUFPOOL exhaustion catalog record");
     JARVIS_ASSERT_FMT(
         __builtin_strcmp("Virtual address not mapped",
                          log::error_string(log::ErrorSubsystem::VMM,
