@@ -27,6 +27,17 @@
 
 namespace kernel {
 
+/// @brief Largest MemPool block class (F21, #573): the single source of
+///        truth for the table's top entry (mempool.cpp sizes[]) and the
+///        TCB size static_assert (task.hpp). aarch64 needs 16384
+///        (larger ArchContext + debug ring); x86_64/riscv64 fit 8192.
+inline constexpr size_t kMemPoolMaxBlockSize =
+#if defined(CONFIG_ARCH_AARCH64)
+    16384;
+#else
+    8192;
+#endif
+
 /// @brief Fixed-size block memory allocator with 9 pool classes.
 ///
 /// Each pool is a contiguous page-aligned region partitioned into fixed-size

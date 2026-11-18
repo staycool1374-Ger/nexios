@@ -21,6 +21,8 @@
 /// manipulation, transfer.
 
 #include <kernel/ipc/buffer_pool.hpp>
+#include <kernel/memory/mem_pressure.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
@@ -216,22 +218,18 @@ void BufferPool::init() {
 }
 
 /// @brief Pop a physical page from the pre-allocated pool.
-///        Falls back to PMM::alloc_user_page() when the pool is exhausted.
+///        Never allocates from the PMM (M4, #563): an exhausted pool
+///        fails closed with 0 (callers map it to BUF_ERR_OOM).
 uint64_t BufferPool::alloc_page() {
     if (__atomic_load_n(&pool_count_, __ATOMIC_RELAXED) > 0) {
         uint64_t idx = __atomic_sub_fetch(&pool_count_, 1UL,
                                           __ATOMIC_RELAXED);
         uint64_t phys = pool_pages_[idx];
         pool_pages_[idx] = 0; // scrub stale slot (C4)
-        // Pool pages may have been freed via PMM::free_page() in a prior
-        // lifecycle (before the pool-only reclaim below), which resets the
-        // owner bit to KERNEL.  Ensure USER ownership.
-        if (!PMM::is_user_page(phys)) {
-            PMM::free_page(phys);
-            phys = PMM::alloc_user_page();
-            if (!phys)
-                return 0;
-        }
+        // NOTE (M4, #563): the pre-freeze repair path (free a non-USER
+        // pool page + re-allocate from PMM) is gone — a runtime PMM
+        // allocation contradicts "kernel never allocates". Non-USER pool
+        // pages fail closed in the typed alloc path below.
         // v0.3.11: the pool is a tracked cache — a page pulled from the pool
         // is a tracked alloc (balances free_page()'s tracked push) so a
         // PMM-allocated buffer page absorbed into the pool does not read as a
@@ -239,7 +237,7 @@ uint64_t BufferPool::alloc_page() {
         kernel::test::ResourceTracker::instance().track_pmm_alloc(1);
         return phys;
     }
-    return PMM::alloc_user_page();
+    return 0;
 }
 
 /// @brief Return a physical page to the pre-allocated pool.
@@ -346,6 +344,17 @@ int32_t BufferPool::validate(uint64_t handle) noexcept {
 /// task's space.
 /// @return handle, or 0 on failure.
 uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
+    uint64_t handle = 0;
+    return alloc_err(task, va, handle) == errors::BUF_ERR_OK ? handle : 0;
+}
+
+/// @brief Allocate a buffer with a typed error (M4, #563). Same contract
+///        as alloc(); resource failures report the BufPoolError instead
+///        of collapsing to 0. The syscall ABI stays handle-or-0.
+errors::BufPoolError BufferPool::alloc_err(TaskControlBlock &task,
+                                           uint64_t va,
+                                           uint64_t &out_handle) noexcept {
+    out_handle = 0;
     bp_check_guard();
     // S6: serialize free-list + entries + per-task lists (concurrent
     // syscalls on SMP would double-alloc/lose entries). VMM map + PMM
@@ -355,22 +364,40 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
     // is effectively always open — kernel driver tasks (is_user_ == false)
     // may still map a user buffer through their (otherwise empty) user half.
     if (!task.get_page_table())
-        return 0;
+        return errors::BUF_ERR_NOT_MAPPED;
 
     if (va >= USER_SPACE_LIMIT)
-        return 0;
+        return errors::BUF_ERR_VA_OUT_OF_RANGE;
 
     int32_t idx = alloc_entry();
     if (idx < 0)
-        return 0;
+        return errors::BUF_ERR_MAX_BUFFERS;
 
     uint64_t phys = alloc_page();
     if (!phys) {
+        // M4 (#563): the pool is the only buffer source — exhaustion is a
+        // typed error with a pressure latch, never a PMM allocation.
         free_entry(idx);
-        return 0;
+        mem_pressure::latch(mem_pressure::MemPressureReason::BUFPOOL_EMPTY);
+        log::dmesg_push_sev(log::ErrorSubsystem::BUFPOOL,
+                            log::kDmesgBase_BUFPOOL + 1,
+                            log::LogSeverity::ERROR,
+                            "bufpool: cache exhausted, no PMM fallback", 0);
+        return errors::BUF_ERR_OOM;
     }
-    ENSURE(PMM::is_user_page(phys) &&
-           "BufferPool::alloc: page not user-owned before map_page_in_pml4");
+    if (!PMM::is_user_page(phys)) {
+        // M4 (#563): the pre-freeze USER-repair round-trip is gone. A
+        // non-USER pool page fails closed: entry freed, page returned to
+        // the PMM (freeing is legal post-freeze), typed error + latch.
+        free_entry(idx);
+        PMM::free_page(phys);
+        mem_pressure::latch(mem_pressure::MemPressureReason::BUFPOOL_EMPTY);
+        log::dmesg_push_sev(log::ErrorSubsystem::BUFPOOL,
+                            log::kDmesgBase_BUFPOOL + 1,
+                            log::LogSeverity::ERROR,
+                            "bufpool: non-USER page, no PMM repair", 0);
+        return errors::BUF_ERR_OOM;
+    }
 
     // Issue #325-D: IPC buffers are data (never executable).
     VMM::map_page_in_pml4(va, phys, true, false, task.get_page_table());
@@ -383,8 +410,9 @@ uint64_t BufferPool::alloc(TaskControlBlock &task, uint64_t va) noexcept {
 
     list_insert(task, idx);
 
-    return (static_cast<uint64_t>(entries[idx].generation) << 32) |
-           static_cast<uint64_t>(idx);
+    out_handle = (static_cast<uint64_t>(entries[idx].generation) << 32) |
+                 static_cast<uint64_t>(idx);
+    return errors::BUF_ERR_OK;
 }
 
 /// @brief Free a buffer: unmap, free the physical page, return entry to pool.

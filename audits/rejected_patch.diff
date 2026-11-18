@@ -1,36 +1,16 @@
-diff --git a/src/kernel/ipc/ipc.cpp b/src/kernel/ipc/ipc.cpp
---- a/src/kernel/ipc/ipc.cpp
-+++ b/src/kernel/ipc/ipc.cpp
-@@ -884,6 +884,10 @@ IPC::send_sync_err(uint64_t dest_id, const Message &msg,
-     bool was_blocked = false;
-     IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
-                     "ty=", msg.type, "q=", cur->msg_queue.count);
-+    // M3 audit (S2): the direct-switch cap is per wait — reset the
-+    // attempt counter on wait entry.  Nothing else clears it, so
-+    // without this the fast path dies after three lifetime waits.
-+    cur->ipc_direct_attempts = 0;
-     for (;;) {
-         if (cur->state == TaskState::BLOCKED) {
-             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
-@@ -1164,6 +1168,9 @@ IPC::send_sync_bounded_err(uint64_t dest_id,
-     }
-     bool was_blocked = false;
-     bool armed_here = (timeout_ticks != 0);
-+    // M3 audit (S2): per-wait attempt budget — reset on wait entry
-+    // (see send_sync_err; same lifetime-saturation hazard here).
-+    cur->ipc_direct_attempts = 0;
-     for (;;) {
-         if (cur->state == TaskState::BLOCKED) {
-             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
-@@ -1391,7 +1398,11 @@ IPC::reply_recv_err(Message &reply, uint32_t reply_type,
-     }
-     // Wait for the next request: the sys_receive forever-leg shape
-     // (bounded hlt-wait, INV-4b gated takes, direct-switch entry).
-     bool was_blocked = false;
-+    // M3 audit (S2): per-wait attempt budget — reset on wait entry.
-+    // A REPLY_RECV server loop would otherwise lose the fast path
-+    // after three served requests.
-+    cur->ipc_direct_attempts = 0;
-     for (;;) {
-         if (cur->state == TaskState::BLOCKED) {
-             // INV-4b: a BLOCKED task takes no locks (F1 gate-denied
+diff --git a/src/kernel/memory/pmm.cpp b/src/kernel/memory/pmm.cpp
+--- a/src/kernel/memory/pmm.cpp
++++ b/src/kernel/memory/pmm.cpp
+@@ -806,6 +806,12 @@
+ /// @brief Colored KERNEL alloc with error code (issue #62).
+ errors::PmmError PMM::alloc_page_colored_err(uint64_t color,
+                                              uint64_t &out_phys_addr) {
++#if CONFIG_STATIC_POOLS_ONLY
++    if (g_pmm_frozen) {
++        note_frozen_deny();
++        return errors::PMM_ERR_OOM;
++    }
++#endif
+     sync::IrqSpinLockGuard lock(pmm_lock_);
+     uint64_t result = try_alloc_colored_kernel(color);
+     if (result) {

@@ -13,6 +13,17 @@ Your sole objective is to enforce the architectural contract and uncover
 latent defects, race conditions, memory violations, and unmitigated failure
 paths before code is accepted.
 
+## Audit Scope
+
+You review production kernel diffs only (AGENTS.md pipeline scope). A
+test-only submission — every file under `src/kernel/test/`,
+`src/lib/test.hpp` / `src/lib/test.cpp`, `initrd` test config, or
+`test_expected_counts` rows, and nothing else — is out of scope: decline
+it as misrouted (no DECISION line) instead of auditing it. When a
+production diff also edits test files, CRITICAL CHECK 3 (assertion
+masking) applies to those test edits: a production fix that weakens a
+test to pass is a finding, not a test improvement.
+
 ## Operational Rules
 
 1. **Assume guilt by default:** every submitted patch, refactoring, or

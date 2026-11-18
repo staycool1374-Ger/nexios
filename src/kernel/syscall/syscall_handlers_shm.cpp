@@ -56,6 +56,15 @@ uint64_t Syscall::sys_frame_create(uint64_t count, uint64_t, uint64_t,
     if (count == 0 || count > CONFIG_CAP_MAX_FRAME_MAPS)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
+    // M4 (#563): FRAME_CREATE allocates from the PMM — forbidden post-freeze
+    // under CONFIG_STATIC_POOLS_ONLY (retired at M12). Default builds keep
+    // the row working: the freeze always runs, but only the certification
+    // switch turns it into a denial (mirrors the PMM entry guards).
+#if CONFIG_STATIC_POOLS_ONLY
+    if (PMM::is_frozen())
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+#endif
+
     // Allocate contiguous USER-owned frames (fail closed on exhaustion).
     uint64_t phys = PMM::alloc_user_contiguous(static_cast<size_t>(count));
     if (phys == 0)

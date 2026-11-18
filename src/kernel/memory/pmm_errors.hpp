@@ -31,7 +31,8 @@ namespace kernel::errors {
     X(OOM, 1, "Out of memory — no free physical pages")                        \
     X(USER_OOM, 2, "Out of memory — no free user physical pages")              \
     X(TABLE_OOM, 3, "Out of memory — page table pool exhausted")               \
-    X(INVALID, 4, "Invalid physical address")
+    X(INVALID, 4, "Invalid physical address")                                  \
+    X(FROZEN_DENY, 5, "Post-freeze allocation denied")
 
 /// @brief Error codes for the Physical Memory Manager.
 // NOLINTNEXTLINE(performance-enum-size)

@@ -734,6 +734,11 @@ class Scheduler {
     static void release_memory_pages(uint64_t count) noexcept;
     /// @brief Returns the remaining budget in pages.
     static uint64_t remaining_memory_budget() noexcept;
+    /// @brief Subtracts handed-over pages from the global budget (M4,
+    ///        #563). The budget was initialised from total PMM pages;
+    ///        without this the handed-over count over-reports headroom.
+    ///        Underflow-clamped; no-op when CONFIG_MEMORY_BUDGET == 0.
+    static void apply_boot_handover(uint64_t pages) noexcept;
 #endif
     /// @brief Enables or disables preemption.
     /// @param en True to enable preemption.

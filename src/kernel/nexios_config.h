@@ -291,23 +291,40 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// MemPool Configuration
+// MemPool Configuration (F21, #573)
 // ---------------------------------------------------------------------------
-/// Number of fixed-size MemPool classes.
-#ifndef CONFIG_MEMPOOL_NUM_POOLS
-#define CONFIG_MEMPOOL_NUM_POOLS 9
+/// MemPool classes are hard-coded in memory/mempool.cpp (single source of
+/// truth: kMemPoolMaxBlockSize). The CONFIG_MEMPOOL_* macros were dead
+/// (referenced nowhere) and are deleted — do not reintroduce them; size
+/// the table in mempool.cpp and pin it with the TCB static_assert in
+/// task.hpp.
+
+// ---------------------------------------------------------------------------
+// Mem-Mgr Bootstrap Configuration (M4, #563)
+// ---------------------------------------------------------------------------
+/// Master switch for the mem-mgr bootstrap handover (root-task Untyped
+/// handover, frozen kernel pools). Default 0: composition runs unchanged;
+/// freeze still lands (correct STATIC_POOLS_ONLY point) with no handover.
+#ifndef CONFIG_MEM_MGR_BOOTSTRAP
+#define CONFIG_MEM_MGR_BOOTSTRAP 0
 #endif
 
-/// Comma-separated list of block sizes per pool.
-/// Must have exactly CONFIG_MEMPOOL_NUM_POOLS entries.
-#ifndef CONFIG_MEMPOOL_BLOCK_SIZES
-#define CONFIG_MEMPOOL_BLOCK_SIZES 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
+/// Maximum free runs the handover registry tracks (bounded table, no
+/// allocation). Surplus runs stay kernel-retained, never handed over.
+#ifndef CONFIG_MEM_HANDOVER_MAX_RUNS
+#define CONFIG_MEM_HANDOVER_MAX_RUNS 64
 #endif
 
-/// Comma-separated list of block counts per pool.
-/// Must have exactly CONFIG_MEMPOOL_NUM_POOLS entries.
-#ifndef CONFIG_MEMPOOL_BLOCK_COUNTS
-#define CONFIG_MEMPOOL_BLOCK_COUNTS 256, 128, 64, 32, 16, 8, 4, 2, 1
+/// Kernel reserve withheld from handover (pages). Covers residual legacy
+/// kernel allocations after the freeze (owner decision Q-M4-3: 2 MiB).
+#ifndef CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES
+#define CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES 512
+#endif
+
+/// Pressure-latch threshold, percent of PMM window consumed (R-MEM #575).
+/// Cross it and mem_pressure::latch() emits the unstable-state warning.
+#ifndef CONFIG_MEM_PRESSURE_THRESHOLD_PCT
+#define CONFIG_MEM_PRESSURE_THRESHOLD_PCT 90
 #endif
 
 // ---------------------------------------------------------------------------
@@ -566,9 +583,12 @@
 #endif
 
 /// Maximum number of live Untyped memory objects (ROADMAP 0.4.1 item 3).
-/// Enforced by a TU-local live counter in untyped.cpp.
+/// Enforced by a TU-local live counter in untyped.cpp. Raised for the M4
+/// handover (Q-M4-2: M4 raises the bound itself; F9/#562 tracks the full
+/// static-bound review): the handover mints up to
+/// CONFIG_MEM_HANDOVER_MAX_RUNS Untypeds plus headroom.
 #ifndef CONFIG_CAP_MAX_UNTYPED
-#define CONFIG_CAP_MAX_UNTYPED 16
+#define CONFIG_CAP_MAX_UNTYPED 64
 #endif
 
 /// Maximum number of live MmioCap objects (v0.4.2, issue #3).  Enforced by a
@@ -1434,6 +1454,20 @@ extern "C" void panic(const char *msg);
 #error "CONFIG_PAGE_TABLE_POOL_SIZE must be >= 1 (default 4096)"
 #endif
 
+// --- Mem-mgr bootstrap M4 (no validator rule) ---
+#if CONFIG_MEM_MGR_BOOTSTRAP != 0 && CONFIG_MEM_MGR_BOOTSTRAP != 1
+#error "CONFIG_MEM_MGR_BOOTSTRAP must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_MEM_HANDOVER_MAX_RUNS < 1
+#error "CONFIG_MEM_HANDOVER_MAX_RUNS must be >= 1 (default 64)"
+#endif
+#if CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES < 0
+#error "CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES must be >= 0 (default 512)"
+#endif
+#if CONFIG_MEM_PRESSURE_THRESHOLD_PCT < 1 || CONFIG_MEM_PRESSURE_THRESHOLD_PCT > 100
+#error "CONFIG_MEM_PRESSURE_THRESHOLD_PCT must be 1..100 (default 90)"
+#endif
+
 // --- Per-task objects (no validator rule) ---
 #if CONFIG_MAX_PER_TASK_OBJECTS < 1
 #error "CONFIG_MAX_PER_TASK_OBJECTS must be >= 1 (default 32)"
@@ -1451,7 +1485,7 @@ extern "C" void panic(const char *msg);
 #error "CONFIG_CAP_MAX_DEPTH must be >= 1 (default 8)"
 #endif
 #if CONFIG_CAP_MAX_UNTYPED < 1
-#error "CONFIG_CAP_MAX_UNTYPED must be >= 1 (default 16)"
+#error "CONFIG_CAP_MAX_UNTYPED must be >= 1 (default 64)"
 #endif
 #if CONFIG_CAP_MAX_MMIO < 1
 #error "CONFIG_CAP_MAX_MMIO must be >= 1 (default 16)"
@@ -1865,9 +1899,10 @@ extern "C" void panic(const char *msg);
 // CONFIG_CAP_MAX_MMIO_MAPS / CONFIG_CAP_MAX_FRAME_MAPS: already
 // static_assert(... > 0) at cap/mmio.cpp:67 and cap/frame_map.cpp:64, whose
 // window-fit asserts also need mem:: constants this header cannot reference.
-// CONFIG_STACK_SIZE_TABLE / CONFIG_MEMPOOL_BLOCK_SIZES /
-// CONFIG_MEMPOOL_BLOCK_COUNTS: brace/comma lists, not preprocessor
-// expressions; the C++ compiler validates their use at task.cpp:452.
+// CONFIG_STACK_SIZE_TABLE: brace/comma list, not a preprocessor
+// expression; the C++ compiler validates its use at task.cpp:452.
+// (CONFIG_MEMPOOL_BLOCK_SIZES/COUNTS were deleted as dead in F21;
+// the MemPool table lives in mempool.cpp, pinned by the TCB assert.)
 // CONFIG_VERSION_MAJOR/MINOR/PATCH/NUM: informational, no invariant.
 // CONFIG_SYSCALL_COUNT: derived aggregate.
 // CONFIG_INCLUDE_SYS_*: non-0/1 values would alter CONFIG_SYSCALL_COUNT;

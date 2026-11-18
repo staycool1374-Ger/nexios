@@ -900,6 +900,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 |---|---|
 | `d1b44d849` | #47 step-a vfs + block PDs: SDF, PDs, parity, fault demo (no flip) |
 | `960b27673` | #51 step-c-prime serial SHM SPSC ring TX |
+| uncommitted | #563 M4 mem-mgr bootstrap: freeze at composition end, root Untyped handover, BufferPool PMM-fallback removal, STATIC_POOLS_ONLY coverage, TCB static_assert, dead CONFIG_MEMPOOL_* removal |
 | `fc4a5e0e8` | #47 step-b1 block-srv live path |
 | `ace5c4da1` | #47 step-b2 block-srv IRQ delegation (WAIT_ACK, bounded wait, poll fallback) |
 | `579605bd4` | #47 step-b3 vfs-srv backends live path |

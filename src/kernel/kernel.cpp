@@ -1504,7 +1504,9 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #endif
     kernel::DriverRegistry::init();
     debug_write("[BOOT] Kernel init done\n");
-    kernel::PMM::mark_init_done();
+    // M4 (#563): the PMM freeze moved to the end of composition
+    // (taskdefs reboot_from_table) — freezing here would assert under
+    // CONFIG_STATIC_POOLS_ONLY while probes and task spawn still allocate.
     boot_mark(kernel::BootStage::MEMORY_INIT);
 
     // Issue #48/#51: the probe always runs — with the fb-device PD live
