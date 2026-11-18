@@ -29,6 +29,7 @@
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler_integrity.hpp>
 #include <kernel/arch/hal/context_id.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/task/scheduler_switch_internal.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/test/task_ptr.hpp>
@@ -199,6 +200,11 @@ JARVIS_TEST(slot_trap_trip_hook_repair, "PRE: none | POST: none") {
     constexpr uint64_t kSite = 0x513;
 
     // PROCEED: hook armed, live trapped task -> repair current.
+    // Note: the trip->assert windows run under IrqGuard so a timer-tick
+    // ISR cannot reschedule (raw is BLOCKED, so any tick in the window
+    // moves current away and trips the ==raw assert) — same race class
+    // as the #584 lock_order_violation_reported hardening.
+    arch::IrqGuard irq_guard{};
     g_hook_seen = 0;
     g_hook_ret = 1;
     {
