@@ -395,6 +395,15 @@ class Scheduler {
     static uint64_t stuck_rescue_count() noexcept;
     /// @brief Reset the rescue counter (test isolation).
     static void reset_stuck_rescue_count_for_test() noexcept;
+    /// @brief Flagged-orphan READY rescues since boot (issue #582 tick
+    ///        sweep). READY + in_ready_queue_==1 + physically queued
+    ///        nowhere (refused re-enqueue on a stale flag). Detection-first
+    ///        telemetry like stuck_rescue_count_: must stay 0 in a healthy
+    ///        run — every firing proves a lost-consume on a wake path.
+    ///        Monotonic (never rewound by snapshot restore).
+    static uint64_t orphan_rescue_count() noexcept;
+    /// @brief Reset the flagged-orphan rescue counter (test isolation).
+    static void reset_orphan_rescue_count_for_test() noexcept;
     /// @brief Depth spread that triggers migration (issue #61).
     static constexpr uint64_t BALANCER_THRESHOLD = 2;
     /// @brief Migration cap per tick (issue #61, RT budget bound).
@@ -1270,6 +1279,10 @@ struct SwSlots {
     ///        write under scheduler_lock_; readers use atomics; reset by
     ///        reset_stuck_rescue_count_for_test().
     static uint64_t stuck_rescue_count_;
+    /// @brief Flagged-orphan READY rescues since boot (issue #582).  Same
+    ///        ownership/discipline as stuck_rescue_count_; reset by
+    ///        reset_orphan_rescue_count_for_test().
+    static uint64_t orphan_rescue_count_;
     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
     ///        Shared by the stranded-READY and IPC-wake sweeps.
     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;
