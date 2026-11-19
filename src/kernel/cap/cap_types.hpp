@@ -27,8 +27,13 @@
 
 namespace kernel::cap {
 
-/// @brief Capability target types (iteration-1 slice).
+/// @brief Capability target types (F1 object model, issue #554).
 ///        Null = empty slot; Task/Endpoint/Frame/CNode are live targets.
+///        TCB is the schedulable object split from Task as the join/thread
+///        authority (spec §4.1).  Carvable fixed-size kinds: Frame, TCB,
+///        VSpace, PageTable, Notification, SchedContext.  Endpoint, CNode,
+///        Mmio, Irq, IoMmuDma, Msix, Wdog, Untyped, Task and Null are NOT
+///        retype targets (MemPool-resident or authority-only).
 enum class CapType : uint8_t {
     Null = 0,
     Task = 1,
@@ -41,7 +46,33 @@ enum class CapType : uint8_t {
     IoMmuDma = 8, ///< IOMMU DMA protection domain (v0.4.2, issue #4)
     Msix = 9,     ///< per-vector MSI-X entry on a PCI device (v0.4.2, issue #10)
     Wdog = 10,    ///< cross-task watchdog arm/kick authority (issue #277)
+    TCB = 11,     ///< schedulable object (F1 #554; split from Task)
+    VSpace = 12,  ///< address-space root (F1 #554; wired by F5 #558)
+    PageTable = 13, ///< page-table page (F1 #554; wired by F5 #558)
+    Notification = 14, ///< sync notification object (F1 #554; §8.1/§5 work)
+    SchedContext = 15, ///< scheduling context (F1 #554; M13 #190)
 };
+
+/// @brief Last valid capability type (F1 append point for CapType).
+constexpr CapType kCapTypeLast = CapType::SchedContext;
+
+/// @brief True when @p raw_value names a live CapType (syscall boundary
+///        gate: rejects truncated out-of-range values before the enum
+///        cast, issue #554).
+constexpr bool cap_type_valid(uint64_t raw_value) noexcept {
+    return raw_value <= kernel::to_underlying(kCapTypeLast);
+}
+
+static_assert(kernel::to_underlying(CapType::TCB) == 11,
+              "CapType::TCB ABI value moved");
+static_assert(kernel::to_underlying(CapType::VSpace) == 12,
+              "CapType::VSpace ABI value moved");
+static_assert(kernel::to_underlying(CapType::PageTable) == 13,
+              "CapType::PageTable ABI value moved");
+static_assert(kernel::to_underlying(CapType::Notification) == 14,
+              "CapType::Notification ABI value moved");
+static_assert(kernel::to_underlying(CapType::SchedContext) == 15,
+              "CapType::SchedContext ABI value moved");
 
 /// @brief Rights bitmap, checked by the operation that consumes the cap.
 ///        Scoped enum (issue #348-D): combine with |  test with &, strip

@@ -23,6 +23,7 @@
 
 #include <types.hpp>
 #include <kernel/nexios_config.h>
+#include <kernel/cap/cap_errors.hpp>
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -183,18 +184,29 @@ int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
          uint32_t badge, uint32_t *gen_out = nullptr) noexcept;
 
 /// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
-///        capability of @p target_type, installed into @p cspace.  Supports
-///        Frame targets with a sub-range carve (issue #1): @p size may be
-///        smaller than the Untyped's region (PAGE-aligned, prefix-only); the
-///        remainder is installed as a child Untyped in the same @p cspace and
-///        is itself retypable (exhaustion model).  size == ut->size is the
-///        exact-size degenerate case (no child).  Non-destructive on
-///        validation/capacity failure; fail-closed after the guard is claimed.
-/// @return the new target slot index, or -1 on any failure.
+///        capability of @p target_type, installed into @p cspace (F1 #554).
+///        The target type is a per-invocation argument: the six carvable
+///        kinds are Frame (variable size) and the five fixed-size kinds
+///        TCB, VSpace, PageTable, Notification, SchedContext (fixed
+///        compile-time sizes, object_sizing.hpp).  Supports a sub-range
+///        carve (issue #1): @p size may be smaller than the Untyped's
+///        region (PAGE-aligned, prefix-only); the remainder is installed
+///        as a child Untyped in the same @p cspace and is itself
+///        retypable (exhaustion model).  size == ut->size is the
+///        exact-size degenerate case (no child).  A fixed kind with
+///        size 0 means "the type's size" (Frame still requires an
+///        explicit non-zero size).  Non-destructive on
+///        validation/capacity failure; fail-closed after the guard is
+///        claimed.  Revocation of the parent Untyped's derivations
+///        reclaims every carved object (spec §4.2).
+/// @return the new target slot index, or -1 on any failure.  When
+///         @p err_out is non-null it carries the typed reason
+///         (errors::CapError) on failure and is untouched on success.
 /// @param gen_out when non-null, receives the new target slot's generation
 ///        (issue #266; written inside the install lock).
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
            size_t size, CapRights rights,
-           uint32_t *gen_out = nullptr) noexcept;
+           uint32_t *gen_out = nullptr,
+           errors::CapError *err_out = nullptr) noexcept;
 
 } // namespace kernel::cap

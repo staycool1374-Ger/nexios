@@ -21,7 +21,10 @@
 
 #include <kernel/cap/untyped.hpp>
 #include <kernel/cap/cap.hpp>
+#include <kernel/cap/cap_errors.hpp>
+#include <kernel/cap/carved_object.hpp>
 #include <kernel/cap/frame.hpp>
+#include <kernel/cap/object_sizing.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -46,8 +49,8 @@ namespace {
 ///        Assumes @p phys/@p size already validated and, for create(), the
 ///        region already carved from PMM.  Enforces the shared
 ///        CONFIG_CAP_MAX_UNTYPED live bound and cap-object tracking.
-UntypedMem *alloc_object(uint64_t phys, size_t size, bool is_user,
-                         CapType target) noexcept {
+UntypedMem *alloc_object(uint64_t phys, size_t size,
+                         bool is_user) noexcept {
     if (__atomic_load_n(&g_live_untypeds, __ATOMIC_RELAXED) >=
         static_cast<uint32_t>(CONFIG_CAP_MAX_UNTYPED))
         return nullptr;
@@ -59,19 +62,30 @@ UntypedMem *alloc_object(uint64_t phys, size_t size, bool is_user,
     ut->phys = phys;
     ut->size = size;
     ut->is_user = is_user;
-    ut->retype_target = target;
     __atomic_fetch_add(&g_live_untypeds, 1U, __ATOMIC_RELAXED);
     kernel::test::ResourceTracker::instance().track_cap_object_add();
     return ut;
 }
 
+/// @brief Builds the retype target object over the carved prefix
+///        [ut->phys, ut->phys + carve_bytes).  Frame takes an explicit
+///        size; the five fixed kinds are constructed at their
+///        compile-time size (set by construction — no widening setter).
+KernelObject *create_target(const UntypedMem *ut, CapType target_type,
+                            size_t carve_bytes) noexcept {
+    if (target_type == CapType::Frame) {
+        return FrameCap::create(ut->phys, carve_bytes / arch::PAGE_SIZE,
+                                ut->is_user);
+    }
+    return CarvedObjectCap::create(target_type, ut->phys, carve_bytes,
+                                   ut->is_user);
+}
+
 } // namespace
 
-UntypedMem *UntypedMem::create(size_t size, bool is_user, CapType target) {
+UntypedMem *UntypedMem::create(size_t size, bool is_user) {
     if (size == 0 || (size % arch::PAGE_SIZE) != 0)
         return nullptr;
-    if (target != CapType::Frame)
-        return nullptr; // Frame is the only supported target
     // Check the live bound BEFORE carving PMM (avoids allocate-then-free on
     // exhaustion).  alloc_object re-checks it as the shared enforcement for
     // create_subrange.
@@ -85,7 +99,7 @@ UntypedMem *UntypedMem::create(size_t size, bool is_user, CapType target) {
     if (!phys)
         return nullptr;
 
-    UntypedMem *ut = alloc_object(phys, size, is_user, target);
+    UntypedMem *ut = alloc_object(phys, size, is_user);
     if (!ut) {
         for (size_t i = 0; i < pages; ++i)
             PMM::free_page(phys + i * arch::PAGE_SIZE);
@@ -95,14 +109,12 @@ UntypedMem *UntypedMem::create(size_t size, bool is_user, CapType target) {
 }
 
 UntypedMem *UntypedMem::create_subrange(uint64_t phys, size_t size,
-                                        bool is_user, CapType target) {
+                                        bool is_user) {
     if (phys == 0 || size == 0 || (size % arch::PAGE_SIZE) != 0)
-        return nullptr;
-    if (target != CapType::Frame)
         return nullptr;
     // No PMM allocation: the frames are already owned by the parent Untyped;
     // ownership transfers when the parent's retype guard is claimed.
-    return alloc_object(phys, size, is_user, target);
+    return alloc_object(phys, size, is_user);
 }
 
 bool UntypedMem::claim_once() noexcept {
@@ -130,15 +142,21 @@ void UntypedMem::dispose() noexcept {
 }
 
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
-           size_t size, CapRights rights, uint32_t *gen_out) noexcept {
-    if (!cspace)
+           size_t size, CapRights rights, uint32_t *gen_out,
+           errors::CapError *err_out) noexcept {
+    if (!cspace) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_INVALID_ARGS;
         return -1;
+    }
     // Issue #240 step-a: cached policy-word check (one short locked load,
     // zero new lock order); all-allow at step-a so always passes.
     {
         SpinLockGuard<sync::SpinLock> guard(cspace->lock_);
         if (!CNode::policy_allows(cspace->policy_word_,
                                    kCapBrokerAllowRetype)) {
+            if (err_out != nullptr)
+                *err_out = errors::CAP_ERR_POLICY_DENIED;
             return -1;
         }
     }
@@ -146,66 +164,128 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
     // alive across the transfer so dispose() cannot run mid-retype.
     KernelObject *obj = lookup(cspace, untyped_handle, CapType::Untyped,
                                CapRights::WRITE);
-    if (!obj)
+    if (!obj) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_BAD_HANDLE;
         return -1;
+    }
     auto *ut = static_cast<UntypedMem *>(obj);
 
-    // Validation must not consume the Untyped (retype can be retried).
-    if (target_type != ut->retype_target || size == 0 ||
-        (size % arch::PAGE_SIZE) != 0 || size > ut->size) {
+    // Per-invocation target (F1 #554): only the six carvable kinds pass.
+    // Endpoint/CNode/Mmio/Irq/IoMmuDma/Msix/Wdog/Untyped/Task/Null are
+    // MemPool-resident or authority-only and stay rejected here.
+    const ObjectSizing sizing = object_sizing(target_type);
+    if (!sizing.carvable) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_TARGET_UNSUPPORTED;
         ut->release();
         return -1;
     }
-    const bool exact = (size == ut->size);
+    // Effective carve size: Frame takes the explicit size; a fixed kind
+    // with size 0 means "the type's size" (F1 UX note in cap.hpp).
+    size_t carve_bytes = size;
+    if (!sizing.variable_size && size == 0)
+        carve_bytes = sizing.bytes;
+    // Validation must not consume the Untyped (retype can be retried).
+    if (sizing.variable_size && size == 0) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_SIZE_ZERO;
+        ut->release();
+        return -1;
+    }
+    if ((carve_bytes % arch::PAGE_SIZE) != 0) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_SIZE_UNALIGNED;
+        ut->release();
+        return -1;
+    }
+    if (carve_bytes > ut->size) {
+        if (err_out != nullptr) {
+            *err_out = sizing.variable_size ? errors::CAP_ERR_RANGE_EXCEEDED
+                                            : errors::CAP_ERR_SHORT_RANGE;
+        }
+        ut->release();
+        return -1;
+    }
+    if (!sizing.variable_size && size != 0 && size != sizing.bytes) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_SIZE_MISMATCH;
+        ut->release();
+        return -1;
+    }
+    const bool exact = (carve_bytes == ut->size);
 
     // Non-destructive slot-capacity pre-check: a sub-range carve installs two
     // slots (target + child Untyped).  Failing here leaves the Untyped intact.
     const size_t need_slots = exact ? 1U : 2U;
     if (occupied_count(cspace) + need_slots >
         static_cast<size_t>(CONFIG_CSLOT_COUNT)) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_NO_CSLOT;
         ut->release();
         return -1;
     }
 
     // Claim the single transfer.  Loser -> -1.
     if (!ut->claim_once()) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_ALREADY_RETYPED;
         ut->release();
         return -1;
     }
 
-    // Build the target FrameCap over [ut->phys, ut->phys + size).  On MemPool
+    // Build the target over [ut->phys, ut->phys + carve_bytes).  On MemPool
     // exhaustion roll the claim back (no object over the region exists yet)
     // and keep the whole region with the Untyped.
-    FrameCap *fc = FrameCap::create(ut->phys, size / arch::PAGE_SIZE,
-                                    ut->is_user);
-    if (!fc) {
+    KernelObject *target = create_target(ut, target_type, carve_bytes);
+    if (!target) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_OBJECT_EXHAUSTED;
         ut->reset_claim();
         ut->release();
         return -1;
     }
 
     // Sub-range carve: build the child Untyped for the remainder
-    // [ut->phys + size, ut->phys + ut->size).  On failure (MemPool or the
-    // CONFIG_CAP_MAX_UNTYPED live bound) fail closed: stretch the never-
-    // installed FrameCap to the whole region and release it — every frame
+    // [ut->phys + carve_bytes, ut->phys + ut->size).  On failure (MemPool or
+    // the CONFIG_CAP_MAX_UNTYPED live bound) fail closed: the whole region
     // returns to PMM exactly once and the parent stays spent (guard set).
     UntypedMem *child = nullptr;
     if (!exact) {
-        child = UntypedMem::create_subrange(ut->phys + size, ut->size - size,
-                                            ut->is_user, ut->retype_target);
+        child = UntypedMem::create_subrange(ut->phys + carve_bytes,
+                                            ut->size - carve_bytes,
+                                            ut->is_user);
         if (!child) {
-            fc->count = ut->size / arch::PAGE_SIZE;
-            fc->release();
+            if (err_out != nullptr)
+                *err_out = errors::CAP_ERR_CHILD_UNAVAILABLE;
+            if (target_type == CapType::Frame) {
+                auto *frame = static_cast<FrameCap *>(target);
+                frame->count = ut->size / arch::PAGE_SIZE;
+                frame->release();
+            } else {
+                // Carved kinds have no widening setter (S3-4 construction
+                // preference): release the prefix target (frees the carved
+                // prefix) then free the remainder directly.  Bounded loop
+                // (INV-RT-4); every page is freed exactly once.
+                target->release();
+                const size_t first_page = carve_bytes / arch::PAGE_SIZE;
+                const size_t total_pages = ut->size / arch::PAGE_SIZE;
+                for (size_t page_idx = first_page; page_idx < total_pages;
+                     ++page_idx)
+                    PMM::free_page(ut->phys + page_idx * arch::PAGE_SIZE);
+            }
             ut->release();
             return -1;
         }
     }
 
-    int idx_target = cspace->install(fc, CapType::Frame, rights, gen_out);
+    int idx_target = cspace->install(target, target_type, rights, gen_out);
     if (idx_target < 0) {
+        if (err_out != nullptr)
+            *err_out = errors::CAP_ERR_INSTALL_FAILED;
         if (child)
-            child->release(); // disposes [ut->phys + size, ut->phys + ut->size)
-        fc->release();        // disposes [ut->phys, ut->phys + size)
+            child->release(); // disposes [ut->phys + carve, remainder)
+        target->release();    // disposes [ut->phys, ut->phys + carve)
         ut->release();
         return -1;
     }
@@ -218,10 +298,12 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
         int idx_child = cspace->install(child, CapType::Untyped,
                                         rights | CapRights::WRITE);
         if (idx_child < 0) {
+            if (err_out != nullptr)
+                *err_out = errors::CAP_ERR_INSTALL_FAILED;
             // Roll back the target install, then release the child: the two
             // disposes cover the whole region exactly once.
             cspace->remove(static_cast<uint32_t>(idx_target));
-            fc->release(); // drop the creator ref -> dispose frees [ut->phys, ut->phys + size)
+            target->release(); // drop creator ref -> dispose frees prefix
             child->release();
             ut->release();
             return -1;
@@ -229,7 +311,8 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
     }
 
     // Success: both slots hold a reference; drop the creator refs.
-    fc->release();
+    // err_out is untouched on success (INV-RT-5).
+    target->release();
     if (child)
         child->release();
     ut->release();
