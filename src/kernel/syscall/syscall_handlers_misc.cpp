@@ -156,31 +156,13 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                      // Any-child wildcard (waitpid pid -1), not a failure
                      // code — deliberately raw, see H6 note #257.
                      p->waiting_child_pid == static_cast<uint64_t>(-1))) {
-                    // Write exit code to parent's user-space status pointer.
-                    // We must switch to the parent's page table because
-                    // the status address belongs to the parent's address space.
-                    if (p->waiting_child_status) {
-                        uint64_t old_cr3 = 0;
-                        bool switched = false;
-                        if (p->get_page_table() &&
-                            arch::read_cr3() != p->get_page_table()) {
-                            old_cr3 = arch::read_cr3();
-                            arch::write_cr3(p->get_page_table());
-                            switched = true;
-                        }
-                        // MP-4 (SMAP): the status page is a user page in the
-                        // parent's address space, pre-certified MAPPED by
-                        // waitpid's virt_to_phys_in_pml4 check.  The write
-                        // runs with AC set (stac) — the page is present so no
-                        // recover_ip is needed; clac restores AC for the
-                        // kernel after the user-page store.
-                        arch::stac();
-                        *p->waiting_child_status = t->exit_code;
-                        arch::clac();
-                        if (switched)
-                            arch::write_cr3(old_cr3);
-                        p->waiting_child_status = nullptr;
-                    }
+                    // Write exit code to parent's user-space status pointer
+                    // (issue #588: fault-armed shared helper — same contract
+                    // as wake_waiting_parent; the slot was certified mapped
+                    // AND writable at waitpid entry but the store stays armed
+                    // against remap races and uncertified kernel-task slots).
+                    if (p->waiting_child_status)
+                        (void)Scheduler::deliver_wait_status(*p, t->exit_code);
                     p->waiting_child_pid = 0;
                     // Issue #221: leave the child linked when the parent is
                     // actively waiting — it collects the zombie itself via

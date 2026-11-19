@@ -307,6 +307,18 @@ class VMM {
     ///       allocates). SMP: N/A.
     [[nodiscard]] static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
                                    bool *executable_out);
+    /// @brief Production query: reports whether the whole
+    ///        `[virt_addr, virt_addr + bytes)` window lands on present,
+    ///        writable 4 KiB leaves of @p pml4_phys (issue #588: waitpid
+    ///        status-slot pre-certification — mapped present is not enough,
+    ///        an RO leaf would fault the deferred wake store).
+    /// @return false for holes, RO leaves, huge/block leaves, overflow and
+    ///         `bytes == 0` (fail closed).
+    /// @note Concurrency/caller contract (issue #366): Lock: none.
+    ///       Context: any-task (walk-only, never allocates). SMP: N/A.
+    [[nodiscard]] static bool user_write_window_writable(uint64_t virt_addr,
+                                                         uint64_t bytes,
+                                                         uint64_t pml4_phys);
     /// @brief Test inspector: reports whether the mapped leaf is
     ///        executable per the arch NX encoding (walk-only, never
     ///        allocates; issue #325-D NX pinning).  x86_64: NX bit 63

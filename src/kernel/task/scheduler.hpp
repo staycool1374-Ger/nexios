@@ -735,13 +735,30 @@ class Scheduler {
     /// @param name_len Capacity of @p out_name.
     static AuthStepResult auth_verify_step(uint64_t &out_task_id, char *out_name,
                                            uint64_t name_len) noexcept;
+    /// @brief Fault-armed delivery of a terminated child's exit code into
+    ///        the parent's waitpid status slot (issue #588).  Performs the
+    ///        parent-CR3 switch, the armed 8-byte store, and the CR3 restore,
+    ///        then clears `parent.waiting_child_status` on both paths.
+    ///        Takes no lock, allocates nothing, logs only through the
+    ///        lock-free dmesg SPSC ring — safe from IRQ-masked/ISR context.
+    ///        The store runs under the single-slot recovery IP (saved and
+    ///        restored, never zeroed) with AC cleared first on the recover
+    ///        path; a fault skips delivery and records dmesg SCHED+20.
+    /// @param parent Waiting parent whose status slot is written and cleared.
+    /// @param code Child exit code to store.
+    /// @return false when the store faulted (delivery skipped), true otherwise.
+    [[nodiscard]] static bool deliver_wait_status(TaskControlBlock &parent,
+                                                 uint64_t code) noexcept;
     /// @brief Wake a parent blocked in waitpid for a child that just
     ///        terminated via a non-sys_exit path (issue #217: EL0-fault
     ///        kill; also terminate, deadline miss).  Mirrors the wake
     ///        Syscall::sys_exit performs inline, including the waitpid(-1)
-    ///        match.  Lock-free on the UP/test path (set_task_ready only
-    ///        takes scheduler_lock_ for down-CPU targets); safe from
-    ///        IRQ-masked fault context.
+    ///        match.  Status delivery is fault-armed (issue #588:
+    ///        deliver_wait_status under the parent's CR3 with the
+    ///        single-slot recovery IP saved/restored, AC cleared on both
+    ///        paths — never panics on a bad/RO status page).  Lock-free on
+    ///        the UP/test path (set_task_ready only takes scheduler_lock_
+    ///        for down-CPU targets); safe from IRQ-masked fault context.
     static void wake_waiting_parent(TaskControlBlock &child) noexcept;
 #if defined(CONFIG_DEBUG)
     /// @brief Issue #299/#280 diagnostic: dump the ready-queue view (highest

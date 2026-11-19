@@ -29,6 +29,8 @@
 #include <kernel/memory/integrity.hpp>
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/memory/checked_ptr.hpp>
+#include <kernel/core/global_state.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/console/urc.hpp>
 #include <services/terminal/terminal.hpp>
@@ -385,6 +387,60 @@ void Scheduler::cleanup_step_try() noexcept {
 /// termination paths (Scheduler::terminate, deadline miss, cleanup_test_tasks,
 /// EL0-fault kill — issue #217) so a parent blocked in waitpid is not left
 /// waiting forever on a child that exited via a path other than sys_exit.
+/// @brief Fault-armed wait-status delivery shared by all wake paths
+///        (issue #588: wake_waiting_parent, sys_exit, sys_thread_exit).
+///        Switches to the parent's page table, arms the single-slot
+///        recovery IP around the 8-byte user store, then converges on a
+///        shared tail that restores the caller's CR3 and clears the slot.
+///        No lock, no allocation, lock-free dmesg only (safe from the
+///        timer-tick watchdog KILL arm and IRQ-masked fault context).
+bool Scheduler::deliver_wait_status(TaskControlBlock &parent,
+                                    uint64_t code) noexcept {
+    uint64_t *status_slot = parent.waiting_child_status;
+    if (status_slot == nullptr)
+        return true;
+    // Single-slot recovery contract (docs/specs/external-pager.md §6):
+    // save the outer arm — a nested arm (timer-tick watchdog KILL, fault
+    // context) must not clobber it; the common case restores 0, so the
+    // cleared-on-exit / pager-F2 precondition still holds.
+    const uint64_t prev_arm = kernel::gs::user_access_recover_ip();
+    bool delivered = false;
+    uint64_t old_cr3 = 0;
+    bool switched = false;
+    if (parent.get_page_table() &&
+        arch::read_cr3() != parent.get_page_table()) {
+        old_cr3 = arch::read_cr3();
+        arch::write_cr3(parent.get_page_table());
+        switched = true;
+    }
+    kernel::gs::user_access_recover_ip() =
+        reinterpret_cast<uint64_t>(&&recover_status);
+    NEXIOS_FAULT_RECOVERY_KEEP(recover_status);
+    arch::stac();
+    *status_slot = code;
+    arch::clac();
+    delivered = true;
+    kernel::gs::user_access_recover_ip() = prev_arm;
+    goto converge;
+
+recover_status:
+    // S1: clac FIRST — a leaked AC panics debug/x86 at the next syscall
+    // entry (syscall.cpp MP-4 detector) and hands SMAP bypass to ring 3
+    // via sysret on release.  Then restore the outer arm (not zero) and
+    // converge on the shared tail so the caller's CR3 is always restored.
+    arch::clac();
+    kernel::gs::user_access_recover_ip() = prev_arm;
+    log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
+                        log::kDmesgBase_SCHED + 20, log::LogSeverity::WARN,
+                        "Sched: waitpid status store faulted (not writable)",
+                        parent.id);
+converge:
+    if (switched)
+        arch::write_cr3(old_cr3);
+    parent.waiting_child_status = nullptr;
+    return delivered;
+}
+
 /// @param child The just-terminated child task.
 void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
     ENSURE(validate_task_ptr(&child, "wake_waiting_parent"));
@@ -400,27 +456,14 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
         p->waiting_child_pid != kWaitAny)
         return;
 
-    // Deliver the child's exit status to a parent blocked in waitpid.
-    if (p->waiting_child_status) {
-        uint64_t old_cr3 = 0;
-        bool switched = false;
-        if (p->get_page_table() && arch::read_cr3() != p->get_page_table()) {
-            old_cr3 = arch::read_cr3();
-            arch::write_cr3(p->get_page_table());
-            switched = true;
-        }
-        // MP-4 (SMAP): the status page is a user page pre-certified MAPPED by
-        // waitpid's virt_to_phys_in_pml4 check (syscall_handlers_process.cpp).
-        // The write runs with AC set (stac) — the page cannot fault (present),
-        // so no recover_ip is needed.  clac restores AC for the kernel after
-        // the user-page store.
-        arch::stac();
-        *p->waiting_child_status = child.exit_code;
-        arch::clac();
-        if (switched)
-            arch::write_cr3(old_cr3);
-        p->waiting_child_status = nullptr;
-    }
+    // Deliver the child's exit status to a parent blocked in waitpid
+    // (issue #588: fault-armed shared helper — the slot was certified
+    // mapped AND writable at waitpid entry, but kernel-task parents skip
+    // the pre-cert and the mapping can change while the parent is BLOCKED,
+    // so the store stays armed; AC cleared on both paths, slot cleared
+    // inside the helper).
+    if (p->waiting_child_status)
+        (void)Scheduler::deliver_wait_status(*p, child.exit_code);
 
     // Clear the parent's wait and orphan the child for ANY waiting parent.
     // This lets reap_orphans collect the zombie even when the parent is a

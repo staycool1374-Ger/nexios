@@ -129,19 +129,23 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         if (arg2 & 1)
             return static_cast<uint64_t>(errors::SYS_ERR_OK); // WNOHANG with nothing reaped: zero pids ready
                       // (POSIX waitpid count, not status — keep numeric).
-        cur->waiting_child_pid = target_pid;
-        // MP-4 (SMAP): the stored status pointer is written later by
-        // Scheduler::wake_waiting_parent under the parent's CR3.  For user
-        // tasks pre-certify the page is MAPPED (range validity alone is
-        // insufficient — an unmapped-but-valid VA would #PF in the wake
-        // path).  Kernel tasks pass a kernel pointer (no user page check
-        // needed).
-        if (syscall_is_user_task() && status.unsafe_ptr() &&
-            VMM::virt_to_phys_in_pml4(
-                reinterpret_cast<uint64_t>(status.unsafe_ptr()),
-                cur->get_page_table()) == 0) {
-            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+        // Issue #588: two-cert contract BEFORE any wait-state publication
+        // (INV-WAIT-2 — a rejected pointer must leave no stale
+        // waiting_child_pid behind): range (checked() above) → mapped →
+        // writable over the whole 8-byte window, fail closed with the typed
+        // fault code.  The wake-path armed store (deliver_wait_status) is
+        // the TOCTOU backstop for remaps while BLOCKED.
+        if (syscall_is_user_task() && status.unsafe_ptr()) {
+            const uint64_t status_va =
+                reinterpret_cast<uint64_t>(status.unsafe_ptr());
+            if (VMM::virt_to_phys_in_pml4(status_va, cur->get_page_table()) ==
+                0)
+                return static_cast<uint64_t>(errors::SYS_ERR_FAULT);
+            if (!VMM::user_write_window_writable(status_va, sizeof(uint64_t),
+                                                 cur->get_page_table()))
+                return static_cast<uint64_t>(errors::SYS_ERR_FAULT);
         }
+        cur->waiting_child_pid = target_pid;
         cur->waiting_child_status = status_ptr;
         Scheduler::dequeue_ready(*cur);
         cur->state = TaskState::BLOCKED;
