@@ -50,8 +50,12 @@ goes through `ParkLockGuard` (M2), which parks only when INV-L1 holds.
 park (≤ `CONFIG_LOCK_PARK_MAX_ATTEMPTS=8` × `CONFIG_LOCK_PARK_TICKS=2`) →
 park re-arm (≤ `CONFIG_LOCK_PARK_REARM_BUDGET=64` windows, one loud line
 per site when the budget is spent, then re-arming continues). Park
-precondition (all must hold): park enabled, no ISR nesting, no live
-`IrqGuard`, no held spinlock, current task live, non-idle, RUNNING. The
+precondition (all must hold): park enabled, no ISR context
+(`arch::isr_context_park_denied()` — nesting denies only outside a syscall
+trap and only while IF==0; the rv64 nesting count is stale by
+construction), no live `IrqGuard`, no held spinlock, current task live,
+non-idle, RUNNING. Both park gates consume this single predicate; a
+divergence between them is a defect (#583). The
 park wake is the existing level-triggered sleep-expiry scan (no waiter
 registry, no unlock-side hooks — INV-L3). Resume restores RUNNING after
 dequeue (INV-L2).

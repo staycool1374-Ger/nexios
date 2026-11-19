@@ -1289,10 +1289,14 @@ uint64_t resched_park_gate_base(bool entry_if) noexcept {
         why |= 1ULL << 1;
     // #578 test-context waiver: evaluated pre-guard (the arm below takes an
     // IrqGuard, so gate_task can no longer observe the entry depth). The
-    // waiver excuses bits 2 (harness-phantom depth) and 4 (stale nesting
-    // at IF==1) for a marked task under an armed seam — every other bit,
-    // and gate_task's task checks (harness/impersonation denials intact),
-    // still applies. See park_ctx_waivable() for the full conjunction.
+    // waiver excuses bit 2 (harness-phantom depth) for a marked task under
+    // an armed seam — every other bit, and gate_task's task checks
+    // (harness/impersonation denials intact), still applies. Bit 4 carries
+    // the #583 production IF==1 carve-out via the shared predicate
+    // (`arch::isr_context_park_denied`): a stale/rv64 nesting denies only
+    // while IF==0 — IF==1 proves task context (INV-MK-4) and is the same
+    // proof the lock-park predicate consumes. See park_ctx_waivable() for
+    // the full conjunction.
     auto *gate_task_cur = Scheduler::current_task();
     const bool waived =
         gate_task_cur != nullptr &&
@@ -1302,8 +1306,12 @@ uint64_t resched_park_gate_base(bool entry_if) noexcept {
         why |= 1ULL << 2;
     if (sync::spinlock_held_by_current_count() != 0)
         why |= 1ULL << 3;
-    if (kernel::isr_nesting_own() != 0 && !arch::in_syscall_trap_level() &&
-        !waived)
+    // #583: shared IsrContext predicate — entry_if is the single pre-guard
+    // sample (never re-read). `&& !waived` is now redundant (the waiver
+    // requires IF==1, which already clears the predicate) but retained so
+    // bit 4's fail-closed direction does not couple to the seam's
+    // internal conjuncts.
+    if (arch::isr_context_park_denied(entry_if) && !waived)
         why |= 1ULL << 4;
     if (!entry_if && !arch::in_syscall_trap_level())
         why |= 1ULL << 5;

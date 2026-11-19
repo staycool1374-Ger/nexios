@@ -148,19 +148,13 @@ static ParkDenyReason deny_reason() noexcept {
     if (CONFIG_LOCK_PARK_ENABLE == 0)
         return ParkDenyReason::Disabled;
     // IsrContext arm (M2 §6.2 + #545 FIRE): a hardware ISR must never park
-    // (no task to deschedule).  Two precision carve-outs, both fail-closed:
-    // (a) genuine syscall-trap level (in_syscall_trap_level): the trap runs
-    // on the calling task's stack with a task to deschedule, and the park
-    // path's own sti/hlt owns the IRQ state exactly like sys_receive's
-    // wait loop — without this, every syscall would deny (all traps bump
-    // isr_nesting) and the FIRE shape could never park; (b) stale nesting
-    // with interrupts enabled: isr_nesting is observably wrong then
-    // (rv64 suite baseline), and IF==1 proves we are not inside a hardware
-    // ISR (interrupt gates clear IF; our ISRs never re-enable), so the
-    // count must not deny.  IF==0 keeps the deny (fail-closed direction,
-    // covering the QE manual-nesting test which holds IF=0 via IrqGuard).
-    if (kernel::isr_nesting_own() != 0 && !arch::in_syscall_trap_level() &&
-        !arch::interrupts_enabled())
+    // (no task to deschedule).  Precision carve-outs, both fail-closed,
+    // live in the shared predicate `arch::isr_context_park_denied`
+    // (irq_guard.hpp): syscall-trap level is exempt, and a stale nesting
+    // count (rv64 suite baseline) denies only while IF==0 — IF==1 proves
+    // not-a-hardware-ISR.  IF==0 keeps the deny, covering the QE
+    // manual-nesting test which holds IF=0 via IrqGuard.
+    if (arch::isr_context_park_denied(arch::interrupts_enabled()))
         return ParkDenyReason::IsrContext;
     if (arch::irq_guard_depth_own() != 0) {
         // #578 test-context waiver: a harness-phantom depth (the suite's

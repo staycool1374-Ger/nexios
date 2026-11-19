@@ -72,6 +72,28 @@ inline bool in_syscall_trap_level() noexcept {
            (kernel::isr_nesting_own() == syscall_trap_nesting[cpu]);
 }
 
+/// @brief Single IsrContext-park predicate shared by `deny_reason()` and
+///        `resched_park_gate_base()` (#583: the two gates forked on this
+///        definition and diverged on rv64).
+///        Deny iff all three conjuncts hold: ISR nesting is nonzero, the
+///        caller is NOT at a genuine syscall-trap level, and interrupts
+///        are disabled (the caller-supplied single IF sample is 0).
+///        IF==1 *is* the proof of not-a-hardware-ISR: x86 interrupt gates
+///        clear IF on entry, aarch64 takes the exception with `daifset`
+///        masking IRQs, and riscv64 hardware-clears SSTATUS.SIE with the
+///        #206 `csrci sstatus, 2` entry rule — our ISRs never re-enable, so
+///        a hardware ISR cannot observe IF==1.  A stale (unbalanced)
+///        `isr_nesting` count (rv64 suite baseline) must therefore not deny
+///        while IF==1; IF==0 keeps the deny (fail-closed direction).
+///        Only callers: `sync::deny_reason()` (passes
+///        `arch::interrupts_enabled()`) and `resched_park_gate_base()`
+///        (passes the already-sampled entry IF, never re-read inside so
+///        the two gates cannot sample different instants).
+inline bool isr_context_park_denied(bool interrupts_on) noexcept {
+    return kernel::isr_nesting_own() != 0 && !in_syscall_trap_level() &&
+           !interrupts_on;
+}
+
 /// @brief 32-entry per-CPU transition ring length (power of two: idx & 31).
 inline constexpr uint64_t kIrqGuardTraceEntries = 32;
 
