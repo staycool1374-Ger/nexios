@@ -27,7 +27,10 @@ def main():
     if not test_class or "\n" in test_class:
         print("refusing empty/multiline test class")
         return 2
-    payload = test_class + "\n"
+    # One class per line: the in-guest filter (parse_test_config) splits on
+    # whitespace only, so a raw comma-joined value would parse as one unknown
+    # class and select zero tests (#591).
+    payload = test_class.replace(",", "\n") + "\n"
     Path(output).write_text(payload, encoding="utf-8")
     for compat in compat_paths:
         Path(compat).write_text(payload, encoding="utf-8")
