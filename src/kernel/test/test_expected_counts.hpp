@@ -92,6 +92,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_core",             10,    0,       0      },  // CSpace engine: CNode/CSlot lifecycle, decode, revoke
     {"cap_lifecycle",        13,    0,       0      },  // grant, copy, revoke, mint, endpoints, frames + F2 #555 x5
     {"cap_syscall",          15,    0,       0      },  // cap syscall dispatch + handle roundtrip + F2 #555 x3 (row was stale at 9 since #171 P3/P4)
+    {"cap_vspace",           13,    0,       0      },  // F5 #558 N4 VSPACE_MAP link/validate/teardown (stub-first QE)
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator, sub-range carve, child split
     {"cap_mmio",              20,   11,      11     },  // MMIO caps, I/O delegation, revocation closure (4 ioport happy x86-only, #528)
@@ -303,7 +304,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                106,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10
-    {"capability",          178,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9)
+    {"capability",          191,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9 + F5 #558 x13 stubs)
     {"proc_elf",            135,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM) + F2 cap-smoke migration
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
     {"libc_stdio",            5,   0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (x86_64 only)

@@ -104,6 +104,7 @@ void register_pt_merge_tests();
 void register_cap_core_tests();
 void register_cap_lifecycle_tests();
 void register_cap_syscall_tests();
+void register_cap_vspace_tests();
 void register_debug_syscall_tests();
 void register_cap_ipc_tests();
 void register_cap_untyped_tests();
@@ -437,6 +438,7 @@ static void run_process_secure_exec_group() { register_secure_exec_tests(); }
 static void run_cap_core_group() { register_cap_core_tests(); }
 static void run_cap_lifecycle_group() { register_cap_lifecycle_tests(); }
 static void run_cap_syscall_group() { register_cap_syscall_tests(); }
+static void run_cap_vspace_group() { register_cap_vspace_tests(); }
 static void run_debug_syscall_group() { register_debug_syscall_tests(); }
 static void run_cap_ipc_group() { register_cap_ipc_tests(); }
 static void run_cap_untyped_group() { register_cap_untyped_tests(); }
@@ -806,6 +808,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"cap_core", []() { run_cap_core_group(); }},
     {"cap_lifecycle", []() { run_cap_lifecycle_group(); }},
     {"cap_syscall", []() { run_cap_syscall_group(); }},
+    {"cap_vspace", []() { run_cap_vspace_group(); }},
     {"debug_syscall", []() { run_debug_syscall_group(); }},
     {"cap_ipc", []() { run_cap_ipc_group(); }},
     {"cap_untyped", []() { run_cap_untyped_group(); }},
@@ -1215,6 +1218,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_cap_death_group();
          run_cap_pager_group();
          run_cap_broker_group();
+         run_cap_vspace_group();
      }},
     // proc_elf: process lifecycle + ELF loading (issue #173).  Named
     // proc_elf (not process_elf) — the fine-grained file class
