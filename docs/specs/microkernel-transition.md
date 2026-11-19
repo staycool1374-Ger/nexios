@@ -159,7 +159,7 @@ number retired · **RETIRE** number retired without replacement ·
 | 53 | CAP_REVOKE | live, object-wide | KEEP, semantics redefined: derivations only (INV-MK-7) |
 | 54 | CAP_MINT | live | KEEP |
 | 55 | IOPORT_GRANT | live, x86_64 only | KEEP; aarch64/riscv64: not applicable, fail-closed |
-| 56 | CAP_RETYPE | live; target fixed per Untyped (`cap/untyped.hpp:retype_target`) | KEEP, extended: target type per invocation (F1) |
+| 56 | CAP_RETYPE | live; target type per invocation (F1 #554) | KEEP, extended: target type per invocation (F1) |
 | 57 | IRQ_REGISTER | live; mode 0 WAIT, 1 NOTIFY, 2 WAIT_ACK | KEEP |
 | 58 | IRQ_WAIT | live; arg1 timeout ticks, 0 = forever (`syscall_handlers_irq.cpp:sys_irq_wait`) | KEEP |
 | 59 | IOMMU_MAP | live, x86_64 VT-d only | KEEP; other arches fail-closed (§11) |
@@ -234,8 +234,8 @@ objects).
 
 ### 4.2 Retype
 
-- Today an Untyped carries one fixed `retype_target` (default Frame) checked
-  at retype (`cap/untyped.cpp`). The caller cannot choose the type.
+- The target type is a per-invocation argument of `CAP_RETYPE` (F1 #554).
+  The Untyped records its physical range and watermark only.
 - REQUIRED: the target type is a per-invocation argument of `CAP_RETYPE`. The
   Untyped records its physical range and watermark only.
 - Every object type SHALL have a fixed, compile-time size; retype SHALL fail
@@ -898,6 +898,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 
 | Commit | Content |
 |---|---|
+| `66e698281` | #554 F1 object model: CapType += TCB/VSpace/PageTable/Notification/SchedContext; per-invocation retype target; fixed-size carved storage; X-macro CapError |
 | `d1b44d849` | #47 step-a vfs + block PDs: SDF, PDs, parity, fault demo (no flip) |
 | `960b27673` | #51 step-c-prime serial SHM SPSC ring TX |
 | uncommitted | #563 M4 mem-mgr bootstrap: freeze at composition end, root Untyped handover, BufferPool PMM-fallback removal, STATIC_POOLS_ONLY coverage, TCB static_assert, dead CONFIG_MEMPOOL_* removal |
