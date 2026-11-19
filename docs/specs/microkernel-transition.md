@@ -77,7 +77,7 @@ tracking issue; it is never presented as already true.
 | INV-MK-4 | Task context runs with IF=1 except inside an explicit `IrqGuard`; syscall entry owns IF=0 until the handler blocks or returns; no spinlock SHALL be held across a blocking point or `reschedule()`; every IRQ-off region SHALL be bounded. | debug assertions (§6) | VIOLATED (#545 S1, #546 S2); contract currently implicit |
 | INV-MK-5 | A context switch is applied only at an ISR epilogue at nesting depth 1, at a nested timer epilogue at depth 2, or at a nested self-triggered apply epilogue at depth 2 (M3 `sched_apply_trigger`: x86_64 vector 0xE1, aarch64 SGI 11, riscv64 SSIP). | `arch/x86_64/isr_stubs.asm` epilogue, `arch/aarch64/vectors.S`, `arch/riscv64/syscall_entry.S` + `interrupt_controller.cpp` (§11); `ipc.md` §4 | TRUE; fast path removes the tick wait per hop (M3 structural gate slope < 1.0), tick remains the fallback |
 | INV-MK-6 | Exactly one death record per task, latched at a single funnel, visible to a watching supervisor within a bounded number of ticks. | `ipc/death_notify.cpp:DeathNotify::on_task_death` | SATISFIED (M1: funnel latch at `Scheduler::publish_task_death` for every terminate path incl. fault kills, `complete_teardown` backstop; daemon PID cell cleared at the same funnel, #516; record carries id + generation + cause + tick) |
-| INV-MK-7 | Capabilities SHALL be non-amplifying. Revoke SHALL invalidate derivations only; deleting one's own cap SHALL NOT invalidate other holders. | `cap/cap.cpp` | VIOLATED (F2): `cap::revoke` clears the slot and calls the object's `revoke()` (object-wide); no `CAP_DELETE` exists |
+| INV-MK-7 | Capabilities SHALL be non-amplifying. Revoke SHALL invalidate derivations only; deleting one's own cap SHALL NOT invalidate other holders. | `cap/cap.cpp` | TRUE (F2 #555: `cap::remove` N6 slot-only, `revoke_derivations` 53 derivations-only, named survives) |
 | INV-MK-8 | Bulk channels SHALL be single-producer / single-consumer: `head` written only by the producer, `tail` only by the consumer. | `ipc/shm_ring.hpp` | TRUE; ring header lacks an epoch (§5.4) |
 | INV-MK-9 | An absent mechanism SHALL deny, never degrade silently: no IOMMU domain ⇒ no DMA cap; stale IRQ slot ⇒ refuse; missing cap ⇒ typed error. | `syscall_handlers_iommu.cpp`, `syscall_handlers_irq.cpp` | TRUE for IOMMU/IRQ arm paths |
 | INV-MK-10 | Every mechanism SHALL exist on x86_64, aarch64 and riscv64, or carry a documented arch-equivalent and a tracked issue (§11). | per-arch matrix | PARTIAL (§11) |
@@ -100,7 +100,7 @@ tracking issue; it is never presented as already true.
 | Supervision | in-kernel `daemon_mgr` (`MAX_RESTART_COUNT = 10`, no backoff, polled from `on_tick`); death notify syscalls 66–68 | supervisor PD with restart policy, cap re-derive, client rebind | #191, #516 |
 | Caps | `CapType` {Null, Task, Endpoint, Frame, CNode, Untyped, Mmio, Irq, IoMmuDma, Msix, Wdog} | add TCB, VSpace, PageTable, Notification, SchedContext; split delete/revoke | #50, F1, F2 |
 | Process mgmt | `FORK/EXEC/WAITPID/KILL/GETPID` in kernel | proc-mgr PD over TCB/VSpace mechanisms | F11 |
-| Syscalls | `MAX_SYSCALL = 98` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
+| Syscalls | `MAX_SYSCALL = 99` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
 
 ## 3. Target kernel API
 
@@ -116,7 +116,7 @@ excluded from the certified set · **MOVE** behaviour moves to a server RPC,
 number retired · **RETIRE** number retired without replacement ·
 **GATED** live, retirement gated on a migration step.
 
-### 3.2 Table T-1 — disposition of every number 0–96
+### 3.2 Table T-1 — disposition of every number 0–98
 
 | Nr | Name | Today | Disposition |
 |---|---|---|---|
@@ -187,6 +187,7 @@ number retired · **RETIRE** number retired without replacement ·
 | 92 | WATCHDOG_KICK | live | KEEP |
 | 93–96 | THREAD_CREATE, THREAD_EXIT, THREAD_JOIN, THREAD_WRAP | live (#52, #53) | KEEP |
 | 97 | REPLY_RECV | live (M3, F3/Q2 #556) | KEEP |
+| 98 | CAP_DELETE | live (M11, F2 #555) | KEEP |
 
 ### 3.3 New entries (numbers `TBD at API freeze`)
 
@@ -197,7 +198,7 @@ number retired · **RETIRE** number retired without replacement ·
 | N3 | TCB_RESUME | counterpart of N2; also starts a retyped TCB |
 | N4 | VSPACE_MAP | map a PageTable object into a VSpace; proc-mgr and mem-mgr cannot build address spaces without it |
 | N5 | REPLY_RECV | RESOLVED at M3 as syscall 97 (F3/Q2 #556): reply to the recorded caller and receive the next request, dest + token implicit kernel-held |
-| N6 | CAP_DELETE | delete one's own slot without invalidating other holders |
+| N6 → 98 | CAP_DELETE | delete one's own slot without invalidating other holders |
 | N7 | SC_BIND | bind a SchedContext to a TCB |
 | N8 | SC_UNBIND | counterpart of N7 |
 | N9 | SC_DONATE | explicit donation where Call-implicit donation does not apply (if Q1 selects donation) |
@@ -209,9 +210,9 @@ pointer-free rule of `syscall-fastpath.md` §0.
 
 KEEP: 0, 1, 2, 3, 5, 6, 27, 28 (8), 49, 50 (2), 51–62 (12), 64–79 (16),
 84, 85 (2), 91–97 (7) = 47.
-New: N1–N4, N6–N9 = 8 (N5 resolved to 97 at M3). Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
+New: N1–N4, N7–N9 = 7 (N5 resolved to 97 at M3; N6 resolved to 98 at F2 #555). Certified total = 54. KEEP-D: 86–90 = 5 (debug builds only).
 MOVE/RETIRE/GATED: 4 (1), 7–26 (20), 29–48 (20), 63 (1), 80–83 (4) = 46.
-47 + 5 + 46 = 98 =
+47 + 5 + 46 + 1 = 99 =
 `MAX_SYSCALL`, so every existing number has exactly one disposition.
 
 ### 3.5 Affinity and accounting split
@@ -249,8 +250,13 @@ objects).
   the object is destroyed; otherwise other holders are unaffected.
 - `CAP_REVOKE` (53): destroys all derivations of the named cap; the named
   cap itself survives. Requires a derivation tree per object (#50).
-- Both SHALL be bounded: revocation depth is bounded by `TBD at API freeze`;
-  a revoke that exceeds the bound returns a typed error and is resumable.
+- Both SHALL be bounded: derivation depth is bounded at creation by
+  `CONFIG_CAP_MAX_DEPTH` = 8 (deeper derivations fail closed with
+  `CAP_ERR_DEPTH_EXCEEDED`, F2 #555); a revoke that exceeds its per-call
+  work budget (`kRevokeEdgeBudget` = 64) returns typed
+  `CAP_ERR_REVOKE_INCOMPLETE` and is resumable by re-invocation (Q2: the
+  depth dimension is enforced at creation, the revoke-time typed-error /
+  resume contract on the work dimension).
 
 ### 4.4 Receive with timeout
 
