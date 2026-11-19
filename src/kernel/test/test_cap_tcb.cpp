@@ -36,8 +36,96 @@
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
+#include <kernel/sync/semaphore.hpp>
+#include <kernel/arch/timer.hpp>
 
 using namespace kernel;
+
+namespace {
+
+// Runs @p entry as a real task with a CSpace, waits, drains, returns it.
+// The driver task is made non-EDF (deadline 0, like the harness
+// itself): an EDF driver with an earlier deadline than its target
+// would never be preempted (edf_earlier fails), starving the target
+// forever. A non-EDF current always yields to any EDF candidate.
+TaskControlBlock *run_tcb_task(void (*entry)(), uint64_t prio = 11,
+                               uint64_t period = 10) {
+    auto *t = TaskControlBlock::create(entry, prio, period);
+    if (!t)
+        return nullptr;
+    t->deadline_ticks = 0; // non-EDF driver (see above)
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    Scheduler::drain_zombie_list();
+    return t;
+}
+
+// Installs a TcbCap for @p target_id/@p gen into @p cs; returns slot or -1.
+int install_tcb_cap(cap::CNode *cs, uint64_t target_id, uint32_t gen) {
+    auto *cap = cap::TcbCap::create(target_id, gen);
+    if (!cap)
+        return -1;
+    const int s = cs->install(cap, cap::CapType::TCB,
+                              cap::CapRights::READ | cap::CapRights::WRITE);
+    if (s < 0) {
+        cap->release();
+        return -1;
+    }
+    return s;
+}
+
+uint64_t tcb_handle(cap::CNode *cs, int slot) {
+    return cap::encode_handle(cs->cspace_id, static_cast<uint32_t>(slot),
+                              cs->slot_gen(static_cast<uint32_t>(slot)));
+}
+
+// Syscall-face encoding of a TCBCTL error: -(1000 + code).
+uint64_t tcb_err(uint64_t code) {
+    return 0ULL - (1000ULL + code);
+}
+
+// Bounded hlt-wait for @p target to leave RUNNING (yields the CPU like
+// wait_for_termination_safe does, so a higher-priority waiter cannot
+// starve the target). Records spins/state/ticks/in-ready-queue for the
+// harness to assert (and to diagnose starvation: READY + in_rq==0
+// means dequeued-without-dispatch).
+uint64_t g_tcb_wait_spins = 0;
+uint64_t g_tcb_wait_state = 0;
+uint64_t g_tcb_ticks0 = 0;
+uint64_t g_tcb_ticks1 = 0;
+uint64_t g_tcb_inrq = 0;
+uint64_t g_tcb_inedf = 0;
+uint64_t g_tcb_rqprio = 0;
+uint64_t g_tcb_deadline = 0;
+uint64_t g_tcb_period = 0;
+uint64_t g_tcb_policy = 0;
+
+void tcb_wait_settled(TaskControlBlock *target) {
+    g_tcb_wait_spins = 0;
+    g_tcb_wait_state = 0;
+    g_tcb_ticks0 = arch::Timer::ticks();
+    for (uint64_t i = 0;
+         i < 1000 && target->state != TaskState::TERMINATED &&
+         target->state != TaskState::BLOCKED;
+         ++i) {
+        __atomic_store_n(&kernel::Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELAXED);
+        arch::hlt();
+        ++g_tcb_wait_spins;
+    }
+    g_tcb_ticks1 = arch::Timer::ticks();
+    g_tcb_wait_state = static_cast<uint64_t>(target->state);
+    g_tcb_inrq = target->in_ready_queue_ ? 1ULL : 0ULL;
+    g_tcb_inedf = target->in_edf_queue_ ? 1ULL : 0ULL;
+    g_tcb_rqprio = target->rq_priority_;
+    g_tcb_deadline = target->deadline_ticks;
+    g_tcb_period = target->period_ticks;
+    g_tcb_policy = static_cast<uint64_t>(target->sched_policy);
+    g_tcb_policy = static_cast<uint64_t>(target->sched_policy);
+}
+
+} // namespace
 
 // Runmode: kernel
 // Testidea: F4 suspend parks a READY task: admin_parked set, state
@@ -288,12 +376,112 @@ JARVIS_TEST(tcb_cap_derivation_cascade, "PRE: none | POST: none") {
 // Input: 99 with mask bit0 (priority) + value; bit1 (affinity) +
 //        value; oversized priority; parked target configure.
 // Expect: Priority + affinity applied; over-ceiling INVALID_ARGS;
-//         parked target configurable.
-// Depends: sys_tcb_configure N1, set_priority/set_affinity_err
-// Pseudocode: configure priority (applied); affinity (applied +
-// clamped); over-ceiling (INVALID_ARGS); parked target (OK);
-// teardown.
+//         parked target configurable (returns 0, reprioritized).
+// Depends: sys_tcb_configure N1, set_priority/set_affinity_err,
+//        admin_suspend_err/resume_err park path
+// Pseudocode: spawn BLOCKED user child (creator-linked); configure
+// priority (applied); affinity (applied); over-ceiling
+// (INVALID_ARGS); suspend (parked); configure while parked;
+// resume; teardown.
 JARVIS_TEST(tcb_config_priority_and_affinity, "PRE: none | POST: none") {
+    static uint64_t g_prio = 0;
+    static uint64_t g_got_prio = 0;
+    static uint64_t g_aff = 0;
+    static uint64_t g_got_aff = 0;
+    static uint64_t g_over = 0;
+    static uint64_t g_parked = 0;
+    g_prio = g_aff = g_over = g_parked = g_got_prio = g_got_aff = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        // Live user child, creator-linked to the caller. Blocked on a
+        // semaphore so suspend parks synchronously. Priority 20 (above
+        // this task): higher number wins dispatch, so the child is
+        // guaranteed to run and block.
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                while (self->state == TaskState::BLOCKED)
+                    arch::pause();
+            },
+            20, 10);
+        JARVIS_ASSERT(target != nullptr);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        JARVIS_ASSERT_EQ(static_cast<uint64_t>(TaskState::BLOCKED),
+                         g_tcb_wait_state);
+        int tslot = install_tcb_cap(cs, target->id, target->generation);
+        if (tslot < 0) {
+            Scheduler::terminate(*target, 0);
+            Scheduler::drain_zombie_list();
+            return;
+        }
+        const uint64_t th = tcb_handle(cs, static_cast<uint32_t>(tslot));
+        // Priority field (bit 0) applies through set_priority.
+        g_prio = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::TCB_CONFIGURE), th, 1,
+            20, 0, nullptr);
+        g_got_prio = target->priority;
+        // Affinity field (bit 1) applies; CPU 0 always admissible.
+        g_aff = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::TCB_CONFIGURE), th, 2, 0,
+            1, nullptr);
+        g_got_aff = target->cpu_affinity;
+        // Over-ceiling priority is rejected, state untouched.
+        g_over = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::TCB_CONFIGURE), th, 1,
+            1ULL << 40, 0, nullptr);
+        // A parked target stays configurable: suspend (synchronous park
+        // — the target is already BLOCKED), configure while parked,
+        // resume back to BLOCKED.
+        g_parked = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::TCB_SUSPEND), th, 0, 0,
+            0, nullptr);
+        uint64_t reprio = g_parked;
+        if (reprio == 0) {
+            reprio = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::TCB_CONFIGURE), th, 1,
+                21, 0, nullptr);
+        }
+        uint64_t resume = reprio;
+        if (resume == 0) {
+            resume = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::TCB_RESUME), th, 0, 0,
+                0, nullptr);
+        }
+        if (resume != 0)
+            g_parked = resume;
+        else if (reprio != 0)
+            g_parked = reprio;
+        cs->remove(static_cast<uint32_t>(tslot));
+        // Reap the child (still BLOCKED on the semaphore or parked).
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    Logger::warn("[TCB-DIAG] spins=%llu state=%llu t0=%llu t1=%llu inrq=%llu inedf=%llu rqprio=%llu dl=%llu per=%llu pol=%llu",
+                 g_tcb_wait_spins, g_tcb_wait_state, g_tcb_ticks0,
+                 g_tcb_ticks1, g_tcb_inrq, g_tcb_inedf, g_tcb_rqprio,
+                 g_tcb_deadline, g_tcb_period, g_tcb_policy);
+    JARVIS_ASSERT_EQ(0ULL, g_prio);
+    JARVIS_ASSERT_EQ(20ULL, g_got_prio);
+    JARVIS_ASSERT_EQ(0ULL, g_aff);
+    JARVIS_ASSERT((g_got_aff & 1ULL) != 0ULL);
+    JARVIS_ASSERT_EQ(tcb_err(1), g_over);
+    JARVIS_ASSERT_EQ(0ULL, g_parked);
     JARVIS_TEST_PASS();
 }
 
@@ -306,21 +494,116 @@ JARVIS_TEST(tcb_config_priority_and_affinity, "PRE: none | POST: none") {
 // Expect: INVALID_ARGS, INVALID_ARGS, UNSUPPORTED, UNSUPPORTED,
 //         INVALID_ARGS.
 // Depends: sys_tcb_configure mask gate (no silent ignore)
-// Pseudocode: each malformed call returns its typed code; teardown.
+// Pseudocode: build an authorized child target (as in
+// tcb_config_priority_and_affinity); each malformed call returns its
+// typed code; teardown.
 JARVIS_TEST(tcb_config_unsupported_and_bad_mask, "PRE: none | POST: none") {
+    static uint64_t g_m0 = 0;
+    static uint64_t g_mhigh = 0;
+    static uint64_t g_bit2 = 0;
+    static uint64_t g_bit3 = 0;
+    static uint64_t g_over = 0;
+    g_m0 = g_mhigh = g_bit2 = g_bit3 = g_over = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                while (self->state == TaskState::BLOCKED)
+                    arch::pause();
+            },
+            20, 10);
+        JARVIS_ASSERT(target != nullptr);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        JARVIS_ASSERT_EQ(static_cast<uint64_t>(TaskState::BLOCKED),
+                         g_tcb_wait_state);
+        int tslot = install_tcb_cap(cs, target->id, target->generation);
+        if (tslot < 0) {
+            Scheduler::terminate(*target, 0);
+            Scheduler::drain_zombie_list();
+            return;
+        }
+        const uint64_t th = tcb_handle(cs, static_cast<uint32_t>(tslot));
+        const uint64_t cfg =
+            static_cast<uint64_t>(SyscallNumber::TCB_CONFIGURE);
+        g_m0 = Syscall::handle(cfg, th, 0, 10, 0, nullptr);
+        g_mhigh = Syscall::handle(cfg, th, 0x10, 10, 0, nullptr);
+        g_bit2 = Syscall::handle(cfg, th, 1ULL << 2, 0, 0, nullptr);
+        g_bit3 = Syscall::handle(cfg, th, 1ULL << 3, 0, 0, nullptr);
+        g_over = Syscall::handle(cfg, th, 1, 1ULL << 40, 0, nullptr);
+        cs->remove(static_cast<uint32_t>(tslot));
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(tcb_err(1), g_m0);
+    JARVIS_ASSERT_EQ(tcb_err(1), g_mhigh);
+    JARVIS_ASSERT_EQ(tcb_err(12), g_bit2);
+    JARVIS_ASSERT_EQ(tcb_err(12), g_bit3);
+    JARVIS_ASSERT_EQ(tcb_err(1), g_over);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
 // Testidea: F4 syscall surface — 99/100/101 dispatch through
-//        Syscall::handle; MAX_SYSCALL == 102 (F4); 102 rejected with
-//        SYS_ERR_INVALID_NUMBER; ABI_VERSION unchanged.
-// Input: handle(99/100/101, ...) reachable; MAX pin; 102 probe.
-// Expect: Dispatch works; MAX == 102; 102 rejected; ABI 0x10000.
+//        Syscall::handle; MAX_SYSCALL == 103 with F5 VSPACE_MAP (was
+//        102 at F4 landing); 103 rejected past-MAX; ABI unchanged.
+// Input: handle(99/100/101, ...) reachable; MAX pin; 103 probe.
+// Expect: Dispatch works with typed codes; MAX == 103; 103 ->
+//        GENERIC_FAIL; ABI 0x10000.
 // Depends: syscall table wiring, ABI_VERSION stability
 // Pseudocode: call 99/100/101 (typed outcomes, no crash); assert
-// MAX == 102; call 102 (INVALID_NUMBER); ABI_VERSION == 0x10000.
+// MAX == 103; call 103 (GENERIC_FAIL); ABI_VERSION == 0x10000.
 JARVIS_TEST(sys_tcb_surface_and_numbering, "PRE: none | POST: none") {
+    static uint64_t g_99 = 0;
+    static uint64_t g_100 = 0;
+    static uint64_t g_101 = 0;
+    static uint64_t g_102 = 0;
+    static uint64_t g_abi = 0;
+    g_99 = g_100 = g_101 = g_102 = g_abi = 0;
+
+    auto *t = run_tcb_task([]() {
+        // 99 with empty mask: INVALID_ARGS proves dispatch reached the
+        // handler (not INVALID_NUMBER).
+        g_99 = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::TCB_CONFIGURE), 0, 0, 0,
+            0, nullptr);
+        // 100/101 with a bogus handle: BAD_HANDLE (typed, no crash).
+        g_100 = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::TCB_SUSPEND),
+            0xDEADBEEFULL, 0, 0, 0, nullptr);
+        g_101 = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::TCB_RESUME), 0xDEADBEEFULL,
+            0, 0, 0, nullptr);
+        // 102 is VSPACE_MAP now; 103 is past MAX -> GENERIC_FAIL.
+        g_102 = Syscall::handle(103, 0, 0, 0, 0, nullptr);
+        g_abi = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::ABI_VERSION), 0, 0, 0, 0,
+            nullptr);
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(tcb_err(1), g_99);
+    JARVIS_ASSERT_EQ(tcb_err(2), g_100);
+    JARVIS_ASSERT_EQ(tcb_err(2), g_101);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_102);
+    JARVIS_ASSERT_EQ(0x10000ULL, g_abi);
+    JARVIS_ASSERT_EQ(103ULL,
+                     static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL));
     JARVIS_TEST_PASS();
 }
 
