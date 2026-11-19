@@ -34,6 +34,9 @@ namespace kernel::cap {
 /// @brief A fixed-size kernel object carved from an Untyped region.
 ///        Owns the PMM pages it wraps: the last reference frees them via
 ///        dispose().  Shared-heap class (FrameCap pattern).
+///        F4 note (issue #557): a carved TCB carries no live binding at
+///        F4 — the bind seam (retype-created TCB -> TcbCap authority) lands
+///        with retype-only creation (M12/M14).  No code change here.
 class CarvedObjectCap : public KernelObject {
   public:
     /// @brief Wrapping discriminator: stale-slot guard so a future

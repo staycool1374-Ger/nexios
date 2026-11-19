@@ -550,6 +550,11 @@ void PosixTime::reapply_wakes(uint32_t sched_cpu) noexcept {
         if (Scheduler::queue_target(*waiter) != sched_cpu) {
             continue;
         }
+        // F4 INV-ADM-1 layer a (issue #557): absorb before the READY
+        // write below — the parked task keeps its timerfd waiter.
+        if (Scheduler::admin_absorb_wake(*waiter)) {
+            continue;
+        }
         if (waiter->state == TaskState::BLOCKED) {
             waiter->state = TaskState::READY;
         } else if (waiter->state != TaskState::READY) {

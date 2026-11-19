@@ -126,6 +126,15 @@ Scheduler::terminate_err(TaskControlBlock &task,
     dequeue_ready(task);
     task.state = TaskState::TERMINATED;
     task.exit_code = exit_code;
+    // F4 INV-ADM-5 (issue #557): death is terminal for the admin
+    // latch — clear every field so a recycled TCB slot never inherits
+    // a stale park.  The deadline node is dropped when it was parked
+    // (remove is membership-guarded, hence a safe no-op otherwise).
+    __atomic_store_n(&task.admin_parked, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.admin_wake_pending, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.admin_stop_requested, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.admin_wdog_expiry_tick, 0, __ATOMIC_RELEASE);
+    deadline_list_.remove(task);
     // Issue #53: join-rendezvous handoff for terminating threads (covers
     // kill/fault/watchdog paths funnelled here, mirroring sys_exit's
     // inline handoff).  No-ops for non-threads (checked inside).
@@ -244,6 +253,15 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
         dequeue_ready(task);
     task.state = TaskState::TERMINATED;
     task.exit_code = exit_code;
+    // F4 INV-ADM-5 (issue #557): death is terminal for the admin
+    // latch — clear every field (see terminate_err).  The trap funnel
+    // shares the same clearing so a fault-killed parked task cannot
+    // strand a stale park across slot reuse.
+    __atomic_store_n(&task.admin_parked, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.admin_wake_pending, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.admin_stop_requested, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&task.admin_wdog_expiry_tick, 0, __ATOMIC_RELEASE);
+    deadline_list_.remove(task);
     // Issue #53: join-rendezvous handoff (mirrors terminate_err).
     TaskControlBlock::thread_join_note_termination(task);
     // Issue #217: wake a waitpid-blocked parent before switching away.

@@ -239,6 +239,21 @@ class FrameCap : public KernelObject {          // cap/frame.hpp/.cpp
   create syscall (SYS_MSIX_CREATE) is future work; the delivery path is exactly what user
   drivers will use.  Class `cap_msix` (12 tests); `all` registered 1028.
 
+  **IMPLEMENTED (F4, issue #557):** `CapType::TCB`, `src/kernel/cap/tcb_cap.{hpp,cpp}`
+  (control authority over one task — ThreadCap shape, so F2
+  derivation/revoke cascade applies with no new machinery).  The TcbCap
+  row carries `target_id`/`target_gen` plus the scope/grantee binding
+  (`Authority::{CREATOR_ONLY, SUPERVISOR}`, `grantee_id`, `grantee_gen`):
+  CREATOR_ONLY is the F4-minted creator-facing form; SUPERVISOR is minted
+  only by the kernel-only factory `TcbCap::create_supervised` (no syscall
+  producer) and binds `(grantee_id, grantee_gen)` so a copy/grant onward
+  cannot be exercised by the copy's new holder (INV-ADM-12 branch 6 —
+  deny-all in production until M5/M12, fail closed).  Owning the cap is
+  the authority for TCB_CONFIGURE/SUSPEND/RESUME (99/100/101); a raw tid
+  never suffices.  A carved TCB carries no live binding at F4 — the bind
+  seam (retype-created TCB → TcbCap) lands with retype-only creation
+  (M12/M14).
+
 ### 2.7 Configuration additions (`src/kernel/nexios_config.h`)
 
 | Tuner | Default | Notes |

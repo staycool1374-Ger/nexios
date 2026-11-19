@@ -1528,6 +1528,26 @@ uint64_t lockpark_class_of(uint64_t cpu) noexcept {
     return s582::s_lockpark_latch[cpu % CONFIG_MAX_CPUS].latch_class;
 }
 
+bool lockpark_is_latched(uint64_t task_id,
+                         uint64_t generation) noexcept {
+    if (task_id == UINT64_MAX) {
+        return false;
+    }
+    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu) {
+        const uint64_t id = __atomic_load_n(
+            &s582::s_lockpark_latch[cpu].task_id, __ATOMIC_ACQUIRE);
+        if (id != task_id) {
+            continue;
+        }
+        const uint64_t gen = __atomic_load_n(
+            &s582::s_lockpark_latch[cpu].generation, __ATOMIC_ACQUIRE);
+        if (gen == generation) {
+            return true;
+        }
+    }
+    return false;
+}
+
 LockParkAction lockpark_service_hook() noexcept {
     const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
     s582::LockParkLatch &latch = s582::s_lockpark_latch[cpu];

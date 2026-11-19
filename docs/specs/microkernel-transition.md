@@ -100,7 +100,7 @@ tracking issue; it is never presented as already true.
 | Supervision | in-kernel `daemon_mgr` (`MAX_RESTART_COUNT = 10`, no backoff, polled from `on_tick`); death notify syscalls 66–68 | supervisor PD with restart policy, cap re-derive, client rebind | #191, #516 |
 | Caps | `CapType` {Null, Task, Endpoint, Frame, CNode, Untyped, Mmio, Irq, IoMmuDma, Msix, Wdog} | add TCB, VSpace, PageTable, Notification, SchedContext; split delete/revoke | #50, F1, F2 |
 | Process mgmt | `FORK/EXEC/WAITPID/KILL/GETPID` in kernel | proc-mgr PD over TCB/VSpace mechanisms | F11 |
-| Syscalls | `MAX_SYSCALL = 99` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
+| Syscalls | `MAX_SYSCALL = 102` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
 
 ## 3. Target kernel API
 
@@ -116,7 +116,7 @@ excluded from the certified set · **MOVE** behaviour moves to a server RPC,
 number retired · **RETIRE** number retired without replacement ·
 **GATED** live, retirement gated on a migration step.
 
-### 3.2 Table T-1 — disposition of every number 0–98
+### 3.2 Table T-1 — disposition of every number 0–101
 
 | Nr | Name | Today | Disposition |
 |---|---|---|---|
@@ -188,14 +188,17 @@ number retired · **RETIRE** number retired without replacement ·
 | 93–96 | THREAD_CREATE, THREAD_EXIT, THREAD_JOIN, THREAD_WRAP | live (#52, #53) | KEEP |
 | 97 | REPLY_RECV | live (M3, F3/Q2 #556) | KEEP |
 | 98 | CAP_DELETE | live (M11, F2 #555) | KEEP |
+| 99 | TCB_CONFIGURE | live (F4 N1 #557) | KEEP |
+| 100 | TCB_SUSPEND | live (F4 N2 #557) | KEEP |
+| 101 | TCB_RESUME | live (F4 N3 #557) | KEEP |
 
 ### 3.3 New entries (numbers `TBD at API freeze`)
 
 | ID | Name | Justification |
 |---|---|---|
-| N1 | TCB_CONFIGURE | priority, affinity, SchedContext binding and fault endpoint as one cap-gated invocation |
-| N2 | TCB_SUSPEND | supervisor must stop a hung PD; no mechanism exists (KILL is signal delivery) |
-| N3 | TCB_RESUME | counterpart of N2; also starts a retyped TCB |
+| N1 → 99 | TCB_CONFIGURE | RESOLVED at F4 as syscall 99 (#557): priority, affinity, SchedContext binding and fault endpoint as one cap-gated invocation (schedctx/endpoint UNSUPPORTED at F4) |
+| N2 → 100 | TCB_SUSPEND | RESOLVED at F4 as syscall 100 (#557): supervisor must stop a hung PD; no mechanism exists (KILL is signal delivery) |
+| N3 → 101 | TCB_RESUME | RESOLVED at F4 as syscall 101 (#557): counterpart of N2; also starts a retyped TCB |
 | N4 | VSPACE_MAP | map a PageTable object into a VSpace; proc-mgr and mem-mgr cannot build address spaces without it |
 | N5 | REPLY_RECV | RESOLVED at M3 as syscall 97 (F3/Q2 #556): reply to the recorded caller and receive the next request, dest + token implicit kernel-held |
 | N6 → 98 | CAP_DELETE | delete one's own slot without invalidating other holders |
@@ -209,11 +212,12 @@ pointer-free rule of `syscall-fastpath.md` §0.
 ### 3.4 Derived counts (informative; the set in T-1 is normative)
 
 KEEP: 0, 1, 2, 3, 5, 6, 27, 28 (8), 49, 50 (2), 51–62 (12), 64–79 (16),
-84, 85 (2), 91–97 (7) = 47.
-New: N1–N4, N7–N9 = 7 (N5 resolved to 97 at M3; N6 resolved to 98 at F2 #555). Certified total = 54. KEEP-D: 86–90 = 5 (debug builds only).
+84, 85 (2), 91–101 (11) = 51.
+New: N4, N7–N9 = 4 (N1–N3 resolved to 99–101 at F4 #557; N5 resolved to 97 at M3; N6 resolved to 98 at F2 #555). Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
 MOVE/RETIRE/GATED: 4 (1), 7–26 (20), 29–48 (20), 63 (1), 80–83 (4) = 46.
-47 + 5 + 46 + 1 = 99 =
-`MAX_SYSCALL`, so every existing number has exactly one disposition.
+KEEP 51 + KEEP-D 5 + MOVE/RETIRE/GATED 46 = 102 numbers (0–101), and
+`MAX_SYSCALL` = 102, so every existing number has exactly one
+disposition.
 
 ### 3.5 Affinity and accounting split
 
@@ -472,7 +476,7 @@ Each subsection gives: (1) current vs end state and syscall mapping,
    server (`task/sporadic_server.hpp`); an exhausted server drops to
    `bg_priority` (0 for vfsd and iocd, `taskdefs.cpp`). The only priority
    boost is in `IPC::block_sender` on a full queue. Syscalls: keeps 0, 77–79;
-   adds N1, N7–N9.
+   adds 99 (N1, F4 #557), N7–N9.
 2. **Invariants.** SchedContexts are fixed-size retyped objects (INV-MK-1).
    A donated SchedContext is returned exactly once (INV-MK-12). Boost or
    donation SHALL propagate along a blocked chain up to the depth bound, or
@@ -605,7 +609,10 @@ Each subsection gives: (1) current vs end state and syscall mapping,
 1. **State.** In-kernel `daemon_mgr` restarts up to 10 times without backoff,
    polled from `on_tick`. Death records latch only in
    `TaskControlBlock::cleanup()`; fault-path kills bypass `notify_death`
-   (#516). Syscalls: keeps 49, 50, 66–68; adds N2, N3; receives 35.
+   (#516). Syscalls: keeps 49, 50, 66–68; adds N2 (100), N3 (101); receives 35.
+   TCB_CONFIGURE (99) is the N1 companion: one cap-gated invocation for
+   priority, affinity, SchedContext binding and fault endpoint (schedctx
+   and endpoint fields UNSUPPORTED at F4 — typed refusal, never silent).
 2. **Invariants.** INV-MK-6 and INV-MK-11. The supervisor SHALL hold a
    death watch for every supervised PD (bound §7.3). Restart SHALL revoke the
    dead PD's derivations before re-derive (§10 D4).
@@ -808,7 +815,7 @@ Only these are valid:
 | `mk_reply_waiter_wake` | INV-MK-11 |
 | `mk_cap_delete_vs_revoke` | INV-MK-7 |
 | `mk_retype_target_types` | §4.2 |
-| `mk_supervisor_stop` | N2 / N3 |
+| `mk_supervisor_stop` | N2 (100) / N3 (101); also exercises the N1 (99) authority gate (same TcbCap, same Q9 rule) |
 | `mk_ring_epoch_reject` | D5 |
 | `mk_irq_slot_death_drain` | D3 |
 | `cap_schedctx`, `mm_usermgr`, `irq_mux`, `srv_supervisor`, `srv_timer` | §8.1–§8.4, §8.7 |
@@ -864,7 +871,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F1 | #554 | Object model: CapType additions + per-invocation retype target | `cap/cap_types.hpp`, `cap/untyped.*` |
 | F2 | #555 | Split CAP_DELETE from CAP_REVOKE | `cap/cap.cpp` |
 | F3 | #556 | Reply token + REPLY_RECV + direct switch on Call | `ipc/ipc.cpp`, ISR epilogue |
-| F4 | #557 | TCB_CONFIGURE / TCB_SUSPEND / TCB_RESUME | new |
+| F4 | #557 | TCB_CONFIGURE (99) / TCB_SUSPEND (100) / TCB_RESUME (101) — cap-gated Q9 stop authority (TcbCap), orthogonal admin latch, pause-and-shift supervision | `syscall/syscall_handlers_tcb.cpp`, `task/scheduler_suspend.cpp`, `task/tcb_control.*`, `cap/tcb_cap.*` |
 | F5 | #558 | VSPACE_MAP | new |
 | F6 | #559 | Death record at terminate funnel, bounded visibility | extends #516 |
 | F7 | #560 | Wake reply waiters on server death | `ipc/ipc.cpp` |
@@ -905,6 +912,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | Commit | Content |
 |---|---|
 | `66e698281` | #554 F1 object model: CapType += TCB/VSpace/PageTable/Notification/SchedContext; per-invocation retype target; fixed-size carved storage; X-macro CapError |
+| uncommitted | #557 F4 TCB control: TcbCap + Q9 authority gate, admin suspend/resume with pause-and-shift supervision, syscalls 99–101 (MAX_SYSCALL 102) — SIL 3 justification posted as #557 comment (T-1 §3.1, feeds #80) |
 | `d1b44d849` | #47 step-a vfs + block PDs: SDF, PDs, parity, fault demo (no flip) |
 | `960b27673` | #51 step-c-prime serial SHM SPSC ring TX |
 | uncommitted | #563 M4 mem-mgr bootstrap: freeze at composition end, root Untyped handover, BufferPool PMM-fallback removal, STATIC_POOLS_ONLY coverage, TCB static_assert, dead CONFIG_MEMPOOL_* removal |

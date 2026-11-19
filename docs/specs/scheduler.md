@@ -401,3 +401,123 @@ beyond one placement store:
   suppressed runs. A line earns an fb mirror by being user-actionable.
 - Console **input** and RTC source contracts live in `docs/specs/drivers.md`
   §10 (issue #355): decoder-first ordering, Goldfish/PL031/mtime sources.
+
+## 12. F4 Admin Stop — TCB_CONFIGURE / TCB_SUSPEND / TCB_RESUME (issue #557)
+
+Cap-gated task control (syscalls 99/100/101): a supervisor (or the
+creator parent) parks a live task into an orthogonal admin latch and
+resumes it later.  The latch is NOT a TaskState — the parked task stays
+BLOCKED (or RUNNING-becoming-BLOCKED via the deferred stop) while seven
+transient TCB fields (`task.hpp`: `admin_parked`, `admin_wake_pending`,
+`admin_stop_requested`, `admin_prev_state`, `admin_suspend_tick`,
+`admin_deadline_ticks`, `admin_wdog_expiry_tick`) remember the disposition.
+
+### State table
+
+| Parked? | TCB state | Queues | Wake path |
+|---|---|---|---|
+| no | READY | runq/EDF as usual | normal |
+| yes, prev READY | BLOCKED | dequeued; node removed | resume -> READY + enqueue |
+| yes, prev BLOCKED | BLOCKED | untouched (channel kept, INV-ADM-4) | resume -> stays BLOCKED unless a wake was absorbed |
+| yes, prev RUNNING | BLOCKED (after the tick deferred stop) | dequeued at park | resume -> READY + enqueue |
+| dead (TERMINATED/REAPED) | terminal | latch cleared (INV-ADM-5) | resume refuses DEAD |
+
+### Invariants INV-ADM-1..16
+
+- **INV-ADM-1 (single writer to runnable).** While `admin_parked` is set,
+  NO path may set the target READY or link it into a runq; the only
+  legal exit is `admin_resume_err`. Two layers: (a) semantic — every
+  wake-decision site calls `admin_absorb_wake()` BEFORE writing READY
+  (`set_task_ready`, the three tick level-triggered loops, the
+  wake-while-current deferral, the mailbox drain, `reapply_wakes`,
+  the deadline-monitor wake); (b) structural — `enqueue_ready` /
+  `enqueue_ready_inner` refuse an owning parked TCB, restore BLOCKED,
+  latch `admin_wake_pending` and count `adm_wake_backstop_count_`
+  (must-read-0 outside the dedicated negative test).
+- **INV-ADM-2 (absorb is a latch, never a drop).** An absorbed wake sets
+  `admin_wake_pending` exactly once, consumed exactly once by resume.
+- **INV-ADM-3 (no READY/BLOCKED desync).** A parked task is never
+  `in_ready_queue_`, never `in_edf_queue_`, never `ready_deferred_`.
+- **INV-ADM-4 (the BLOCKED channel is preserved, never torn down).**
+  Suspend does NOT touch mutex/semaphore/event/queue/pager/IRQ waiter
+  arrays, `waiting_*`, `reply_wait*`, `blocked_in_recv`,
+  `blocked_on_pager_fault`, `waiting_child_*`.
+- **INV-ADM-5 (death wins).** TERMINATED/REAPED are terminal for the
+  latch: both terminate funnels and `cleanup()` clear all admin fields.
+- **INV-ADM-6 (snapshot neutrality).** The seven fields are transient
+  (never in TaskFields), zero at every memset/ctor site, byte-rewound
+  by `MemPool::restore_pool_data`. No new ResourceTracker type
+  (`cap_objects` covers TcbCap).
+- **INV-ADM-7 (no new O(n) work on RT paths).** The absorb guard is O(1)
+  inside loops that already exist; the mem-mgr walk is
+  O(CONFIG_CSLOT_COUNT)=O(64) in AUTHORITY (syscall) context only.
+- **INV-ADM-8 (lock discipline).** Suspend/resume are task-context only
+  (ENSURE depth 0 + IrqGuard + SchedulerLockGuard). N1 calls
+  `set_priority` / `set_affinity_err` OUTSIDE the lock (each takes it
+  itself).
+- **INV-ADM-9 (deferred stop of a RUNNING target).** Suspend latches
+  `admin_stop_requested`; the tick consumes it at a user-mode boundary
+  (same preconditions shape as the #225 debugger block, which keeps
+  precedence). A task halted in `resched_park_until_dispatched` stays
+  halted (the loop breaks on non-BLOCKED) and is released by resume. A
+  #582-latch-armed runner is refused BUSY, never silenced.
+- **INV-ADM-10 (arch neutrality).** All new logic is shared C++: no
+  per-arch asm, no new apply site, no new trap-frame handling.
+- **INV-ADM-11 (supervision is paused and restored, never revoked).**
+  Suspend of a watchdog-armed target latches `wdog_expiry_tick` into
+  `admin_wdog_expiry_tick`, clears `wdog_armed` only, and bumps
+  `wdog_gen` (with the 0→1 clamp the scan paths carry — stated, not
+  omitted; the suspend edge bumps even never-armed targets, which is
+  harmless: kick refuses via `!armed` and the idle seam takes the
+  report-only branch). The expiry/last_kick words are PRESERVED (unlike
+  `disarm_target`, which zeroes the expiry). Resume, when the latched
+  expiry is non-zero, shifts expiry and last_kick by the suspension
+  (saturating, the same fail-safe clamp `arm_watchdog` uses), re-arms,
+  bumps gen, and emits SCHED+21 (pause) / SCHED+22 (resume). Hence the
+  #41 hang guarantee is restored with the phase preserved: N ticks of
+  budget left at suspend means N ticks at resume. An already-overdue
+  latched expiry resumes already-due and fires on the next scan
+  (fail-safe). Paused vs revoked stays observable in procfs without a
+  format change (paused: armed=0/expires=<non-zero>; revoked: armed=0/
+  expires=0). Arming on a parked target is refused typed; kick-after-
+  resume proves supervision is live.
+- **INV-ADM-12 (Q9 authority — exact rule).** Evaluated in order, every
+  refusal typed with zero side effects: SELF, KERNEL_TASK, IDLE,
+  PROTECTED_ROLE, CREATOR (`target.parent_id == caller.id` — kernel-
+  assigned at creation only, cleared on orphan/reap, never
+  caller-writable), SUPERVISOR (scope == SUPERVISOR AND grantee binds
+  the caller id+generation — minted only by `create_supervised`, no
+  syscall producer), else NO_AUTHORITY. `DeathNotify::is_watching`
+  confers NOTHING (self-grantable slots); raw WdogCap possession is
+  watchdog authority only. Branch 6 is deny-all in production until
+  M5/M12 and provably so (fail closed).
+- **INV-ADM-13 (stop-guarantee boundary: scheduling state, not handoff
+  data).** A park freezes the target's SCHEDULING state. It does NOT
+  freeze data a waker legitimately hands it: `wake_waiting_parent`
+  still stores the child's status into the parked parent's user slot
+  (`scheduler_lifecycle.cpp:420`, fault-armed #588 path), clears the
+  slot (`:440`), patches the saved return-value slot (`:494-500`) and
+  clears `waiting_child_pid` (`:502`) while the READY transition is
+  absorbed; `thread_join_note_termination` likewise writes
+  `join_status_` / `join_ready_` (`task.cpp:156-157`). Correct on
+  resume: the parent re-enters its wait loop, the rescan observes the
+  zombie and returns without blocking again.
+- **INV-ADM-14 (benign freezes).** While parked: the sporadic-server
+  budget is untouched (nothing consumes it while BLOCKED, replenishment
+  bounded by its period — no budget created or lost); `remaining_ticks`
+  is frozen, consistent with `deadline_ticks` being frozen and only
+  SHIFTED by the suspension at resume (both frozen, phase preserved) —
+  the "suspension buys budget" direction is closed by construction.
+- **INV-ADM-15 (never mem-mgr — enforceable).** Protected iff: (a) a
+  registered mem-mgr pid exists and equals the target (the cell is 0
+  today — truthful: no user-space mem-mgr exists — and 0 matches
+  nothing); (b) the target is a user task whose CSpace holds a live
+  `CapType::Untyped` (the spec's defining property of the mem-mgr),
+  checked by `cnode_holds_type` under the CNode leaf lock in AUTHORITY
+  context only; (c) the `kPdRoleCount == 13` static_assert tripwire
+  breaks the build the moment a mem-mgr/supervisor role row is added.
+  Layer (b) self-populates at M4 with no table to remember.
+- **INV-ADM-16 (deadline supervision is paused, not violated).** While
+  parked, `scan_deadlines` skips the task; resume's shift makes
+  `deadline_ticks` future-consistent. Removing the deadline node alone
+  is insufficient because the scan walks `all_tasks_`.

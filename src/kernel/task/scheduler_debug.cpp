@@ -68,6 +68,14 @@ bool Scheduler::debug_park_stop(TaskControlBlock &tgt, uint64_t kind,
         return false;
     if (tgt.magic != TaskControlBlock::TCB_MAGIC)
         return false;
+    // F4 mutual exclusion (issue #557, step 12): two park owners are
+    // exclusive by construction — suspend refuses a debug-parked target
+    // and this attach refuses an admin-parked one (a latched deferred
+    // stop counts as parked: the tick is about to stop this task, so a
+    // debugger attach now would strand it between two owners).
+    if (__atomic_load_n(&tgt.admin_parked, __ATOMIC_ACQUIRE) ||
+        __atomic_load_n(&tgt.admin_stop_requested, __ATOMIC_ACQUIRE))
+        return false;
     __atomic_store_n(&tgt.debug_stop_kind, kind, __ATOMIC_RELEASE);
     __atomic_store_n(&tgt.debug_stop_va, va, __ATOMIC_RELEASE);
     // A step-over re-arm belongs to exactly one pending step: any fresh

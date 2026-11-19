@@ -307,6 +307,15 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_REPLY_RECV      97
 #define SYS_CAP_DELETE      98
 
+// Issue #557 — F4 TCB control (matches kernel SyscallNumber).
+// CONFIGURE: arg0 = TcbCap handle, arg1 = field mask (bit0 priority,
+// bit1 affinity; bit2 schedctx / bit3 fault endpoint UNSUPPORTED at
+// F4), arg2 = value_a (priority), arg3 = value_b (affinity mask).
+// SUSPEND/RESUME: arg0 = TcbCap handle (arg1..3 reserved, must be 0).
+#define SYS_TCB_CONFIGURE   99
+#define SYS_TCB_SUSPEND     100
+#define SYS_TCB_RESUME      101
+
 static inline long sys_watchdog_create(unsigned long period_ticks) {
     return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
 }
@@ -350,14 +359,32 @@ static inline long sys_reply_recv(unsigned long reply_buf,
                        (long)reply_len, (long)next_buf, 0);
 }
 
+// Issue #557 — F4 TCB control (matches kernel SyscallNumber 99–101).
+static inline long sys_tcb_configure(unsigned long cap_handle,
+                                     unsigned long field_mask,
+                                     unsigned long value_a,
+                                     unsigned long value_b) {
+    return __syscall5(SYS_TCB_CONFIGURE, (long)cap_handle, (long)field_mask,
+                      (long)value_a, (long)value_b);
+}
+
+static inline long sys_tcb_suspend(unsigned long cap_handle) {
+    return __syscall5(SYS_TCB_SUSPEND, (long)cap_handle, 0, 0, 0);
+}
+
+static inline long sys_tcb_resume(unsigned long cap_handle) {
+    return __syscall5(SYS_TCB_RESUME, (long)cap_handle, 0, 0, 0);
+}
+
 // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==
-// kernel MAX_SYSCALL (99 — closes the pre-existing drift vs the frozen
-// 86; nothing pins 86, cf. test_syscall.cpp:1052 asserting only > 79);
+// kernel MAX_SYSCALL (102 — certified set 0–101; closes the pre-existing
+// drift vs the frozen 86, cf. test_syscall.cpp:1052 asserting only > 79);
 // 80–85 appended by #70 (handlers for 80–83 land with #76, TLS_SET with
-// #74 — table slots fail-closed until then); 98 is CAP_DELETE (F2 #555).
+// #74 — table slots fail-closed until then); 98 is CAP_DELETE (F2 #555);
+// 99–101 are TCB_CONFIGURE/SUSPEND/RESUME (F4 #557).
 #define NEXIOS_ABI_MAJOR 1
 #define NEXIOS_ABI_MINOR 0
-#define SYS_MAX          99
+#define SYS_MAX          102
 
 // SDK internal versioning macros live in sdk_version.h (spec §14,
 // issue #171) so kernel test TUs can consume them without libc types.

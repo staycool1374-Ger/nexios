@@ -199,6 +199,20 @@ void CNode::set_policy_word(uint32_t word) noexcept {
     ++policy_gen_; // atomic with the store under the same lock (S3 note)
 }
 
+bool cnode_holds_type(CNode *cs, CapType want) noexcept {
+    if (cs == nullptr) {
+        return false;
+    }
+    SpinLockGuard<sync::SpinLock> guard(cs->lock_);
+    for (uint32_t idx = 0;
+         idx < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++idx) {
+        if (cs->peek(idx, want) != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
+
 KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
                      CapRights need_rights) noexcept {
     if (!cspace)

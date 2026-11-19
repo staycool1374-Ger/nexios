@@ -323,6 +323,16 @@ void lockpark_latch_arm(uint64_t task_id, uint64_t generation,
                          uint8_t cls) noexcept;
 /// @brief Latch arms since boot (issue #582 INV-PARK-2).
 uint64_t lockpark_arm_count() noexcept;
+/// @brief True when any per-CPU lock-park latch (issue #582 §4.3, 8-CPU
+///        bounded) currently names (@p task_id, @p generation).  F4
+///        (#557 INV-ADM-9): a latch-armed BLOCKED runner is never
+///        silenced by an admin suspend (BUSY refusal).  Atomic loads
+///        only, no locks; a recycled occupant cannot false-match (the
+///        generation is part of the key).
+/// @param task_id Latch task id to look for.
+/// @param generation Latch generation to look for.
+/// @return true when a latch names the pair.
+bool lockpark_is_latched(uint64_t task_id, uint64_t generation) noexcept;
 /// @brief Live covered-tick count on @p cpu (monotonic per latch).
 uint64_t lockpark_covered_ticks(uint64_t cpu) noexcept;
 /// @brief Max observed covered-ticks (issue #582 §4.6 witness).

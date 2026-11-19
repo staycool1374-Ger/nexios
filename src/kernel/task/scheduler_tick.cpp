@@ -399,8 +399,13 @@ void Scheduler::on_tick() noexcept {
                 // G2: magic-guarded, provably live — bind a reference
                 // (docs/irqguard-ledger.md §G2-A).
                 TaskControlBlock &m = *s_monitor_task_;
-                m.state = TaskState::READY;
-                enqueue_ready(m);
+                // F4 INV-ADM-1 layer a (issue #557): the monitor is a
+                // kernel task (never parkable via authority), but no
+                // READY write is exempt from the absorb rule.
+                if (!Scheduler::admin_absorb_wake(m)) {
+                    m.state = TaskState::READY;
+                    enqueue_ready(m);
+                }
             }
         }
 #else
@@ -459,6 +464,11 @@ void Scheduler::on_tick() noexcept {
                 continue;
             if (queue_target(*task) != sched_cpu())
                 continue;
+            // F4 INV-ADM-1 layer a (issue #557): absorb before the
+            // READY write below — the parked task keeps its waiter.
+            if (Scheduler::admin_absorb_wake(*task)) {
+                continue;
+            }
             if (task->state == TaskState::BLOCKED) {
                 task->state = TaskState::READY;
             } else if (task->state == TaskState::READY) {
@@ -498,6 +508,11 @@ void Scheduler::on_tick() noexcept {
                 continue;
             if (queue_target(*task) != sched_cpu())
                 continue;
+            // F4 INV-ADM-1 layer a (issue #557): absorb before the
+            // READY write below — the parked task keeps its waiter.
+            if (Scheduler::admin_absorb_wake(*task)) {
+                continue;
+            }
             if (task->state == TaskState::BLOCKED) {
                 task->state = TaskState::READY;
             } else if (task->state == TaskState::READY) {
@@ -528,6 +543,11 @@ void Scheduler::on_tick() noexcept {
                 continue;
             if (queue_target(*task) != sched_cpu())
                 continue;
+            // F4 INV-ADM-1 layer a (issue #557): absorb before the
+            // READY write below — the parked task keeps its waiter.
+            if (Scheduler::admin_absorb_wake(*task)) {
+                continue;
+            }
             if (task->state == TaskState::BLOCKED)
                 task->state = TaskState::READY;
             else if (task->state != TaskState::READY)
@@ -1117,6 +1137,23 @@ void Scheduler::rate_monotonic_schedule() noexcept {
             current->state = TaskState::BLOCKED;
             dequeue_ready(*current);
             kernel::debug::debug_note_requested_park(*current, tick_pc);
+        }
+    }
+    // F4 admin deferred stop (issue #557, INV-ADM-9): same position and
+    // preconditions shape as the #225 debugger block above (own CPU,
+    // user-mode boundary).  Consumes admin_stop_requested and parks the
+    // RUNNING target via the shared park tail (watchdog screened,
+    // deadline node removed).  The debugger keeps precedence: a
+    // debug-parked target is refused here (suspend refused it at the
+    // edge, and debug_park_stop refuses a latched target).
+    {
+        uint64_t cpu = sched_cpu();
+        uint64_t tick_pc = (cpu < CONFIG_MAX_CPUS)
+                               ? __atomic_load_n(&debug_tick_pc_[cpu],
+                                                 __ATOMIC_RELAXED)
+                               : CONFIG_USER_SPACE_LIMIT;
+        if (cpu < CONFIG_MAX_CPUS) {
+            Scheduler::admin_consume_deferred_stop(*current, tick_pc);
         }
     }
 

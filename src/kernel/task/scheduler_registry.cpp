@@ -512,6 +512,13 @@ void Scheduler::balancer_tick() noexcept {
 void Scheduler::set_task_ready(TaskControlBlock &task) noexcept {
     ENSURE(validate_task_ptr(&task, "set_task_ready"));
     arch::IrqGuard irq_guard{};
+    // F4 INV-ADM-1 layer a (issue #557): absorb before the liveness
+    // capture below, hence before the READY write, the progress note,
+    // the remote mailbox publish, the wake-while-current deferral, the
+    // remote direct enqueue and the local enqueue_ready fallthrough.
+    if (Scheduler::admin_absorb_wake(task)) {
+        return;
+    }
     // Issue #250 (audit): capture liveness BEFORE the READY write below.
     // The wake-while-current defer guard must observe the pre-wake state:
     // TERMINATED/REAPED tasks are never deferred (§12.1).

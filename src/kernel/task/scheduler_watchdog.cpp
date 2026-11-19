@@ -108,6 +108,16 @@ void Scheduler::scan_deadlines() noexcept {
             continue;
         if (task->state == TaskState::TERMINATED)
             continue;
+        // F4 INV-ADM-16 (issue #557): deadline supervision is paused,
+        // not violated, while a task is admin-parked.  Removing the
+        // deadline node at suspend is NOT enough — this walk covers
+        // all_tasks_, not deadline_list_ — so a stopped periodic task
+        // would otherwise be reported (or killed, per CONFIG) as
+        // missing every deadline while stopped.  Resume shifts
+        // deadline_ticks by the suspension and re-inserts the node,
+        // restoring phase.
+        if (__atomic_load_n(&task->admin_parked, __ATOMIC_ACQUIRE))
+            continue;
         if (task->period_ticks == 0 || task->deadline_ticks == 0)
             continue;
         if (task->deadline_missed)

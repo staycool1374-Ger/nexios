@@ -1048,6 +1048,16 @@ TaskControlBlock *TaskControlBlock::create(void (*entry)(), uint64_t priority,
     tcb->wdog_last_kick_tick = 0;
     tcb->wdog_expiry_tick = 0;
     tcb->wdog_gen = 0;
+    // F4 admin latch (issue #557, INV-ADM-6): transient, zero at every
+    // memset site; explicit per the TCB-memset discipline.
+    tcb->admin_parked = false;
+    tcb->admin_wake_pending = false;
+    tcb->admin_stop_requested = false;
+    tcb->admin_prev_state =
+        static_cast<uint8_t>(AdminPrevState::BLOCKED);
+    tcb->admin_suspend_tick = 0;
+    tcb->admin_deadline_ticks = 0;
+    tcb->admin_wdog_expiry_tick = 0;
     {
         char buf[CONFIG_TASK_NAME_LEN];
         size_t pos = 0;
@@ -1324,6 +1334,16 @@ TaskControlBlock::create_user(void (*entry)(), uint64_t priority,
     tcb->wdog_last_kick_tick = 0;
     tcb->wdog_expiry_tick = 0;
     tcb->wdog_gen = 0;
+    // F4 admin latch (issue #557, INV-ADM-6): transient, zero at every
+    // memset site; explicit per the TCB-memset discipline.
+    tcb->admin_parked = false;
+    tcb->admin_wake_pending = false;
+    tcb->admin_stop_requested = false;
+    tcb->admin_prev_state =
+        static_cast<uint8_t>(AdminPrevState::BLOCKED);
+    tcb->admin_suspend_tick = 0;
+    tcb->admin_deadline_ticks = 0;
+    tcb->admin_wdog_expiry_tick = 0;
     TCB_WRITE(tcb, state, TaskState::READY);
     tcb->priority = priority;
     tcb->base_priority = priority;
@@ -1741,6 +1761,16 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
     tcb->wdog_last_kick_tick = 0;
     tcb->wdog_expiry_tick = 0;
     tcb->wdog_gen = 0;
+    // F4 admin latch (issue #557, INV-ADM-6): clone never inherits a
+    // park — transient, zero at every memset site.
+    tcb->admin_parked = false;
+    tcb->admin_wake_pending = false;
+    tcb->admin_stop_requested = false;
+    tcb->admin_prev_state =
+        static_cast<uint8_t>(AdminPrevState::BLOCKED);
+    tcb->admin_suspend_tick = 0;
+    tcb->admin_deadline_ticks = 0;
+    tcb->admin_wdog_expiry_tick = 0;
     __builtin_memcpy(tcb->name, parent->name, CONFIG_TASK_NAME_LEN);
     tcb->parent_id = parent->id;
     TCB_WRITE(tcb, state, TaskState::READY);
@@ -2600,6 +2630,18 @@ void TaskControlBlock::cleanup() noexcept {
     wdog_armed = false;
     wdog_expiry_tick = 0;
     ++wdog_gen;
+    // F4 INV-ADM-5 (issue #557): death is terminal for the admin latch
+    // (see the terminate funnels) — clear every field before
+    // complete_teardown so a recycled slot never inherits a stale park.
+    // The deadline node was already dropped at suspend/terminate (both
+    // membership-guarded); no list work remains here.
+    admin_parked = false;
+    admin_wake_pending = false;
+    admin_stop_requested = false;
+    admin_prev_state = static_cast<uint8_t>(AdminPrevState::BLOCKED);
+    admin_suspend_tick = 0;
+    admin_deadline_ticks = 0;
+    admin_wdog_expiry_tick = 0;
     kernel::task_step(kernel::TaskCleanupSteps::WatchdogDisarm); // issue #347 Slice C
     if (wdog_gen == 0)
         wdog_gen = 1;

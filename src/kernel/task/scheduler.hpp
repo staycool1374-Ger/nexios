@@ -31,6 +31,7 @@
 #include <kernel/nexios_config.h>
 #include <kernel/task/scheduler_errors.hpp>
 #include <kernel/task/task_errors.hpp>
+#include <kernel/task/tcb_control_errors.hpp>
 #include <kernel/task/ready_queue_manager.hpp>
 #include <kernel/task/deadline_list.hpp>
 #include <kernel/task/all_tasks_registry.hpp>
@@ -587,6 +588,73 @@ class Scheduler {
     ///        Call this instead of directly setting `task.state = READY`
     ///        to keep the ready-queue bitmap in sync.
     static void set_task_ready(TaskControlBlock &task) noexcept;
+    /// @brief F4 admin stop: park a live task (issue #557, INV-ADM-1..16).
+    ///        Task-context only (ENSURE depth 0 + IrqGuard +
+    ///        SchedulerLockGuard, debugger_resume precedent).  READY ->
+    ///        dequeue + park; BLOCKED -> park in place; RUNNING -> latch
+    ///        admin_stop_requested for the tick deferred stop (OK only
+    ///        when queue_target == own CPU, else BUSY); WAITING -> BUSY;
+    ///        TERMINATED/REAPED -> DEAD; self -> SELF; debug-parked ->
+    ///        BUSY; latch-armed -> BUSY.  Screens the per-task watchdog
+    ///        (INV-ADM-11: latch expiry, disarm, bump gen) and removes
+    ///        the deadline node (pause scanned by INV-ADM-16).
+    /// @param target Live, validated target (authority checked by caller).
+    /// @return TCBCTL_ERR_* typed outcome (OK on park or deferred latch).
+    static errors::TcbCtlError
+    admin_suspend_err(TaskControlBlock &target) noexcept;
+    /// @brief F4 admin stop: resume a parked task (issue #557).  Same
+    ///        envelope as suspend.  !parked -> NOT_SUSPENDED; dead ->
+    ///        DEAD.  Shifts deadline + watchdog by the suspension
+    ///        (saturating, INV-ADM-11/16), clears the latch BEFORE any
+    ///        enqueue, then READY + enqueue when the latch says so.
+    /// @param target Live, validated target (authority checked by caller).
+    /// @return TCBCTL_ERR_* typed outcome.
+    static errors::TcbCtlError
+    admin_resume_err(TaskControlBlock &target) noexcept;
+    /// @brief F4 wake absorb (INV-ADM-1 layer a): if @p task is
+    ///        admin-parked, latch admin_wake_pending (exactly once) and
+    ///        report absorbed WITHOUT writing READY.  O(1), no lock;
+    ///        DEBUG-warns unless IF=0 or scheduler_lock_ held.  Every
+    ///        wake-decision site calls this BEFORE writing READY.
+    /// @param task Wake candidate (any state).
+    /// @return true when the wake was absorbed (caller skips), false
+    ///         when the task is not parked (caller proceeds).
+    static bool admin_absorb_wake(TaskControlBlock &task) noexcept;
+    /// @brief True while @p task is admin-parked (ACQUIRE load).
+    /// @param task Task to query.
+    /// @return Parked state.
+    static bool admin_parked_of(const TaskControlBlock &task) noexcept;
+    /// @brief Absorbed wakes since boot (INV-ADM-1 layer-a oracle).
+    static uint64_t adm_wake_absorbed_count() noexcept;
+    /// @brief Structural-backstop refusals since boot (INV-ADM-1 layer
+    ///        b).  Must-read-0 outside the dedicated negative test: any
+    ///        firing proves a missed absorb site.
+    static uint64_t adm_wake_backstop_count() noexcept;
+    /// @brief Deferred RUNNING-target latches since boot (INV-ADM-9).
+    static uint64_t adm_stop_deferred_count() noexcept;
+    /// @brief Successful resumes since boot.
+    static uint64_t adm_resumed_count() noexcept;
+    /// @brief Watchdog pauses (suspend of an armed target, INV-ADM-11).
+    static uint64_t adm_wdog_paused_count() noexcept;
+    /// @brief Watchdog re-arms (resume of an armed target, INV-ADM-11).
+    static uint64_t adm_wdog_rearmed_count() noexcept;
+    /// @brief Deadline pauses (suspend of a periodic target,
+    ///        INV-ADM-16).  Informational (not must-read-0).
+    static uint64_t adm_deadline_paused_count() noexcept;
+    /// @brief Test-isolation reset for the admin-stop counters (#557).
+    ///        Production definition; QE wires the call in
+    ///        test_isolate.cpp.
+    static void admin_stats_reset_for_test() noexcept;
+    /// @brief Tick deferred-stop consumer (INV-ADM-9): parks a RUNNING
+    ///        target whose suspend latched admin_stop_requested.  Tick
+    ///        context only (caller holds scheduler_lock_); the debugger
+    ///        park block keeps precedence.  No-op unless the request is
+    ///        set, the target is RUNNING, unparked by the debugger, and
+    ///        the interrupted PC is below the user limit.
+    /// @param current The running task on this CPU.
+    /// @param tick_pc Interrupted PC recorded for this tick.
+    static void admin_consume_deferred_stop(TaskControlBlock &current,
+                                            uint64_t tick_pc) noexcept;
     /// @brief Deadline scan entry — runs in task context when the monitor
     ///        task is enabled.  Identical deadline detection logic as the
     ///        inline scan in on_tick() but can hold scheduler_lock_ and
@@ -1457,6 +1525,25 @@ struct SwSlots {
     /// @brief Enqueue refusals: invalid TCB (issue #582 §5.5, byte-identical
     ///        + one-shot ERROR + sweep rescue).  Same discipline; same reset.
     static uint64_t rqm_enqueue_refused_invalid_;
+    /// @brief F4 admin-stop counters (issue #557, INV-ADM-1/9/11/16).
+    ///        Same ownership/discipline as stuck_rescue_count_; reset by
+    ///        admin_stats_reset_for_test().  The backstop counter is
+    ///        must-read-0 outside the dedicated negative test.
+    static uint64_t adm_wake_absorbed_count_;
+    static uint64_t adm_wake_backstop_count_;
+    static uint64_t adm_stop_deferred_count_;
+    static uint64_t adm_resumed_count_;
+    static uint64_t adm_wdog_paused_count_;
+    static uint64_t adm_wdog_rearmed_count_;
+    static uint64_t adm_deadline_paused_count_;
+    /// @brief F4 park tail (issue #557): latches the pre-park
+    ///        disposition, screens supervision, removes the deadline
+    ///        node.  Caller holds scheduler_lock_ + IF=0; the target is
+    ///        live, unparked and stoppable.  Shared by the direct
+    ///        suspend path and the tick deferred-stop consumer so the
+    ///        two parks are bit-identical.
+    static void admin_park_locked(TaskControlBlock &target,
+                                  AdminPrevState prev) noexcept;
     /// @brief Rescue scan bound per tick (issue #249, RT budget bound).
     ///        Shared by the stranded-READY and IPC-wake sweeps.
     static constexpr uint64_t STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS;

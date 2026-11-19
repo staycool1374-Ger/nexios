@@ -119,7 +119,21 @@ namespace kernel::errors {
     X(MEMPOOL_DOUBLE_FREE, 904, "Double free")                                 \
     X(MEMPOOL_UNINIT, 905, "Pool uninitialized")                               \
     X(MEMPOOL_INVALID_POOL, 906, "Invalid pool index")                         \
-    X(MEMPOOL_CORRUPTED, 907, "Pool corrupted")
+    X(MEMPOOL_CORRUPTED, 907, "Pool corrupted")                                 \
+    /* TCB control subsystem errors (1000+, F4 #557) */                         \
+    X(TCBCTL_INVALID_ARGS, 1001, "Invalid arguments")                           \
+    X(TCBCTL_BAD_HANDLE, 1002, "TCB cap handle invalid or revoked")             \
+    X(TCBCTL_STALE_TARGET, 1003, "TCB cap target recycled")                     \
+    X(TCBCTL_DEAD, 1004, "Target is TERMINATED or REAPED")                      \
+    X(TCBCTL_SELF, 1005, "Target is the calling task")                          \
+    X(TCBCTL_KERNEL_TASK, 1006, "Target is not a user task")                    \
+    X(TCBCTL_PROTECTED_ROLE, 1007, "Target holds a protected role")             \
+    X(TCBCTL_NO_AUTHORITY, 1008, "Caller is neither creator nor supervisor")    \
+    X(TCBCTL_NOT_SUSPENDED, 1009, "Target is not suspended")                    \
+    X(TCBCTL_ALREADY_SUSPENDED, 1010, "Target is already suspended")            \
+    X(TCBCTL_BUSY, 1011, "Target is debugger-parked or latch-armed")            \
+    X(TCBCTL_UNSUPPORTED, 1012, "Field not configurable at F4")                 \
+    X(TCBCTL_IDLE, 1013, "Target is the idle task")
 
 /// @brief System-call-level error codes (aggregated from all kernel
 /// subsystems).
@@ -176,6 +190,12 @@ inline SyscallError from_sched_error(uint64_t e) {
 }
 inline SyscallError from_mempool_error(uint64_t e) {
     return static_cast<SyscallError>(900 + e);
+}
+/// @brief Convert a TCB control error to SyscallError (offset 1000,
+///        F4 #557).  The TcbCtlError numerics are 0-based (X-macro), so
+///        the face is 1000 + numeric (TCBCTL_ERR_OK -> 1000).
+inline SyscallError from_tcb_control_error(uint64_t e) {
+    return static_cast<SyscallError>(1000 + e);
 }
 
 } // namespace kernel::errors
