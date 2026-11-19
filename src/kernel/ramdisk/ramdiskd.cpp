@@ -22,6 +22,7 @@
 
 #include <kernel/ramdisk/ramdiskd.hpp>
 #include <kernel/cap/cap.hpp>
+#include <kernel/cap/cap_errors.hpp>
 #include <kernel/cap/untyped.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -104,11 +105,19 @@ static int grant_one_segment(cap::CNode *cs, uint64_t seg_idx,
         return -1;
     uint64_t ut_handle =
         cap::encode_user_handle(cs->cspace_id, ut_idx, gen);
+    errors::CapError retype_err = errors::CAP_ERR_OK;
     int frame_idx = cap::retype(cs, ut_handle, cap::CapType::Frame,
                                 static_cast<size_t>(RAMDISK_SEGMENT_SIZE),
                                 cap::CapRights::READ | cap::CapRights::WRITE,
-                                gen_out);
+                                gen_out, &retype_err);
     if (frame_idx < 0) {
+        // Reuses the existing DAEMON +9 catalog row ("Ramdisk carve
+        // failed"); the ctx carries the typed CapError code, not an
+        // index — no new catalog row, no collision.
+        log::dmesg_push_sev(log::ErrorSubsystem::DAEMON,
+                            log::kDmesgBase_DAEMON + 9,
+                            log::LogSeverity::ERROR, "ramdisk retype",
+                            static_cast<uintptr_t>(retype_err));
         cs->remove(static_cast<uint32_t>(ut_idx));
         return -1;
     }

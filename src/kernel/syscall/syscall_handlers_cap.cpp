@@ -26,7 +26,9 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/cap/cap.hpp>
+#include <kernel/cap/cap_errors.hpp>
 #include <kernel/cap/cap_types.hpp>
+#include <lib/logger.hpp>
 
 namespace kernel {
 
@@ -84,7 +86,34 @@ uint64_t Syscall::sys_cap_revoke(uint64_t src_handle, uint64_t, uint64_t,
     cap::CNode *src = current_cspace();
     if (!src)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-    if (!cap::revoke(src, src_handle))
+    // F2 (issue #555): CAP_REVOKE destroys the derivations of src_handle
+    // and leaves src_handle live (revoke_derivations, INV-DERIV-9).  The
+    // syscall face stays frozen at SYS_ERR_GENERIC_FAIL (T-1/Q3): a typed
+    // CAP_ERR_REVOKE_INCOMPLETE is retryable — call again until it
+    // returns 0.
+    errors::CapError rev_err = errors::CAP_ERR_OK;
+    int destroyed =
+        cap::revoke_derivations(src, src_handle, &rev_err);
+    if (destroyed < 0) {
+#if defined(CONFIG_DEBUG)
+        // Diagnostic only: no control-flow divergence (CODING_STYLE §6).
+        Logger::error("cap_revoke: %s", errors::error_string(rev_err));
+#endif
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
+}
+
+/// @brief CAP_DELETE (N6, F2, issue #555): delete one cap slot.
+///        Last-reference delete destroys the target; other holders are
+///        unaffected (cap::remove, INV-DERIV-5).  Idempotent: a re-delete
+///        of the same handle fails closed.
+uint64_t Syscall::sys_cap_delete(uint64_t handle, uint64_t, uint64_t,
+                                 uint64_t, uint64_t *) {
+    cap::CNode *src = current_cspace();
+    if (!src)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    if (!cap::remove(src, handle))
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
@@ -119,18 +148,31 @@ uint64_t Syscall::sys_cap_retype(uint64_t untyped_handle, uint64_t target_type,
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     // Installs the retyped target (and, on a sub-range carve, the child
     // Untyped) into the caller's own root CNode.  cap::retype validates the
-    // type/size (garbage target_type or oversize/unaligned -> -1, parent kept).
-    // The install lands in the caller's own root CNode, so the handle is
-    // encoded with the caller's own cspace id (issue #266).
+    // type/size (garbage target_type, unsupported kind, oversize/unaligned
+    // or short range -> -1, parent kept).  The install lands in the caller's
+    // own root CNode, so the handle is encoded with the caller's own
+    // cspace id (issue #266).
     uint32_t gen = 0;
-    // ABI boundary (issue #348-D1): the syscall takes raw u64 rights;
-    // unknown bits keep legacy ignore-semantics downstream.
+    // ABI boundary (issue #348-D1): the syscall takes raw u64 rights and a
+    // raw u64 target; unknown rights bits keep legacy ignore-semantics
+    // downstream.  The target is range-gated BEFORE the enum cast (F1
+    // #554): a truncated out-of-range value (e.g. 0x10B silently becoming
+    // TCB) must fail, never build a wrong-type object.
+    if (!cap::cap_type_valid(target_type))
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    errors::CapError retype_err = errors::CAP_ERR_OK;
     int idx = cap::retype(src, untyped_handle,
                           static_cast<cap::CapType>(target_type),
                           static_cast<size_t>(size),
                           static_cast<cap::CapRights>(
                               static_cast<uint32_t>(rights)),
-                          &gen);
+                          &gen, &retype_err);
+#if defined(CONFIG_DEBUG)
+    // Diagnostic only: no control-flow divergence (CODING_STYLE §6).  The
+    // frozen -1 face is preserved; the typed reason stays in-kernel.
+    if (idx < 0)
+        Logger::error("cap_retype: %s", errors::error_string(retype_err));
+#endif
     return cap::encode_user_handle(src->cspace_id, idx, gen);
 }
 

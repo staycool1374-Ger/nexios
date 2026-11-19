@@ -549,3 +549,39 @@ long nexios_sys_watchdog_kick(
         SYS_WATCHDOG_KICK, arg0, arg1, arg2, arg3, 0));
 }
 
+long nexios_sys_thread_create(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_THREAD_CREATE, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_thread_exit(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_THREAD_EXIT, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_thread_join(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_THREAD_JOIN, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_thread_wrap(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_THREAD_WRAP, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_reply_recv(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_REPLY_RECV, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_cap_delete(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_CAP_DELETE, arg0, arg1, arg2, arg3, 0));
+}
+

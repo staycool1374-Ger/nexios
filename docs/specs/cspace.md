@@ -294,22 +294,23 @@ Genuinely missing for the Untyped slice:
 // src/kernel/cap/untyped.hpp
 namespace kernel::cap {
 
-/// Owns a contiguous PMM region and may be retyped at most once.
+/// Owns a contiguous PMM region and may be retyped into capabilities.
+/// The Untyped records its physical range and carve state only
+/// (spec §4.2 "range and watermark"): the child-Untyped chain IS the
+/// watermark.  The retype target is a per-invocation argument (F1 #554).
 class UntypedMem : public KernelObject {
   public:
     uint64_t phys = 0;                        // first frame of the owned region
     size_t   size = 0;                        // region size in bytes (PAGE_SIZE multiple)
     bool     is_user = false;                 // PMM ownership class (FrameCap parity)
-    CapType  retype_target = CapType::Frame;  // iteration-1: only Frame supported
 
-    static UntypedMem *create(size_t size, bool is_user,
-                              CapType target = CapType::Frame);
+    static UntypedMem *create(size_t size, bool is_user);
     /// Wraps an already-owned PAGE-aligned sub-range as a new Untyped WITHOUT
     /// allocating frames (the child remainder of a sub-range carve).  Enforces
     /// the shared CONFIG_CAP_MAX_UNTYPED live bound + cap-object tracking.
+    /// The child remainder is itself type-agnostic.
     static UntypedMem *create_subrange(uint64_t phys, size_t size,
-                                       bool is_user,
-                                       CapType target = CapType::Frame);
+                                       bool is_user);
 
     /// CAS false->true; true iff this caller wins the region transfer.
     bool claim_once() noexcept;
@@ -332,29 +333,44 @@ it on the caller's root CNode (v0.4.2, issue #1):
 
 ```cpp
 /// Retypes the Untyped at @p untyped_handle in @p cspace into a new capability
-/// of @p target_type, installed into @p cspace.  Supports sub-range carves
-/// (PAGE-aligned, prefix-only): the remainder is installed as a child Untyped.
+/// of @p target_type (per-invocation, F1 #554), installed into @p cspace.
+/// Supports sub-range carves (PAGE-aligned, prefix-only): the remainder is
+/// installed as a child Untyped.  A fixed kind with size 0 means "the
+/// type's size".  The typed reason (errors::CapError) is reported through
+/// @p err_out; the return stays the frozen -1/index face.
 /// @return the new target slot index, or -1 on any failure.
 int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
-           size_t size, uint32_t rights) noexcept;
+           size_t size, CapRights rights, uint32_t *gen_out = nullptr,
+           errors::CapError *err_out = nullptr) noexcept;
 ```
 
 Semantics (task context only; no IRQ context; no blocking):
 
-1. `lookup(cspace, untyped_handle, CapType::Untyped, CAP_RIGHT_WRITE)` pins the Untyped (WRITE = mutation right; a dedicated `CAP_RIGHT_RETYPE` is a future extension).
-2. Validate `target_type == ut->retype_target` (`CapType::Frame`), `size > 0`, PAGE-aligned, `size <= ut->size`. Any failure → release pin, -1. **The Untyped is left intact** on validation failure. `exact = (size == ut->size)`.
-3. **Non-destructive slot-capacity pre-check**: a sub-range carve installs two slots (target + child), so `occupied_count(cspace) + (exact ? 1 : 2) <= CONFIG_CSLOT_COUNT` is required; failure → release pin, -1, parent intact.
-4. **Claim the guard**: `ut->claim_once()` (CAS on `retyped_` false→true). Loser → release pin, -1. From this instant the Untyped owns nothing and no other retype can win.
-5. `FrameCap *fc = FrameCap::create(ut->phys, size / arch::PAGE_SIZE, ut->is_user)`. On nullptr (MemPool exhaustion) → roll back the claim, release pin, -1. Region stays with the Untyped.
-6. If `!exact`: `child = UntypedMem::create_subrange(ut->phys + size, ut->size - size, ...)`. On nullptr (MemPool / `CONFIG_CAP_MAX_UNTYPED` bound) → **stretch fail-closed**: set `fc->count = ut->size / arch::PAGE_SIZE`, release `fc` (whole region → PMM exactly once), release pin, -1. The parent stays spent (guard set).
-7. `idx_target = cspace->install(fc, CapType::Frame, rights)`:
-   - Success (and `!exact`) → `idx_child = cspace->install(child, CapType::Untyped, rights)`. On child-install failure → `cspace->remove(idx_target)` (rollback), release child (disposes remainder), release pin, -1.
-   - Failure → release `fc` (disposes carved sub-range) and `child` if any (disposes remainder) — together the whole region returns to PMM exactly once; guard stays set (fail-closed); release pin, -1.
-8. Success → drop creator refs (`fc->release()`, `child->release()` if any), release pin, return `idx_target`.
+1. `lookup(cspace, untyped_handle, CapType::Untyped, CapRights::WRITE)` pins the Untyped (WRITE = mutation right; a dedicated `CAP_RIGHT_RETYPE` is a future extension).
+2. Validate the per-invocation target and size, in order, without consuming
+   the Untyped (any failure → release pin, -1, parent intact; `exact` is
+   re-derived from the effective carve size):
+   - `!object_sizing(target_type).carvable` → `TARGET_UNSUPPORTED`
+     (Endpoint/CNode/Mmio/Irq/IoMmuDma/Msix/Wdog/Untyped/Task/Null);
+   - Frame with `size == 0` → `SIZE_ZERO` (a fixed kind with `size == 0`
+     means "the type's size");
+   - effective size not PAGE-aligned → `SIZE_UNALIGNED`;
+   - effective size larger than the region → `RANGE_EXCEEDED` (Frame) or
+     `SHORT_RANGE` (fixed kind smaller than its object — non-destructive);
+   - fixed kind with an explicit `size !=` the fixed size →
+     `SIZE_MISMATCH`.  `exact = (carve == ut->size)`.
+3. **Non-destructive slot-capacity pre-check**: a sub-range carve installs two slots (target + child), so `occupied_count(cspace) + (exact ? 1 : 2) <= CONFIG_CSLOT_COUNT` is required; failure → release pin, -1 (`NO_CSLOT`), parent intact.
+4. **Claim the guard**: `ut->claim_once()` (CAS on `retyped_` false→true). Loser → release pin, -1 (`ALREADY_RETYPED`). From this instant the Untyped owns nothing and no other retype can win.
+5. `target = create_target(ut, target_type, carve)` — Frame → `FrameCap::create(ut->phys, carve / arch::PAGE_SIZE, ut->is_user)`; a fixed kind → `CarvedObjectCap::create(target_type, ut->phys, carve, ut->is_user)` (fields set by construction; the zeroed payload lives in the carved region). On nullptr (MemPool exhaustion) → `OBJECT_EXHAUSTED`, roll back the claim, release pin, -1. Region stays with the Untyped.
+6. If `!exact`: `child = UntypedMem::create_subrange(ut->phys + carve, ut->size - carve, ...)`. On nullptr (MemPool / `CONFIG_CAP_MAX_UNTYPED` bound) → **fail closed** (`CHILD_UNAVAILABLE`): Frame stretches the never-installed target to the whole region (`fc->count = ut->size / arch::PAGE_SIZE`) and releases it; a carved kind releases the prefix target and frees the remainder directly (no widening setter — construction only). Either way the whole region returns to PMM exactly once; the parent stays spent (guard set). Release pin, -1.
+7. `idx_target = cspace->install(target, target_type, rights)`:
+   - Success (and `!exact`) → `idx_child = cspace->install(child, CapType::Untyped, rights | CapRights::WRITE)`. On child-install failure (`INSTALL_FAILED`) → `cspace->remove(idx_target)` (rollback), release child (disposes remainder), release pin, -1.
+   - Failure (`INSTALL_FAILED`) → release `target` (disposes carved sub-range) and `child` if any (disposes remainder) — together the whole region returns to PMM exactly once; guard stays set (fail-closed); release pin, -1.
+8. Success → drop creator refs (`target->release()`, `child->release()` if any), release pin, return `idx_target`.
 
 **Ownership/transfer invariant:** every frame in a region has exactly one owner
 at every instant — Untyped (before claim) → in-flight (claim set) → exactly one
-of {target FrameCap, child Untyped, PMM free-list} (after). PMM bitmap stays
+of {target FrameCap/CarvedObjectCap, child Untyped, PMM free-list} (after). PMM bitmap stays
 consistent: the region is allocated exactly once (at `UntypedMem::create`) and
 every page is freed exactly once by whichever owner disposes.
 
@@ -372,14 +388,36 @@ remainder.  The child is a full Untyped (owns its sub-range, itself retypable),
 so a region can be split repeatedly.  Both child and parent dispose free
 exactly their own sub-ranges; no frame is owned twice or by nobody.
 
-**Retype targets — Frame only in iteration 1.** CNode and Endpoint are MemPool-allocated shared-heap structs, not physical-memory-resident objects; retyping a region "into" them requires object-storage-in-region support (deferred to 0.4.2). `retype_target` is the documented extension point.
+**Retype targets — six carvable kinds (F1 #554).** The target type is a
+per-invocation argument of `retype`: Frame (variable size, explicit size
+required) plus the five fixed-size kinds TCB, VSpace, PageTable,
+Notification and SchedContext (fixed compile-time sizes from
+`src/kernel/cap/object_sizing.hpp`; `size == 0` means "the type's size",
+an explicit size must equal the fixed size or retype fails with
+`SIZE_MISMATCH`, and a region smaller than the fixed object fails with
+`SHORT_RANGE`).  The carved object stores its descriptor in the MemPool
+and its zeroed payload in the carved region (`CarvedObjectCap`);
+zeroing is mandatory because a stale page-table root is a
+privilege-escalation primitive.  Endpoint, CNode, Mmio, Irq, IoMmuDma,
+Msix, Wdog, Untyped, Task and Null are still NOT carvable
+(`TARGET_UNSUPPORTED`): CNode and Endpoint are MemPool-allocated
+shared-heap structs, not physical-memory-resident objects.
+
+| Kind | Fixed size | Consumer |
+|------|------------|----------|
+| Frame | explicit (variable) | existing frame mapping |
+| TCB | 16 KiB (4 pages) | F4 #557 (schedulable object) |
+| VSpace | 1 page | F5 #558 (address-space root) |
+| PageTable | 1 page | F5 #558 (page-table page) |
+| Notification | 1 page | §8.1/§5 sync work |
+| SchedContext | 1 page | M13 #190 (scheduling context) |
 
 **Revoke/dispose interplay:**
 - Revoking a CNode cascades to its Untyped slot: `slot.obj->revoke()` marks the Untyped revoked; future `acquire()` fails. The Untyped still owns its region until the last reference drops → dispose frees it. Revoke invalidates the cap, not the memory.
 - Retyped Untyped revoked later: dispose (guard set) frees only the MemPool block — no double-free.
 - The retype-once guard is the only place the "who frees the region" decision is made; there is no path where both the Untyped and the FrameCap free the same frames.
 
-**Config:** `CONFIG_CAP_MAX_UNTYPED` (default 16) in `nexios_config.h` cap section (~line 509). Enforced in `UntypedMem::create()` via the TU-local live counter.
+**Config:** `CONFIG_CAP_MAX_UNTYPED` (default 64) in `nexios_config.h` cap section (~line 590). Enforced in `UntypedMem::create()` via the TU-local live counter.
 
 ### 2.8.3 Phased execution plan
 

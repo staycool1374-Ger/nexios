@@ -711,4 +711,52 @@ long nexios_sys_watchdog_create(
 /// @return raw success value, or -1 with errno set.
 long nexios_sys_watchdog_kick(
     long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_THREAD_CREATE (93).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_thread_create(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_THREAD_EXIT (94).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_thread_exit(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_THREAD_JOIN (95).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_thread_join(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_THREAD_WRAP (96).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_thread_wrap(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_REPLY_RECV (97).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_reply_recv(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_CAP_DELETE (98).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_cap_delete(
+    long arg0, long arg1, long arg2, long arg3);
 
