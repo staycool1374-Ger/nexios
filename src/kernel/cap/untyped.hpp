@@ -37,27 +37,32 @@ namespace kernel::cap {
 /// exhaustion model (issue #1): a sub-range carve creates a child Untyped for
 /// the remainder, so a region can be split repeatedly (each child is itself
 /// retypable).  No path frees the same frame twice.
+///
+/// The Untyped records its physical range and carve state only (spec §4.2
+/// "range and watermark"): the child-Untyped chain IS the watermark — each
+/// carve spends the parent and leaves the remainder as a child Untyped.
+/// There is no fixed per-Untyped target type; the retype target is a
+/// per-invocation argument (F1, issue #554).
 class UntypedMem : public KernelObject {
   public:
     uint64_t phys = 0;                       ///< first frame of the owned region
     size_t size = 0;                         ///< region size in bytes (PAGE_SIZE multiple)
     bool is_user = false;                    ///< PMM ownership class (FrameCap parity)
-    CapType retype_target = CapType::Frame;  ///< supported target type
 
     /// @brief Allocates a contiguous PMM region and a MemPool-backed UntypedMem.
     ///        Validates size > 0 and PAGE_SIZE-aligned; enforces
     ///        CONFIG_CAP_MAX_UNTYPED.  Returns nullptr on any failure (the
     ///        region is returned to PMM on partial failure).
-    static UntypedMem *create(size_t size, bool is_user,
-                              CapType target = CapType::Frame);
+    static UntypedMem *create(size_t size, bool is_user);
 
     /// @brief Wraps an already-owned, PAGE-aligned sub-range as a new Untyped
     ///        WITHOUT allocating frames (the child remainder of a sub-range
     ///        carve).  Enforces the shared CONFIG_CAP_MAX_UNTYPED live bound
     ///        and cap-object tracking.  Returns nullptr on any failure.
+    ///        The child remainder is itself type-agnostic: any carvable kind
+    ///        may be retyped from it.
     static UntypedMem *create_subrange(uint64_t phys, size_t size,
-                                       bool is_user,
-                                       CapType target = CapType::Frame);
+                                       bool is_user);
 
     /// @brief CAS false->true on the retype guard.  True iff this caller wins
     ///        the transfer of this Untyped's region.

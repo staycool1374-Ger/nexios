@@ -116,9 +116,12 @@ hlt-waits (every tick wakes the hlt) until the caller is dispatched.
 Park gate (all must hold; otherwise status-quo-ante arm-only return):
 `CONFIG_RESCHED_PARK_ON_BLOCKED==1`, `CONFIG_TICK_HZ!=0`,
 `irq_guard_depth_own()==0`, no held tracked spinlock, not a hardware ISR
-(`isr_nesting==0` or in syscall-trap level), IRQ entitlement (entry IF==1
-or trap level), current valid + BLOCKED + non-idle + multi-task guest,
-not the test harness (plus RSP-inside-TCB-stack impersonation guard).
+(`arch::isr_context_park_denied(entry_if)` is false, i.e. `isr_nesting==0`
+**or** in syscall-trap level **or** IF==1 — interrupt gates clear IF on all
+three arches, and the riscv64 nesting count is a known stale baseline,
+#583), IRQ entitlement (entry IF==1 or trap level), current valid + BLOCKED
++ non-idle + multi-task guest, not the test harness (plus RSP-inside-TCB-stack
+impersonation guard).
 
 Caller contract: C1 RUNNING/READY callers return immediately (zero
 behavioral change); C2 BLOCKED+gated callers return only when no longer

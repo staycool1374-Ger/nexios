@@ -225,9 +225,12 @@ the guard keeps it that way.
 - The depth-1 suite premise is **unchanged for every unflagged test**; gate
   bits 10 (`all_tasks().size() <= 1`) and 1 (`CONFIG_TICK_HZ == 0`) stay
   premise-pinning negatives (deviation recorded on #578, OQ2).
-- OQ1 deviation: `resched_park_gate_base()` bit 4 (stale rv64 nesting) is
-  waived test-side under the same IF==1 proof; the production
-  IF-carve-out inconsistency is tracked separately (#583).
+- OQ1 closed (#583): `resched_park_gate_base()` bit 4 now applies the
+  production IF==1 carve-out via the shared predicate
+  `arch::isr_context_park_denied(entry_if)` — stale rv64 nesting denies
+  only while IF==0, in parity with the lock-park gate. The seam's
+  `!waived` conjunct on bit 4 is retained as redundant (the waiver
+  requires IF==1, which already clears the predicate).
 
 ## 6. Watchdog & QEMU Verdict
 

@@ -54,6 +54,7 @@
 #include <kernel/arch/gdt.hpp>
 #include <kernel/arch/hal/iopb.hpp>
 #include <kernel/cap/mmio.hpp>
+#include <kernel/cap/derivation.hpp>
 #include <kernel/cap/frame_map.hpp>
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/debug/debug_stop.hpp>
@@ -1275,6 +1276,12 @@ void snapshot_restore(const char *test_name) {
     cap::FrameUserMap::snapshot_reset();
     cap::MmioUserMap::snapshot_reset();
     kernel::ipc::PagerRegistry::snapshot_reset();
+    // F2 (#555): the derivation table holds value-only edges keyed by CNode
+    // serial. The rewind below restores slots/MemPool from baseline, so any
+    // edge recorded after the snapshot would name a recycled slot or a stale
+    // live edge — clear them HERE, before the rewind (same live-first order
+    // as the pin registries above).
+    cap::derivation_snapshot_reset();
 
     // ---- PMM ----
     {
