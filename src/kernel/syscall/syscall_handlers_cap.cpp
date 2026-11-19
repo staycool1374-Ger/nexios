@@ -86,7 +86,34 @@ uint64_t Syscall::sys_cap_revoke(uint64_t src_handle, uint64_t, uint64_t,
     cap::CNode *src = current_cspace();
     if (!src)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-    if (!cap::revoke(src, src_handle))
+    // F2 (issue #555): CAP_REVOKE destroys the derivations of src_handle
+    // and leaves src_handle live (revoke_derivations, INV-DERIV-9).  The
+    // syscall face stays frozen at SYS_ERR_GENERIC_FAIL (T-1/Q3): a typed
+    // CAP_ERR_REVOKE_INCOMPLETE is retryable — call again until it
+    // returns 0.
+    errors::CapError rev_err = errors::CAP_ERR_OK;
+    int destroyed =
+        cap::revoke_derivations(src, src_handle, &rev_err);
+    if (destroyed < 0) {
+#if defined(CONFIG_DEBUG)
+        // Diagnostic only: no control-flow divergence (CODING_STYLE §6).
+        Logger::error("cap_revoke: %s", errors::error_string(rev_err));
+#endif
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+    return static_cast<uint64_t>(errors::SYS_ERR_OK);
+}
+
+/// @brief CAP_DELETE (N6, F2, issue #555): delete one cap slot.
+///        Last-reference delete destroys the target; other holders are
+///        unaffected (cap::remove, INV-DERIV-5).  Idempotent: a re-delete
+///        of the same handle fails closed.
+uint64_t Syscall::sys_cap_delete(uint64_t handle, uint64_t, uint64_t,
+                                 uint64_t, uint64_t *) {
+    cap::CNode *src = current_cspace();
+    if (!src)
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    if (!cap::remove(src, handle))
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }

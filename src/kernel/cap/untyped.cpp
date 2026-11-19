@@ -23,6 +23,7 @@
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_errors.hpp>
 #include <kernel/cap/carved_object.hpp>
+#include <kernel/cap/derivation.hpp>
 #include <kernel/cap/frame.hpp>
 #include <kernel/cap/object_sizing.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -290,13 +291,17 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
         return -1;
     }
 
+    // F2 (#555): hoisted to function scope so the derivation-record
+    // rollback below can remove the child slot (the verbatim reuse left a
+    // live child Untyped on that path).
+    int idx_child = -1;
     if (child) {
         // Child must remain retypable: retype() requires CapRights::WRITE on
         // the Untyped slot; the caller already holds WRITE over the parent
         // region (the parent lookup demanded it), so this grants no new
         // authority.
-        int idx_child = cspace->install(child, CapType::Untyped,
-                                        rights | CapRights::WRITE);
+        idx_child = cspace->install(child, CapType::Untyped,
+                                    rights | CapRights::WRITE);
         if (idx_child < 0) {
             if (err_out != nullptr)
                 *err_out = errors::CAP_ERR_INSTALL_FAILED;
@@ -306,6 +311,59 @@ int retype(CNode *cspace, uint64_t untyped_handle, CapType target_type,
             target->release(); // drop creator ref -> dispose frees prefix
             child->release();
             ut->release();
+            return -1;
+        }
+    }
+
+    // F2 (#555): record both derivations (carved target + child remainder)
+    // as self edges.  The depth is generic (child_depth(parent) + 1), so
+    // carve-chains nest correctly (INV-DERIV-3).  Either record failure
+    // removes BOTH slots before the creator releases: each region is then
+    // disposed exactly once (prefix via target, remainder via child) and no
+    // live child Untyped survives — matching the no-partial-grant
+    // precedent above.  cspace->remove's forget_slot prunes an
+    // already-recorded edge, so the table keeps no dangling entry.
+    {
+        const uint32_t parent_slot = handle_slot(untyped_handle);
+        const uint32_t parent_gen = handle_gen(untyped_handle);
+        const uint32_t parent_depth =
+            static_cast<uint32_t>(DerivationTable::instance().child_depth(
+                *cspace, parent_slot, parent_gen));
+        if (parent_depth + 1 > static_cast<uint32_t>(CONFIG_CAP_MAX_DEPTH)) {
+            cspace->remove(static_cast<uint32_t>(idx_target));
+            if (child)
+                cspace->remove(static_cast<uint32_t>(idx_child));
+            target->release();
+            if (child)
+                child->release();
+            ut->release();
+            if (err_out != nullptr)
+                *err_out = errors::CAP_ERR_DEPTH_EXCEEDED;
+            return -1;
+        }
+        const uint8_t depth = static_cast<uint8_t>(parent_depth + 1);
+        const uint32_t target_gen =
+            cspace->slot_gen(static_cast<uint32_t>(idx_target));
+        bool recorded = DerivationTable::instance().record(
+            *cspace, parent_slot, parent_gen, *cspace, kDerivSelfNode, 0,
+            static_cast<uint32_t>(idx_target), target_gen, depth);
+        if (recorded && child) {
+            const uint32_t child_slot_gen =
+                cspace->slot_gen(static_cast<uint32_t>(idx_child));
+            recorded = DerivationTable::instance().record(
+                *cspace, parent_slot, parent_gen, *cspace, kDerivSelfNode, 0,
+                static_cast<uint32_t>(idx_child), child_slot_gen, depth);
+        }
+        if (!recorded) {
+            cspace->remove(static_cast<uint32_t>(idx_target));
+            if (child)
+                cspace->remove(static_cast<uint32_t>(idx_child));
+            target->release();
+            if (child)
+                child->release();
+            ut->release();
+            if (err_out != nullptr)
+                *err_out = errors::CAP_ERR_DERIVATION_FULL;
             return -1;
         }
     }

@@ -43,6 +43,10 @@ long nexios_cap_revoke(nexios_cap_t handle) {
     return nexios_sys_cap_revoke((long)handle, 0, 0, 0);
 }
 
+long nexios_cap_delete(nexios_cap_t handle) {
+    return nexios_sys_cap_delete((long)handle, 0, 0, 0);
+}
+
 long nexios_cap_mint(nexios_cap_t src, nexios_cap_t dst,
                      unsigned long rights, unsigned long badge) {
     return nexios_sys_cap_mint((long)src, (long)dst,

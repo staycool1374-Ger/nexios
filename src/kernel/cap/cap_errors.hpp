@@ -44,7 +44,11 @@ namespace kernel::errors {
     X(ALREADY_RETYPED, 11, "Untyped region already retyped")                    \
     X(OBJECT_EXHAUSTED, 12, "Target object allocation failed")                  \
     X(CHILD_UNAVAILABLE, 13, "Child Untyped allocation failed")                \
-    X(INSTALL_FAILED, 14, "Target slot install failed")
+    X(INSTALL_FAILED, 14, "Target slot install failed")                         \
+    X(DERIVATION_FULL, 15, "Derivation table full")                             \
+    X(DEPTH_EXCEEDED, 16, "Derivation depth bound exceeded")                    \
+    X(REVOKE_INCOMPLETE, 17, "Revoke incomplete: call again to continue")      \
+    X(DERIVATION_CYCLE, 18, "Derivation table corrupt: revoke step bound hit")
 
 /// @brief Retype error codes (F1 object model).
 // NOLINTNEXTLINE(performance-enum-size)

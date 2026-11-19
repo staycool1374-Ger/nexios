@@ -305,6 +305,7 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_THREAD_JOIN     95
 #define SYS_THREAD_WRAP     96
 #define SYS_REPLY_RECV      97
+#define SYS_CAP_DELETE      98
 
 static inline long sys_watchdog_create(unsigned long period_ticks) {
     return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
@@ -350,11 +351,13 @@ static inline long sys_reply_recv(unsigned long reply_buf,
 }
 
 // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==
-// kernel MAX_SYSCALL; 80–85 appended by #70 (handlers for 80–83 land
-// with #76, TLS_SET with #74 — table slots fail-closed until then).
+// kernel MAX_SYSCALL (99 — closes the pre-existing drift vs the frozen
+// 86; nothing pins 86, cf. test_syscall.cpp:1052 asserting only > 79);
+// 80–85 appended by #70 (handlers for 80–83 land with #76, TLS_SET with
+// #74 — table slots fail-closed until then); 98 is CAP_DELETE (F2 #555).
 #define NEXIOS_ABI_MAJOR 1
 #define NEXIOS_ABI_MINOR 0
-#define SYS_MAX          86
+#define SYS_MAX          99
 
 // SDK internal versioning macros live in sdk_version.h (spec §14,
 // issue #171) so kernel test TUs can consume them without libc types.

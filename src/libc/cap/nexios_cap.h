@@ -70,6 +70,11 @@ long nexios_cap_copy(nexios_cap_t src, nexios_cap_t dst);
 /// @return 0, or -1 with errno set.
 long nexios_cap_revoke(nexios_cap_t handle);
 
+/// @brief Delete handle's slot (F2, N6, issue #555): the target is
+/// destroyed iff this was the last reference; other holders keep working.
+/// @return 0, or -1 with errno set.
+long nexios_cap_delete(nexios_cap_t handle);
+
 /// @brief Copy src into dst with reduced rights mask + badge.
 /// @return new opaque handle, or -1 with errno set.
 long nexios_cap_mint(nexios_cap_t src, nexios_cap_t dst,

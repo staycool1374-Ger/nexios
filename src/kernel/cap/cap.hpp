@@ -57,11 +57,18 @@ constexpr uint32_t kCapBrokerAllowAll =
 ///       revoke path collects targets under the lock and releases them after
 ///       unlocking.
 class CNode : public KernelObject {
+    /// @brief DerivationTable assigns serial_ under the table lock
+    ///        (F2, issue #555; value-only linkage, INV-DERIV-2).
+    friend class DerivationTable;
   public:
     CSlot slots[CONFIG_CSLOT_COUNT];
     uint32_t cspace_id = 0;
     CNode *parent_ = nullptr;
     uint32_t depth_ = 0;
+    /// @brief Derivation-table identity (F2, issue #555): assigned lazily
+    ///        by DerivationTable::node_serial under the table lock, never
+    ///        0 once recorded.  Value-only linkage (INV-DERIV-2).
+    uint32_t serial_ = 0;
     sync::SpinLock lock_;
     // Issue #240 cached delegation policy (step-a: always all-allow).
     // Placed after the lock (off the slots hot path). Read under the
@@ -97,6 +104,9 @@ class CNode : public KernelObject {
     ///        TOCTOU against SMP cross-task grants; stale gens can only fail
     ///        closed in lookup).
     /// @return slot index on success, -1 when full or the target is revoked.
+    /// @note install() itself records no derivation edge: copy/grant/mint
+    ///       (F2, issue #555) record the edge after a successful install,
+    ///       so a raw in-kernel install stays untracked by construction.
     int install(KernelObject *obj, CapType type, CapRights rights,
                 uint32_t *gen_out = nullptr) noexcept;
 
@@ -104,6 +114,20 @@ class CNode : public KernelObject {
     ///        Idempotent: an already-free slot is a no-op.  The target is
     ///        released OUTSIDE the slot-table lock (deferred release list).
     void remove(uint32_t idx) noexcept;
+
+    /// @brief Removes the slot at @p idx only when it is occupied and its
+    ///        generation still equals @p gen (F2, issue #555: gen-checked
+    ///        destroy for the revoke walk, INV-DERIV-10).  A recycled slot
+    ///        (generation mismatch) is never deleted — that means the cap
+    ///        is already gone, not an error.
+    /// @return true when a slot was removed, false on out-of-range,
+    ///         unoccupied or generation-mismatched slots.
+    bool remove_if(uint32_t idx, uint32_t gen) noexcept;
+
+    /// @brief Returns the derivation-table identity of this CNode,
+    ///        assigning it lazily on first use (F2, issue #555).  Never 0
+    ///        once recorded; 0 only before any derivation touched it.
+    uint32_t serial() noexcept;
 
     /// @brief Returns the slot at @p idx if it is occupied and matches the
     ///        requested type; nullptr otherwise.  Does NOT take a reference.
@@ -151,7 +175,35 @@ KernelObject *lookup(CNode *cspace, uint64_t handle, CapType want,
 /// @brief Revokes the capability at @p handle in @p cspace.  Idempotent.
 /// @return true when a live capability was revoked, false when the slot was
 ///         already free (or the handle was invalid).
+/// @note Kernel teardown primitive (object-wide cascade): marks the target
+///       revoked and invalidates every capability reachable through it.
+///       NOT the CAP_REVOKE (53) user semantics — user-visible deletion is
+///       remove(), user-visible derivation revoke is revoke_derivations().
+///       Reachable from kernel teardown (ramdiskd) and tests only.
 bool revoke(CNode *cspace, uint64_t handle) noexcept;
+
+/// @brief Deletes the capability at @p handle in @p cspace (F2, N6
+///        CAP_DELETE core, issue #555): clears only the caller's slot.
+///        The target is destroyed iff this was the last reference; other
+///        holders' lookups keep succeeding.  Never calls revoke()
+///        (INV-DERIV-5).
+/// @return true when a live capability slot was deleted, false on a bad,
+///         stale or already-free handle (idempotent, matching revoke()).
+bool remove(CNode *cspace, uint64_t handle) noexcept;
+
+/// @brief Destroys the caps derived from @p handle, leaving @p handle
+///        live (F2, CAP_REVOKE (53) core, issue #555): bounded post-order
+///        walk over the derivation table (INV-DERIV-9, root exemption;
+///        INV-DERIV-10 validated gen-pinned walk; INV-DERIV-11 monotone
+///        resumable).  A revoke that exceeds the per-call edge budget
+///        returns CAP_ERR_REVOKE_INCOMPLETE through @p err_out and is
+///        resumed by calling again.
+/// @return the number of derived caps destroyed (>= 0; 0 is legal and
+///         means "no derivations"), or -1 with a typed @p err_out reason
+///         (CAP_ERR_BAD_HANDLE, CAP_ERR_DEPTH_EXCEEDED,
+///         CAP_ERR_REVOKE_INCOMPLETE, CAP_ERR_DERIVATION_CYCLE).
+int revoke_derivations(CNode *cspace, uint64_t handle,
+                       errors::CapError *err_out) noexcept;
 
 /// @brief Number of occupied slots (debug/leak audit helper).
 size_t occupied_count(const CNode *cspace) noexcept;
@@ -165,23 +217,39 @@ size_t occupied_count(const CNode *cspace) noexcept;
 ///        The destination slot inherits the source rights (COPY-capped).
 /// @param gen_out when non-null, receives the new destination slot's
 ///        generation (issue #266; written inside the install lock).
+/// @param err_out when non-null, carries the typed reason
+///        (errors::CapError) when the derivation edge cannot be recorded
+///        (CAP_ERR_DEPTH_EXCEEDED / CAP_ERR_DERIVATION_FULL — the install
+///        is rolled back); untouched on success.
 int copy(CNode *src, uint64_t src_handle, CNode *dst,
-         uint32_t *gen_out = nullptr) noexcept;
+         uint32_t *gen_out = nullptr,
+         errors::CapError *err_out = nullptr) noexcept;
 
 /// @brief Grants the capability at @p src_handle of @p src into @p dst.
 ///        Requires CapRights::GRANT on the source slot; clears the source
 ///        GRANT right after use (mint-once semantics).
 /// @param gen_out when non-null, receives the new destination slot's
 ///        generation (issue #266; written inside the install lock).
+/// @param err_out when non-null, carries the typed reason
+///        (errors::CapError) when the derivation edge cannot be recorded
+///        (CAP_ERR_DEPTH_EXCEEDED / CAP_ERR_DERIVATION_FULL — the install
+///        is rolled back and the GRANT right is kept); untouched on
+///        success.
 int grant(CNode *src, uint64_t src_handle, CNode *dst,
-          uint32_t *gen_out = nullptr) noexcept;
+          uint32_t *gen_out = nullptr,
+          errors::CapError *err_out = nullptr) noexcept;
 
 /// @brief Copies the capability with a reduced rights mask and, for
 ///        endpoints, a new badge.
 /// @param gen_out when non-null, receives the new destination slot's
 ///        generation (issue #266; written inside the install lock).
+/// @param err_out when non-null, carries the typed reason
+///        (errors::CapError) when the derivation edge cannot be recorded
+///        (CAP_ERR_DEPTH_EXCEEDED / CAP_ERR_DERIVATION_FULL — the install
+///        is rolled back); untouched on success.
 int mint(CNode *src, uint64_t src_handle, CNode *dst, CapRights rights_mask,
-         uint32_t badge, uint32_t *gen_out = nullptr) noexcept;
+         uint32_t badge, uint32_t *gen_out = nullptr,
+         errors::CapError *err_out = nullptr) noexcept;
 
 /// @brief Retypes the Untyped at @p untyped_handle in @p cspace into a new
 ///        capability of @p target_type, installed into @p cspace (F1 #554).
