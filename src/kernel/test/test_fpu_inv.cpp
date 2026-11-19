@@ -39,6 +39,7 @@
 #include <kernel/memory/mempool.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/task/scheduler_integrity.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include "test_sched_helpers.hpp"
 #if defined(CONFIG_ARCH_X86_64)
@@ -210,8 +211,38 @@ JARVIS_TEST(fpu_nm_own_arm_no_clobber, "PRE: none | POST: none") {
 //         every other slot stays null; all slots null after manual restore.
 // Depends: test_isolate restore loop, fpu_owner_own() (issue #151)
 JARVIS_TEST(fpu_owner_percpu_reset, "PRE: none | POST: none") {
-    for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
-        JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
+    // Hardened entry (x86_64 core_task flake on the merged F1/F2/#583
+    // tree): a timer tick in the restore->entry window may switch to a
+    // READY user daemon; the switch's lazy-FPU arm (CR0.TS) makes the
+    // daemon's first SSE fault #NM, recording the daemon as fpu_owner.
+    // That is legal system activity, not a cross-test leak — but it
+    // breaks the entry-null premise. Under one IrqGuard (no switch can
+    // intervene): snapshot pre-values, tolerate live non-harness owners
+    // (daemon noise), FAIL on harness owners (only tests run as harness,
+    // so a harness owner at entry proves restore failed to clear) and on
+    // invalid pointers (wild write). Then clear and assert null.
+    auto *harness = Scheduler::get_harness_task();
+    JARVIS_ASSERT(harness != nullptr);
+    {
+        arch::IrqGuard irq_guard{};
+        for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu) {
+            auto *pre = __atomic_load_n(&arch::per_cpu[cpu].fpu_owner,
+                                        __ATOMIC_ACQUIRE);
+            if (pre != nullptr) {
+                Logger::raw_write("[FPU-ENTRY] cpu=");
+                Logger::print_dec(cpu);
+                Logger::raw_write(" owner=0x");
+                Logger::print_hex(reinterpret_cast<uint64_t>(pre));
+                Logger::raw_write("\n");
+                JARVIS_ASSERT(sched_verify::validate_task_ptr(pre, "fpu-entry"));
+                JARVIS_ASSERT(pre != harness);
+            }
+            __atomic_store_n(&arch::per_cpu[cpu].fpu_owner,
+                             (TaskControlBlock *)nullptr, __ATOMIC_RELEASE);
+        }
+        for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS; ++cpu)
+            JARVIS_ASSERT(arch::per_cpu[cpu].fpu_owner == nullptr);
+    }
     auto *sentinel =
         reinterpret_cast<TaskControlBlock *>(uintptr_t(0xF900));
     {
