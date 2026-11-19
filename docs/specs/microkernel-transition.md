@@ -100,7 +100,7 @@ tracking issue; it is never presented as already true.
 | Supervision | in-kernel `daemon_mgr` (`MAX_RESTART_COUNT = 10`, no backoff, polled from `on_tick`); death notify syscalls 66–68 | supervisor PD with restart policy, cap re-derive, client rebind | #191, #516 |
 | Caps | `CapType` {Null, Task, Endpoint, Frame, CNode, Untyped, Mmio, Irq, IoMmuDma, Msix, Wdog} | add TCB, VSpace, PageTable, Notification, SchedContext; split delete/revoke | #50, F1, F2 |
 | Process mgmt | `FORK/EXEC/WAITPID/KILL/GETPID` in kernel | proc-mgr PD over TCB/VSpace mechanisms | F11 |
-| Syscalls | `MAX_SYSCALL = 102` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
+| Syscalls | `MAX_SYSCALL = 103` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
 
 ## 3. Target kernel API
 
@@ -116,7 +116,7 @@ excluded from the certified set · **MOVE** behaviour moves to a server RPC,
 number retired · **RETIRE** number retired without replacement ·
 **GATED** live, retirement gated on a migration step.
 
-### 3.2 Table T-1 — disposition of every number 0–101
+### 3.2 Table T-1 — disposition of every number 0–102
 
 | Nr | Name | Today | Disposition |
 |---|---|---|---|
@@ -191,6 +191,7 @@ number retired · **RETIRE** number retired without replacement ·
 | 99 | TCB_CONFIGURE | live (F4 N1 #557) | KEEP |
 | 100 | TCB_SUSPEND | live (F4 N2 #557) | KEEP |
 | 101 | TCB_RESUME | live (F4 N3 #557) | KEEP |
+| 102 | VSPACE_MAP | live (M11, F5 #558) | KEEP |
 
 ### 3.3 New entries (numbers `TBD at API freeze`)
 
@@ -199,7 +200,7 @@ number retired · **RETIRE** number retired without replacement ·
 | N1 → 99 | TCB_CONFIGURE | RESOLVED at F4 as syscall 99 (#557): priority, affinity, SchedContext binding and fault endpoint as one cap-gated invocation (schedctx/endpoint UNSUPPORTED at F4) |
 | N2 → 100 | TCB_SUSPEND | RESOLVED at F4 as syscall 100 (#557): supervisor must stop a hung PD; no mechanism exists (KILL is signal delivery) |
 | N3 → 101 | TCB_RESUME | RESOLVED at F4 as syscall 101 (#557): counterpart of N2; also starts a retyped TCB |
-| N4 | VSPACE_MAP | map a PageTable object into a VSpace; proc-mgr and mem-mgr cannot build address spaces without it |
+| N4 → 102 | VSPACE_MAP | RESOLVED at F5 as syscall 102 (#558): one PageTable object linked at a 9-bit-component path under a VSpace root; WRITE on the VSpace + READ on the PageTable, zero allocation, destructive delete |
 | N5 | REPLY_RECV | RESOLVED at M3 as syscall 97 (F3/Q2 #556): reply to the recorded caller and receive the next request, dest + token implicit kernel-held |
 | N6 → 98 | CAP_DELETE | delete one's own slot without invalidating other holders |
 | N7 | SC_BIND | bind a SchedContext to a TCB |
@@ -212,11 +213,11 @@ pointer-free rule of `syscall-fastpath.md` §0.
 ### 3.4 Derived counts (informative; the set in T-1 is normative)
 
 KEEP: 0, 1, 2, 3, 5, 6, 27, 28 (8), 49, 50 (2), 51–62 (12), 64–79 (16),
-84, 85 (2), 91–101 (11) = 51.
-New: N4, N7–N9 = 4 (N1–N3 resolved to 99–101 at F4 #557; N5 resolved to 97 at M3; N6 resolved to 98 at F2 #555). Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
+84, 85 (2), 91–102 (12) = 52.
+New: N7–N9 = 3 (N4 resolved to 102 at F5 #558; N1–N3 resolved to 99–101 at F4 #557; N5 resolved to 97 at M3; N6 resolved to 98 at F2 #555). Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
 MOVE/RETIRE/GATED: 4 (1), 7–26 (20), 29–48 (20), 63 (1), 80–83 (4) = 46.
-KEEP 51 + KEEP-D 5 + MOVE/RETIRE/GATED 46 = 102 numbers (0–101), and
-`MAX_SYSCALL` = 102, so every existing number has exactly one
+KEEP 52 + KEEP-D 5 + MOVE/RETIRE/GATED 46 = 103 numbers (0–102), and
+`MAX_SYSCALL` = 103, so every existing number has exactly one
 disposition.
 
 ### 3.5 Affinity and accounting split
@@ -261,6 +262,17 @@ objects).
   `CAP_ERR_REVOKE_INCOMPLETE` and is resumable by re-invocation (Q2: the
   depth dimension is enforced at creation, the revoke-time typed-error /
   resume contract on the work dimension).
+
+### 4.3b VSPACE_MAP (N4, F5 #558)
+
+`VSPACE_MAP` (102) links one carved PageTable object at a packed
+9-bit-component path under a carved VSpace root (WRITE on the VSpace,
+READ on the PageTable, one 8-byte table-link store, zero allocation).
+Single parent per table (INV-VS-1: registry phys-identity scan refuses a
+second parent), full TLB shootdown on every removal (INV-VS-5), and
+destructive delete — CAP_DELETE on a mapped cap destroys its link on the
+last release (INV-VS-8, never a revoke).  No carved space is ever
+activated at F5; M14 inherits the activation guard.
 
 ### 4.4 Receive with timeout
 
@@ -499,8 +511,8 @@ Each subsection gives: (1) current vs end state and syscall mapping,
    (56) carves Frames only. `PMM::alloc_user_page` performs no budget check
    or attribution, while `alloc_page` and `alloc_page_colored` do. End state:
    mem-mgr PD owns all free memory as Untyped; the kernel creates objects only
-   by retype. Syscalls: keeps 56, 61, 62, 64, 65; adds N4; retires 63 at M12;
-   moves 44–46 to mem-mgr RPC.
+   by retype. Syscalls: keeps 56, 61, 62, 64, 65; adds N4 (landed, 102);
+   retires 63 at M12; moves 44–46 to mem-mgr RPC.
 2. **Invariants.** Split into **bootstrap** (M4: root task receives all free
    memory as Untyped, kernel pools frozen) and **policy** (M12: retype-only
    creation). After M4 the BufferPool PMM fallback is removed; exhaustion
@@ -816,6 +828,7 @@ Only these are valid:
 | `mk_cap_delete_vs_revoke` | INV-MK-7 |
 | `mk_retype_target_types` | §4.2 |
 | `mk_supervisor_stop` | N2 (100) / N3 (101); also exercises the N1 (99) authority gate (same TcbCap, same Q9 rule) |
+| `mk_vspace_map_*` (`cap_vspace`, F5 #558) | N4 (102): link at depth 1–3, occupied/aliased/kernel-half/path-bits refusals, ownership mismatch, delete-unlinks, vspace-delete zeroes tree, revoke cascade, dispatch end-to-end (13-test QE sketch, plan-558 TEST STRATEGY) |
 | `mk_ring_epoch_reject` | D5 |
 | `mk_irq_slot_death_drain` | D3 |
 | `cap_schedctx`, `mm_usermgr`, `irq_mux`, `srv_supervisor`, `srv_timer` | §8.1–§8.4, §8.7 |
@@ -853,7 +866,7 @@ before every kernel deletion.
 | M8 | IRQ hardening (x86 limiter, level mask, `pending` saturation, single waiter), then irq-mux config role (F8, #192) | M2 | `capability`, `drivers` |
 | M9 | Driver PDs → block-srv → VFS (#476, #517) | M4, M8 | `drivers`, `storage`, `block_srv_live`, `vfs_srv_live` |
 | M10 | Console / term and procfs | M9 | `ui`, `servers` |
-| M11 | Object model: CapType additions, per-invocation retype, CAP_DELETE, TCB_*, VSPACE_MAP (F1, F2, F4, F5) | M3 | `capability`, `proc_elf` |
+| M11 | Object model: CapType additions, per-invocation retype, CAP_DELETE, TCB_*, VSPACE_MAP (F1, F2, F4, F5 — F5 #558 landed: syscall 102) | M3 | `capability`, `proc_elf` |
 | M12 | mem-mgr policy: retype-only creation; retire FRAME_CREATE; supervisor switches to the full §8.7 item 3 restart protocol | M4, M5, M11 | `core_memory`, `capability`, `servers` |
 | M13 | SchedContext donation or enforced priority rule (#190, Q1) | M3, M11 | `cap_schedctx`, `core_sched` |
 | M14 | proc-mgr | M11, M12 | `proc_elf`, `core_task` |
@@ -872,7 +885,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F2 | #555 | Split CAP_DELETE from CAP_REVOKE | `cap/cap.cpp` |
 | F3 | #556 | Reply token + REPLY_RECV + direct switch on Call | `ipc/ipc.cpp`, ISR epilogue |
 | F4 | #557 | TCB_CONFIGURE (99) / TCB_SUSPEND (100) / TCB_RESUME (101) — cap-gated Q9 stop authority (TcbCap), orthogonal admin latch, pause-and-shift supervision | `syscall/syscall_handlers_tcb.cpp`, `task/scheduler_suspend.cpp`, `task/tcb_control.*`, `cap/tcb_cap.*` |
-| F5 | #558 | VSPACE_MAP | new |
+| F5 | #558 | VSPACE_MAP (syscall 102: VSpaceMap registry + link, carved-object teardown hooks, VMM arch seams, 1100-block face) | `cap/cap_types.hpp`, `cap/vspace_map.*`, `cap/vspace_errors.hpp`, `cap/carved_object.*`, `memory/vmm.*`, `syscall/syscall_handlers_vspace.cpp` |
 | F6 | #559 | Death record at terminate funnel, bounded visibility | extends #516 |
 | F7 | #560 | Wake reply waiters on server death | `ipc/ipc.cpp` |
 | F8 | #561 | x86_64 IRQ parity: storm limiter, level mask, `pending` saturation, single waiter | `irq_delivery.cpp`, `syscall_handlers_irq.cpp` |
@@ -912,6 +925,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | Commit | Content |
 |---|---|
 | `66e698281` | #554 F1 object model: CapType += TCB/VSpace/PageTable/Notification/SchedContext; per-invocation retype target; fixed-size carved storage; X-macro CapError |
+| uncommitted | #558 F5 VSPACE_MAP: N4 as syscall 102 (MAX_SYSCALL 103) — VSpaceMap bounded registry + single-mutation link, carved-object dispose/revoke hooks, 5 VMM arch seams, 1100-block face, destructive delete — SIL 3 justification posted as #558 comment (T-1 §3.1, feeds #80) |
 | uncommitted | #557 F4 TCB control: TcbCap + Q9 authority gate, admin suspend/resume with pause-and-shift supervision, syscalls 99–101 (MAX_SYSCALL 102) — SIL 3 justification posted as #557 comment (T-1 §3.1, feeds #80) |
 | `d1b44d849` | #47 step-a vfs + block PDs: SDF, PDs, parity, fault demo (no flip) |
 | `960b27673` | #51 step-c-prime serial SHM SPSC ring TX |

@@ -73,9 +73,10 @@ class CarvedObjectCap : public KernelObject {
     ///        the block to the MemPool.
     void dispose() noexcept override;
 
-    /// @brief Marks the cap revoked.  No mapping/registry invalidation
-    ///        is needed at F1: no consumer can map a carved object until
-    ///        F5 wires VSPACE_MAP, which must add its invalidation here.
+    /// @brief Marks the cap revoked.  F5 (issue #558) runs the VSpaceMap
+    ///        invalidation here (same hooks as dispose()): a revoked
+    ///        VSpace/PageTable keeps no live table link.  Both hooks are
+    ///        idempotent, so revoke-then-dispose is safe.
     void revoke() noexcept override;
 
     /// @brief Genuinely shared (referenced by capability slots).

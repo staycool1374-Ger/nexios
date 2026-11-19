@@ -195,7 +195,9 @@ bool revoke(CNode *cspace, uint64_t handle) noexcept;
 ///        CAP_DELETE core, issue #555): clears only the caller's slot.
 ///        The target is destroyed iff this was the last reference; other
 ///        holders' lookups keep succeeding.  Never calls revoke()
-///        (INV-DERIV-5).
+///        (INV-DERIV-5).  Deleting a mapped PageTable/VSpace cap destroys
+///        its table link on the last release (INV-VS-8, F5 #558) — a
+///        destructive delete, still never a `revoke()` (INV-DERIV-5).
 /// @return true when a live capability slot was deleted, false on a bad,
 ///         stale or already-free handle (idempotent, matching revoke()).
 bool remove(CNode *cspace, uint64_t handle) noexcept;

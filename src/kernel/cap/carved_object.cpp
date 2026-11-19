@@ -20,6 +20,7 @@
 /// @brief Fixed-size carved capability object implementation (F1 #554).
 
 #include <kernel/cap/carved_object.hpp>
+#include <kernel/cap/vspace_map.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/task/task.hpp>
@@ -69,6 +70,14 @@ CarvedObjectCap *CarvedObjectCap::create(CapType kind, uint64_t phys,
 }
 
 void CarvedObjectCap::dispose() noexcept {
+    // F5 (issue #558, INV-VS-4): destroy the table link BEFORE the
+    // payload pages go back to the PMM.  Reversing that order hands a
+    // live parent a page the allocator may re-issue (S1).  The hook is
+    // idempotent, so revoke-then-dispose is safe.
+    if (kind == CapType::PageTable)
+        VSpaceMap::invalidate_table(phys);
+    else if (kind == CapType::VSpace)
+        VSpaceMap::invalidate_vspace(phys);
     const size_t page_count = bytes / arch::PAGE_SIZE;
     for (size_t page_idx = 0; page_idx < page_count; ++page_idx)
         PMM::free_page(phys + page_idx * arch::PAGE_SIZE);
@@ -77,8 +86,13 @@ void CarvedObjectCap::dispose() noexcept {
 }
 
 void CarvedObjectCap::revoke() noexcept {
-    // No mapping/registry invalidation at F1 (see header): no consumer
-    // can map a carved object until F5 wires VSPACE_MAP.
+    // F5 (issue #558): a revoked carved object keeps no live mapping —
+    // the same invalidation dispose() runs, before the revoked mark, so
+    // no parent ever points at a page whose owner went away.
+    if (kind == CapType::PageTable)
+        VSpaceMap::invalidate_table(phys);
+    else if (kind == CapType::VSpace)
+        VSpaceMap::invalidate_vspace(phys);
     KernelObject::revoke();
 }
 

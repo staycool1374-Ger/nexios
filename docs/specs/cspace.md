@@ -416,14 +416,17 @@ zeroing is mandatory because a stale page-table root is a
 privilege-escalation primitive.  Endpoint, CNode, Mmio, Irq, IoMmuDma,
 Msix, Wdog, Untyped, Task and Null are still NOT carvable
 (`TARGET_UNSUPPORTED`): CNode and Endpoint are MemPool-allocated
-shared-heap structs, not physical-memory-resident objects.
+shared-heap structs, not physical-memory-resident objects.  PageTable and
+VSpace caps are the only kinds with an object-level map operation:
+VSPACE_MAP (102, F5 #558) links a PageTable page at a path under a
+VSpace root (WRITE on the VSpace, READ on the PageTable).
 
 | Kind | Fixed size | Consumer |
 |------|------------|----------|
 | Frame | explicit (variable) | existing frame mapping |
 | TCB | 16 KiB (4 pages) | F4 #557 (schedulable object) |
-| VSpace | 1 page | F5 #558 (address-space root) |
-| PageTable | 1 page | F5 #558 (page-table page) |
+| VSpace | 1 page | F5 #558 — address-space root, wired by VSPACE_MAP (syscall 102) |
+| PageTable | 1 page | F5 #558 — page-table page, wired by VSPACE_MAP (syscall 102) |
 | Notification | 1 page | §8.1/§5 sync work |
 | SchedContext | 1 page | M13 #190 (scheduling context) |
 
