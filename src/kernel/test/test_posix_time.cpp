@@ -57,6 +57,23 @@ uint64_t sys_call(uint64_t number, uint64_t arg0, uint64_t arg1, uint64_t arg2,
     return Syscall::handle(number, arg0, arg1, arg2, arg3, nullptr);
 }
 
+// Daemon-timer race family (x86_64 merged-tree flakes): a daemon
+// timeout-receive timer may legitimately be live on wheel 0 while a
+// test runs. Tests must pin THEIR OWN residue (drain back to the
+// entry baseline), not a global zero. Bounded settle: transient
+// daemon timers fire and drop off; a leaked test timer never does,
+// and persistent churn fails loud (anomalous, worth flagging).
+uint64_t drain_wheel_to_baseline(uint64_t baseline) {
+    const uint64_t t0 = arch::Timer::ns_monotonic();
+    uint64_t live = time::TimerWheel::live_count(0);
+    while (live != baseline &&
+           arch::Timer::ns_monotonic() - t0 < 100000000ULL) {
+        arch::pause();
+        live = time::TimerWheel::live_count(0);
+    }
+    return live;
+}
+
 struct SleepCtx {
     uint64_t budget_ns;
     uint64_t result;
@@ -211,6 +228,13 @@ JARVIS_TEST(posix_nanosleep_expiry_bound, "PRE: none | POST: none") {
     ctx.result = 0xAAAAAAAAAAAAAAAAULL;
     ctx.elapsed_ns = 0;
     g_sleep_ctx = &ctx;
+    // Baseline, not zero (same idiom as the bad-arg tests above): a
+    // daemon timeout-receive timer may legitimately be live on wheel 0
+    // while the sleeper runs. What must hold is no residue FROM THIS
+    // TEST — the count returns to baseline once transient daemon timers
+    // fire. (x86_64 flake: live==1 here with the sleeper fully
+    // disarmed.)
+    const uint64_t live_before = time::TimerWheel::live_count(0);
     auto *sleeper = TaskControlBlock::create([]() { sleep_entry(); }, 11, 100);
     JARVIS_ASSERT(sleeper != nullptr);
     {
@@ -225,7 +249,11 @@ JARVIS_TEST(posix_nanosleep_expiry_bound, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(0ULL, ctx.result);
     JARVIS_ASSERT(ctx.elapsed_ns >= ctx.budget_ns);
     JARVIS_ASSERT(ctx.elapsed_ns < 10000000000ULL);
-    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
+    // Settle to baseline (bounded): transient daemon timers fire and
+    // drop off; a leaked sleeper timer never would. Fail loud if the
+    // window does not quiet (pathological churn, worth flagging).
+    JARVIS_ASSERT_EQ(live_before,
+                     drain_wheel_to_baseline(live_before));
     JARVIS_ASSERT(!sleeper->sleep_armed);
     test::terminate_and_drain(*sleeper);
     g_sleep_ctx = nullptr;
@@ -249,6 +277,9 @@ JARVIS_TEST(posix_nanosleep_killed_by_signal, "PRE: none | POST: none") {
     ctx.result = 0xAAAAAAAAAAAAAAAAULL;
     ctx.elapsed_ns = 0;
     g_sleep_ctx = &ctx;
+    // Baseline, not zero: daemon timers may be live (see
+    // drain_wheel_to_baseline).
+    const uint64_t live_before = time::TimerWheel::live_count(0);
     auto *sleeper = TaskControlBlock::create([]() { sleep_entry(); }, 11, 100);
     JARVIS_ASSERT(sleeper != nullptr);
     {
@@ -271,7 +302,8 @@ JARVIS_TEST(posix_nanosleep_killed_by_signal, "PRE: none | POST: none") {
     Scheduler::set_current(*original);
     JARVIS_ASSERT_EQ(kNegErrno(4), ctx.result);
     JARVIS_ASSERT(ctx.elapsed_ns < 10000000000ULL);
-    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
+    JARVIS_ASSERT_EQ(live_before,
+                     drain_wheel_to_baseline(live_before));
     JARVIS_ASSERT(!sleeper->sleep_armed);
     test::terminate_and_drain(*sleeper);
     g_sleep_ctx = nullptr;
@@ -291,6 +323,9 @@ JARVIS_TEST(posix_timer_oneshot_and_periodic, "PRE: none | POST: none") {
     }
 #endif
     uint64_t timer_id = 0;
+    // Baseline, not zero: daemon timers may be live (see
+    // drain_wheel_to_baseline).
+    const uint64_t live_before = time::TimerWheel::live_count(0);
     JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
                                     reinterpret_cast<uint64_t>(&timer_id), 0));
     AbiItimer spec{};
@@ -318,7 +353,8 @@ JARVIS_TEST(posix_timer_oneshot_and_periodic, "PRE: none | POST: none") {
                                     reinterpret_cast<uint64_t>(&readback), 0));
     JARVIS_ASSERT(readback.it_interval.tv_nsec == 10000000);
     JARVIS_ASSERT_EQ(0ULL, sys_call(82, 3, timer_id, 0, 0));
-    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
+    JARVIS_ASSERT_EQ(live_before,
+                     drain_wheel_to_baseline(live_before));
     JARVIS_TEST_PASS();
 }
 
@@ -335,6 +371,9 @@ JARVIS_TEST(posix_timer_table_full, "PRE: none | POST: none") {
     }
 #endif
     uint64_t ids[32] = {0};
+    // Baseline, not zero: daemon timers may be live (see
+    // drain_wheel_to_baseline).
+    const uint64_t live_before = time::TimerWheel::live_count(0);
     for (size_t i = 0; i < 32; ++i) {
         JARVIS_ASSERT_EQ(0ULL, sys_call(82, 0, 1,
                                         reinterpret_cast<uint64_t>(&ids[i]),
@@ -347,7 +386,8 @@ JARVIS_TEST(posix_timer_table_full, "PRE: none | POST: none") {
     for (size_t i = 0; i < 32; ++i) {
         JARVIS_ASSERT_EQ(0ULL, sys_call(82, 3, ids[i], 0, 0));
     }
-    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
+    JARVIS_ASSERT_EQ(live_before,
+                     drain_wheel_to_baseline(live_before));
     JARVIS_TEST_PASS();
 }
 
@@ -367,6 +407,9 @@ JARVIS_TEST(posix_timerfd_read_semantics, "PRE: none | POST: none") {
 #endif
     const uint64_t fd = sys_call(83, 1, 0, 0, 0); // MONOTONIC, blocking
     JARVIS_ASSERT(fd <= 0x7FFFFFFFULL);
+    // Baseline, not zero: daemon timers may be live (see
+    // drain_wheel_to_baseline).
+    const uint64_t live_before = time::TimerWheel::live_count(0);
     const int timer_fd = static_cast<int>(fd);
     AbiItimer spec{};
     spec.it_value.tv_sec = 0;
@@ -390,7 +433,8 @@ JARVIS_TEST(posix_timerfd_read_semantics, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(0ULL,
                      sys_call(11, static_cast<uint64_t>(timer_fd), 0, 0, 0));
     JARVIS_ASSERT_EQ(0ULL, sys_call(11, fd_nb, 0, 0, 0));
-    JARVIS_ASSERT_EQ(0ULL, time::TimerWheel::live_count(0));
+    JARVIS_ASSERT_EQ(live_before,
+                     drain_wheel_to_baseline(live_before));
     JARVIS_TEST_PASS();
 }
 
