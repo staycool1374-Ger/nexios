@@ -5,8 +5,9 @@ kernel, as of commit `55fde391` (v0.3.12 milestone definition).
 
 ## Summary
 
-- **18** production `arch::IrqGuard` instantiations audited.
-- **18 KEEP** (class A — justified IRQ-exclusion).
+- **20** production `arch::IrqGuard` instantiations audited (18 at v0.3.12
+  G1 + S12/S13 for the F4 #557 admin suspend/resume mechanism).
+- **20 KEEP** (class A — justified IRQ-exclusion).
 - **0 MIGRATE** (after SIL-3 finding G1-B-01: the original claim that the
   task.cpp kslot sites have "no ISR accessor" was FALSE — see T1-T3 below).
 - **0** migrate to `sync::Mutex` (no site needs a blocking lock; all class-A
@@ -44,13 +45,16 @@ kernel, as of commit `55fde391` (v0.3.12 milestone definition).
 | TD1 | taskdefs.cpp:181 | `reboot_from_table` | Whole teardown (kill all tasks, drain zombies, reset queues) | Timer ISR | IrqGuard | Teardown touches every task; ISR concurrency would corrupt the tables mid-reset |
 | I1 | ipc.cpp:421 | `IPC::block_sender` PI boost | `q.owner->priority` RMW + old/new snapshot + `move_priority` | Timer ISR (deadline demote / sporadic change) | IrqGuard (inside `q.lock_`) | `q.lock_` is a plain spinlock (does not mask IRQs); IrqGuard excludes the ISR so the old/new effective-priority snapshots stay consistent |
 | I2 | ipc.cpp:469 | `IPC::wake_sender` PI restore | Receiver priority restore + old/new snapshot + `move_priority` | Timer ISR | IrqGuard (inside `q.lock_`) | Same as I1 |
+| S12 | scheduler_suspend.cpp | `Scheduler::admin_suspend_err` | Park latch + wdog screen + deadline-node remove under scheduler_lock_ | Timer ISR (tick park consumer reads the latch) | IrqGuard + scheduler_lock_ | IRQ exclusion prevents ISR try_lock starvation while this task holds scheduler_lock_ (same class as S6) |
+| S13 | scheduler_suspend.cpp | `Scheduler::admin_resume_err` | Latch clear + supervision re-arm + conditional enqueue under scheduler_lock_ | Timer ISR | IrqGuard + scheduler_lock_ | Same as S12; the clear-before-enqueue order keeps the backstop net exact |
+| C1 | cap.cpp | `cap::cnode_holds_type` | Bounded O(64) Untyped-presence walk under the target CSpace leaf lock | None (AUTHORITY/syscall context only — never ISR/tick) | CNode leaf lock only (lookup class) | No scheduler lock held at the gate, so no new lock order; IRQ contract unchanged |
 | T1 | task.cpp:391 | `alloc_kslot` free-list scope | First-fit scan of `s_kslot_list`/`s_kslot_pool` + free-head update | Timer ISR (on_tick → reap_orphans → idle recreate) | IrqGuard | ISR-reachable: `Scheduler::on_tick` (timer ISR) calls `reap_orphans()` every 100 ticks, which re-creates the idle task via `TaskControlBlock::create()` → `alloc_kslot()`. A plain SpinLock deadlocks: a task-context holder preempted by the timer ISR can never release it. IRQ masking is REQUIRED (SIL-3 finding G1-B-01; the original "no ISR accessor" claim was wrong). |
 | T2 | task.cpp:411 | `alloc_kslot` bump scope | `s_kslot_bump` bump-allocate | Timer ISR (same chain as T1) | IrqGuard | Same as T1 — ISR-reachable, IRQ masking required |
 | T3 | task.cpp:421 | `free_kslot` | Free-head push of `s_kslot_pool` entry | Timer ISR (task exit via reap_orphans) | IrqGuard | Same as T1 — ISR-reachable via the same reap chain, IRQ masking required |
 
 ## Migration outcome
 
-- 18 keep / 0 migrate / 0 sync::Mutex.
+- 20 keep / 0 migrate / 0 sync::Mutex (18 at G1 + S12/S13 at F4 #557).
 - KEEP sites retain `arch::IrqGuard` exactly as found — no statement was
   reordered inside any IrqGuard-scoped section, and the deferred-switch
   publish/clear sequences (S8/S10) were not touched.

@@ -585,6 +585,27 @@ void VMM::tlb_shootdown(uint64_t va, uint16_t context_id, bool all) {
     smp_tlb_shootdown_hook(va, context_id, all);
 }
 
+// F5 VSPACE_MAP arch seams (issue #558): single tail calls onto the
+// private per-arch codecs — no branch, no state, no behavior change to
+// any existing caller.
+unsigned VMM::page_table_levels() noexcept { return vmm_arch_walk_levels(); }
+
+uint64_t VMM::current_root_phys() noexcept {
+    return vmm_arch_root_phys(current_pml4());
+}
+
+bool VMM::table_entry_is_table(uint64_t entry) noexcept {
+    return vmm_arch_is_table(entry);
+}
+
+uint64_t VMM::table_entry_child(uint64_t entry) noexcept {
+    return vmm_arch_table_child(entry);
+}
+
+uint64_t VMM::table_link_word(uint64_t child_phys) noexcept {
+    return vmm_arch_table_link(child_phys);
+}
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 /// @brief Map a page into a specific (non-kernel) PML4 page table.
 /// @param virt_addr Page-aligned virtual address.

@@ -133,6 +133,30 @@ class VMM {
     ///       Context: any-task (register read). SMP: N/A.
     static uint64_t current_pml4();
 
+    /// @brief F5 VSPACE_MAP arch seams (issue #558): thin public wrappers
+    ///        over the private per-arch table codecs (vmm_arch_*).  ONE
+    ///        shared mapping mechanism calls these; no new per-arch code
+    ///        exists.  Each body is a single tail call — no branch, no
+    ///        state, no new error path, bit-identical by construction.
+    ///        Only the per-arch codec may decode/encode a table
+    ///        descriptor (LEARNINGS #363).
+    /// @note Concurrency/caller contract (issue #366): Lock: none.
+    ///       Context: any-task (pure functions of their arguments, plus
+    ///       a register read for current_root_phys). SMP: N/A.
+    /// @return Walk depth from the root (4 on x86_64/aarch64, 3 on
+    ///         riscv64 Sv39).
+    static unsigned page_table_levels() noexcept;
+    /// @brief Strip arch upper bits from the LIVE root register value to
+    ///        a table phys (x86 PCID, aa64 ASID; riscv pre-stripped).
+    /// @return Table physical address usable as a walk root.
+    static uint64_t current_root_phys() noexcept;
+    /// @brief True when @p entry points at a next-level table.
+    static bool table_entry_is_table(uint64_t entry) noexcept;
+    /// @brief Decode the child-table phys from a table @p entry.
+    static uint64_t table_entry_child(uint64_t entry) noexcept;
+    /// @brief Encode the installable link word for @p child_phys.
+    static uint64_t table_link_word(uint64_t child_phys) noexcept;
+
     /// @brief Cross-CPU shootdown hook, overridden by SMP ports (issue
     ///        #352).  Weak no-op default: single-CPU runs need only the
     ///        local invalidate in tlb_shootdown.  SMP enablement replaces
@@ -307,6 +331,18 @@ class VMM {
     ///       allocates). SMP: N/A.
     [[nodiscard]] static bool pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
                                    bool *executable_out);
+    /// @brief Production query: reports whether the whole
+    ///        `[virt_addr, virt_addr + bytes)` window lands on present,
+    ///        writable 4 KiB leaves of @p pml4_phys (issue #588: waitpid
+    ///        status-slot pre-certification — mapped present is not enough,
+    ///        an RO leaf would fault the deferred wake store).
+    /// @return false for holes, RO leaves, huge/block leaves, overflow and
+    ///         `bytes == 0` (fail closed).
+    /// @note Concurrency/caller contract (issue #366): Lock: none.
+    ///       Context: any-task (walk-only, never allocates). SMP: N/A.
+    [[nodiscard]] static bool user_write_window_writable(uint64_t virt_addr,
+                                                         uint64_t bytes,
+                                                         uint64_t pml4_phys);
     /// @brief Test inspector: reports whether the mapped leaf is
     ///        executable per the arch NX encoding (walk-only, never
     ///        allocates; issue #325-D NX pinning).  x86_64: NX bit 63

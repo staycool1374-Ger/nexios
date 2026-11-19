@@ -136,6 +136,12 @@ void Scheduler::mailbox_drain() noexcept {
         if (task->state == TaskState::TERMINATED ||
             task->state == TaskState::REAPED)
             continue;
+        // F4 INV-ADM-1 layer a (issue #557): the SCHED-IPI mailbox
+        // drain is a wake-decision site (the only READY write in this
+        // TU) — absorb before the READY write below.
+        if (Scheduler::admin_absorb_wake(*task)) {
+            continue;
+        }
         task->state = TaskState::READY;
         // Issue #19: route through enqueue_ready so EDF-eligible tasks
         // land in the deadline list (a direct bitmap enqueue here would

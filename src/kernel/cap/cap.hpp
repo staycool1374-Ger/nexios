@@ -132,10 +132,8 @@ class CNode : public KernelObject {
     /// @brief Returns the slot at @p idx if it is occupied and matches the
     ///        requested type; nullptr otherwise.  Does NOT take a reference.
     KernelObject *peek(uint32_t idx, CapType want) const noexcept;
-
     /// @brief Returns the current generation of the slot at @p idx.
     uint32_t slot_gen(uint32_t idx) const noexcept;
-
     /// @brief Clears the GRANT right on the slot at @p idx (mint-once after
     ///        a grant).  No-op on an unoccupied slot.
     void clear_grant(uint32_t idx) noexcept;
@@ -164,6 +162,17 @@ class CNode : public KernelObject {
     }
 };
 
+/// @brief True when @p cs holds a live slot of type @p want (F4,
+///        issue #557, INV-ADM-15 layer b).  Bounded O(CONFIG_CSLOT_COUNT)
+///        walk under the CNode leaf lock (same take class as lookup:
+///        must not be called with scheduler_lock_ held — the authority
+///        gate runs before the mechanism lock).  No allocation, no
+///        reference taken, no scheduler lock.
+/// @param cs Target CSpace (null reads false).
+/// @param want Capability type to look for.
+/// @return true on the first matching occupied slot.
+bool cnode_holds_type(CNode *cs, CapType want) noexcept;
+
 /// @brief Looks up @p handle in @p cspace and returns a PREFIX-reference
 ///        (target->acquire() already taken) if the slot is occupied, matches
 ///        @p want, carries @p need_rights and the generation matches.
@@ -186,7 +195,9 @@ bool revoke(CNode *cspace, uint64_t handle) noexcept;
 ///        CAP_DELETE core, issue #555): clears only the caller's slot.
 ///        The target is destroyed iff this was the last reference; other
 ///        holders' lookups keep succeeding.  Never calls revoke()
-///        (INV-DERIV-5).
+///        (INV-DERIV-5).  Deleting a mapped PageTable/VSpace cap destroys
+///        its table link on the last release (INV-VS-8, F5 #558) — a
+///        destructive delete, still never a `revoke()` (INV-DERIV-5).
 /// @return true when a live capability slot was deleted, false on a bad,
 ///         stale or already-free handle (idempotent, matching revoke()).
 bool remove(CNode *cspace, uint64_t handle) noexcept;

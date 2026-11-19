@@ -254,6 +254,19 @@ enum class TaskState : uint8_t {
     REAPED,
 };
 
+/// @brief Admin-park previous-state latch (F4, issue #557, INV-ADM-1..16).
+///        Records what the target was doing when admin_suspend_err parked
+///        it, so admin_resume_err restores exactly that disposition.  Value
+///        pins are stable (persisted in the latch only, never on a wire).
+///        Orthogonal to TaskState: NO new TaskState enumerator exists — the
+///        parked task stays BLOCKED (or RUNNING-becoming-BLOCKED via the
+///        deferred stop) while this latch remembers where to return it.
+enum class AdminPrevState : uint8_t {
+    READY = 0, ///< was READY+queued: resume re-enqueues
+    RUNNING = 1, ///< was RUNNING: deferred stop parked it mid-dispatch
+    BLOCKED = 2, ///< was BLOCKED: resume returns it to its channel
+};
+
 /// @brief CPU register save area for context switching.
 #if defined(CONFIG_ARCH_X86_64)
 struct TaskContext {
@@ -423,8 +436,15 @@ struct TaskControlBlock {
            waiting_on_eventgroup(nullptr), waiting_on_queue(nullptr),
            blocked_on_pager_fault(nullptr), debugger_id(0),
            debug_stop_requested(false), debug_parked(false),
-           has_utrap_frame(false), debug_stop_kind(0), debug_stop_va(0),
+           has_utrap_frame(false),
+           admin_parked(false), admin_wake_pending(false),
+           admin_stop_requested(false),
+           admin_prev_state(
+               static_cast<uint8_t>(AdminPrevState::BLOCKED)),
+           debug_stop_kind(0), debug_stop_va(0),
            debug_rearm_va(0),
+           admin_suspend_tick(0), admin_deadline_ticks(0),
+           admin_wdog_expiry_tick(0),
            held_ceiling_depth_(0), system_ceiling_(0), first_child(nullptr),
             next_sibling(nullptr), prev_sibling(nullptr), num_children(0),
             generation(0), park_test_member(false) {
@@ -1088,6 +1108,26 @@ struct TaskControlBlock {
     ///        U-trap once set).  Never-dispatched tasks read EAGAIN.
     bool has_utrap_frame;
 
+    /// @brief F4 admin-stop latch, smalls (issue #557, INV-ADM-6/8).
+    ///        These four bytes ride the existing pad after the debug
+    ///        bools (3 bools + 4 bytes + 1 pad = 8: net-zero growth —
+    ///        the TCB sits exactly at the MemPool class limit, so every
+    ///        byte here is borrowed, not added).  Transient, zero at
+    ///        every memset/ctor site; __atomic discipline (same class
+    ///        as the debug park fields above).
+    /// @brief True while parked by Scheduler::admin_suspend_err.
+    bool admin_parked;
+    /// @brief A wake arrived while parked (latch, never a drop): resume
+    ///        consumes it exactly once (-> READY).  Set by
+    ///        admin_absorb_wake, cleared by resume.
+    bool admin_wake_pending;
+    /// @brief Deferred stop requested for a RUNNING target: the tick
+    ///        consumes it at a user-mode boundary (same shape as
+    ///        debug_stop_requested).
+    bool admin_stop_requested;
+    /// @brief AdminPrevState numerics of the pre-park disposition.
+    uint8_t admin_prev_state;
+
     /// @brief Stop kind latched when the fault router parks this task
     ///        (issue #226, StopKind numerics; 0 = cleanly parked, not
     ///        fault-stopped).  Decides the detach disposition (fault-stopped
@@ -1105,6 +1145,21 @@ struct TaskControlBlock {
     ///        re-inserts the breakpoint here.  0 when no re-arm is pending.
     ///        __atomic discipline.
     uint64_t debug_rearm_va;
+
+    /// @brief F4 admin-stop latch, saved ticks (issue #557,
+    ///        INV-ADM-11/16).  The three words resume shifts by the
+    ///        suspension (saturating).  Transient, zero at every memset/
+    ///        ctor site; __atomic discipline.
+    /// @brief Tick at which the park took effect (suspend or deferred
+    ///        stop); resume shifts deadline + watchdog by (now - this).
+    uint64_t admin_suspend_tick;
+    /// @brief Latched deadline_ticks at park time; resume re-inserts the
+    ///        deadline node shifted by the suspension (INV-ADM-16).
+    uint64_t admin_deadline_ticks;
+    /// @brief Latched wdog_expiry_tick at park time (INV-ADM-11: the
+    ///        expiry is PRESERVED, never zeroed — unlike disarm_target).
+    ///        0 means the target was unarmed (no phantom re-arm).
+    uint64_t admin_wdog_expiry_tick;
 
     /// @brief Number of mutexes currently held by this task (for PCP ceiling
     /// tracking).

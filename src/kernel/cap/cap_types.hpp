@@ -47,8 +47,8 @@ enum class CapType : uint8_t {
     Msix = 9,     ///< per-vector MSI-X entry on a PCI device (v0.4.2, issue #10)
     Wdog = 10,    ///< cross-task watchdog arm/kick authority (issue #277)
     TCB = 11,     ///< schedulable object (F1 #554; split from Task)
-    VSpace = 12,  ///< address-space root (F1 #554; wired by F5 #558)
-    PageTable = 13, ///< page-table page (F1 #554; wired by F5 #558)
+    VSpace = 12,  ///< address-space root (F1 #554; wired at F5 as VSPACE_MAP, syscall 102)
+    PageTable = 13, ///< page-table page (F1 #554; wired at F5 as VSPACE_MAP, syscall 102)
     Notification = 14, ///< sync notification object (F1 #554; §8.1/§5 work)
     SchedContext = 15, ///< scheduling context (F1 #554; M13 #190)
 };

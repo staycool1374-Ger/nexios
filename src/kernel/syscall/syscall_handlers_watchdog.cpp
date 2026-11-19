@@ -80,8 +80,12 @@ TaskControlBlock *resolve_watchdog_target(uint64_t pid, uint64_t cap_handle) {
 ///        arg0 = period in ticks (> 0); arg1 = pid (0 = self, else needs
 ///        WdogCap); arg2 = cap handle for cross-task (0 = unused/self).
 ///        One-shot semantics live in the expiry scan; re-CREATE simply
-///        re-arms with a fresh generation.
-/// @return 0, -SYS_ERR_SCHED_NO_CURRENT, -SYS_ERR_SCHED_INVALID_ARGS.
+///        re-arms with a fresh generation.  F4 (issue #557): arming a
+///        parked target is refused typed (INVALID_STATE) — a stopped PD
+///        must never be declared hung; kicking a suspended target
+///        reports INVALID_STATE through the existing disarmed path.
+/// @return 0, -SYS_ERR_SCHED_NO_CURRENT, -SYS_ERR_SCHED_INVALID_ARGS,
+///         -SYS_ERR_SCHED_INVALID_STATE (target admin-parked).
 uint64_t arm_watchdog(uint64_t period, TaskControlBlock *t) {
     const uint64_t now = arch::Timer::ticks();
     // Saturating expiry: a period reaching past UINT64_MAX clamps instead
@@ -91,6 +95,14 @@ uint64_t arm_watchdog(uint64_t period, TaskControlBlock *t) {
         (period > slack) ? static_cast<uint64_t>(-1) : now + period;
     {
         arch::IrqGuard guard{};
+        // F4 INV-ADM-11 (issue #557): a parked target must never be
+        // declared hung — arming supervision on a stopped task would
+        // fire while it cannot make progress.  sys_watchdog_kick needs
+        // no change: a suspended target is disarmed, so the existing
+        // !armed path already returns INVALID_STATE.
+        if (__atomic_load_n(&t->admin_parked, __ATOMIC_ACQUIRE))
+            return static_cast<uint64_t>(
+                -errors::SYS_ERR_SCHED_INVALID_STATE);
         t->wdog_period_ticks = period;
         t->wdog_last_kick_tick = now;
         t->wdog_expiry_tick = expiry;

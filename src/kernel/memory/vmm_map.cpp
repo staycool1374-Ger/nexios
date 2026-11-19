@@ -338,6 +338,36 @@ bool VMM::pte_is_ro_in_pml4(uint64_t virt_addr, uint64_t pml4_phys,
     return vmm_arch_leaf_is_ro(*leaf, executable_out);
 }
 
+// Issue #588: production writability pre-cert for the waitpid status slot.
+// Walk-only (never allocates, no lock): every page covered by the window
+// must resolve to a present, writable 4 KiB leaf.  pte_leaf_in_pml4 returns
+// non-null only for present leaves and excludes huge/block entries
+// (treated as not ours — fail closed); the per-arch RO decoder answers the
+// writability question on all three arches.
+bool VMM::user_write_window_writable(uint64_t virt_addr, uint64_t bytes,
+                                     uint64_t pml4_phys) {
+    if (bytes == 0)
+        return false;
+    if (bytes > USER_SPACE_LIMIT)
+        return false;
+    if (virt_addr + bytes < virt_addr)
+        return false; // wrap: fail closed
+    const uint64_t page_mask = arch::PAGE_SIZE - 1;
+    const uint64_t first_page = virt_addr & ~page_mask;
+    const uint64_t last_page = (virt_addr + bytes - 1) & ~page_mask;
+    for (uint64_t page = first_page;; page += arch::PAGE_SIZE) {
+        uint64_t *slot = pte_leaf_in_pml4(page, pml4_phys);
+        if (slot == nullptr)
+            return false;
+        bool exec_dummy = false;
+        if (vmm_arch_leaf_is_ro(*slot, &exec_dummy))
+            return false;
+        if (page == last_page)
+            break;
+    }
+    return true;
+}
+
 /// @brief Test inspector: reports whether the mapped leaf is executable
 ///        per the arch NX encoding (walk-only, never allocates).
 /// @param virt_addr Virtual address to inspect.

@@ -209,22 +209,12 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
             if (p && p->id == t->parent_id &&
                 (p->waiting_child_pid == t->id ||
                  p->waiting_child_pid == static_cast<uint64_t>(-1))) {
-                if (p->waiting_child_status) {
-                    uint64_t old_cr3 = 0;
-                    bool switched = false;
-                    if (p->get_page_table() &&
-                        arch::read_cr3() != p->get_page_table()) {
-                        old_cr3 = arch::read_cr3();
-                        arch::write_cr3(p->get_page_table());
-                        switched = true;
-                    }
-                    arch::stac();
-                    *p->waiting_child_status = t->exit_code;
-                    arch::clac();
-                    if (switched)
-                        arch::write_cr3(old_cr3);
-                    p->waiting_child_status = nullptr;
-                }
+                // Issue #588: fault-armed shared helper — same contract as
+                // wake_waiting_parent/sys_exit (certified mapped AND writable
+                // at waitpid entry, store stays armed; AC cleared on both
+                // paths, slot cleared inside the helper).
+                if (p->waiting_child_status)
+                    (void)Scheduler::deliver_wait_status(*p, t->exit_code);
                 p->waiting_child_pid = 0;
                 // Issue #53: a thread with a registered joiner stays
                 // parented (the joiner reaps it); a detached thread orphans

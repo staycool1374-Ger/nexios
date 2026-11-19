@@ -69,11 +69,15 @@ def main():
                       encoding="utf-8")
     baked = Path(args.baked)
     baked.parent.mkdir(parents=True, exist_ok=True)
-    baked.write_text(args.test_class + "\n", encoding="utf-8")
+    # One class per line (whitespace-separated list): the A3 gate splits on
+    # whitespace, so a raw comma-joined value would read as one token (#591).
+    baked.write_text(args.test_class.replace(",", "\n") + "\n",
+                     encoding="utf-8")
     if args.baked_extra:
         extra = Path(args.baked_extra)
         extra.parent.mkdir(parents=True, exist_ok=True)
-        extra.write_text(args.test_class + "\n", encoding="utf-8")
+        extra.write_text(args.test_class.replace(",", "\n") + "\n",
+                         encoding="utf-8")
 
     legacy = Path(args.legacy_dir)
     legacy.mkdir(parents=True, exist_ok=True)

@@ -119,7 +119,34 @@ namespace kernel::errors {
     X(MEMPOOL_DOUBLE_FREE, 904, "Double free")                                 \
     X(MEMPOOL_UNINIT, 905, "Pool uninitialized")                               \
     X(MEMPOOL_INVALID_POOL, 906, "Invalid pool index")                         \
-    X(MEMPOOL_CORRUPTED, 907, "Pool corrupted")
+    X(MEMPOOL_CORRUPTED, 907, "Pool corrupted")                                 \
+    /* TCB control subsystem errors (1000+, F4 #557) */                         \
+    X(TCBCTL_INVALID_ARGS, 1001, "Invalid arguments")                           \
+    X(TCBCTL_BAD_HANDLE, 1002, "TCB cap handle invalid or revoked")             \
+    X(TCBCTL_STALE_TARGET, 1003, "TCB cap target recycled")                     \
+    X(TCBCTL_DEAD, 1004, "Target is TERMINATED or REAPED")                      \
+    X(TCBCTL_SELF, 1005, "Target is the calling task")                          \
+    X(TCBCTL_KERNEL_TASK, 1006, "Target is not a user task")                    \
+    X(TCBCTL_PROTECTED_ROLE, 1007, "Target holds a protected role")             \
+    X(TCBCTL_NO_AUTHORITY, 1008, "Caller is neither creator nor supervisor")    \
+    X(TCBCTL_NOT_SUSPENDED, 1009, "Target is not suspended")                    \
+    X(TCBCTL_ALREADY_SUSPENDED, 1010, "Target is already suspended")            \
+    X(TCBCTL_BUSY, 1011, "Target is debugger-parked or latch-armed")            \
+    X(TCBCTL_UNSUPPORTED, 1012, "Field not configurable at F4")                 \
+    X(TCBCTL_IDLE, 1013, "Target is the idle task")                              \
+    /* VSpace mapping errors (1100+, F5 #558) */                                  \
+    X(VSPACE_INVALID_ARGS, 1101, "Invalid arguments")                             \
+    X(VSPACE_BAD_HANDLE, 1102, "VSpace or PageTable handle invalid or revoked")   \
+    X(VSPACE_BAD_OBJECT, 1103, "Handle is not the expected carved kind")          \
+    X(VSPACE_OWNERSHIP_MISMATCH, 1104, "VSpace and PageTable ownership differ")    \
+    X(VSPACE_BAD_LEVEL, 1105, "Path length is zero or exceeds the walk depth")    \
+    X(VSPACE_KERNEL_HALF, 1106, "Path root component names the kernel half")     \
+    X(VSPACE_SLOT_OCCUPIED, 1107, "Destination entry already holds a link")       \
+    X(VSPACE_ALIASED, 1108, "PageTable page already linked under a parent")       \
+    X(VSPACE_NOT_TABLE, 1109, "Path component holds a leaf, not a table")        \
+    X(VSPACE_UNMAPPED, 1110, "Path component absent while descending")            \
+    X(VSPACE_REGISTRY_FULL, 1111, "No free VSpace mapping registry slot")        \
+    X(VSPACE_ACTIVE_SPACE, 1112, "Target root is the active address space")
 
 /// @brief System-call-level error codes (aggregated from all kernel
 /// subsystems).
@@ -176,6 +203,19 @@ inline SyscallError from_sched_error(uint64_t e) {
 }
 inline SyscallError from_mempool_error(uint64_t e) {
     return static_cast<SyscallError>(900 + e);
+}
+/// @brief Convert a TCB control error to SyscallError (offset 1000,
+///        F4 #557).  The TcbCtlError numerics are 0-based (X-macro), so
+///        the face is 1000 + numeric (TCBCTL_ERR_OK -> 1000).
+inline SyscallError from_tcb_control_error(uint64_t e) {
+    return static_cast<SyscallError>(1000 + e);
+}
+/// @brief Convert a VSpace mapping error to SyscallError (offset 1100,
+///        F5 #558).  The VspaceError numerics are 0-based (X-macro), so
+///        the face is 1100 + numeric (VSPACE_ERR_OK -> 1100, never
+///        returned — the handler maps OK to SYS_ERR_OK first).
+inline SyscallError from_vspace_error(uint64_t e) {
+    return static_cast<SyscallError>(1100 + e);
 }
 
 } // namespace kernel::errors

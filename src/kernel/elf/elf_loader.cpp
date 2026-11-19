@@ -775,6 +775,16 @@ TaskControlBlock *ElfLoader::try_rerun(const char **reason) {
     tcb->wdog_last_kick_tick = 0;
     tcb->wdog_expiry_tick = 0;
     tcb->wdog_gen = 0;
+    // F4 admin latch (issue #557, INV-ADM-6): transient, zero at every
+    // memset site; explicit per the TCB-memset discipline.
+    tcb->admin_parked = false;
+    tcb->admin_wake_pending = false;
+    tcb->admin_stop_requested = false;
+    tcb->admin_prev_state =
+        static_cast<uint8_t>(AdminPrevState::BLOCKED);
+    tcb->admin_suspend_tick = 0;
+    tcb->admin_deadline_ticks = 0;
+    tcb->admin_wdog_expiry_tick = 0;
     tcb->magic = TaskControlBlock::TCB_MAGIC;
     tcb->id = Scheduler::alloc_id();
     tcb->state = TaskState::READY;

@@ -524,10 +524,13 @@ def assert_baked(arch, builddir, requested):
     """Fail loud on a stale baked config (A3 pre-QEMU gate)."""
     baked = builddir / (".baked-test-config-%s" % arch)
     try:
-        have = baked.read_text(encoding="utf-8").split()
+        raw = baked.read_text(encoding="utf-8").split()
     except OSError:
         raise SystemExit("ERROR: missing baked test-config %s — rebuild"
                          % baked)
+    # Comma-tolerant: pre-#591 artifacts hold the raw comma-joined value as
+    # one token; split those too so stale files gate on content, not format.
+    have = [c for tok in raw for c in tok.split(",") if c]
     if sorted(have) != sorted(requested):
         raise SystemExit(
             "ERROR: baked test-config %s != requested %s — stale artifact, "

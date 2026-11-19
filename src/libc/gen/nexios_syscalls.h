@@ -759,4 +759,28 @@ long nexios_sys_reply_recv(
 /// @return raw success value, or -1 with errno set.
 long nexios_sys_cap_delete(
     long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_TCB_CONFIGURE (99).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_tcb_configure(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_TCB_SUSPEND (100).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_tcb_suspend(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_TCB_RESUME (101).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_tcb_resume(
+    long arg0, long arg1, long arg2, long arg3);
 

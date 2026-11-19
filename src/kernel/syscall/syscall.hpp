@@ -25,6 +25,19 @@
 
 namespace kernel {
 
+/// @brief T-1 closed-set justification for N4 (F5, issue #558; SIL 3
+///        justification posted as
+///        https://github.com/staycool1374-Ger/nexios/issues/558#issuecomment-7021456532,
+///        feeds #80).  N4 exists because INV-MK-1 cannot be met without
+///        it: proc-mgr (§8.8) and mem-mgr (§8.2) must build page-table
+///        hierarchies from carved PageTable caps, and a hierarchy
+///        assembled without an object-level link operation can only be
+///        built by the kernel allocating tables on the caller's behalf.
+///        VSPACE_MAP adds no authority beyond the two caps it consumes
+///        (WRITE on the VSpace, READ on the PageTable), allocates
+///        nothing, and is bounded by the arch depth (<=3 components), a
+///        32-entry registry and one 8-byte store.
+///
 /// @brief System call numbers recognised by the kernel.
 enum class SyscallNumber : uint8_t {
     YIELD = 0,
@@ -126,7 +139,11 @@ enum class SyscallNumber : uint8_t {
     THREAD_WRAP = 96,     ///< mint a ThreadCap for a thread (issue #53, option Y): arg0 = tid of a live child thread (or self), arg1 = Task-cap handle with SHARE (cross-task wrap only, 0 = child-or-self); returns the generation-tagged cap handle (never a raw index)
     REPLY_RECV = 97,      ///< reply to the recorded caller and wait for the next request (M3, F3/Q2, issue #556): arg0 = reply buffer, arg1 = reply type, arg2 = reply len, arg3 = next-request buffer, arg4(regs) = next_cap (reserved, 0); dest+token implicit kernel-held; returns reply code or next request type
     CAP_DELETE = 98, ///< N6 slot removal (F2, issue #555): arg0 = handle; last-ref destroys, never revokes the target (INV-DERIV-5)
-    MAX_SYSCALL = 99,
+    TCB_CONFIGURE = 99, ///< cap-gated TCB configure (F4 N1, issue #557): arg0 = TcbCap handle, arg1 = field mask (bit0 priority, bit1 affinity), arg2 = value_a, arg3 = value_b
+    TCB_SUSPEND = 100, ///< cap-gated task stop (F4 N2, issue #557): arg0 = TcbCap handle; parks the target admin-BLOCKED
+    TCB_RESUME = 101, ///< cap-gated task resume (F4 N3, issue #557): arg0 = TcbCap handle; restores the parked target
+    VSPACE_MAP = 102, ///< N4 map a PageTable object into a VSpace (F5, issue #558): arg0 = VSpace handle (WRITE), arg1 = PageTable handle (READ), arg2 = packed 9-bit path, arg3 = path length
+    MAX_SYSCALL = 103,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -431,6 +448,29 @@ class Syscall {
     ///        see sys_send_sync_fast precedent for the arg4 plumbing.
     static uint64_t sys_reply_recv(uint64_t, uint64_t, uint64_t, uint64_t,
                                    uint64_t *);
+    /// @brief F4 TCB control handlers (issue #557).  Four-arg form only:
+    ///        CONFIGURE(handle, field_mask, value_a, value_b),
+    ///        SUSPEND(handle), RESUME(handle).  Every return is a typed
+    ///        code (TCBCTL_* via the 1000-block); no raw -1.  The
+    ///        authority gate (tcb_control_resolve + authorize) runs
+    ///        before the mechanism; N1 calls set_priority /
+    ///        set_affinity_err OUTSIDE the scheduler lock (each takes it
+    ///        itself).  F2's frozen face applied to an existing number is
+    ///        NOT reused here — these are NEW numbers with a NEW contract.
+    static uint64_t sys_tcb_configure(uint64_t, uint64_t, uint64_t, uint64_t,
+                                      uint64_t *);
+    static uint64_t sys_tcb_suspend(uint64_t, uint64_t, uint64_t, uint64_t,
+                                    uint64_t *);
+    static uint64_t sys_tcb_resume(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
+    /// @brief F5 VSpace map (issue #558).  Four-arg form only:
+    ///        MAP(vspace_handle, table_handle, packed_path, path_len).
+    ///        Every return is SYS_ERR_OK or a VSPACE_* code via the
+    ///        1100-block; no raw -1.  The authority gate (WRITE on the
+    ///        VSpace, READ on the PageTable, tag/kind re-check, is_user
+    ///        match) runs before the VSpaceMap::link mechanism.
+    static uint64_t sys_vspace_map(uint64_t, uint64_t, uint64_t, uint64_t,
+                                   uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -553,6 +593,10 @@ class Syscall {
             &Syscall::sys_thread_wrap,     // 96 THREAD_WRAP (issue #53, Y)
             &Syscall::sys_reply_recv,      // 97 REPLY_RECV (M3, F3/Q2 #556)
             &Syscall::sys_cap_delete,     // 98 CAP_DELETE (M11, F2 #555)
+            &Syscall::sys_tcb_configure,  // 99 TCB_CONFIGURE (F4 N1 #557)
+            &Syscall::sys_tcb_suspend,    // 100 TCB_SUSPEND (F4 N2 #557)
+            &Syscall::sys_tcb_resume,     // 101 TCB_RESUME (F4 N3 #557)
+            &Syscall::sys_vspace_map,      // 102 VSPACE_MAP (M11, F5 #558)
     };
 };
 

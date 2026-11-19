@@ -70,6 +70,13 @@ semantics.
   task, or (b) the watched task designating a supervisor.  A third party cannot
   register (worst case a spurious wakeup pulse — the mechanism is info-only,
   no privilege transfer).
+- **Watch slots confer death notification only, never stop authority
+  (F4, issue #557, cross-reference INV-ADM-12):** the watch slots are
+  self-grantable (a foreign task can self-install as supervisor of a live
+  target), so `DeathNotify::is_watching` is REMOVED from the TCB stop
+  authority predicate entirely.  Stop authority is creator-parent (`Q9`
+  client-stop branch) or a compose-minted SUPERVISOR-scope TcbCap bound
+  to the caller — never a watch slot, never raw WdogCap possession.
 - **Supervisor-alive safety:** every slot stores the supervisor's `(id,
   generation)`.  The poke goes through the supervisor's own `Notify::notify()`
   which already guards `TERMINATED`/`REAPED`/generation — a poke to a just-died

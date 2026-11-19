@@ -585,3 +585,21 @@ long nexios_sys_cap_delete(
         SYS_CAP_DELETE, arg0, arg1, arg2, arg3, 0));
 }
 
+long nexios_sys_tcb_configure(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_TCB_CONFIGURE, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_tcb_suspend(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_TCB_SUSPEND, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_tcb_resume(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_TCB_RESUME, arg0, arg1, arg2, arg3, 0));
+}
+

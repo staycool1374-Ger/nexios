@@ -34,6 +34,9 @@ namespace kernel::cap {
 /// @brief A fixed-size kernel object carved from an Untyped region.
 ///        Owns the PMM pages it wraps: the last reference frees them via
 ///        dispose().  Shared-heap class (FrameCap pattern).
+///        F4 note (issue #557): a carved TCB carries no live binding at
+///        F4 — the bind seam (retype-created TCB -> TcbCap authority) lands
+///        with retype-only creation (M12/M14).  No code change here.
 class CarvedObjectCap : public KernelObject {
   public:
     /// @brief Wrapping discriminator: stale-slot guard so a future
@@ -70,9 +73,10 @@ class CarvedObjectCap : public KernelObject {
     ///        the block to the MemPool.
     void dispose() noexcept override;
 
-    /// @brief Marks the cap revoked.  No mapping/registry invalidation
-    ///        is needed at F1: no consumer can map a carved object until
-    ///        F5 wires VSPACE_MAP, which must add its invalidation here.
+    /// @brief Marks the cap revoked.  F5 (issue #558) runs the VSpaceMap
+    ///        invalidation here (same hooks as dispose()): a revoked
+    ///        VSpace/PageTable keeps no live table link.  Both hooks are
+    ///        idempotent, so revoke-then-dispose is safe.
     void revoke() noexcept override;
 
     /// @brief Genuinely shared (referenced by capability slots).

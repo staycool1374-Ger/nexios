@@ -289,6 +289,31 @@ uint64_t Scheduler::effective_priority(const TaskControlBlock *t) noexcept {
 
 void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
     ENSURE(validate_task_ptr(&task, "enqueue_ready"));
+    // F4 INV-ADM-1 layer b (issue #557): structural owning refusal.
+    // The scheduler OWNS this TCB (unlike the H2 orphan above), so the
+    // refusal restores BLOCKED and latches the wake — the one
+    // intentional deviation from INV-RQ-2's byte-identical refusal.
+    // Exists so a missed absorb site can never strand a READY-queued
+    // suspended task.  Must-read-0 outside the dedicated negative
+    // test (adm_wake_backstop_count_).
+    if (__atomic_load_n(&task.admin_parked, __ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&task.admin_wake_pending, true,
+                         __ATOMIC_RELEASE);
+        task.state = TaskState::BLOCKED;
+        if (task.in_ready_queue_) {
+            rq_for(queue_target(task)).remove(task, task.rq_priority_);
+        }
+        if (task.in_edf_queue_) {
+            edf_remove(task, queue_target(task));
+        }
+        __atomic_fetch_add(&adm_wake_backstop_count_, 1ULL,
+                           __ATOMIC_RELAXED);
+#if defined(CONFIG_DEBUG)
+        Logger::warn("sched: admin backstop refused link id=%u",
+                     static_cast<unsigned>(task.id));
+#endif
+        return;
+    }
     // H2 liveness guard (ROADMAP §v0.4.0 direction #1): the scheduler must not
     // enqueue a TCB it no longer owns.  A task removed from id_table_ (via
     // release_zombie / remove_task) is dead — the harness can still re-run
@@ -335,6 +360,12 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
     // set_current). EDF-eligible self-wakes defer identically.
     if (&task == Scheduler::current_task() &&
         Scheduler::queue_target(task) == Scheduler::sched_cpu()) {
+        // F4 INV-ADM-1 layer a (issue #557): absorb before the READY
+        // write below — a parked current is impossible by construction
+        // (park dequeues), so this fires only on a missed-site bug.
+        if (Scheduler::admin_absorb_wake(task)) {
+            return;
+        }
         if (task.state != TaskState::TERMINATED &&
             task.state != TaskState::REAPED) {
             task.state = TaskState::READY;
@@ -356,6 +387,27 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
 // it cannot create a queued-while-current window).
 void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
     ENSURE(validate_task_ptr(&task, "enqueue_ready_inner"));
+    // F4 INV-ADM-1 layer b (issue #557): same owning refusal as
+    // enqueue_ready — the routing half is reachable without passing
+    // through the H2/deferral gates above.
+    if (__atomic_load_n(&task.admin_parked, __ATOMIC_ACQUIRE)) {
+        __atomic_store_n(&task.admin_wake_pending, true,
+                         __ATOMIC_RELEASE);
+        task.state = TaskState::BLOCKED;
+        if (task.in_ready_queue_) {
+            rq_for(queue_target(task)).remove(task, task.rq_priority_);
+        }
+        if (task.in_edf_queue_) {
+            edf_remove(task, queue_target(task));
+        }
+        __atomic_fetch_add(&adm_wake_backstop_count_, 1ULL,
+                           __ATOMIC_RELAXED);
+#if defined(CONFIG_DEBUG)
+        Logger::warn("sched: admin backstop refused link id=%u",
+                     static_cast<unsigned>(task.id));
+#endif
+        return;
+    }
     // Issue #25 C1: shared-TSS backstop — user tasks never leave CPU0 no
     // matter what the mask says (set_affinity clamps persistently; this
     // covers every other path to AP execution).
