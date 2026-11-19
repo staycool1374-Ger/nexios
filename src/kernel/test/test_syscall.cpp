@@ -1049,9 +1049,11 @@ JARVIS_TEST(syscall_abi_surface_mirror_and_version, "PRE: none | POST: none") {
                      static_cast<uint64_t>(SyscallNumber::SET_AFFINITY));
     JARVIS_ASSERT_EQ(79ULL, static_cast<uint64_t>(SyscallNumber::TIMES));
     JARVIS_ASSERT_EQ(84ULL, static_cast<uint64_t>(SyscallNumber::ABI_VERSION));
-    // M3 (#556): REPLY_RECV is the newest syscall; MAX tracks it + 1.
+    // M3 (#556): REPLY_RECV is 97; F2 (#555): N6 CAP_DELETE is 98;
+    // MAX tracks the newest + 1.
     JARVIS_ASSERT_EQ(97ULL, static_cast<uint64_t>(SyscallNumber::REPLY_RECV));
-    JARVIS_ASSERT_EQ(98ULL, static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL));
+    JARVIS_ASSERT_EQ(98ULL, static_cast<uint64_t>(SyscallNumber::CAP_DELETE));
+    JARVIS_ASSERT_EQ(99ULL, static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL));
     JARVIS_ASSERT(static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL) > 79ULL);
     auto *t = run_syscall_task([]() {
         g_ver = Syscall::handle(
