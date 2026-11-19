@@ -217,6 +217,14 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t timeout_ticks,
             obj->release();
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
+        // INV-9 single waiter (F8 #561 hardening, spec 8.3(1): a second
+        // distinct waiter cannot register today because recipient must match
+        // the caller; this makes the invariant explicit and typed, and never
+        // unmasks the line).
+        if (r->waiter != nullptr && r->waiter != t) {
+            obj->release();
+            return static_cast<uint64_t>(errors::SYS_ERR_IRQ_ALREADY_WAITING);
+        }
         IrqDelivery::unmask_for_wait(*r);
         if (r->pending > 0 && r->armed) {
             --r->pending;

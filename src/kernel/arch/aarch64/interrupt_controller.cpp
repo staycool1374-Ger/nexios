@@ -34,6 +34,33 @@ static uint64_t g_spurious_count = 0;
 /// @brief Per-tick same-INTID storm limiter (never fed the timer).
 static IrqStormLimiter g_storm{};
 
+/// @brief F8 #561 arch gate: observe + trip-count in one call (the counter
+/// increment that used to be a separate caller-side note_masked() now runs
+/// inside, before the controller mask write — no ordering dependency, so the
+/// substitution is behavior-identical to the pre-F8 sequence).
+bool storm_gate(uint64_t intid, uint64_t now_tick) {
+    if (!g_storm.observe(intid, now_tick)) {
+        return false;
+    }
+    g_storm.note_masked();
+    return true;
+}
+
+/// @brief F8 #561 effective mask: the GIC source line (fail-closed no-op
+/// outside the INTID window).
+void storm_mask_line(uint8_t vector) {
+    if (vector >= GIC_MAX_INTID) {
+        return;
+    }
+    ArchInterruptController::mask(vector);
+}
+
+/// @brief F8 #561 trip-count accessor.
+uint64_t storm_trips() { return g_storm.masked_count(); }
+
+/// @brief F8 #561 burst-state reset (test isolation; trips_ monotonic).
+void storm_reset() { g_storm.reset(); }
+
 /// @brief Initialise the GIC distributor, CPU interface, and redistributor.
 /// Full GICv2 bring-up: version from GICD_PIDR2 (TYPER holds no version),
 /// distributor reset, priority/target/edge programming, timer PPI enable.
@@ -257,9 +284,10 @@ extern "C" void handle_gic_irq(void) {
                               elr);
     } else if (intid < GIC_MAX_INTID) {
         // Storm guard: mask persistently re-asserting lines (not the tick).
-        if (g_storm.observe(intid, arch::Timer::ticks())) {
-            ArchInterruptController::mask(static_cast<uint8_t>(intid));
-            g_storm.note_masked();
+        // F8 #561: same object, same counter as before; observe+note now
+        // happen inside storm_gate (before the mask write — immaterial).
+        if (arch::storm_gate(intid, arch::Timer::ticks())) {
+            arch::storm_mask_line(static_cast<uint8_t>(intid));
             kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::BASE,
                                         kernel::log::kDmesgBase_BASE + 64,
                                         kernel::log::LogSeverity::ERROR,

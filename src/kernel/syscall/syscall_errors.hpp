@@ -146,7 +146,9 @@ namespace kernel::errors {
     X(VSPACE_NOT_TABLE, 1109, "Path component holds a leaf, not a table")        \
     X(VSPACE_UNMAPPED, 1110, "Path component absent while descending")            \
     X(VSPACE_REGISTRY_FULL, 1111, "No free VSpace mapping registry slot")        \
-    X(VSPACE_ACTIVE_SPACE, 1112, "Target root is the active address space")
+    X(VSPACE_ACTIVE_SPACE, 1112, "Target root is the active address space")      \
+    /* IRQ slot errors (1200+, F8 #561) */                                       \
+    X(IRQ_ALREADY_WAITING, 1201, "IRQ slot already has a waiter")
 
 /// @brief System-call-level error codes (aggregated from all kernel
 /// subsystems).

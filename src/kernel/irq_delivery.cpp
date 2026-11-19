@@ -307,6 +307,7 @@ int16_t IrqDelivery::claim_slot(uint8_t vector) {
             r.recipient = nullptr;
             r.recipient_gen = 0;
             r.pending = 0;
+            r.pending_overflow = 0;
             r.waiter = nullptr;
             r.waiter_gen = 0;
             return static_cast<int16_t>(i);
@@ -470,7 +471,13 @@ bool IrqDelivery::isr_entry(uint8_t vector) {
     // block driver issues its command BEFORE entering the wait.
     if (r->delivery_mode == IrqDeliveryMode::WAIT ||
         r->delivery_mode == IrqDeliveryMode::WAIT_ACK) {
-        ++r->pending;
+        // INV-7 (F8 #561): saturate and count; the delivery is *reported*,
+        // never silently dropped.
+        if (r->pending < kIrqPendingMax) {
+            ++r->pending;
+        } else if (r->pending_overflow < kIrqPendingMax) {
+            ++r->pending_overflow;
+        }
         if (r->delivery_mode == IrqDeliveryMode::WAIT_ACK)
             mask_on_delivery(*r);
 
@@ -576,6 +583,7 @@ bool IrqDelivery::release_slot_idx(int16_t reg_idx,
     r->waiter = nullptr;
     r->waiter_gen = 0;
     r->pending = 0;
+    r->pending_overflow = 0;
     r->delivery_mode = IrqDeliveryMode::WAIT;
     r->occupied = false;
     return true;
@@ -642,6 +650,7 @@ void IrqDelivery::drain_task(TaskControlBlock &tcb) {
         r.waiter = nullptr;
         r.waiter_gen = 0;
         r.pending = 0;
+        r.pending_overflow = 0;
         r.delivery_mode = IrqDeliveryMode::WAIT;
         r.occupied = false;
     }

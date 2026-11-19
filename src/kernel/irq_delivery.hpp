@@ -73,6 +73,11 @@ enum class IrqSlotKind : uint8_t {
     PLATFORM = 2 ///< GIC/PLIC line (aarch64 32–255, riscv64 1–95)
 };
 
+/// @brief Saturation bound and overflow-accounting unit for
+/// IrqRegistration::pending (F8 #561). A type bound, not a tunable — no
+/// nexios_config.h change.
+inline constexpr uint32_t kIrqPendingMax = 0xFFFFFFFFU;
+
 /// @brief One armed IRQ delivery registration.
 struct IrqRegistration {
     uint8_t vector = 0;        ///< hardware vector (PIC 33–47, MSI-X 48–255,
@@ -103,6 +108,8 @@ struct IrqRegistration {
     TaskControlBlock *recipient = nullptr; ///< task armed to receive
     uint64_t recipient_gen = 0;            ///< TCB generation at arm time
     uint32_t pending = 0;      ///< undelivered IRQ count (never lost)
+    uint32_t pending_overflow = 0; ///< deliveries refused by the pending
+                                   ///< cap (F8 #561, saturating, never wraps)
     TaskControlBlock *waiter = nullptr;    ///< task blocked in sys_irq_wait
     uint64_t waiter_gen = 0;               ///< TCB generation at wait time
     sync::SpinLock lock_;      ///< serializes ISR vs syscall/teardown paths
@@ -114,7 +121,10 @@ struct IrqRegistration {
 /// the syscall path serialize on that one lock, so a pending IRQ can never be
 /// lost between the pending-check and the waiter registration.  The wake path
 /// rejects TERMINATED/REAPED tasks and mismatched generations (Notify
-/// discipline) — a recycled TCB must never be fed to the scheduler.
+/// discipline) — a recycled TCB must never be fed to the scheduler.  A slot
+/// has at most one waiter: a second distinct waiter is refused with
+/// SYS_ERR_IRQ_ALREADY_WAITING under the slot lock and never unmasks the
+/// line (F8 #561 hardening).
 class IrqDelivery {
   public:
     /// @brief Finds the occupied slot for @p vector, or nullptr.
