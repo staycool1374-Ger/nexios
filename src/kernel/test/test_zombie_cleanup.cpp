@@ -112,6 +112,13 @@ JARVIS_TEST(test_zombie_starvation_watchdog, "PRE: none | POST: none") {
 JARVIS_TEST(zombie_cleanup_step_frees_resources, "PRE: none | POST: none") {
     auto *task = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(task != nullptr);
+    // Pinned FIXED (same hazard as zombie_drain_multiple): the default EDF
+    // policy lets a tick dispatch the task mid-test; it would self-terminate
+    // and the explicit terminate() below would double-append the zombie
+    // (release_zombie has no idempotency guard), so cleanup_step's single
+    // pop leaves zombie_count()==1. FIXED keeps the task queued below the
+    // prio-10 harness, so no tick can dispatch it before terminate().
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*task, SchedPolicy::FIXED));
     Scheduler::add_task(*task);
 
     Scheduler::terminate(*task, 0);

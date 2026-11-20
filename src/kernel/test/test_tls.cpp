@@ -380,13 +380,32 @@ JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
 
     // Harness sets live X, then dispatches a kernel task rigged with a
     // nonzero field: a correct kernel publish (0) loads nothing.
-    JARVIS_ASSERT_EQ(0ULL, tls_call(k_base_x));
-    auto *kk = TaskControlBlock::create([]() {}, 12, 10);
-    JARVIS_ASSERT(kk != nullptr);
-    kk->tls_base_ = k_base_b;
-    Scheduler::add_task(*kk);
-    kernel::test::wait_for_termination_safe(kk);
-    g_live_after = read_live_tls();
+    // Flake note (merged F1/F2/#583 tree): a timer tick may schedule a
+    // READY user daemon anywhere in Part B; the daemon publishes its own
+    // TLS base and the switch back to the harness (kernel publish: loads
+    // nothing) leaves it live — observed live=0x403120 (daemon base) with
+    // 4 ticks elapsed. That is legal system activity, not a publish
+    // defect. Retry Part B until the iteration is daemon-free: a genuine
+    // kernel-publish defect loads Kk's field (k_base_b) deterministically
+    // and breaks out immediately; daemon bases (anything else) retry with
+    // X re-established. Persistent noise exhausts the budget and fails
+    // loud (a Part B that never gets a quiet window is itself anomalous).
+    g_live_after = 0;
+    unsigned tls_tries = 0;
+    for (; tls_tries < 4; ++tls_tries) {
+        JARVIS_ASSERT_EQ(0ULL, tls_call(k_base_x));
+        auto *kk = TaskControlBlock::create([]() {}, 12, 10);
+        JARVIS_ASSERT(kk != nullptr);
+        kk->tls_base_ = k_base_b;
+        Scheduler::add_task(*kk);
+        kernel::test::wait_for_termination_safe(kk);
+        g_live_after = read_live_tls();
+        release_tls_task(kk);
+        if (g_live_after == k_base_x || g_live_after == k_base_b)
+            break;
+    }
+    if (tls_tries > 0 && g_live_after == k_base_x)
+        Logger::raw_write("[TLS-RETRY] absorbed daemon noise\n");
     JARVIS_ASSERT_EQ(k_base_x, g_live_after);
 #if defined(CONFIG_ARCH_X86_64)
     uint64_t gs_after = arch::rdmsr(arch::MSR_GS_BASE);
@@ -396,7 +415,6 @@ JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
 #endif
     JARVIS_ASSERT_EQ(1ULL, g_gs_same);
     write_live_tls(0);
-    release_tls_task(kk);
     Scheduler::drain_zombie_list();
     JARVIS_TEST_PASS();
 }

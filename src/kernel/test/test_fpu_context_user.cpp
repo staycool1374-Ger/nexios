@@ -86,6 +86,12 @@ constexpr uint64_t kOffIndex = 0x48;  // task index (diagnostics)
 constexpr uint64_t kOffAlive = 0x50;  // kAliveMagic once regs are set
 constexpr uint64_t kOffForkRet = 0x58; // fork() return value (parent: child pid)
 constexpr uint64_t kOffWaitStatus = 0x60; // waitpid status out (child exit)
+// Non-zero pre-seed for the wait-status word: the success path overwrites
+// it with 0 (child exit 0), so a surviving seed proves waitpid never wrote
+// (e.g. the #586 absolute-address bug, where the kernel rejects the pointer
+// before storing). Without this, a stale zero passes the status assert
+// vacuously.
+constexpr uint64_t kWaitStatusSeed = 0x5EED5EED5EED5EEDULL;
 constexpr uint64_t kOffWaitRet = 0x68; // waitpid return (child pid)
 constexpr uint64_t kOffRecv = 0x100;  // 16-byte RECEIVE scratch
 
@@ -166,6 +172,15 @@ constexpr uint32_t A64_MOV_X8_WAITPID = 0xD28002C8U; // mov x8,#22 WAITPID;
 constexpr uint32_t rv_addi(uint32_t rd, uint32_t imm12) {
     return (imm12 << 20) | (rd << 7) | 0x13U;
 }
+// ADDI with explicit base register (rs1 field, bits 15-19). Use this —
+// NOT rv_addi() — whenever the operand is base+offset: rv_addi() hardwires
+// rs1=x0, so it can only build `li` (absolute) immediates. Emitting
+// rv_addi(rd, off) where a base register is required silently produces an
+// absolute low address (e.g. 0x60), which passes the user-range check but
+// faults the kernel's virt_to_phys lookup (#586).
+constexpr uint32_t rv_addi_rs1(uint32_t rd, uint32_t rs1, uint32_t imm12) {
+    return ((imm12 & 0xFFFU) << 20) | ((rs1 & 0x1FU) << 15) | (rd << 7) | 0x13U;
+}
 constexpr uint32_t rv_sd(uint32_t rs1, uint32_t rs2, uint32_t off) {
     return (((off >> 5) & 0x7FU) << 25) | (rs2 << 20) | (rs1 << 15) |
            (3U << 12) | (((off) & 0x1FU) << 7) | 0x23U;
@@ -176,6 +191,8 @@ constexpr uint32_t rv_ld(uint32_t rd, uint32_t rs1, uint32_t off) {
 static_assert(rv_addi(5, 160) == 0x0A000293U, "li t0,160");
 static_assert(rv_addi(10, 0) == 0x00000513U, "li a0,0");
 static_assert(rv_addi(17, 6) == 0x00600893U, "li a7,6");
+static_assert(rv_addi_rs1(11, 18, 0x60) == 0x06090593U,
+              "addi a1,s2,#0x60 (s2 = data-page base)");
 static_assert(rv_sd(19, 5, 0) == 0x0059B023U, "sd t0,0(s3)");
 static_assert(rv_sd(18, 0, 0x40) == 0x04093023U, "sd zero,64(s2)");
 static_assert(rv_sd(18, 20, 0x30) == 0x03493823U, "sd s4,48(s2)");
@@ -472,7 +489,7 @@ inline size_t emit_fork_stub(uint32_t *code) {
         const int32_t off = static_cast<int32_t>((parent_label - branch_idx) *
                                                  sizeof(uint32_t));
         code[branch_idx] = rv_bne(10, 0, off); // bne a0,zero,parent
-        code[n++] = rv_addi(11, (uint32_t)kOffWaitStatus); // a1 = &status
+        code[n++] = rv_addi_rs1(11, 18, (uint32_t)kOffWaitStatus); // a1 = s2+status (s2 = kUserDataVa base; plain rv_addi would emit rs1=x0 -> absolute 0x60, #586)
         code[n++] = rv_addi(12, 0);  // li a2,0 options
         code[n++] = rv_addi(13, 0);  // li a3,0
         code[n++] = rv_addi(17, 22); // li a7,22 WAITPID
@@ -603,6 +620,9 @@ bool fpu_fork_spawn(FpuUserWorker &w, uint32_t idx) {
     (void)nwords;
     for (size_t i = 0; i < 512; ++i)
         data[i] = 0;
+    // De-vacuum the wait-status oracle: only a successful waitpid write
+    // clears this (see kWaitStatusSeed).
+    data[kOffWaitStatus / 8] = kWaitStatusSeed;
     data[kOffLo / 8 + 0] = fpu_lane_pattern(10 + idx);
     data[kOffLo / 8 + 1] = fpu_lane_pattern(20 + idx);
     data[kOffLo / 8 + 2] = fpu_lane_pattern(30 + idx);

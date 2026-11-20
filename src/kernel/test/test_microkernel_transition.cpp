@@ -25,11 +25,13 @@
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/test/task_ptr.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/vfs/vfs.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/memory/mempool.hpp>
+#include <kernel/memory/mem_pressure.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/driver/driver.hpp>
 #include "test_sched_helpers.hpp"
@@ -263,15 +265,99 @@ JARVIS_TEST(irq_pending_capped, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: No PMM fallback on the IPC data path (MEM-1).
-// Input: Drive BufferPool past its preallocated page count.
-// Expect: Typed BUF_POOL_EXHAUSTED, never a runtime PMM allocation.
-// Depends: BufferPool, PMM free-count, static budget test
+// Testidea: No PMM fallback on the IPC data path (MEM-1, M4 #563).
+// Input: Drive BufferPool past its preallocated page count (POOL_PAGES).
+// Expect: Typed BUF_ERR_OOM, never a runtime PMM allocation (PMM free
+// count unchanged across the overflow); pressure latch fires once with
+// BUFPOOL_EMPTY; freed entry recycles.
+// Depends: BufferPool, PMM free-count, mem_pressure latch
 JARVIS_TEST(buffer_pool_no_pmm_fallback, "PRE: none | POST: none") {
     /* Pseudocode:
-     *   snapshot PMM free count; exhaust pool to max live buffers;
-     *   assert typed exhaustion error and unchanged PMM count.
+     *   clear pressure latch; snapshot PMM free count;
+     *   alloc POOL_PAGES buffers (all succeed);
+     *   overflow via alloc_err -> BUF_ERR_OOM + PMM count unchanged;
+     *   assert pressure latched BUFPOOL_EMPTY exactly once;
+     *   free one + realloc recycles; free all; destroy task;
+     *   PMM count net-zero after cleanup (PTs freed on teardown).
      */
+    mem_pressure::clear();
+    uint64_t pmm_before = PMM::free_pages_ref();
+
+    static constexpr size_t kExpect =
+        BufferPool::POOL_PAGES < BufferPool::MAX_BUFFERS
+            ? BufferPool::POOL_PAGES
+            : BufferPool::MAX_BUFFERS;
+    {
+        SimpleTaskPtr task(TaskControlBlock::create_user([]() {}, 5, 10, 32_KiB));
+        JARVIS_ASSERT(task != nullptr);
+
+        uint64_t handles[BufferPool::POOL_PAGES];
+        // Sibling-test VA window (0x40200000, PD[1]): the tables above it
+        // already exist (stub + stack share the region), so the alloc loop
+        // only grows one PT page, which cleanup frees. A far VA (e.g.
+        // 0x7000000000) forces FRESH top-level tables on riscv64 (L1+L2 =
+        // +2 PMM pages the user-half teardown does not reclaim) and breaks
+        // the net-zero assert there while x86_64/aarch64 stay green.
+        uint64_t va = 0x40200000ULL;
+        for (size_t i = 0; i < kExpect; ++i) {
+            uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
+            JARVIS_ASSERT_FMT(h != 0, "pool alloc %lu must succeed", i);
+            handles[i] = h;
+        }
+        // M4: data pages come from the preallocated pool, not PMM. Mapping the
+        // 128 VAs allocates a bounded number of PT pages, so PMM may drop by
+        // the PT overhead — but never by kExpect data pages. Pool must drain.
+        uint64_t pmm_after_alloc = PMM::free_pages_ref();
+        JARVIS_ASSERT_EQ(0ULL, BufferPool::pool_count_debug());
+        JARVIS_ASSERT_FMT(pmm_before >= pmm_after_alloc &&
+                              pmm_before - pmm_after_alloc < kExpect,
+                          "pool allocs must not consume PMM data pages "
+                          "(before=%lu after=%lu)",
+                          pmm_before, pmm_after_alloc);
+
+        // Overflow: raw 0 + typed BUF_ERR_OOM, still no PMM movement.
+        uint64_t raw_overflow =
+            BufferPool::alloc(*task, va + kExpect * arch::PAGE_SIZE);
+        JARVIS_ASSERT_EQ(0ULL, raw_overflow);
+        {
+            uint64_t overflow_handle = 0;
+            auto overflow_err = BufferPool::alloc_err(
+                *task, va + (kExpect + 1) * arch::PAGE_SIZE, overflow_handle);
+            JARVIS_ASSERT_EQ(0ULL, overflow_handle);
+            JARVIS_ASSERT(overflow_err == errors::BUF_ERR_OOM);
+        }
+        JARVIS_ASSERT_EQ(pmm_after_alloc, PMM::free_pages_ref());
+
+        // Pressure latch fired exactly once with BUFPOOL_EMPTY.
+        JARVIS_ASSERT(mem_pressure::latched());
+        JARVIS_ASSERT(mem_pressure::reason() ==
+                      mem_pressure::MemPressureReason::BUFPOOL_EMPTY);
+        mem_pressure::clear();
+        JARVIS_ASSERT(!mem_pressure::latched());
+
+        // Entry recycle: free middle, realloc reuses the same index.
+        const size_t kMid = kExpect / 2;
+        uint32_t freed_idx =
+            static_cast<uint32_t>(handles[kMid] & 0xFFFFFFFFULL);
+        JARVIS_ASSERT(BufferPool::free(*task, handles[kMid]));
+        uint64_t recycled =
+            BufferPool::alloc(*task, va + kMid * arch::PAGE_SIZE);
+        JARVIS_ASSERT(recycled != 0);
+        JARVIS_ASSERT_EQ(freed_idx,
+                         static_cast<uint32_t>(recycled & 0xFFFFFFFFULL));
+        JARVIS_ASSERT(BufferPool::free(*task, recycled));
+
+        for (size_t i = 0; i < kExpect; ++i) {
+            if (i == kMid)
+                continue;
+            JARVIS_ASSERT(BufferPool::free(*task, handles[i]));
+        }
+        // Pool refilled; PT pages still live until task cleanup below.
+        JARVIS_ASSERT_EQ(BufferPool::POOL_PAGES, BufferPool::pool_count_debug());
+    }
+    // SimpleTaskPtr destroyed: cleanup() frees PT pages + stack.
+    JARVIS_ASSERT_EQ(pmm_before, PMM::free_pages_ref());
+    mem_pressure::clear();
     JARVIS_TEST_PASS();
 }
 

@@ -488,7 +488,14 @@ JARVIS_TEST(fast_send_sync_oversized_reply_stays_queued,
         Scheduler::add_task(*sender);
     }
     auto *original = Scheduler::current_task();
-    kernel::test::yield_as(*receiver);
+    // Deterministic rendezvous (x86_64 ipc flake on the merged tree):
+    // the receiver's recv() is a non-blocking poll, so receiver-first
+    // gambles that the sender's tick lands within 100000 spins. Sender-
+    // first parks the sender (SEND_SYNC blocks for the reply) with the
+    // request already queued, so the receiver's first poll hits no
+    // matter when ticks land — the oversized-reply assertion below is
+    // unchanged, only the handshake order is.
+    kernel::test::yield_as(*sender);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(sender);
     kernel::test::wait_for_termination_safe(receiver);

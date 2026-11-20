@@ -104,6 +104,9 @@ void register_pt_merge_tests();
 void register_cap_core_tests();
 void register_cap_lifecycle_tests();
 void register_cap_syscall_tests();
+void register_cap_vspace_tests();
+void register_tcb_control_tests();
+void register_cap_tcb_tests();
 void register_debug_syscall_tests();
 void register_cap_ipc_tests();
 void register_cap_untyped_tests();
@@ -190,6 +193,7 @@ void register_locking_stress_tests();
 void register_preemption_tests();
 void register_ipc_extended_tests();
 void register_daemon_restart_crash_tests();
+void register_mk_death_tests(); // M1 #545/#516 death funnel + daemon cells
 void register_irqguard_audit_tests();
 void register_memory_safety_tests();
 void register_memory_determinism_tests();
@@ -208,6 +212,7 @@ void register_lock_order_tests();
 void register_park_lock_tests();
 void register_resched_park_tests(); // #545 Cycle D reschedule park
 void register_ipc_inv4b_tests();    // #545 Cycle D INV-4b probe gates
+void register_ipc_reply_tests();    // M3 #556 reply token + direct switch
 void register_tick_watchdog_tests();
 void register_budget_tests();
 void register_pip_tests();
@@ -435,6 +440,9 @@ static void run_process_secure_exec_group() { register_secure_exec_tests(); }
 static void run_cap_core_group() { register_cap_core_tests(); }
 static void run_cap_lifecycle_group() { register_cap_lifecycle_tests(); }
 static void run_cap_syscall_group() { register_cap_syscall_tests(); }
+static void run_cap_vspace_group() { register_cap_vspace_tests(); }
+static void run_tcb_control_group() { register_tcb_control_tests(); }
+static void run_cap_tcb_group() { register_cap_tcb_tests(); }
 static void run_debug_syscall_group() { register_debug_syscall_tests(); }
 static void run_cap_ipc_group() { register_cap_ipc_tests(); }
 static void run_cap_untyped_group() { register_cap_untyped_tests(); }
@@ -454,7 +462,7 @@ static void run_ipc_fastpath_group() { register_ipc_fastpath_tests(); }
 static void run_ipc_pipe_blocking_group() {
     register_pipe_blocking_tests();
 }
-static void run_ipc_core_group() { register_ipc_tests(); register_ipc_inv4b_tests(); } // #545 Cycle D INV-4b
+static void run_ipc_core_group() { register_ipc_tests(); register_ipc_inv4b_tests(); register_ipc_reply_tests(); } // #545 Cycle D INV-4b + M3
 static void run_ipc_blocking_group() { register_ipc_blocking_tests(); }
 static void run_ipc_timeout_group() { register_ipc_timeout_tests(); }
 static void run_ipc_extended_group() { register_ipc_extended_tests(); }
@@ -487,6 +495,7 @@ static void run_servers_vfsd_auth_group() {
 static void run_servers_iocd_group() { register_iocd_tests(); }
 static void run_servers_daemon_restart_group() {
     register_daemon_restart_crash_tests();
+    register_mk_death_tests(); // M1 #545/#516
 }
 static void run_servers_health_group() { register_health_tests(); }
 static void run_services_framework_group() {
@@ -803,6 +812,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"cap_core", []() { run_cap_core_group(); }},
     {"cap_lifecycle", []() { run_cap_lifecycle_group(); }},
     {"cap_syscall", []() { run_cap_syscall_group(); }},
+    {"cap_vspace", []() { run_cap_vspace_group(); }},
+    {"cap_tcb", []() { run_cap_tcb_group(); }},
     {"debug_syscall", []() { run_debug_syscall_group(); }},
     {"cap_ipc", []() { run_cap_ipc_group(); }},
     {"cap_untyped", []() { run_cap_untyped_group(); }},
@@ -1144,6 +1155,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_fpu_invariants_group();
          run_kernel_top_group();
          run_per_cpu_group();
+         run_tcb_control_group();
      }},
     {"core_memory",
      []() {
@@ -1212,6 +1224,8 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_cap_death_group();
          run_cap_pager_group();
          run_cap_broker_group();
+         run_cap_vspace_group();
+         run_cap_tcb_group();
      }},
     // proc_elf: process lifecycle + ELF loading (issue #173).  Named
     // proc_elf (not process_elf) — the fine-grained file class
