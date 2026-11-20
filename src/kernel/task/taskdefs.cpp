@@ -36,6 +36,9 @@
 #include <kernel/cap/cap_broker.hpp>
 #include <kernel/vfs/procfs_srv.hpp>
 #include <kernel/watchdog/wdog_mon.hpp>
+#if CONFIG_PROC_MGR
+#include <kernel/proc/proc_mgr_proxy.hpp>
+#endif
 #include <kernel/driver/driver_pds.hpp>
 #include <kernel/task/dmesg_task.hpp>
 #include <initrd/initrd.hpp>
@@ -287,6 +290,28 @@ void pd_set_procfs_srv(uint64_t pid) {
     kernel::procfs_srv::set_procfs_srv_pid(pid);
 }
 #endif
+#if CONFIG_PROC_MGR
+// proc-mgr: process policy PD (issue #564 F11, strangler step b).
+// Restart order mirrors procfs-srv above: sdf_rebind first (re-derive,
+// never inherit), then the PID cell + epoch bump — a client's stale-epoch
+// in-flight reply is refused by the proxy identity check.
+void pd_restart_proc_mgr(uint64_t pid) {
+    auto *t = kernel::Scheduler::find_task(pid);
+    if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
+        return;
+    }
+    if (!kernel::sdf::sdf_rebind(*t, kernel::sdf::PdRole::PROC_MGR)) {
+        return;
+    }
+    kernel::proc::proc_mgr_proxy::proc_mgr_on_restart(pid);
+}
+uint64_t pd_pid_proc_mgr() {
+    return kernel::proc::proc_mgr_proxy::get_proc_mgr_pid();
+}
+void pd_set_proc_mgr(uint64_t pid) {
+    kernel::proc::proc_mgr_proxy::set_proc_mgr_pid(pid);
+}
+#endif
 
 // ── Task definition table ────────────────────────────────────────────────
 
@@ -435,6 +460,19 @@ constexpr TaskDef g_task_defs[] = {
      "bin/procfs-srv.c.elf", 20, 10, 0, 1, 10, 0, "procfs-srv",
      pd_set_procfs_srv, pd_pid_procfs_srv, 1, 0, false,
      ServerMode::SPORADIC, pd_restart_procfs_srv, 12},
+#endif
+#if CONFIG_PROC_MGR
+    // proc-mgr: process policy PD (issue #564 F11, strangler step b).
+    // §8.10 ordering (literal): this row lands BEFORE the dispatch MOVE
+    // takes effect (the knob-gated flip) — the SDF row + restart hook
+    // precede any verdict-routed syscall. Sporadic server SS(1,10,0);
+    // policy + verdicts only, no device caps. Appended (not inserted) so
+    // earlier PD PIDs are stable (vfsd 2, iocd 3, ...). Restart class:
+    // restartable (Q12 critical = supervisor + mem-mgr only).
+    {"proc-mgr", TaskType::SPORADIC_SERVER, true, nullptr,
+     "bin/proc-mgr.c.elf", 4, 10, 0, 1, 10, 0, "proc-mgr",
+     pd_set_proc_mgr, pd_pid_proc_mgr, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_proc_mgr, 13},
 #endif
     // shell: interactive kernel debug shell.  Disabled in the table — the
     // real shell is created aperiodic by init_task_main at prio 2; values

@@ -48,22 +48,74 @@
 #include <signal.hpp>
 #include <constants.hpp>
 #include <string.hpp>
+#include <kernel/nexios_config.h>
+#if CONFIG_PROC_MGR
+#include <kernel/proc/proc_mgr_proxy.hpp>
+#include <kernel/proc/proc_tcb_caps.hpp>
+#endif
 
 namespace kernel::proc {
+
+#if CONFIG_PROC_MGR
+namespace {
+
+// Issue #564 F11 Stage B: one verdict RPC per syscall (never per
+// waitpid loop iteration), in caller context with no lock held
+// (INV-PROC-1/2/3). The mechanism below each verdict is unchanged; a
+// non-OK verdict fails the op closed with the generic boundary code.
+errors::ProcError ask_proc_verdict(ProcMgrOp op, uint64_t arg0, uint64_t arg1,
+                                   uint64_t arg2) noexcept {
+    return proc_mgr_proxy::proc_mgr_verdict(op, arg0, arg1, arg2);
+}
+
+bool proc_verdict_denied(errors::ProcError err) noexcept {
+    return err != errors::PROC_ERR_OK;
+}
+
+} // namespace
+#endif
 
 uint64_t ProcSvc::fork(uint64_t, uint64_t, uint64_t, uint64_t,
                        uint64_t *regs) {
     if (!regs)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+#if CONFIG_PROC_MGR
+    // Q-B2 deny-only (INV-PROC-11): the proxy may refuse the fork; the
+    // quota/ownership mechanism below still runs on OK.
+    if (proc_verdict_denied(
+            ask_proc_verdict(ProcMgrOp::FORK, 0, 0, 0))) {
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+#endif
     auto *child = TaskControlBlock::clone(regs);
     if (!child)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+#if CONFIG_PROC_MGR
+    // INV-PROC-12 (pre-publication hold): the hold is installed before
+    // Scheduler::add_task_err publishes the child. Hold failure destroys
+    // the child pre-publication (no publish_task_death, no death record,
+    // no waiter wake — mirrors the admission-denial destroy below).
+    auto *holder = proc_mgr_proxy::proc_mgr_holder();
+    if (holder == nullptr) {
+        TaskControlBlock::destroy(child);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+    errors::ProcError hold_err = errors::PROC_ERR_OK;
+    if (proc_tcb_caps::hold(*holder, child->id, child->generation,
+                            &hold_err) < 0) {
+        TaskControlBlock::destroy(child);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+#endif
     // Issue #20: fork goes through the enforced admission gate.  On denial
     // the child was never registered, so destroy() teardown is safe
     // (remove paths no-op on absent entries); the parent is unaffected and
     // the caller sees -1 (fail-closed, no zombie birth, no parent wake).
     errors::SchedulerError adm = Scheduler::add_task_err(*child);
     if (adm != errors::SCHED_ERR_OK) {
+#if CONFIG_PROC_MGR
+        (void)proc_tcb_caps::release(*holder, child->id, child->generation);
+#endif
         TaskControlBlock::destroy(child);
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
@@ -138,6 +190,16 @@ uint64_t ProcSvc::waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     auto *cur = syscall_task();
     if (!cur)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+#if CONFIG_PROC_MGR
+    // Issue #564 F11 Stage B: exactly one verdict per waitpid call (the
+    // ownership predicate), resolved before the blocking loop — no RPC
+    // inside the loop. The find/collect/block/reap machinery below stays
+    // statement-identical (INV-PROC-1).
+    if (proc_verdict_denied(
+            ask_proc_verdict(ProcMgrOp::WAITPID, target_pid, 0, 0))) {
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+#endif
     // Issue #221: a user trap must not return to userspace until the wait
     // resolves — returning -1 immediately fails single-shot waiters (the
     // fork-marker parent prints WAITPID-FAILED).  Kernel callers hlt-loop
@@ -413,6 +475,16 @@ uint64_t ProcSvc::exec(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     vfs::Vnode *vn = nullptr;
     char path_buf[SYSCALL_MAX_PATH];
+#if CONFIG_PROC_MGR
+    // Issue #564 F11 Stage B: verdict after the early presence gates
+    // above and before the first filesystem touch. Validation, read and
+    // elf::exec_into_current stay untouched; the id is preserved and the
+    // hold is untouched (INV-PROC-1 deny-only).
+    if (proc_verdict_denied(
+            ask_proc_verdict(ProcMgrOp::EXEC, arg0, arg1, arg2))) {
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+#endif
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     if (!strncpy_from_user(path_buf, reinterpret_cast<const char *>(arg0),
                            SYSCALL_MAX_PATH))
@@ -486,6 +558,17 @@ uint64_t ProcSvc::kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     auto *t = Scheduler::find_task(target_pid);
     if (!t)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+#if CONFIG_PROC_MGR
+    // Issue #564 F11 Stage B (Q-B2 deny-only, INV-PROC-11): the proxy
+    // supplies deny vs allow only — it never reclassifies fatal vs
+    // handler. Delivery stays pending_signals + the #593 trap-funnel leg
+    // in the invoking client's context below, and the gate is called as
+    // the client (the unchanged parent_id branch decides).
+    if (proc_verdict_denied(
+            ask_proc_verdict(ProcMgrOp::KILL, target_pid, sig, 0))) {
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+#endif
     if (t == syscall_task()) {
         if (signal_is_fatal(sig) || !t->has_signal_handler(sig)) {
             // Issue #593: the self-fatal leg runs the trap funnel
@@ -540,12 +623,24 @@ uint64_t ProcSvc::signal(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
         return static_cast<uint64_t>(errors::SYS_ERR_OK);
     // NOLINTNEXTLINE(performance-no-int-to-ptr)
     auto handler = reinterpret_cast<sighandler_t>(arg1);
+#if CONFIG_PROC_MGR
+    // Issue #564 F11 Stage B: handler-table decision per-TCB (deny-only);
+    // installation below is unchanged mechanism.
+    if (proc_verdict_denied(
+            ask_proc_verdict(ProcMgrOp::SIGNAL, sig, arg1, 0))) {
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+#endif
     t->set_signal_handler(sig, handler);
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
 uint64_t ProcSvc::sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t *regs) {    auto *t = syscall_task();
+    // Issue #564 F11 Stage B: policy/mechanism split — the trap-frame
+    // restore below is mechanism only, so the proxy is not on this path;
+    // the handler table it restores is proc-mgr-owned via signal()
+    // (deny-only, INV-PROC-11).
     if (!t || !regs)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     uint64_t user_rsp = regs[20];
@@ -571,6 +666,11 @@ uint64_t ProcSvc::sigreturn(uint64_t, uint64_t, uint64_t, uint64_t,
 }
 
 uint64_t ProcSvc::getpid(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t *) {
+    // Issue #564 F11 Stage B: O(1) read — no RPC on this path (INV-PROC-2
+    // holds trivially). Writer discipline: the fork path (alloc_id in
+    // clone) is the only producer of a new identity and exec preserves
+    // it, so no PD-side replica exists to diverge; GETPID stays a FAST
+    // member with no lock, no IPC, no allocation.
     auto *t = syscall_task();
     return t ? t->id : 0;
 }
@@ -579,10 +679,10 @@ errors::ProcError
 ProcSvc::handle_decision(const ProcMgrRpc &decision) noexcept {
     // Stage B verdict validator: reserved fields must be zero (R-INPUT)
     // and the op must name a served op. STOP/RESUME carry a disposition
-    // that Stage A cannot enforce — no PD policy exists yet, and the only
-    // stop authority is the unchanged Q9 parent_id branch evaluated in the
-    // invoking client's context (INV-PROC-6) — so they refuse here until
-    // Stage B wires the client-context enforcement.
+    // that stays refused (STOP_REFUSED): Stage B verdicts are deny-only
+    // (INV-PROC-11) and kill is enforced in invoking-client context via
+    // the unchanged Q9 parent_id branch (INV-PROC-6) — the PD never owns
+    // a stop disposition, so no verdict can grant one.
     if (decision.rsvd != 0 || decision.rsvd3 != 0) {
         return errors::PROC_ERR_BAD_REQUEST;
     }

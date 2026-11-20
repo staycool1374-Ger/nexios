@@ -17,7 +17,7 @@
  */
 
 /// @file proc_svc.hpp
-/// @brief Proc-mgr service layer (F11 Stage A, #564): owns the CURRENT
+/// @brief Proc-mgr service layer (F11 Stage A+B, #564): owns the CURRENT
 ///        process-syscall bodies (fork/exec/waitpid/getpid/kill/signal/
 ///        sigreturn), moved statement-identical out of
 ///        syscall_handlers_process.cpp / syscall_handlers_misc.cpp.
@@ -25,8 +25,10 @@
 ///        FULL classification and caller-context mechanism, and delegate
 ///        here — behavior-identity with the knob OFF (INV-PROC-7). Stage B
 ///        adds the proxy verdict call inside the bodies (still in caller
-///        context, INV-PROC-1); handle_decision() is the verdict validator
-///        for that path.
+///        context, INV-PROC-1; deny-only, INV-PROC-11); handle_decision()
+///        is the verdict validator for that path. sigreturn/getpid take
+///        no verdict (mechanism-only split / O(1) read — documented at the
+///        bodies).
 
 #pragma once
 
@@ -79,10 +81,12 @@ class ProcSvc {
     /// @return Caller id, or 0 when no calling task exists.
     static uint64_t getpid(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t *);
 
-    /// @brief Validate a proc-mgr verdict (Stage B entry point).
+    /// @brief Validate a proc-mgr verdict (Stage B entry point, live).
     ///        Unknown op or non-zero reserved fields refuse with
-    ///        BAD_REQUEST; STOP/RESUME refuse with STOP_REFUSED until a PD
-    ///        policy owns the disposition (Stage A has no PD yet).
+    ///        BAD_REQUEST; STOP/RESUME refuse with STOP_REFUSED (deny-only
+    ///        verdicts, INV-PROC-11 — the PD never owns a stop
+    ///        disposition). A non-zero PD verdict status on a served op is
+    ///        mapped by the proxy to STOP_REFUSED (fail closed).
     /// @return The mapped ProcError (OK = verdict accepted for dispatch).
     static errors::ProcError
     handle_decision(const ProcMgrRpc &decision) noexcept;

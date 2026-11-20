@@ -36,10 +36,31 @@
 #include <kernel/proc/proc_errors.hpp>
 #include <kernel/proc/proc_wire.hpp>
 
-namespace kernel::proc::proc_mgr_proxy {
+namespace kernel {
+
+struct TaskControlBlock;
+
+namespace proc::proc_mgr_proxy {
 
 #if CONFIG_PROC_MGR
 
+/// @brief Resolve the live proc-mgr holder task (the PD itself).
+/// @return The holder task when the PID cell names a live (non
+///         TERMINATED/REAPED, magic-checked) task, else nullptr (down).
+///         The fork path installs holds in this task's CSpace.
+TaskControlBlock *proc_mgr_holder() noexcept;
+/// @brief Bounded verdict Call: build the owner-tagged (id+gen, #441)
+///        request, run it through proc_mgr_call, and validate the reply
+///        shape via ProcSvc::handle_decision. A forged/mismatched echo is
+///        refused here as BAD_REQUEST (never consumed); STOP/RESUME stay
+///        STOP_REFUSED; a non-zero PD verdict status fails the op closed
+///        (deny-only, INV-PROC-11). NO_SERVER/RPC_BOUND/BAD_REQUEST pass
+///        through. No lock is held anywhere in this function (INV-PROC-3).
+///        The RPC_BOUND leg pushes the +21 dmesg row (outside any lock).
+/// @return OK (verdict accepted for dispatch) or the typed refusal.
+[[nodiscard]] errors::ProcError proc_mgr_verdict(ProcMgrOp op, uint64_t arg0,
+                                                uint64_t arg1,
+                                                uint64_t arg2) noexcept;
 /// @brief Record the PID of the proc-mgr daemon task.
 void set_proc_mgr_pid(uint64_t pid);
 /// @brief Get the recorded proc-mgr PID (0 when unset).
@@ -60,7 +81,19 @@ void proc_mgr_on_restart(uint64_t pid);
 ///         refusal (NO_SERVER / RPC_BOUND / BAD_REQUEST) with no block held.
 [[nodiscard]] errors::ProcError proc_mgr_call(const ProcMgrRpc &req,
                                              ProcMgrRpc &reply_out) noexcept;
+/// @brief QE probe seam (procfs_srv shape): BIND round-trip status.
+/// @return 0 on an allowed BIND, else the PD/transport status; -38
+///         (-ENOSYS) when the server is unavailable pre-flip. No
+///         production caller; whole TU already knob-guarded.
+int64_t proc_mgr_probe_bind();
+/// @brief QE probe seam (procfs_srv shape): LOOPBACK echo round-trip.
+/// @param echo_out When non-null, receives the echoed arg0 on success.
+/// @return 0 on an echoed LOOPBACK, else the PD/transport status; -38
+///         (-ENOSYS) when the server is unavailable pre-flip.
+int64_t proc_mgr_probe_loopback(uint64_t payload, uint64_t *echo_out);
 
 #endif // CONFIG_PROC_MGR
 
-} // namespace kernel::proc::proc_mgr_proxy
+} // namespace proc::proc_mgr_proxy
+
+} // namespace kernel

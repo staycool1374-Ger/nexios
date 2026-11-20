@@ -140,6 +140,8 @@ constexpr DmesgRecord kDmesgCatalog_TASK[] = {
      "Proc-mgr compose failed"},
     {ErrorSubsystem::TASK, kDmesgBase_TASK + 20, LogSeverity::ERROR,
      "Proc-mgr restart failed"},
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 21, LogSeverity::WARN,
+     "Proc-mgr RPC bound expired"},
 };
 
 /// @brief Network records (canonical base kDmesgBase_NET). No producer

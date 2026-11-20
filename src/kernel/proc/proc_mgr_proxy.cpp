@@ -14,10 +14,129 @@
 
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/ipc_errors.hpp>
+#include <kernel/proc/proc_svc.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 
 namespace kernel::proc::proc_mgr_proxy {
+namespace {
+
+/// @brief Probe helper (procfs_srv shape): one owner-tagged round-trip
+///        for BIND/LOOPBACK; echo + status captured on success.
+bool probe_op(ProcMgrOp op, uint64_t arg0, uint64_t *echo_out,
+              int64_t *status_out) {
+    auto *cur = Scheduler::current_task();
+    if (cur == nullptr) {
+        return false;
+    }
+    ProcMgrRpc req{};
+    req.op = static_cast<uint8_t>(op);
+    req.epoch = proc_mgr_epoch();
+    req.owner_id = static_cast<uint32_t>(cur->id);
+    req.owner_gen = cur->generation;
+    req.arg0 = arg0;
+    ProcMgrRpc reply{};
+    if (proc_mgr_call(req, reply) != errors::PROC_ERR_OK) {
+        return false;
+    }
+    if (ProcSvc::handle_decision(reply) != errors::PROC_ERR_OK) {
+        return false;
+    }
+    if (echo_out != nullptr) {
+        *echo_out = reply.arg0;
+    }
+    if (status_out != nullptr) {
+        *status_out = static_cast<int64_t>(reply.status);
+    }
+    return true;
+}
+
+} // namespace
+
+TaskControlBlock *proc_mgr_holder() noexcept {
+    const uint64_t pid = get_proc_mgr_pid();
+    if (pid == 0) {
+        return nullptr;
+    }
+    auto *srv = Scheduler::find_task(pid);
+    if (srv == nullptr || srv->magic != TaskControlBlock::TCB_MAGIC) {
+        return nullptr;
+    }
+    if (srv->state != TaskState::TERMINATED &&
+        srv->state != TaskState::REAPED) {
+        return srv;
+    }
+    return nullptr;
+}
+
+errors::ProcError proc_mgr_verdict(ProcMgrOp op, uint64_t arg0, uint64_t arg1,
+                                   uint64_t arg2) noexcept {
+    auto *cur = Scheduler::current_task();
+    if (cur == nullptr) {
+        return errors::PROC_ERR_NO_SERVER;
+    }
+    ProcMgrRpc req{};
+    req.op = static_cast<uint8_t>(op);
+    req.flags = 0;
+    req.rsvd = 0;
+    req.epoch = proc_mgr_epoch();
+    req.owner_id = static_cast<uint32_t>(cur->id);
+    req.owner_gen = cur->generation;
+    req.arg0 = arg0;
+    req.arg1 = arg1;
+    req.arg2 = arg2;
+    req.status_op = 0;
+    req.status = 0;
+    req.rsvd3 = 0;
+    ProcMgrRpc reply{};
+    const errors::ProcError call_err = proc_mgr_call(req, reply);
+    if (call_err == errors::PROC_ERR_RPC_BOUND) {
+        // Outside any lock (INV-PROC-3: this function holds none).
+        log::dmesg_push_sev(log::ErrorSubsystem::TASK,
+                            log::kDmesgBase_TASK + 21, log::LogSeverity::WARN,
+                            "Proc-mgr RPC bound expired", cur->id);
+        return errors::PROC_ERR_RPC_BOUND;
+    }
+    if (call_err != errors::PROC_ERR_OK) {
+        return call_err;
+    }
+    const errors::ProcError shape_err = ProcSvc::handle_decision(reply);
+    if (shape_err != errors::PROC_ERR_OK) {
+        return shape_err;
+    }
+    if (reply.status != 0) {
+        // Deny-only rule (INV-PROC-11): any non-zero PD verdict fails
+        // the op closed. Stage B policy never produces this for the
+        // seven ops (allow-with-typed-refusals); the mapping keeps the
+        // refusal typed instead of consuming it.
+        return errors::PROC_ERR_STOP_REFUSED;
+    }
+    return errors::PROC_ERR_OK;
+}
+
+int64_t proc_mgr_probe_bind() {
+    int64_t status = -38;
+    if (!probe_op(ProcMgrOp::BIND, 0, nullptr, &status)) {
+        return -38; // -ENOSYS: server unavailable pre-flip
+    }
+    return status;
+}
+
+int64_t proc_mgr_probe_loopback(uint64_t payload, uint64_t *echo_out) {
+    int64_t status = -38;
+    uint64_t got = 0;
+    if (!probe_op(ProcMgrOp::LOOPBACK, payload, &got, &status)) {
+        return -38; // -ENOSYS: server unavailable pre-flip
+    }
+    if (status != 0) {
+        return status;
+    }
+    if (echo_out != nullptr) {
+        *echo_out = got;
+    }
+    return 0;
+}
 namespace {
 
 uint64_t g_proc_mgr_pid = 0;

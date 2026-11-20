@@ -426,7 +426,7 @@ suite premise unchanged for unflagged tests): timed-park entry asserts
 The SDF already exists: `task/boot_sdf.hpp` with `sdf_row` / `sdf_compose`
 (all-or-nothing with rollback) and cap kinds IRQ, MSIX, MMIO, DMA, FRAME, SHM,
 DMA_REGION. Roles: SERIAL, KBD, RTC, FB, BLOCK, NET, VFS_SRV, BLOCK_SRV,
-TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON, PROCFS_SRV (13).
+TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON, PROCFS_SRV, PROC_MGR (14).
 REQUIRED additions: rows for supervisor, mem-mgr, irq-mux, timer-srv,
 proc-mgr, sync-srv, entropy-srv, SHM-manager, sched-policy; per row a
 priority, a budget/period, an Untyped quota, its channels, and its restart
@@ -665,18 +665,48 @@ Each subsection gives: (1) current vs end state and syscall mapping,
 
 ### 8.8 Process manager (F11)
 
-1. **State.** No PD, no issue. 20–24 and 31–32 are in-kernel.
+1. **State.** Stage B landed (issue #564): the proc-mgr PD exists
+   (`userspace/proc-mgr.c`, sporadic server SS(1,10,0), `CONFIG_PROC_MGR`
+   — debug 1 / release 0 once the 2x3 matrix is green; until the QE
+   parity class is green the shipped default stays 0 and 20–24 + 31–32
+   dispatch through `ProcSvc` with the verdict leg compiled in but the
+   knob OFF). With the knob ON, 20–24 + 31–32 dispatch through `ProcSvc`
+   with a verdict-only proxy call in caller context; the mechanism
+   (clone, ELF load/swap, waitpid block/reap, terminate, trap-frame
+   restore) never leaves caller context.
 2. **Invariants.** Requires N1–N4 and the retype types of §4.1. `fork` is
    built from retype + VSpace map; no kernel deep copy after the flip.
-   INTERIM waiver (Stage B, #564 F11a tracked): Stage B ships the
-   PD/MOVE with the kernel-composed `clone` deep copy; carve-composed
-   fork is deferred, never silently dropped (see Q1).
+   INTERIM waiver, in-tree (Stage B, #564 F11a tracked): Stage B ships
+   the PD/MOVE with the kernel-composed `clone` deep copy (every fork
+   child now carries a fresh generation from the single allocator,
+   INV-PROC-13); carve-composed fork is deferred, never silently dropped
+   (see Q1). Verdicts are deny-only (INV-PROC-11): after an OK verdict
+   the kernel still runs every existing gate, so a compromised PD can
+   only reduce availability, never widen authority. The fork hold is
+   installed pre-publication (INV-PROC-12): hold failure destroys the
+   child with no death record and no waiter wake.
 3. **Protocol.** proc-mgr holds TCB caps for every task it created
    (CREATOR holds, lifecycle tracking only — no stop power, INV-PROC-6);
    every hold releases from the M1 death funnel by (pid, generation)
-   (Stage A mechanism, #564).
+   (Stage A mechanism, #564). The funnel clears by index only and never
+   dereferences a foreign CNode*; a dead target with a live holder parks
+   the slot for lazy gen-checked reclaim in the holder's own syscall
+   context (drain at the top of hold()/release(); lookup stays
+   read-only).
 4. **Failure.** Critical-server class decided by Q12.
-5. **Verification.** `proc_elf` parity; `pid_reuse_safe`.
+5. **Verification.** `proc_mgr_parity` (per-op kernel vs PD path),
+   `pid_reuse_safe` (generation-keyed stale-hold refusal), plus
+   `proc_mgr_crash_restart`, `proc_mgr_stop_authority`,
+   `proc_mgr_hold_full`, `proc_mgr_death_visible` (reusing
+   `mk_death_visible_bounded`); `proc_elf` parity is the blast-radius
+   gate. §8.10 ordering (literal): the SDF zero-cap row plus the
+   taskdefs restart row land BEFORE the dispatch MOVE takes effect —
+   the knob-gated flip is the last step, policy-gated on parity green.
+   ON-world test rule (Stage B evidence, #564): a verdict RPC parks the
+   caller visibly BLOCKED (bounded Call, INV-PROC-2), so tests must not
+   spin on `state == BLOCKED` to mean "reached its wait point", nor spin
+   above PD priority across a verdict RPC (the PD starves and the bound
+   fails the op closed — by design, never a hang).
 
 ### 8.9 Log server
 
@@ -916,7 +946,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F8 | #561 | x86_64 IRQ parity: storm limiter, level mask, `pending` saturation, single waiter | `irq_delivery.cpp`, `syscall_handlers_irq.cpp` |
 | F9 | #562 | Static bound re-sizing (Untyped, per-task objects, CNode slots, IOPB, death watches) | `nexios_config.h` |
 | F10 | #563 | mem-mgr bootstrap handover | #193 part a |
-| F11 | #564 | proc-mgr PD | new |
+| F11 | #564 | proc-mgr PD | in-progress (Stage B: PD + MOVE behind CONFIG_PROC_MGR; MOVE rows flip on parity green; release default stays 0) |
 | F12 | #565 | sync-srv PD | new |
 | F13 | #566 | entropy-srv PD | new |
 | F14 | #567 | SHM-manager PD + ring epoch | new |
@@ -959,3 +989,4 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | `ace5c4da1` | #47 step-b2 block-srv IRQ delegation (WAIT_ACK, bounded wait, poll fallback) |
 | `579605bd4` | #47 step-b3 vfs-srv backends live path |
 | `27842ffa2` | #51 console PD substrate (SDF FB row, fb-pd render, `fb_bounded_render`) |
+| Stage B (#564 F11) | proc-mgr PD + MOVE of 20–24/31–32 behind CONFIG_PROC_MGR (knob OFF until parity green; release stays 0); kernel-composed `clone` fork retained (fresh generation per child, INV-PROC-13), carve composition deferred to F11a (Q1 option (a)) |

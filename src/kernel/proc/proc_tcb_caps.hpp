@@ -52,9 +52,20 @@ static_assert(kMaxHeldTcbCaps <= CONFIG_CSLOT_COUNT,
               "hold table must fit one holder CNode");
 
 /// @brief Install a CREATOR TcbCap for (target_pid, target_gen) in the
-///        holder's CSpace and record the F2 derivation edge. The install
-///        publishes only after mint + edge both succeed (never a half-hold:
-///        any failure removes the CNode slot and drops the creator ref).
+///        holder's CSpace and record the F2 derivation edge. The claim is
+///        reserved under the table lock before the mint window and
+///        published only after mint + edge both succeed (never a
+///        half-hold: any failure rolls the claim back, and the publish
+///        re-checks that the funnel did not clear the claim mid-hold —
+///        a cleared claim fails closed with STALE_PID, never overwriting
+///        another holder's re-claim of the freed slot).
+///        A hold's CNode slot may be reclaimed lazily: when the target
+///        dies with a live holder, the funnel parks the entry and the
+///        holder reaps it with a gen-checked remove_if in its own syscall
+///        context (drain_reclaim at the top of hold()/release(); bounded
+///        and fail-closed, never a panic). A dead holder's slots are
+///        reclaimed by CNode::dispose — the funnel clears those entries by
+///        index only and never dereferences a foreign CNode*.
 /// @param holder Task whose CSpace receives the cap (ensure_cspace'd here).
 /// @param err_out When non-null, carries the typed reason on failure
 ///        (STALE_PID / CAP_TABLE_FULL / HOLD_INSTALL_FAILED); untouched on
@@ -84,15 +95,17 @@ errors::ProcError release(TaskControlBlock &holder, uint64_t target_pid,
                          uint32_t target_gen) noexcept;
 
 /// @brief Funnel hook: drop every hold naming (dead_pid, dead_gen),
-///        whether as target (child died: remove the holder's CNode slot)
-///        or as holder (holder died: its CNode teardown already released
-///        the wrappers and pruned the edges — clear the index only).
+///        whether as target (child died: the holder's CNode slot is
+///        parked for lazy reclaim by drain_reclaim in the holder's own
+///        syscall context) or as holder (holder died: its CNode teardown
+///        already released the wrappers and pruned the edges — clear the
+///        index only).
 ///        Locking: caller holds IrqGuard with scheduler_lock_ NOT held
 ///        (publish_task_death contract); takes only the table leaf lock
-///        plus the CNode leaf internals of remove_if (sequential, never
-///        nested — INV-DERIV-1: no CNode slot lock is ever held across a
-///        derivation-table call). Idempotent: a cleared or recycled entry
-///        is a generation-mismatch no-op. No logging.
+///        (never nested — INV-DERIV-1: no CNode slot lock is ever held
+///        across a derivation-table call, and no CNode* is captured here
+///        at all). Idempotent: a cleared or parked entry is a
+///        generation-mismatch no-op. No logging.
 /// @param dead_pid Terminated task id.
 /// @param dead_gen Terminated task generation at death.
 void release_on_death(uint64_t dead_pid, uint32_t dead_gen) noexcept;

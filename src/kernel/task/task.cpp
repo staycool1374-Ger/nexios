@@ -443,9 +443,24 @@ void TaskControlBlock::release_all_objects() noexcept {
 /// process-hierarchy links, signal handlers, and buffer pool state.
 static uint32_t s_next_generation = 1;
 
+/// @brief Single allocator for fresh task generations (issue #564 F11
+///        Stage B, drift 4). Every TCB gets its generation from here
+///        before it becomes reachable (INV-PROC-13): init_task_common
+///        today, clone from Stage B. No code treats generation == 0 as
+///        "unset" (only wdog_gen, timerfd slot gens and buffer-pool slot
+///        gens use 0 sentinels — never TCB.generation), so assigning a
+///        fresh generation to fork children strengthens the (pid, gen)
+///        key in tcb_control.cpp:104, resolve_live_target and the
+///        DerivationTable without changing any consumer. S3 follow-up
+///        (out of scope here): spawn_thread still leaves generation 0;
+///        threads are never proc-mgr holds, so the Q9 gen check for
+///        threads stays as weak as it is today.
+static uint32_t next_task_generation() noexcept {
+    return __atomic_fetch_add(&s_next_generation, 1, __ATOMIC_RELAXED);
+}
+
 void init_task_common(TaskControlBlock &tcb) {
-    tcb.generation =
-        __atomic_fetch_add(&s_next_generation, 1, __ATOMIC_RELAXED);
+    tcb.generation = next_task_generation();
     for (size_t i = 0; i < vfs::MAX_FDS; ++i) {
         tcb.fd_table.fds[i].used = false;
         tcb.fd_table.fds[i].vnode = nullptr;
@@ -1811,6 +1826,11 @@ TaskControlBlock *TaskControlBlock::clone(uint64_t *regs) {
 
     TCB_WRITE(tcb, magic, TCB_MAGIC);
     TCB_WRITE(tcb, id, Scheduler::alloc_id());
+    // Issue #564 F11 Stage B (INV-PROC-13): clone never routed through
+    // init_task_common, so every fork child was generation 0 — degenerate
+    // for exactly the population proc-mgr holds. Assign a fresh
+    // generation next to the id, before publication.
+    tcb->generation = next_task_generation();
     tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
     // Issue #41: watchdog disarmed, never-armed generation (see create).
     tcb->wdog_armed = false;

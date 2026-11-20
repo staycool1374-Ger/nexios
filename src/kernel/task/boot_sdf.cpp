@@ -427,12 +427,21 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // copy anyway — so the kernel stages raw backend bytes into the
         // window per op and the PD parses. The row carries no device
         // caps (MMIO/IRQ/DMA-device), so sdf_policy_only still holds.
+        // Issue #564 F11 Stage B: kVfsRegionPages is `#if CONFIG_VFS_SRV`-
+        // guarded in vfs_srv.hpp, so a knob-ON build without VFS_SRV
+        // (e.g. PROC_MGR-only) must not name it — the row never composes
+        // there (compose is per-enabled-row), and zero keeps the row a
+        // well-formed empty demand.
         uint64_t n = 0;
         if (n + 1 > kMaxCapsPerRole) {
             return 0;
         }
         out[n++] = CapSpec{CapKind::DMA_REGION, 0,
+#if CONFIG_VFS_SRV
                            kernel::vfs_srv::kVfsRegionPages *
+#else
+                           0 *
+#endif
                                arch::PAGE_SIZE,
                            0, 0};
         return n;
@@ -681,6 +690,12 @@ bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen) {
 // unconditionally (F10 QE seam, testbed cap_sdf): values-only over header
 // constants, no locks, no state, no server types — so unit tests can link
 // them in builds with every server PD disabled.
+// Issue #564 F11 Stage B: the gated block above leaves `kernel::sdf`
+// open, so these helpers must close it first — otherwise a knob-ON build
+// nests a second `kernel::sdf` here and the helpers define
+// `kernel::sdf::kernel::sdf::*` (ambiguous against the header).
+} // namespace sdf
+} // namespace kernel
 #endif // server-PD compose block (reopened below for sdf_compose)
 
 // Namespace reopened: the kernel::sdf opening above sits inside the gated
@@ -748,7 +763,10 @@ bool sdf_check_bounds(PdRole role, const CapSpec *specs, uint64_t count,
     CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
     CONFIG_PROCFS_SRV || CONFIG_PROC_MGR || CONFIG_SERIAL_TX_SHM
 // (server-PD compose block reopened; see above for the unconditional
-// pure-bound helpers)
+// pure-bound helpers. Issue #564 F11 Stage B: the unconditional section
+// closed `kernel::sdf`, so reopen it here for the gated compose path.)
+namespace kernel {
+namespace sdf {
 
 bool sdf_compose(TaskControlBlock &task, PdRole role) {
     CapSpec specs[kMaxCapsPerRole] = {};
