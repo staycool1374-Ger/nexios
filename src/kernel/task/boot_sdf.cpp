@@ -668,6 +668,18 @@ bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen) {
     return true;
 }
 
+// The server-PD gate above covers compose machinery with server-type
+// dependencies. The two pure bound helpers below intentionally compile
+// unconditionally (F10 QE seam, testbed cap_sdf): values-only over header
+// constants, no locks, no state, no server types — so unit tests can link
+// them in builds with every server PD disabled.
+#endif // server-PD compose block (reopened below for sdf_compose)
+
+// Namespace reopened: the kernel::sdf opening above sits inside the gated
+// region, so the unconditional helpers below need their own scope.
+namespace kernel {
+namespace sdf {
+
 RowBounds sdf_role_bounds(PdRole role) {
     // Values-only over the existing 13 rows (F10 mechanism; the per-row
     // 256 / Untyped-quota tuning lands with the M5/M12 rows that need
@@ -717,6 +729,18 @@ bool sdf_check_bounds(PdRole role, const CapSpec *specs, uint64_t count,
     }
     return true;
 }
+
+} // namespace sdf
+} // namespace kernel
+
+#if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
+    CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
+    CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
+    CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
+    CONFIG_PROCFS_SRV || CONFIG_SERIAL_TX_SHM
+// (server-PD compose block reopened; see above for the unconditional
+// pure-bound helpers)
 
 bool sdf_compose(TaskControlBlock &task, PdRole role) {
     CapSpec specs[kMaxCapsPerRole] = {};
