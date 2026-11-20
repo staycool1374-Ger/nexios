@@ -26,9 +26,26 @@
 #include <kernel/memory/untyped_handover.hpp>
 #include <kernel/memory/mem_pressure.hpp>
 #include <kernel/memory/pmm.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/test/resource_tracker.hpp>
 
 using namespace kernel;
+
+namespace {
+
+// Counts live dmesg rows for (subsystem, code) — the pressure latch
+// must emit exactly one row no matter how many times it fires.
+uint64_t dmesg_row_count(log::ErrorSubsystem sub, uint64_t code) {
+    uint64_t n = 0;
+    log::DmesgService::instance().for_each(
+        [&](const log::LogEntry &e) {
+            if (e.subsystem == sub && e.error_code == code)
+                ++n;
+        });
+    return n;
+}
+
+} // namespace
 
 // Runmode: kernel
 // Testidea: F10 handover coverage — status().frozen, caps_minted ==
@@ -94,17 +111,61 @@ JARVIS_TEST(untyped_handover_snapshot_immune, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: F10 mem-pressure latch-once — two latches give count()
-//        == 2, exactly one dmesg row, pending_notify() true, clear()
-//        resets to NONE.
+// Testidea: F10 mem-pressure latch-once — two latches bump the
+//        monotonic count by 2, emit exactly one dmesg row,
+//        pending_notify() true with first-wins reason; clear()
+//        resets to NONE (count stays monotonic — telemetry, not
+//        state).
 // Input: latch(X); latch(Y).
-// Expect: count 2; one dmesg row; pending true; after clear:
-//         NONE, !latched, count 0.
+// Expect: delta +2; one row; pending true; reason X; after clear:
+//         NONE, !latched, !pending, count unchanged since latch.
 // Depends: mem_pressure::latch/clear/count/pending_notify,
 //        dmesg row scan
 // Pseudocode: clear; latch; latch; assert 2/one-row/pending;
 // clear; assert NONE/clean; teardown.
+//
+// Note: the latch is global (not per-test isolated); the test
+// clears first and counts a DELTA so concurrent boot rows cannot
+// flake it. Reason pins first-wins.
 JARVIS_TEST(mem_pressure_latch_once, "PRE: none | POST: none") {
+    static uint64_t g_count = 0;
+    static uint64_t g_rows = 0;
+    static uint64_t g_pending = 0;
+    static uint64_t g_reason = 0;
+    static uint64_t g_clean = 0;
+    static uint64_t g_mono = 0;
+    g_count = g_rows = g_pending = g_reason = g_clean = g_mono = 0;
+
+    constexpr uint64_t kCode =
+        static_cast<uint64_t>(log::kDmesgBase_PMM) + 4;
+    mem_pressure::clear();
+    // count() is a monotonic lifetime counter (clear() resets state,
+    // not telemetry) — assert the +2 delta, not an absolute.
+    const uint64_t c0 = mem_pressure::count();
+    const uint64_t rows0 = dmesg_row_count(log::ErrorSubsystem::PMM, kCode);
+    mem_pressure::latch(mem_pressure::MemPressureReason::PMM_OOM);
+    mem_pressure::latch(mem_pressure::MemPressureReason::BUFPOOL_EMPTY);
+    g_count = mem_pressure::count() - c0;
+    g_rows = dmesg_row_count(log::ErrorSubsystem::PMM, kCode) - rows0;
+    g_pending = mem_pressure::pending_notify() ? 1ULL : 0ULL;
+    g_reason = static_cast<uint64_t>(mem_pressure::reason());
+    mem_pressure::clear();
+    g_clean = (!mem_pressure::latched() &&
+               mem_pressure::reason() ==
+                   mem_pressure::MemPressureReason::NONE &&
+               !mem_pressure::pending_notify())
+                  ? 1ULL
+                  : 0ULL;
+    g_mono = (mem_pressure::count() == c0 + 2) ? 1ULL : 0ULL;
+
+    JARVIS_ASSERT_EQ(2ULL, g_count);
+    JARVIS_ASSERT_EQ(1ULL, g_rows);
+    JARVIS_ASSERT_EQ(1ULL, g_pending);
+    JARVIS_ASSERT_EQ(
+        static_cast<uint64_t>(mem_pressure::MemPressureReason::PMM_OOM),
+        g_reason);
+    JARVIS_ASSERT_EQ(1ULL, g_clean);
+    JARVIS_ASSERT_EQ(1ULL, g_mono);
     JARVIS_TEST_PASS();
 }
 
