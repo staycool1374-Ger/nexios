@@ -122,7 +122,6 @@ void tcb_wait_settled(TaskControlBlock *target) {
     g_tcb_deadline = target->deadline_ticks;
     g_tcb_period = target->period_ticks;
     g_tcb_policy = static_cast<uint64_t>(target->sched_policy);
-    g_tcb_policy = static_cast<uint64_t>(target->sched_policy);
 }
 
 } // namespace
@@ -138,6 +137,57 @@ void tcb_wait_settled(TaskControlBlock *target) {
 // assert parked/BLOCKED/dequeued; tick; counter unchanged; teardown
 // (resume + drain).
 JARVIS_TEST(tcb_suspend_ready_parks_and_dequeues, "PRE: none | POST: none") {
+    static uint64_t g_runs = 0;
+    static uint64_t g_parked = 0;
+    static uint64_t g_state = 0;
+    static uint64_t g_queued = 0;
+    static uint64_t g_runs_after = 0;
+    static uint64_t g_admin = 0;
+    g_runs = g_parked = g_state = g_queued = g_runs_after = g_admin = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        // READY target that counts runs; parked before it ever runs.
+        auto *target = TaskControlBlock::create(
+            []() {
+                ++g_runs;
+                for (;;)
+                    arch::hlt();
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        // Tick-atomic setup: a timer tick between add and suspend could
+        // dispatch the target first (making it RUNNING, not READY).
+        {
+            arch::IrqGuard irq_guard{};
+            Scheduler::add_task(*target);
+            // Suspend the never-dispatched READY target (no latch: not RUNNING).
+            const errors::TcbCtlError r =
+                Scheduler::admin_suspend_err(*target);
+            g_parked = (r == errors::TCBCTL_ERR_OK) ? 1ULL : 0ULL;
+        }
+        g_admin = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        g_state = static_cast<uint64_t>(target->state);
+        g_queued = target->in_ready_queue_ ? 1ULL : 0ULL;
+        // Let a tick pass; a parked target must not run.
+        const uint64_t t0 = arch::Timer::ticks();
+        while (arch::Timer::ticks() == t0)
+            arch::hlt();
+        g_runs_after = g_runs;
+        Scheduler::admin_resume_err(*target);
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(1ULL, g_parked);
+    JARVIS_ASSERT_EQ(1ULL, g_admin);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(TaskState::BLOCKED), g_state);
+    JARVIS_ASSERT_EQ(0ULL, g_queued);
+    JARVIS_ASSERT_EQ(0ULL, g_runs_after);
     JARVIS_TEST_PASS();
 }
 
@@ -149,6 +199,51 @@ JARVIS_TEST(tcb_suspend_ready_parks_and_dequeues, "PRE: none | POST: none") {
 // Pseudocode: suspend READY target; resume (0); assert READY+queued;
 // run to completion; counter +1; teardown.
 JARVIS_TEST(tcb_resume_prev_ready_reenables, "PRE: none | POST: none") {
+    static uint64_t g_runs2 = 0;
+    static uint64_t g_susp = 0;
+    static uint64_t g_resume = 0;
+    static uint64_t g_ready = 0;
+    static uint64_t g_queued = 0;
+    g_runs2 = g_susp = g_resume = g_ready = g_queued = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Single-shot target: counts one run, then returns
+        // (terminates). Parked before it ever runs.
+        auto *target = TaskControlBlock::create(
+            []() {
+                ++g_runs2;
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        {
+            arch::IrqGuard irq_guard{};
+            Scheduler::add_task(*target);
+            const errors::TcbCtlError r =
+                Scheduler::admin_suspend_err(*target);
+            g_susp = static_cast<uint64_t>(r);
+            if (r != errors::TCBCTL_ERR_OK)
+                return;
+        }
+        g_resume = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        g_ready = (target->state == TaskState::READY) ? 1ULL : 0ULL;
+        // Queued means bitmap OR EDF list (periodic targets route to
+        // the EDF list exclusively — no bitmap flag).
+        g_queued = (target->in_ready_queue_ || target->in_edf_queue_) ? 1ULL
+                                                                      : 0ULL;
+        kernel::test::wait_for_termination_safe(target);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, g_susp);
+    JARVIS_ASSERT_EQ(0ULL, g_resume);
+    JARVIS_ASSERT_EQ(1ULL, g_ready);
+    JARVIS_ASSERT_EQ(1ULL, g_queued);
+    JARVIS_ASSERT_EQ(1ULL, g_runs2);
     JARVIS_TEST_PASS();
 }
 
@@ -166,6 +261,71 @@ JARVIS_TEST(tcb_resume_prev_ready_reenables, "PRE: none | POST: none") {
 // run); resume; wait returns; counter +1; teardown. Repeat shape for
 // waitpid-blocked parent + exiting child (assert status delivered).
 JARVIS_TEST(tcb_suspend_blocked_absorbs_wake_then_resumes, "PRE: none | POST: none") {
+    static uint64_t g_abs0 = 0;
+    static uint64_t g_abs1 = 0;
+    static uint64_t g_woke = 0;
+    static uint64_t g_parked = 0;
+    static uint64_t g_resumed = 0;
+    static uint64_t g_still_blocked = 0;
+    static uint64_t g_still_parked = 0;
+    g_abs0 = g_abs1 = g_woke = g_parked = g_resumed = g_still_blocked =
+        g_still_parked = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        // Latch into the waiter: waits once, counts the wake, exits.
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                __atomic_fetch_add(&g_woke, 1ULL, __ATOMIC_RELAXED);
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        g_abs0 = Scheduler::adm_wake_absorbed_count();
+        // Suspend the semaphore-BLOCKED target: parked, still BLOCKED.
+        if (Scheduler::admin_suspend_err(*target) !=
+            errors::TCBCTL_ERR_OK)
+            return;
+        g_parked = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        // A post while parked must be absorbed: count +1, still
+        // BLOCKED + parked, task did not run past the wait.
+        sem.post();
+        g_abs1 = Scheduler::adm_wake_absorbed_count();
+        g_still_blocked =
+            (target->state == TaskState::BLOCKED) ? 1ULL : 0ULL;
+        g_still_parked =
+            Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        // Resume returns the task to its semaphore wait...
+        g_resumed = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        // ...which a second post then satisfies: wait returns,
+        // counter +1, task terminates.
+        sem.post();
+        kernel::test::wait_for_termination_safe(target);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(g_abs0 + 1, g_abs1);
+    JARVIS_ASSERT_EQ(1ULL, g_parked);
+    JARVIS_ASSERT_EQ(1ULL, g_still_blocked);
+    JARVIS_ASSERT_EQ(1ULL, g_still_parked);
+    JARVIS_ASSERT_EQ(0ULL, g_resumed);
+    JARVIS_ASSERT_EQ(1ULL, g_woke);
     JARVIS_TEST_PASS();
 }
 
@@ -181,6 +341,64 @@ JARVIS_TEST(tcb_suspend_blocked_absorbs_wake_then_resumes, "PRE: none | POST: no
 // Pseudocode: suspend READY target; call enqueue_ready directly
 // (refused); assert counters/state; teardown (resume + drain).
 JARVIS_TEST(tcb_suspend_absorb_backstop_refuses_link, "PRE: none | POST: none") {
+    static uint64_t g_back0 = 0;
+    static uint64_t g_back1 = 0;
+    static uint64_t g_orp0 = 0;
+    static uint64_t g_orp1 = 0;
+    static uint64_t g_blocked = 0;
+    static uint64_t g_queued = 0;
+    static uint64_t g_parked = 0;
+    g_back0 = g_back1 = g_orp0 = g_orp1 = g_blocked = g_queued = g_parked = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                while (self->state == TaskState::BLOCKED)
+                    arch::pause();
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        if (Scheduler::admin_suspend_err(*target) !=
+            errors::TCBCTL_ERR_OK)
+            return;
+        g_back0 = Scheduler::adm_wake_backstop_count();
+        g_orp0 = Scheduler::orphan_rescue_count();
+        // Direct enqueue of a parked task: refused, stays BLOCKED.
+        Scheduler::enqueue_ready(*target);
+        g_back1 = Scheduler::adm_wake_backstop_count();
+        g_orp1 = Scheduler::orphan_rescue_count();
+        g_blocked =
+            (target->state == TaskState::BLOCKED) ? 1ULL : 0ULL;
+        g_parked = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        g_queued = target->in_ready_queue_ ? 1ULL : 0ULL;
+        Scheduler::admin_resume_err(*target);
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, g_back0); // must-read-0 outside this test
+    JARVIS_ASSERT_EQ(g_back0 + 1, g_back1);
+    JARVIS_ASSERT_EQ(g_orp0, g_orp1);
+    JARVIS_ASSERT_EQ(1ULL, g_blocked);
+    JARVIS_ASSERT_EQ(1ULL, g_parked);
+    JARVIS_ASSERT_EQ(0ULL, g_queued);
     JARVIS_TEST_PASS();
 }
 
@@ -193,18 +411,99 @@ JARVIS_TEST(tcb_suspend_absorb_backstop_refuses_link, "PRE: none | POST: none") 
 // Pseudocode: live target; resume (expect NOT_SUSPENDED); assert
 // state/queue untouched; teardown.
 JARVIS_TEST(tcb_resume_not_suspended_typed, "PRE: none | POST: none") {
+    static uint64_t g_ret = 0;
+    static uint64_t g_parked = 0;
+    static uint64_t g_state = 0;
+    g_ret = g_parked = g_state = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Live user child, never suspended.
+        auto *target = TaskControlBlock::create(forever_entry, 20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        g_ret = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        g_parked = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        g_state = static_cast<uint64_t>(target->state);
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_NOT_SUSPENDED),
+                     g_ret);
+    JARVIS_ASSERT_EQ(0ULL, g_parked);
+    JARVIS_ASSERT(static_cast<uint64_t>(TaskState::TERMINATED) != g_state);
     JARVIS_TEST_PASS();
 }
 
 // Runmode: kernel
-// Testidea: F4 suspend of dead targets is typed (TERMINATED and
-//        REAPED both -> DEAD).
-// Input: TERMINATED target; reaped (freed) generation.
-// Expect: Both DEAD; no state change.
-// Depends: admin_suspend_err DEAD leg, generation guard
-// Pseudocode: terminate target (no drain); suspend (DEAD); drain;
-// suspend stale handle (DEAD); teardown.
+// Testidea: F4 suspend/resume of dead targets is typed: a TERMINATED
+// (not yet reaped) target gives DEAD; a reaped slot is gone from the
+// id table so the resolve path fails closed (BAD_HANDLE here — ids
+// are never reused in-boot, so no stale slot can be confused for it).
+// Input: TERMINATED target (no drain); reaped target.
+// Expect: DEAD; BAD_HANDLE; no state change.
+// Depends: admin_suspend_err/admin_resume_err DEAD leg,
+//        tcb_control_resolve id-table miss
+// Pseudocode: terminate target (no drain); suspend+resume (DEAD);
+// drain (reaped); resolve via fresh cap (BAD_HANDLE); teardown.
 JARVIS_TEST(tcb_suspend_dead_target_typed, "PRE: none | POST: none") {
+    static uint64_t g_susp = 0;
+    static uint64_t g_res = 0;
+    static uint64_t g_reaped = 0;
+    g_susp = g_res = g_reaped = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        auto *target = TaskControlBlock::create(forever_entry, 20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        Scheduler::add_task(*target);
+        int tslot = install_tcb_cap(cs, target->id, target->generation);
+        if (tslot < 0) {
+            Scheduler::terminate(*target, 0);
+            Scheduler::drain_zombie_list();
+            return;
+        }
+        const uint64_t th = tcb_handle(cs, static_cast<uint32_t>(tslot));
+        // Terminate but do NOT drain: TERMINATED, still in the table.
+        Scheduler::terminate(*target, 0);
+        g_susp = static_cast<uint64_t>(
+            Scheduler::admin_suspend_err(*target));
+        g_res = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        // Drain (reap + free), then resolve via a fresh cap: the slot
+        // is gone from the id table -> fail closed, not DEAD (ids are
+        // never reused, so no stale-target confusion is possible).
+        Scheduler::drain_zombie_list();
+        auto *cap2 = cap::TcbCap::create(target->id, target->generation);
+        if (cap2) {
+            int s2 = cs->install(cap2, cap::CapType::TCB,
+                                 cap::CapRights::READ);
+            if (s2 >= 0) {
+                const uint64_t h2 = tcb_handle(cs, static_cast<uint32_t>(s2));
+                auto rr = tcb_control::tcb_control_resolve(*cur, h2);
+                g_reaped = static_cast<uint64_t>(rr.err);
+                cs->remove(static_cast<uint32_t>(s2));
+            }
+            cap2->release();
+        }
+        cs->remove(static_cast<uint32_t>(tslot));
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_DEAD), g_susp);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_DEAD), g_res);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_BAD_HANDLE),
+                     g_reaped);
     JARVIS_TEST_PASS();
 }
 
