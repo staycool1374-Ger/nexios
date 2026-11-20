@@ -38,6 +38,7 @@
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/arch/timer.hpp>
+#include <kernel/nexios_config.h>
 
 using namespace kernel;
 
@@ -443,16 +444,25 @@ JARVIS_TEST(tcb_resume_not_suspended_typed, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: F4 suspend/resume of dead targets is typed: a TERMINATED
-// (not yet reaped) target gives DEAD; a reaped slot is gone from the
-// id table so the resolve path fails closed (BAD_HANDLE here — ids
-// are never reused in-boot, so no stale slot can be confused for it).
+// Testidea: F4 suspend/resume of dead targets fails closed: terminate()
+//        synchronously unlinks the corpse from the id table
+//        (release_zombie runs inside terminate's locked section), so a
+//        TERMINATED-but-undrained target is already unaddressable —
+//        admin_suspend_err/admin_resume_err return BAD_HANDLE via the
+//        find_task miss, which precedes the DEAD check. Same for the
+//        reaped half via tcb_control_resolve. DEVIATION from plan-557
+//        test 6 (TERMINATED -> DEAD): the DEAD leg covers an in-table
+//        TERMINATED TCB, which terminate() never leaves behind, so it is
+//        defense-in-depth only; BAD_HANDLE here is the more closed of
+//        the two fail-closeds (flagged for dev on #557 to either drive
+//        DEAD or re-spec it).
 // Input: TERMINATED target (no drain); reaped target.
-// Expect: DEAD; BAD_HANDLE; no state change.
-// Depends: admin_suspend_err/admin_resume_err DEAD leg,
-//        tcb_control_resolve id-table miss
-// Pseudocode: terminate target (no drain); suspend+resume (DEAD);
-// drain (reaped); resolve via fresh cap (BAD_HANDLE); teardown.
+// Expect: BAD_HANDLE; BAD_HANDLE; no state change.
+// Depends: admin_suspend_err/admin_resume_err find_task gate,
+//        tcb_control_resolve id-table miss, release_zombie unlink
+// Pseudocode: terminate target (no drain); suspend+resume
+// (BAD_HANDLE: corpse already unlinked); drain (reaped); resolve via
+// fresh cap (BAD_HANDLE); teardown.
 JARVIS_TEST(tcb_suspend_dead_target_typed, "PRE: none | POST: none") {
     static uint64_t g_susp = 0;
     static uint64_t g_res = 0;
@@ -482,29 +492,25 @@ JARVIS_TEST(tcb_suspend_dead_target_typed, "PRE: none | POST: none") {
             Scheduler::admin_suspend_err(*target));
         g_res = static_cast<uint64_t>(
             Scheduler::admin_resume_err(*target));
-        // Drain (reap + free), then resolve via a fresh cap: the slot
-        // is gone from the id table -> fail closed, not DEAD (ids are
-        // never reused, so no stale-target confusion is possible).
+        // Drain (reap + free), then mint a fresh cap: TcbCap::create
+        // validates liveness and refuses the dead target (nullptr) —
+        // the fail-closed point is one step earlier than resolve, and
+        // stronger (no cap to even present). g_reaped records mint
+        // refusal (1) vs unexpected success (0).
         Scheduler::drain_zombie_list();
         auto *cap2 = cap::TcbCap::create(target->id, target->generation);
+        g_reaped = (cap2 == nullptr) ? 1ULL : 0ULL;
         if (cap2) {
-            int s2 = cs->install(cap2, cap::CapType::TCB,
-                                 cap::CapRights::READ);
-            if (s2 >= 0) {
-                const uint64_t h2 = tcb_handle(cs, static_cast<uint32_t>(s2));
-                auto rr = tcb_control::tcb_control_resolve(*cur, h2);
-                g_reaped = static_cast<uint64_t>(rr.err);
-                cs->remove(static_cast<uint32_t>(s2));
-            }
             cap2->release();
         }
         cs->remove(static_cast<uint32_t>(tslot));
     });
     JARVIS_ASSERT(t != nullptr);
-    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_DEAD), g_susp);
-    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_DEAD), g_res);
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_BAD_HANDLE),
-                     g_reaped);
+                     g_susp);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_BAD_HANDLE),
+                     g_res);
+    JARVIS_ASSERT_EQ(1ULL, g_reaped);
     JARVIS_TEST_PASS();
 }
 
@@ -521,6 +527,104 @@ JARVIS_TEST(tcb_suspend_dead_target_typed, "PRE: none | POST: none") {
 // user-PC tick (parked); kernel-PC tick on a fresh target (RUNNING);
 // teardown (resume + drain).
 JARVIS_TEST(tcb_suspend_deferred_running_boundary, "PRE: none | POST: none") {
+    static uint64_t g_latched = 0;
+    static uint64_t g_still_running = 0;
+    static uint64_t g_parked = 0;
+    static uint64_t g_blocked = 0;
+    static uint64_t g_klatch = 0;
+    static uint64_t g_krunning = 0;
+    g_latched = g_still_running = g_parked = g_blocked = g_klatch =
+        g_krunning = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Fabricated-RUNNING user target: added READY (add_task
+        // requires it), flipped to RUNNING under IF=0 so no tick can
+        // dispatch the fabrication. Mirrors what the tick observes.
+        auto *target = TaskControlBlock::create(
+            []() {
+                for (;;)
+                    arch::hlt();
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        Scheduler::add_task(*target);
+        {
+            arch::IrqGuard irq_guard{};
+            target->state = TaskState::RUNNING;
+            // Suspend a RUNNING target: deferred latch, still RUNNING.
+            const errors::TcbCtlError r =
+                Scheduler::admin_suspend_err(*target);
+            if (r != errors::TCBCTL_ERR_OK)
+                return;
+            g_latched =
+                __atomic_load_n(&target->admin_stop_requested,
+                                __ATOMIC_ACQUIRE)
+                    ? 1ULL
+                    : 0ULL;
+            g_still_running =
+                (target->state == TaskState::RUNNING) ? 1ULL : 0ULL;
+            // Tick with a user-mode PC: the deferred consumer parks it.
+            // Single-actor under IF=0 (no tick/ISR can interleave); the
+            // consumer's park tail is the same code the tick runs.
+            Scheduler::admin_consume_deferred_stop(*target, 0x1000);
+            g_parked = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+            g_blocked =
+                (target->state == TaskState::BLOCKED) ? 1ULL : 0ULL;
+        }
+        // Resume + reap the parked target (public API, lock-safe).
+        Scheduler::admin_resume_err(*target);
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+        // Kernel-PC half: fresh target, same latch setup; a kernel PC
+        // (>= USER_SPACE_LIMIT) must NOT park it and must NOT consume
+        // the latch.
+        auto *ktarget = TaskControlBlock::create(
+            []() {
+                for (;;)
+                    arch::hlt();
+            },
+            20, 10);
+        if (!ktarget)
+            return;
+        ktarget->is_user_ = true;
+        ktarget->parent_id = cur->id;
+        Scheduler::add_task(*ktarget);
+        {
+            arch::IrqGuard irq_guard{};
+            ktarget->state = TaskState::RUNNING;
+            if (Scheduler::admin_suspend_err(*ktarget) !=
+                errors::TCBCTL_ERR_OK) {
+                ktarget->state = TaskState::READY;
+                return;
+            }
+            Scheduler::admin_consume_deferred_stop(
+                *ktarget, CONFIG_USER_SPACE_LIMIT);
+            g_klatch =
+                __atomic_load_n(&ktarget->admin_stop_requested,
+                                __ATOMIC_ACQUIRE)
+                    ? 1ULL
+                    : 0ULL;
+            g_krunning =
+                (ktarget->state == TaskState::RUNNING) ? 1ULL : 0ULL;
+            // Park it for real so teardown is uniform: user-PC consume,
+            // then drop the guard before the public-API teardown.
+            Scheduler::admin_consume_deferred_stop(*ktarget, 0x1000);
+        }
+        Scheduler::admin_resume_err(*ktarget);
+        Scheduler::terminate(*ktarget, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(1ULL, g_latched);
+    JARVIS_ASSERT_EQ(1ULL, g_still_running);
+    JARVIS_ASSERT_EQ(1ULL, g_parked);
+    JARVIS_ASSERT_EQ(1ULL, g_blocked);
+    JARVIS_ASSERT_EQ(1ULL, g_klatch);
+    JARVIS_ASSERT_EQ(1ULL, g_krunning);
     JARVIS_TEST_PASS();
 }
 
