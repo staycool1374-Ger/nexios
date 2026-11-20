@@ -157,6 +157,13 @@ BootInfo &boot_info() noexcept;
 uint64_t get_boot_epoch() noexcept;
 /// @brief Set the boot epoch.  BOOT_ONLY: rejected after boot.
 bool try_set_boot_epoch(uint64_t epoch, const WriteContext &ctx) noexcept;
+/// @brief ISR-nesting counter value observed at firmware handover (#589).
+///        Read-only seam for tests/QE; stored once at boot, then immutable.
+uint64_t get_isr_nesting_boot_baseline() noexcept;
+/// @brief Record the handover-observed nesting baseline.  BOOT_ONLY and
+///        called exactly once from the higherhalf_entry handover site.
+bool try_set_isr_nesting_boot_baseline(uint64_t observed,
+                                       const WriteContext &ctx) noexcept;
 /// @brief Multiboot2 magic (0x36D76289 if booted by Multiboot2).
 uint64_t get_multiboot_magic() noexcept;
 /// @brief Physical pointer to the Multiboot2 info structure.

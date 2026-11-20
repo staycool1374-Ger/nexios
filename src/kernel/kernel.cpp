@@ -41,6 +41,7 @@
 #include <kernel/iommu/iommu.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/cpu_context.hpp>
 #include <kernel/arch/hal/irq_storm.hpp>
 #include <kernel/task/admission_selftest.hpp>
 #include <kernel/task/task.hpp>
@@ -144,10 +145,49 @@ static void keyboard_threaded_handler(uint64_t, uint64_t, uint64_t) {
 // blocks as reaper.  Referenced by both the manual pre-test create (below)
 // and the post-test task-definition table (taskdefs.cpp).
 extern "C" void debug_write(const char *msg);
+extern "C" void debug_write_hex(uint64_t value);
+extern "C" void debug_write_dec(uint64_t value);
 void init_task_main() {
 #if defined(CONFIG_DEBUG)
     debug_write("[DIAG] init_task_main entered\n");
 #endif
+    // Issue #589 acceptance tripwire (READ-ONLY — never write the counter
+    // here: ticks are live and tasks run, so INV-NEST-1 no longer holds).
+    // A nonzero depth at first task context INDICATES (does not prove)
+    // post-handover residual: higher-priority daemons dispatched before
+    // init block in recv holding trap frames by design, so the value is
+    // dispatch-order-dependent. The census names the discriminating
+    // fields: BLOCKED-via-trap is state == BLOCKED && has_utrap_frame
+    // (the monotonic entered-via-trap marker, set in Syscall::handle and
+    // never cleared), with blocked_in_recv confirming the recv channel.
+    {
+        const uint64_t entry_depth = kernel::isr_nesting_own();
+        if (entry_depth != 0) {
+            debug_write("[NEST] task-entry depth=");
+            debug_write_hex(entry_depth);
+            debug_write("\n");
+            for (auto *census_task =
+                     kernel::Scheduler::all_tasks().first_ptr();
+                 census_task != nullptr;
+                 census_task =
+                     kernel::Scheduler::all_tasks().next_ptr(census_task)) {
+                if (census_task->magic !=
+                    kernel::TaskControlBlock::TCB_MAGIC) {
+                    continue;
+                }
+                debug_write("[NEST] task id=");
+                debug_write_hex(census_task->id);
+                debug_write(" state=");
+                debug_write_dec(
+                    static_cast<uint64_t>(census_task->state));
+                debug_write(" utrap=");
+                debug_write_dec(census_task->has_utrap_frame ? 1 : 0);
+                debug_write(" recv=");
+                debug_write_dec(census_task->blocked_in_recv ? 1 : 0);
+                debug_write("\n");
+            }
+        }
+    }
     // Read /etc/fstab and mount entries
     {
         auto fstab = initrd::find("./etc/fstab");
@@ -1052,6 +1092,21 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
     arch::percpu_init_bsp(
         static_cast<uint64_t>(kernel::gs::boot_info().hart_id));
 #endif
+    // Issue #589 (owner option (a)): normalize the ISR-nesting baseline at
+    // kernel handover — the last single-threaded, SIE==0,
+    // zero-outstanding-frame point (INV-NEST-1); after this the scheduler
+    // and traps own the counter. A nonzero observed value is EVIDENCE
+    // (firmware/boot-path carry), not an error: it is preserved in the
+    // baseline global before being cleared.
+    {
+        const uint64_t nesting_baseline =
+            arch::normalize_isr_nesting_baseline();
+        (void)kernel::gs::try_set_isr_nesting_boot_baseline(nesting_baseline,
+                                                            ctx);
+        debug_write("[BOOT] isr_nesting baseline=");
+        debug_write_hex(nesting_baseline);
+        debug_write("\n");
+    }
 #if defined(CONFIG_ARCH_X86_64)
     // Issue #251: same hidden-visibility binding as the RSP switch above —
     // RSP and TSS.RSP0 must resolve to the identical descriptor value.

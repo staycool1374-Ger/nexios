@@ -152,6 +152,13 @@ class VMM {
     static uint64_t current_root_phys() noexcept;
     /// @brief True when @p entry points at a next-level table.
     static bool table_entry_is_table(uint64_t entry) noexcept;
+    /// @brief Level-aware table test for external validators (issue #564,
+    ///        F11 Stage C): true when @p entry in the table at @p depth
+    ///        points at a next-level table (0 = PML4/L0 .. 2 = PD/L2;
+    ///        level 3 = PT/L3 entries are always leaves).  The walker's
+    ///        is_table_entry exposed without widening private-codec
+    ///        access; pure function of its arguments.
+    static bool table_entry_is_table_at(uint64_t entry, unsigned level);
     /// @brief Decode the child-table phys from a table @p entry.
     static uint64_t table_entry_child(uint64_t entry) noexcept;
     /// @brief Encode the installable link word for @p child_phys.
@@ -352,6 +359,32 @@ class VMM {
     ///       Context: any-task (test inspector, walk-only). SMP: N/A.
     [[nodiscard]] static bool pte_is_executable_in_pml4(uint64_t virt_addr,
                                           uint64_t pml4_phys);
+    /// @brief One enumerated user region (issue #564, F11 Stage C): a
+    ///        maximal run of contiguous identically-permissioned present
+    ///        leaves.  Va and bytes are page-aligned; bytes covers whole
+    ///        block entries when the parent maps huge/block pages.
+    struct UserRegion {
+        uint64_t va = 0;      ///< region base (page-aligned)
+        uint64_t bytes = 0;   ///< region size (page-multiple)
+        bool executable = false; ///< any-execute permission (NX otherwise)
+        bool writable = false;   ///< write permission (RO otherwise)
+    };
+    /// @brief Enumerate the user half of @p root_phys into @p out
+    ///        (issue #564, F11 Stage C): bounded, allocation-free,
+    ///        read-only walk that coalesces contiguous
+    ///        identically-permissioned present leaves and stops filling
+    ///        at @p max_out.  Permissions decode only through the
+    ///        existing per-arch codecs (LEARNINGS #363).  Non-user entries
+    ///        (merged kernel half) are skipped, never enumerated.
+    /// @return Total regions found (may exceed @p max_out — the caller
+    ///         fails closed on truncation); only out[0..min(count,
+    ///         max_out)) are written.  Zero side effects.
+    /// @note Concurrency/caller contract: Lock: none. Context:
+    ///       kernel-only (caller context, pre-publication root). SMP:
+    ///       pre-publication window (no dispatcher can reach the root).
+    [[nodiscard]] static size_t
+    enumerate_user_regions(uint64_t root_phys, UserRegion *out,
+                           size_t max_out) noexcept;
 #if defined(CONFIG_ARCH_RISCV64)
     /// @brief Sv39 PTE address codecs (issue #206: PTEs carry PPN<<10, so
     ///        raw masking is x86-domain-wrong).  Public for the

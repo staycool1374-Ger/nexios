@@ -154,6 +154,13 @@ BootInfo g_boot_info{};
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 uint64_t g_boot_epoch = 0; // RTC read_seconds() at boot
 
+// Issue #589: value the ISR-nesting counter held when the kernel took over
+// from firmware. Zero on every arch whose baseline is zero by construction;
+// nonzero on rv64 is measured firmware/boot-path carry-over, normalized at
+// handover. Written exactly once (BOOT_ONLY); QE/test read seam.
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t g_isr_nesting_boot_baseline = 0;
+
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 CanaryTrip g_canary_trip{};
 
@@ -217,6 +224,17 @@ uint64_t get_boot_epoch() noexcept {
 bool try_set_boot_epoch(uint64_t epoch, const WriteContext &ctx) noexcept {
     return verify_and_write(g_boot_epoch, epoch, WriteClass::BOOT_ONLY, ctx,
                             "boot_epoch");
+}
+
+uint64_t get_isr_nesting_boot_baseline() noexcept {
+    return g_isr_nesting_boot_baseline;
+}
+
+bool try_set_isr_nesting_boot_baseline(uint64_t observed,
+                                       const WriteContext &ctx) noexcept {
+    return verify_and_write(g_isr_nesting_boot_baseline, observed,
+                            WriteClass::BOOT_ONLY, ctx,
+                            "isr_nesting_boot_baseline");
 }
 
 uint64_t get_multiboot_magic() noexcept {

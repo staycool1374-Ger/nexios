@@ -3,7 +3,18 @@
 #include <kernel/arch/apic.hpp>
 #include <constants.hpp>
 
+#include <kernel/arch/cpu_context.hpp>
+
 namespace arch {
+
+// Issue #589 (owner option (a)): VERIFY-ONLY body — must observe NO STORE.
+// The own-CPU slot is asm-owned (isr_stubs.asm gs:0x20 RMW) and
+// percpu_init_bsp already installed 0; this function exists to VERIFY the
+// baseline, never to set it. The returned live value is logged at the
+// handover call site so future drift is boot-visible.
+uint64_t normalize_isr_nesting_baseline() noexcept {
+    return kernel::isr_nesting_own();
+}
 
 // Per-CPU array (CONFIG_MAX_CPUS pages, 4 KiB each).
 PerCpu per_cpu[CONFIG_MAX_CPUS];

@@ -20,6 +20,7 @@
 /// @brief Syscall handlers for miscellaneous operations: yield, print,
 /// get_ticks, exit, etc.
 
+#include <kernel/proc/proc_svc.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/kernel.hpp>
@@ -83,10 +84,9 @@ uint64_t Syscall::sys_get_ticks(uint64_t, uint64_t, uint64_t, uint64_t,
     return arch::Timer::ticks();
 }
 
-uint64_t Syscall::sys_getpid(uint64_t, uint64_t, uint64_t, uint64_t,
-                             uint64_t *) {
-    auto *t = syscall_task();
-    return t ? t->id : 0;
+uint64_t Syscall::sys_getpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
+                             uint64_t arg3, uint64_t *regs) {
+    return proc::ProcSvc::getpid(arg0, arg1, arg2, arg3, regs);
 }
 
 uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,

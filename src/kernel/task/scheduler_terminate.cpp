@@ -29,6 +29,7 @@
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/ipc/death_notify.hpp>           // M1/F6 death latch
 #include <kernel/ipc/ipc.hpp>                    // M1/F7 waiter drains
+#include <kernel/proc/proc_tcb_caps.hpp>         // F11 proc-mgr hold funnel release
 #include <assert.hpp>                              // issue #369 T1b ENSURE
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
@@ -75,6 +76,13 @@ void Scheduler::publish_task_death(TaskControlBlock &dead,
     // harness ever observes BLOCKED) — convicted by bisection, full
     // class green without the early sender wake.
     IPC::wake_reply_waiters_of(dead);
+    // F11 (#564, INV-PROC-5): drop every proc-mgr TCB-cap hold naming the
+    // dead task (target leg) or held by it (holder leg, index-only — the
+    // dying holder's CNode teardown owns its wrappers/edges). IrqGuard is
+    // held above with scheduler_lock_ NOT held (ENSUREd at entry);
+    // release_on_death adds only leaf takes, is idempotent across
+    // double-publish (generation-mismatch no-op), and performs no logging.
+    proc::proc_tcb_caps::release_on_death(dead.id, dead.generation);
     // Wake-only: no reschedule(), no switch_to_task (single-writer arm
     // rule, H2).  The poked supervisor dispatches on the next tick.
 }

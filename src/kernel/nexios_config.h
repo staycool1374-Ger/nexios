@@ -1571,8 +1571,101 @@ extern "C" void panic(const char *msg);
 #if CONFIG_WDOG_MON != 0 && CONFIG_WDOG_MON != 1
 #error "CONFIG_WDOG_MON must be 0 or 1 (default 0)"
 #endif
+/// Bounded proc-mgr RPC timeout in ticks (issue #564, INV-PROC-2).
+/// Caps one proc-mgr Call round-trip; expiry fails closed with a typed
+/// error (never an unbounded wait, never a held block). Default: 5000
+/// (the interim ceiling shared by the other server proxies; per-server
+/// refinement follows #574). Defined before the validator group below
+/// (an undefined macro reads as 0 in `#if`, which would trip the >= 1
+/// check before the late `#ifndef` default lands).
+#ifndef CONFIG_PROC_MGR_RPC_TIMEOUT_TICKS
+#define CONFIG_PROC_MGR_RPC_TIMEOUT_TICKS 5000
+#endif
+
+/// Maximum TCB-cap holds tracked by the proc-mgr hold table (issue #564,
+/// INV-PROC-4). Bounded fixed array, no allocation on the fork path.
+/// Overflow fails closed with a typed error (no zombie, no half-hold,
+/// never a panic). Default: 32 (fits one CNode; quota extension is a
+/// tracked follow-up, not a silent overrun). Placed before the validator
+/// group for the same reason as the timeout above.
+#ifndef CONFIG_PROC_MGR_MAX_HELD_TCB_CAPS
+#define CONFIG_PROC_MGR_MAX_HELD_TCB_CAPS 32
+#endif
+
+/// Carve-composed fork master switch (issue #564, F11 Stage C).
+/// 0 = kernel-composed clone (shipped default, bit-identical).
+/// 1 = carve-composed fork (retype + VSpace map + foreign-frame map +
+/// carved-root activation, no kernel deep copy). Requires
+/// CONFIG_PROC_MGR=1 (build-time #error otherwise — S3-3 cross-knob
+/// validator). All carve code is `#if
+/// CONFIG_PROC_MGR_CARVE_FORK`-guarded (empty TU when 0); no runtime `if`
+/// on this knob. Default: 0.
+#ifndef CONFIG_PROC_MGR_CARVE_FORK
+#define CONFIG_PROC_MGR_CARVE_FORK 0
+#endif
+
+/// Maximum live VSpace table links kernel-wide (issue #564, F11 Stage C).
+/// Replaces the F5 placeholder kMaxVspaceMappings = 32, which sized table
+/// links for tests: a carved fork child needs one link per table (capped
+/// at CONFIG_CARVE_MAX_TABLES), so 256 = 64 tasks x 4. F9 (#562, Q7) owns
+/// the final re-derivation and this key is the handoff, not a second
+/// copy. Default: 256.
+#ifndef CONFIG_CAP_MAX_VSPACE_MAPPINGS
+#define CONFIG_CAP_MAX_VSPACE_MAPPINGS 256
+#endif
+
+/// Maximum concurrent carve bindings (issue #564, F11 Stage C).
+/// One slot per carved child (64 = CONFIG_MAX_TASKS); exhaustion fails
+/// the fork closed with a typed error (never a panic, never a partial
+/// child). Default: 64.
+#ifndef CONFIG_CARVE_BINDINGS
+#define CONFIG_CARVE_BINDINGS 64
+#endif
+
+/// Maximum user regions enumerated per carve-composed fork (issue #564,
+/// F11 Stage C). A legitimately more-fragmented process is refused fork
+/// with a typed error (never a panic); raising the bound is a config
+/// change, not a code change. Default: 16.
+#ifndef CONFIG_CARVE_MAX_REGIONS
+#define CONFIG_CARVE_MAX_REGIONS 16
+#endif
+
+/// Maximum page tables carved per carve-composed fork (issue #564,
+/// F11 Stage C). Covers a fully-populated 4-level chain with spares;
+/// exhaustion fails the fork closed with a typed error. Default: 24.
+#ifndef CONFIG_CARVE_MAX_TABLES
+#define CONFIG_CARVE_MAX_TABLES 24
+#endif
+
 #if CONFIG_PROCFS_SRV != 0 && CONFIG_PROCFS_SRV != 1
 #error "CONFIG_PROCFS_SRV must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_PROC_MGR != 0 && CONFIG_PROC_MGR != 1
+#error "CONFIG_PROC_MGR must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_PROC_MGR_RPC_TIMEOUT_TICKS < 1
+#error "CONFIG_PROC_MGR_RPC_TIMEOUT_TICKS must be >= 1 (default 5000)"
+#endif
+#if CONFIG_PROC_MGR_MAX_HELD_TCB_CAPS < 1
+#error "CONFIG_PROC_MGR_MAX_HELD_TCB_CAPS must be >= 1 (default 32)"
+#endif
+#if CONFIG_PROC_MGR_CARVE_FORK != 0 && CONFIG_PROC_MGR_CARVE_FORK != 1
+#error "CONFIG_PROC_MGR_CARVE_FORK must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_CAP_MAX_VSPACE_MAPPINGS < 1
+#error "CONFIG_CAP_MAX_VSPACE_MAPPINGS must be >= 1 (default 256)"
+#endif
+#if CONFIG_CARVE_BINDINGS < 1
+#error "CONFIG_CARVE_BINDINGS must be >= 1 (default 64)"
+#endif
+#if CONFIG_CARVE_MAX_REGIONS < 1
+#error "CONFIG_CARVE_MAX_REGIONS must be >= 1 (default 16)"
+#endif
+#if CONFIG_CARVE_MAX_TABLES < 1
+#error "CONFIG_CARVE_MAX_TABLES must be >= 1 (default 24)"
+#endif
+#if CONFIG_PROC_MGR_CARVE_FORK && !CONFIG_PROC_MGR
+#error "CONFIG_PROC_MGR_CARVE_FORK requires CONFIG_PROC_MGR=1"
 #endif
 #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
 #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
@@ -1644,6 +1737,17 @@ extern "C" void panic(const char *msg);
 /// knob. Default: 0.
 #ifndef CONFIG_PROCFS_SRV
 #define CONFIG_PROCFS_SRV 0
+#endif
+
+/// proc-mgr externalization master switch (issue #564, strangler step a).
+/// 0 = in-kernel process management (shipped default, behavior-identical:
+/// fork/exec/waitpid/getpid/kill/signal/sigreturn stay on the kernel path).
+/// 1 = proc-mgr PD serves process policy; mechanism stays in caller
+/// context (Stage B). All proc-mgr kernel code is `#if
+/// CONFIG_PROC_MGR`-guarded (empty TU when 0); no runtime `if` on this
+/// knob. Default: 0.
+#ifndef CONFIG_PROC_MGR
+#define CONFIG_PROC_MGR 0
 #endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"

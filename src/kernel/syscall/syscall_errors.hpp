@@ -147,6 +147,9 @@ namespace kernel::errors {
     X(VSPACE_UNMAPPED, 1110, "Path component absent while descending")            \
     X(VSPACE_REGISTRY_FULL, 1111, "No free VSpace mapping registry slot")        \
     X(VSPACE_ACTIVE_SPACE, 1112, "Target root is the active address space")      \
+    X(VSPACE_ACTIVATED, 1113, "Target root is bound to a live task")               \
+    X(VSPACE_SUBTREE_INVALID, 1114, "Carved subtree fails re-validation")          \
+    X(VSPACE_TARGET_REJECTED, 1115, "Activation target is not an idle task")       \
     /* IRQ slot errors (1200+, F8 #561) */                                       \
     X(IRQ_ALREADY_WAITING, 1201, "IRQ slot already has a waiter")
 

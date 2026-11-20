@@ -1004,6 +1004,10 @@ class GlobalStateApiChecker(Checker):
             "accessor": "kernel::gs::get_boot_epoch()",
             "allow": {"src/kernel/core/global_state.cpp"},
         },
+        "g_isr_nesting_boot_baseline": {
+            "accessor": "kernel::gs::get_isr_nesting_boot_baseline()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
         "multiboot_magic": {
             "accessor": "kernel::gs::get_multiboot_magic()",
             "allow": {
@@ -1031,6 +1035,7 @@ class GlobalStateApiChecker(Checker):
                 "src/kernel/elf/elf.cpp",           # fault-atomic SMAP path
                 "src/kernel/kernel.cpp",            # fault handler
                 "src/kernel/memory/checked_ptr.hpp",# fault-atomic inline
+                "src/kernel/proc/proc_svc.cpp",     # F11 #564: verbatim move
                 "src/kernel/syscall/syscall_handlers_fs.cpp",
                 "src/kernel/syscall/syscall_handlers_misc.cpp",
                 "src/kernel/syscall/syscall_handlers_process.cpp",
