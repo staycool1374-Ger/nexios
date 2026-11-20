@@ -55,7 +55,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server policy
     {"scheduler_idle",       40,    0,       0      },  // idle task, cleanup, monitor, mem accounting
-    {"scheduler_zombie",      5,    5,       5      },  // zombie cleanup + wcet cleanup
+    {"scheduler_zombie",      6,    6,       6      },  // zombie cleanup + wcet cleanup + #593 refusal guard (stubs)
     {"scheduler_preemption", 13,    0,       0      },  // preemption, under-syscall, block-arm
     {"scheduler_budget",      6,    0,       0      },  // task budget accounting
     {"scheduler_cpu_load",    5,    0,       0      },  // idle/CPU load metrics
@@ -84,7 +84,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support
     {"process_signals",       8,    0,       0      },  // signal delivery/handling
     {"process_rlimit",        5,    0,       0      },  // getrlimit, brk
-    {"process_waitpid",       3,    0,       0      },  // waitpid zombie/reap
+    {"process_waitpid",      11,    0,       0      },  // waitpid zombie/reap + #590 x7 + #593 x1 (stubs)
     {"process_pml4_clone",   13,    13,      13     },  // fork deep-copy page tables, independence walk
     {"pt_merge",              6,    6,       6      },  // kernel-half page-table merge
     {"process_secure_exec",   5,    0,       0      },  // exec argv/envp validation
@@ -126,6 +126,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"smp_bringup",            5,   0,       0      },  // AP bring-up
     {"sched_affinity",         7,   0,       0      },  // CPU affinity
     {"smp_sched",              13,   0,       0      },  // AP scheduling, admission, drain
+    {"smp_waitpid",             1,    0,       0      },  // #590 SMP waitpid timing supplement, x86 -smp 2 only (stubs)
     {"lapic",                6,    0,       0      },  // local APIC
     {"ioapic",               5,    0,       0      },  // I/O APIC
     {"core_isolation",       5,    0,       0      },  // core isolation
@@ -166,7 +167,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"servers_vfsd",         18,   0,       0      },  // VFS daemon kernel-bypass ops/auth
     {"servers_vfsd_auth",    27,   27,      27     },  // daemon auth, dup/pipe, fs handlers, gates
     {"servers_iocd",          7,   0,       0      },  // IOCD daemon boot/IRQ/MMIO/affinity
-    {"servers_daemon_restart", 10,   0,       0      },  // unknown-daemon rejection, terminate/resurrect + M1 death funnel x8
+    {"servers_daemon_restart", 11,   0,       0      },  // unknown-daemon rejection, terminate/resurrect + M1 death funnel x8 + #593 x1 (stubs)
     {"servers_health",        5,    0,       0      },  // health status metrics/procfs
 
     // memory

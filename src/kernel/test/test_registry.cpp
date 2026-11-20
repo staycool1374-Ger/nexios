@@ -263,6 +263,7 @@ void register_smp_ipi_tests();
 void register_smp_bringup_tests();
 void register_sched_affinity_tests();
 void register_smp_sched_tests();
+void register_smp_waitpid_tests();
 void register_lapic_tests();
 void register_ioapic_tests();
 void register_core_isolation_tests();
@@ -590,6 +591,7 @@ static void run_smp_ipi_group() { register_smp_ipi_tests(); }
 static void run_smp_bringup_group() { register_smp_bringup_tests(); }
 static void run_sched_affinity_group() { register_sched_affinity_tests(); }
 static void run_smp_sched_group() { register_smp_sched_tests(); }
+static void run_smp_waitpid_group() { register_smp_waitpid_tests(); }
 static void run_lapic_group() { register_lapic_tests(); }
 static void run_ioapic_group() { register_ioapic_tests(); }
 static void run_core_isolation_group() { register_core_isolation_tests(); }
@@ -980,6 +982,9 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"smp_bringup", []() { run_smp_bringup_group(); }},
     {"sched_affinity", []() { run_sched_affinity_group(); }},
     {"smp_sched", []() { run_smp_sched_group(); }},
+#if defined(CONFIG_ARCH_X86_64)
+    {"smp_waitpid", []() { run_smp_waitpid_group(); }},
+#endif
     {"lapic", []() { run_lapic_group(); }},
     {"ioapic", []() { run_ioapic_group(); }},
     {"core_isolation", []() { run_core_isolation_group(); }},

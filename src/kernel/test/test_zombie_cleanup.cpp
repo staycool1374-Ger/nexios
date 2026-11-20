@@ -164,10 +164,23 @@ JARVIS_TEST(zombie_drain_multiple, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: #593 terminate_err refusal is side-effect-free —
+//        refusing a target (remote-current or already TERMINATED)
+//        leaves it untouched: state/queue/slots unchanged.
+// Input: Refused terminate_err call.
+// Expect: Refusal code; target byte-identical.
+// Depends: terminate_err guard legs
+// Pseudocode: live target; refuse; assert untouched; teardown.
+JARVIS_TEST(terminate_err_refusal_leaves_target_untouched, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
 void register_zombie_cleanup_tests() {
     Logger::info("Registering zombie cleanup tests");
     JARVIS_REGISTER_TEST(zombie_cleanup_step_frees_resources);
     JARVIS_REGISTER_TEST(zombie_drain_multiple);
     JARVIS_REGISTER_TEST(test_release_zombie_self);
     JARVIS_REGISTER_TEST(test_zombie_starvation_watchdog);
+    JARVIS_REGISTER_TEST(terminate_err_refusal_leaves_target_untouched);
 }

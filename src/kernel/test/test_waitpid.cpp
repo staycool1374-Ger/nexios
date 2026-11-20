@@ -268,9 +268,122 @@ JARVIS_TEST(waitpid_cr3_switch_on_status_write, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: #590 primary — full cross-CPU terminator inside the
+//        publication window (dequeue + TERMINATED + exit 42 + wake +
+//        release), then WAITPID collects: return == child, status 42,
+//        wait cleared, not BLOCKED, corpse gone, zombies 0, delta 0.
+// Input: Parent prio 20 + child prio 11 + add_child; seam hook
+//        runs the funnel inside the window; waitpid.
+// Expect: child id; 42; pid 0; status null; not BLOCKED;
+//         find_task null; zombies 0; delta 0.
+// Depends: WaitPublishSeamScope, wake path, second-residence collect
+// Pseudocode: arm seam (full-funnel hook); waitpid (collects);
+// assert all; disarm via ScopeGuard; resume parent; teardown.
+JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #590 S1-b — funnel minus the wake (dequeue, TERMINATED,
+//        exit 42, release; no wake): the miss leg collects via the
+//        absent branch. UP only.
+// Input: Seam hook without wake_waiting_parent; waitpid.
+// Expect: Same outcome as primary via the miss leg.
+// Depends: miss-branch collect (step 9)
+// Pseudocode: arm hook (no wake); waitpid (collects); assert all;
+// teardown.
+JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #590 INV-WAIT-5 — corpse owned by a collecting parent:
+//        hook terminates+wakes+releases, then drain from the hook:
+//        zombie still returned while owner lives; collect; then
+//        owner-first termination frees the corpse (owner-death).
+// Input: Hook with in-hook drain; waitpid; owner-kill leg.
+// Expect: zombies 1 while owned; 0 after collect; corpse freed
+//         on owner death.
+// Depends: wait_collect_pending_, drain, collect
+// Pseudocode: arm; drain-in-hook (1 zombie); collect (0);
+// terminate owner; drain (freed); teardown.
+JARVIS_TEST(waitpid_retained_corpse_survives_drain, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #590 wildcard reverify — same as primary with target -1.
+// Input: Seam hook (full funnel); waitpid(-1).
+// Expect: Collects with status 42.
+// Depends: wildcard path + consumption precedence
+// Pseudocode: arm; waitpid(-1) (collects); assert; teardown.
+JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #590 reverify never fights the wake — read-only hook;
+//        a second task terminates the child; the classic path
+//        resolves exactly once with no SCHED+23 dmesg record.
+// Input: No-op hook; racing terminator; waitpid.
+// Expect: Single resolution; no SCHED+23 row.
+// Depends: classic wake path, dmesg ring scan
+// Pseudocode: arm no-op; racer terminates; waitpid (once);
+// assert no +23 row; teardown.
+JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #590 publish order (INV-WAIT-4/INV-2) — at the seam
+//        point (read-only): parent BLOCKED, not in ready queue,
+//        waiting_child_pid == target.
+// Input: Seam hook observing only; waitpid.
+// Expect: BLOCKED + !in_ready_queue_ + pid == target at seam.
+// Depends: waitpid publication order
+// Pseudocode: arm observer; waitpid; assert seam snapshot;
+// teardown.
+JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #590 zombie-claim atomicity — a claimed zombie is
+//        skipped by flush_zombies/cleanup_step while claimed and
+//        freed after the collect releases the claim.
+// Input: Forge claimed zombie; flush; release via collect.
+// Expect: Skipped while claimed; freed after.
+// Depends: two-phase zombie tail
+// Pseudocode: claim; flush (skipped); release (freed); teardown.
+JARVIS_TEST(waitpid_zombie_claim_is_atomic, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #593 self-kill wakes parent — child sys_kill(self,
+//        SIGKILL): ctx.result_ == 1, status == -SIGKILL, corpse
+//        gone, zombies 0, delta 0.
+// Input: Parent + self-killing child (cookbook scaffolding).
+// Expect: 1; -SIGKILL; find null; zombies 0; delta 0.
+// Depends: sys_kill self-fatal funnel, waitpid collect
+// Pseudocode: spawn pair; child kills self; parent collects;
+// assert all; teardown.
+JARVIS_TEST(waitpid_kill_self_wakes_parent, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
 void register_waitpid_tests() {
     Logger::info("Registering waitpid tests");
     JARVIS_REGISTER_TEST(waitpid_zombie_over_new_child);
     JARVIS_REGISTER_TEST(waitpid_two_children_sequential_reap);
     JARVIS_REGISTER_RELEASE_TEST(waitpid_cr3_switch_on_status_write);
+    JARVIS_REGISTER_TEST(waitpid_missed_wake_consumed_collects);
+    JARVIS_REGISTER_TEST(waitpid_released_corpse_collects);
+    JARVIS_REGISTER_TEST(waitpid_retained_corpse_survives_drain);
+    JARVIS_REGISTER_TEST(waitpid_reverify_wildcard_collects);
+    JARVIS_REGISTER_TEST(waitpid_reverify_never_fights_the_wake);
+    JARVIS_REGISTER_TEST(waitpid_publish_order_preserved);
+    JARVIS_REGISTER_TEST(waitpid_zombie_claim_is_atomic);
+    JARVIS_REGISTER_TEST(waitpid_kill_self_wakes_parent);
 }

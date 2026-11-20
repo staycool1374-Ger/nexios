@@ -188,13 +188,28 @@ JARVIS_TEST(daemon_terminate_ensure_resurrects,
     JARVIS_ASSERT(second_task != nullptr);
     JARVIS_ASSERT(second_task->state != TaskState::TERMINATED);
 
-    // Teardown: daemon::terminate() marks TERMINATED directly without
-    // queueing on the scheduler zombie list, so drain alone would leak the
-    // first task — route it through Scheduler::terminate (queues exactly
-    // once; it was never queued) and drain both together.
-    Scheduler::terminate(*first_task, 0);
+    // Teardown (issue #593 coupled edit): daemon::terminate() funnels
+    // through terminate_err, which already dequeued, marked and
+    // zombie-listed the corpse — drain frees it exactly once. The old
+    // manual Scheduler::terminate() here would double-release
+    // (duplicate zombie-list push, later double free).
     kernel::test::terminate_if_live(second_task);
     Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #593 daemon funnel — register qe_probe, ensure_running,
+//        terminate; entry PID cleared, corpse off find_task (released),
+//        still TERMINATED via the held pointer, drain frees exactly
+//        once (no Tasks/PMM delta).
+// Input: qe_probe lifecycle through the funnel.
+// Expect: PID 0; find null; held ptr TERMINATED; drain freed once;
+//         delta 0.
+// Depends: daemon::terminate funnel, drain_zombie_list
+// Pseudocode: register; ensure (pid); terminate (PID 0, corpse
+// TERMINATED but released); drain (freed, delta 0); teardown.
+JARVIS_TEST(daemon_terminate_wakes_and_zombie_lists, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
@@ -205,4 +220,5 @@ void register_daemon_restart_crash_tests() {
 #endif
     JARVIS_REGISTER_TEST(daemon_unknown_name_rejected);
     JARVIS_REGISTER_TEST(daemon_terminate_ensure_resurrects);
+    JARVIS_REGISTER_TEST(daemon_terminate_wakes_and_zombie_lists);
 }

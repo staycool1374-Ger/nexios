@@ -40,6 +40,7 @@ class|testrunner|expected_panic|1
 class|task_fpu|expected_empty|1
 class|smp|arch_scope|x86_64
 class|smp_multicpu|arch_scope|x86_64
+class|smp_waitpid|arch_scope|x86_64
 class|ahci_live|arch_scope|x86_64
 class|iommu_live|arch_scope|x86_64
 class|ahci_live|build_scope|debug

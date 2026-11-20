@@ -23,7 +23,7 @@ POLICY_AWK = REPO / "tools" / "test-policy.awk"
 
 X86_64_CLASSES = ("core_basic core_sync core_sched core_task core_memory "
                   "core_syscall core_tracing ipc capability proc_elf storage "
-                  "servers drivers hal smp smp_multicpu deadline ui "
+                  "servers drivers hal smp smp_multicpu smp_waitpid deadline ui "
                   "logging_debug random bench task_tcb_log task_fpu "
                   "ahci_live iommu_live testrunner").split()
 # aarch64 debug gate (issue #357): verbatim TEST_FULL_CLASSES_aarch64
