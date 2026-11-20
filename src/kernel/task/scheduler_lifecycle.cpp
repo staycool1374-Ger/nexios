@@ -353,7 +353,12 @@ bool Scheduler::collect_zombie_child(TaskControlBlock &parent,
         TaskControlBlock *t = zombie_head_;
         for (uint64_t i = 0; i < bound && t != nullptr; ++i) {
             TaskControlBlock *next = t->zombie_next_;
+            // Issue #593 (INV-593-5, #197 precedent): skip a corpse still
+            // current on any CPU — its stack is live until the trap
+            // epilogue applies the standing arm.  Keep walking (never abort
+            // the scan): the waiter retries on the R-1 loud-deny leg.
             if (t->magic == TaskControlBlock::TCB_MAGIC &&
+                !is_current_on_any_cpu(t) &&
                 t->parent_id == parent.id &&
                 (target_pid == kWaitAny || t->id == target_pid) &&
                 !MemPool::is_block_pinned(t)) {

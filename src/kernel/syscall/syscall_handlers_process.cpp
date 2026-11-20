@@ -161,7 +161,14 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
             }
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         }
-        if (child->state == TaskState::TERMINATED) {
+        // Issue #593 (INV-593-5): a corpse still current on any CPU is
+        // unfreeable — its stack is live until the trap epilogue applies
+        // the standing arm.  Falling through is safe: observing the child
+        // in all_tasks_ proves release_zombie has not run yet, so the
+        // funnel's later wake still matches this parent's publication (no
+        // lost wake), and a WNOHANG caller correctly reports nothing ready.
+        if (child->state == TaskState::TERMINATED &&
+            !Scheduler::is_current_on_any_cpu(child)) {
             if (child->is_thread() &&
                 !TaskControlBlock::thread_join_try_claim(*child)) {
                 // Lost the collect race to a concurrent joiner/detach/
@@ -471,27 +478,27 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     if (t == syscall_task()) {
         if (signal_is_fatal(sig) || !t->has_signal_handler(sig)) {
-            t->state = TaskState::TERMINATED;
-            t->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
-            // Issue #590 step 16 (scoped out, follow-up issue #593): this
-            // self-fatal leg sets TERMINATED + exit_code + publish_task_death
-            // and calls NO wake, so a waitpid parent is never readied — the
-            // identical lost-wake outcome, deterministic rather than racy.
-            // It also does NO dequeue and NO switch_away_from_terminating,
-            // so the corpse can still be current on this CPU when a parent
-            // (woken by any other means) collects and frees it — adding
-            // only the wake here would introduce a cross-CPU use-after-free
-            // of a live stack.  The fix must first give the self-kill a
-            // residence (dequeue + deferred-switch arm before the trap
-            // return, then wake_waiting_parent); see issue #593 (same
-            // follow-up class: daemon_mgr.cpp has no wake either).
-            // M1/F6 (issue #559): the self-fatal leg never reaches a
-            // terminate funnel — latch synchronously here.  Fault-class
-            // signals latch as Fault, plain kills as Kill.
-            Scheduler::publish_task_death(
-                *t, signal_is_fault_class(sig)
+            // Issue #593: the self-fatal leg runs the trap funnel
+            // (terminate_err_from_trap) instead of marking TERMINATED
+            // inline — the funnel dequeues, marks, zombie-lists, then wakes
+            // the waitpid parent, and the arm below is the trap-return gate
+            // on all three arches (x86 isr_stubs.asm depth-1 epilogue for
+            // int 0x80; aarch64 syscall_entry.S applies on any non-zero
+            // arm; riscv64 applies via the force_apply bit that
+            // switch_away_from_terminating sets).  terminate_err is
+            // deliberately not used (INV-593-1): its scope-B switch_to_task
+            // resolves the live ISR RSP as the save owner (see sys_exit's
+            // warning in syscall_handlers_misc.cpp).  Refusal is impossible:
+            // t == current (mirrors the arch EL0-fault legs).
+            const errors::SchedulerError trap_term_err =
+                Scheduler::terminate_err_from_trap(
+                    *t,
+                    static_cast<uint64_t>(-static_cast<int64_t>(sig)),
+                    signal_is_fault_class(sig)
                         ? kernel::ipc::DeathCause::Fault
                         : kernel::ipc::DeathCause::Kill);
+            (void)trap_term_err;
+            Scheduler::switch_away_from_terminating(*t);
         } else {
             t->pending_signals |= (1ULL << sig);
         }
