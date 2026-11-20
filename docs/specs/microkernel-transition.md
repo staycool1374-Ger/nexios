@@ -668,7 +668,13 @@ Each subsection gives: (1) current vs end state and syscall mapping,
 1. **State.** No PD, no issue. 20–24 and 31–32 are in-kernel.
 2. **Invariants.** Requires N1–N4 and the retype types of §4.1. `fork` is
    built from retype + VSpace map; no kernel deep copy after the flip.
-3. **Protocol.** proc-mgr holds TCB caps for every task it created.
+   INTERIM waiver (Stage B, #564 F11a tracked): Stage B ships the
+   PD/MOVE with the kernel-composed `clone` deep copy; carve-composed
+   fork is deferred, never silently dropped (see Q1).
+3. **Protocol.** proc-mgr holds TCB caps for every task it created
+   (CREATOR holds, lifecycle tracking only — no stop power, INV-PROC-6);
+   every hold releases from the M1 death funnel by (pid, generation)
+   (Stage A mechanism, #564).
 4. **Failure.** Critical-server class decided by Q12.
 5. **Verification.** `proc_elf` parity; `pid_reuse_safe`.
 

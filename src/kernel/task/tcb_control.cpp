@@ -33,13 +33,17 @@ namespace kernel::tcb_control {
 // INV-ADM-15(c): the mem-mgr/supervisor identity is a role-table row
 // until M4/F10.  The moment such a row exists this predicate must be
 // revisited in the same commit — the tripwire forces that review.
+// F11 (#564) revisit, recorded here: PROC_MGR is not the mem-mgr (no
+// Untyped possession, no SUPERVISOR scope), adds no new exclusion, and
+// its CREATOR holds are lifecycle tracking, not stop power (INV-PROC-6:
+// the PD never calls this gate as caller).
 static_assert(
-    static_cast<uint64_t>(sdf::PdRole::PROCFS_SRV) + 1 == sdf::kPdRoleCount,
+    static_cast<uint64_t>(sdf::PdRole::PROC_MGR) + 1 == sdf::kPdRoleCount,
     "INV-ADM-15(c): PdRole grew — revisit tcb_control_role_protected");
 
-// INV-ADM-15(c), second anchor: the count literal itself (13 today).
+// INV-ADM-15(c), second anchor: the count literal itself (14 today).
 // A row addition moves this number and breaks the build here too.
-static_assert(sdf::kPdRoleCount == 13,
+static_assert(sdf::kPdRoleCount == 14,
               "INV-ADM-15(c): kPdRoleCount moved — revisit the gate");
 
 // File-static mem-mgr pid cell (M4/F10 hook).  0 today: no user-space

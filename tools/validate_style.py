@@ -1035,6 +1035,7 @@ class GlobalStateApiChecker(Checker):
                 "src/kernel/elf/elf.cpp",           # fault-atomic SMAP path
                 "src/kernel/kernel.cpp",            # fault handler
                 "src/kernel/memory/checked_ptr.hpp",# fault-atomic inline
+                "src/kernel/proc/proc_svc.cpp",     # F11 #564: verbatim move
                 "src/kernel/syscall/syscall_handlers_fs.cpp",
                 "src/kernel/syscall/syscall_handlers_misc.cpp",
                 "src/kernel/syscall/syscall_handlers_process.cpp",

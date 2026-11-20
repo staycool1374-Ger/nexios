@@ -71,8 +71,8 @@ struct CapSpec {
 
 /// @brief Driver PD roles (one SDF row each; VFS_SRV/BLOCK_SRV are
 /// issue #47, TERM_SRV/LOG_SRV are issue #51, CAP_BROKER is issue #240,
-/// WDOG_MON is issue #390 and PROCFS_SRV is issue #54; all share this
-/// table + compose path).
+/// WDOG_MON is issue #390, PROCFS_SRV is issue #54 and PROC_MGR is issue
+/// #564; all share this table + compose path).
 enum class PdRole : uint8_t {
     SERIAL = 0,
     KBD = 1,
@@ -87,6 +87,7 @@ enum class PdRole : uint8_t {
     CAP_BROKER = 10,
     WDOG_MON = 11,
     PROCFS_SRV = 12,
+    PROC_MGR = 13,
 };
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
@@ -116,9 +117,10 @@ static_assert(kConsoleMaxScanoutChunks == 4,
 
 /// @brief Number of PdRole entries (issue #47 step-b1): role tables are
 /// sized by this, not by a hardcoded 6 (roles ≥ 6 share the compose
-/// path but previously skipped slot persistence).
+/// path but previously skipped slot persistence). F11 (#564) adds
+/// PROC_MGR as the 14th row.
 inline constexpr uint64_t kPdRoleCount =
-    static_cast<uint64_t>(PdRole::PROCFS_SRV) + 1;
+    static_cast<uint64_t>(PdRole::PROC_MGR) + 1;
 
 /// @brief TX-ring element size in bytes (issue #51 step-c-prime).
 /// Fixed 8: {uint8 len, char data[7]}. Multiple of 8 per the SPSC
@@ -161,10 +163,12 @@ struct RowBounds {
 ///        reservation, is what F10 owes).
 inline constexpr uint32_t kRowReservedSlots = 0;
 
-/// @brief Demand bounds for @p role (values-only over the 13 existing
+/// @brief Demand bounds for @p role (values-only over the 14 existing
 ///        rows: max_caps = kMaxCapsPerRole, object_budget =
 ///        CONFIG_MAX_PER_TASK_OBJECTS, quotas 0; the mem-mgr/supervisor
-///        256 / Untyped-quota rows land with their SDF rows at M5/M12).
+///        256 / Untyped-quota tuning lands with the M5/M12 rows that need
+///        them). F11 (#564): PROC_MGR reads the same defaults (hold
+///        releases run from the death funnel, never a death watch).
 ///        Unknown roles read zero bounds. Pure: no locks, no state.
 RowBounds sdf_role_bounds(PdRole role);
 
@@ -221,13 +225,13 @@ bool pd_owns_device(PdRole role);
 /// @brief Structural policy-only predicate (issues #47/#51): true only
 /// for roles whose SDF row MUST NOT carry device caps (IRQ/MSIX/MMIO/
 /// DMA) — VFS_SRV by design, TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/
-/// PROCFS_SRV policy PDs. Memory caps (FRAME/SHM/DMA_REGION — fresh
-/// user frames, no device authority) are allowed: VFS_SRV carries its
-/// step-b3 data window this way. Used by compose to reject device-cap
-/// rows for these roles, and by #48's SDF boundary test to prove the
-/// emulation side holds no device caps.
+/// PROCFS_SRV/PROC_MGR policy PDs. Memory caps (FRAME/SHM/DMA_REGION —
+/// fresh user frames, no device authority) are allowed: VFS_SRV carries
+/// its step-b3 data window this way. Used by compose to reject
+/// device-cap rows for these roles, and by #48's SDF boundary test to
+/// prove the emulation side holds no device caps.
 /// @return True for VFS_SRV, TERM_SRV, LOG_SRV, CAP_BROKER, WDOG_MON,
-/// PROCFS_SRV; false otherwise.
+/// PROCFS_SRV, PROC_MGR; false otherwise.
 bool sdf_policy_only(PdRole role);
 
 /// @brief Capture block topology for the BLOCK_SRV row (issue #47 S2):
@@ -240,7 +244,9 @@ bool capture_block_topology();
 /// allowlist): VFS_SRV always (no ambient authority — the row is its
 /// memory-only data window; a zero-cap compose still starts the PD
 /// endpoint-only); degraded BLOCK_SRV when no controller/IOMMU was captured
-/// (logged at the call site; never a silent start).
+/// (logged at the call site; never a silent start); the policy-only PDs
+/// (TERM_SRV/LOG_SRV/CAP_BROKER/WDOG_MON/PROCFS_SRV/PROC_MGR, empty sets
+/// by structural rule).
 bool sdf_zero_caps_allowed(PdRole role);
 
 } // namespace sdf

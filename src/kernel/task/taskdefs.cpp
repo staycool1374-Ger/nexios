@@ -493,13 +493,13 @@ constexpr bool server_params_valid(const TaskDef &d) {
         return false;
     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
         return false;
-    // Issue #48/#51/#240/#390/#54: an SDF row needs its supervisor hook
-    // (re-derive on restart, never inherit) and a valid role index.
+    // Issue #48/#51/#240/#390/#54/#564: an SDF row needs its supervisor
+    // hook (re-derive on restart, never inherit) and a valid role index.
     if (d.sdf_role != 0xFF) {
         if (d.on_restart_fn == nullptr)
             return false;
         if (d.sdf_role >
-            static_cast<uint64_t>(sdf::PdRole::PROCFS_SRV))
+            static_cast<uint64_t>(sdf::PdRole::PROC_MGR))
             return false;
     }
     return true;
@@ -809,7 +809,7 @@ void reboot_from_table() {
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
     CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
-    CONFIG_PROCFS_SRV
+    CONFIG_PROCFS_SRV || CONFIG_PROC_MGR
             if (def.sdf_role != 0xFF) {
                 // SDF compose (issues #47/#48/#51/#240/#390/#54): mint the
                 // role caps into the fresh task. Fail-closed: compose failure

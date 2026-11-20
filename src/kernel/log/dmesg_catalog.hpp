@@ -134,6 +134,12 @@ constexpr DmesgRecord kDmesgCatalog_TASK[] = {
      "Task SDF row demand exceeds bound"},
     {ErrorSubsystem::TASK, kDmesgBase_TASK + 17, LogSeverity::INFO,
      "Task terminated"},
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 18, LogSeverity::WARN,
+     "Proc-mgr hold table full (child refused)"},
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 19, LogSeverity::ERROR,
+     "Proc-mgr compose failed"},
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 20, LogSeverity::ERROR,
+     "Proc-mgr restart failed"},
 };
 
 /// @brief Network records (canonical base kDmesgBase_NET). No producer
