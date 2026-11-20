@@ -554,6 +554,8 @@ JARVIS_TEST(freeze_denies_all_pmm_entry_points, "PRE: none | POST: none") {
     g_latched = g_reason_ok = g_control = 0;
 
 #if CONFIG_STATIC_POOLS_ONLY
+    // Flag leg: the #if itself proves the flag, pinned explicitly.
+    static_assert(CONFIG_STATIC_POOLS_ONLY == 1, "pools1 leg needs flag 1");
     g_flag = 1;
     PMM::freeze_pools(); // idempotent; boot already froze
     mem_pressure::clear();
