@@ -53,7 +53,8 @@ per site when the budget is spent, then re-arming continues). Park
 precondition (all must hold): park enabled, no ISR context
 (`arch::isr_context_park_denied()` — nesting denies only outside a syscall
 trap and only while IF==0; the rv64 nesting count is stale by
-construction), no live `IrqGuard`, no held spinlock, current task live,
+construction, normalized at kernel handover (#589), and the IF==1
+carve-out is retained as fail-safe defense-in-depth), no live `IrqGuard`, no held spinlock, current task live,
 non-idle, RUNNING. Both park gates consume this single predicate; a
 divergence between them is a defect (#583). The
 park wake is the existing level-triggered sleep-expiry scan (no waiter

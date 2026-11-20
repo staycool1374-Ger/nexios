@@ -123,6 +123,19 @@ three arches, and the riscv64 nesting count is a known stale baseline,
 + non-idle + multi-task guest, not the test harness (plus RSP-inside-TCB-stack
 impersonation guard).
 
+Handover baseline (issue #589, owner option (a)): exactly one boot write
+records the firmware-handover nesting value via
+`kernel::gs::try_set_isr_nesting_boot_baseline()` (`WriteClass::BOOT_ONLY`)
+at the last zero-outstanding-frame point in `higherhalf_entry`
+(single-threaded, SIE==0, right after the per-arch `percpu_init_bsp`
+blocks); a read-only `[NEST]` tripwire at `init_task_main` entry prints a
+nonzero first-task-context depth plus the task census for post-handover
+diagnosis. Per-arch authority: x86_64 counts in the per-CPU slot
+(gs:0x20, asm-owned); riscv64/aarch64 count the plain global, while their
+PerCpu `isr_nesting_depth` (0x20) slots are layout parity only — on rv64
+the handover normalizer writes the plain global to 0, on x86_64/aarch64
+it is verify-only (no store).
+
 Caller contract: C1 RUNNING/READY callers return immediately (zero
 behavioral change); C2 BLOCKED+gated callers return only when no longer
 BLOCKED; C3 BLOCKED+denied callers get the old arm-only return; C4 IRQ

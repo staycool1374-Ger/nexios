@@ -21,7 +21,31 @@
 
 #include <kernel/arch/riscv64/hal/percpu.hpp>
 
+#include <kernel/arch/cpu_context.hpp>
+#include <kernel/arch/io.hpp>
+#include <assert.hpp>
+
 namespace arch {
+
+// Issue #589 (owner option (a)): the ONLY writer of the handover
+// normalization. The S-mode trap vector addresses the plain global via
+// `la t0, isr_nesting_depth` (syscall_entry.S:160/253/468), so the plain
+// global is the authoritative counter on rv64; the PerCpu 0x20 slot zeroed
+// below is layout parity only (normalizing that slot would be a no-op no
+// reader observes). Precondition INV-NEST-1 (single-threaded, SIE==0,
+// zero outstanding frames) is asserted, not trusted: the handover call
+// site is the last boot point where it holds. cli()-first is declined by
+// design: OpenSBI enters S-mode with SIE==0 and the scheduler does not
+// exist yet, so no concurrent RMW from the asm entry/tail sites can
+// interleave; the ENSURE documents the contract instead of masking a
+// firmware that violates it.
+uint64_t normalize_isr_nesting_baseline() noexcept {
+    ENSURE(!arch::interrupts_enabled());
+    uint64_t &nesting = kernel::isr_nesting_own();
+    const uint64_t observed = nesting;
+    __atomic_store_n(&nesting, 0, __ATOMIC_RELEASE);
+    return observed;
+}
 
 // Per-hart array (CONFIG_MAX_CPUS pages, 4 KiB each).
 PerCpu per_cpu[CONFIG_MAX_CPUS];

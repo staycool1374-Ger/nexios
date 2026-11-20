@@ -21,7 +21,22 @@
 
 #include <kernel/arch/aarch64/hal/percpu.hpp>
 
+#include <kernel/arch/cpu_context.hpp>
+
 namespace arch {
+
+// Issue #589 (owner option (a)): VERIFY-ONLY body — must observe NO STORE.
+// The aa64 trap vector never maintains the counter (only the layout-parity
+// PerCpu 0x20 slot exists, zeroed below and read by nobody), so the
+// effective counter (the plain global via isr_nesting_own()) reads 0
+// trivially, not by construction. This function exists to VERIFY that
+// baseline, never to set it; making aa64 vectors maintain the counter is
+// a separate behavior change needing its own audit. The returned live
+// value is logged at the handover call site so future drift is
+// boot-visible.
+uint64_t normalize_isr_nesting_baseline() noexcept {
+    return kernel::isr_nesting_own();
+}
 
 // Per-CPU array (CONFIG_MAX_CPUS pages, 4 KiB each).
 PerCpu per_cpu[CONFIG_MAX_CPUS];

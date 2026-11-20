@@ -122,3 +122,25 @@ inline TaskControlBlock *&fpu_owner_own() {
 #endif
 
 } // namespace kernel
+
+namespace arch {
+
+// Issue #589 (owner option (a)): normalize the ISR-nesting baseline at
+// kernel handover.  Called ONCE from higherhalf_entry, after every arch
+// published its per-CPU base and while the boot is still single-threaded
+// with SIE==0 and zero outstanding trap frames (INV-NEST-1; a write
+// anywhere else corrupts the entry-inc/exit-dec balance, #514).
+// Returns the counter value observed BEFORE normalization (evidence, not
+// an error: nonzero is preserved in the boot baseline global before the
+// store clears it).
+// Per-arch authority: riscv64 writes the plain global to 0 (the S-mode
+// trap vector addresses it via `la` — authoritative; the PerCpu 0x20 slot
+// zeroed by percpu_init_bsp is layout-only parity, normalizing it would
+// be a silent no-op); x86_64 and aarch64 are VERIFY-ONLY (x86 slot is
+// asm-owned via gs:0x20 and already 0; aa64 vectors never touch the
+// counter so the plain global reads 0 trivially) and must observe NO
+// STORE.  The returned value is logged so future drift is boot-visible.
+// Never zero the counter in snapshot_restore or task context (#514).
+uint64_t normalize_isr_nesting_baseline() noexcept;
+
+} // namespace arch

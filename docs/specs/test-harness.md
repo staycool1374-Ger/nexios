@@ -230,7 +230,10 @@ the guard keeps it that way.
   `arch::isr_context_park_denied(entry_if)` — stale rv64 nesting denies
   only while IF==0, in parity with the lock-park gate. The seam's
   `!waived` conjunct on bit 4 is retained as redundant (the waiver
-  requires IF==1, which already clears the predicate).
+  requires IF==1, which already clears the predicate). #589 closure
+  state: the rv64 baseline is normalized at kernel handover (one BOOT_ONLY
+  write plus a read-only `[NEST]` tripwire); the carve-out is retained as
+  fail-safe defense-in-depth — redundant, not dead.
 
 ## 6. Watchdog & QEMU Verdict
 

@@ -1004,6 +1004,10 @@ class GlobalStateApiChecker(Checker):
             "accessor": "kernel::gs::get_boot_epoch()",
             "allow": {"src/kernel/core/global_state.cpp"},
         },
+        "g_isr_nesting_boot_baseline": {
+            "accessor": "kernel::gs::get_isr_nesting_boot_baseline()",
+            "allow": {"src/kernel/core/global_state.cpp"},
+        },
         "multiboot_magic": {
             "accessor": "kernel::gs::get_multiboot_magic()",
             "allow": {
