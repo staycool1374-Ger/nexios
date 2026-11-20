@@ -26,6 +26,7 @@
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/cap/tcb_cap.hpp>
+#include <kernel/cap/wdog.hpp>
 #include <kernel/cap/untyped.hpp>
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -34,6 +35,7 @@
 #include <kernel/task/tcb_control.hpp>
 #include <kernel/task/tcb_control_errors.hpp>
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/test/resource_tracker.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
 #include <kernel/sync/semaphore.hpp>
@@ -902,9 +904,118 @@ JARVIS_TEST(tcb_resume_shift_saturates, "PRE: none | POST: none") {
 // Input: Suspended target; CREATE + KICK; tick.
 // Expect: Both INVALID_STATE; target not killed by tick scan.
 // Depends: suspend-time disarm, watchdog create/kick gates
-// Pseudocode: suspend target; CREATE (INVALID_STATE); KICK
-// (INVALID_STATE); tick; target alive; teardown (resume + drain).
+// Pseudocode: target self-arms, blocks; suspend; CREATE+KICK via
+// WdogCap (both INVALID_STATE); tick; target alive; resume; teardown.
+//
+// Note: cross-task CREATE/KICK need a WdogCap with WRITE (the
+// #277 daemon-supervision path) — minted here after the target
+// blocks (gen stable, no recycle in between). The target self-arms
+// first via the real CREATE path (no cap needed for self), proving
+// the arm works pre-park; the park then disarms it, so KICK fails
+// through the existing disarmed path.
 JARVIS_TEST(tcb_watchdog_arm_refused_while_parked, "PRE: none | POST: none") {
+    static uint64_t g_self_arm = 0;
+    static uint64_t g_create = 0;
+    static uint64_t g_kick = 0;
+    static uint64_t g_alive = 0;
+    static uint64_t g_disarmed = 0;
+    // Rendezvous block shared with the target lambda (function-local
+    // statics are visible to non-capturing lambdas).
+    static sync::Semaphore *g_sem10 = nullptr;
+    static sync::Semaphore *g_go10 = nullptr;
+    g_self_arm = g_create = g_kick = g_alive = g_disarmed = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        sync::Semaphore go;
+        go.init(0, 1);
+        g_sem10 = &sem;
+        g_go10 = &go;
+        // Target: self-arm via the real CREATE path, signal, block.
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                (void)self;
+                g_self_arm = Syscall::handle(
+                    static_cast<uint64_t>(
+                        SyscallNumber::WATCHDOG_CREATE),
+                    50, 0, 0, 0, nullptr);
+                g_sem10->post();
+                g_go10->wait();
+                for (;;)
+                    arch::hlt();
+            },
+            20, 50);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        // Wait until the target self-armed AND blocked on go.
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        if (!target->wdog_armed)
+            return;
+        // Mint cross-task authority (gen stable: target never recycles
+        // between here and teardown).
+        auto *wc = cap::WdogCap::create(target->id);
+        if (!wc)
+            return;
+        int wslot = cs->install(wc, cap::CapType::Wdog,
+                                cap::CapRights::WRITE);
+        if (wslot < 0) {
+            wc->release();
+            return;
+        }
+        const uint64_t wh = tcb_handle(cs, wslot);
+        // Suspend: park disarms.
+        if (Scheduler::admin_suspend_err(*target) !=
+            errors::TCBCTL_ERR_OK) {
+            cs->remove(static_cast<uint32_t>(wslot));
+            wc->release();
+            return;
+        }
+        g_disarmed = target->wdog_armed ? 0ULL : 1ULL;
+        // CREATE on a parked target: INVALID_STATE (never declare a
+        // stopped task hung). KICK: INVALID_STATE via disarmed path.
+        g_create = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::WATCHDOG_CREATE), 50,
+            target->id, wh, 0, nullptr);
+        g_kick = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::WATCHDOG_KICK),
+            target->id, wh, 0, 0, nullptr);
+        // Ticks pass: the disarmed parked target must not be killed.
+        {
+            const uint64_t t0 = arch::Timer::ticks();
+            while (arch::Timer::ticks() < t0 + 60)
+                arch::hlt();
+        }
+        g_alive = (Scheduler::find_task(target->id) == target)
+                      ? 1ULL
+                      : 0ULL;
+        cs->remove(static_cast<uint32_t>(wslot));
+        wc->release();
+        go.post();
+        Scheduler::admin_resume_err(*target);
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, g_self_arm);
+    JARVIS_ASSERT_EQ(
+        static_cast<uint64_t>(-errors::SYS_ERR_SCHED_INVALID_STATE),
+        g_create);
+    JARVIS_ASSERT_EQ(
+        static_cast<uint64_t>(-errors::SYS_ERR_SCHED_INVALID_STATE),
+        g_kick);
+    JARVIS_ASSERT_EQ(1ULL, g_disarmed);
+    JARVIS_ASSERT_EQ(1ULL, g_alive);
     JARVIS_TEST_PASS();
 }
 
