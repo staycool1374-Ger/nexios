@@ -32,6 +32,8 @@
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/test/task_ptr.hpp>
+#include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/log/dmesg.hpp>
 #include <kernel/test/resource_tracker.hpp>
 
@@ -417,9 +419,15 @@ JARVIS_TEST(untyped_handover_snapshot_immune, "PRE: none | POST: none") {
         g_table = (st.runs_total == 0) ? 1ULL : 0ULL;
     }
 #endif
-    // Bounded alloc sweep in BOTH legs (no handed frames may come
-    // back; default leg has zero regions, so the check is trivially
-    // clean but the alloc/free cycle is still real).
+    // Bounded alloc sweep (no handed frame may come back; default
+    // leg has zero regions, so the check is trivially clean but the
+    // alloc/free cycle is still real). Skipped under
+    // STATIC_POOLS_ONLY: post-freeze alloc_page denies by design
+    // (that refusal is the freeze test's pin, not this one's).
+#if CONFIG_STATIC_POOLS_ONLY
+    g_sweep = 1;
+    g_freed = 1;
+#else
     {
         uint64_t got[32] = {};
         uint64_t n = 0;
@@ -451,6 +459,7 @@ JARVIS_TEST(untyped_handover_snapshot_immune, "PRE: none | POST: none") {
             PMM::free_page(got[i]);
         g_freed = 1ULL;
     }
+#endif
     JARVIS_ASSERT_EQ(1ULL, g_frozen);
     JARVIS_ASSERT_EQ(1ULL, g_table);
     JARVIS_ASSERT_EQ(1ULL, g_sweep);
@@ -529,8 +538,69 @@ JARVIS_TEST(mem_pressure_latch_once, "PRE: none | POST: none") {
 //         leg: flag 0 + control alloc OK.
 // Depends: CONFIG_STATIC_POOLS_ONLY, six PMM entry points, latch
 // Pseudocode: assert flag value first; per-leg assertions;
-// teardown.
+// teardown (free the control page in the default leg).
 JARVIS_TEST(freeze_denies_all_pmm_entry_points, "PRE: none | POST: none") {
+    static uint64_t g_flag = 0;
+    static uint64_t g_r0 = 0;
+    static uint64_t g_r1 = 0;
+    static uint64_t g_r2 = 0;
+    static uint64_t g_r3 = 0;
+    static uint64_t g_r4 = 0;
+    static uint64_t g_r5 = 0;
+    static uint64_t g_latched = 0;
+    static uint64_t g_reason_ok = 0;
+    static uint64_t g_control = 0;
+    g_flag = g_r0 = g_r1 = g_r2 = g_r3 = g_r4 = g_r5 = 0;
+    g_latched = g_reason_ok = g_control = 0;
+
+#if CONFIG_STATIC_POOLS_ONLY
+    g_flag = 1;
+    PMM::freeze_pools(); // idempotent; boot already froze
+    mem_pressure::clear();
+    const uint64_t c0 = mem_pressure::count();
+    // All six kernel entry points deny with 0 post-freeze.
+    g_r0 = PMM::alloc_page();
+    g_r1 = PMM::alloc_contiguous(2);
+    g_r2 = PMM::alloc_user_page();
+    g_r3 = PMM::alloc_page_colored(0);
+    g_r4 = PMM::alloc_user_page_colored(0);
+    g_r5 = PMM::alloc_user_contiguous(2);
+    g_latched = mem_pressure::latched() ? 1ULL : 0ULL;
+    g_reason_ok =
+        (mem_pressure::reason() ==
+         mem_pressure::MemPressureReason::PMM_FROZEN_DENY)
+            ? 1ULL
+            : 0ULL;
+    // All six counted (telemetry), one latch state (first-wins —
+    // pinned by mem_pressure_latch_once).
+    g_control = (mem_pressure::count() == c0 + 6) ? 1ULL : 0ULL;
+    JARVIS_ASSERT_EQ(0ULL, g_r0);
+    JARVIS_ASSERT_EQ(0ULL, g_r1);
+    JARVIS_ASSERT_EQ(0ULL, g_r2);
+    JARVIS_ASSERT_EQ(0ULL, g_r3);
+    JARVIS_ASSERT_EQ(0ULL, g_r4);
+    JARVIS_ASSERT_EQ(0ULL, g_r5);
+    JARVIS_ASSERT_EQ(1ULL, g_latched);
+    JARVIS_ASSERT_EQ(1ULL, g_reason_ok);
+    JARVIS_ASSERT_EQ(1ULL, g_control);
+#else
+    g_flag = (CONFIG_STATIC_POOLS_ONLY == 0) ? 1ULL : 0ULL;
+    // Control alloc succeeds in the default build.
+    const uint64_t p = PMM::alloc_page();
+    g_control = (p != 0) ? 1ULL : 0ULL;
+    if (p != 0)
+        PMM::free_page(p);
+    JARVIS_ASSERT_EQ(1ULL, g_flag);
+    JARVIS_ASSERT_EQ(1ULL, g_control);
+    JARVIS_ASSERT_EQ(0ULL, g_r0);
+    JARVIS_ASSERT_EQ(0ULL, g_r1);
+    JARVIS_ASSERT_EQ(0ULL, g_r2);
+    JARVIS_ASSERT_EQ(0ULL, g_r3);
+    JARVIS_ASSERT_EQ(0ULL, g_r4);
+    JARVIS_ASSERT_EQ(0ULL, g_r5);
+    JARVIS_ASSERT_EQ(0ULL, g_latched);
+    JARVIS_ASSERT_EQ(0ULL, g_reason_ok);
+#endif
     JARVIS_TEST_PASS();
 }
 
@@ -544,9 +614,69 @@ JARVIS_TEST(freeze_denies_all_pmm_entry_points, "PRE: none | POST: none") {
 // Expect: Typed OOM; PMM delta 0; deny sweep per above.
 // Depends: freeze_denies leg, buffer_pool_no_pmm_fallback
 //        (existing — referenced, not duplicated)
-// Pseudocode: deny sweep (as above); BufferPool exhaust (typed
-// OOM, PMM still); teardown.
+// Pseudocode: pools1 leg — one PMM deny probe (full six-sweep
+// lives in the freeze test) + bounded pool probe (alloc/free N
+// buffers, delta 0; the exhaustion/OOM direction is the
+// referenced buffer_pool_no_pmm_fallback property, not
+// duplicated here). Default leg: flag 0 + control probes OK.
+// teardown (free everything; task cleanup reclaims PTs).
 JARVIS_TEST(mk_inv_no_kernel_alloc, "PRE: none | POST: none") {
+    static uint64_t g_pmm_deny = 0;
+    static uint64_t g_pool_ok = 0;
+    static uint64_t g_delta = 0;
+    static uint64_t g_after = 0;
+    g_pmm_deny = g_pool_ok = g_delta = 0;
+    g_after = 0;
+
+    // Snapshot BEFORE task creation (mirrors the referenced
+    // buffer_pool_no_pmm_fallback): create+destroy must net to zero
+    // by construction, isolating the buffer cycle's delta.
+    const uint64_t before = PMM::free_pages_ref();
+    SimpleTaskPtr task(TaskControlBlock::create_user([]() {}, 5, 10,
+                                                     32_KiB));
+    if (!task)
+        return;
+#if CONFIG_STATIC_POOLS_ONLY
+    // Frozen pools1 VM: PMM denies, pool serves from its cache.
+    g_pmm_deny = (PMM::alloc_page() == 0 &&
+                  PMM::alloc_user_page() == 0)
+                     ? 1ULL
+                     : 0ULL;
+#else
+    g_pmm_deny = 1ULL; // deny shape N/A here (freeze test covers it)
+#endif
+    // Bounded pool probe (sibling VA window per the referenced
+    // test: tables above it already exist, so only bounded PT
+    // growth occurs, reclaimed by task cleanup).
+    static constexpr size_t kN = 8;
+    uint64_t handles[kN] = {};
+    uint64_t va = 0x40200000ULL;
+    uint64_t ok = 1;
+    for (size_t i = 0; i < kN; ++i) {
+        uint64_t h = BufferPool::alloc(*task, va + i * arch::PAGE_SIZE);
+        if (h == 0) {
+            ok = 0;
+            break;
+        }
+        handles[i] = h;
+    }
+    if (ok) {
+        for (size_t i = 0; i < kN; ++i) {
+            if (!BufferPool::free(*task, handles[i])) {
+                ok = 0;
+                break;
+            }
+        }
+    }
+    g_pool_ok = ok;
+    // Task cleanup frees PT pages + stack; pool blocks recycled.
+    task.reset();
+    g_after = PMM::free_pages_ref();
+    g_delta = (g_after == before) ? 1ULL : 0ULL;
+
+    JARVIS_ASSERT_EQ(1ULL, g_pmm_deny);
+    JARVIS_ASSERT_EQ(1ULL, g_pool_ok);
+    JARVIS_ASSERT_EQ(1ULL, g_delta);
     JARVIS_TEST_PASS();
 }
 
