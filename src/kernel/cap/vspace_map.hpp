@@ -53,17 +53,29 @@
 ///        object's own page before PMM::free_page runs.  The child scrub
 ///        on link plus the zero on teardown make the kill independent of
 ///        the order F2's revoke cascade destroys the caps in.
+///        INV-VS-3-prime (activation guard spent, never removed — issue
+///        #564, F11 Stage C): a carved space becomes a task's address
+///        space ONLY through the activation surface (`VSPACE_ACTIVATE`
+///        (104) or the fork composer's internal `CarveBinding::activate`).
+///        While activated the root refuses `VSPACE_MAP` links
+///        (`VSPACE_ERR_ACTIVATED`, enforced in link() via the lock-free
+///        carve_root_is_activated() probe — pure, no lock, the INV-VS-9
+///        precedent) and `CAP_DELETE` (the binding pin keeps the last
+///        reference alive, so dispose() can never zero a live root).
+///        Install takes no flush: the destination entry was zero, the
+///        child page is scrubbed, and no *unactivated* carved space is
+///        ever switched to.
 ///        INV-VS-5 flush discipline: every removal ends with a
-///        conservative full VMM::tlb_shootdown(0, 0, true) after the
-///        registry lock is released (untagged CR3 reload on x86_64,
-///        TLBI VMALLE1-class on aarch64, full sfence.vma on riscv64,
-///        plus the weak SMP hook).  No narrowing to (ASID, VA): no
-///        ASID/PCID is assigned to a carved space yet.  Install takes no
-///        flush: the destination entry was zero, the child page is
-///        scrubbed, and no carved space is ever activated at F5
-///        (INV-VS-3) — M14 must move the flush before the zero and add
-///        activation-time subtree re-validation once it activates a
-///        carved space.
+///        conservative full VMM::tlb_shootdown(0, 0, true) BEFORE the
+///        zero store (the M14 handoff is spent: once a VSpace can be
+///        activated, the flush MUST move before the zero — a stale TLB
+///        entry translating a freed page under a live task is S1).
+///        The flush runs after the registry lock is released (untagged
+///        CR3 reload on x86_64, TLBI VMALLE1-class on aarch64, full
+///        sfence.vma on riscv64, plus the weak SMP hook).  No narrowing
+///        to (ASID, VA): no ASID/PCID is assigned to a carved space at
+///        link time.  The zero itself re-takes the registry lock so it
+///        stays mutually exclusive with link()'s child scrub + store.
 ///        INV-VS-8 mapping lifetime is bound to the PageTable cap: the
 ///        registry stores physical addresses only (never object pointers,
 ///        so no record can dangle) and holds NO pin on either cap —
@@ -89,13 +101,16 @@
 
 namespace kernel::cap {
 
-/// @brief Maximum live VSpace table links kernel-wide.  Placeholder
-///        sizing owned by F9 (#562, Q7 bound re-sizing): 32 slots cover
-///        10+ distinct 4-level subtrees.  Lives here (cap/) per Q7 — not
-///        a nexios_config.h key; when F9 re-sizes page-table bounds this
-///        constant moves with it, it is not duplicated.  Tracked by F9 so
-///        the placeholder cannot fossilize.
-inline constexpr size_t kMaxVspaceMappings = 32;
+/// @brief Maximum live VSpace table links kernel-wide (issue #564,
+///        F11 Stage C: CONFIG_CAP_MAX_VSPACE_MAPPINGS, default 256).
+///        The F5 placeholder 32 sized table links for tests; a carved
+///        fork child needs one link per table (capped at
+///        CONFIG_CARVE_MAX_TABLES), so 256 = 64 tasks x 4.  F9 (#562,
+///        Q7 bound re-sizing) owns the final re-derivation — this key is
+///        the handoff, not a second copy.  Lives in nexios_config.h
+///        (not here) per Q7; when F9 re-sizes page-table bounds this key
+///        moves with it, it is not duplicated.
+inline constexpr size_t kMaxVspaceMappings = CONFIG_CAP_MAX_VSPACE_MAPPINGS;
 
 /// @brief Bounded registry + tree-link policy for VSpace/PageTable
 ///        objects (F5 N4, issue #558).  All methods are noexcept, bounded
@@ -122,6 +137,13 @@ class VSpaceMap {
     ///        page (kills the whole subtree in one bounded store), flush
     ///        the TLB.  Idempotent.  Runs before PMM::free_page.
     static void invalidate_vspace(uint64_t vspace_phys) noexcept;
+    /// @brief Destroy every link under @p vspace_phys WITHOUT zeroing
+    ///        any page (issue #564, F11 Stage C): the pages are
+    ///        cap-owned (carved root/table/frame caps stay pinned to
+    ///        teardown drain), so zeroing here would scrub live caps.
+    ///        Registry unlink + dependent drop only, then the TLB flush.
+    ///        The exec/carved-teardown releaser path only.
+    static void invalidate_vspace_links_only(uint64_t vspace_phys) noexcept;
     /// @brief Test isolation: drop every registry slot.  Touches no
     ///        page (fixture pages belong to the snapshot, rewound by it)
     ///        and unwinds no pin (none exists, INV-VS-8).

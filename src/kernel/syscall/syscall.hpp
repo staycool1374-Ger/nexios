@@ -143,7 +143,9 @@ enum class SyscallNumber : uint8_t {
     TCB_SUSPEND = 100, ///< cap-gated task stop (F4 N2, issue #557): arg0 = TcbCap handle; parks the target admin-BLOCKED
     TCB_RESUME = 101, ///< cap-gated task resume (F4 N3, issue #557): arg0 = TcbCap handle; restores the parked target
     VSPACE_MAP = 102, ///< N4 map a PageTable object into a VSpace (F5, issue #558): arg0 = VSpace handle (WRITE), arg1 = PageTable handle (READ), arg2 = packed 9-bit path, arg3 = path length
-    MAX_SYSCALL = 103,
+    VSPACE_FRAME_MAP = 103, ///< N10 map a FrameCap into a VSpace other than the caller's (F11 Stage C, issue #564): arg0 = VSpace handle (WRITE), arg1 = Frame handle (READ), arg2 = user VA, arg3 = flags (bit0 executable, bit1 read-only; all other bits must be 0)
+    VSPACE_ACTIVATE = 104, ///< N11 bind a carved VSpace root to the TcbCap-named target (F11 Stage C, issue #564): arg0 = VSpace handle (WRITE), arg1 = TcbCap handle (READ), arg2 = flags (0), arg3 = reserved (must be 0)
+    MAX_SYSCALL = 105,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -471,6 +473,19 @@ class Syscall {
     ///        match) runs before the VSpaceMap::link mechanism.
     static uint64_t sys_vspace_map(uint64_t, uint64_t, uint64_t, uint64_t,
                                    uint64_t *);
+    /// @brief F11 Stage C VSPACE_FRAME_MAP (issue #564): map a FrameCap
+    ///        into a VSpace other than the caller's at an explicit VA.
+    ///        Every return is SYS_ERR_OK or a typed VSPACE_* code via the
+    ///        1100-block; no raw -1.  FULL path (touches user VAs) —
+    ///        k_syscall_fast is untouched.
+    static uint64_t sys_vspace_frame_map(uint64_t, uint64_t, uint64_t,
+                                         uint64_t, uint64_t *);
+    /// @brief F11 Stage C VSPACE_ACTIVATE (issue #564): bind a carved
+    ///        VSpace root to the TcbCap-named unpublished target.
+    ///        Unpublished-target-only (never a live task); side-effect
+    ///        free refusals.  FULL path — k_syscall_fast is untouched.
+    static uint64_t sys_vspace_activate(uint64_t, uint64_t, uint64_t,
+                                        uint64_t, uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -597,6 +612,8 @@ class Syscall {
             &Syscall::sys_tcb_suspend,    // 100 TCB_SUSPEND (F4 N2 #557)
             &Syscall::sys_tcb_resume,     // 101 TCB_RESUME (F4 N3 #557)
             &Syscall::sys_vspace_map,      // 102 VSPACE_MAP (M11, F5 #558)
+            &Syscall::sys_vspace_frame_map, // 103 VSPACE_FRAME_MAP (N10, F11 Stage C #564)
+            &Syscall::sys_vspace_activate, // 104 VSPACE_ACTIVATE (N11, F11 Stage C #564)
     };
 };
 

@@ -100,7 +100,7 @@ tracking issue; it is never presented as already true.
 | Supervision | in-kernel `daemon_mgr` (`MAX_RESTART_COUNT = 10`, no backoff, polled from `on_tick`); death notify syscalls 66–68 | supervisor PD with restart policy, cap re-derive, client rebind | #191, #516 |
 | Caps | `CapType` {Null, Task, Endpoint, Frame, CNode, Untyped, Mmio, Irq, IoMmuDma, Msix, Wdog} | add TCB, VSpace, PageTable, Notification, SchedContext; split delete/revoke | #50, F1, F2 |
 | Process mgmt | `FORK/EXEC/WAITPID/KILL/GETPID` in kernel | proc-mgr PD over TCB/VSpace mechanisms | F11 |
-| Syscalls | `MAX_SYSCALL = 103` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
+| Syscalls | `MAX_SYSCALL = 105` (`syscall/syscall.hpp:SyscallNumber`) | closed certified set (§3) | #49 |
 
 ## 3. Target kernel API
 
@@ -116,7 +116,7 @@ excluded from the certified set · **MOVE** behaviour moves to a server RPC,
 number retired · **RETIRE** number retired without replacement ·
 **GATED** live, retirement gated on a migration step.
 
-### 3.2 Table T-1 — disposition of every number 0–102
+### 3.2 Table T-1 — disposition of every number 0–104
 
 | Nr | Name | Today | Disposition |
 |---|---|---|---|
@@ -192,6 +192,8 @@ number retired · **RETIRE** number retired without replacement ·
 | 100 | TCB_SUSPEND | live (F4 N2 #557) | KEEP |
 | 101 | TCB_RESUME | live (F4 N3 #557) | KEEP |
 | 102 | VSPACE_MAP | live (M11, F5 #558) | KEEP |
+| 103 | VSPACE_FRAME_MAP | live (F11 Stage C, N10 #564) | KEEP |
+| 104 | VSPACE_ACTIVATE | live (F11 Stage C, N11 #564) | KEEP |
 
 ### 3.3 New entries (numbers `TBD at API freeze`)
 
@@ -201,6 +203,8 @@ number retired · **RETIRE** number retired without replacement ·
 | N2 → 100 | TCB_SUSPEND | RESOLVED at F4 as syscall 100 (#557): supervisor must stop a hung PD; no mechanism exists (KILL is signal delivery) |
 | N3 → 101 | TCB_RESUME | RESOLVED at F4 as syscall 101 (#557): counterpart of N2; also starts a retyped TCB |
 | N4 → 102 | VSPACE_MAP | RESOLVED at F5 as syscall 102 (#558): one PageTable object linked at a 9-bit-component path under a VSpace root; WRITE on the VSpace + READ on the PageTable, zero allocation, destructive delete |
+| N10 → 103 | VSPACE_FRAME_MAP | RESOLVED at F11/M14 as syscall 103 (#564): map a FrameCap into a VSpace other than the caller's; WRITE on the VSpace + READ on the Frame, explicit VA, unmapped-window probe |
+| N11 → 104 | VSPACE_ACTIVATE | RESOLVED at F11/M14 as syscall 104 (#564): bind a carved VSpace root to the TcbCap-named unpublished target; kernel-half converge + subtree re-validation, no register write |
 | N5 | REPLY_RECV | RESOLVED at M3 as syscall 97 (F3/Q2 #556): reply to the recorded caller and receive the next request, dest + token implicit kernel-held |
 | N6 → 98 | CAP_DELETE | delete one's own slot without invalidating other holders |
 | N7 | SC_BIND | bind a SchedContext to a TCB |
@@ -213,11 +217,11 @@ pointer-free rule of `syscall-fastpath.md` §0.
 ### 3.4 Derived counts (informative; the set in T-1 is normative)
 
 KEEP: 0, 1, 2, 3, 5, 6, 27, 28 (8), 49, 50 (2), 51–62 (12), 64–79 (16),
-84, 85 (2), 91–102 (12) = 52.
-New: N7–N9 = 3 (N4 resolved to 102 at F5 #558; N1–N3 resolved to 99–101 at F4 #557; N5 resolved to 97 at M3; N6 resolved to 98 at F2 #555). Certified total = 55. KEEP-D: 86–90 = 5 (debug builds only).
+84, 85 (2), 91–104 (14) = 54.
+New: N7–N9 = 3 (N4 resolved to 102 at F5 #558; N1–N3 resolved to 99–101 at F4 #557; N5 resolved to 97 at M3; N6 resolved to 98 at F2 #555) + N10–N11 = 2 (resolved to 103–104 at F11 #564). Certified total = 57. KEEP-D: 86–90 = 5 (debug builds only).
 MOVE/RETIRE/GATED: 4 (1), 7–26 (20), 29–48 (20), 63 (1), 80–83 (4) = 46.
-KEEP 52 + KEEP-D 5 + MOVE/RETIRE/GATED 46 = 103 numbers (0–102), and
-`MAX_SYSCALL` = 103, so every existing number has exactly one
+KEEP 54 + KEEP-D 5 + MOVE/RETIRE/GATED 46 = 105 numbers (0–104), and
+`MAX_SYSCALL` = 105, so every existing number has exactly one
 disposition.
 
 ### 3.5 Affinity and accounting split
@@ -269,10 +273,27 @@ objects).
 9-bit-component path under a carved VSpace root (WRITE on the VSpace,
 READ on the PageTable, one 8-byte table-link store, zero allocation).
 Single parent per table (INV-VS-1: registry phys-identity scan refuses a
-second parent), full TLB shootdown on every removal (INV-VS-5), and
-destructive delete — CAP_DELETE on a mapped cap destroys its link on the
-last release (INV-VS-8, never a revoke).  No carved space is ever
-activated at F5; M14 inherits the activation guard.
+second parent), full TLB shootdown before the zero on every removal
+(INV-VS-5, amended), and destructive delete — CAP_DELETE on a mapped cap
+destroys its link on the last release (INV-VS-8, never a revoke).  No
+carved space is ever activated at F5; **M14 inherits and spends the
+activation guard through the surface below.**
+Activation (`VSPACE_ACTIVATE` (104), or the fork composer's internal
+`CarveBinding::activate`) requires WRITE on the VSpace and a TcbCap
+naming the target; refuses a root that is the caller's active space,
+already activated, or owned by a RUNNING/TERMINATING task;
+re-validates the whole subtree top-down through the per-arch codec
+before install (`SUBTREE_INVALID`); writes **no** arch control register
+(the scheduler publishes the root at the target's first dispatch —
+x86_64 CR3 via `context_id_tag`, aarch64 TTBR0 with the task's ASID,
+riscv64 SATP); and pins the VSpace cap until the binding drains at
+teardown.  While activated the root refuses `VSPACE_MAP` links
+(`VSPACE_ERR_ACTIVATED`) and `CAP_DELETE`; deactivation performs a full
+shootdown, and every teardown path flushes **before** zeroing
+(INV-VS-5, amended).  Frames enter a carved space only through
+`VSPACE_FRAME_MAP` (103), which requires WRITE on the VSpace and READ
+on the FrameCap, refuses a kernel-backed frame, requires an unmapped
+target window, and maps NX unless the executable flag is set.
 
 ### 4.4 Receive with timeout
 
@@ -673,14 +694,19 @@ Each subsection gives: (1) current vs end state and syscall mapping,
    knob OFF). With the knob ON, 20–24 + 31–32 dispatch through `ProcSvc`
    with a verdict-only proxy call in caller context; the mechanism
    (clone, ELF load/swap, waitpid block/reap, terminate, trap-frame
-   restore) never leaves caller context.
+   restore) never leaves caller context.  Stage C landed: carve-composed
+   fork under `CONFIG_PROC_MGR_CARVE_FORK` (debug 1 only after the parity
+   class is green; release 0 until the 2x3 matrix re-runs).
 2. **Invariants.** Requires N1–N4 and the retype types of §4.1. `fork` is
-   built from retype + VSpace map; no kernel deep copy after the flip.
-   INTERIM waiver, in-tree (Stage B, #564 F11a tracked): Stage B ships
-   the PD/MOVE with the kernel-composed `clone` deep copy (every fork
-   child now carries a fresh generation from the single allocator,
-   INV-PROC-13); carve-composed fork is deferred, never silently dropped
-   (see Q1). Verdicts are deny-only (INV-PROC-11): after an OK verdict
+   built from retype + VSpace map (Stage C): the child's VSpace root,
+   every page-table page and every frame it maps are carved with
+   `CAP_RETYPE`, linked top-down with `VSPACE_MAP`, populated with
+   `VSPACE_FRAME_MAP` and installed with `VSPACE_ACTIVATE`;
+   `VMM::deep_copy_user_pages` is not on the fork path (INV-CARVE-2). The
+   Stage B interim waiver is **lifted**, not extended: the kernel-composed
+   `clone` survives only as the knob-OFF comparator and the release
+   default until the 2x3 matrix re-runs. INV-PROC-11/12/13 are unchanged.
+   Verdicts are deny-only (INV-PROC-11): after an OK verdict
    the kernel still runs every existing gate, so a compromised PD can
    only reduce availability, never widen authority. The fork hold is
    installed pre-publication (INV-PROC-12): hold failure destroys the
@@ -699,7 +725,9 @@ Each subsection gives: (1) current vs end state and syscall mapping,
    `proc_mgr_crash_restart`, `proc_mgr_stop_authority`,
    `proc_mgr_hold_full`, `proc_mgr_death_visible` (reusing
    `mk_death_visible_bounded`); `proc_elf` parity is the blast-radius
-   gate. §8.10 ordering (literal): the SDF zero-cap row plus the
+   gate.  Stage C adds `carve_fork_parity`, `carve_fork_rollback`,
+   `carve_activation_guard`, `carve_foreign_frame_map`,
+   `pid_reuse_safe_carved`, `carve_tcb_storage` (testbed lane). §8.10 ordering (literal): the SDF zero-cap row plus the
    taskdefs restart row land BEFORE the dispatch MOVE takes effect —
    the knob-gated flip is the last step, policy-gated on parity green.
    ON-world test rule (Stage B evidence, #564): a verdict RPC parks the
@@ -946,7 +974,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F8 | #561 | x86_64 IRQ parity: storm limiter, level mask, `pending` saturation, single waiter | `irq_delivery.cpp`, `syscall_handlers_irq.cpp` |
 | F9 | #562 | Static bound re-sizing (Untyped, per-task objects, CNode slots, IOPB, death watches) | `nexios_config.h` |
 | F10 | #563 | mem-mgr bootstrap handover | #193 part a |
-| F11 | #564 | proc-mgr PD | in-progress (Stage B: PD + MOVE behind CONFIG_PROC_MGR; MOVE rows flip on parity green; release default stays 0) |
+| F11 | #564 | proc-mgr PD | in-progress (Stage C landed: carve fork + N10/N11; release default 0 until the 2x3 matrix) |
 | F12 | #565 | sync-srv PD | new |
 | F13 | #566 | entropy-srv PD | new |
 | F14 | #567 | SHM-manager PD + ring epoch | new |
@@ -989,4 +1017,5 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | `ace5c4da1` | #47 step-b2 block-srv IRQ delegation (WAIT_ACK, bounded wait, poll fallback) |
 | `579605bd4` | #47 step-b3 vfs-srv backends live path |
 | `27842ffa2` | #51 console PD substrate (SDF FB row, fb-pd render, `fb_bounded_render`) |
-| Stage B (#564 F11) | proc-mgr PD + MOVE of 20–24/31–32 behind CONFIG_PROC_MGR (knob OFF until parity green; release stays 0); kernel-composed `clone` fork retained (fresh generation per child, INV-PROC-13), carve composition deferred to F11a (Q1 option (a)) |
+| Stage B (#564 F11) | proc-mgr PD + MOVE of 20–24/31–32 behind CONFIG_PROC_MGR (knob OFF until parity green; release stays 0); kernel-composed `clone` fork retained (fresh generation per child, INV-PROC-13); carve composition in Stage C below (F11a superseded) |
+| Stage C (#564 F11) | carve-composed fork: N10 as syscall 103 (VSPACE_FRAME_MAP — FrameCap into a non-caller VSpace), N11 as syscall 104 (VSPACE_ACTIVATE — carved root onto the unpublished composer child), retype + top-down VSPACE_MAP composition, no kernel deep copy (INV-CARVE-2), Stage B interim waiver LIFTED |

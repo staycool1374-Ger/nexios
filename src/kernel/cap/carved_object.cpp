@@ -20,11 +20,13 @@
 /// @brief Fixed-size carved capability object implementation (F1 #554).
 
 #include <kernel/cap/carved_object.hpp>
+#include <kernel/cap/carve_binding.hpp>
 #include <kernel/cap/vspace_map.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/test/resource_tracker.hpp>
+#include <assert.hpp>
 #include <constants.hpp>
 
 // Placement new (defined in lib/new.cpp, no <new> header in freestanding)
@@ -74,10 +76,19 @@ void CarvedObjectCap::dispose() noexcept {
     // payload pages go back to the PMM.  Reversing that order hands a
     // live parent a page the allocator may re-issue (S1).  The hook is
     // idempotent, so revoke-then-dispose is safe.
+    // F11 Stage C (issue #564, INV-VS-3-prime): an activated root is
+    // never deletable — the binding pin keeps the last reference alive
+    // until teardown drain_task, so dispose() on an activated root is
+    // unreachable.  The CONFIG_DEBUG ENSURE below is the backstop: if it
+    // fires, a delete path bypassed the binding gate.
     if (kind == CapType::PageTable)
         VSpaceMap::invalidate_table(phys);
-    else if (kind == CapType::VSpace)
+    else if (kind == CapType::VSpace) {
+#if defined(CONFIG_DEBUG)
+        ENSURE(!carve_root_is_activated(phys));
+#endif
         VSpaceMap::invalidate_vspace(phys);
+    }
     const size_t page_count = bytes / arch::PAGE_SIZE;
     for (size_t page_idx = 0; page_idx < page_count; ++page_idx)
         PMM::free_page(phys + page_idx * arch::PAGE_SIZE);
@@ -89,6 +100,10 @@ void CarvedObjectCap::revoke() noexcept {
     // F5 (issue #558): a revoked carved object keeps no live mapping —
     // the same invalidation dispose() runs, before the revoked mark, so
     // no parent ever points at a page whose owner went away.
+    // F11 Stage C (issue #564): an activated root is refused by the
+    // delete gate rather than silently zeroed — the binding pin holds
+    // the last reference, so revoke() of a live holder only marks; the
+    // mapping dies at teardown drain_task, never under a live task.
     if (kind == CapType::PageTable)
         VSpaceMap::invalidate_table(phys);
     else if (kind == CapType::VSpace)

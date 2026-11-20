@@ -142,6 +142,10 @@ constexpr DmesgRecord kDmesgCatalog_TASK[] = {
      "Proc-mgr restart failed"},
     {ErrorSubsystem::TASK, kDmesgBase_TASK + 21, LogSeverity::WARN,
      "Proc-mgr RPC bound expired"},
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 22, LogSeverity::WARN,
+     "Carve fork rolled back"},
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 23, LogSeverity::ERROR,
+     "Carved root activation refused"},
 };
 
 /// @brief Network records (canonical base kDmesgBase_NET). No producer

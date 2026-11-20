@@ -973,10 +973,17 @@ bool exec_into_current(const ELF64Header *hdr, const uint8_t *data,
     // v0.4.0 MP-3: arm segment-boundary canaries in the new address space.
     install_segment_canaries(tcb, hdr, data, file_size);
 
-    if (old_pml4 && old_pml4 != VMM::get_kernel_pml4()) {
-        VMM::free_user_pages(old_pml4);
-        PMM::free_page(old_pml4);
-    }
+    // Issue #564, F11 Stage C: the single releaser.  Behaviour-identical
+    // for CLONE (same calls, same order).  A carved predecessor takes
+    // the CARVED arm (links-only invalidate + foreign drain +
+    // deactivate — the caps die at teardown drain, never here; the
+    // context ID survives exec).  The fresh PMM-owned root below
+    // re-kinds to CLONE so the next teardown frees it (never the
+    // drain-only arm, or the PMM root leaks one page per exec).
+    // switch_address_space stays exactly where it is (the #524
+    // retarget-before-free ordering must not move).
+    tcb->release_replaced_root(old_pml4);
+    tcb->vspace_kind_ = TaskControlBlock::VspaceKind::CLONE;
 
     return true;
 }

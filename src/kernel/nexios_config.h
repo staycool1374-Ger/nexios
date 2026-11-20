@@ -1592,6 +1592,51 @@ extern "C" void panic(const char *msg);
 #define CONFIG_PROC_MGR_MAX_HELD_TCB_CAPS 32
 #endif
 
+/// Carve-composed fork master switch (issue #564, F11 Stage C).
+/// 0 = kernel-composed clone (shipped default, bit-identical).
+/// 1 = carve-composed fork (retype + VSpace map + foreign-frame map +
+/// carved-root activation, no kernel deep copy). Requires
+/// CONFIG_PROC_MGR=1 (build-time #error otherwise — S3-3 cross-knob
+/// validator). All carve code is `#if
+/// CONFIG_PROC_MGR_CARVE_FORK`-guarded (empty TU when 0); no runtime `if`
+/// on this knob. Default: 0.
+#ifndef CONFIG_PROC_MGR_CARVE_FORK
+#define CONFIG_PROC_MGR_CARVE_FORK 0
+#endif
+
+/// Maximum live VSpace table links kernel-wide (issue #564, F11 Stage C).
+/// Replaces the F5 placeholder kMaxVspaceMappings = 32, which sized table
+/// links for tests: a carved fork child needs one link per table (capped
+/// at CONFIG_CARVE_MAX_TABLES), so 256 = 64 tasks x 4. F9 (#562, Q7) owns
+/// the final re-derivation and this key is the handoff, not a second
+/// copy. Default: 256.
+#ifndef CONFIG_CAP_MAX_VSPACE_MAPPINGS
+#define CONFIG_CAP_MAX_VSPACE_MAPPINGS 256
+#endif
+
+/// Maximum concurrent carve bindings (issue #564, F11 Stage C).
+/// One slot per carved child (64 = CONFIG_MAX_TASKS); exhaustion fails
+/// the fork closed with a typed error (never a panic, never a partial
+/// child). Default: 64.
+#ifndef CONFIG_CARVE_BINDINGS
+#define CONFIG_CARVE_BINDINGS 64
+#endif
+
+/// Maximum user regions enumerated per carve-composed fork (issue #564,
+/// F11 Stage C). A legitimately more-fragmented process is refused fork
+/// with a typed error (never a panic); raising the bound is a config
+/// change, not a code change. Default: 16.
+#ifndef CONFIG_CARVE_MAX_REGIONS
+#define CONFIG_CARVE_MAX_REGIONS 16
+#endif
+
+/// Maximum page tables carved per carve-composed fork (issue #564,
+/// F11 Stage C). Covers a fully-populated 4-level chain with spares;
+/// exhaustion fails the fork closed with a typed error. Default: 24.
+#ifndef CONFIG_CARVE_MAX_TABLES
+#define CONFIG_CARVE_MAX_TABLES 24
+#endif
+
 #if CONFIG_PROCFS_SRV != 0 && CONFIG_PROCFS_SRV != 1
 #error "CONFIG_PROCFS_SRV must be 0 or 1 (default 0)"
 #endif
@@ -1603,6 +1648,24 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_PROC_MGR_MAX_HELD_TCB_CAPS < 1
 #error "CONFIG_PROC_MGR_MAX_HELD_TCB_CAPS must be >= 1 (default 32)"
+#endif
+#if CONFIG_PROC_MGR_CARVE_FORK != 0 && CONFIG_PROC_MGR_CARVE_FORK != 1
+#error "CONFIG_PROC_MGR_CARVE_FORK must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_CAP_MAX_VSPACE_MAPPINGS < 1
+#error "CONFIG_CAP_MAX_VSPACE_MAPPINGS must be >= 1 (default 256)"
+#endif
+#if CONFIG_CARVE_BINDINGS < 1
+#error "CONFIG_CARVE_BINDINGS must be >= 1 (default 64)"
+#endif
+#if CONFIG_CARVE_MAX_REGIONS < 1
+#error "CONFIG_CARVE_MAX_REGIONS must be >= 1 (default 16)"
+#endif
+#if CONFIG_CARVE_MAX_TABLES < 1
+#error "CONFIG_CARVE_MAX_TABLES must be >= 1 (default 24)"
+#endif
+#if CONFIG_PROC_MGR_CARVE_FORK && !CONFIG_PROC_MGR
+#error "CONFIG_PROC_MGR_CARVE_FORK requires CONFIG_PROC_MGR=1"
 #endif
 #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
 #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"

@@ -53,6 +53,9 @@
 #include <kernel/proc/proc_mgr_proxy.hpp>
 #include <kernel/proc/proc_tcb_caps.hpp>
 #endif
+#if CONFIG_PROC_MGR_CARVE_FORK
+#include <kernel/proc/proc_fork_carve.hpp>
+#endif
 
 namespace kernel::proc {
 
@@ -87,7 +90,19 @@ uint64_t ProcSvc::fork(uint64_t, uint64_t, uint64_t, uint64_t,
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
 #endif
-    auto *child = TaskControlBlock::clone(regs);
+    // Issue #564, F11 Stage C: carve-composed fork (retype + VSpace
+    // map + foreign-frame map + carved-root activation, no kernel deep
+    // copy) under CONFIG_PROC_MGR_CARVE_FORK; the knob-OFF leg is the
+    // statement-identical kernel-composed clone (INV-CARVE-3: the sole
+    // user-task publication path — unpublished until add_task_err
+    // either way; the hold + add_task_err + release-then-destroy tail
+    // below is shared verbatim, INV-CARVE-10).
+    auto *child =
+#if CONFIG_PROC_MGR_CARVE_FORK
+        carve_fork(regs);
+#else
+        TaskControlBlock::clone(regs);
+#endif
     if (!child)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 #if CONFIG_PROC_MGR

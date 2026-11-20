@@ -21,6 +21,7 @@
 
 #include <kernel/cap/frame.hpp>
 #include <kernel/cap/frame_map.hpp>
+#include <kernel/cap/frame_foreign_map.hpp>
 #include <kernel/ipc/pager_registry.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/pmm.hpp>
@@ -68,6 +69,12 @@ void FrameCap::dispose() noexcept {
     // non-owning (equality-match only) in the map registry — never
     // dereferenced after this point.
     FrameUserMap::invalidate_cap(this);
+    // Issue #564 audit (Stage C code r1, S2): same closure for the foreign
+    // registry — a frame mapped into a non-caller VSpace (103) must not
+    // outlive the capability either.  Normally empty here (teardown drains
+    // the foreign map before the binding pins release), so a no-op; kept
+    // for dispose/revoke symmetry with the FrameUserMap precedent.
+    ForeignFrameMap::invalidate_cap(this);
     // Issue #107: same closure for the pager registry's fault ledger — a
     // pager-mapped page backed by this cap must be unmapped + unpinned before
     // the frames are freed.
@@ -87,6 +94,12 @@ void FrameCap::revoke() noexcept {
     // Issue #106 Part B: same closure as dispose — a revoked capability must
     // not leave stale frame mappings behind (fail-closed, MMIO parity).
     FrameUserMap::invalidate_cap(this);
+    // Issue #564 audit (Stage C code r1, S2): the foreign-registry half of
+    // the revocation closure.  The binding pin keeps the pages owned (no
+    // UAF), but without this a revoked frame stays readable+writable in
+    // the carved child's address space until teardown — a revocation
+    // bypass.  Pointer-equality only; holes fold-and-ignore.
+    ForeignFrameMap::invalidate_cap(this);
     // Issue #107: pager-ledger closure (same rationale as dispose).
     ipc::PagerRegistry::invalidate_cap(this);
     KernelObject::revoke();

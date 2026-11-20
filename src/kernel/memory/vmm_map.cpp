@@ -447,5 +447,87 @@ errors::VmmError VMM::unmap_page_in_pml4_err(uint64_t virt_addr,
     return errors::VMM_ERR_OK;
 }
 
+size_t VMM::enumerate_user_regions(uint64_t root_phys, UserRegion *out,
+                                   size_t max_out) noexcept {
+    // Issue #564, F11 Stage C: bounded, allocation-free, read-only walk
+    // of the user half.  Zero side effects: no allocation, no store, no
+    // lock, no flush.  Permissions decode only through the per-arch
+    // codecs (LEARNINGS #363); the merged kernel half is skipped, never
+    // enumerated.  Present-table descent only, so the walk is bounded by
+    // mapped memory; recursion depth is at most the walk depth (4).
+    if (root_phys == 0 || out == nullptr || max_out == 0)
+        return 0;
+    const unsigned levels = vmm_arch_walk_levels();
+    if (levels != 3 && levels != 4)
+        return 0;
+    size_t total = 0;  // regions found (may exceed max_out)
+    size_t filled = 0; // regions written to out
+    bool have_run = false;
+    UserRegion run{};
+    auto flush_run = [&]() {
+        if (!have_run)
+            return;
+        if (filled < max_out)
+            out[filled] = run;
+        ++filled;
+        ++total;
+        have_run = false;
+    };
+    auto emit_leaf = [&](uint64_t va, uint64_t bytes, uint64_t entry) {
+        if ((entry & PAGE_USER) == 0)
+            return; // kernel-owned (merge/shared) — never enumerated
+        bool exec_probe = false;
+        const bool read_only = vmm_arch_leaf_is_ro(entry, &exec_probe);
+        const bool writable = !read_only;
+        // pte_is_ro contract: executable_out is written ONLY when the
+        // leaf is RO — RW executability needs the NX-codec probe.
+        const bool executable =
+            read_only ? exec_probe : vmm_arch_leaf_is_executable(entry);
+        if (have_run && run.va + run.bytes == va &&
+            run.executable == executable && run.writable == writable &&
+            run.bytes + bytes >= run.bytes) {
+            run.bytes += bytes; // coalesce contiguous identical perms
+            return;
+        }
+        flush_run();
+        run.va = va;
+        run.bytes = bytes;
+        run.executable = executable;
+        run.writable = writable;
+        have_run = true;
+    };
+    auto walk = [&](auto &&self, uint64_t table_phys, unsigned depth,
+                    uint64_t base_va) -> void {
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        const auto *table = reinterpret_cast<const uint64_t *>(
+            arch::HHDM_OFFSET + (table_phys & PAGE_TABLE_ADDR_MASK));
+        const uint64_t level_bytes = 1ULL << (12 + 9 * (levels - 1u - depth));
+        const size_t span =
+            (depth == 0) ? arch::PML4_USER_COUNT : PAGE_TABLE_ENTRIES;
+        const bool last_level = (depth == levels - 1u);
+        for (size_t entry_idx = 0; entry_idx < span; ++entry_idx) {
+            const uint64_t entry = table[entry_idx];
+            if (entry == 0)
+                continue;
+            const uint64_t entry_va = base_va + entry_idx * level_bytes;
+            if (!last_level && is_table_entry(entry, depth)) {
+                self(self, vmm_arch_table_child(entry), depth + 1u,
+                     entry_va);
+                continue;
+            }
+            // Leaf (or block) at any depth: one region of level size.
+            // A table pointer stranded at the leaf level is a reserved
+            // encoding — never mapped by any in-tree path — so skip it
+            // rather than enumerating a bogus region.
+            if (last_level && is_table_entry(entry, depth))
+                continue;
+            emit_leaf(entry_va, level_bytes, entry);
+        }
+    };
+    walk(walk, root_phys & PAGE_TABLE_ADDR_MASK, 0, 0);
+    flush_run();
+    return total;
+}
+
 
 } // namespace kernel

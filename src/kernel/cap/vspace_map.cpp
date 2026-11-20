@@ -23,6 +23,7 @@
 ///        s_lock_, never with scheduler_lock_ held, never from an ISR).
 
 #include <kernel/cap/vspace_map.hpp>
+#include <kernel/cap/carve_binding.hpp>
 #include <kernel/cap/vspace_errors.hpp>
 #include <kernel/memory/vmm.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -117,6 +118,12 @@ errors::VspaceError VSpaceMap::link(uint64_t vspace_phys,
         return errors::VSPACE_ERR_ALIASED;
     if (vspace_phys == VMM::current_root_phys())
         return errors::VSPACE_ERR_ACTIVE_SPACE;
+    // INV-VS-3-prime (issue #564, F11 Stage C): an activated root is
+    // immutable — post-activation links would escape the activation-time
+    // validate_subtree guarantee.  Pure lock-free probe (no lock — the
+    // INV-VS-9 precedent), so there is no s_lock_ <-> binding cycle.
+    if (carve_root_is_activated(vspace_phys))
+        return errors::VSPACE_ERR_ACTIVATED;
     if (((vspace_phys | table_phys) & (arch::PAGE_SIZE - 1u)) != 0)
         return errors::VSPACE_ERR_INVALID_ARGS;
 
@@ -189,20 +196,27 @@ void VSpaceMap::invalidate_table(uint64_t table_phys) noexcept {
             break;
         }
         drop_dependents_locked(table_phys);
+    }
+    // INV-VS-5 (amended, issue #564 M14 handoff spent): the full shootdown
+    // runs BEFORE the zero — a stale TLB entry translating a freed page
+    // under a live task is S1 now that roots can activate.  Conservative
+    // full shootdown after the registry unlock (untagged CR3 reload on
+    // x86_64 / tlb_purge_all INVPCID all-incl-global, TLBI VMALLE1-class
+    // on aarch64, full sfence.vma on riscv64, plus the weak SMP hook).
+    // Never narrowed to (ASID, VA): no ASID/PCID is assigned to a carved
+    // space at link time.  Activation re-validates the whole subtree —
+    // no VA under this tree is translatable until then.
+    VMM::tlb_shootdown(0, 0, true);
+    {
+        // The zero re-takes the registry lock so it stays mutually
+        // exclusive with link()'s child scrub + store (INV-VS-9: the
+        // flush itself is never held across, but the zero is).
+        SpinLockGuard<sync::SpinLock> guard(s_lock_);
         // Authoritative kill (INV-VS-4 step 3): after this store no stale
         // link inside the departing page can ever reach a freed page,
         // whatever order F2's revoke cascade destroys the caps in.
         zero_page(table_phys);
     }
-    // Conservative full shootdown after the unlock (INV-VS-5): untagged
-    // CR3 reload on x86_64 (page_table_impl.hpp:51-54) / tlb_purge_all
-    // INVPCID all-incl-global, TLBI VMALLE1-class on aarch64, full
-    // sfence.vma on riscv64, plus the weak SMP hook.  Never narrowed to
-    // (ASID, VA): no ASID/PCID is assigned to a carved space yet.
-    // M14 handoff: once a VSpace can be activated, this flush must move
-    // BEFORE the zero above, and activation must re-validate the whole
-    // subtree — no VA under this tree is translatable until then.
-    VMM::tlb_shootdown(0, 0, true);
 }
 
 void VSpaceMap::invalidate_vspace(uint64_t vspace_phys) noexcept {
@@ -214,13 +228,35 @@ void VSpaceMap::invalidate_vspace(uint64_t vspace_phys) noexcept {
             if (slot.occupied && slot.vspace_phys == vspace_phys)
                 slot.occupied = false;
         }
+    }
+    // INV-VS-5 (amended): flush BEFORE the zero (same S1 rationale as
+    // invalidate_table).
+    VMM::tlb_shootdown(0, 0, true);
+    {
+        SpinLockGuard<sync::SpinLock> guard(s_lock_);
         // One bounded store kills every link inside the root, whatever
         // order the caps leave in (INV-VS-4).  Orphaned PageTable caps
         // stay deletable afterwards (their own teardown re-zeroes a page
         // they still own — no double free, no dangling record).
         zero_page(vspace_phys);
     }
-    // Same conservative full shootdown as invalidate_table (INV-VS-5).
+}
+
+void VSpaceMap::invalidate_vspace_links_only(uint64_t vspace_phys) noexcept {
+    // Issue #564, F11 Stage C: the carved-teardown releaser path.  The
+    // pages are cap-owned (root/table/frame caps stay pinned to the
+    // teardown drain), so zeroing here would scrub live caps — unlink the
+    // registry records and drop dependents only, then the TLB flush.
+    {
+        SpinLockGuard<sync::SpinLock> guard(s_lock_);
+        for (size_t slot_idx = 0; slot_idx < kMaxVspaceMappings;
+             ++slot_idx) {
+            Slot &slot = s_slots_[slot_idx];
+            if (slot.occupied && slot.vspace_phys == vspace_phys)
+                slot.occupied = false;
+        }
+        drop_dependents_locked(vspace_phys);
+    }
     VMM::tlb_shootdown(0, 0, true);
 }
 

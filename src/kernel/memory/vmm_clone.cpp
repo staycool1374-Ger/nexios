@@ -179,6 +179,13 @@ bool VMM::is_table_entry(uint64_t entry, unsigned level) {
     return vmm_arch_is_table(entry);
 }
 
+/// @brief Level-aware table test for external validators (issue #564,
+///        F11 Stage C): thin public wrapper over the walker's
+///        is_table_entry (same arch decode, no widened access).
+bool VMM::table_entry_is_table_at(uint64_t entry, unsigned level) {
+    return is_table_entry(entry, level);
+}
+
 /// @brief Recursive merge worker (issue #96): converge @p dst_table
 ///        toward @p src_table over [@p start, 512).  Missing-present
 ///        entries are linked (copied by value); present entries are left

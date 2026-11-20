@@ -41,6 +41,9 @@
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/cap/cap.hpp>
+#include <kernel/cap/carve_binding.hpp>
+#include <kernel/cap/frame_foreign_map.hpp>
+#include <kernel/cap/vspace_map.hpp>
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/ipc/death_notify.hpp>
@@ -1047,6 +1050,205 @@ void TaskControlBlock::clear_page_table() noexcept {
     // elf error paths).  Unconditional: clearing an already-zero slot
     // on fresh TCBs is a no-op.
     page_table_ = 0;
+}
+
+#if defined(CONFIG_ARCH_X86_64)
+// Forward declaration (defined beside complete_teardown): frees the
+// private stack PDPT + PD/PT pages; used by release_root_pages below.
+static void free_stack_pdpt(uint64_t pdpt_phys) noexcept;
+#endif
+
+TaskControlBlock *TaskControlBlock::create_carved(TaskControlBlock &parent,
+                                                  uint64_t region_phys) noexcept {
+    // Issue #564, F11 Stage C: TCB adoption over a carved region.  The
+    // region cap is pinned by the caller (CarveBinding); this adopts the
+    // C++ object view over it (memset-then-fields — never ctor-built, so
+    // the TCB block address IS the carved region identity and the new
+    // discriminator fields are explicit here, matching the four memset
+    // birth sites).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    auto *tcb =
+        reinterpret_cast<TaskControlBlock *>(arch::HHDM_OFFSET + region_phys);
+    memset(tcb, 0, sizeof(TaskControlBlock));
+
+    TCB_WRITE(tcb, magic, TCB_MAGIC);
+    TCB_WRITE(tcb, id, Scheduler::alloc_id());
+    // INV-CARVE-5: the carved birth site takes its generation from
+    // next_task_generation() before the child is reachable (INV-PROC-13
+    // extended to every birth site).
+    tcb->generation = next_task_generation();
+    tcb->tcb_storage_ = TcbStorage::CARVED;
+    tcb->vspace_kind_ = VspaceKind::CARVED;
+    tcb->iopb_slot_ = TaskControlBlock::IOPB_SLOT_NONE;
+    // Issue #41: watchdog disarmed, never-armed generation (see create).
+    tcb->wdog_armed = false;
+    tcb->wdog_period_ticks = 0;
+    tcb->wdog_last_kick_tick = 0;
+    tcb->wdog_expiry_tick = 0;
+    tcb->wdog_gen = 0;
+    // F4 admin latch (issue #557, INV-ADM-6): a carved child never
+    // inherits a park — transient, zero at every memset site.
+    tcb->admin_parked = false;
+    tcb->admin_wake_pending = false;
+    tcb->admin_stop_requested = false;
+    tcb->admin_prev_state =
+        static_cast<uint8_t>(AdminPrevState::BLOCKED);
+    tcb->admin_suspend_tick = 0;
+    tcb->admin_deadline_ticks = 0;
+    tcb->admin_wdog_expiry_tick = 0;
+    __builtin_memcpy(tcb->name, parent.name, CONFIG_TASK_NAME_LEN);
+    tcb->parent_id = parent.id;
+    TCB_WRITE(tcb, state, TaskState::READY);
+    tcb->priority = parent.priority;
+    tcb->base_priority = parent.base_priority;
+    tcb->cpu_affinity = parent.cpu_affinity; // issue #25 C1: inherit mask
+    tcb->tls_base_ = parent.tls_base_; // issue #74: clone inherits TLS base
+    // v0.4.0 MP-1: the user flag is authoritative (every task owns a
+    // private kernel-half PML4).  A carved child of a user parent is a
+    // user task; the composer asserts the parent side of this.
+    tcb->is_user_ = parent.is_user_;
+    // Issue #312: a child forked from a USER parent is best-effort/
+    // aperiodic — it must not inherit the parent's periodic window.
+    // runelf stamps the parent period_ticks 100 with no WCET, so an
+    // implicit-100% periodic child would be rejected by the Liu-Leyland
+    // admission gate (1.0 + 1.0 = 2.0 > bound(2) = 0.828).  A child
+    // forked from a KERNEL parent inherits as today.  deadline_ticks == 0
+    // makes the child admission-exempt (admission_exempted, I-4).
+    const bool is_user_parent = parent.is_user_;
+    tcb->period_ticks = is_user_parent ? 0 : parent.period_ticks;
+    tcb->deadline_ticks = is_user_parent ? 0 : parent.deadline_ticks;
+    tcb->executed_ticks = 0;
+    tcb->exec_ns_total = 0;
+    tcb->exec_period_ns = 0;
+    tcb->exec_window_start_tick = arch::Timer::ticks(); // issue #331 fresh
+    tcb->exec_stamp_ns = 0;
+    tcb->sched_policy = SchedPolicy::AUTO; // issue #19 (starts AUTO)
+    tcb->edf_exempt = false;               // no policy inheritance
+    tcb->wcet_observed_ns = 0;          // issue #283: fresh observed max
+    tcb->mem_alloc_ops_ = 0;               // issue #284: fresh counters
+    tcb->mem_free_ops_ = 0;
+    tcb->mem_prev_outstanding_ = 0;
+    tcb->mem_prev_used_ = 0;
+    tcb->mem_leak_streak_ = 0;
+    tcb->edf_next_ = nullptr;
+    tcb->edf_prev_ = nullptr;
+    tcb->in_edf_queue_ = false;
+    tcb->ready_deferred_ = false;
+    tcb->remaining_ticks = is_user_parent ? 0 : parent.remaining_ticks;
+    tcb->exit_code = 0;
+    tcb->waiting_child_pid = 0;
+    tcb->waiting_child_status = nullptr;
+    tcb->user_data = parent.user_data;
+    tcb->program_break = parent.program_break;
+    tcb->program_break_start = parent.program_break_start;
+
+    tcb->blocked_next = nullptr;
+    tcb->blocked_prev = nullptr;
+
+    // Process hierarchy: add child to parent
+    tcb->first_child = nullptr;
+    tcb->next_sibling = nullptr;
+    tcb->prev_sibling = nullptr;
+    tcb->num_children = 0;
+    parent.add_child(tcb);
+
+    // Per-task IPC objects (child gets fresh empty queues — embedded in
+    // TCB).  The FPU state copy, register frame, fd/cwd inheritance and
+    // canaries are the composer's (proc_fork_carve.cpp) — the region is
+    // adopted here, the content arrives there.
+    tcb->msg_queue.init();
+    tcb->msg_queue.owner = tcb;
+    kernel::test::ResourceTracker::instance().track_msg_queue_add();
+
+    tcb->notify.init();
+    kernel::test::ResourceTracker::instance().track_notify_add();
+
+    tcb->event_group.init();
+    kernel::test::ResourceTracker::instance().track_event_group_add();
+    // Issue #542: the birth add lives here. Pairs with the remove in
+    // complete_teardown.
+    kernel::test::ResourceTracker::instance().track_task_add();
+
+    // Buffer pool starts empty — buffers are NOT inherited on fork
+    tcb->buf_list_head = -1;
+
+    // Issue #578: same membership rule as init_task_common (clone does not
+    // route through it).  Never inherit the parent's marker: membership is
+    // creation-time state, and the parent may outlive the armed window.
+    tcb->park_test_member = gs::get_park_test_ctx() &&
+                            Scheduler::is_test_active();
+
+    return tcb;
+}
+
+void TaskControlBlock::install_carved_root(uint64_t root_phys,
+                                           uint16_t pcid) noexcept {
+    // Issue #564, F11 Stage C activation (INV-CARVE-6): install the
+    // carved root + context ID on an unpublished TCB.  ENSUREs the slot
+    // is empty (same #371 orphan discipline as install_page_table).  No
+    // register write, no flush — the scheduler publishes the root at the
+    // target's first dispatch and the root was never live.
+    ENSURE(page_table_ == 0);
+    ENSURE(root_phys != 0);
+    page_table_ = root_phys;
+    pcid_ = pcid;
+    vspace_kind_ = VspaceKind::CARVED;
+}
+
+void TaskControlBlock::release_address_space() noexcept {
+    // Issue #564, F11 Stage C: the ONE address-space releaser.  The
+    // thread-group arm in complete_teardown is untouched (carved tasks
+    // are never group members — the bare-104 gate refuses shared roots).
+    const uint64_t root = page_table_;
+    if (root == 0)
+        return;
+    release_root_pages(root);
+    // Issue #352 + #390: release the context ID AFTER the cross-CPU
+    // purge (free_user_pages / the deactivate shootdown fan out via
+    // tlb_shootdown(0,0,true)).  Releasing first lets the ID be reissued
+    // while a remote CPU still holds entries tagged with it (stale-tag
+    // reuse). Keyed on the live TCB, never after free; 0 is a no-op.
+    // Arch-neutral.
+    arch::context_id_free(pcid_);
+    pcid_ = 0;
+    clear_page_table();
+}
+
+void TaskControlBlock::release_replaced_root(uint64_t old_root) noexcept {
+    // Issue #564, F11 Stage C exec path: the current root is already the
+    // new table (swap_page_table ran before switch_address_space, the
+    // #524 order), so only the old root's pages are reclaimed — the
+    // context ID survives exec (tlb_purge_context already ran) and the
+    // slot keeps naming the new table.
+    if (old_root == 0 || old_root == VMM::get_kernel_pml4() ||
+        old_root == page_table_)
+        return;
+    release_root_pages(old_root);
+}
+
+void TaskControlBlock::release_root_pages(uint64_t root) noexcept {
+    // Shared page-level worker for both releasers: kind-branched, never
+    // touches pcid_ or the page_table_ slot (the caller's window).
+    if (vspace_kind_ == VspaceKind::CARVED) {
+        // Cap-owned root: drop the registry links WITHOUT zeroing (the
+        // pages belong to pinned carved caps), drain the foreign frames,
+        // clear the activation flag with a full shootdown.  The caps own
+        // the pages — nothing here frees.
+        cap::VSpaceMap::invalidate_vspace_links_only(root);
+        cap::ForeignFrameMap::drain_vspace(root);
+        cap::CarveBinding::deactivate(id, generation);
+        return;
+    }
+    // CLONE arm: today's sequence, statement-identical (free_user_pages
+    // fans out the cross-CPU purge before the caller frees the ID).
+    VMM::free_user_pages(root);
+    PMM::free_page(root);
+#if defined(CONFIG_ARCH_X86_64)
+    if (stack_pdpt_phys_) {
+        free_stack_pdpt(stack_pdpt_phys_);
+        stack_pdpt_phys_ = 0;
+    }
+#endif // CONFIG_ARCH_X86_64
 }
 
 void TaskControlBlock::provision_kstack(TaskControlBlock *tcb,
@@ -2918,7 +3120,13 @@ void TaskControlBlock::complete_teardown() noexcept {
 
     // v0.4.0 MP-1: keyed on the authoritative is_user_ flag — a kernel task
     // owns a private kernel-half PML4 but never a user stack.
-    if (is_user_ && user_stack_) {
+    // Issue #564, F11 Stage C: a carved child's user stack pages are
+    // FrameCap-owned (pinned in the CarveBinding until teardown drain) —
+    // PMM::free_page here would double-free them at dispose.  The whole
+    // block is skipped for CARVED storage (carved tasks are never thread
+    // group members either, so the grouped arm is unreachable too).
+    if (is_user_ && user_stack_ &&
+        tcb_storage_ != TcbStorage::CARVED) {
         // Issue #53 S1-2: only a window-slot member owns a private stack
         // range in a shared root.  The owner member (user_stack_va_ == 0,
         // joined at spawn) shares its STACK_VADDR range with the group —
@@ -3075,23 +3283,10 @@ void TaskControlBlock::complete_teardown() noexcept {
             clear_page_table();
             user_stack_size_ = 0;
         } else {
-            // Issue #352 + #390: release the context ID AFTER the
-            // cross-CPU purge (free_user_pages fans out via
-            // tlb_shootdown(0,0,true)).  Releasing first lets the ID be
-            // reissued while a remote CPU still holds entries tagged with
-            // it (stale-tag reuse). Keyed on the live TCB, never after
-            // free; 0 is a no-op. Arch-neutral.
-            VMM::free_user_pages(get_page_table());
-            arch::context_id_free(pcid_);
-            pcid_ = 0;
-            PMM::free_page(get_page_table());
-#if defined(CONFIG_ARCH_X86_64)
-            if (stack_pdpt_phys_) {
-                free_stack_pdpt(stack_pdpt_phys_);
-                stack_pdpt_phys_ = 0;
-            }
-#endif // CONFIG_ARCH_X86_64
-            clear_page_table();
+            // Private root: the single releaser (issue #564, F11 Stage
+            // C).  CLONE frees the PMM-owned root; CARVED drops links,
+            // drains foreign frames and deactivates (caps own the pages).
+            release_address_space();
         }
     }
     kernel::task_step(kernel::TaskCleanupSteps::PageTeardown); // issue #347 Slice C
@@ -3139,6 +3334,23 @@ void TaskControlBlock::complete_teardown() noexcept {
     // Issue #373: teardown ran to completion — any further cleanup() or
     // destroy() on this TCB is a safe no-op, never a re-teardown.
     teardown_completed_ = true;
+    // Issue #564, F11 Stage C (INV-CARVE-4): the carved drain is the last
+    // statement — after it nothing may read or write `this` (its storage
+    // may be gone).  The drain runs only on the destroy-owned tail
+    // (teardown_claimed_): waitpid/reaper cleanups run unclaimed and
+    // must not free — destroy() or the claimed reaper tail drains.
+    // Replay is a generation-mismatch no-op.  The gate covers CARVED
+    // storage (composer child) and a CARVED kind on POOL storage (bare-
+    // 104-activated task: one-pin binding, drained here so the claimed
+    // reaper tail — which frees without destroy() — cannot leak it).
+    if ((tcb_storage_ == TcbStorage::CARVED ||
+         vspace_kind_ == VspaceKind::CARVED) &&
+        teardown_claimed_) {
+        const uint64_t drain_pid = id;
+        const uint32_t drain_gen = generation;
+        cap::CarveBinding::drain_task(drain_pid, drain_gen);
+        // Nothing may read or write `this` after this line.
+    }
 }
 
 } // namespace kernel
@@ -3221,12 +3433,32 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
     if (!TaskControlBlock::try_claim_teardown(tcb))
         return;
     if (tcb->magic == TCB_MAGIC) {
+        // Issue #564, F11 Stage C: capture the carved identity BEFORE any
+        // teardown (the drain frees the block — no read after it).
+        // `carved` is the storage class (CARVED TCBs are never
+        // MemPool-owned); `carved_kind` covers a bare-104-activated POOL
+        // task (one-pin binding, drained here so the root pin cannot
+        // leak past the MemPool free).
+        const bool carved = (tcb->tcb_storage_ == TcbStorage::CARVED);
+        const bool carved_kind =
+            (tcb->vspace_kind_ == VspaceKind::CARVED);
+        const uint64_t saved_pid = tcb->id;
+        const uint32_t saved_gen = tcb->generation;
         // If the caller already called cleanup() before destroy, state
         // is REAPED and we must NOT cleanup/remove again — doing so
         // double-frees resources and corrupts the scheduler lists.
         if (tcb->state != TaskState::REAPED) {
+            if (carved) {
+                // Carved live path: unregister while the block is alive
+                // — cleanup() drains (claimed tail) as its last act,
+                // so a remove after cleanup would touch freed storage.
+                // Unregister is idempotent (complete_teardown re-runs
+                // the same path); an unpublished child no-ops here.
+                Scheduler::remove_task(*tcb);
+            }
             tcb->cleanup();
-            Scheduler::remove_task(*tcb);
+            if (!carved)
+                Scheduler::remove_task(*tcb);
         } else if (!tcb->teardown_completed_ &&
                    !kernel::MemPool::is_block_pinned(tcb)) {
             // Issue #373: REAPED-with-resources-pending — the first
@@ -3236,6 +3468,21 @@ void TaskControlBlock::destroy(TaskControlBlock *tcb) noexcept {
             // happened on the first destroy and the tail's Unregister
             // block is idempotent, so remove_task() must NOT run again.
             tcb->complete_teardown();
+        }
+        if (carved) {
+            // CARVED arm (INV-CARVE-4): the claimed tail above already
+            // drained; this replay is a generation-mismatch no-op when
+            // it did, and the effective drain when the tail ran
+            // unclaimed.  The block is never MemPool-owned.
+            // Nothing may read or write `tcb` after this line.
+            cap::CarveBinding::drain_task(saved_pid, saved_gen);
+            return;
+        }
+        if (carved_kind) {
+            // Bare-104-activated POOL task: the one-pin binding dies
+            // with the block (the block itself stays MemPool-owned —
+            // drain releases binding pins only, never the TCB).
+            cap::CarveBinding::drain_task(saved_pid, saved_gen);
         }
         // Baseline-owned (pinned) blocks are never freed: the snapshot
         // owns the block and restore rewinds it (cleanup() already skips

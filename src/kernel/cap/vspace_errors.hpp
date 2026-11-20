@@ -44,7 +44,10 @@ namespace kernel::errors {
     X(NOT_TABLE, 9, "Path component holds a leaf, not a table")                \
     X(UNMAPPED, 10, "Path component absent while descending")                  \
     X(REGISTRY_FULL, 11, "No free VSpace mapping registry slot")               \
-    X(ACTIVE_SPACE, 12, "Target root is the currently active address space")
+    X(ACTIVE_SPACE, 12, "Target root is the currently active address space")  \
+    X(ACTIVATED, 13, "Target root is bound to a live task")                   \
+    X(SUBTREE_INVALID, 14, "Carved subtree fails activation re-validation")   \
+    X(TARGET_REJECTED, 15, "Activation target is not an idle carved task")
 
 /// @brief VSpace mapping error codes (F5 object-link mechanism).
 // NOLINTNEXTLINE(performance-enum-size)
@@ -56,6 +59,14 @@ enum VspaceError : uint64_t {
 
 /// @brief OK anchor (issue #348-C): success is zero by convention.
 static_assert(VSPACE_ERR_OK == 0, "error OK must be 0");
+
+/// @brief ABI-face anchors (issue #564, F11 Stage C): the syscall face is
+///        arithmetic (1100 + code), so the new codes pin their faces here.
+static_assert(VSPACE_ERR_ACTIVATED == 13, "ACTIVATED must be code 13");
+static_assert(VSPACE_ERR_SUBTREE_INVALID == 14,
+              "SUBTREE_INVALID must be code 14");
+static_assert(VSPACE_ERR_TARGET_REJECTED == 15,
+              "TARGET_REJECTED must be code 15");
 
 /// @brief Return a human-readable string for a VSpace mapping error.
 template <> inline const char *error_string(VspaceError e) {

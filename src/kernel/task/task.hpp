@@ -554,6 +554,12 @@ struct TaskControlBlock {
     ///        swap / clear below, all reads through get_page_table().
     uint64_t page_table_;
 
+    /// @brief Shared page-level worker for release_address_space() and
+    ///        release_replaced_root() (issue #564, F11 Stage C):
+    ///        kind-branched page reclamation only — never touches pcid_
+    ///        or the page_table_ slot (the caller's window).
+    void release_root_pages(uint64_t root) noexcept;
+
   public:
     /// @brief Read the task's PML4 root (0 = none installed yet).
     [[nodiscard]] uint64_t get_page_table() const noexcept {
@@ -569,6 +575,60 @@ struct TaskControlBlock {
     void swap_page_table(uint64_t new_pml4) noexcept;
     /// @brief Teardown clear (issue #377): the caller freed the table.
     void clear_page_table() noexcept;
+    /// @brief Storage class of this TCB's own block (issue #564, F11
+    ///        Stage C): POOL = MemPool-owned (create/clone/threads —
+    ///        freed with MemPool::free), CARVED = carved-region-owned
+    ///        (carve-composed fork child — the region belongs to a pinned
+    ///        CarvedObjectCap and is released via the CarveBinding drain,
+    ///        never MemPool::free).  Zeroed at every memset birth site.
+    enum class TcbStorage : uint8_t {
+        POOL = 0,
+        CARVED = 1,
+    };
+    /// @brief Ownership class of this task's address space (issue #564,
+    ///        F11 Stage C): CLONE = PMM-owned root (clone/ELF — teardown
+    ///        is free_user_pages + PMM::free_page), CARVED = cap-owned
+    ///        root (carve-composed fork — teardown is links-only
+    ///        invalidate + foreign-map drain + binding-deactivate, the
+    ///        pages die with the caps at drain_task).  Exec re-kinds to
+    ///        CLONE after installing its fresh PMM root.
+    enum class VspaceKind : uint8_t {
+        CLONE = 0,
+        CARVED = 1,
+    };
+    /// @brief Adopt a TCB over a carved region (issue #564, F11 Stage C):
+    ///        memset-then-fields (magic, id, fresh generation from
+    ///        next_task_generation, CARVED storage/kind, hierarchy,
+    ///        periods zeroed with the #312 user-child comment, FPU left
+    ///        zero for the composer copy, register frame left unset for
+    ///        the composer's push).  The caller pins the region cap; the
+    ///        TCB block address IS the region (no separate identity
+    ///        stored — plan drift C3-D1).
+    /// @return The adopted TCB (infallible after the region is carved).
+    static TaskControlBlock *create_carved(TaskControlBlock &parent,
+                                           uint64_t region_phys) noexcept;
+    /// @brief Install a carved VSpace root + context ID on an unpublished
+    ///        TCB (issue #564, F11 Stage C activation): sets page_table_
+    ///        + pcid_ + VspaceKind::CARVED.  No register write (INV-CARVE-6
+    ///        — the scheduler publishes the root at first dispatch), no
+    ///        flush (the root was never live).
+    void install_carved_root(uint64_t root_phys, uint16_t pcid) noexcept;
+    /// @brief The ONE address-space releaser (issue #564, F11 Stage C):
+    ///        CLONE takes today's free_user_pages + context_id_free +
+    ///        PMM::free_page + clear sequence (statement-identical);
+    ///        CARVED takes invalidate-links-only + foreign-map drain +
+    ///        binding-deactivate + context_id_free + clear (the caps own
+    ///        the pages — nothing here frees).  No-op on a null root.
+    void release_address_space() noexcept;
+    /// @brief Reclaim a REPLACED root on the exec path (issue #564,
+    ///        F11 Stage C): the current root is already the new table,
+    ///        so only the old root's pages are reclaimed — the context
+    ///        ID survives exec and the slot is untouched.  CLONE frees
+    ///        (same calls, same order as today's exec tail); CARVED
+    ///        drops links, drains foreign frames and clears the
+    ///        activation flag (caps die at teardown drain, never here).
+    ///        No-op on a null root, the kernel root, or the live root.
+    void release_replaced_root(uint64_t old_root) noexcept;
     /// @brief Context identifier for TLB tagging (issue #156 x86_64 PCID,
     ///        generalized issue #352: aarch64/riscv64 ASID).  0 = untagged
     ///        (kernel tasks + unsupported CPUs); user tasks hold an
@@ -649,6 +709,20 @@ struct TaskControlBlock {
     ///        this task's state (issue #93).  0 = never saved.  Unconditional
     ///        (not CONFIG_DEBUG-gated) to preserve debug/release symmetry.
     uint32_t fpu_state_gen;
+    /// @brief Storage class of this TCB's block (issue #564, F11 Stage C;
+    ///        see TcbStorage).  Placed in the FPU preamble: the pair below
+    ///        absorbs the alignas(64) padding ahead of fpu_state, so the
+    ///        debug TCB stays within the 8192 pool class (F21 — the class
+    ///        is exactly full on x86_64 debug).  The carved region identity
+    ///        and page count are NOT stored here: the region address is the
+    ///        TCB block itself and the size is the compile-time constant
+    ///        kObjectBytesTcb/PAGE_SIZE — the binding slot's TCB pin is the
+    ///        single source of truth (plan drift C3-D1: two informational
+    ///        fields folded to keep F21 green).
+    TcbStorage tcb_storage_ = TcbStorage::POOL;
+    /// @brief Ownership class of this task's address space (see
+    ///        VspaceKind).
+    VspaceKind vspace_kind_ = VspaceKind::CLONE;
 #if defined(CONFIG_ARCH_X86_64)
     alignas(64) uint8_t fpu_state[512];
 #else
@@ -1495,6 +1569,8 @@ struct TaskControlBlock {
 // F21 (#573): the TCB must fit the largest MemPool class on every arch
 // (x86_64 8064 B, aarch64 8256 B). A TCB that outgrows the pool cannot be
 // allocated and would fail boot — fail at compile time instead.
+// PROBE-DISABLED static_assert(sizeof(TaskControlBlock) <= kernel::kMemPoolMaxBlockSize,
+// PROBE-DISABLED               "TaskControlBlock exceeds largest MemPool class");
 static_assert(sizeof(TaskControlBlock) <= kernel::kMemPoolMaxBlockSize,
               "TaskControlBlock exceeds largest MemPool class");
 
