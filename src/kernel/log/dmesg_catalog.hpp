@@ -130,6 +130,8 @@ constexpr DmesgRecord kDmesgCatalog_USER[] = {
 /// Scheduler::note_termination_and_free) needs a catalog label — without
 /// it the record falls through to "Unknown task error".
 constexpr DmesgRecord kDmesgCatalog_TASK[] = {
+    {ErrorSubsystem::TASK, kDmesgBase_TASK + 10, LogSeverity::ERROR,
+     "Task SDF row demand exceeds bound"},
     {ErrorSubsystem::TASK, kDmesgBase_TASK + 17, LogSeverity::INFO,
      "Task terminated"},
 };

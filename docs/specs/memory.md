@@ -171,6 +171,26 @@ Constraints:
   suite baseline is captured post-boot (handover bits already set), so
   every restore returns to the handed-over state — never to a free pool.
   `freeze_pools()` is idempotent; tests never trigger a freeze.
+- `boot_handover()` is all-or-nothing (INV-F10-1): a capacity pre-check
+  (one Untyped + one CSlot per run, against the
+  `CONFIG_CAP_MAX_UNTYPED` headroom and the root-CSpace free slots)
+  refuses with `MEM_HANDOVER_ERR_BOUNDS` before anything mints, and any
+  mid-loop failure unwinds every install in reverse — the registry is
+  either fully installed or empty, so a retry can never double-mint a
+  region. `transfer_all_to()` carries the same destination-capacity
+  pre-check before its phase-2 moves (M5 seam).
+- Compose-time demand check (`sdf_check_bounds`, INV-MK-2): every SDF
+  row's declared demand (caps, CSlots, kernel objects, Untyped quota,
+  death watches) is checked against its `RowBounds` before the first
+  mint; violations refuse with a typed `SdfError` and install nothing.
+- Per-row TCB object budget: `object_budget_` (0 = row default
+  `CONFIG_MAX_PER_TASK_OBJECTS`; ceiling
+  `CONFIG_MAX_PER_TASK_OBJECTS_INFRA` = 256 for the future
+  mem-mgr/supervisor rows, 32 elsewhere) bounds both the attach refusal
+  and the detach walk through `effective_object_budget()`, so a task
+  owning N objects always has a walk of >= N.
+- `HandoverStatus::runs_capped` reports the PMM reservoir-tail evictions
+  at freeze (`PMM::handover_dropped_runs()`).
 
 ## 7. Memory-Protection Requirements (0.4.x, OPEN)
 

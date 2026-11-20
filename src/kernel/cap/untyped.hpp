@@ -64,6 +64,11 @@ class UntypedMem : public KernelObject {
     static UntypedMem *create_subrange(uint64_t phys, size_t size,
                                        bool is_user);
 
+    /// @brief Live Untyped object count (handover pre-check demand input).
+    ///        A relaxed atomic read, not a reservation: the bound itself is
+    ///        still enforced in alloc_object() at mint time.
+    static uint32_t live_count() noexcept;
+
     /// @brief CAS false->true on the retype guard.  True iff this caller wins
     ///        the transfer of this Untyped's region.
     bool claim_once() noexcept;

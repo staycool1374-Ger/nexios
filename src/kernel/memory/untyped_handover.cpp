@@ -5,6 +5,7 @@
 #include <kernel/cap/untyped.hpp>
 #include <kernel/core/global_state.hpp>
 #include <kernel/log/dmesg.hpp>
+#include <kernel/memory/mem_pressure.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/nexios_config.h>
 #include <kernel/task/task.hpp>
@@ -21,6 +22,33 @@ bool g_done = false;
 bool g_transferred = false;
 TaskControlBlock *g_source = nullptr;
 errors::MemHandoverError g_result = errors::MEM_HANDOVER_ERR_OK;
+
+/// @brief Undo installs 0..g_run_count-1 in reverse slot order, then reset
+///        the registry. Zeroes each entry whose remove() dropped the last
+///        reference (a dangling pointer after release()->dispose()) so a
+///        retry overwriting entries 0..runs-1 can never observe a stale
+///        object. g_done stays false: the retry restarts clean.
+void rollback_minted(cap::CNode &cs) noexcept {
+    for (uint32_t j = g_run_count; j > 0; --j) {
+        const uint32_t k = j - 1;
+        cs.remove(g_runs[k].slot);
+        g_runs[k] = HandoverRun{};
+    }
+    g_run_count = 0;
+    g_source = nullptr;
+}
+
+/// @brief Latch + log a failed handover attempt (mid-loop or pre-check).
+///        The latch emits the PMM+4 row once; this row carries the typed
+///        outcome with the demanded run count as context.
+void note_handover_failure(errors::MemHandoverError err,
+                            uint32_t runs) noexcept {
+    mem_pressure::latch(mem_pressure::MemPressureReason::HANDOVER_CAPPED);
+    log::dmesg_push_sev(log::ErrorSubsystem::PMM,
+                        log::kDmesgBase_PMM + 4, log::LogSeverity::ERROR,
+                        "mem: handover failed", runs);
+    g_result = err;
+}
 
 } // namespace
 
@@ -39,10 +67,30 @@ errors::MemHandoverError boot_handover(TaskControlBlock &root) {
         g_result = errors::MEM_HANDOVER_ERR_NO_ROOT;
         return g_result;
     }
+    // All-or-nothing pre-check (INV-F10-1): demand is exactly one Untyped
+    // + one CSlot per run. Refuse with BOUNDS before anything mints when
+    // the CONFIG_CAP_MAX_UNTYPED headroom or the root-CSpace free slots
+    // cannot hold all runs — no partial state, so a retry can never
+    // double-mint a region. Advisory inputs (live_count, free_slot_count);
+    // the live bound and install() stay authoritative at mint time.
+    const uint32_t live = cap::UntypedMem::live_count();
+    const uint32_t cap_max =
+        static_cast<uint32_t>(CONFIG_CAP_MAX_UNTYPED);
+    const uint32_t headroom = (live >= cap_max) ? 0U : (cap_max - live);
+    const uint32_t free_slots = cs->free_slot_count();
+    if (runs > headroom || runs > free_slots) {
+        note_handover_failure(errors::MEM_HANDOVER_ERR_BOUNDS, runs);
+        return g_result;
+    }
     g_source = &root;
     for (uint32_t i = 0; i < runs; ++i) {
         if (g_run_count >= CONFIG_MEM_HANDOVER_MAX_RUNS) {
-            g_result = errors::MEM_HANDOVER_ERR_REGISTRY_FULL;
+            // Unreachable: PMM caps handover_run_count at MAX_RUNS, and
+            // the pre-check above bounded runs by headroom. Roll back
+            // anyway — a partial registry must never survive.
+            rollback_minted(*cs);
+            note_handover_failure(errors::MEM_HANDOVER_ERR_REGISTRY_FULL,
+                                  runs);
             return g_result;
         }
         const uint64_t phys = PMM::handover_run_phys(i);
@@ -54,7 +102,11 @@ errors::MemHandoverError boot_handover(TaskControlBlock &root) {
             phys, static_cast<size_t>(pages * arch::PAGE_SIZE),
             /*is_user=*/true);
         if (obj == nullptr) {
-            g_result = errors::MEM_HANDOVER_ERR_UNTYPED_CAP_FULL;
+            // MemPool exhaust or live-bound race: unwind every install so
+            // no handed-over frame is marked-but-unminted.
+            rollback_minted(*cs);
+            note_handover_failure(
+                errors::MEM_HANDOVER_ERR_UNTYPED_CAP_FULL, runs);
             return g_result;
         }
         uint32_t gen = 0;
@@ -65,7 +117,9 @@ errors::MemHandoverError boot_handover(TaskControlBlock &root) {
                         &gen);
         if (idx < 0) {
             obj->release(); // never installed — drop the creator reference
-            g_result = errors::MEM_HANDOVER_ERR_CSPACE_FULL;
+            rollback_minted(*cs);
+            note_handover_failure(errors::MEM_HANDOVER_ERR_CSPACE_FULL,
+                                  runs);
             return g_result;
         }
         obj->release(); // slot holds the reference; drop the creator's
@@ -115,6 +169,16 @@ errors::MemHandoverError transfer_all_to(TaskControlBlock &dst) {
             return errors::MEM_HANDOVER_ERR_STALE_SLOT;
         }
     }
+    // Destination-capacity pre-check (F10): phase 2 installs exactly
+    // g_run_count caps, so refuse up front when the destination CSpace
+    // cannot hold them — a partial phase-2 move would strand caps split
+    // across two CSpaces with g_transferred == false. M5 follow-up
+    // (M5-transfer-atomicity): under live-AP callers a concurrent install
+    // between this check and the phase-2 moves can still strand; close it
+    // there with a phase-2 rollback or a generation re-verify.
+    if (dcs->free_slot_count() < g_run_count) {
+        return errors::MEM_HANDOVER_ERR_CSPACE_FULL;
+    }
     // Phase 2 — move: install-then-remove keeps the object referenced at
     // every instant (no use-after-free window for a concurrent lookup).
     for (uint32_t i = 0; i < g_run_count; ++i) {
@@ -139,6 +203,7 @@ HandoverStatus status() {
     HandoverStatus st{};
     st.frozen = PMM::is_frozen();
     st.runs_total = g_run_count;
+    st.runs_capped = PMM::handover_dropped_runs();
     st.pages_handed = PMM::handover_pages();
     st.pages_retained = PMM::handover_retained_pages();
     st.caps_minted = g_run_count;

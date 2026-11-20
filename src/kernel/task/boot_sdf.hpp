@@ -30,6 +30,7 @@
 
 #include <types.hpp>
 #include <kernel/nexios_config.h>
+#include <kernel/task/sdf_errors.hpp>
 
 namespace kernel {
 
@@ -143,6 +144,37 @@ inline constexpr uint64_t kConsoleStatusPages = 1;
 /// @param out Filled with the row (untouched on unknown role).
 /// @return Number of CapSpecs, 0 for unknown role (fail-closed).
 uint64_t sdf_row(PdRole role, CapSpec *out);
+
+/// @brief Per-row compose-time demand bounds (F10, #563; INV-MK-2).
+///        All members initialized (§10.3); the compose demand check
+///        refuses a row whose declared demand exceeds any of these before
+///        a single cap mints (fail closed, no partial install).
+struct RowBounds {
+    uint32_t max_caps = 0;      ///< cap demand ceiling (stack-array bound)
+    uint32_t object_budget = 0; ///< TCB object budget for the composed task
+    uint32_t untyped_quota = 0; ///< Untyped live-object quota for the row
+    uint32_t death_watches = 0; ///< death-watch quota for the row
+};
+
+/// @brief Reserved CSlots per SDF row beyond the composed caps (handover
+///        headroom for future M5 rows; 0 today — the mechanism, not the
+///        reservation, is what F10 owes).
+inline constexpr uint32_t kRowReservedSlots = 0;
+
+/// @brief Demand bounds for @p role (values-only over the 13 existing
+///        rows: max_caps = kMaxCapsPerRole, object_budget =
+///        CONFIG_MAX_PER_TASK_OBJECTS, quotas 0; the mem-mgr/supervisor
+///        256 / Untyped-quota rows land with their SDF rows at M5/M12).
+///        Unknown roles read zero bounds. Pure: no locks, no state.
+RowBounds sdf_role_bounds(PdRole role);
+
+/// @brief Compose-time demand check (INV-MK-2): the row's declared demand
+///        (cap count, object budget, slot footprint, Untyped quota, death
+///        watches) against its configured bound. Pure, no side effects.
+/// @return true when the row fits; false with @p err_out set to the
+///         specific SdfError otherwise (nothing minted, nothing installed).
+bool sdf_check_bounds(PdRole role, const CapSpec *specs, uint64_t count,
+                      errors::SdfError &err_out);
 
 /// @brief Compose a PD's caps: mint every CapSpec of @p role and install
 /// into the task's CSpace (all-or-nothing; rollback on any failure).

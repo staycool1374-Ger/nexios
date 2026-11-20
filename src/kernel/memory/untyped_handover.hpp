@@ -42,6 +42,11 @@ struct HandoverStatus {
 };
 
 /// @brief Mint one UntypedMem per PMM handover run into @p root's CSpace.
+///        All-or-nothing (INV-F10-1): a capacity pre-check (Untyped
+///        headroom + root-CSpace free slots) refuses with BOUNDS before
+///        anything mints, and any mid-loop failure unwinds every install
+///        in reverse, so the registry is either fully installed or empty —
+///        a retry can never double-mint a region.
 ///        Idempotent guard: a second call returns ALREADY_FROZEN without
 ///        touching caps. Runs with zero PMM handover runs return
 ///        NO_FREE_RUNS. Every failure path is typed; no asserts, no panic.
@@ -50,6 +55,8 @@ errors::MemHandoverError boot_handover(TaskControlBlock &root);
 /// @brief M5 seam: move every handed-over cap into @p dst's CSpace.
 ///        Two-phase (verify all slots+generations first, then move), so a
 ///        stale slot aborts with STALE_SLOT before anything moves.
+///        A destination-capacity pre-check refuses with CSPACE_FULL before
+///        phase 2 when @p dst cannot hold all runs.
 ///        Refuses dst == source (BAD_TARGET) and a second transfer
 ///        (ALREADY_TRANSFERRED). Unused in M4 by design.
 errors::MemHandoverError transfer_all_to(TaskControlBlock &dst);

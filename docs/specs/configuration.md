@@ -75,6 +75,9 @@ M4 handover: `CONFIG_MEM_MGR_BOOTSTRAP` (0) ·
 `CONFIG_MEM_HANDOVER_MAX_RUNS` (64) ·
 `CONFIG_MEM_HANDOVER_KERNEL_RESERVE_PAGES` (512, Q-M4-3) ·
 `CONFIG_MEM_PRESSURE_THRESHOLD_PCT` (90, M5 policy input).
+Per-row TCB object budget (F10, #563): `CONFIG_MAX_PER_TASK_OBJECTS` (32,
+row default) · `CONFIG_MAX_PER_TASK_OBJECTS_INFRA` (256, ceiling for the
+future mem-mgr/supervisor rows; no row uses 256 yet).
 
 ### 1.5 IPC & Sync
 `CONFIG_IPC_MAX_MSG_SIZE` (64 — fixed; the vfsd `Msg` is exactly this) ·
@@ -177,6 +180,28 @@ Iterates `ACTION ∈ {0..4}` via `meson configure build/meson-x86_64-matrix "-Dc
 and runs the `deadline_action` class.  **PANIC (action=1) is an expected-fail**:
 the kernel must halt and print `action=PANIC`; its presence is the PASS signal.
 Other actions must pass the class normally.  Kills leftover QEMU between runs.
+
+### 2.3 Mem-mgr bootstrap flag legs (F10, #563 — QE-owned, documented build rot)
+
+Both flags default to 0 and no gate builds them today (the M4 dev built
+`meson-x86_64-pools1` by hand) — that is build rot, so the legs are
+enumerated here for QE.  Do NOT flip the defaults: flipping either changes
+all-gates behavior and belongs to M12/certification, not F10.
+
+per arch (`<arch>` ∈ `x86_64|aarch64|riscv64`):
+```
+meson setup build/meson-<arch>-pools1 --cross-file cross/<arch>-elf.txt \
+  -Darch=<arch> -Dconfig_defs=-DCONFIG_STATIC_POOLS_ONLY=1
+meson setup build/meson-<arch>-bootstrap1 --cross-file cross/<arch>-elf.txt \
+  -Darch=<arch> -Dconfig_defs=-DCONFIG_MEM_MGR_BOOTSTRAP=1
+python3 tools/meson/qemu_test.py --arch <arch> --build debug \
+  --class <class> --builddir build/meson-<arch>-pools1      # then -bootstrap1
+```
+Each leg's first in-guest assert must be `CONFIG_* == 1`, so a mis-built leg
+fails loudly instead of passing vacuously.  Gate set: the M4 classes
+(`core_memory`, `capability`) plus the freeze-denies sweep on the pools1 leg
+and the handover-caps-cover-free-pool asserts on the bootstrap1 leg
+(see the QE sketch on #563).
 
 ## 3. `tools/check-config.py` — Configuration Validation
 

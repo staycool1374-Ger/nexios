@@ -35,7 +35,8 @@ namespace kernel::errors {
     X(REGISTRY_FULL, 6, "Handover registry full")                              \
     X(BAD_TARGET, 7, "Bad handover target")                                    \
     X(ALREADY_TRANSFERRED, 8, "Handover already moved")                    \
-    X(STALE_SLOT, 9, "Handover slot no longer names its cap")
+    X(STALE_SLOT, 9, "Handover slot no longer names its cap")              \
+    X(BOUNDS, 10, "Handover demand exceeds a configured bound")
 
 /// @brief Mem-mgr handover errors.
 // NOLINTNEXTLINE(performance-enum-size)

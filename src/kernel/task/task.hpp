@@ -744,6 +744,18 @@ struct TaskControlBlock {
     uint64_t mem_prev_outstanding_ = 0;
     uint64_t mem_prev_used_ = 0;
     uint32_t mem_leak_streak_ = 0;
+    /// @brief Per-row TCB object budget (F10, #563): maximum KernelObjects
+    ///        this task may own on its intrusive object list. 0 = row
+    ///        default (CONFIG_MAX_PER_TASK_OBJECTS): every TCB memset site
+    ///        zeroes the block and the smallest live object count is 1 (the
+    ///        CSpace itself), so 0 stays unambiguous. Set once by
+    ///        sdf_compose() via set_object_budget(); the stored value is
+    ///        always read through effective_object_budget() (clamped), so a
+    ///        poisoned/restored field can never unbound the detach walk.
+    uint16_t object_budget_{0};
+    /// @brief Live count of owned objects (attach/detach accounting,
+    ///        floor 0). Reuses the 32-bit budget group's padding.
+    uint16_t object_count_{0};
 
     vfs::FdTable fd_table;
     char cwd[CONFIG_VFS_MAX_PATH];
@@ -1410,10 +1422,22 @@ struct TaskControlBlock {
         uint64_t budget_granularity = CONFIG_SPORADIC_SERVER_BUDGET_GRANULARITY,
         task::ServerMode mode = task::ServerMode::SPORADIC) noexcept;
 
+    /// @brief Effective object budget (F10, #563): the row-set budget
+    ///        clamped to [CONFIG_MAX_PER_TASK_OBJECTS,
+    ///        CONFIG_MAX_PER_TASK_OBJECTS_INFRA]; 0 reads the row default.
+    ///        The detach walk and the attach refusal share this bound, so a
+    ///        task owning N objects always has a walk of >= N.
+    uint32_t effective_object_budget() const noexcept;
+    /// @brief Sets the row object budget (sdf_compose success path only).
+    ///        Clamped to the effective window; 0 keeps the row default.
+    void set_object_budget(uint32_t budget) noexcept;
+
     /// @brief Attaches @p obj to this task's intrusive object list.
     ///        The task takes ownership of exactly one reference
     ///        (refcount == 1 at attach).  O(1), head insert.
-    void attach_object(KernelObject *obj) noexcept;
+    /// @return true on attach; false (no mutation) when the task already
+    ///         owns effective_object_budget() objects — fail closed.
+    [[nodiscard]] bool attach_object(KernelObject *obj) noexcept;
 
     /// @brief Unlinks @p obj from this task's object list WITHOUT releasing
     ///        it.  O(1).  Used when ownership transfers or when snapshot
@@ -1422,7 +1446,7 @@ struct TaskControlBlock {
     void detach_object(KernelObject *obj) noexcept;
 
     /// @brief Unlinks every node from this task's object list WITHOUT
-    ///        releasing any of them.  Bounded by CONFIG_MAX_PER_TASK_OBJECTS
+    ///        releasing any of them.  Bounded by effective_object_budget()
     ///        pop-head iterations (runaway-link protection).  Used by
     ///        snapshot restore where blocks are reclaimed by the pool rewind,
     ///        never by release().

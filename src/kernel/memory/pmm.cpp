@@ -90,6 +90,11 @@ static uint64_t g_handover_pages[CONFIG_MEM_HANDOVER_MAX_RUNS] = {};
 static uint32_t g_handover_runs = 0;
 static uint64_t g_handover_pages_total = 0;
 static uint64_t g_handover_retained_total = 0;
+// F10 (#563): reservoir-tail evictions — runs dropped from the top-N table
+// because the table was already full. A smaller candidate that never enters
+// the reservoir is kernel-retained, not dropped: only an eviction discards
+// a run the table had already kept.
+static uint32_t g_handover_dropped = 0;
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 /// @brief Initialise the PMM bitmap and mark kernel/reserved pages as
@@ -538,7 +543,11 @@ void PMM::freeze_pools() noexcept {
         } else if (pages <= top[top_count - 1].pages) {
             return; // smaller than everything kept — retained by kernel
         } else {
+            // Evict the reservoir tail: the table had kept it, the
+            // candidate displaces it. The evicted run is the dropped one
+            // (diagnostic: handover_dropped_runs()).
             top[top_count - 1] = cand;
+            __atomic_fetch_add(&g_handover_dropped, 1U, __ATOMIC_RELAXED);
         }
         // Insertion sort step (descending by pages; N <= 64, boot-only).
         for (uint32_t i = top_count; i > 1; --i) {
@@ -648,6 +657,10 @@ uint64_t PMM::handover_run_pages(uint32_t idx) noexcept {
         return 0;
     }
     return __atomic_load_n(&g_handover_pages[idx], __ATOMIC_RELAXED);
+}
+
+uint32_t PMM::handover_dropped_runs() noexcept {
+    return __atomic_load_n(&g_handover_dropped, __ATOMIC_RELAXED);
 }
 
 /// @brief True when @p index lies in a handed-over run (M4 double-
