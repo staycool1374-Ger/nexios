@@ -26,6 +26,13 @@
 #include <kernel/arch/context.hpp>
 #include <kernel/arch/cpuid.hpp>
 #include <kernel/arch/interrupt_controller.hpp>
+#include <kernel/arch/hal/irq_storm.hpp>
+#include <kernel/arch/hal/irq_vectors.hpp>
+#include <kernel/irq_delivery.hpp>
+#if defined(CONFIG_ARCH_X86_64)
+#include <kernel/arch/x86_64/hal/apic.hpp>
+#include <kernel/arch/hal/idt.hpp>
+#endif
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
 #include <string.hpp>
@@ -355,6 +362,154 @@ JARVIS_TEST(hal_interrupt_snapshot_restore_cycle, "PRE: iocd | POST: none") {
 }
 #endif
 
+// Runmode: kernel
+// Testidea: the per-tick same-INTID storm gate bounds a stuck line
+//        and the x86 tick vectors are exempt by name (IRQ-1, spec
+//        8.3(5)).
+// Input: local IrqStormLimiter unit run; live arch::storm_gate on a
+//        line-kind vector with the controller snapshot saved.
+// Expect: no trip at CONFIG_IRQ_STORM_LIMIT dispatches, trip at +1
+//         and thereafter; a new tick value and a different INTID
+//         reset the burst; storm_mask_line clears line_enabled();
+//         on x86 32 and 0xE0 never trip over 4x the limit; tracker
+//         delta 0.
+// Depends: arch::IrqStormLimiter, arch::storm_gate/storm_mask_line/
+//        trips, ArchInterruptController snapshot/restore (x86:
+//        APIC::ioapic entry save/restore)
+// Pseudocode: unit run (limit ok, +1 trips, new tick/INTID
+// reset); live gate to trip on a free line-kind vector; mask +
+// restore; x86 timer exemption leg; teardown.
+JARVIS_TEST(hal_irq_storm_gate_bounded, "PRE: iocd | POST: none") {
+    static uint64_t g_unit = 0;
+    static uint64_t g_gate = 0;
+    static uint64_t g_masked = 0;
+    static uint64_t g_reset = 0;
+    static uint64_t g_exempt = 0;
+    g_unit = g_gate = g_masked = g_reset = g_exempt = 0;
+
+    // Unit run on a local limiter (no global state touched).
+    {
+        arch::IrqStormLimiter lim;
+        const uint64_t tick = 1000;
+        const uint64_t id = 33;
+        uint64_t ok = 1;
+        for (uint64_t i = 0;
+             i < static_cast<uint64_t>(CONFIG_IRQ_STORM_LIMIT); ++i) {
+            if (lim.observe(id, tick))
+                ok = 0;
+            if ((i & 31U) == 0U)
+                arch_pause();
+        }
+        // +1 at the same tick trips; a new tick and a different
+        // INTID each reset the burst.
+        const bool trip = lim.observe(id, tick);
+        const bool new_tick = lim.observe(id, tick + 1);
+        const bool new_id = lim.observe(id + 1, tick + 1);
+        g_unit = (ok && trip && !new_tick && !new_id) ? 1ULL : 0ULL;
+    }
+
+    // Line-kind vector per arch, verified free of any delivery slot
+    // (never fight the delivery table).
+#if defined(CONFIG_ARCH_X86_64)
+    constexpr uint8_t kVec = 46;
+#elif defined(CONFIG_ARCH_AARCH64)
+    constexpr uint8_t kVec = 33;
+#else
+    constexpr uint8_t kVec = 8;
+#endif
+    if (kernel::IrqDelivery::find(kVec) != nullptr)
+        return;
+#if defined(CONFIG_ARCH_X86_64)
+    constexpr uint8_t kLine = kVec - 32U;
+    arch::IrqState saved = arch::ArchInterruptController::snapshot();
+    const uint32_t saved_entry = arch::APIC::ioapic_entry(kLine);
+    const bool apic_on = arch::APIC::is_enabled();
+#else
+    arch::IrqState saved = arch::ArchInterruptController::snapshot();
+#endif
+    arch::storm_reset();
+    const uint64_t trips0 = arch::storm_trips();
+    const uint64_t tick = arch::Timer::ticks();
+    uint64_t ok = 1;
+    for (uint64_t i = 0;
+         i < static_cast<uint64_t>(CONFIG_IRQ_STORM_LIMIT); ++i) {
+        if (arch::storm_gate(kVec, tick))
+            ok = 0;
+        if ((i & 31U) == 0U)
+            arch_pause();
+    }
+#if defined(CONFIG_ARCH_X86_64)
+    if (!arch::ArchInterruptController::line_enabled(kLine))
+        ok = 0;
+#else
+    if (!arch::ArchInterruptController::line_enabled(kVec))
+        ok = 0;
+#endif
+    if (arch::storm_trips() != trips0)
+        ok = 0;
+    g_gate = ok;
+    // +1 at the same tick trips.
+    g_masked = arch::storm_gate(kVec, tick) ? 1ULL : 0ULL;
+    arch::storm_mask_line(kVec);
+#if defined(CONFIG_ARCH_X86_64)
+    const bool line_off = !arch::ArchInterruptController::line_enabled(kLine);
+    const bool ioapic_ok =
+        !apic_on || arch::APIC::ioapic_masked(kLine);
+    g_masked = (g_masked && line_off && ioapic_ok) ? 1ULL : 0ULL;
+    if (arch::storm_trips() != trips0 + 1)
+        g_masked = 0;
+#else
+    if (arch::ArchInterruptController::line_enabled(kVec))
+        g_masked = 0;
+    if (arch::storm_trips() != trips0 + 1)
+        g_masked = 0;
+#endif
+    // A new tick value and a different INTID each reset the burst.
+    const bool rt = arch::storm_gate(kVec, tick + 1);
+    const bool ri = arch::storm_gate(kVec + 1, tick + 1);
+    g_reset = (!rt && !ri) ? 1ULL : 0ULL;
+#if defined(CONFIG_ARCH_X86_64)
+    // Tick vectors are exempt by name: 4x the limit never trips.
+    arch::storm_reset();
+    const uint64_t trips1 = arch::storm_trips();
+    uint64_t ex = 1;
+    for (uint64_t i = 0;
+         i < 4ULL * static_cast<uint64_t>(CONFIG_IRQ_STORM_LIMIT);
+         ++i) {
+        if (arch::storm_gate(
+                static_cast<uint64_t>(
+                    arch::InterruptVector::TIMER),
+                tick + 2))
+            ex = 0;
+        if (arch::storm_gate(
+                static_cast<uint64_t>(
+                    arch::APIC::APIC_TIMER_VECTOR),
+                tick + 2))
+            ex = 0;
+        if ((i & 31U) == 0U)
+            arch_pause();
+    }
+    if (arch::storm_trips() != trips1)
+        ex = 0;
+    g_exempt = ex;
+#else
+    g_exempt = 1;
+#endif
+    // Teardown: burst reset + controller + IOAPIC entry restore.
+    arch::storm_reset();
+    arch::ArchInterruptController::restore(saved);
+#if defined(CONFIG_ARCH_X86_64)
+    arch::APIC::ioapic_write_entry(kLine, saved_entry);
+#endif
+
+    JARVIS_ASSERT_EQ(1ULL, g_unit);
+    JARVIS_ASSERT_EQ(1ULL, g_gate);
+    JARVIS_ASSERT_EQ(1ULL, g_masked);
+    JARVIS_ASSERT_EQ(1ULL, g_reset);
+    JARVIS_ASSERT_EQ(1ULL, g_exempt);
+    JARVIS_TEST_PASS();
+}
+
 void register_hal_tests() {
     Logger::info("Registering HAL tests");
 
@@ -376,4 +531,5 @@ void register_hal_tests() {
     JARVIS_REGISTER_TEST(hal_cpuid_features);
     JARVIS_REGISTER_TEST(hal_interrupt_snapshot_restore_cycle);
 #endif
+    JARVIS_REGISTER_TEST(hal_irq_storm_gate_bounded);
 }

@@ -35,6 +35,7 @@
 #include <kernel/irq_delivery.hpp>
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/syscall/syscall.hpp>
+#include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/hal/interrupt_controller.hpp>
@@ -497,6 +498,11 @@ JARVIS_TEST(irq_register_dispatch_happy, "PRE: none | POST: none") {
 JARVIS_TEST(irq_register_validation_matrix, "PRE: none | POST: none") {
     auto *t = run_irq_task([]() {
         auto *cur = Scheduler::current_task();
+        // Non-EDF driver (F4 lesson): an EDF driver with an earlier
+        // absolute deadline than a nested peer starves the peer
+        // forever (edf_preempt_candidate never fires for a later
+        // deadline). Harmless for peerless tests, required with peers.
+        cur->deadline_ticks = 0;
         cur->ensure_cspace();
         cap::CNode *cs = cur->get_cspace();
 
@@ -844,6 +850,11 @@ JARVIS_TEST(irq_wait_ack_idempotent_reregister, "PRE: none | POST: none") {
     r_mode_change = 0;
     auto *t = run_irq_task([]() {
         auto *cur = Scheduler::current_task();
+        // Non-EDF driver (F4 lesson): an EDF driver with an earlier
+        // absolute deadline than a nested peer starves the peer
+        // forever (edf_preempt_candidate never fires for a later
+        // deadline). Harmless for peerless tests, required with peers.
+        cur->deadline_ticks = 0;
         cur->ensure_cspace();
         cap::CNode *cs = cur->get_cspace();
         auto *irq = cap::IrqCap::create(kTestVector);
@@ -973,6 +984,237 @@ JARVIS_TEST(irq_wait_ack_stale_fire_noop, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: F8 saturating pending pair (INV-7): planting
+//        MAX-1 then isr_entry clamps at MAX with overflow 0; three
+//        more deliveries keep MAX (never wraps) with overflow 3.
+// Input: Armed IrqCap (vector 40); set pending = MAX-1; isr x4.
+// Expect: MAX/0 then MAX/3; teardown zeroes + occupied 0.
+// Depends: IrqDelivery::find/isr_entry, kIrqPendingMax
+// Pseudocode: arm via syscall; plant MAX-1; isr (MAX,0); isr x3
+// (MAX,3); teardown (zero, release, occupied 0).
+JARVIS_TEST(cap_irq_pending_saturates, "PRE: none | POST: none") {
+    static uint64_t g_p1 = 0;
+    static uint64_t g_o1 = 0;
+    static uint64_t g_p4 = 0;
+    static uint64_t g_o4 = 0;
+    static uint64_t g_occ = 0;
+    g_p1 = g_o1 = g_p4 = g_o4 = g_occ = 0;
+
+    auto *t = run_irq_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Non-EDF driver (F4 lesson): an EDF driver with an earlier
+        // absolute deadline than a nested peer starves the peer
+        // forever (edf_preempt_candidate never fires for a later
+        // deadline). Harmless for peerless tests, required with peers.
+        cur->deadline_ticks = 0;
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        auto *irq = cap::IrqCap::create(kTestVector);
+        if (!irq)
+            return;
+        int s = cs->install(irq, cap::CapType::Irq,
+                            cap::CapRights::READ | cap::CapRights::WRITE);
+        if (s < 0) {
+            irq->release();
+            return;
+        }
+        uint64_t h = cap::encode_handle(cs->cspace_id,
+                                        static_cast<uint32_t>(s),
+                                        cs->slot_gen(static_cast<uint32_t>(s)));
+        if (Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER), h, 0,
+                0, 0, nullptr) != 0) {
+            cs->remove(static_cast<uint32_t>(s));
+            irq->release();
+            return;
+        }
+        auto *r = kernel::IrqDelivery::find(kTestVector);
+        if (!r) {
+            cs->remove(static_cast<uint32_t>(s));
+            irq->release();
+            return;
+        }
+        {
+            arch::IrqGuard guard{};
+            r->pending = kernel::kIrqPendingMax - 1;
+            r->pending_overflow = 0;
+        }
+        kernel::IrqDelivery::isr_entry(kTestVector);
+        g_p1 = r->pending;
+        g_o1 = r->pending_overflow;
+        kernel::IrqDelivery::isr_entry(kTestVector);
+        kernel::IrqDelivery::isr_entry(kTestVector);
+        kernel::IrqDelivery::isr_entry(kTestVector);
+        g_p4 = r->pending;
+        g_o4 = r->pending_overflow;
+        // Teardown: zero the pair, release the slot.
+        {
+            arch::IrqGuard guard{};
+            r->pending = 0;
+            r->pending_overflow = 0;
+        }
+        cs->remove(static_cast<uint32_t>(s));
+        irq->release();
+        g_occ = kernel::IrqDelivery::occupied_count();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(kernel::kIrqPendingMax), g_p1);
+    JARVIS_ASSERT_EQ(0ULL, g_o1);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(kernel::kIrqPendingMax), g_p4);
+    JARVIS_ASSERT_EQ(3ULL, g_o4);
+    JARVIS_ASSERT_EQ(0ULL, g_occ);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: F8 second-waiter refusal (INV-9): a foreign task's wait
+//        on the slot returns GENERIC_FAIL (recipient mismatch); with
+//        a planted live waiter, the recipient's own wait returns
+//        IRQ_ALREADY_WAITING, the line stays masked, and occupancy
+//        is unchanged.
+// Input: Driver arms (WAIT_ACK); peer with the same cap waits
+//        (GENERIC_FAIL); plant peer as waiter; driver waits
+//        (ALREADY_WAITING, still masked).
+// Expect: GENERIC_FAIL; ALREADY_WAITING + masked + occupied same.
+// Depends: sys_irq_wait recipient/waiter gates, unmask_for_wait,
+//        ArchInterruptController mask/line_enabled
+// Pseudocode: arm; peer wait (GENERIC_FAIL); plant waiter;
+// driver wait (ALREADY_WAITING, masked, occupied same);
+// teardown (clear waiter, reap peer, release, occupied 0).
+JARVIS_TEST(cap_irq_waiter_second_refused, "PRE: none | POST: none") {
+    static uint64_t g_foreign = 0;
+    static uint64_t g_second = 0;
+    static uint64_t g_masked = 0;
+    static uint64_t g_occ0 = 0;
+    static uint64_t g_occ1 = 0;
+    static uint64_t g_occ_end = 0;
+    g_foreign = g_second = g_masked = 0;
+    g_occ0 = g_occ1 = g_occ_end = 0;
+
+    auto *t = run_irq_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Non-EDF driver (F4 lesson): an EDF driver with an earlier
+        // absolute deadline than a nested peer starves the peer
+        // forever (edf_preempt_candidate never fires for a later
+        // deadline). Harmless for peerless tests, required with peers.
+        cur->deadline_ticks = 0;
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        auto *irq = cap::IrqCap::create(kTestVector);
+        if (!irq)
+            return;
+        int s = cs->install(irq, cap::CapType::Irq,
+                            cap::CapRights::READ | cap::CapRights::WRITE);
+        if (s < 0) {
+            irq->release();
+            return;
+        }
+        uint64_t h = cap::encode_handle(cs->cspace_id,
+                                        static_cast<uint32_t>(s),
+                                        cs->slot_gen(static_cast<uint32_t>(s)));
+        // WAIT_ACK delivery (unmask-on-wait path under test).
+        if (Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::IRQ_REGISTER), h, 2,
+                0, 0, nullptr) != 0) {
+            cs->remove(static_cast<uint32_t>(s));
+            irq->release();
+            return;
+        }
+        // Leg A: a foreign peer holding the same cap waits anyway.
+        // Recipient mismatch fails closed before any lock site.
+        auto *peer = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *cap = reinterpret_cast<cap::IrqCap *>(
+                    self->user_data);
+                cap::CNode *pcs = self->get_cspace();
+                int ps = pcs->install(
+                    cap, cap::CapType::Irq, cap::CapRights::READ);
+                if (ps < 0) {
+                    g_foreign = 98;
+                    Scheduler::terminate(*self, 0);
+                    return;
+                }
+                uint64_t ph = cap::encode_handle(
+                    pcs->cspace_id, static_cast<uint32_t>(ps),
+                    pcs->slot_gen(static_cast<uint32_t>(ps)));
+                g_foreign = Syscall::handle(
+                    static_cast<uint64_t>(SyscallNumber::IRQ_WAIT), ph,
+                    0, 0, 0, nullptr);
+                pcs->remove(static_cast<uint32_t>(ps));
+                Scheduler::terminate(*self, 0);
+            },
+            11, 10);
+        if (!peer)
+            return;
+        peer->ensure_cspace();
+        peer->user_data = irq;
+        Scheduler::add_task(*peer);
+        Scheduler::reschedule();
+        kernel::test::wait_for_termination_safe(peer);
+        Scheduler::drain_zombie_list();
+        // Leg B: plant the (live, non-blocked) peer as waiter, then
+        // the recipient's own wait must refuse typed without
+        // unmasking the line.
+        auto *holder = TaskControlBlock::create(
+            []() {
+                for (;;)
+                    arch::hlt();
+            },
+            11, 10);
+        if (!holder)
+            return;
+        Scheduler::add_task(*holder);
+        Scheduler::reschedule();
+        auto *r = kernel::IrqDelivery::find(kTestVector);
+        if (!r) {
+            Scheduler::terminate(*holder, 0);
+            Scheduler::drain_zombie_list();
+            return;
+        }
+#if defined(CONFIG_ARCH_X86_64)
+        constexpr uint8_t kLine = kTestVector - 32U;
+#else
+        constexpr uint8_t kLine = kTestVector;
+#endif
+        arch::ArchInterruptController::mask(kLine);
+        {
+            arch::IrqGuard guard{};
+            r->waiter = holder;
+            r->waiter_gen = holder->generation;
+        }
+        g_occ0 = kernel::IrqDelivery::occupied_count();
+        g_second = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::IRQ_WAIT), h, 0, 0, 0,
+            nullptr);
+        g_masked =
+            arch::ArchInterruptController::line_enabled(kLine) ? 0ULL
+                                                              : 1ULL;
+        g_occ1 = kernel::IrqDelivery::occupied_count();
+        {
+            arch::IrqGuard guard{};
+            r->waiter = nullptr;
+            r->waiter_gen = 0;
+        }
+        Scheduler::terminate(*holder, 0);
+        Scheduler::drain_zombie_list();
+        cs->remove(static_cast<uint32_t>(s));
+        irq->release();
+        g_occ_end = kernel::IrqDelivery::occupied_count();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(
+        static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL), g_foreign);
+    JARVIS_ASSERT_EQ(
+        static_cast<uint64_t>(errors::SYS_ERR_IRQ_ALREADY_WAITING),
+        g_second);
+    JARVIS_ASSERT_EQ(1ULL, g_masked);
+    JARVIS_ASSERT_EQ(g_occ0, g_occ1);
+    JARVIS_ASSERT_EQ(0ULL, g_occ_end);
+    JARVIS_TEST_PASS();
+}
+
 /// @brief Registers all IRQ-cap / user-space delivery test cases (issue #2).
 void register_cap_irq_tests() {
     JARVIS_REGISTER_TEST(irq_cap_create_fields);
@@ -990,6 +1232,8 @@ void register_cap_irq_tests() {
     JARVIS_REGISTER_TEST(irq_wait_ack_timeout_fires);
     JARVIS_REGISTER_TEST(irq_wait_ack_irq_cancels_timeout);
     JARVIS_REGISTER_TEST(irq_wait_ack_stale_fire_noop);
+    JARVIS_REGISTER_TEST(cap_irq_pending_saturates);
+    JARVIS_REGISTER_TEST(cap_irq_waiter_second_refused);
 #if defined(CONFIG_ARCH_X86_64)
     JARVIS_REGISTER_TEST(irq_delivery_ack_ioapic_state);
 #endif
