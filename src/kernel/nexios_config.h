@@ -701,7 +701,7 @@
 /// static pool.  Bounded so the pool is a fixed .bss allocation — no
 /// dynamic allocation on real-time paths.
 #ifndef CONFIG_IOPB_MAX_TASKS
-#define CONFIG_IOPB_MAX_TASKS 4
+#define CONFIG_IOPB_MAX_TASKS 8 // F9/Q7: 8 (was 4; 64 KiB .bss on x86_64)
 #endif
 
 /// Maximum number of concurrent IOPB grant-ledger entries (issue #8).  The
@@ -861,7 +861,7 @@
 /// Maximum number of outstanding DMA mappings per IOMMU domain (v0.4.2,
 /// issue #4).  Bounded per-domain record table; exhausting it fails closed.
 #ifndef CONFIG_IOMMU_MAX_MAPPINGS
-#define CONFIG_IOMMU_MAX_MAPPINGS 32
+#define CONFIG_IOMMU_MAX_MAPPINGS 128 // F9/Q7: 128 per domain (was 32; +18 KiB .bss)
 #endif
 
 /// Maximum number of PCI buses with a static IOMMU context table (v0.4.2,
@@ -1698,7 +1698,7 @@ extern "C" void panic(const char *msg);
 #error "CONFIG_DRIVER_PD_NET=1 needs the S6 net-device row (not landed yet)"
 #endif
 #if CONFIG_IOPB_MAX_TASKS < 1
-#error "CONFIG_IOPB_MAX_TASKS must be >= 1 (default 4)"
+#error "CONFIG_IOPB_MAX_TASKS must be >= 1 (default 8)"
 #endif
 #if CONFIG_IOPB_MAX_GRANTS < 1
 #error "CONFIG_IOPB_MAX_GRANTS must be >= 1 (default 8)"
@@ -1731,7 +1731,7 @@ extern "C" void panic(const char *msg);
 #error "CONFIG_IOMMU_MAX_DOMAINS must be >= 1 (default 8)"
 #endif
 #if CONFIG_IOMMU_MAX_MAPPINGS < 1
-#error "CONFIG_IOMMU_MAX_MAPPINGS must be >= 1 (default 32)"
+#error "CONFIG_IOMMU_MAX_MAPPINGS must be >= 1 (default 128)"
 #endif
 #if CONFIG_IOMMU_MAX_BUSES < 1
 #error "CONFIG_IOMMU_MAX_BUSES must be >= 1 (default 8)"

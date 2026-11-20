@@ -458,10 +458,10 @@ before M4's gate): every post-init PMM entry point SHALL be covered.
 | `CONFIG_MAX_CPUS` | 8 | — |
 | `CONFIG_CSLOT_COUNT` | 64 per CNode | SDF caps per PD + derived caps |
 | `CONFIG_MAX_PER_TASK_OBJECTS` | 32 | mem-mgr owning many objects |
-| `CONFIG_CAP_MAX_UNTYPED` | 16 live system-wide | CONFLICT: mem-mgr owning all free memory as Untyped |
-| `CONFIG_CAP_MAX_DEATH_WATCHES` | 16 | supervisor watching every PD (≥ 13 roles + new rows) |
-| `CONFIG_IOMMU_MAX_DOMAINS` / `_MAPPINGS` | 8 / 32 per domain | net RX rings, block DMA |
-| `CONFIG_IOPB_MAX_TASKS` | 4 (x86_64) | CONFLICT: serial, kbd, rtc, ATA block all need port caps |
+| `CONFIG_CAP_MAX_UNTYPED` | 64 live system-wide | CONFLICT: mem-mgr owning all free memory as Untyped |
+| `CONFIG_CAP_MAX_DEATH_WATCHES` | 32 | supervisor watching every PD (≥ 13 roles + new rows) |
+| `CONFIG_IOMMU_MAX_DOMAINS` / `_MAPPINGS` | 8 / 128 per domain | net RX rings, block DMA |
+| `CONFIG_IOPB_MAX_TASKS` | 8 (x86_64) | CONFLICT: serial, kbd, rtc, ATA block all need port caps |
 | `CONFIG_MAX_DAEMONS` | 16 | interim `daemon_mgr` |
 | `CONFIG_IPC_FAST_PAYLOAD_BYTES` | 48 | all control RPCs |
 | `CONFIG_ZOMBIE_STARVATION_LIMIT` | 32 | death latency (§9.1) |
@@ -785,7 +785,7 @@ Every rule is verified by a kill/restart cycle under `test_isolate` with
 | Line mask on delivery (`irq_delivery.cpp:mask_on_delivery`) | WAIT_ACK only; WAIT mode programs a level IOAPIC entry and is not masked | WAIT_ACK only (GIC mask); WAIT mode relies on the storm limiter | never masked (PLIC edge semantics); storm limiter only | F8 |
 | Deferred-switch apply point (INV-MK-5) | `isr_stubs.asm` epilogue | `vectors.S` epilogue | `syscall_entry.S` / `interrupt_controller.cpp` trap epilogue | #546 |
 | IOMMU | VT-d | SMMUv3 pending; `sys_iommu_map`/`unmap` dispatch tests fail instead of being arch-scoped (#528) | none: DMA PDs fail closed (Q10) | #168, #528 |
-| I/O ports | IOPB, 4 tasks | not applicable, fail-closed; ioport dispatch tests fail instead of being arch-scoped (#528) | not applicable, fail-closed | F9, #528 |
+| I/O ports | IOPB, 8 tasks | not applicable, fail-closed; ioport dispatch tests fail instead of being arch-scoped (#528) | not applicable, fail-closed | F9, #528 |
 | Debug syscalls 86–90 (KEEP-D) | green (`core_syscall` debug, `test-history.txt` 2026-11-13) | green (`core_syscall` debug, `test-history.txt` 2026-11-13) | `debug_launch_entry_trap_parks` flakes under load (#544) | #544 |
 | SMP tests | `smp`, `smp_multicpu` | not run | not run | #525 |
 | Console PD runtime | green | green | was blocked by #513 (closed); re-verify at next gate | #476 |

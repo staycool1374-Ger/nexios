@@ -37,7 +37,7 @@ domain lands in phase-2).
 | `IoMmuManager` | `src/kernel/iommu/iommu.{hpp,cpp}` | static bounded tables, one leaf SpinLock, identity-IOVA 4-level SL walk, cascade-empty-free |
 | Handlers | `src/kernel/syscall/syscall_handlers_iommu.cpp` | `SYS_IOMMU_MAP`(59) / `SYS_IOMMU_UNMAP`(60), `MAX_SYSCALL=61` |
 | Tests | `src/kernel/test/test_cap_iommu.cpp` | class `cap_iommu`, 12 tests |
-| Tunables | `src/kernel/nexios_config.h` | `CONFIG_CAP_MAX_IOMMU`(16), `CONFIG_IOMMU_MAX_DOMAINS`(8), `CONFIG_IOMMU_MAX_MAPPINGS`(32), `CONFIG_IOMMU_MAX_BUSES`(8) |
+| Tunables | `src/kernel/nexios_config.h` | `CONFIG_CAP_MAX_IOMMU`(16), `CONFIG_IOMMU_MAX_DOMAINS`(8), `CONFIG_IOMMU_MAX_MAPPINGS`(128), `CONFIG_IOMMU_MAX_BUSES`(8) |
 
 ## 3. Domain Model
 
