@@ -645,9 +645,168 @@ JARVIS_TEST(tcb_suspend_deferred_running_boundary, "PRE: none | POST: none") {
 //         target: wdog_armed false, gen unchanged after resume.
 // Depends: INV-ADM-11/16, tick scan, watchdog kick path
 // Pseudocode: armed periodic target; suspend; assert frozen + removed;
-// tick past E/deadline (no kill/miss, no dmesg records); resume;
-// assert shifted + live kick; unarmed half; teardown.
+// tick past E/deadline (no kill/miss: target alive + still parked);
+// resume; assert shifted + rearmed; unarmed half; teardown.
+//
+// Note (deviation): the arm is fabricated (fields set directly under
+// IF=0), the same precedent the resume path itself anticipates
+// ("already-overdue latched expiry, reachable only through
+// test-fabricated arms"). Driving the real WATCHDOG_CREATE needs a
+// WdogCap for a non-self target — cap-wiring coverage belongs to the
+// F4 cap-side tests, not this mechanism test. The kick path (#41) is
+// covered by its own tests; here the rearm (armed + shifted last_kick)
+// is the pinned observable.
 JARVIS_TEST(tcb_resume_rearms_watchdog_and_shifts_deadline, "PRE: none | POST: none") {
+    static uint64_t g_frozen = 0;
+    static uint64_t g_gen1 = 0;
+    static uint64_t g_alive = 0;
+    static uint64_t g_still_parked = 0;
+    static uint64_t g_resume = 0;
+    static uint64_t g_shift_hi = 0;
+    static uint64_t g_gen2 = 0;
+    static uint64_t g_rearmed = 0;
+    static uint64_t g_dl_shift_hi = 0;
+    static uint64_t g_u_armed = 0;
+    static uint64_t g_u_gen = 0;
+    static uint64_t g_u_gen_expected = 0;
+    g_frozen = g_gen1 = g_alive = g_still_parked = g_resume = 0;
+    g_shift_hi = g_gen2 = g_rearmed = 0;
+    g_dl_shift_hi = g_u_armed = g_u_gen = 0;
+    g_u_gen_expected = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Armed periodic user target, semaphore-blocked (synchronous
+        // park, no latch path). Fabricated arm: period 50, expiry 5
+        // ticks out, last kick now, gen 7.
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                for (;;)
+                    arch::hlt();
+            },
+            20, 50);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        const uint64_t now0 = arch::Timer::ticks();
+        const uint64_t exp = now0 + 5;
+        const uint64_t dl0 = target->deadline_ticks;
+        const uint64_t rem0 = target->remaining_ticks;
+        {
+            arch::IrqGuard irq_guard{};
+            target->wdog_armed = true;
+            target->wdog_period_ticks = 50;
+            target->wdog_last_kick_tick = now0;
+            target->wdog_expiry_tick = exp;
+            target->wdog_gen = 7;
+        }
+        // Suspend at S: park freezes (armed false, expiry PRESERVED in
+        // the latch, gen g+1), deadline node dropped (latch keeps it).
+        const uint64_t s_tick = arch::Timer::ticks();
+        if (Scheduler::admin_suspend_err(*target) !=
+            errors::TCBCTL_ERR_OK)
+            return;
+        g_frozen = (!target->wdog_armed &&
+                    target->admin_wdog_expiry_tick == exp &&
+                    target->admin_deadline_ticks == dl0)
+                       ? 1ULL
+                       : 0ULL;
+        g_gen1 = target->wdog_gen;
+        // Ticks past expiry + deadline: parked target must not be
+        // killed or missed — still alive, still parked.
+        while (arch::Timer::ticks() <= exp)
+            arch::hlt();
+        // One more tick for the scans to observe the overdue-but-parked
+        // target.
+        {
+            const uint64_t t0 = arch::Timer::ticks();
+            while (arch::Timer::ticks() == t0)
+                arch::hlt();
+        }
+        g_alive = (Scheduler::find_task(target->id) == target &&
+                   target->state == TaskState::BLOCKED)
+                      ? 1ULL
+                      : 0ULL;
+        g_still_parked =
+            Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        // Resume at R: shift window [R-S, R-S+3] covers ISR latency
+        // between the R sample and resume's internal now.
+        const uint64_t r_tick = arch::Timer::ticks();
+        g_resume = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        const uint64_t elo = (r_tick >= s_tick) ? r_tick - s_tick : 0;
+        const uint64_t shi = target->wdog_expiry_tick;
+        g_shift_hi = (shi >= exp + elo && shi <= exp + elo + 3) ? 1ULL
+                                                               : 0ULL;
+        const uint64_t dhi = target->deadline_ticks;
+        g_dl_shift_hi =
+            (dhi >= dl0 + elo && dhi <= dl0 + elo + 3) ? 1ULL : 0ULL;
+        g_gen2 = target->wdog_gen;
+        g_rearmed = (target->wdog_armed &&
+                     target->wdog_last_kick_tick >= now0)
+                        ? 1ULL
+                        : 0ULL;
+        (void)rem0;
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+        // Unarmed half: never-armed target parks (gen bump per the N2
+        // note) and resumes disarmed with no rearm bump and no arm.
+        auto *u = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                for (;;)
+                    arch::hlt();
+            },
+            20, 50);
+        if (!u)
+            return;
+        u->is_user_ = true;
+        u->parent_id = cur->id;
+        u->user_data = &sem;
+        Scheduler::add_task(*u);
+        Scheduler::reschedule();
+        tcb_wait_settled(u);
+        if (u->state != TaskState::BLOCKED)
+            return;
+        const uint32_t ug0 = u->wdog_gen;
+        if (Scheduler::admin_suspend_err(*u) != errors::TCBCTL_ERR_OK)
+            return;
+        g_u_gen_expected = static_cast<uint64_t>(ug0) + 1ULL;
+        if (Scheduler::admin_resume_err(*u) != errors::TCBCTL_ERR_OK)
+            return;
+        g_u_armed = u->wdog_armed ? 1ULL : 0ULL;
+        g_u_gen = u->wdog_gen;
+        Scheduler::terminate(*u, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(1ULL, g_frozen);
+    JARVIS_ASSERT_EQ(8ULL, g_gen1);
+    JARVIS_ASSERT_EQ(1ULL, g_alive);
+    JARVIS_ASSERT_EQ(1ULL, g_still_parked);
+    JARVIS_ASSERT_EQ(0ULL, g_resume);
+    JARVIS_ASSERT_EQ(1ULL, g_shift_hi);
+    JARVIS_ASSERT_EQ(9ULL, g_gen2);
+    JARVIS_ASSERT_EQ(1ULL, g_rearmed);
+    JARVIS_ASSERT_EQ(1ULL, g_dl_shift_hi);
+    JARVIS_ASSERT_EQ(0ULL, g_u_armed);
+    JARVIS_ASSERT_EQ(g_u_gen_expected, g_u_gen);
     JARVIS_TEST_PASS();
 }
 
