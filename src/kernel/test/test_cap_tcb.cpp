@@ -1610,9 +1610,95 @@ JARVIS_TEST(mk_supervisor_stop, "PRE: none | POST: none") {
 //         pid cell; 0 after clear. Teardown restores cell 0.
 // Depends: tcb_control_role_protected (INV-ADM-15 durable layer b),
 //         mem-mgr pid cell
-// Pseudocode: helper + Untyped (PROTECTED x2); delete Untyped (OK);
-// set pid cell (PROTECTED); clear cell; teardown.
+// Pseudocode: helper + Untyped (PROTECTED x2); delete Untyped, suspend
+// (OK) + resume; set pid cell (PROTECTED); clear cell, suspend (OK);
+// teardown (cell 0 restored, drain).
 JARVIS_TEST(tcb_never_mem_mgr_predicate, "PRE: none | POST: none") {
+    static uint64_t g_susp1 = 0;
+    static uint64_t g_cfg1 = 0;
+    static uint64_t g_susp2 = 0;
+    static uint64_t g_res2 = 0;
+    static uint64_t g_susp3 = 0;
+    static uint64_t g_susp4 = 0;
+    g_susp1 = g_cfg1 = g_susp2 = g_res2 = g_susp3 = g_susp4 = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        const uint64_t susp =
+            static_cast<uint64_t>(SyscallNumber::TCB_SUSPEND);
+        const uint64_t cfg =
+            static_cast<uint64_t>(SyscallNumber::TCB_CONFIGURE);
+        // User helper, creator-parented. CSPACE + Untyped installed
+        // PRE-ADD (the documented attach window).
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                for (;;)
+                    arch::hlt();
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->ensure_cspace();
+        cap::CNode *tcs = target->get_cspace();
+        if (!tcs)
+            return;
+        auto *ut =
+            cap::UntypedMem::create(arch::PAGE_SIZE, true);
+        if (!ut)
+            return;
+        int us = tcs->install(ut, cap::CapType::Untyped,
+                              cap::CapRights::READ | cap::CapRights::WRITE);
+        if (us < 0) {
+            ut->release();
+            return;
+        }
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        int tslot = install_tcb_cap(cs, target->id, target->generation);
+        if (tslot < 0)
+            return;
+        const uint64_t th = tcb_handle(cs, static_cast<uint32_t>(tslot));
+        // Untyped present: SUSPEND + CONFIGURE both PROTECTED_ROLE.
+        g_susp1 = Syscall::handle(susp, th, 0, 0, 0, nullptr);
+        g_cfg1 = Syscall::handle(cfg, th, 1, 20, 0, nullptr);
+        // Delete the Untyped: same target is now suspendable.
+        tcs->remove(static_cast<uint32_t>(us));
+        ut->release();
+        g_susp2 = Syscall::handle(susp, th, 0, 0, 0, nullptr);
+        g_res2 = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        // Pid-cell layer overrides regardless of cspace contents.
+        tcb_control::tcb_control_set_mem_mgr_pid(target->id);
+        g_susp3 = Syscall::handle(susp, th, 0, 0, 0, nullptr);
+        tcb_control::tcb_control_set_mem_mgr_pid(0);
+        g_susp4 = Syscall::handle(susp, th, 0, 0, 0, nullptr);
+        Scheduler::admin_resume_err(*target);
+        cs->remove(static_cast<uint32_t>(tslot));
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(tcb_err(7), g_susp1);
+    JARVIS_ASSERT_EQ(tcb_err(7), g_cfg1);
+    JARVIS_ASSERT_EQ(0ULL, g_susp2);
+    JARVIS_ASSERT_EQ(0ULL, g_res2);
+    JARVIS_ASSERT_EQ(tcb_err(7), g_susp3);
+    JARVIS_ASSERT_EQ(0ULL, g_susp4);
+    JARVIS_ASSERT_EQ(0ULL, tcb_control::tcb_control_mem_mgr_pid());
     JARVIS_TEST_PASS();
 }
 
