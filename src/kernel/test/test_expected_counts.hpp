@@ -304,7 +304,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_sync",           105,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8 + #545 Cycle C inv x2 + #578 depth-0 park x2
     {"core_sched",          130,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3
     {"core_task",           66,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu + F4 #557 x13 + F10 #563 x1 stubs
-    {"core_memory",         132,  0,       0      },  // memory_* incl. NX/W^X pins + F10 #563 x7 stubs
+    {"core_memory",         136,  0,       0      },  // memory_* incl. NX/W^X pins + F10 #563 x7 stubs (row was stale at 125 vs 129 measured)
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                106,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10
