@@ -821,6 +821,76 @@ JARVIS_TEST(tcb_resume_rearms_watchdog_and_shifts_deadline, "PRE: none | POST: n
 // Pseudocode: fabricate near-max expiry/deadline on parked target;
 // resume (0); assert clamped, no fire; teardown.
 JARVIS_TEST(tcb_resume_shift_saturates, "PRE: none | POST: none") {
+    static uint64_t g_resume = 0;
+    static uint64_t g_expiry = 0;
+    static uint64_t g_deadline = 0;
+    static uint64_t g_alive = 0;
+    g_resume = g_expiry = g_deadline = g_alive = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        // Parked user target (semaphore-blocked, synchronous park).
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                for (;;)
+                    arch::hlt();
+            },
+            20, 50);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        if (Scheduler::admin_suspend_err(*target) !=
+            errors::TCBCTL_ERR_OK)
+            return;
+        // Fabricate near-max latch values (the park wrote real ones;
+        // overwrite under IF=0): any elapsed tick must saturate, not
+        // wrap to an immediate fire.
+        {
+            arch::IrqGuard irq_guard{};
+            __atomic_store_n(&target->admin_wdog_expiry_tick,
+                             0xFFFFFFFFFFFFFFFEULL, __ATOMIC_RELEASE);
+            __atomic_store_n(&target->admin_deadline_ticks,
+                             0xFFFFFFFFFFFFFFFEULL, __ATOMIC_RELEASE);
+        }
+        // Let at least one tick elapse so the shift is nonzero.
+        {
+            const uint64_t t0 = arch::Timer::ticks();
+            while (arch::Timer::ticks() == t0)
+                arch::hlt();
+        }
+        g_resume = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        g_expiry = target->wdog_expiry_tick;
+        g_deadline = target->deadline_ticks;
+        // No immediate fire: target alive and back in its semaphore
+        // wait (prev was BLOCKED with no pending wake, so resume
+        // restores BLOCKED rather than re-enqueueing — the re-queue
+        // shape is covered by test 2).
+        g_alive = (Scheduler::find_task(target->id) == target &&
+                   target->state == TaskState::BLOCKED)
+                      ? 1ULL
+                      : 0ULL;
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, g_resume);
+    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, g_expiry);
+    JARVIS_ASSERT_EQ(0xFFFFFFFFFFFFFFFFULL, g_deadline);
+    JARVIS_ASSERT_EQ(1ULL, g_alive);
     JARVIS_TEST_PASS();
 }
 
