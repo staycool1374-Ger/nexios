@@ -222,7 +222,7 @@ def qemu_argv(arch, build, cls, paths, tag):
         args += ["-device", "virtio-rng-pci,disable-legacy=on",
                  "-machine", "virt", "-bios", "default",
                  "-display", "none", "-no-reboot"]
-    if cls in ("smp_bringup", "smp_sched", "smp_multicpu"):
+    if cls in ("smp_bringup", "smp_sched", "smp_multicpu", "smp_waitpid"):
         args += ["-smp", "2"]
     if os.environ.get("HRT_ICOUNT"):
         args += ["-icount", "shift=0,sleep=off"]

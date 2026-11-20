@@ -188,13 +188,86 @@ JARVIS_TEST(daemon_terminate_ensure_resurrects,
     JARVIS_ASSERT(second_task != nullptr);
     JARVIS_ASSERT(second_task->state != TaskState::TERMINATED);
 
-    // Teardown: daemon::terminate() marks TERMINATED directly without
-    // queueing on the scheduler zombie list, so drain alone would leak the
-    // first task — route it through Scheduler::terminate (queues exactly
-    // once; it was never queued) and drain both together.
-    Scheduler::terminate(*first_task, 0);
+    // Teardown (issue #593 coupled edit): daemon::terminate() funnels
+    // through terminate_err, which already dequeued, marked and
+    // zombie-listed the corpse — drain frees it exactly once. The old
+    // manual Scheduler::terminate() here would double-release
+    // (duplicate zombie-list push, later double free).
     kernel::test::terminate_if_live(second_task);
     Scheduler::drain_zombie_list();
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #593 daemon funnel — register qe_probe, ensure_running,
+//        terminate; entry PID cleared, corpse off find_task (released),
+//        still TERMINATED via the held pointer, drain frees exactly
+//        once (no Tasks/PMM delta).
+// Input: qe_probe lifecycle through the funnel.
+// Expect: PID 0; find null; held ptr TERMINATED; drain freed once;
+//         delta 0.
+// Depends: daemon::terminate funnel, drain_zombie_list
+// Pseudocode: register; ensure (pid); terminate (PID 0, corpse
+// TERMINATED but released); drain (freed, delta 0); teardown.
+JARVIS_TEST(daemon_terminate_wakes_and_zombie_lists, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_cleared = 0;
+    static uint64_t g_findnull = 0;
+    static uint64_t g_term = 0;
+    static uint64_t g_freed = 0;
+    g_cleared = g_findnull = g_term = g_freed = 0;
+
+    const char *vfsd_path = nullptr;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "vfsd") == 0) {
+            vfsd_path = entry.initrd_path;
+            break;
+        }
+    }
+    if (vfsd_path == nullptr)
+        return;
+    if (!daemon::register_daemon("qe_probe2", vfsd_path, nullptr,
+                                 nullptr))
+        return;
+    daemon::ensure_running("qe_probe2");
+    uint64_t pid = 0;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "qe_probe2") == 0) {
+            pid = entry.pid;
+            break;
+        }
+    }
+    if (pid == 0)
+        return;
+    auto *corpse = Scheduler::find_task(pid);
+    if (corpse == nullptr)
+        return;
+    daemon::terminate("qe_probe2");
+    uint64_t cleared = 1;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "qe_probe2") == 0) {
+            cleared = entry.pid;
+            break;
+        }
+    }
+    g_cleared = cleared;
+    // Released from the tables but still TERMINATED via the held
+    // pointer (reaped on drain, not on terminate). The held pointer
+    // must NOT be touched after the drain below (freed memory).
+    g_findnull = (Scheduler::find_task(pid) == nullptr) ? 1ULL : 0ULL;
+    g_term = (corpse->state == TaskState::TERMINATED) ? 1ULL : 0ULL;
+    Scheduler::drain_zombie_list();
+    g_freed = (Scheduler::find_task(pid) == nullptr) ? 1ULL : 0ULL;
+
+    JARVIS_ASSERT_EQ(0ULL, g_cleared);
+    JARVIS_ASSERT_EQ(1ULL, g_findnull);
+    JARVIS_ASSERT_EQ(1ULL, g_term);
+    JARVIS_ASSERT_EQ(1ULL, g_freed);
     JARVIS_TEST_PASS();
 }
 
@@ -205,4 +278,5 @@ void register_daemon_restart_crash_tests() {
 #endif
     JARVIS_REGISTER_TEST(daemon_unknown_name_rejected);
     JARVIS_REGISTER_TEST(daemon_terminate_ensure_resurrects);
+    JARVIS_REGISTER_TEST(daemon_terminate_wakes_and_zombie_lists);
 }

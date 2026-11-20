@@ -398,7 +398,7 @@ JARVIS_TEST(hal_irq_storm_gate_bounded, "PRE: iocd | POST: none") {
             if (lim.observe(id, tick))
                 ok = 0;
             if ((i & 31U) == 0U)
-                arch_pause();
+                arch::pause();
         }
         // +1 at the same tick trips; a new tick and a different
         // INTID each reset the burst.
@@ -436,7 +436,7 @@ JARVIS_TEST(hal_irq_storm_gate_bounded, "PRE: iocd | POST: none") {
         if (arch::storm_gate(kVec, tick))
             ok = 0;
         if ((i & 31U) == 0U)
-            arch_pause();
+            arch::pause();
     }
 #if defined(CONFIG_ARCH_X86_64)
     if (!arch::ArchInterruptController::line_enabled(kLine))
@@ -487,7 +487,7 @@ JARVIS_TEST(hal_irq_storm_gate_bounded, "PRE: iocd | POST: none") {
                 tick + 2))
             ex = 0;
         if ((i & 31U) == 0U)
-            arch_pause();
+            arch::pause();
     }
     if (arch::storm_trips() != trips1)
         ex = 0;
