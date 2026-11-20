@@ -198,6 +198,9 @@ void register_irqguard_audit_tests();
 void register_memory_safety_tests();
 void register_memory_determinism_tests();
 void register_pmm_tests();
+void register_mem_handover_tests();
+void register_sdf_bounds_tests();
+void register_task_budget_tests();
 void register_mempool_tests();
 void register_slab_reclaim_tests();
 void register_sporadic_server_tests();
@@ -442,6 +445,8 @@ static void run_cap_lifecycle_group() { register_cap_lifecycle_tests(); }
 static void run_cap_syscall_group() { register_cap_syscall_tests(); }
 static void run_cap_vspace_group() { register_cap_vspace_tests(); }
 static void run_tcb_control_group() { register_tcb_control_tests(); }
+static void run_task_budget_group() { register_task_budget_tests(); }
+static void run_sdf_bounds_group() { register_sdf_bounds_tests(); }
 static void run_cap_tcb_group() { register_cap_tcb_tests(); }
 static void run_debug_syscall_group() { register_debug_syscall_tests(); }
 static void run_cap_ipc_group() { register_cap_ipc_tests(); }
@@ -504,6 +509,7 @@ static void run_services_framework_group() {
 static void run_memory_pmm_group() {
     register_memory_tests();
     register_pmm_tests();
+    register_mem_handover_tests();
 }
 static void run_memory_mempool_group() { register_mempool_tests(); }
 static void run_memory_slab_group() { register_slab_reclaim_tests(); }
@@ -748,6 +754,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- task: TCB, lifecycle, FPU, init --
     {"task_core", []() { run_task_core_group(); }},
+    {"task_budget", []() { run_task_budget_group(); }},
     {"task_lifecycle", []() { run_task_lifecycle_group(); }},
     {"task_fpu",
      []() {
@@ -813,6 +820,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"cap_lifecycle", []() { run_cap_lifecycle_group(); }},
     {"cap_syscall", []() { run_cap_syscall_group(); }},
     {"cap_vspace", []() { run_cap_vspace_group(); }},
+    {"cap_sdf", []() { run_sdf_bounds_group(); }},
     {"cap_tcb", []() { run_cap_tcb_group(); }},
     {"debug_syscall", []() { run_debug_syscall_group(); }},
     {"cap_ipc", []() { run_cap_ipc_group(); }},
@@ -896,6 +904,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // register_memory_tests() is a documented 0-test delegate (sub-classes
     // register themselves); kept for all-class consistency.
     {"memory_pmm", []() { run_memory_pmm_group(); }},
+    {"mem_handover", []() { register_mem_handover_tests(); }},
     {"memory_mempool", []() { run_memory_mempool_group(); }},
     {"memory_slab", []() { run_memory_slab_group(); }},
     {"memory_safety", []() { run_memory_safety_group(); }},
@@ -1156,6 +1165,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_kernel_top_group();
          run_per_cpu_group();
          run_tcb_control_group();
+         run_task_budget_group();
      }},
     {"core_memory",
      []() {
@@ -1226,6 +1236,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_cap_broker_group();
          run_cap_vspace_group();
          run_cap_tcb_group();
+         run_sdf_bounds_group();
      }},
     // proc_elf: process lifecycle + ELF loading (issue #173).  Named
     // proc_elf (not process_elf) — the fine-grained file class
