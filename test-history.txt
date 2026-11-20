@@ -8278,3 +8278,5 @@ SUMMARY: total=35 ok=34 fail=1 ARCH=riscv64
 2026-11-20 17:24:01 process_waitpid PASSED: 11 FAILED: 0 TIME: 870ms
 2026-11-20 17:24:43 servers_daemon_restart PASSED: 10 FAILED: 1 TIME: 1116ms
 2026-11-20 17:25:04 servers_daemon_restart PASSED: 11 FAILED: 0 TIME: 989ms
+2026-11-20 17:26:53 scheduler_zombie PASSED: 5 FAILED: 1 TIME: 4030ms
+2026-11-20 17:27:25 scheduler_zombie PASSED: 6 FAILED: 0 TIME: 3939ms

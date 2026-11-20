@@ -22,8 +22,12 @@
 #include <test.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
+#include <kernel/task/scheduler_errors.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/io.hpp>
+#include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/cpu_context.hpp>
+#include <kernel/ipc/death_notify.hpp>
 #include <logger.hpp>
 
 using namespace kernel;
@@ -166,13 +170,60 @@ JARVIS_TEST(zombie_drain_multiple, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: #593 terminate_err refusal is side-effect-free —
-//        refusing a target (remote-current or already TERMINATED)
-//        leaves it untouched: state/queue/slots unchanged.
-// Input: Refused terminate_err call.
-// Expect: Refusal code; target byte-identical.
-// Depends: terminate_err guard legs
-// Pseudocode: live target; refuse; assert untouched; teardown.
+//        planting the target as current on a spare CPU makes the
+//        funnel refuse with REMOTE_CURRENT and leave the target
+//        untouched: state READY, still queued, still registered.
+// Input: Live queued spare; remote-current plant; terminate_err.
+// Expect: REMOTE_CURRENT; READY + queued + findable, unchanged.
+// Depends: is_current_on_any_cpu gate, terminate_err
+// Pseudocode: add spare (READY); plant cpu1.current; refuse;
+// assert untouched; restore slot; terminate + drain.
 JARVIS_TEST(terminate_err_refusal_leaves_target_untouched, "PRE: none | POST: none") {
+    static uint64_t g_ret = 0;
+    static uint64_t g_ready = 0;
+    static uint64_t g_queued = 0;
+    static uint64_t g_found = 0;
+    g_ret = g_ready = g_queued = g_found = 0;
+
+    auto *spare = TaskControlBlock::create(
+        []() {
+            for (;;)
+                arch::hlt();
+        },
+        20, 10);
+    if (!spare)
+        return;
+    {
+        // Whole sequence under IF=0: no tick can dispatch the spare
+        // between add and assert (it would leave the ready queue and
+        // make the queued assertion racy).
+        arch::IrqGuard guard{};
+        Scheduler::add_task(*spare);
+        // Plant as current-on-CPU1 (UP box: CPU1 never runs, so the
+        // slot is inert except for the spare-any-current scan).
+        auto &c1 = kernel::cpu_ctx(1);
+        TaskControlBlock *saved = c1.current;
+        c1.current = spare;
+        g_ret = static_cast<uint64_t>(Scheduler::terminate_err(
+            *spare, 0, kernel::ipc::DeathCause::Admin));
+        g_ready = (spare->state == TaskState::READY) ? 1ULL : 0ULL;
+        // Queued means bitmap OR EDF list (periodic targets route to
+        // the EDF list exclusively — no bitmap flag).
+        g_queued = (spare->in_ready_queue_ || spare->in_edf_queue_)
+                       ? 1ULL
+                       : 0ULL;
+        g_found = (Scheduler::find_task(spare->id) == spare) ? 1ULL
+                                                             : 0ULL;
+        c1.current = saved;
+    }
+    Scheduler::terminate(*spare, 0);
+    Scheduler::drain_zombie_list();
+
+    JARVIS_ASSERT_EQ(
+        static_cast<uint64_t>(errors::SCHED_ERR_REMOTE_CURRENT), g_ret);
+    JARVIS_ASSERT_EQ(1ULL, g_ready);
+    JARVIS_ASSERT_EQ(1ULL, g_queued);
+    JARVIS_ASSERT_EQ(1ULL, g_found);
     JARVIS_TEST_PASS();
 }
 
