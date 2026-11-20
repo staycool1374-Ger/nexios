@@ -1027,9 +1027,80 @@ JARVIS_TEST(tcb_watchdog_arm_refused_while_parked, "PRE: none | POST: none") {
 // Expect: Stays halted across suspend; resume releases; no
 //         park/apply counter trip.
 // Depends: INV-ADM-9, resched park path
-// Pseudocode: halt task in resched park; suspend (stays halted);
-// resume (released, no counter trip); teardown.
+// Pseudocode: BLOCKED waiter suspend (stays halted); resume; post
+// delivers (runs to completion); no park counter trip; teardown.
+//
+// Note (deviation): on UP a task halted inside resched_park IS the
+// current task, so no second task can observe it mid-park —
+// "halted" is indistinguishable from BLOCKED-current. The pinned
+// property is suspend/resume transparency for a BLOCKED waiter: it
+// stays halted across suspend, resume returns it to its wait (a
+// later post runs it to completion). The counter half pins that the
+// cycle itself engages no park: in this UP setup the driver stays
+// runnable throughout, so neither task enters the park and the
+// counters must read identical across the cycle (a future
+// suspend/resume implementation that hlt-waits would trip them).
 JARVIS_TEST(tcb_suspend_parked_runner_released_by_resume, "PRE: none | POST: none") {
+    static uint64_t g_entries0 = 0;
+    static uint64_t g_wakeups0 = 0;
+    static uint64_t g_entries1 = 0;
+    static uint64_t g_wakeups1 = 0;
+    static uint64_t g_susp = 0;
+    static uint64_t g_resumed = 0;
+    static uint64_t g_ran = 0;
+    static uint64_t g_parked = 0;
+    g_entries0 = g_wakeups0 = g_entries1 = g_wakeups1 = 0;
+    g_susp = g_resumed = g_ran = g_parked = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        // Waiter that counts its wake and exits (mirrors the absorb
+        // test's waiter shape).
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                __atomic_fetch_add(&g_ran, 1ULL, __ATOMIC_RELAXED);
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        g_entries0 = Scheduler::resched_park_entries_count();
+        g_wakeups0 = Scheduler::resched_park_wakeups_count();
+        // Suspend the halted waiter: stays halted (BLOCKED + parked).
+        g_susp = static_cast<uint64_t>(
+            Scheduler::admin_suspend_err(*target));
+        g_parked = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        // Resume returns it to its wait; the park counters must not
+        // have tripped (no spurious park engagement by the cycle).
+        g_resumed = static_cast<uint64_t>(
+            Scheduler::admin_resume_err(*target));
+        g_entries1 = Scheduler::resched_park_entries_count();
+        g_wakeups1 = Scheduler::resched_park_wakeups_count();
+        // A post now delivers: the wait returns, counter +1, exit.
+        sem.post();
+        kernel::test::wait_for_termination_safe(target);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, g_susp);
+    JARVIS_ASSERT_EQ(1ULL, g_parked);
+    JARVIS_ASSERT_EQ(0ULL, g_resumed);
+    JARVIS_ASSERT_EQ(g_entries0, g_entries1);
+    JARVIS_ASSERT_EQ(g_wakeups0, g_wakeups1);
+    JARVIS_ASSERT_EQ(1ULL, g_ran);
     JARVIS_TEST_PASS();
 }
 
