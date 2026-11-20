@@ -465,7 +465,7 @@ before M4's gate): every post-init PMM entry point SHALL be covered.
 | `CONFIG_MAX_DAEMONS` | 16 | interim `daemon_mgr` |
 | `CONFIG_IPC_FAST_PAYLOAD_BYTES` | 48 | all control RPCs |
 | `CONFIG_ZOMBIE_STARVATION_LIMIT` | 32 | death latency (§9.1) |
-| `CONFIG_IRQ_STORM_LIMIT` | 256 (aarch64, riscv64 users) | x86 has no limiter (§8.3) |
+| `CONFIG_IRQ_STORM_LIMIT` | 256 (all three arches; x86 PIC lines 33–47) | F8 #561: x86 gate in `handle_interrupt_c`, tick vectors 32/0xE0 exempt by name |
 
 New values for conflicting bounds are an owner decision (Q7, F9).
 
@@ -536,22 +536,41 @@ Each subsection gives: (1) current vs end state and syscall mapping,
 ### 8.3 IRQ routing and multiplexer (#192)
 
 1. **State.** `IrqDelivery` slots with WAIT / NOTIFY / WAIT_ACK. The storm
-   limiter exists on aarch64 and riscv64 only. On x86 every PIC-kind arm
-   programs a level-triggered IOAPIC entry (`irq_delivery.cpp`), and
+   limiter exists on all three arches (F8 #561): aarch64/riscv64 as before,
+   x86 via the `handle_interrupt_c` dispatch gate over PIC lines 33–47 with
+   the tick vectors 32 (PIT/HPET) and 0xE0 (xAPIC timer) exempt by name; a
+   tripped x86 line is masked on the PIC mirror line AND the live I/O APIC
+   entry (the `mask_on_delivery` twin). Residual (S3): vectors 34 (PIC
+   cascade) and 39/47 (spurious IRQ7/15) sit inside the 33–47 window but map
+   by identity to their own line, so no foreign line is ever masked. A
+   storm-masked line is fail-closed sticky: it stays masked until its owning
+   slot releases it (or reboot); `storm_reset()` restores burst state only
+   and is a test-isolation seam, not an unmask path. On x86 every PIC-kind
+   arm programs a level-triggered IOAPIC entry (`irq_delivery.cpp`), and
    `mask_on_delivery` runs in WAIT_ACK mode only, so a WAIT-mode level line
-   is not masked on delivery and x86 has no storm limiter behind it. On
+   is not masked on delivery — after F8 the x86 WAIT-mode level line is
+   bounded by the limiter, i.e. exactly aarch64's contract (WAIT-mode
+   mask-on-delivery is deliberately NOT added: it would diverge from
+   aarch64, change `pending` accumulation for WAIT users, and alter the
+   WAIT/WAIT_ACK mode split; end-state mask semantics belong to the #192
+   irq-mux config role). On
    aarch64 the GIC line is masked on delivery in WAIT_ACK mode only; on
    riscv64 the PLIC line is deliberately never masked (edge semantics,
-   `irq_delivery.cpp:mask_on_delivery`). `pending` is an unsaturated
-   `uint32_t` counter; NOTIFY keeps only the last vector. `sys_irq_wait`
+   `irq_delivery.cpp:mask_on_delivery`). `pending` is a saturating
+   `uint32_t` counter with a saturating `pending_overflow` side counter (F8
+   #561); NOTIFY keeps only the last vector. `sys_irq_wait`
    accepts only the slot's recipient (`r->recipient != t` refused under the
-   slot lock), so a second distinct waiter cannot register today; the
-   single-waiter rule below is a hardening assertion, not a defect fix.
+   slot lock), and a second distinct waiter is refused with the typed
+   `SYS_ERR_IRQ_ALREADY_WAITING` (1201) under the slot lock before
+   `unmask_for_wait` — the single-waiter rule below is a hardening assertion,
+   not a defect fix.
    Syscalls: keeps 57–60.
 2. **Invariants.** Delivery goes from the kernel directly to the owning PD's
    waiter or Notify; the mux SHALL NOT be in the delivery path. Level lines
-   SHALL be masked on delivery and unmasked only by the owner's ack. Per-line
-   storm limiting SHALL exist on all three arches. `pending` SHALL saturate
+   SHALL be masked on delivery (end state, mux era — #192 owns the mask
+   semantics; until then WAIT-mode level lines are bounded by the per-arch
+   storm limiter) and unmasked only by the owner's ack. Per-line storm
+   limiting SHALL exist on all three arches. `pending` SHALL saturate
    and count overflow. A second waiter on a slot SHALL fail with a typed error.
 3. **Protocol.** irq-mux holds IrqCaps for shared or remappable lines and
    grants per-line or per-MSI-X-entry caps to drivers; IRTE programming is a
@@ -762,7 +781,7 @@ Every rule is verified by a kill/restart cycle under `test_isolate` with
 |---|---|---|---|---|
 | Syscall entry IF state | interrupt gate, IF=0 | `svc` entry, IRQs masked | `ecall` entry, SIE cleared | #546 |
 | IRQ controller | PIC / IOAPIC / MSI-X | GICv2 (v3 path) | PLIC | #192 |
-| IRQ storm limiter | ABSENT | present | present | F8 |
+| IRQ storm limiter | present (PIC 33–47, `handle_interrupt_c` gate) | present | present | F8 |
 | Line mask on delivery (`irq_delivery.cpp:mask_on_delivery`) | WAIT_ACK only; WAIT mode programs a level IOAPIC entry and is not masked | WAIT_ACK only (GIC mask); WAIT mode relies on the storm limiter | never masked (PLIC edge semantics); storm limiter only | F8 |
 | Deferred-switch apply point (INV-MK-5) | `isr_stubs.asm` epilogue | `vectors.S` epilogue | `syscall_entry.S` / `interrupt_controller.cpp` trap epilogue | #546 |
 | IOMMU | VT-d | SMMUv3 pending; `sys_iommu_map`/`unmap` dispatch tests fail instead of being arch-scoped (#528) | none: DMA PDs fail closed (Q10) | #168, #528 |

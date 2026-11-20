@@ -148,14 +148,23 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
         }
 
         if (t->parent_id) {
+            // Issue #590 INV-WAIT-3: pair the waiter's publish fence
+            // (same contract as wake_waiting_parent — both fences are
+            // required; release/acquire alone does not forbid the
+            // both-miss on weak models).
+            __atomic_thread_fence(__ATOMIC_SEQ_CST);
             uint64_t count = Scheduler::task_count();
             for (uint64_t i = 0; i < count; ++i) {
                 auto *p = Scheduler::task_at(i);
+                // Single observation (issue #590): one load feeds both
+                // comparisons so a concurrent publish/clear cannot
+                // half-match.
+                const uint64_t waited = p ? p->waiting_child_pid : 0;
                 if (p && p->id == t->parent_id &&
-                    (p->waiting_child_pid == t->id ||
+                    (waited == t->id ||
                      // Any-child wildcard (waitpid pid -1), not a failure
                      // code — deliberately raw, see H6 note #257.
-                     p->waiting_child_pid == static_cast<uint64_t>(-1))) {
+                     waited == static_cast<uint64_t>(-1))) {
                     // Write exit code to parent's user-space status pointer
                     // (issue #588: fault-armed shared helper — same contract
                     // as wake_waiting_parent; the slot was certified mapped
@@ -163,6 +172,11 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                     // against remap races and uncertified kernel-task slots).
                     if (p->waiting_child_status)
                         (void)Scheduler::deliver_wait_status(*p, t->exit_code);
+                    // Issue #590 INV-WAIT-5: the parent owns this corpse;
+                    // no zombie path and no deferred kill may free it
+                    // while the owner lives.
+                    __atomic_store_n(&t->wait_collect_pending_, true,
+                                     __ATOMIC_RELEASE);
                     p->waiting_child_pid = 0;
                     // Issue #221: leave the child linked when the parent is
                     // actively waiting — it collects the zombie itself via

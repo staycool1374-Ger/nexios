@@ -41,6 +41,7 @@
 #include <kernel/iommu/iommu.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/arch/hal/irq_storm.hpp>
 #include <kernel/task/admission_selftest.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/ipc/ipc.hpp>
@@ -2730,29 +2731,50 @@ extern "C" void handle_interrupt_c(uint64_t vector, uint64_t error_code,
         return;
     }
 
+    // F8 #561 storm gate: a PIC line (33–47) re-dispatched more than
+    // CONFIG_IRQ_STORM_LIMIT times within one tick is masked (PIC mirror +
+    // live I/O APIC entry) and NOT dispatched. The tail EOI/TPR/histogram
+    // below stays unconditional (INV-5, #252 wedge class). Off-x86 the flag
+    // folds to false (no arch call); the timer exemption lives inside the
+    // gate (32 PIT/HPET and 0xE0 xAPIC, by name).
+    bool storm_tripped = false;
+#if defined(CONFIG_ARCH_X86_64)
+    storm_tripped = arch::storm_gate(vector, arch::Timer::ticks());
+    if (storm_tripped) {
+        arch::storm_mask_line(static_cast<uint8_t>(vector));
+        kernel::log::dmesg_push_sev(kernel::log::ErrorSubsystem::BASE,
+                                    kernel::log::kDmesgBase_BASE + 64,
+                                    kernel::log::LogSeverity::ERROR,
+                                    "irq storm masked", vector);
+    }
+#endif
+    if (!storm_tripped) {
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_CAP_MAX_IRQ
-    // User-space IRQ delivery (issue #2): an armed IrqCap slot consumes the
-    // vector — EOI + pending-record + waiter wake — and returns early so the
-    // tail EOI below does not double-fire.  Unarmed vectors fall through to
-    // the generic handler.
-    if (kernel::IrqDelivery::isr_entry(static_cast<uint8_t>(vector)))
-        return;
+        // User-space IRQ delivery (issue #2): an armed IrqCap slot consumes
+        // the vector — EOI + pending-record + waiter wake — and returns
+        // early so the tail EOI below does not double-fire.  Unarmed vectors
+        // fall through to the generic handler.
+        if (kernel::IrqDelivery::isr_entry(static_cast<uint8_t>(vector)))
+            return;
 #endif
 
 #if CONFIG_THREADED_IRQS
-    // Threaded IRQ dispatch: if this vector has an IrqThread, let the
-    // handler task process it.  The ISR entry does ack + Notify and returns.
-    {
-        auto *irqt = kernel::IrqThread::for_vector(static_cast<uint8_t>(vector));
-        if (irqt) {
-            kernel::IrqThread::isr_entry(static_cast<uint8_t>(vector),
-                                          error_code, rip);
-            return;
+        // Threaded IRQ dispatch: if this vector has an IrqThread, let the
+        // handler task process it.  The ISR entry does ack + Notify and
+        // returns.
+        {
+            auto *irqt =
+                kernel::IrqThread::for_vector(static_cast<uint8_t>(vector));
+            if (irqt) {
+                kernel::IrqThread::isr_entry(static_cast<uint8_t>(vector),
+                                             error_code, rip);
+                return;
+            }
         }
-    }
 #endif
 
-    arch::IDT::handle_interrupt(vector, error_code, rip);
+        arch::IDT::handle_interrupt(vector, error_code, rip);
+    }
 
 #if defined(CONFIG_ARCH_X86_64)
     // Send APIC EOI for every interrupt — the APIC requires EOI

@@ -30,7 +30,11 @@
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/mempool.hpp>
 #include <kernel/memory/checked_ptr.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/test/test_isolate.hpp>
+#if defined(CONFIG_DEBUG)
+#include <kernel/test/wait_publish_seam.hpp>
+#endif
 #include <signal.hpp>
 #include <constants.hpp>
 #include <string.hpp>
@@ -56,6 +60,63 @@ uint64_t Syscall::sys_fork(uint64_t, uint64_t, uint64_t, uint64_t,
     return child->id;
 }
 
+namespace {
+
+/// @brief Scan-predicate helpers (issue #590 step 1): identical semantics
+///        to the inlined scan they replace.  find_wait_child_by_id is the
+///        only way the publish re-verify re-resolves the child — a carried
+///        pointer never crosses the publication window.
+TaskControlBlock *find_wait_child(TaskControlBlock &parent,
+                                  uint64_t target_pid) noexcept {
+    uint64_t count = Scheduler::task_count();
+    for (uint64_t i = 0; i < count; ++i) {
+        auto *t = Scheduler::task_at(i);
+        if (t && t->parent_id == parent.id) {
+            // Issue #53: a thread with a registered joiner is owned by
+            // that joiner (which reaps it on collect) — waitpid skips
+            // it instead of racing the join.  Non-threads and
+            // join-less threads are unaffected.
+            if (t->is_thread() &&
+                __atomic_load_n(&t->join_waiter_, __ATOMIC_ACQUIRE) !=
+                    nullptr) {
+                continue;
+            }
+            // (uint64_t)-1 is the any-child wildcard (waitpid pid -1),
+            // not a failure code — deliberately raw, see H6 note #257.
+            if (target_pid == static_cast<uint64_t>(-1) ||
+                t->id == target_pid) {
+                return t;
+            }
+        }
+    }
+    return nullptr;
+}
+
+TaskControlBlock *find_wait_child_by_id(TaskControlBlock &parent,
+                                        uint64_t child_id) noexcept {
+    uint64_t count = Scheduler::task_count();
+    for (uint64_t i = 0; i < count; ++i) {
+        auto *t = Scheduler::task_at(i);
+        if (t && t->parent_id == parent.id && t->id == child_id) {
+            if (t->is_thread() &&
+                __atomic_load_n(&t->join_waiter_, __ATOMIC_ACQUIRE) !=
+                    nullptr) {
+                continue;
+            }
+            return t;
+        }
+    }
+    return nullptr;
+}
+
+/// @brief Bounded revive-retry cap (issue #590 §6): the undo leg gives up
+///        after this many TERMINATED re-observations and falls through to
+///        the normal block with the publication intact (never undo — a
+///        real wake must not fight the re-verify).
+constexpr uint64_t kWaitReverifyRetryMax = 4;
+
+} // namespace
+
 uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                               uint64_t, uint64_t *) {
     uint64_t target_pid = arg0;
@@ -73,32 +134,33 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // themselves (see scheduler_waitpid_wakes_parent); user traps wait
     // in-trap (hlt, preemptible) and re-scan on wake, mirroring the
     // sys_receive blocked-wait pattern.
+    uint64_t reverify_retries = 0;
     for (;;) {
-        TaskControlBlock *child = nullptr;
-        uint64_t count = Scheduler::task_count();
-        for (uint64_t i = 0; i < count; ++i) {
-            auto *t = Scheduler::task_at(i);
-            if (t && t->parent_id == cur->id) {
-                // Issue #53: a thread with a registered joiner is owned by
-                // that joiner (which reaps it on collect) — waitpid skips
-                // it instead of racing the join.  Non-threads and
-                // join-less threads are unaffected.
-                if (t->is_thread() &&
-                    __atomic_load_n(&t->join_waiter_, __ATOMIC_ACQUIRE) !=
-                        nullptr) {
-                    continue;
+        TaskControlBlock *child = find_wait_child(*cur, target_pid);
+        if (!child) {
+            // Issue #590 second residence: the corpse may have left the
+            // live tables inside the publication window (released to the
+            // zombie list) — collect it there before failing closed.
+            uint64_t zid = 0;
+            uint64_t zcode = 0;
+            if (Scheduler::collect_zombie_child(*cur, target_pid, zid,
+                                                zcode)) {
+                if (status_ptr) {
+                    // MP-4 (SMAP): user write via safe_copy_to_user
+                    // (stac-wrapped); kernel-task callers write directly.
+                    if (syscall_is_user_task()) {
+                        if (!safe_copy_to_user(status.unsafe_ptr(), &zcode,
+                                               1))
+                            return static_cast<uint64_t>(
+                                errors::SYS_ERR_GENERIC_FAIL);
+                    } else {
+                        *status_ptr = zcode;
+                    }
                 }
-                // (uint64_t)-1 is the any-child wildcard (waitpid pid -1),
-                // not a failure code — deliberately raw, see H6 note #257.
-                if (target_pid == static_cast<uint64_t>(-1) ||
-                    t->id == target_pid) {
-                    child = t;
-                    break;
-                }
+                return zid;
             }
-        }
-        if (!child)
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+        }
         if (child->state == TaskState::TERMINATED) {
             if (child->is_thread() &&
                 !TaskControlBlock::thread_join_try_claim(*child)) {
@@ -145,10 +207,92 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                                  cur->get_page_table()))
                 return static_cast<uint64_t>(errors::SYS_ERR_FAULT);
         }
-        cur->waiting_child_pid = target_pid;
+        // Issue #590 INV-WAIT-4: publish order is status → dequeue →
+        // BLOCKED → pid, pid LAST.  The wake gate is state==BLOCKED +
+        // pid, and the fence below pairs them — a terminator that
+        // observes the pid also observes BLOCKED.
+        const uint64_t child_id = child->id;
         cur->waiting_child_status = status_ptr;
         Scheduler::dequeue_ready(*cur);
         cur->state = TaskState::BLOCKED;
+        cur->waiting_child_pid = target_pid;
+        // Issue #590 INV-WAIT-3: pair the terminator-side fence.  Both
+        // fences are required — release/acquire is not sufficient here
+        // (store buffering would let both sides miss on weak models).
+        // Placed before the kernel-caller return so the kernel-caller
+        // path is fenced as well.
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+#if defined(CONFIG_DEBUG)
+        kernel::test::fire_wait_publish(*cur);
+#endif
+        // Issue #590 INV-WAIT-6 (consumption precedence): after the
+        // fence, a pid that no longer matches what was just published
+        // proves a wake consumed the publication (the wake's clear is
+        // the only other writer of this field on a live parent).  A
+        // delivered wake always wins: do NOT undo, never return −1,
+        // never block — resolution happens at the top of the loop via
+        // the normal collect.  Undoing here would turn a delivered wake
+        // into −1 and strand a parented zombie.  Compared against
+        // target_pid (not 0) so a pathological target 0 cannot alias
+        // the sentinel; waiting_child_status is NOT the indicator
+        // (deliver_wait_status clears it on both the delivered and the
+        // faulted path).
+        if (__atomic_load_n(&cur->waiting_child_pid, __ATOMIC_ACQUIRE) !=
+            target_pid)
+            continue;
+        // Re-resolve by id (never a carried pointer across the window):
+        // child_id was captured in the scan epoch above.
+        TaskControlBlock *re = find_wait_child_by_id(*cur, child_id);
+        if (re != nullptr && re->state == TaskState::TERMINATED) {
+            if (reverify_retries < kWaitReverifyRetryMax) {
+                ++reverify_retries;
+                // Undo order is status first, pid last: a concurrent
+                // wake holding the old slot pointer must never see a
+                // half-cleared publication.
+                cur->waiting_child_status = nullptr;
+                cur->waiting_child_pid = 0;
+                Scheduler::set_task_ready(*cur);
+                continue;
+            }
+            // Retry-cap exhaustion (only reachable when the rescan keeps
+            // observing TERMINATED while ownership is lost): log once
+            // and fall through to the normal block — do NOT undo, the
+            // publication must stay intact for a real wake.
+            log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
+                                log::kDmesgBase_SCHED + 23,
+                                log::LogSeverity::WARN,
+                                "Sched: waitpid re-verify cap exhausted",
+                                cur->id);
+        } else if (re == nullptr) {
+            // The corpse left the live tables inside the window: resolve
+            // via the second residence (collect_zombie_child).  On a
+            // miss the pre-INV-WAIT-4 hole made the hlt loop exit on
+            // pid == 0 and the rescan miss the orphaned child —
+            // spurious −1 with a lost status (never an indefinite
+            // block).  That leg now warns once and fails closed.
+            uint64_t zid = 0;
+            uint64_t zcode = 0;
+            if (Scheduler::collect_zombie_child(*cur, target_pid, zid,
+                                                zcode)) {
+                if (status_ptr) {
+                    if (syscall_is_user_task()) {
+                        if (!safe_copy_to_user(status.unsafe_ptr(), &zcode,
+                                               1))
+                            return static_cast<uint64_t>(
+                                errors::SYS_ERR_GENERIC_FAIL);
+                    } else {
+                        *status_ptr = zcode;
+                    }
+                }
+                return zid;
+            }
+            log::dmesg_push_sev(log::ErrorSubsystem::SCHED,
+                                log::kDmesgBase_SCHED + 23,
+                                log::LogSeverity::WARN,
+                                "Sched: waitpid unrecoverable wait",
+                                cur->id);
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+        }
         if (!syscall_is_user_task())
             return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
         // User trap: wait in-trap until woken (waiting flag cleared and
@@ -158,7 +302,8 @@ uint64_t Syscall::sys_waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         // resumes re-enter the wait; ticks preempt via sti/hlt/cli.
         Scheduler::reschedule();
         while (cur->state == TaskState::BLOCKED &&
-               cur->waiting_child_pid != 0) {
+               __atomic_load_n(&cur->waiting_child_pid, __ATOMIC_ACQUIRE) !=
+                   0) {
             arch::sti();
             arch::hlt();
             arch::cli();
@@ -328,6 +473,18 @@ uint64_t Syscall::sys_kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
         if (signal_is_fatal(sig) || !t->has_signal_handler(sig)) {
             t->state = TaskState::TERMINATED;
             t->exit_code = static_cast<uint64_t>(-static_cast<int64_t>(sig));
+            // Issue #590 step 16 (scoped out, follow-up issue #593): this
+            // self-fatal leg sets TERMINATED + exit_code + publish_task_death
+            // and calls NO wake, so a waitpid parent is never readied — the
+            // identical lost-wake outcome, deterministic rather than racy.
+            // It also does NO dequeue and NO switch_away_from_terminating,
+            // so the corpse can still be current on this CPU when a parent
+            // (woken by any other means) collects and frees it — adding
+            // only the wake here would introduce a cross-CPU use-after-free
+            // of a live stack.  The fix must first give the self-kill a
+            // residence (dequeue + deferred-switch arm before the trap
+            // return, then wake_waiting_parent); see issue #593 (same
+            // follow-up class: daemon_mgr.cpp has no wake either).
             // M1/F6 (issue #559): the self-fatal leg never reaches a
             // terminate funnel — latch synchronously here.  Fault-class
             // signals latch as Fault, plain kills as Kill.

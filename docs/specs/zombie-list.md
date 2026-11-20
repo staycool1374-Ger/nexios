@@ -268,6 +268,30 @@ void Scheduler::drain_zombie_list() noexcept {
 }
 ```
 
+### 4.3 Wait-collect retention (issue #590)
+
+A fifth spare predicate applies uniformly in all four drain paths
+(`flush_zombies`, `drain_zombie_list`, `cleanup_step`,
+`cleanup_step_try`) plus the deferred-kill `kill_declined` check:
+a corpse with `wait_collect_pending_` set is **spared while its owner
+lives** (`find_task(parent_id)` exists and is not TERMINATED).  The
+flag is set only by a wake that matched a waiting parent (the parent
+owns the corpse); an unwoken corpse is freed immediately, as before
+(issue #523's fault-kill leak fix is preserved).
+
+Owner-death escape: once the parent leaves the tables (or terminates),
+the predicate is false and the corpse frees normally — the watchdog
+`defer_kill` skip shape (corpse stays parented/in-table, never
+released) is covered by `reap_orphans` (parent TERMINATED/absent ⇒
+`can_reap`; live parent ⇒ Unix deferred zombie).
+
+Forced drain does not override the predicate: `drain_zombie_list` and
+the starvation watchdog rotate/spare retained corpses within their
+existing budgets (never free them) until the owner collects or dies.
+Head-of-line stall note: `cleanup_step` leaves a retained head listed
+and makes no progress on that head until the owner collects — bounded
+by the wake guarantee (the owner is READY and running).
+
 ## 5. Snapshots and Restore
 
 ### 5.1 Pre-snapshot (`test_isolate.cpp`)
@@ -427,6 +451,17 @@ flag remains for:
 These are unrelated to reaping and are unchanged.
 
 ## 8. Migration Plan
+
+### 7.10 Wait-collect retention vs synchronous drain (issue #590)
+
+`wait_collect_spared()` (the INV-WAIT-5 predicate) is consulted by all
+four drain paths and by `kill_declined` before any free/destroy.  A
+synchronous drain (`drain_zombie_list` in snapshot restore, the
+starvation watchdog's `flush_zombie`s batch) never frees a retained
+corpse: it rotates/spares it within its pass budget.  No future free
+path may bypass the predicate — §7 stays the normative list, and the
+`wait_collect_pending_` reader set is enumerated in the implementation
+audit (no reader in the syscall TUs).
 
 ### Phase 1 — Core Implementation
 1. Add `zombie_next_` to TCB + `zombie_head_`/`zombie_tail_`/`zombie_count_`

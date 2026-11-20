@@ -29,6 +29,33 @@ static uint64_t g_spurious_count = 0;
 /// @brief Per-tick same-INTID storm limiter (never fed the timer INTID).
 static IrqStormLimiter g_storm{};
 
+/// @brief F8 #561 arch gate: observe + trip-count in one call (the counter
+/// increment that used to be a separate caller-side note_masked() now runs
+/// inside, before the controller mask write — no ordering dependency, so the
+/// substitution is behavior-identical to the pre-F8 sequence).
+bool storm_gate(uint64_t intid, uint64_t now_tick) {
+    if (!g_storm.observe(intid, now_tick)) {
+        return false;
+    }
+    g_storm.note_masked();
+    return true;
+}
+
+/// @brief F8 #561 effective mask: the PLIC source (fail-closed no-op for
+/// source 0 / out-of-window sources).
+void storm_mask_line(uint8_t vector) {
+    if (vector == 0 || vector >= PLIC_MAX_SOURCES) {
+        return;
+    }
+    ArchInterruptController::mask(vector);
+}
+
+/// @brief F8 #561 trip-count accessor.
+uint64_t storm_trips() { return g_storm.masked_count(); }
+
+/// @brief F8 #561 burst-state reset (test isolation; trips_ monotonic).
+void storm_reset() { g_storm.reset(); }
+
 void ArchInterruptController::init() {
     if (g_plic_initialized) {
         return;
@@ -145,10 +172,10 @@ extern "C" void handle_plic_trap(uint64_t scause, uint64_t sepc,
                 plic_complete_s(intid);
                 return;
             }
-            if (g_storm.observe(intid, arch::Timer::ticks())) {
-                ArchInterruptController::mask(
-                    static_cast<uint8_t>(intid));
-                g_storm.note_masked();
+            // F8 #561: same object, same counter as before; observe+note now
+            // happen inside storm_gate (before the mask write — immaterial).
+            if (arch::storm_gate(intid, arch::Timer::ticks())) {
+                arch::storm_mask_line(static_cast<uint8_t>(intid));
                 kernel::log::dmesg_push_sev(
                     kernel::log::ErrorSubsystem::BASE,
                     kernel::log::kDmesgBase_BASE + 64,

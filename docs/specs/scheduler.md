@@ -148,6 +148,50 @@ is needed and no IF=0 spin ever happens).
 F2 (follow-up, not fixed here): the tick-tail direct switch still has no
 INV-C1 check — diagnosis-only counter proposed, decision logic unchanged.
 
+### INV-WAIT-3/4/5/6 — waitpid missed wake (issue #590) [IMPLEMENTED]
+
+Four cooperating rules close the scan-to-publish missed-wake window (a
+terminator that marks TERMINATED between the waiter's scan and its
+publish):
+
+- INV-WAIT-3 (fence pair): `child.state = TERMINATED` is separated from
+  that path's read of `parent.waiting_child_pid` by SEQ_CST, and the
+  waiter's publish is separated from its re-verification read by SEQ_CST.
+  Both fences are required (store buffering would let both sides miss on
+  weak models; release/acquire alone does not forbid it).  Four fence
+  sites: `wake_waiting_parent` (covers all four funnel callers:
+  `terminate_err`, `terminate_err_from_trap`, the deadline KILL arm and
+  the watchdog KILL arm), `sys_exit`, `sys_thread_exit`, `sys_waitpid`.
+- INV-WAIT-4 (publish order): `waiting_child_status → dequeue_ready →
+  state=BLOCKED → waiting_child_pid`, pid last.  Only
+  `wake_waiting_parent` re-queues on `state==BLOCKED`; `sys_exit` readies
+  on `state != TERMINATED` and `sys_thread_exit` has no BLOCKED gate —
+  but pid-last makes every pid observation imply BLOCKED, so the reorder
+  is safe at all three wake sites.
+- INV-WAIT-5 (corpse ownership): every wake site sets
+  `child.wait_collect_pending_` at the match point (single writer: the
+  terminator, never the waiter).  A flagged corpse is never freed by
+  `flush_zombies`, `drain_zombie_list`, `cleanup_step[_try]` or the
+  deferred-kill destroy while `find_task(child.parent_id)` lives and is
+  not TERMINATED.  Exactly two frees: the owner's waitpid collect, or
+  the owner-death escape once the parent leaves the tables.
+- INV-WAIT-6 (consumption precedence, production paths only): after its
+  fence, a waiter that no longer observes its own pid was consumed by a
+  wake and must resolve via the normal collect — never undo, never −1,
+  never block.
+
+Deliberate divergence from the locked post-publish rechecks at lines
+131-135 (`send_sync[_bounded]`, `sys_receive`/`recv_clamped` run their
+rechecks inside the publish `IrqGuard`, before the BLOCKED marking): the
+waitpid publish is lock-free (no guard exists on that path), so the
+re-verify runs after the fence instead of under a lock.  The second
+residence is `Scheduler::collect_zombie_child` (pop+claim under the
+zombie leaf, owner tail outside).  Residual R-1 (terminator missed the
+publication AND a concurrent drainer reclaimed the corpse first) denies
+loudly with SCHED+23 + −1 — never a hang, leak or UAF.  Fourth death
+path scoped out: the sys_kill self-fatal leg (issue #593) wakes nobody
+and is fixed separately.
+
 ### INV-APPLY-1/2/3 + INV-PARK-2 — issue #582 [IMPLEMENTED]
 
 Two intertwined defects: (B) a task suspended while holding
