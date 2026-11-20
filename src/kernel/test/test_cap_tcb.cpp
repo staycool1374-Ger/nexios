@@ -41,6 +41,7 @@
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/arch/timer.hpp>
 #include <kernel/nexios_config.h>
+#include <kernel/core/global_state.hpp>
 
 using namespace kernel;
 
@@ -1113,7 +1114,68 @@ JARVIS_TEST(tcb_suspend_parked_runner_released_by_resume, "PRE: none | POST: non
 // Depends: #582 fail-closed latch, lockpark_reset_for_test
 // Pseudocode: arm latch; suspend (BUSY); assert untouched; reset;
 // teardown.
+//
+// Note: the latch is armed directly (the documented fabrication
+// path — the latch exists precisely for runners the tick observed;
+// here the tick is replaced by the direct arm). Reset via the
+// Scheduler wrapper in-test (test_isolate also resets at the
+// boundary, but the explicit reset keeps this test self-contained).
 JARVIS_TEST(tcb_suspend_latch_armed_refused, "PRE: none | POST: none") {
+    static uint64_t g_susp = 0;
+    static uint64_t g_parked = 0;
+    static uint64_t g_blocked = 0;
+    static uint64_t g_latched = 0;
+    g_susp = g_parked = g_blocked = g_latched = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        auto *target = TaskControlBlock::create(
+            []() {
+                auto *self = Scheduler::current_task();
+                auto *s = reinterpret_cast<sync::Semaphore *>(
+                    self->user_data);
+                s->wait();
+                for (;;)
+                    arch::hlt();
+            },
+            20, 10);
+        if (!target)
+            return;
+        target->is_user_ = true;
+        target->parent_id = cur->id;
+        target->user_data = &sem;
+        Scheduler::add_task(*target);
+        Scheduler::reschedule();
+        tcb_wait_settled(target);
+        if (target->state != TaskState::BLOCKED)
+            return;
+        // Fabricated latch naming this exact (id, generation).
+        gs::lockpark_latch_arm(target->id, target->generation,
+                               static_cast<uint8_t>(
+                                   gs::LockParkClass::ExternalDenial));
+        g_latched = gs::lockpark_is_latched(target->id,
+                                            target->generation)
+                        ? 1ULL
+                        : 0ULL;
+        // Suspend refuses a latch-armed BLOCKED runner: BUSY, park
+        // state untouched (not parked, still BLOCKED).
+        g_susp = static_cast<uint64_t>(
+            Scheduler::admin_suspend_err(*target));
+        g_parked = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
+        g_blocked =
+            (target->state == TaskState::BLOCKED) ? 1ULL : 0ULL;
+        Scheduler::lockpark_reset_for_test();
+        Scheduler::terminate(*target, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(1ULL, g_latched);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_BUSY),
+                     g_susp);
+    JARVIS_ASSERT_EQ(0ULL, g_parked);
+    JARVIS_ASSERT_EQ(1ULL, g_blocked);
     JARVIS_TEST_PASS();
 }
 
@@ -1126,10 +1188,114 @@ JARVIS_TEST(tcb_suspend_latch_armed_refused, "PRE: none | POST: none") {
 //        debug_park_stop.
 // Expect: BUSY + intact; false + intact.
 // Depends: INV-ADM park mutual exclusion, both directions
-// Pseudocode: debug-park target; suspend (BUSY, still debug-parked);
-// admin-park other; debug_park_stop (false, still admin-parked);
-// teardown both.
+// Pseudocode: debug-park target A (fabricated debugger attach);
+// suspend A (BUSY, still debug-parked); suspend target B (admin
+// park); debug_park_stop on B (false, still admin-parked);
+// teardown both (debugger_resume A, admin_resume B, drain).
+//
+// Note: the debugger attach is fabricated (debugger_id set under
+// IF=0) — the real attach path is debugger-trap-driven (#226) and
+// covered by its own tests; the mutual-exclusion property under
+// test lives in the two park gates, which take the fabricated
+// attach identically.
 JARVIS_TEST(tcb_debugger_admin_park_mutual_exclusion, "PRE: none | POST: none") {
+    static uint64_t g_dbg_parked = 0;
+    static uint64_t g_susp = 0;
+    static uint64_t g_dbg_intact = 0;
+    static uint64_t g_blk_intact = 0;
+    static uint64_t g_stop = 0;
+    static uint64_t g_adm_intact = 0;
+    g_dbg_parked = g_susp = g_dbg_intact = g_blk_intact = 0;
+    g_stop = g_adm_intact = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        sync::Semaphore sem;
+        sem.init(0, 1);
+        auto mk_waiter = [&]() -> TaskControlBlock * {
+            auto *u = TaskControlBlock::create(
+                []() {
+                    auto *self = Scheduler::current_task();
+                    auto *s = reinterpret_cast<sync::Semaphore *>(
+                        self->user_data);
+                    s->wait();
+                    for (;;)
+                        arch::hlt();
+                },
+                20, 10);
+            if (!u)
+                return nullptr;
+            u->is_user_ = true;
+            u->parent_id = cur->id;
+            u->user_data = &sem;
+            Scheduler::add_task(*u);
+            Scheduler::reschedule();
+            tcb_wait_settled(u);
+            if (u->state != TaskState::BLOCKED) {
+                Scheduler::terminate(*u, 0);
+                Scheduler::drain_zombie_list();
+                return nullptr;
+            }
+            return u;
+        };
+        // Direction 1: debug-park A, then suspend must refuse.
+        auto *a = mk_waiter();
+        if (!a)
+            return;
+        {
+            arch::IrqGuard irq_guard{};
+            a->debugger_id = cur->id;
+        }
+        g_dbg_parked =
+            Scheduler::debug_park_stop(*a, 1, 0x1000) ? 1ULL : 0ULL;
+        g_susp = static_cast<uint64_t>(
+            Scheduler::admin_suspend_err(*a));
+        g_dbg_intact =
+            (__atomic_load_n(&a->debug_parked, __ATOMIC_ACQUIRE) &&
+             a->state == TaskState::BLOCKED)
+                ? 1ULL
+                : 0ULL;
+        // Direction 2: admin-park B, then debug attach must refuse.
+        auto *b = mk_waiter();
+        if (!b) {
+            Scheduler::debugger_resume(*a);
+            Scheduler::terminate(*a, 0);
+            Scheduler::drain_zombie_list();
+            return;
+        }
+        {
+            arch::IrqGuard irq_guard{};
+            b->debugger_id = cur->id;
+        }
+        if (Scheduler::admin_suspend_err(*b) != errors::TCBCTL_ERR_OK) {
+            Scheduler::debugger_resume(*a);
+            Scheduler::terminate(*a, 0);
+            Scheduler::terminate(*b, 0);
+            Scheduler::drain_zombie_list();
+            return;
+        }
+        g_stop = Scheduler::debug_park_stop(*b, 1, 0x1000) ? 1ULL : 0ULL;
+        g_adm_intact =
+            (Scheduler::admin_parked_of(*b) &&
+             !__atomic_load_n(&b->debug_parked, __ATOMIC_ACQUIRE))
+                ? 1ULL
+                : 0ULL;
+        g_blk_intact =
+            (b->state == TaskState::BLOCKED) ? 1ULL : 0ULL;
+        Scheduler::debugger_resume(*a);
+        Scheduler::terminate(*a, 0);
+        Scheduler::admin_resume_err(*b);
+        Scheduler::terminate(*b, 0);
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(1ULL, g_dbg_parked);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_BUSY),
+                     g_susp);
+    JARVIS_ASSERT_EQ(1ULL, g_dbg_intact);
+    JARVIS_ASSERT_EQ(0ULL, g_stop);
+    JARVIS_ASSERT_EQ(1ULL, g_adm_intact);
+    JARVIS_ASSERT_EQ(1ULL, g_blk_intact);
     JARVIS_TEST_PASS();
 }
 
