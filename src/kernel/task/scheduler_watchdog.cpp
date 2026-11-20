@@ -317,7 +317,17 @@ deadline_miss_handler(TaskControlBlock &task,
     task.state = TaskState::TERMINATED;
     task.exit_code =
         static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGKILL));
-    wake_waiting_parent(task);
+    if (Scheduler::wake_waiting_parent(task) ==
+        Scheduler::WakeResult::PARENT_COLLECTS) {
+        // Issue #590 INV-WAIT-5: the corpse stays parented/in-table for
+        // the parent's rescan (no TERMINATED node may remain in a ready
+        // queue: INV-2), and the deferred kill is not armed.  C4:
+        // dequeue_ready takes no lock (lock-agnostic by precedent:
+        // sys_waitpid calls it lock-free, terminate_err under the
+        // global lock), so no guard is needed on either arm.
+        Scheduler::dequeue_ready(task);
+        return;
+    }
     Scheduler::defer_kill(&task);
 #elif CONFIG_DEADLINE_ACTION == 4
     if (budget_exhausted)
@@ -465,7 +475,17 @@ watchdog_expiry_handler(TaskControlBlock &task,
     task.state = TaskState::TERMINATED;
     task.exit_code =
         static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGKILL));
-    Scheduler::wake_waiting_parent(task);
+    if (Scheduler::wake_waiting_parent(task) ==
+        Scheduler::WakeResult::PARENT_COLLECTS) {
+        // Issue #590 INV-WAIT-5: the corpse stays parented/in-table for
+        // the parent's rescan (no TERMINATED node may remain in a ready
+        // queue: INV-2), and the deferred kill is not armed.  C4:
+        // dequeue_ready takes no lock (lock-agnostic by precedent:
+        // sys_waitpid calls it lock-free, terminate_err under the
+        // global lock), so no guard is needed on either arm.
+        Scheduler::dequeue_ready(task);
+        return;
+    }
     Scheduler::defer_kill(&task);
 #elif CONFIG_WATCHDOG_ACTION == 4
     Logger::info("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "

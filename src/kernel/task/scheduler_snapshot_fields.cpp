@@ -237,6 +237,10 @@ void Scheduler::capture_task_fields(TaskFields *out) {
         out[idx].waiting_child_pid = t->waiting_child_pid;
         out[idx].waiting_child_status =
             reinterpret_cast<uint64_t>(t->waiting_child_status);
+        // Issue #590: capture-only, like its sibling wait fields above
+        // (restore deliberately rewinds no wait state — a rewound waiter
+        // must not inherit a stale ownership latch).
+        out[idx].wait_collect_pending = t->wait_collect_pending_;
         out[idx].pending_signals = t->pending_signals;
         out[idx].alarm_ticks = t->alarm_ticks;
         out[idx].alarm_armed = t->alarm_armed;

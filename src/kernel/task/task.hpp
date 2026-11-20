@@ -409,6 +409,7 @@ struct TaskControlBlock {
             waiting_child_status(nullptr), join_waiter_(nullptr),
             join_target_id_(0), join_detached_(false), join_status_(0),
             join_ready_(false), join_reaped_(false),
+            wait_collect_pending_(false),
             pending_signals(0), alarm_ticks(0),
            alarm_armed(false), wdog_armed(false), wdog_period_ticks(0),
            wdog_last_kick_tick(0), wdog_expiry_tick(0), wdog_gen(0),
@@ -795,6 +796,9 @@ struct TaskControlBlock {
 
     uint64_t waiting_child_pid;
     uint64_t *waiting_child_status;
+    // Issue #590 INV-WAIT-5 latch lives with the bool cluster below
+    // (after join_reaped_): a bool here would pad to 8 bytes between
+    // the two pointers and break the F21 pool-size static_assert.
 
     /// @brief Join rendezvous state (issue #53, phase ii).  A thread may
     ///        have at most one joiner: join_waiter_ points at the joiner
@@ -833,6 +837,18 @@ struct TaskControlBlock {
     ///        concurrent collectors on SMP; the loser takes the fail-closed
     ///        path (or the handoff status if it was the woken joiner).
     bool join_reaped_ = false;
+    /// @brief Wait-collect ownership latch (issue #590, INV-WAIT-5).
+    ///        Placed in the bool cluster (zero size growth — shares the
+    ///        tail padding before signal_handlers).  Set ONLY by the
+    ///        terminator at the wake match point (single writer, in its
+    ///        own critical section — never by the waiter, so no
+    ///        store-buffering pair is introduced).  While set, no zombie
+    ///        path (flush/drain/cleanup_step[_try]) and no deferred-kill
+    ///        destroy may free this corpse while the owner (parent_id)
+    ///        lives and is not TERMINATED.  Exactly two frees: (i) the
+    ///        owner's waitpid collect, (ii) the owner-death escape once
+    ///        the parent leaves the tables.
+    bool wait_collect_pending_ = false;
 
     /// @brief Signal handler table — one handler per signal number (max 32).
     ///        nullptr means default action (terminate on fatal signals).

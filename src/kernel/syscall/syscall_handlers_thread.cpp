@@ -202,19 +202,30 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     }
 
     if (t->parent_id) {
+        // Issue #590 INV-WAIT-3: pair the waiter's publish fence (same
+        // contract as wake_waiting_parent — both fences are required).
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
         uint64_t count = Scheduler::task_count();
         for (uint64_t i = 0; i < count; ++i) {
             auto *p = Scheduler::task_at(i);
+            // Single observation (issue #590): one load feeds both
+            // comparisons so a concurrent publish/clear cannot half-match.
             // Waiter match mirrors sys_exit (own pid or the -1 wildcard).
+            const uint64_t waited = p ? p->waiting_child_pid : 0;
             if (p && p->id == t->parent_id &&
-                (p->waiting_child_pid == t->id ||
-                 p->waiting_child_pid == static_cast<uint64_t>(-1))) {
+                (waited == t->id ||
+                 waited == static_cast<uint64_t>(-1))) {
                 // Issue #588: fault-armed shared helper — same contract as
                 // wake_waiting_parent/sys_exit (certified mapped AND writable
                 // at waitpid entry, store stays armed; AC cleared on both
                 // paths, slot cleared inside the helper).
                 if (p->waiting_child_status)
                     (void)Scheduler::deliver_wait_status(*p, t->exit_code);
+                // Issue #590 INV-WAIT-5: the parent owns this corpse; no
+                // zombie path and no deferred kill may free it while the
+                // owner lives.
+                __atomic_store_n(&t->wait_collect_pending_, true,
+                                 __ATOMIC_RELEASE);
                 p->waiting_child_pid = 0;
                 // Issue #53: a thread with a registered joiner stays
                 // parented (the joiner reaps it); a detached thread orphans

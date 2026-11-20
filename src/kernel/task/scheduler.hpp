@@ -817,6 +817,16 @@ class Scheduler {
     /// @return false when the store faulted (delivery skipped), true otherwise.
     [[nodiscard]] static bool deliver_wait_status(TaskControlBlock &parent,
                                                  uint64_t code) noexcept;
+    /// @brief Wake-result discriminator (issue #590, INV-WAIT-5).  Lets a
+    ///        KILL arm keep a corpse parented/in-table for its collecting
+    ///        parent instead of arming a deferred kill that would free it.
+    enum class WakeResult : uint8_t {
+        NO_WAITER = 0,       ///< No waiting parent matched; nothing readied.
+        WOKE_NOT_COLLECTING = 1, ///< A parent was readied without collect
+                             ///  duty (non-BLOCKED: orphan path taken).
+        PARENT_COLLECTS = 2, ///< Matched parent is BLOCKED: it stays
+                             ///  published and collects the corpse itself.
+    };
     /// @brief Wake a parent blocked in waitpid for a child that just
     ///        terminated via a non-sys_exit path (issue #217: EL0-fault
     ///        kill; also terminate, deadline miss).  Mirrors the wake
@@ -827,7 +837,46 @@ class Scheduler {
     ///        paths — never panics on a bad/RO status page).  Lock-free on
     ///        the UP/test path (set_task_ready only takes scheduler_lock_
     ///        for down-CPU targets); safe from IRQ-masked fault context.
-    static void wake_waiting_parent(TaskControlBlock &child) noexcept;
+    ///        Issue #590 INV-WAIT-3: the wake block opens with a SEQ_CST
+    ///        fence pairing the waiter's publish fence (store buffering
+    ///        would let both sides miss on weak models; release/acquire
+    ///        alone does not forbid it).  INV-WAIT-4: pid is stored last
+    ///        by the waiter, so an observed pid implies BLOCKED at every
+    ///        site keyed on it.  INV-WAIT-5: a match sets the child's
+    ///        wait_collect_pending_ latch — the corpse is then owned by
+    ///        the parent and no zombie path or deferred kill may free it
+    ///        while the owner lives.  INV-WAIT-6 (waiter side, production
+    ///        paths only — the test-harness snapshot restore rewrites
+    ///        the field): after its fence, a waiter that no longer sees
+    ///        its own pid was consumed by a wake and must resolve via
+    ///        the normal collect, never undo, never return -1, never
+    ///        block.  Fourth death path (sys_kill self-fatal, issue #593)
+    ///        is scoped out: it wakes nobody and is fixed separately.
+    /// @param child The just-terminated child task.
+    /// @return WakeResult telling a KILL arm whether the corpse now has
+    ///         a collecting parent (PARENT_COLLECTS: keep parented, skip
+    ///         the deferred kill).  The terminate funnel ignores it.
+    static WakeResult wake_waiting_parent(TaskControlBlock &child) noexcept;
+    /// @brief Collect a released corpse on the waiter's behalf (issue
+    ///        #590, second residence).  Searches the zombie list for the
+    ///        parent's child (exact id, or any child for the -1
+    ///        wildcard), pops it under IrqGuard + zombie_lock_ and claims
+    ///        teardown in-leaf, then runs the owner tail
+    ///        (remove_child + cleanup + pinned-aware free) outside the
+    ///        leaf.  Atomic pop+claim: the claim is taken under the leaf
+    ///        so a concurrent drain either claims first (the entry is
+    ///        never seen) or defers to us — never both, never doubled.
+    /// @param parent Waiting parent whose child is collected.
+    /// @param target_pid Exact child id, or (uint64_t)-1 for any child.
+    /// @param[out] out_child_id Collected child's id (valid on true).
+    /// @param[out] out_exit_code Collected child's exit code (valid on
+    ///        true).
+    /// @return true when a corpse was collected, false otherwise (the
+    ///         R-1 miss leg: caller logs SCHED+23 and fails closed).
+    static bool collect_zombie_child(TaskControlBlock &parent,
+                                     uint64_t target_pid,
+                                     uint64_t &out_child_id,
+                                     uint64_t &out_exit_code) noexcept;
 #if defined(CONFIG_DEBUG)
     /// @brief Issue #299/#280 diagnostic: dump the ready-queue view (highest
     ///        priority, peek head + its state, per-task rq bucket/flag/physical
@@ -1019,6 +1068,9 @@ class Scheduler {
         uint64_t kernel_stack_top; ///< For RSP-range validation
         uint64_t waiting_child_pid;
         uint64_t waiting_child_status;
+        /// @brief Wait-collect ownership latch (issue #590, INV-WAIT-5).
+        ///        Rewinds with the snapshot like its sibling wait fields.
+        bool wait_collect_pending;
         uint64_t pending_signals;
         uint64_t alarm_ticks;
         bool alarm_armed;

@@ -39,6 +39,7 @@
 #include <kernel/arch/msr.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/test/wait_publish_seam.hpp>
 #include <lib/logger.hpp>
 #include <assert.hpp>
 
@@ -128,6 +129,21 @@ uint64_t Scheduler::snapshot_zombies(TaskControlBlock **out,
     }
     return copied;
 }
+namespace {
+// Issue #590 INV-WAIT-5: a flagged corpse is owned by its waiting parent
+// and must not be freed while the owner lives.  The owner-liveness read
+// is lock-free (find_task id-table read, same precedent as kill_declined
+// below): a stale "absent" verdict frees a flagged corpse, but the loser
+// then takes the R-1 miss leg (never a UAF — both the drain and the
+// waiter's collect claim under the same zombie leaf).
+bool wait_collect_spared(const TaskControlBlock &t) noexcept {
+    if (!t.wait_collect_pending_)
+        return false;
+    auto *p = Scheduler::find_task(t.parent_id);
+    return p != nullptr && p->state != TaskState::TERMINATED;
+}
+} // namespace
+
 void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
     // Caller: on_tick tail. NOTE (issue #369 T2a): the tail runs WITHOUT
     // the global lock (adopt scope closes before the tail); taking only
@@ -171,6 +187,20 @@ void Scheduler::flush_zombies(uint64_t max_flush) noexcept {
             // as TaskControlBlock::cleanup and the watchdog scan).
             // Spared like AP-live above — re-queued, budget-bounded.
             if (MemPool::is_block_pinned(task)) {
+                task->zombie_next_ = nullptr;
+                if (zombie_tail_ != nullptr) {
+                    zombie_tail_->zombie_next_ = task;
+                } else {
+                    zombie_head_ = task;
+                }
+                zombie_tail_ = task;
+                continue;
+            }
+            // Issue #590 INV-WAIT-5 (docs/specs/zombie-list.md §7):
+            // a wait-collect-retained corpse is spared while its owner
+            // lives — re-queued at the tail, budget-bounded like the
+            // AP-live/pinned legs above.
+            if (wait_collect_spared(*task)) {
                 task->zombie_next_ = nullptr;
                 if (zombie_tail_ != nullptr) {
                     zombie_tail_->zombie_next_ = task;
@@ -256,6 +286,23 @@ void Scheduler::drain_zombie_list() noexcept {
                 }
                 continue;
             }
+            // Issue #590 INV-WAIT-5 (docs/specs/zombie-list.md §7):
+            // a wait-collect-retained corpse is spared while its owner
+            // lives — rotated like the legs above, charged to the same
+            // spared/pass_budget bound.
+            if (wait_collect_spared(*task)) {
+                if (task->zombie_next_ == nullptr || zombie_tail_ == task) {
+                    return;
+                }
+                zombie_head_ = task->zombie_next_;
+                task->zombie_next_ = nullptr;
+                zombie_tail_->zombie_next_ = task;
+                zombie_tail_ = task;
+                if (++spared >= pass_budget) {
+                    return;
+                }
+                continue;
+            }
             zombie_head_ = task->zombie_next_;
             if (!zombie_head_)
                 zombie_tail_ = nullptr;
@@ -279,6 +326,78 @@ void Scheduler::drain_zombie_list() noexcept {
         task->cleanup();
         MemPool::free(task);
     }
+}
+/// @brief Collect a released corpse on the waiter's behalf (issue #590,
+///        second residence).  Pops the parent's child from the zombie
+///        list under IrqGuard + zombie_lock_ and claims teardown in-leaf,
+///        then runs the owner tail (remove_child + cleanup +
+///        pinned-aware free) outside the leaf — the exact owner tail of
+///        drain_zombie_list above.  Atomic pop+claim: the claim is taken
+///        under the leaf so a concurrent drain either claims first (the
+///        entry is never seen) or defers to us — never both.
+bool Scheduler::collect_zombie_child(TaskControlBlock &parent,
+                                     uint64_t target_pid,
+                                     uint64_t &out_child_id,
+                                     uint64_t &out_exit_code) noexcept {
+    ENSURE(validate_task_ptr(&parent, "collect_zombie_child"));
+    constexpr uint64_t kWaitAny = static_cast<uint64_t>(-1);
+    TaskControlBlock *found = nullptr;
+    {
+        arch::IrqGuard irq_guard{};
+        SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
+        // Bounded walk: count + 1 iterations max (same budget shape as
+        // the drain's pass_budget); no allocation, no unbounded loop.
+        const uint64_t bound =
+            __atomic_load_n(&zombie_count_, __ATOMIC_RELAXED) + 1;
+        TaskControlBlock *prev = nullptr;
+        TaskControlBlock *t = zombie_head_;
+        for (uint64_t i = 0; i < bound && t != nullptr; ++i) {
+            TaskControlBlock *next = t->zombie_next_;
+            if (t->magic == TaskControlBlock::TCB_MAGIC &&
+                t->parent_id == parent.id &&
+                (target_pid == kWaitAny || t->id == target_pid) &&
+                !MemPool::is_block_pinned(t)) {
+                if (prev) {
+                    prev->zombie_next_ = next;
+                } else {
+                    zombie_head_ = next;
+                }
+                if (next == nullptr)
+                    zombie_tail_ = prev;
+                t->zombie_next_ = nullptr;
+                __atomic_sub_fetch(&zombie_count_, 1, __ATOMIC_RELAXED);
+                if (TaskControlBlock::try_claim_teardown(t)) {
+                    found = t;
+                } else {
+                    // Lost the claim race to a concurrent drain: re-link
+                    // at the tail and report not-collected (the winner
+                    // owns the full tail per the #409 contract — never
+                    // double-free, never leak).
+                    if (zombie_tail_) {
+                        zombie_tail_->zombie_next_ = t;
+                    } else {
+                        zombie_head_ = t;
+                    }
+                    zombie_tail_ = t;
+                    __atomic_add_fetch(&zombie_count_, 1,
+                                       __ATOMIC_RELAXED);
+                    return false;
+                }
+                break;
+            }
+            prev = t;
+            t = next;
+        }
+    }
+    if (!found)
+        return false;
+    out_child_id = found->id;
+    out_exit_code = found->exit_code;
+    parent.remove_child(found);
+    found->cleanup();
+    if (!MemPool::is_block_pinned(found))
+        MemPool::free(found);
+    return true;
 }
 void Scheduler::cleanup_step() noexcept {
     // Pop one zombie under IRQ-disable + zombie leaf so the on_tick
@@ -308,6 +427,13 @@ void Scheduler::cleanup_step() noexcept {
         }
         // Baseline-owned (pinned) heads are never freed — leave listed.
         if (MemPool::is_block_pinned(task)) {
+            return;
+        }
+        // Issue #590 INV-WAIT-5 (docs/specs/zombie-list.md §7): a
+        // wait-collect-retained corpse is spared while its owner lives
+        // — left listed, retry on a later pass (same shape as the
+        // AP-live/pinned legs above).
+        if (wait_collect_spared(*task)) {
             return;
         }
         zombie_head_ = task->zombie_next_;
@@ -362,6 +488,13 @@ void Scheduler::cleanup_step_try() noexcept {
         if (MemPool::is_block_pinned(task)) {
             return;
         }
+        // Issue #590 INV-WAIT-5 (docs/specs/zombie-list.md §7): a
+        // wait-collect-retained corpse is spared while its owner lives
+        // — left listed, retry on a later pass (same shape as the
+        // AP-live/pinned legs above).
+        if (wait_collect_spared(*task)) {
+            return;
+        }
         zombie_head_ = task->zombie_next_;
         if (!zombie_head_)
             zombie_tail_ = nullptr;
@@ -382,6 +515,59 @@ void Scheduler::cleanup_step_try() noexcept {
     task->cleanup();
     MemPool::free(task);
 }
+#if defined(CONFIG_DEBUG)
+// Issue #590 step 14b: DEBUG-gated seam storage.  One TU-local hook,
+// single-shot fire via exchange (two concurrent publishers cannot both
+// fire), RAII scope with teardown discipline (dtor clears an unfired
+// hook).  Debug-only, UP-only, one armer; no production caller arms it.
+static void (*s_wait_publish_hook)(TaskControlBlock &) = nullptr;
+
+namespace test {
+
+void arm_wait_publish(void (*hook)(TaskControlBlock &)) noexcept {
+    if (hook == nullptr)
+        return;
+    // UP-only, test-active only: SMP or non-test arming is ignored
+    // (fail-closed — never arm silently outside the test window).
+    if (Scheduler::up_cpu_count() != 1)
+        return;
+    if (!Scheduler::is_test_active())
+        return;
+    // One armer (first wins): an installed hook stays; a concurrent
+    // publisher cannot double-fire (fire exchanges to null).
+    void (*expected)(TaskControlBlock &) = nullptr;
+    (void)__atomic_compare_exchange_n(&s_wait_publish_hook, &expected,
+                                      hook, false, __ATOMIC_RELEASE,
+                                      __ATOMIC_RELAXED);
+}
+
+void fire_wait_publish(TaskControlBlock &publisher) noexcept {
+    auto *hook = __atomic_exchange_n(&s_wait_publish_hook, nullptr,
+                                     __ATOMIC_ACQ_REL);
+    if (hook != nullptr)
+        hook(publisher);
+}
+
+WaitPublishSeamScope::WaitPublishSeamScope(
+    void (*hook)(TaskControlBlock &)) noexcept
+    : armed_(false) {
+    if (hook == nullptr)
+        return;
+    arm_wait_publish(hook);
+    armed_ = (__atomic_load_n(&s_wait_publish_hook, __ATOMIC_ACQUIRE) ==
+              hook);
+}
+
+WaitPublishSeamScope::~WaitPublishSeamScope() noexcept {
+    // Teardown discipline: clear any unfired hook so no arm crosses
+    // the test boundary (a fired hook already exchanged to null).
+    (void)__atomic_exchange_n(&s_wait_publish_hook, nullptr,
+                              __ATOMIC_ACQ_REL);
+    armed_ = false;
+}
+
+} // namespace test
+#endif // defined(CONFIG_DEBUG)
 /// @brief Wake a parent blocked in waitpid for a child that just terminated.
 /// Mirrors the wake performed by Syscall::sys_exit, but for non-sys_exit
 /// termination paths (Scheduler::terminate, deadline miss, cleanup_test_tasks,
@@ -442,19 +628,30 @@ converge:
 }
 
 /// @param child The just-terminated child task.
-void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
+/// @return WakeResult (issue #590): PARENT_COLLECTS when the matched
+///         parent is BLOCKED (it collects the corpse itself), else the
+///         non-collecting outcome.
+Scheduler::WakeResult Scheduler::wake_waiting_parent(
+    TaskControlBlock &child) noexcept {
     ENSURE(validate_task_ptr(&child, "wake_waiting_parent"));
+    // Issue #590 INV-WAIT-3: pair the waiter's publish fence.  The child
+    // state store (TERMINATED) and the waiter's publish store (pid) must
+    // not both be missed via store buffering on weak models; SEQ_CST on
+    // both sides forbids it (release/acquire alone does not).
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
     if (child.parent_id == 0)
-        return;
+        return WakeResult::NO_WAITER;
     auto *p = Scheduler::find_task(child.parent_id);
     if (!p)
-        return;
+        return WakeResult::NO_WAITER;
     // Issue #217: match waitpid(-1) (any child) like sys_exit does — a
     // wait-any parent must observe every child death, not just sys_exit.
+    // Single observation (issue #590): one load feeds both comparisons
+    // so a concurrent publish/clear cannot half-match.
     constexpr uint64_t kWaitAny = static_cast<uint64_t>(-1);
-    if (p->waiting_child_pid != child.id &&
-        p->waiting_child_pid != kWaitAny)
-        return;
+    const uint64_t waited = p->waiting_child_pid;
+    if (waited != child.id && waited != kWaitAny)
+        return WakeResult::NO_WAITER;
 
     // Deliver the child's exit status to a parent blocked in waitpid
     // (issue #588: fault-armed shared helper — the slot was certified
@@ -476,6 +673,9 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
     // collects the zombie itself via waitpid rescan (in-trap user wait or
     // kernel self-loop).  Orphaning here would make the rescan miss
     // (parent_id cleared) and fail an already-satisfied wait.
+    // Issue #590 INV-WAIT-5: the parent owns this corpse; no zombie path
+    // and no deferred kill may free it while the owner lives.
+    __atomic_store_n(&child.wait_collect_pending_, true, __ATOMIC_RELEASE);
     const bool waiter_collects = (p->state == TaskState::BLOCKED);
     if (p->state == TaskState::BLOCKED) {
         // Issue #582: typed paths (dequeue clears both queues +
@@ -507,7 +707,10 @@ void Scheduler::wake_waiting_parent(TaskControlBlock &child) noexcept {
         (!child.is_thread() || child.join_detached_)) {
         p->remove_child(&child);
         child.parent_id = 0;
+        return WakeResult::WOKE_NOT_COLLECTING;
     }
+    return waiter_collects ? WakeResult::PARENT_COLLECTS
+                           : WakeResult::WOKE_NOT_COLLECTING;
 }
 // Bounded stack buffer, no locks, no heap; write_fb early-outs on null
 // instance / disabled fb, so this is safe wherever the Logger line
@@ -823,7 +1026,11 @@ void Scheduler::cleanup_test_tasks() noexcept {
 // teardown that starts after the arm). Same-tick scan arms never hit
 // this: the owner cannot interleave inside the ISR.
 static bool kill_declined(TaskControlBlock *task) noexcept {
+    // Issue #590 INV-WAIT-5: a wait-collect-retained corpse is owned by
+    // its waiting parent — the owner completes the tail.  Matches the
+    // "Dropped, not retained" contract in process_deferred_kills below.
     return task->teardown_claimed_ || task->teardown_completed_ ||
+           task->wait_collect_pending_ ||
            task->state == TaskState::REAPED ||
            Scheduler::find_task(task->id) != task;
 }
