@@ -29,6 +29,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <string.hpp>
+#include <signal.hpp>
 #include <scope_guard.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/irq_guard.hpp>
@@ -370,6 +371,46 @@ JARVIS_TEST(waitpid_zombie_claim_is_atomic, "PRE: none | POST: none") {
 // Pseudocode: spawn pair; child kills self; parent collects;
 // assert all; teardown.
 JARVIS_TEST(waitpid_kill_self_wakes_parent, "PRE: none | POST: none") {
+    static WaitContext g_ctx;
+    g_ctx.child_id_ = 0;
+    g_ctx.status_ = 0;
+    g_ctx.result_ = 0;
+
+    auto *parent = TaskControlBlock::create(waitpid_parent_entry, 20, 10);
+    JARVIS_ASSERT(parent != nullptr);
+    parent->user_data = &g_ctx;
+
+    auto *child = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            const uint64_t self_id = self->id;
+            (void)Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::KILL), self_id,
+                static_cast<uint64_t>(Signal::SIGKILL), 0, 0, nullptr);
+            // The funnel arms the trap-return gate; never resumed.
+            for (;;)
+                arch::hlt();
+        },
+        11, 10);
+    JARVIS_ASSERT(child != nullptr);
+    parent->add_child(child);
+    g_ctx.child_id_ = child->id;
+    {
+        arch::IrqGuard guard;
+        Scheduler::add_task(*parent);
+        Scheduler::add_task(*child);
+    }
+    Scheduler::reschedule();
+    while (parent->state != TaskState::BLOCKED &&
+           parent->state != TaskState::TERMINATED)
+        arch::pause();
+    kernel::test::wait_for_termination_safe(parent);
+    JARVIS_ASSERT(Scheduler::find_task(g_ctx.child_id_) == nullptr);
+    Scheduler::drain_zombie_list();
+    JARVIS_ASSERT_EQ(1ULL, g_ctx.result_);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(-static_cast<int64_t>(9)),
+                     g_ctx.status_);
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::zombie_count());
     JARVIS_TEST_PASS();
 }
 

@@ -210,6 +210,64 @@ JARVIS_TEST(daemon_terminate_ensure_resurrects,
 // Pseudocode: register; ensure (pid); terminate (PID 0, corpse
 // TERMINATED but released); drain (freed, delta 0); teardown.
 JARVIS_TEST(daemon_terminate_wakes_and_zombie_lists, "PRE: vfsd, iocd | POST: none") {
+    static uint64_t g_cleared = 0;
+    static uint64_t g_findnull = 0;
+    static uint64_t g_term = 0;
+    static uint64_t g_freed = 0;
+    g_cleared = g_findnull = g_term = g_freed = 0;
+
+    const char *vfsd_path = nullptr;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "vfsd") == 0) {
+            vfsd_path = entry.initrd_path;
+            break;
+        }
+    }
+    if (vfsd_path == nullptr)
+        return;
+    if (!daemon::register_daemon("qe_probe2", vfsd_path, nullptr,
+                                 nullptr))
+        return;
+    daemon::ensure_running("qe_probe2");
+    uint64_t pid = 0;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "qe_probe2") == 0) {
+            pid = entry.pid;
+            break;
+        }
+    }
+    if (pid == 0)
+        return;
+    auto *corpse = Scheduler::find_task(pid);
+    if (corpse == nullptr)
+        return;
+    daemon::terminate("qe_probe2");
+    uint64_t cleared = 1;
+    for (uint64_t i = 0; i < daemon::MAX_DAEMONS; ++i) {
+        const auto &entry = daemon::get_entry(i);
+        if (entry.name != nullptr &&
+            __builtin_strcmp(entry.name, "qe_probe2") == 0) {
+            cleared = entry.pid;
+            break;
+        }
+    }
+    g_cleared = cleared;
+    // Released from the tables but still TERMINATED via the held
+    // pointer (reaped on drain, not on terminate). The held pointer
+    // must NOT be touched after the drain below (freed memory).
+    g_findnull = (Scheduler::find_task(pid) == nullptr) ? 1ULL : 0ULL;
+    g_term = (corpse->state == TaskState::TERMINATED) ? 1ULL : 0ULL;
+    Scheduler::drain_zombie_list();
+    g_freed = (Scheduler::find_task(pid) == nullptr) ? 1ULL : 0ULL;
+
+    JARVIS_ASSERT_EQ(0ULL, g_cleared);
+    JARVIS_ASSERT_EQ(1ULL, g_findnull);
+    JARVIS_ASSERT_EQ(1ULL, g_term);
+    JARVIS_ASSERT_EQ(1ULL, g_freed);
     JARVIS_TEST_PASS();
 }
 
