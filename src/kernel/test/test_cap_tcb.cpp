@@ -27,6 +27,7 @@
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/cap/tcb_cap.hpp>
 #include <kernel/cap/wdog.hpp>
+#include <kernel/ipc/death_notify.hpp>
 #include <kernel/cap/untyped.hpp>
 #include <kernel/memory/kernel_object.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -1310,9 +1311,291 @@ JARVIS_TEST(tcb_debugger_admin_park_mutual_exclusion, "PRE: none | POST: none") 
 //         effects on refusal.
 // Depends: tcb_control_authorize INV-ADM-12 branches, TcbCap
 //         create/create_supervised, DeathNotify watch (no authority)
-// Pseudocode: build each cell; call; assert exact typed code;
+// Pseudocode: build each cell; call via 100; assert exact typed code;
 // teardown all caps/tasks.
+//
+// Notes: (a) orphan/foreign parenting is fabricated (parent_id write
+// under IF=0) — the documented orphan state is parent_id == 0 after
+// parent reap; (b) the "onward copy" cell binds the SUPERVISOR cap
+// to a non-caller grantee, which is exactly what a copy exercised
+// by a new holder looks like at authorize time (scope+grantee
+// travel with the cap); (c) idle maps to KERNEL_TASK: the IDLE
+// branch is unreachable through the gate (idle is never a user
+// task), same defense-in-depth class as the DEAD leg in test 6.
 JARVIS_TEST(mk_supervisor_stop, "PRE: none | POST: none") {
+    static uint64_t g_c1 = 0;
+    static uint64_t g_c2 = 0;
+    static uint64_t g_c3 = 0;
+    static uint64_t g_c4 = 0;
+    static uint64_t g_c5 = 0;
+    static uint64_t g_c6 = 0;
+    static uint64_t g_c7 = 0;
+    static uint64_t g_c8 = 0;
+    static uint64_t g_c9 = 0;
+    static uint64_t g_c10 = 0;
+    static uint64_t g_c11 = 0;
+    static uint64_t g_allow_parked = 0;
+    g_c1 = g_c2 = g_c3 = g_c4 = g_c5 = g_c6 = 0;
+    g_c7 = g_c8 = g_c9 = g_c10 = g_c11 = g_allow_parked = 0;
+
+    auto *t = run_tcb_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        const uint64_t susp =
+            static_cast<uint64_t>(SyscallNumber::TCB_SUSPEND);
+        // One BLOCKED user waiter per cell needing a live target.
+        // mk_cell parents to the driver (creator) unless told otherwise.
+        auto mk_cell = [&](bool as_user, uint64_t parent) {
+            auto *u = TaskControlBlock::create(
+                []() {
+                    auto *self = Scheduler::current_task();
+                    auto *s = reinterpret_cast<sync::Semaphore *>(
+                        self->user_data);
+                    s->wait();
+                    for (;;)
+                        arch::hlt();
+                },
+                20, 10);
+            if (!u)
+                return static_cast<TaskControlBlock *>(nullptr);
+            u->is_user_ = as_user;
+            u->parent_id = parent;
+            return u;
+        };
+        sync::Semaphore sem;
+        sem.init(0, 1);
+
+        // Cell 1: creator allow (parent == driver).
+        auto *t1 = mk_cell(true, cur->id);
+        if (!t1)
+            return;
+        t1->user_data = &sem;
+        Scheduler::add_task(*t1);
+        Scheduler::reschedule();
+        tcb_wait_settled(t1);
+        if (t1->state != TaskState::BLOCKED)
+            return;
+        int s1 = install_tcb_cap(cs, t1->id, t1->generation);
+        if (s1 < 0)
+            return;
+        g_c1 = Syscall::handle(susp, tcb_handle(cs, s1), 0, 0, 0,
+                               nullptr);
+        g_allow_parked =
+            Scheduler::admin_parked_of(*t1) ? 1ULL : 0ULL;
+        cs->remove(static_cast<uint32_t>(s1));
+        Scheduler::terminate(*t1, 0);
+        Scheduler::drain_zombie_list();
+
+        // Cell 2: orphaned creator deny (parent_id 0).
+        auto *t2 = mk_cell(true, cur->id);
+        if (!t2)
+            return;
+        t2->user_data = &sem;
+        Scheduler::add_task(*t2);
+        Scheduler::reschedule();
+        tcb_wait_settled(t2);
+        if (t2->state != TaskState::BLOCKED)
+            return;
+        {
+            arch::IrqGuard irq_guard{};
+            t2->parent_id = 0;
+        }
+        int s2 = install_tcb_cap(cs, t2->id, t2->generation);
+        if (s2 < 0)
+            return;
+        g_c2 = Syscall::handle(susp, tcb_handle(cs, s2), 0, 0, 0,
+                               nullptr);
+        cs->remove(static_cast<uint32_t>(s2));
+        Scheduler::terminate(*t2, 0);
+        Scheduler::drain_zombie_list();
+
+        // Cells 3+4: foreign parent; 4 adds a DeathNotify watch
+        // (watch confers nothing).
+        auto *t3 = mk_cell(true, 0xFFFFFFULL);
+        if (!t3)
+            return;
+        t3->user_data = &sem;
+        Scheduler::add_task(*t3);
+        Scheduler::reschedule();
+        tcb_wait_settled(t3);
+        if (t3->state != TaskState::BLOCKED)
+            return;
+        int s3 = install_tcb_cap(cs, t3->id, t3->generation);
+        if (s3 < 0)
+            return;
+        g_c3 = Syscall::handle(susp, tcb_handle(cs, s3), 0, 0, 0,
+                               nullptr);
+        const bool watched =
+            kernel::ipc::DeathNotify::watch(*cur, t3->id, 0);
+        g_c4 = Syscall::handle(susp, tcb_handle(cs, s3), 0, 0, 0,
+                               nullptr);
+        if (watched)
+            kernel::ipc::DeathNotify::unwatch(*cur, t3->id);
+        cs->remove(static_cast<uint32_t>(s3));
+        Scheduler::terminate(*t3, 0);
+        Scheduler::drain_zombie_list();
+
+        // Cells 5+6: SUPERVISOR scope. Bound to driver (allow) vs
+        // bound to the target itself (deny for the driver-caller).
+        // Targets are foreign-parented so only the SUPERVISOR branch
+        // can allow.
+        auto *t5 = mk_cell(true, 0xFFFFFFULL);
+        if (!t5)
+            return;
+        t5->user_data = &sem;
+        Scheduler::add_task(*t5);
+        Scheduler::reschedule();
+        tcb_wait_settled(t5);
+        if (t5->state != TaskState::BLOCKED)
+            return;
+        auto *sup = cap::TcbCap::create_supervised(
+            t5->id, t5->generation, cur->id, cur->generation);
+        int s5 = -1;
+        if (sup) {
+            s5 = cs->install(sup, cap::CapType::TCB,
+                             cap::CapRights::READ | cap::CapRights::WRITE);
+            if (s5 < 0)
+                sup->release();
+        }
+        if (s5 < 0)
+            return;
+        g_c5 = Syscall::handle(susp, tcb_handle(cs, s5), 0, 0, 0,
+                               nullptr);
+        Scheduler::admin_resume_err(*t5);
+        cs->remove(static_cast<uint32_t>(s5));
+        sup->release();
+        auto *sup6 = cap::TcbCap::create_supervised(
+            t5->id, t5->generation, t5->id, t5->generation);
+        int s6 = -1;
+        if (sup6) {
+            s6 = cs->install(sup6, cap::CapType::TCB,
+                             cap::CapRights::READ | cap::CapRights::WRITE);
+            if (s6 < 0)
+                sup6->release();
+        }
+        if (s6 < 0)
+            return;
+        g_c6 = Syscall::handle(susp, tcb_handle(cs, s6), 0, 0, 0,
+                               nullptr);
+        cs->remove(static_cast<uint32_t>(s6));
+        sup6->release();
+        Scheduler::terminate(*t5, 0);
+        Scheduler::drain_zombie_list();
+
+        // Cell 7: self deny (cap on the driver, driver suspends self).
+        auto *selfcap =
+            cap::TcbCap::create(cur->id, cur->generation);
+        int s7 = -1;
+        if (selfcap) {
+            s7 = cs->install(selfcap, cap::CapType::TCB,
+                             cap::CapRights::READ | cap::CapRights::WRITE);
+            if (s7 < 0)
+                selfcap->release();
+        }
+        if (s7 < 0)
+            return;
+        g_c7 = Syscall::handle(susp, tcb_handle(cs, s7), 0, 0, 0,
+                               nullptr);
+        cs->remove(static_cast<uint32_t>(s7));
+        selfcap->release();
+
+        // Cell 8: kernel task deny (non-user, creator-parented).
+        auto *t8 = mk_cell(false, cur->id);
+        if (!t8)
+            return;
+        t8->user_data = &sem;
+        Scheduler::add_task(*t8);
+        Scheduler::reschedule();
+        tcb_wait_settled(t8);
+        if (t8->state != TaskState::BLOCKED)
+            return;
+        int s8 = install_tcb_cap(cs, t8->id, t8->generation);
+        if (s8 < 0)
+            return;
+        g_c8 = Syscall::handle(susp, tcb_handle(cs, s8), 0, 0, 0,
+                               nullptr);
+        cs->remove(static_cast<uint32_t>(s8));
+        Scheduler::terminate(*t8, 0);
+        Scheduler::drain_zombie_list();
+
+        // Cell 9: readonly slot deny (needs WRITE at resolve).
+        auto *t9 = mk_cell(true, cur->id);
+        if (!t9)
+            return;
+        t9->user_data = &sem;
+        Scheduler::add_task(*t9);
+        Scheduler::reschedule();
+        tcb_wait_settled(t9);
+        if (t9->state != TaskState::BLOCKED)
+            return;
+        auto *ro = cap::TcbCap::create(t9->id, t9->generation);
+        int s9 = -1;
+        if (ro) {
+            s9 = cs->install(ro, cap::CapType::TCB, cap::CapRights::READ);
+            if (s9 < 0)
+                ro->release();
+        }
+        if (s9 < 0)
+            return;
+        g_c9 = Syscall::handle(susp, tcb_handle(cs, s9), 0, 0, 0,
+                               nullptr);
+        cs->remove(static_cast<uint32_t>(s9));
+        ro->release();
+        Scheduler::terminate(*t9, 0);
+        Scheduler::drain_zombie_list();
+
+        // Cell 10: deleted slot deny (remove, then call stale handle).
+        auto *t10 = mk_cell(true, cur->id);
+        if (!t10)
+            return;
+        t10->user_data = &sem;
+        Scheduler::add_task(*t10);
+        Scheduler::reschedule();
+        tcb_wait_settled(t10);
+        if (t10->state != TaskState::BLOCKED)
+            return;
+        int s10 = install_tcb_cap(cs, t10->id, t10->generation);
+        if (s10 < 0)
+            return;
+        const uint64_t h10 = tcb_handle(cs, s10);
+        cs->remove(static_cast<uint32_t>(s10));
+        g_c10 = Syscall::handle(susp, h10, 0, 0, 0, nullptr);
+        Scheduler::terminate(*t10, 0);
+        Scheduler::drain_zombie_list();
+
+        // Cell 11: dead target deny (terminate, then call live handle).
+        auto *t11 = mk_cell(true, cur->id);
+        if (!t11)
+            return;
+        t11->user_data = &sem;
+        Scheduler::add_task(*t11);
+        Scheduler::reschedule();
+        tcb_wait_settled(t11);
+        if (t11->state != TaskState::BLOCKED)
+            return;
+        int s11 = install_tcb_cap(cs, t11->id, t11->generation);
+        if (s11 < 0)
+            return;
+        const uint64_t h11 = tcb_handle(cs, s11);
+        Scheduler::terminate(*t11, 0);
+        g_c11 = Syscall::handle(susp, h11, 0, 0, 0, nullptr);
+        cs->remove(static_cast<uint32_t>(s11));
+        Scheduler::drain_zombie_list();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, g_c1);
+    JARVIS_ASSERT_EQ(1ULL, g_allow_parked);
+    JARVIS_ASSERT_EQ(tcb_err(8), g_c2);
+    JARVIS_ASSERT_EQ(tcb_err(8), g_c3);
+    JARVIS_ASSERT_EQ(tcb_err(8), g_c4);
+    JARVIS_ASSERT_EQ(0ULL, g_c5);
+    JARVIS_ASSERT_EQ(tcb_err(8), g_c6);
+    JARVIS_ASSERT_EQ(tcb_err(5), g_c7);
+    JARVIS_ASSERT_EQ(tcb_err(6), g_c8);
+    JARVIS_ASSERT_EQ(tcb_err(2), g_c9);
+    JARVIS_ASSERT_EQ(tcb_err(2), g_c10);
+    JARVIS_ASSERT_EQ(tcb_err(2), g_c11);
     JARVIS_TEST_PASS();
 }
 
