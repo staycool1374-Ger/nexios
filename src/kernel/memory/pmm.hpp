@@ -71,8 +71,10 @@ class PMM {
     /// @brief Freeze kernel pools at end of composition (M4, #563).
     /// Idempotent; refuses a second invocation's state change. Takes
     /// pmm_lock_ internally; never nests with mempool/CNode locks.
-    /// Under CONFIG_STATIC_POOLS_ONLY every post-freeze entry point
-    /// denies; handover accounting is live in all builds.
+    /// Under CONFIG_STATIC_POOLS_ONLY every post-freeze general-pool
+    /// entry point denies (the §7.2 fixed page-table pool stays
+    /// allocatable post-freeze — its deny placement is F21's, #573);
+    /// handover accounting is live in all builds.
     static void freeze_pools() noexcept;
     /// @brief True once freeze_pools() has run.
     static bool is_frozen() noexcept;
@@ -88,6 +90,10 @@ class PMM {
     static uint64_t handover_run_phys(uint32_t idx) noexcept;
     /// @brief Page count of handover run @p idx (0 if out of range).
     static uint64_t handover_run_pages(uint32_t idx) noexcept;
+    /// @brief Reservoir-tail evictions at freeze (F10, #563): runs the
+    ///        top-N table kept and then displaced. Wires into
+    ///        HandoverStatus::runs_capped.
+    static uint32_t handover_dropped_runs() noexcept;
 
     /// @brief Allocates a single 4 KiB page (KERNEL ownership).
     static uint64_t alloc_page();

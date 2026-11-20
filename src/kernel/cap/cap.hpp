@@ -69,7 +69,7 @@ class CNode : public KernelObject {
     ///        by DerivationTable::node_serial under the table lock, never
     ///        0 once recorded.  Value-only linkage (INV-DERIV-2).
     uint32_t serial_ = 0;
-    sync::SpinLock lock_;
+    mutable sync::SpinLock lock_;
     // Issue #240 cached delegation policy (step-a: always all-allow).
     // Placed after the lock (off the slots hot path). Read under the
     // existing slot-table lock (one load, zero new locks/order); mutated
@@ -134,6 +134,13 @@ class CNode : public KernelObject {
     KernelObject *peek(uint32_t idx, CapType want) const noexcept;
     /// @brief Returns the current generation of the slot at @p idx.
     uint32_t slot_gen(uint32_t idx) const noexcept;
+    /// @brief Counts free slots (handover pre-check demand input).
+    ///        Bounded O(CONFIG_CSLOT_COUNT) scan under the leaf slot-table
+    ///        lock (same take class as lookup(); never with scheduler_lock_
+    ///        held). No allocation, no reference taken, 0 for a revoked
+    ///        node. Advisory: install() remains the authority.
+    /// @return Number of unoccupied slots.
+    uint32_t free_slot_count() const noexcept;
     /// @brief Clears the GRANT right on the slot at @p idx (mint-once after
     ///        a grant).  No-op on an unoccupied slot.
     void clear_grant(uint32_t idx) noexcept;

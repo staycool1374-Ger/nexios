@@ -238,7 +238,13 @@ void TaskControlBlock::init_sporadic_server(
     ss->mark_pool_backed();
     ss->init(budget_c, period_t, bg_prio, budget_granularity, mode);
     ss->set_base_priority(priority);
-    attach_object(ss);
+    // Over-budget attach fails closed: release the server and leave the
+    // task without one (typed path, no panic — the same shape as the
+    // failed MemPool::alloc above, which returns before touching state).
+    if (!attach_object(ss)) {
+        ss->release();
+        return;
+    }
     sporadic_server = ss;
     Scheduler::inc_sporadic_count();
 }
@@ -269,7 +275,13 @@ void TaskControlBlock::ensure_cspace() noexcept {
     auto *node = cap::CNode::create(static_cast<uint32_t>(id & 0xFFu));
     if (!node)
         return;
-    attach_object(node);
+    // Over-budget attach fails closed: release the node and leave the
+    // CSpace null ("no cap, no crash" — the same shape as a failed
+    // CNode::create above).
+    if (!attach_object(node)) {
+        node->release();
+        return;
+    }
     cspace_ = node;
 }
 
@@ -277,9 +289,12 @@ void TaskControlBlock::ensure_cspace() noexcept {
 ///        Only called while the task is not visible to the scheduler
 ///        (pre-add_task or inside cleanup under IrqGuard), so the list
 ///        is never mutated from IRQ context.
-void TaskControlBlock::attach_object(KernelObject *obj) noexcept {
+///        Refuses (no mutation) past effective_object_budget() — fail closed.
+bool TaskControlBlock::attach_object(KernelObject *obj) noexcept {
     if (!obj)
-        return;
+        return false;
+    if (object_count_ >= effective_object_budget())
+        return false;
     obj->task_obj_prev_ = nullptr;
     obj->task_obj_next_ = task_obj_head_;
     if (task_obj_head_)
@@ -287,6 +302,8 @@ void TaskControlBlock::attach_object(KernelObject *obj) noexcept {
     else
         task_obj_tail_ = obj;
     task_obj_head_ = obj;
+    ++object_count_;
+    return true;
 }
 
 /// @brief Unlinks @p obj from this task's object list WITHOUT releasing it.
@@ -307,17 +324,50 @@ void TaskControlBlock::detach_object(KernelObject *obj) noexcept {
         sporadic_server = nullptr;
     if (cspace_ == obj)
         cspace_ = nullptr;
+    // Floor at 0: detach_object is also the snapshot-restore path, where
+    // the count may already have been rewound.
+    if (object_count_ > 0) {
+        --object_count_;
+    }
+}
+
+/// @brief Effective row budget: row-set value clamped to the configured
+///        window; 0 reads the row default (every TCB memset site zeroes the
+///        block, so pre-compose tasks always read the default).
+uint32_t TaskControlBlock::effective_object_budget() const noexcept {
+    if (object_budget_ == 0) {
+        return CONFIG_MAX_PER_TASK_OBJECTS;
+    }
+    if (object_budget_ < CONFIG_MAX_PER_TASK_OBJECTS) {
+        return CONFIG_MAX_PER_TASK_OBJECTS;
+    }
+    if (object_budget_ > CONFIG_MAX_PER_TASK_OBJECTS_INFRA) {
+        return CONFIG_MAX_PER_TASK_OBJECTS_INFRA;
+    }
+    return object_budget_;
+}
+
+/// @brief Row budget setter (sdf_compose success path). Clamped on read,
+///        so the stored value is verbatim — never trusted directly.
+void TaskControlBlock::set_object_budget(uint32_t budget) noexcept {
+    if (budget > CONFIG_MAX_PER_TASK_OBJECTS_INFRA) {
+        budget = CONFIG_MAX_PER_TASK_OBJECTS_INFRA;
+    }
+    object_budget_ = static_cast<uint16_t>(budget);
 }
 
 /// @brief Unlinks every node from this task's object list WITHOUT releasing
-///        any of them.  Bounded by CONFIG_MAX_PER_TASK_OBJECTS.
+///        any of them.  Bounded by effective_object_budget() pop-head
+///        iterations (runaway-link protection) — the same clamped bound the
+///        attach refusal enforces, so the walk always covers every owned
+///        node.
 /// @note Snapshot-restore path: the MemPool restore (pool rewind) runs BEFORE
 ///       this in snapshot_restore(), so blocks freed during the test have been
 ///       returned to the free list and may be 0xDD-poisoned.  This routine only
 ///       ever unlinks (never releases) and stops the walk if it encounters a
 ///       poisoned block, so it can never double-free or follow a garbage chain.
 void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
-    for (uint32_t i = 0; i < CONFIG_MAX_PER_TASK_OBJECTS && task_obj_head_;
+    for (uint32_t i = 0; i < effective_object_budget() && task_obj_head_;
          ++i) {
         KernelObject *obj = task_obj_head_;
         // Poison guard: a pool-rewound block's first qword is 0xDDDD... under
@@ -335,9 +385,15 @@ void TaskControlBlock::detach_all_objects(bool keep_cspace) noexcept {
             task_obj_tail_ = nullptr;
         obj->task_obj_next_ = nullptr;
         obj->task_obj_prev_ = nullptr;
+        if (object_count_ > 0) {
+            --object_count_;
+        }
     }
     task_obj_head_ = nullptr;
     task_obj_tail_ = nullptr;
+    // The list is unconditionally emptied above (a poison break still
+    // nulls the head), so the count is exactly 0 regardless of walk length.
+    object_count_ = 0;
     sporadic_server = nullptr;
     if (!keep_cspace)
         cspace_ = nullptr;
@@ -377,6 +433,7 @@ void TaskControlBlock::release_all_objects() noexcept {
     }
     task_obj_head_ = nullptr;
     task_obj_tail_ = nullptr;
+    object_count_ = 0;
     sporadic_server = nullptr;
     cspace_ = nullptr;
 }

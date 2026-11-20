@@ -19,6 +19,7 @@
 #include <kernel/arch/virtio.hpp>
 #include <kernel/arch/hal/irq_vectors.hpp>
 #include <kernel/iommu/iommu.hpp>
+#include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/address.hpp>
 #include <kernel/ipc/shm_ring.hpp>
@@ -667,10 +668,72 @@ bool sdf_role_cap(PdRole role, uint64_t idx, int &slot, uint32_t &gen) {
     return true;
 }
 
+RowBounds sdf_role_bounds(PdRole role) {
+    // Values-only over the existing 13 rows (F10 mechanism; the per-row
+    // 256 / Untyped-quota tuning lands with the M5/M12 rows that need
+    // them). Unknown roles read zero bounds (fail closed downstream).
+    RowBounds row{};
+    const uint64_t idx = static_cast<uint64_t>(role);
+    if (idx >= kPdRoleCount) {
+        return row;
+    }
+    row.max_caps = static_cast<uint32_t>(kMaxCapsPerRole);
+    row.object_budget = static_cast<uint32_t>(CONFIG_MAX_PER_TASK_OBJECTS);
+    row.untyped_quota = 0;
+    row.death_watches = 0;
+    return row;
+}
+
+bool sdf_check_bounds(PdRole role, const CapSpec *specs, uint64_t count,
+                      errors::SdfError &err_out) {
+    err_out = errors::SDF_ERR_OK;
+    if (count > 0 && specs == nullptr) {
+        err_out = errors::SDF_ERR_BOUND_EXCEEDED;
+        return false;
+    }
+    const RowBounds row = sdf_role_bounds(role);
+    if (count > row.max_caps) {
+        err_out = errors::SDF_ERR_ROW_TOO_WIDE;
+        return false;
+    }
+    if (count > row.object_budget) {
+        err_out = errors::SDF_ERR_OBJECTS_EXCEEDED;
+        return false;
+    }
+    if (count + kRowReservedSlots >
+        static_cast<uint64_t>(CONFIG_CSLOT_COUNT)) {
+        err_out = errors::SDF_ERR_CSPACE_EXCEEDED;
+        return false;
+    }
+    if (row.untyped_quota >
+        static_cast<uint32_t>(CONFIG_CAP_MAX_UNTYPED)) {
+        err_out = errors::SDF_ERR_BOUND_EXCEEDED;
+        return false;
+    }
+    if (row.death_watches >
+        static_cast<uint32_t>(CONFIG_CAP_MAX_DEATH_WATCHES)) {
+        err_out = errors::SDF_ERR_BOUND_EXCEEDED;
+        return false;
+    }
+    return true;
+}
+
 bool sdf_compose(TaskControlBlock &task, PdRole role) {
     CapSpec specs[kMaxCapsPerRole] = {};
     const uint64_t count = sdf_row(role, specs);
     if (count > kMaxCapsPerRole) {
+        return false;
+    }
+    // Compose-time demand check (INV-MK-2, F10): refuse the row before a
+    // single cap mints when its declared demand exceeds any configured
+    // bound. Fail closed, nothing installed. The count > kMaxCapsPerRole
+    // guard above stays as the stack-array bound.
+    errors::SdfError bound_err = errors::SDF_ERR_OK;
+    if (!sdf_check_bounds(role, specs, count, bound_err)) {
+        (void)bound_err;
+        log::dmesg_push_sev(
+            log::ErrorSubsystem::TASK, log::kDmesgBase_TASK + 10,
+            log::LogSeverity::ERROR, "sdf: row demand exceeds bound", count);
         return false;
     }
     if (sdf_policy_only(role) && count != 0) {
@@ -727,6 +790,10 @@ bool sdf_compose(TaskControlBlock &task, PdRole role) {
             dma_pages[i] = g_last_dma_pages;
         }
     }
+    // Row budget installs on the composed task only after the
+    // rollback-committed end of the mint loop (all-or-nothing: a failed
+    // row never carries a raised budget).
+    task.set_object_budget(sdf_role_bounds(role).object_budget);
     // Persist the composed (slot, gen) pairs for kernel→PD BIND handle
     // conveyance (issue #51 step-c, extended to all roles by #47
     // step-b1: BLOCK_SRV at index 7 needs persistence for its CAP_GET

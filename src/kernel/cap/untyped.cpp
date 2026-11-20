@@ -118,6 +118,10 @@ UntypedMem *UntypedMem::create_subrange(uint64_t phys, size_t size,
     return alloc_object(phys, size, is_user);
 }
 
+uint32_t UntypedMem::live_count() noexcept {
+    return __atomic_load_n(&g_live_untypeds, __ATOMIC_RELAXED);
+}
+
 bool UntypedMem::claim_once() noexcept {
     bool expected = false;
     return __atomic_compare_exchange_n(&retyped_, &expected, true, false,

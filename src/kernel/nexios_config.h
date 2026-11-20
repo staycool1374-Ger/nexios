@@ -565,6 +565,14 @@
 #define CONFIG_MAX_PER_TASK_OBJECTS 32
 #endif
 
+/// Ceiling for the per-row TCB object budget (F10, #563; Q7: 256 for the
+/// future mem-mgr/supervisor rows, 32 elsewhere). No row uses 256 yet — it
+/// is the ceiling TaskControlBlock::set_object_budget() clamps to. The
+/// TCB field is uint16_t, so the guard below keeps the assignment lossless.
+#ifndef CONFIG_MAX_PER_TASK_OBJECTS_INFRA
+#define CONFIG_MAX_PER_TASK_OBJECTS_INFRA 256
+#endif
+
 // ---------------------------------------------------------------------------
 // Capability (CSpace) Configuration
 // ---------------------------------------------------------------------------
@@ -1471,6 +1479,10 @@ extern "C" void panic(const char *msg);
 // --- Per-task objects (no validator rule) ---
 #if CONFIG_MAX_PER_TASK_OBJECTS < 1
 #error "CONFIG_MAX_PER_TASK_OBJECTS must be >= 1 (default 32)"
+#endif
+#if CONFIG_MAX_PER_TASK_OBJECTS_INFRA < CONFIG_MAX_PER_TASK_OBJECTS || \
+    CONFIG_MAX_PER_TASK_OBJECTS_INFRA > 65535
+#error "CONFIG_MAX_PER_TASK_OBJECTS_INFRA must be in [MAX_PER_TASK_OBJECTS, 65535]"
 #endif
 
 // --- Capabilities / CSpace (no validator rule) ---

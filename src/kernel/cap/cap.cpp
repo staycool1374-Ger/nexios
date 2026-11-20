@@ -185,6 +185,21 @@ uint32_t CNode::slot_gen(uint32_t idx) const noexcept {
     return slots[idx].gen;
 }
 
+uint32_t CNode::free_slot_count() const noexcept {
+    if (revoked()) {
+        return 0;
+    }
+    SpinLockGuard<sync::SpinLock> guard(lock_);
+    uint32_t free = 0;
+    for (uint32_t i = 0; i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT);
+         ++i) {
+        if (!slots[i].occupied) {
+            ++free;
+        }
+    }
+    return free;
+}
+
 void CNode::clear_grant(uint32_t idx) noexcept {
     SpinLockGuard<sync::SpinLock> guard(lock_);
     if (idx >= static_cast<uint32_t>(CONFIG_CSLOT_COUNT) ||
