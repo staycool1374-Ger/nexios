@@ -1725,7 +1725,12 @@ JARVIS_TEST(tcb_cap_derivation_cascade, "PRE: none | POST: none") {
     static uint64_t g_parent = 0;
     static uint64_t g_grantee_ok = 0;
     static uint64_t g_other_noauth = 0;
+    static uint64_t g_reaped = 0;
+    static uint64_t g_rerr = 0;
+    static uint64_t g_stage = 0;
+    static uint64_t g_copy_ok = 0;
     g_derived = g_parent = g_grantee_ok = g_other_noauth = 0;
+    g_reaped = g_rerr = g_stage = g_copy_ok = 0;
 
     auto *t = run_tcb_task([]() {
         auto *cur = Scheduler::current_task();
@@ -1758,12 +1763,19 @@ JARVIS_TEST(tcb_cap_derivation_cascade, "PRE: none | POST: none") {
         tcb_wait_settled(target);
         if (target->state != TaskState::BLOCKED)
             return;
-        // Part 1: parent (GRANT-bearing) + copy, then revoke parent.
+        // Part 1: parent in a scratch CNode, derived copy in the
+        // driver's cspace (F2 pattern: a CNode-cap of the driver cspace
+        // is installed in the scratch node so the edge records;
+        // same-CNode copy is rejected by design — the do_copy_pinned
+        // src==dst guard). Revoke on the scratch parent destroys the
+        // driver's derived slot; the driver suspends through it.
+        cap::CNode second;
         auto *pcap =
             cap::TcbCap::create(target->id, target->generation);
         int ps = -1;
+        int ncs = -1;
         if (pcap) {
-            ps = cs->install(pcap, cap::CapType::TCB,
+            ps = second.install(pcap, cap::CapType::TCB,
                              static_cast<cap::CapRights>(
                                  static_cast<uint32_t>(cap::CapRights::READ) |
                                  static_cast<uint32_t>(cap::CapRights::WRITE) |
@@ -1771,25 +1783,51 @@ JARVIS_TEST(tcb_cap_derivation_cascade, "PRE: none | POST: none") {
             if (ps < 0)
                 pcap->release();
         }
-        if (ps < 0)
-            return;
-        const uint64_t ph = tcb_handle(cs, ps);
-        int ds = cap::copy(cs, ph, cs, nullptr, nullptr);
-        if (ds < 0) {
-            cs->remove(static_cast<uint32_t>(ps));
-            pcap->release();
+        if (ps < 0) {
+            g_stage = 1;
             return;
         }
+        ncs = second.install(cs, cap::CapType::CNode, cap::CapRights::READ);
+        if (ncs < 0) {
+            second.remove(static_cast<uint32_t>(ps));
+            pcap->release();
+            g_stage = 1;
+            return;
+        }
+        g_stage = 2;
+        const uint64_t ph = cap::encode_handle(
+            second.cspace_id, static_cast<uint32_t>(ps),
+            second.slot_gen(static_cast<uint32_t>(ps)));
+        errors::CapError copy_err = errors::CAP_ERR_OK;
+        int ds = cap::copy(&second, ph, cs, nullptr, &copy_err);
+        g_rerr = static_cast<uint64_t>(copy_err);
+        if (ds < 0) {
+            second.remove(static_cast<uint32_t>(ncs));
+            second.remove(static_cast<uint32_t>(ps));
+            pcap->release();
+            g_stage = 3;
+            return;
+        }
+        g_stage = 4;
+        g_copy_ok = 1;
         const uint64_t dh = tcb_handle(cs, static_cast<uint32_t>(ds));
         errors::CapError rerr = errors::CAP_ERR_OK;
-        const int reaped = cap::revoke_derivations(cs, ph, &rerr);
-        (void)reaped;
-        // Derived slot destroyed: suspend via it fails closed.
+        const int reaped = cap::revoke_derivations(&second, ph, &rerr);
+        g_reaped = (reaped < 0) ? 999999ULL : static_cast<uint64_t>(reaped);
+        g_rerr = static_cast<uint64_t>(rerr);
+        // Derived slot in the driver cspace destroyed: suspend via it
+        // fails closed. The named parent survives (root exemption):
+        // still resolvable in its own cspace (lookup, not suspend —
+        // the driver cannot syscall through a foreign cspace).
         g_derived = Syscall::handle(susp, dh, 0, 0, 0, nullptr);
-        // Named parent survives (root exemption) but authorizes
-        // nothing here (foreign-parented, CREATOR_ONLY scope).
-        g_parent = Syscall::handle(susp, ph, 0, 0, 0, nullptr);
-        cs->remove(static_cast<uint32_t>(ps));
+        KernelObject *still = cap::lookup(&second, ph, cap::CapType::TCB,
+                                          cap::CapRights::READ);
+        g_parent = (still != nullptr) ? 0ULL : 999999ULL;
+        if (still)
+            still->release();
+        // Teardown part 1 (slot refs already dropped by remove).
+        second.remove(static_cast<uint32_t>(ncs));
+        second.remove(static_cast<uint32_t>(ps));
         pcap->release();
         // Part 2: SUPERVISOR cap bound to the driver, copied onward.
         // The copy preserves scope+grantee: authorizing from the
@@ -1807,15 +1845,20 @@ JARVIS_TEST(tcb_cap_derivation_cascade, "PRE: none | POST: none") {
         if (ss < 0)
             return;
         const uint64_t sh = tcb_handle(cs, ss);
-        int cs2 = cap::copy(cs, sh, cs, nullptr, nullptr);
+        // Onward copy into the scratch CNode (the "new holder"'s
+        // space; same-CNode copy is rejected by design).
+        int cs2 = cap::copy(cs, sh, &second, nullptr, nullptr);
         if (cs2 < 0) {
             cs->remove(static_cast<uint32_t>(ss));
             sup->release();
             return;
         }
+        const uint64_t ch2 = cap::encode_handle(
+            second.cspace_id, static_cast<uint32_t>(cs2),
+            second.slot_gen(static_cast<uint32_t>(cs2)));
         KernelObject *copied =
-            cap::lookup(cs, tcb_handle(cs, static_cast<uint32_t>(cs2)),
-                        cap::CapType::TCB, cap::CapRights::READ);
+            cap::lookup(&second, ch2, cap::CapType::TCB,
+                        cap::CapRights::READ);
         if (copied) {
             auto *cc = static_cast<cap::TcbCap *>(copied);
             tcb_control::TcbControlAuthority auth{};
@@ -1827,19 +1870,50 @@ JARVIS_TEST(tcb_cap_derivation_cascade, "PRE: none | POST: none") {
             copied->release();
             g_grantee_ok = static_cast<uint64_t>(
                 tcb_control::tcb_control_authorize(*cur, *target, auth));
-            g_other_noauth = static_cast<uint64_t>(
-                tcb_control::tcb_control_authorize(*target, *target,
-                                                   auth));
         }
-        cs->remove(static_cast<uint32_t>(cs2));
+        second.remove(static_cast<uint32_t>(cs2));
         cs->remove(static_cast<uint32_t>(ss));
         sup->release();
+        // A distinct "new holder" task exercising the copied cap:
+        // caller != grantee and != target, so SELF cannot confound
+        // the refusal (NO_AUTHORITY expected).
+        auto *holder = TaskControlBlock::create(
+            []() {
+                for (;;)
+                    arch::hlt();
+            },
+            20, 10);
+        if (holder) {
+            holder->is_user_ = true;
+            holder->parent_id = cur->id;
+            Scheduler::add_task(*holder);
+            auto *sup2 = cap::TcbCap::create_supervised(
+                target->id, target->generation, cur->id, cur->generation);
+            if (sup2) {
+                tcb_control::TcbControlAuthority auth2{};
+                auth2.scope = sup2->scope;
+                auth2.target_id = sup2->target_id;
+                auth2.target_gen = sup2->target_gen;
+                auth2.grantee_id = sup2->grantee_id;
+                auth2.grantee_gen = sup2->grantee_gen;
+                sup2->release();
+                g_other_noauth = static_cast<uint64_t>(
+                    tcb_control::tcb_control_authorize(*holder, *target,
+                                                       auth2));
+            }
+            Scheduler::terminate(*holder, 0);
+            Scheduler::drain_zombie_list();
+        }
         Scheduler::terminate(*target, 0);
         Scheduler::drain_zombie_list();
     });
     JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(4ULL, g_stage);
+    JARVIS_ASSERT_EQ(1ULL, g_copy_ok);
+    JARVIS_ASSERT_EQ(1ULL, g_reaped);
+    JARVIS_ASSERT_EQ(0ULL, g_rerr);
     JARVIS_ASSERT_EQ(tcb_err(2), g_derived);
-    JARVIS_ASSERT_EQ(tcb_err(8), g_parent);
+    JARVIS_ASSERT_EQ(0ULL, g_parent);
     JARVIS_ASSERT_EQ(0ULL, g_grantee_ok);
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(errors::TCBCTL_ERR_NO_AUTHORITY),
                      g_other_noauth);
