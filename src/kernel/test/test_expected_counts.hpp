@@ -64,6 +64,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // task
     {"task_core",             7,    7,       7      },  // TCB cleanup, page tables, clone with real user parents
+    {"task_budget",           1,    0,       0      },  // F10 #563 object budget walk bound (stubs)
     {"task_lifecycle",        9,    0,       0      },  // exit, zombie, reparent
     {"task_fpu",              0,    8,       8      },  // FPU context switch/clone/user isolation (off-x86 only)
     {"task_init",             5,    0,       0      },  // init task exists, reparent, reaper notify/IPC wake
@@ -94,11 +95,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_syscall",          15,    0,       0      },  // cap syscall dispatch + handle roundtrip + F2 #555 x3 (row was stale at 9 since #171 P3/P4)
     {"cap_vspace",           13,    0,       0      },  // F5 #558 N4 VSPACE_MAP link/validate/teardown (stub-first QE)
     {"cap_tcb",               6,    0,       0      },  // F4 #557 cap-side TCB authority/config/surface (stubs)
+    {"cap_sdf",               1,    0,       0      },  // F10 #563 sdf_check_bounds negatives + 13-row sweep (stubs)
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
     {"cap_untyped",          18,    0,       0      },  // Untyped allocator, sub-range carve, child split
     {"cap_mmio",              20,   11,      11     },  // MMIO caps, I/O delegation, revocation closure (4 ioport happy x86-only, #528)
     {"cap_mmio_user",         9,   0,       0      },  // user MMIO map/unmap syscalls + registry
-    {"cap_irq",               17,   15,      15     },  // IRQ caps, user-space delivery (x86-only ACKs off-x86; +4 WAIT_ACK b2 +1 IOAPIC b2)
+    {"cap_irq",               19,   17,      17     },  // IRQ caps, user-space delivery + F8 #561 x2 (saturate, waiter-refused)
     {"cap_irq_notify",        7,   6,       6      },  // IRQ to IPC Notify bridge (x86-only 7th off-x86)
     {"cap_msix",              13,   0,       0      },  // per-vector MSI-X caps + delivery
     {"cap_iommu",             12,   10,      10     },  // IOMMU DMA protection (2 dispatch happy x86-only, #528)
@@ -169,6 +171,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // memory
     {"memory_pmm",            9,    0,       0      },  // PMM alloc/free, window geometry, err wrappers
+    {"mem_handover",          7,    0,       0      },  // F10 #563 handover coverage/rollback/immune/latch/deny/composite (stubs)
     {"memory_mempool",        5,    0,       0      },  // MemPool allocator + helpers
     {"memory_slab",           5,    0,       0      },  // slab reclaim
     {"memory_safety",        11,    0,       0      },  // MemPool/PMM invariants, red zones, canaries
@@ -300,12 +303,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
     {"core_sync",           105,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8 + #545 Cycle C inv x2 + #578 depth-0 park x2
     {"core_sched",          130,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3
-    {"core_task",           65,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu + F4 #557 x13 stubs
-    {"core_memory",         125,  0,       0      },  // memory_* incl. NX/W^X pins
+    {"core_task",           66,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu + F4 #557 x13 + F10 #563 x1 stubs
+    {"core_memory",         136,  0,       0      },  // memory_* incl. NX/W^X pins + F10 #563 x7 stubs (row was stale at 125 vs 129 measured)
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                106,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10
-    {"capability",          197,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9 + F5 #558 x13 + F4 #557 x6 stubs)
+    {"capability",          200,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9 + F5 #558 x13 + F4 #557 x6 + F10 #563 x1 + F8 #561 x2)
     {"proc_elf",            135,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM) + F2 cap-smoke migration
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
     {"libc_stdio",            5,   0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (x86_64 only)
@@ -317,7 +320,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"storage",             167,  0,       0      },  // vfs_* + initrd_parser + ramdisk + fat32 pins + readdir overlay
     {"servers",             74,   74,      74     },  // servers_* + services_framework + M1 death funnel x8
     {"drivers",             111,   66,      66     },  // drivers_* + virtio_blk_req + ahci_deep + net + #51 shm-tx ring x2 (+4 knob-gated: 3 serial-SHM + fb_bounded_render under CONFIG_DRIVER_PD_FB)
-    {"hal",                 130,   83,      85     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups
+    {"hal",                 131,   84,      86     },  // hal_*, exc_table, acpi, arch_cross, serial/rtc/kb groups + F8 #561 storm gate
     {"smp",                 81,   0,       0      },  // single-CPU smp/lapic/ioapic/cache/pcid/tlb
     {"smp_multicpu",        22,   4,       4      },  // smp_bringup + smp_sched (x86) + census + tlb_shootdown E2E (2-CPU)
     {"tlb_shootdown",          3,   3,       3      },  // cross-CPU shootdown E2E (skips single-CPU)
