@@ -419,7 +419,8 @@ JARVIS_TEST(tcb_resume_not_suspended_typed, "PRE: none | POST: none") {
     auto *t = run_tcb_task([]() {
         auto *cur = Scheduler::current_task();
         // Live user child, never suspended.
-        auto *target = TaskControlBlock::create(forever_entry, 20, 10);
+        auto *target = TaskControlBlock::create(kernel::test::forever_entry,
+                                                20, 10);
         if (!target)
             return;
         target->is_user_ = true;
@@ -462,7 +463,8 @@ JARVIS_TEST(tcb_suspend_dead_target_typed, "PRE: none | POST: none") {
         auto *cur = Scheduler::current_task();
         cur->ensure_cspace();
         cap::CNode *cs = cur->get_cspace();
-        auto *target = TaskControlBlock::create(forever_entry, 20, 10);
+        auto *target = TaskControlBlock::create(kernel::test::forever_entry,
+                                                20, 10);
         if (!target)
             return;
         target->is_user_ = true;
@@ -474,7 +476,6 @@ JARVIS_TEST(tcb_suspend_dead_target_typed, "PRE: none | POST: none") {
             Scheduler::drain_zombie_list();
             return;
         }
-        const uint64_t th = tcb_handle(cs, static_cast<uint32_t>(tslot));
         // Terminate but do NOT drain: TERMINATED, still in the table.
         Scheduler::terminate(*target, 0);
         g_susp = static_cast<uint64_t>(
