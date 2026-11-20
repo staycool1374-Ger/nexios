@@ -778,11 +778,18 @@ class Scheduler {
     ///        For fault handlers (traps masked): call this, then
     ///        switch_away_from_terminating[_discard] — the zombie-before-arm
     ///        order is load-bearing (release_zombie invalidates pending arms
-    ///        before the new arm is published).  Precondition: task live
-    ///        (release_zombie has no idempotency guard); hold no scheduler
-    ///        lock.
+    ///        before the new arm is published).  The prefix orders
+    ///        release_zombie BEFORE wake_waiting_parent (issue #593): a wake
+    ///        issued while the corpse is still in all_tasks_ would let the
+    ///        woken parent free a live stack via sys_waitpid's in-table
+    ///        branch.  The cause defaults to Fault so the four arch fault
+    ///        callers stay byte-identical; the sys_kill self-fatal leg
+    ///        (issue #593, syscall_handlers_process.cpp) passes its own.
+    ///        Precondition: task live (release_zombie has no idempotency
+    ///        guard); hold no scheduler lock.
     [[nodiscard]] static errors::SchedulerError terminate_err_from_trap(
-        TaskControlBlock &task, uint64_t exit_code) noexcept;
+        TaskControlBlock &task, uint64_t exit_code,
+        ipc::DeathCause cause = ipc::DeathCause::Fault) noexcept;
     /// @brief Result of one idle authenticity re-verify slice (issue #46).
     enum class AuthStepResult : uint8_t {
         NONE = 0,    ///< No verifiable user image found.
@@ -850,8 +857,10 @@ class Scheduler {
     ///        the field): after its fence, a waiter that no longer sees
     ///        its own pid was consumed by a wake and must resolve via
     ///        the normal collect, never undo, never return -1, never
-    ///        block.  Fourth death path (sys_kill self-fatal, issue #593)
-    ///        is scoped out: it wakes nobody and is fixed separately.
+    ///        block.  Fourth death path (sys_kill self-fatal, issue #593):
+    ///        it runs the trap funnel above (dequeue + release before the
+    ///        wake), so a waitpid parent is readied via wake_waiting_parent
+    ///        and collects through the second residence.
     /// @param child The just-terminated child task.
     /// @return WakeResult telling a KILL arm whether the corpse now has
     ///         a collecting parent (PARENT_COLLECTS: keep parented, skip

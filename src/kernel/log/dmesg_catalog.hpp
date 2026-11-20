@@ -63,6 +63,8 @@ constexpr DmesgRecord kDmesgCatalog_DAEMON[] = {
      "Ramdisk mount failed"},
     {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 12, LogSeverity::WARN,
      "Daemon cell healed (stale PID)"},
+    {ErrorSubsystem::DAEMON, kDmesgBase_DAEMON + 13, LogSeverity::WARN,
+     "Daemon terminate refused (remote-current)"},
 };
 
 /// @brief ELF loader records (canonical base kDmesgBase_ELF).

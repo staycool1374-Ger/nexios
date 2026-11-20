@@ -458,14 +458,38 @@ void terminate(const char *name) {
         auto *task = Scheduler::find_task(entries_[i].pid);
         auto *current = Scheduler::current_task();
         if (task && task != current &&
-            task->magic == TaskControlBlock::TCB_MAGIC) {
-            task->state = TaskState::TERMINATED;
-            task->exit_code = 0;
-            // M1/F6 (issue #559): interim supervisor path never reaches a
-            // terminate funnel — latch synchronously so the restart loop
-            // observes the death without a reaper pass.
-            Scheduler::publish_task_death(*task,
-                                          kernel::ipc::DeathCause::Admin);
+            task->magic == TaskControlBlock::TCB_MAGIC &&
+            task->state != TaskState::TERMINATED) {
+            // Issue #593: funnel through terminate_err (DeathCause::Admin)
+            // instead of marking TERMINATED inline — the funnel dequeues,
+            // marks, zombie-lists (the deferred-drain residence the old
+            // mark never gave the corpse), wakes a waitpid parent, and
+            // latches the admin death (F4 clearing inherited, no new
+            // site).  No switch-away is owed: this-CPU current is excluded
+            // above, an AP-live target is refused below with zero mutation,
+            // and a remote non-current target needs only dequeue + release.
+            // Single-caller contract (design-review-593-r1 S3): only
+            // terminate() targets daemons and the entry PID clears on
+            // success, so no concurrent production caller exists;
+            // terminate_err performs no under-lock liveness re-check, so a
+            // concurrent double-terminate would double-release — the
+            // TERMINATED guard above covers the sequential case only.
+            const errors::SchedulerError term_err = Scheduler::terminate_err(
+                *task, 0, kernel::ipc::DeathCause::Admin);
+            if (term_err != errors::SCHED_ERR_OK) {
+                // Fail closed (issue #197 class): an AP-live daemon keeps
+                // its entry and its PID — never free a live stack.  The
+                // funnel already emitted SCHED+14; DAEMON+13 fires here.
+                // restart_stale_daemons skips live PIDs, so no spin.
+                Logger::warn(
+                    "daemon_mgr: terminate('%s') refused (remote-current)",
+                    entries_[i].name);
+                log::dmesg_push_sev(log::ErrorSubsystem::DAEMON,
+                                     log::kDmesgBase_DAEMON + 13,
+                                     log::LogSeverity::WARN, entries_[i].name,
+                                     entries_[i].pid);
+                return;
+            }
         }
 
         notify_death(entries_[i].pid); // clears PID + calls set_pid_fn(0)

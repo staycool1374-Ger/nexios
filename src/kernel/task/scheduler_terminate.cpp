@@ -222,12 +222,17 @@ Scheduler::terminate_err(TaskControlBlock &task,
 ///        and must leave via the deferred-switch arm published by
 ///        switch_away_from_terminating — a direct switch_to_task from trap
 ///        context would publish the trap frame as the resume point.
+///        The prefix orders release_zombie BEFORE wake_waiting_parent
+///        (issue #593, INV-593-2): the corpse leaves the live tables before
+///        any parent is readied.  Callers are the arch fault kills and the
+///        sys_kill self-fatal leg (issue #593); the cause defaults to Fault
+///        so the arch callers stay byte-identical.
 ///        The pre-existing fault-kill shape (TERMINATED + wake + switch_away)
 ///        skipped release_zombie, so fault-killed tasks were never
 ///        zombie-listed and drain_zombie_list reaped nothing (PMM/Tasks/MQ
 ///        leak, e.g. the pager probes).  This helper restores the full
-///        prefix: dequeue, TERMINATED mark, join-note, parent wake,
-///        release_zombie, reaper poke.
+///        prefix: dequeue, TERMINATED mark, join-note, release_zombie,
+///        parent wake, reaper poke.
 ///        Caller contract (mirrors switch_away_from_terminating): hold no
 ///        scheduler lock; the task must be live (not already TERMINATED —
 ///        release_zombie has no idempotency guard); call
@@ -235,7 +240,8 @@ Scheduler::terminate_err(TaskControlBlock &task,
 ///        zombie-before-arm ordering holds (release_zombie's
 ///        invalidate_pending_switch_to runs before the arm is published).
 errors::SchedulerError Scheduler::terminate_err_from_trap(
-    TaskControlBlock &task, uint64_t exit_code) noexcept {
+    TaskControlBlock &task, uint64_t exit_code,
+    ipc::DeathCause cause) noexcept {
     ENSURE(validate_task_ptr(&task, "terminate_err_from_trap"));
     arch::IrqGuard irq_guard{};
     // Issue #197: same fail-closed remote-current refusal as terminate_err.
@@ -264,12 +270,20 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
     deadline_list_.remove(task);
     // Issue #53: join-rendezvous handoff (mirrors terminate_err).
     TaskControlBlock::thread_join_note_termination(task);
-    // Issue #217: wake a waitpid-blocked parent before switching away.
-    wake_waiting_parent(task);
     teardown_step(SchedTeardownSteps::Terminate);
     // Zombie-list the corpse for the deferred drain (idle cleanup_step or
     // the harness's drain_zombie_list) — the step the trap kill skipped.
+    // Issue #593 (INV-593-2): the release precedes the parent wake, so a
+    // woken parent can never observe the corpse in all_tasks_ and free a
+    // live stack via sys_waitpid's in-table branch.
     release_zombie(task);
+    // Issue #217: wake a waitpid-blocked parent before switching away.
+    // Plan-590 step 12 applies without a defer branch: this funnel already
+    // owns the residence, so PARENT_COLLECTING parents are spared by
+    // INV-WAIT-5 until their collect_zombie_child, and non-collecting
+    // outcomes fall through to the ordinary zombie drain.
+    const WakeResult wake = Scheduler::wake_waiting_parent(task);
+    (void)wake;
     // Issue #155: prompt the PID 1 reaper (same placement as terminate_err:
     // after the list push so wake-then-miss is impossible).
     if (task.id != 1) {
@@ -282,7 +296,7 @@ errors::SchedulerError Scheduler::terminate_err_from_trap(
     // (switch_away_from_terminating) arms the deferred switch AFTER this
     // returns — publish never arms, so the zombie-before-arm ordering the
     // caller contract requires is preserved.
-    publish_task_death(task, ipc::DeathCause::Fault);
+    publish_task_death(task, cause);
     return errors::SCHED_ERR_OK;
 }
 

@@ -189,8 +189,11 @@ residence is `Scheduler::collect_zombie_child` (pop+claim under the
 zombie leaf, owner tail outside).  Residual R-1 (terminator missed the
 publication AND a concurrent drainer reclaimed the corpse first) denies
 loudly with SCHED+23 + −1 — never a hang, leak or UAF.  Fourth death
-path scoped out: the sys_kill self-fatal leg (issue #593) wakes nobody
-and is fixed separately.
+path implemented (issue #593): the sys_kill self-fatal leg runs the trap
+funnel (dequeue, TERMINATED, release_zombie) then arms the deferred
+switch, and the wake moved after `release_zombie` so no parent can free
+a current corpse; `collect_zombie_child` + `sys_waitpid` spare
+`is_current_on_any_cpu`.
 
 ### INV-APPLY-1/2/3 + INV-PARK-2 — issue #582 [IMPLEMENTED]
 

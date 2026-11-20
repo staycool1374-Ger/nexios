@@ -383,6 +383,13 @@ The context switch away is safe because the stack is still mapped.  After
 the switch, the zombie is in the list, and idle will eventually call
 `cleanup()` + `MemPool::free()`.  This is safe.
 
+Kill-self shape (issue #593): `sys_kill` on the current task runs
+`terminate_err_from_trap` (dequeue → TERMINATED → admin-latch clear →
+`release_zombie` → `wake_waiting_parent`, cause Fault-or-Kill by signal
+class) then `switch_away_from_terminating`; the trap epilogue applies the
+arm.  In flight the corpse is spared by the four drains and by both
+collector spares (`sys_waitpid` in-table, `collect_zombie_child`).
+
 ### 7.4 Direct pointer to terminated TCB
 
 Tests that hold a direct `TaskControlBlock *` pointer to a terminated child
