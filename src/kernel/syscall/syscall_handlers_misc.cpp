@@ -199,9 +199,12 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                     // Wake the parent and override its saved RAX to return
                     // the child's PID instead of -1 (the value set when
                     // waitpid blocked).
+                    // Issue #597: the override below is valid only for a
+                    // trap-frame (is_user_) parent — see
+                    // wake_waiting_parent for the full rationale.
                     if (p->state != TaskState::TERMINATED) {
                         Scheduler::set_task_ready(*p);
-                    if (TASK_STACK_PTR(p)) {
+                    if (p->is_user_ && TASK_STACK_PTR(p)) {
                         // NOLINTNEXTLINE(performance-no-int-to-ptr)
                         auto *stack =
                             reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
