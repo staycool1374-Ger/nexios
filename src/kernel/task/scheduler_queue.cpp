@@ -172,19 +172,73 @@ void migrate_dispatch_queue(TaskControlBlock &t) noexcept {
 /// @brief Earliest dispatchable EDF task on the calling CPU, or nullptr.
 ///        Lazily drops stale heads (dead/moved/ineligible), mirroring the
 ///        bitmap candidate loop in next_task().
+///        Issue #600 Part 3 (INV-RQ-5): the walk terminates in at most
+///        CONFIG_MAX_TASKS iterations (== Scheduler::
+///        STRANDED_RESCUE_SCAN_MAX, private — same bound by definition;
+///        CODING_STYLE §6 forbids unbounded loops).  A head whose
+///        in_edf_queue_ is false cannot be spliced by edf_remove (flag
+///        gate, scheduler_queue.cpp:109-110 — the exact asymmetry
+///        try_unlink documents and rejects for the runq,
+///        task_queue.cpp:126-141), so the old unconditional while could
+///        spin forever on one stale head; it is force-dropped instead.
+///        A magic-bad head never donates its links (fail-closed: the head
+///        is nulled, never advanced through a possibly-wild edf_next_).
 TaskControlBlock *edf_peek_valid_own() noexcept {
     uint64_t cpu = Scheduler::sched_cpu();
     EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
-    while (l.head_ != nullptr) {
+    // == Scheduler::STRANDED_RESCUE_SCAN_MAX (private member; same bound).
+    constexpr uint64_t EDF_WALK_BOUND = CONFIG_MAX_TASKS;
+    uint64_t guard = 0;
+    while (l.head_ != nullptr && guard < EDF_WALK_BOUND) {
+        ++guard;
         TaskControlBlock *c = l.head_;
-        if (c->magic != TaskControlBlock::TCB_MAGIC || !edf_eligible(*c) ||
-            (c->state != TaskState::READY &&
-             c->state != TaskState::RUNNING) ||
-            Scheduler::queue_target(*c) != cpu) {
+        if (c->magic == TaskControlBlock::TCB_MAGIC && edf_eligible(*c) &&
+            (c->state == TaskState::READY ||
+             c->state == TaskState::RUNNING) &&
+            Scheduler::queue_target(*c) == cpu) {
+            return c;
+        }
+        // Stale head: drop it without stalling dispatch.
+        if (c->magic != TaskControlBlock::TCB_MAGIC) {
+            // Design-review S3 (issue #600 r1): never adopt the links of
+            // a magic-bad node — its edf_next_ may be wild. Fail closed.
+            l.head_ = nullptr;
+            Scheduler::note_edf_chain_drop(c->id);
+            return nullptr;
+        }
+        if (c->in_edf_queue_) {
             edf_remove(*c, cpu);
             continue;
         }
-        return c;
+        // Flag-gated edf_remove is a no-op here (the non-advancing
+        // shape): force the head forward without following the stale
+        // node's links, then clear the node itself.
+        l.head_ = c->edf_next_;
+        if (l.head_ != nullptr)
+            l.head_->edf_prev_ = nullptr;
+        c->edf_next_ = nullptr;
+        c->edf_prev_ = nullptr;
+        Scheduler::note_edf_chain_drop(c->id);
+    }
+    if (l.head_ != nullptr) {
+        // Bound hit with a live head: the chain cycles (or exceeds the
+        // task-set size). Fail closed but not dead: bounded second walk
+        // clearing every reachable valid node, then null the head. READY
+        // tasks are re-established by the Part-2 sweep on the next tick.
+        uint64_t nuke_guard = 0;
+        TaskControlBlock *n = l.head_;
+        while (n != nullptr && nuke_guard < EDF_WALK_BOUND) {
+            ++nuke_guard;
+            if (n->magic != TaskControlBlock::TCB_MAGIC)
+                break;
+            TaskControlBlock *nx = n->edf_next_;
+            n->edf_next_ = nullptr;
+            n->edf_prev_ = nullptr;
+            n->in_edf_queue_ = false;
+            n = nx;
+        }
+        l.head_ = nullptr;
+        Scheduler::note_edf_chain_cycle();
     }
     return nullptr;
 }
@@ -601,18 +655,36 @@ void Scheduler::note_runq_enqueue_outcome(
     if (result == Outcome::AlreadyQueued) {
         note_rqm_enqueue_refused_already();
 #if defined(CONFIG_DEBUG)
-        // DEBUG membership assert: an already-queued node must be
-        // physically present somewhere, or the flag/link pair desynced
-        // (the sweep then rescues + counts it as an orphan).
+        // DEBUG membership assert (issue #600 Part 1): an already-queued
+        // node must be physically present somewhere, or the flag/link
+        // pair desynced (the sweep then rescues + counts it as an
+        // orphan).  The pre-#600 scan reused one index as CPU *and*
+        // level (rq_for masks q % CONFIG_MAX_CPUS), so it misjudged
+        // every legitimately queued task at a level with
+        // level % CONFIG_MAX_CPUS != cpu — hundreds of false ERRORs on
+        // passing runs.  The corrected scan never reuses an index.
         bool phys = false;
-        for (uint64_t q = 0; q <= CONFIG_PRIORITY_CEILING && !phys; ++q) {
-            if (rq_for(q).queue(q).contains(tcb))
-                phys = true;
+        for (uint64_t cpu = 0; cpu < CONFIG_MAX_CPUS && !phys; ++cpu) {
+            for (uint64_t lvl = 0;
+                 lvl <= CONFIG_PRIORITY_CEILING && !phys; ++lvl) {
+                if (rq_for(cpu).queue(lvl).contains(tcb))
+                    phys = true;
+            }
         }
         if (!phys) {
-            kernel::Logger::error(
-                "[RUNQ] already-queued but nowhere linked id=%lu",
-                tcb.id);
+            const uint64_t rescue_no =
+                __atomic_fetch_add(&runq_nowhere_linked_count_, 1ULL,
+                                   __ATOMIC_RELAXED) +
+                1ULL;
+            if (rescue_no == 1 ||
+                (rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+                kernel::Logger::error(
+                    "[RUNQ] already-queued but nowhere linked id=%lu (n=%lu)",
+                    tcb.id, rescue_no);
+                if (rescue_no == 1) {
+                    sched_debug::sched_runq_trace_dump(tcb.id, 8);
+                }
+            }
         }
 #else
         (void)tcb;
@@ -631,6 +703,30 @@ void Scheduler::note_runq_enqueue_outcome(
             reinterpret_cast<uint64_t>(__builtin_return_address(0)));
         sched_debug::sched_runq_trace_dump(tcb.id, 8);
     }
+}
+
+void Scheduler::note_edf_chain_drop(uint64_t id) noexcept {
+    const uint64_t drop_no =
+        __atomic_fetch_add(&edf_chain_drop_count_, 1ULL,
+                           __ATOMIC_RELAXED) +
+        1ULL;
+    if (drop_no == 1 || (drop_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+        kernel::Logger::warn(
+            "sched: EDF head not membership-marked, dropped id=%lu (n=%lu)",
+            id, drop_no);
+        if (drop_no == 1) {
+            sched_debug::sched_runq_trace_dump(id, 8);
+        }
+    }
+}
+
+void Scheduler::note_edf_chain_cycle() noexcept {
+    const uint64_t drop_no =
+        __atomic_fetch_add(&edf_chain_drop_count_, 1ULL,
+                           __ATOMIC_RELAXED) +
+        1ULL;
+    kernel::Logger::error("sched: EDF chain cycle, nuked (n=%lu)", drop_no);
+    sched_debug::sched_runq_trace_dump(UINT64_MAX, 8);
 }
 
 }  // namespace kernel

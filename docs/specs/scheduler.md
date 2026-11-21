@@ -83,7 +83,9 @@ All "[IMPLEMENTED]" markers are code-verified in the current tree.
 | INV-PARK-2 | No context owning a `scheduler_lock_` take may enter either park; a BLOCKED runner that was not parked is latched (`SelfLock` = holds the lock, `ExternalDenial` otherwise — class is diagnostic-only). Service is hook-at-release for SelfLock in plain task context, tick-only otherwise; uncovered 8 consecutive instants fail closed (SCHED+17) (#582) | [IMPLEMENTED] |
 | INV-RQ-1 | `in_ready_queue_`, `runq_next_`, `runq_prev_` and `rq_priority_` are written only inside `TaskQueue`, each mutation one IRQ-atomic unit. At every ISR boundary each TCB is physically linked in exactly one level queue, except the documented `ready_deferred_` current-task deferral (#582) | [IMPLEMENTED] |
 | INV-RQ-2 | Every enqueue refusal is typed (`Linked`/`AlreadyQueued`/`RefusedInvalid`) and reported; the TCB is byte-identical. No caller sets `in_ready_queue_`/`rq_priority_` itself (#582) | [IMPLEMENTED] |
-| INV-RQ-3 | `orphan_rescue_count_`, `stuck_rescue_count_` and `runq_link_flag_desync_count_` are the violation oracles; all read 0 in a healthy run (#582) | [IMPLEMENTED] |
+| INV-RQ-3 | `orphan_rescue_count_`, `stuck_rescue_count_`, `runq_link_flag_desync_count_`, `runq_nowhere_linked_count_`, `edf_orphan_rescue_count_` and `edf_chain_drop_count_` are the violation oracles; all read 0 in a healthy run (#582, #600) | [IMPLEMENTED] |
+| INV-RQ-4 | Every READY task owned by this CPU and member of neither the bitmap level for its effective priority nor the EDF chain is rescued within one tick, irrespective of `edf_eligible` (#600: tick sweep + restore rebuild route through `enqueue_ready`) | [IMPLEMENTED] |
+| INV-RQ-5 | `edf_peek_valid_own` terminates in ≤ `STRANDED_RESCUE_SCAN_MAX` iterations; a non-membership-marked head is force-dropped, a magic-bad head fails closed (head nulled, links never adopted), a bound hit nukes the chain fail-closed (#600) | [IMPLEMENTED] |
 | INV-5 | State-transition coherence: leaving runnable states ⇒ dequeue. `send_sync` is the historical exception (BLOCKED-in-runq, healed by the peek loop) | [PARTIALLY CHANGED] — see §5 |
 | INV-6 | Every priority change must re-index the ready queue via `move_priority()` | [IMPLEMENTED] |
 | INV-7 | Reaper/termination invariants (a-f): full unlink from RQ / AllTasks / DeadlineList / id_table / blocked_senders / current before free | binding |
@@ -318,6 +320,21 @@ counter-only observer forces progress:
 - Deadline coupling is deliberately absent (fixed N preserves the bound);
   deadline-urgent tasks preempt via EDF first, and the miss handler stays the
   observer of any residual miss.
+
+### 3.4 EDF-blind-spot closure (issue #600) [IMPLEMENTED]
+
+Three defects by code-read, one shared shape (membership proved by scan,
+never by flag): the `[RUNQ] already-queued but nowhere linked` diagnostic
+reused one index as CPU *and* level and misjudged every legitimately queued
+task at a level with `level % CONFIG_MAX_CPUS != cpu` (repaired to a
+two-loop scan + counted `runq_nowhere_linked_count_` oracle); the #249
+sweep and the snapshot restore rebuild skipped every EDF-eligible task
+(now rescued via `enqueue_ready` → `edf_insert`, counted by
+`edf_orphan_rescue_count_`); the EDF head walk could not advance past a
+non-membership-marked head (`edf_remove` is flag-gated) and is now bounded
+(force head advance, magic-bad fails closed, cycle nuked fail-closed,
+counted by `edf_chain_drop_count_`). `RQM::move_priority`'s
+remove→enqueue composite is one `IrqGuard` unit (INV-RQ-1 extension).
 
 ## 4. Sporadic Server Interaction
 

@@ -87,6 +87,11 @@ TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
 uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
 uint64_t Scheduler::stuck_rescue_count_ = {};
 uint64_t Scheduler::orphan_rescue_count_ = {};
+// Issue #600 Parts 1-3 oracles (see hpp): corrected-reporter observations,
+// EDF-orphan rescues, EDF chain drops. Same discipline as above.
+uint64_t Scheduler::runq_nowhere_linked_count_ = {};
+uint64_t Scheduler::edf_orphan_rescue_count_ = {};
+uint64_t Scheduler::edf_chain_drop_count_ = {};
 // Issue #582 INV-RQ-3 oracles + §5.5 miss-path counters (see hpp).
 uint64_t Scheduler::runq_link_flag_desync_count_ = {};
 uint64_t Scheduler::runq_desync_forced_clear_ = {};
@@ -356,6 +361,30 @@ uint64_t Scheduler::orphan_rescue_count() noexcept {
 
 void Scheduler::reset_orphan_rescue_count_for_test() noexcept {
     __atomic_store_n(&orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::runq_nowhere_linked_count() noexcept {
+    return __atomic_load_n(&runq_nowhere_linked_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_runq_nowhere_linked_count_for_test() noexcept {
+    __atomic_store_n(&runq_nowhere_linked_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::edf_orphan_rescue_count() noexcept {
+    return __atomic_load_n(&edf_orphan_rescue_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_edf_orphan_rescue_count_for_test() noexcept {
+    __atomic_store_n(&edf_orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::edf_chain_drop_count() noexcept {
+    return __atomic_load_n(&edf_chain_drop_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_edf_chain_drop_count_for_test() noexcept {
+    __atomic_store_n(&edf_chain_drop_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
 uint64_t Scheduler::runq_link_flag_desync_count() noexcept {

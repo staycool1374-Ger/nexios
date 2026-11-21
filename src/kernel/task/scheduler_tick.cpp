@@ -67,6 +67,21 @@ using sched_debug::g_diag_rms_count;
 using sched_debug::g_diag_tick_count;
 #endif
 
+namespace {
+// Issue #600 Part 2: single bitmap-absence proof shared by the sweep's
+// EDF and FIXED branches (one implementation, no duplicated loops).
+// True when no level queue of the task's affinity target physically
+// contains it. Caller holds scheduler_lock_, so absence is proven.
+bool sweep_bitmap_absent(const TaskControlBlock &task) noexcept {
+    for (uint64_t prio_idx = 0; prio_idx <= CONFIG_PRIORITY_CEILING;
+         ++prio_idx) {
+        if (Scheduler::rq_task(task).queue(prio_idx).contains(task))
+            return false;
+    }
+    return true;
+}
+} // namespace
+
 void Scheduler::on_tick() noexcept {
 #if defined(CONFIG_DEBUG)
     __atomic_fetch_add(&g_diag_tick_count, 1ULL, __ATOMIC_RELAXED);
@@ -575,8 +590,12 @@ void Scheduler::on_tick() noexcept {
         // not recur, so re-apply level-triggered every tick until the
         // task dispatches or dies. Detection-first: count + warn per
         // rescue (H2-ENQDEAD precedent) so a recurring wake-loss can never
-        // hide behind the heal. EDF-eligible tasks are owned by
-        // edf_peek_valid_own — never touch them here. Bounded by
+        // hide behind the heal. Issue #600 Part 2 (INV-RQ-4): the EDF
+        // gate no longer blinds the sweep — EDF-eligible READY tasks
+        // with neither chain nor bitmap membership are rescued via
+        // enqueue_ready (which routes them to edf_insert), so every
+        // READY task owned by this CPU and member of neither list is
+        // rescued within one tick. Bounded by
         // STRANDED_RESCUE_SCAN_MAX; no foreign locks, no allocation,
         // never clobbers a non-READY state (H2 guard, copied from #18).
         uint64_t sweep_count = 0;
@@ -590,19 +609,40 @@ void Scheduler::on_tick() noexcept {
                 continue;
             if (queue_target(*task) != sched_cpu())
                 continue; // issue #25 C1: own-CPU tasks only
-            if (edf_eligible(*task))
-                continue; // EDF path owns these (edf_peek_valid_own)
             if (task->state != TaskState::READY)
                 continue; // never clobber RUNNING/BLOCKED/etc (H2)
+            // Issue #600 Part 2: EDF-eligible tasks are chain members —
+            // prove bitmap absence (they must be in neither list) and
+            // rescue through the single routing point. Chain-flagged
+            // tasks stay owned by edf_peek_valid_own (chain-only view).
+            if (edf_eligible(*task)) {
+                if (task->in_edf_queue_)
+                    continue;
+                if (!sweep_bitmap_absent(*task))
+                    continue; // bitmap-linked — nothing to rescue
+                // Non-current + flagged is a lost-consume bug, never a
+                // valid deferral (same mirror as the FIXED branch below).
+                task->ready_deferred_ = false;
+                const uint64_t edf_rescue_no = ++edf_orphan_rescue_count_;
+                if (edf_rescue_no == 1 ||
+                    (edf_rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+                    Logger::warn(
+                        "sched: EDF-eligible stranded READY rescued "
+                        "#%lx id=%lx eff=%lx",
+                        edf_rescue_no, task->id,
+                        effective_priority(task));
+                    if (edf_rescue_no == 1) {
+                        sched_debug::sched_runq_trace_dump(task->id, 8);
+                    }
+                }
+                enqueue_ready(*task);
+                __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                                 __ATOMIC_RELEASE);
+                continue;
+            }
             if (task->in_edf_queue_)
                 continue; // EDF path owns these (edf_peek_valid_own)
-            bool phys = false;
-            for (uint64_t prio_idx = 0;
-                 prio_idx <= CONFIG_PRIORITY_CEILING && !phys; ++prio_idx) {
-                if (rq_task(*task).queue(prio_idx).contains(*task))
-                    phys = true;
-            }
-            if (phys)
+            if (!sweep_bitmap_absent(*task))
                 continue; // physically queued — nothing to rescue
             // Issue #250: a legitimately-deferred task is always current
             // while flagged (wake-side mirror), and the sweep already

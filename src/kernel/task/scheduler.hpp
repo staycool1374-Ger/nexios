@@ -393,6 +393,17 @@ class Scheduler {
     static void note_restore_drop_rebuilt() noexcept;
     /// @brief Count one ready link/flag desync observation (INV-RQ-3).
     static void note_runq_link_flag_desync() noexcept;
+    /// @brief Count one EDF stale-head force-drop (issue #600 Part 3,
+    ///        INV-RQ-5). Called from the dispatch/peek path (lock state
+    ///        varies — atomic increment); throttled warn + op-ring dump
+    ///        on the first, like the stranded-READY rescues.
+    /// @param id Best-effort head id for the diagnostic line (untrusted
+    ///        when the head failed magic; the (n=) counter is the oracle).
+    static void note_edf_chain_drop(uint64_t id) noexcept;
+    /// @brief Count one EDF chain-cycle fail-closed nuke (issue #600
+    ///        Part 3, INV-RQ-5). Unconditional ERROR + op-ring dump:
+    ///        a cycle is never healthy.
+    static void note_edf_chain_cycle() noexcept;
     /// @brief Typed enqueue-refusal handling (issue #582 INV-RQ-2): the TCB
     ///        is byte-identical (API guarantee).  Counts + one-shot ERROR
     ///        with caller ra; the tick sweep rescues + counts.  No-op when
@@ -513,6 +524,28 @@ class Scheduler {
     static uint64_t orphan_rescue_count() noexcept;
     /// @brief Reset the flagged-orphan rescue counter (test isolation).
     static void reset_orphan_rescue_count_for_test() noexcept;
+    /// @brief Nowhere-linked AlreadyQueued observations since boot (issue #600
+    ///        Part 1). The corrected two-loop scan (every CPU x every level)
+    ///        proved absence: a duplicate wake refused on a task linked
+    ///        nowhere. Detection-first telemetry like orphan_rescue_count_:
+    ///        must stay 0 in a healthy run. Monotonic (never rewound).
+    static uint64_t runq_nowhere_linked_count() noexcept;
+    /// @brief Reset the nowhere-linked counter (test isolation).
+    static void reset_runq_nowhere_linked_count_for_test() noexcept;
+    /// @brief EDF-eligible stranded-READY rescues since boot (issue #600
+    ///        Part 2 tick sweep + restore rebuild). Like stuck_rescue_count_
+    ///        but for the EDF blind spot (INV-RQ-4). Must stay 0 in a
+    ///        healthy run. Monotonic (never rewound).
+    static uint64_t edf_orphan_rescue_count() noexcept;
+    /// @brief Reset the EDF-orphan rescue counter (test isolation).
+    static void reset_edf_orphan_rescue_count_for_test() noexcept;
+    /// @brief EDF chain drops since boot (issue #600 Part 3): stale
+    ///        non-membership-marked heads force-dropped plus cycle
+    ///        fail-closed nukes. Detection-first, must stay 0 in a healthy
+    ///        run. Monotonic (never rewound).
+    static uint64_t edf_chain_drop_count() noexcept;
+    /// @brief Reset the EDF chain-drop counter (test isolation).
+    static void reset_edf_chain_drop_count_for_test() noexcept;
     /// @brief Clear every task's #578 park-test membership (seam teardown).
     ///        Bounded validity-guarded walk under scheduler_lock_.
     static void clear_park_test_members() noexcept;
@@ -1574,6 +1607,20 @@ struct SwSlots {
     ///        ownership/discipline as stuck_rescue_count_; reset by
     ///        reset_orphan_rescue_count_for_test().
     static uint64_t orphan_rescue_count_;
+    /// @brief Nowhere-linked AlreadyQueued observations since boot (issue
+    ///        #600 Part 1). Same ownership/discipline as
+    ///        stuck_rescue_count_; reset by
+    ///        reset_runq_nowhere_linked_count_for_test().
+    static uint64_t runq_nowhere_linked_count_;
+    /// @brief EDF-eligible stranded-READY rescues since boot (issue #600
+    ///        Part 2, INV-RQ-4). Same ownership/discipline as
+    ///        stuck_rescue_count_; reset by
+    ///        reset_edf_orphan_rescue_count_for_test().
+    static uint64_t edf_orphan_rescue_count_;
+    /// @brief EDF chain drops since boot (issue #600 Part 3, INV-RQ-5).
+    ///        Same ownership/discipline as stuck_rescue_count_; reset by
+    ///        reset_edf_chain_drop_count_for_test().
+    static uint64_t edf_chain_drop_count_;
     /// @brief Ready link/flag desync observations since boot (issue #582
     ///        INV-RQ-3 oracle: link/flag mismatches seen by the typed API).
     ///        Same ownership/discipline as stuck_rescue_count_; reset by
