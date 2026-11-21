@@ -61,10 +61,11 @@ All "[IMPLEMENTED]" markers are code-verified in the current tree.
 - **R3 — Clean teardown.**  A task is freed only after (a) it is no longer the
   physical runner, (b) no deferred switch targets it, (c) peers waiting on its
   IPC are resolved.
-- **R4 — Bounded lower-level liveness (issue #242).**  Strict RMS must not
-  deny every lower level forever when the top READY level never drains.
-  Worst-case interference is exactly one forced lower tick per
-  `kStarvationBreakerTicks` (= 20) backlogged ticks (§3.3).
+- **R4 — Bounded lower-level liveness (issues #242, #598).**  Strict RMS must
+  not deny every lower level forever when the top READY level never drains.
+  The breaker observes the lowest waiting non-idle band and forces one
+  dispatch of it per `kStarvationBreakerTicks` (= 20) denied ticks (§3.3);
+  worst-case interference is one forced lower tick per 20 denied ticks.
 
 ## 2. Invariants
 
@@ -284,29 +285,36 @@ atomics + `next_task_id`), then scheduling proceeds; `next_task()` re-selects
 immediately.  Dropped switch worst case = one tick of lag.  This removed the
 "frozen switch window" that blocked the old lazy-rebuild.
 
-### 3.3 Starvation-breaker (issue #242) [IMPLEMENTED]
+### 3.3 Starvation-breaker (issues #242, #598) [IMPLEMENTED]
 Strict RMS starves every lower level forever when the top READY level never
 drains (convicted: two prio-11 never-blocking spinners alternate and the
-prio-10 harness gets zero CPU over 3001 ticks).  The fast path stays strict
-fixed-priority; a counter-only observer forces progress:
+prio-10 harness gets zero CPU over 3001 ticks; #598: a periodic prio-20
+waker with READY window < 20 ticks made 20 identical tops unreachable, so a
+top-identity counter never fired and a highest-below pick diverted the slot
+to a non-starved band).  The fast path stays strict fixed-priority; a
+counter-only observer forces progress:
 
-- When the top READY level H is picked while lower non-idle READY levels wait
-  for `kStarvationBreakerTicks` (= 20) consecutive ticks, exactly one dispatch
-  of the highest READY level below H is forced (`next_task_below`, same
-  eligibility filter as `next_task`), then strict RMS resumes.  Level 0 (idle
-  band) is never a forced target.
+- When lower non-idle READY bands wait while the strict pick serves higher
+  levels for `kStarvationBreakerTicks` (= 20) consecutive ticks, exactly one
+  dispatch of the *lowest* eligible READY non-idle band is forced
+  (`next_task_below`, same eligibility filter as `next_task`), then strict
+  RMS resumes.  The observation is keyed to that victim band, so a transient
+  higher-priority waker can neither reset it nor divert the forced dispatch.
+  Level 0 (idle band) is never a forced target.
 - Counter-only: no `task->priority` write (PI boosts and admission bases
-  untouched); O(1) bitmap ops (`highest_starvable_below` + `dequeue_level`);
+  untouched); O(1) bitmap ops (`lowest_starvable_below` + `dequeue_level`);
   identical debug/release control flow.
 - EDF keeps precedence: a tick with an EDF candidate takes the EDF path and
   resets the count (a non-strict dispatch breaks the pattern).
 - Breaker state is policy-runtime: reset on `init()` and snapshot restore,
   never preserved across tests.
 - Schedulability re-characterization: Liu–Leyland admission is unchanged for
-  the strict fast path; the breaker adds bounded interference of at most one
-  lower tick per 20 backlogged ticks (20 ms delay ceiling at 1 kHz).  Levels
-  below the highest starved level keep classic fixed-priority semantics
-  (a continuously backlogged level legitimately denies lower ones).
+  the strict fast path; the breaker adds bounded interference of one forced
+  tick per N (= 20) denied ticks (20 ms delay ceiling at 1 kHz).  Bands above
+  the victim receive no breaker relief and remain denied while the top never
+  drains (a continuously backlogged middle band keeps strict service only
+  whenever the top drains; per-band fairness escalation is tracked in issue
+  #599).
 - Deadline coupling is deliberately absent (fixed N preserves the bound);
   deadline-urgent tasks preempt via EDF first, and the miss handler stays the
   observer of any residual miss.

@@ -1223,32 +1223,41 @@ void Scheduler::rate_monotonic_schedule() noexcept {
         restore_preempted_current(current, armed);
     }
 
-    // Issue #242: bounded starvation-breaker.  Strict RMS above starves
+    // Issue #598: victim-keyed starvation-breaker.  Strict RMS above starves
     // every lower level forever when the top READY level never drains
     // (convicted: two prio-11 never-blocking spinners alternate and the
-    // prio-10 harness gets zero CPU over 3001 ticks).  When the top level H
-    // is picked while lower non-idle READY levels wait for
-    // kStarvationBreakerTicks consecutive ticks, force exactly one dispatch
-    // below H, then reset to strict RMS.  Counter-only (task priorities are
-    // never mutated: PI/admission untouched); O(1) bitmap ops; identical
-    // debug/release flow; EDF keeps precedence (next_task checks EDF first,
-    // and the breaker only overrides a strict bitmap pick, never an EDF one
-    // — see below).  Worst-case interference is exactly one forced tick per
-    // N = 20 backlogged ticks (docs/specs/scheduler.md).
+    // prio-10 harness gets zero CPU over 3001 ticks; then #598: a periodic
+    // prio-20 waker with READY window < 20 ticks made 20 identical tops
+    // unreachable, so the old top-identity counter sawtoothed 2→5 and never
+    // fired, and the old highest-below pick spent the slot on the
+    // non-starved prio-11 band).  The observation is keyed to the victim
+    // band, not the top level: reset only when NO ready level exists
+    // strictly below the current highest ready level (nothing can be
+    // denied); otherwise increment, independent of top identity, so a
+    // transient upper-level waker can neither reset the count nor divert
+    // the forced pick.  A newly-appearing victim inherits starve_ticks_
+    // from its predecessor and may fire after only a few ticks of its own
+    // waiting — fail direction is strictly early relief (same 1-in-20
+    // ceiling, no priority/order mutation), never later denial; do NOT
+    // "fix" this into a reset-on-victim-change, which would reintroduce
+    // top-identity-style timing sensitivity through the back door.
+    // Counter-only (task priorities are never mutated: PI/admission
+    // untouched); O(1) bitmap ops; identical debug/release flow; EDF keeps
+    // precedence (next_task checks EDF first, and the breaker only overrides
+    // a strict bitmap pick, never an EDF one — see below).  Worst-case
+    // interference is one forced tick per N = 20 denied ticks
+    // (docs/specs/scheduler.md).
     TaskControlBlock *breaker_next = nullptr;
     {
-        uint64_t cpu = sched_cpu();
+        uint64_t cpu = sched_cpu() % CONFIG_MAX_CPUS;
         uint64_t top = rq_own().highest_ready_priority();
-        if (top == 0 ||
-            rq_own().bitmap().highest_starvable_below(top) ==
-                PriorityMap::STARVABLE_NONE) {
-            starve_level_[cpu] = top;
+        uint64_t victim = rq_own().bitmap().lowest_starvable_below(top);
+        if (victim == PriorityMap::STARVABLE_NONE) {
+            starve_level_[cpu] = PriorityMap::STARVABLE_NONE;
             starve_ticks_[cpu] = 0;
-        } else if (top == starve_level_[cpu]) {
-            ++starve_ticks_[cpu];
         } else {
-            starve_level_[cpu] = top;
-            starve_ticks_[cpu] = 1;
+            starve_level_[cpu] = victim;
+            ++starve_ticks_[cpu];
         }
         if (starve_ticks_[cpu] >= kStarvationBreakerTicks) {
             // EDF keeps precedence: an EDF-pending tick is a non-strict

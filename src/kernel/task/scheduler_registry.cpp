@@ -72,9 +72,10 @@ constinit uint64_t Scheduler::sporadic_task_count_ = 0;
 constinit bool Scheduler::preempt_enabled_ = false;
 constinit bool Scheduler::suppress_terminated_log_ = false;
 
-// Issue #242: breaker observation starts unwatched (STARVABLE_NONE) with a
-// zero count on every CPU; reset_starvation_breaker() re-establishes this on
-// init and snapshot restore (policy-runtime, never preserved across tests).
+// Issue #598: breaker observation is the victim band under watch
+// (STARVABLE_NONE = none) plus consecutive denied ticks on every CPU;
+// reset_starvation_breaker() re-establishes this on init and snapshot
+// restore (policy-runtime, never preserved across tests).
 uint64_t Scheduler::starve_level_[CONFIG_MAX_CPUS];
 uint32_t Scheduler::starve_ticks_[CONFIG_MAX_CPUS];
     constinit TaskControlBlock *Scheduler::idle_task_ = nullptr;

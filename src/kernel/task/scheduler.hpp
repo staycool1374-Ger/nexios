@@ -1623,24 +1623,29 @@ struct SwSlots {
     static void reset_ipc_wake_rescue_count_for_test() noexcept;
     /// @brief IPC-wake rescues since reset (QE diagnostic).
     static uint64_t ipc_wake_rescue_count() noexcept;
-    /// @brief Starvation-breaker trigger (issue #242): consecutive ticks the
-    ///        top READY level may be picked while lower non-idle READY levels
-    ///        wait before exactly one dispatch below the top is forced.  Fixed
+    /// @brief Starvation-breaker trigger (issue #598; was top-identity,
+    ///        issue #242): consecutive ticks the victim band was denied
+    ///        while lower non-idle READY levels wait before exactly one
+    ///        dispatch of the lowest eligible band is forced.  Fixed
     ///        constant, deadline-agnostic, so worst-case interference stays
-    ///        exactly 1 forced tick per N = 20 backlogged ticks (20 ms delay
-    ///        ceiling at 1 kHz) in both builds.
+    ///        one forced tick per N = 20 denied ticks (20 ms delay ceiling
+    ///        at 1 kHz) in both builds.
     static constexpr uint32_t kStarvationBreakerTicks = 20;
-    /// @brief Breaker observation per CPU: top level under watch
-    ///        (STARVABLE_NONE = no level watched), consecutive ticks seen.
+    /// @brief Breaker observation per CPU: victim band under watch
+    ///        (STARVABLE_NONE = no victim watched; diagnostic mirror of the
+    ///        lowest ready band below top), consecutive denied ticks.
     ///        Tick-owned writes under scheduler_lock_; policy-runtime only —
     ///        reset by reset_starvation_breaker() on init and snapshot
     ///        restore, never preserved across tests.  Counter-only: task
     ///        priorities are never mutated (PI/admission untouched).
     static uint64_t starve_level_[CONFIG_MAX_CPUS];
     static uint32_t starve_ticks_[CONFIG_MAX_CPUS];
-    /// @brief Forced pick below @p top for the breaker: highest non-idle
-    ///        READY level under top, eligibility-filtered exactly like
-    ///        next_task() (READY/RUNNING, affine here, never current).
+    /// @brief Forced pick below @p top for the breaker: lowest eligible
+    ///        non-idle READY level under top (the maximally-waiting victim),
+    ///        eligibility-filtered exactly like next_task() (READY/RUNNING,
+    ///        affine here, never current).  Per-band-fairness escalation is
+    ///        tracked in issue #599; until then middle backlogged bands keep
+    ///        strict service whenever the top drains.
     ///        Ineligible heads are dequeued-dropped like next_task(); the
     ///        drop loop is bounded (each iteration unlinks >= 1 node or
     ///        clears >= 1 stale bit, both finite).
