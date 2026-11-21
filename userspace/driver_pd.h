@@ -25,6 +25,11 @@ typedef enum {
      * the kind follows the backing; see Framebuffer::scanout_ram_backed).
      * Same payload shape as DRV_OP_BIND, chunk index in `flags`. */
     DRV_OP_BIND_FRAME = 9,
+    /* RTC PD (issue #194): epoch feed rendezvous + polled wall-clock read.
+     * Fresh numbers (>= 10): the shared one-byte op field already defines
+     * WRITE=2, POLL=3 (driver_pds.hpp), so 2/3 would collide. */
+    DRV_OP_RTC_EPOCH = 10,
+    DRV_OP_RTC_READ = 11,
     DRV_OP_INJECT_FAULT = 240,
 } drv_op_t;
 

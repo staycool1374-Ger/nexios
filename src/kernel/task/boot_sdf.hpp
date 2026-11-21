@@ -88,6 +88,7 @@ enum class PdRole : uint8_t {
     WDOG_MON = 11,
     PROCFS_SRV = 12,
     PROC_MGR = 13,
+    TIMER_SRV = 14, ///< Timer/Event externalization PD (issue #194).
 };
 
 /// @brief Maximum CapSpecs per role row (== CONFIG_DRIVER_PD_MAX_CAPS).
@@ -118,9 +119,12 @@ static_assert(kConsoleMaxScanoutChunks == 4,
 /// @brief Number of PdRole entries (issue #47 step-b1): role tables are
 /// sized by this, not by a hardcoded 6 (roles ≥ 6 share the compose
 /// path but previously skipped slot persistence). F11 (#564) adds
-/// PROC_MGR as the 14th row.
+/// PROC_MGR as the 14th row; #194 appends TIMER_SRV as the 15th.
+/// Appending last keeps kPdRoleCount = TIMER_SRV + 1 a truncation-safe
+/// single point of change (S2-6: unknown roles fail closed downstream).
 inline constexpr uint64_t kPdRoleCount =
-    static_cast<uint64_t>(PdRole::PROC_MGR) + 1;
+    static_cast<uint64_t>(PdRole::TIMER_SRV) + 1;
+static_assert(kPdRoleCount == 15, "PdRole grew — revisit role tables");
 
 /// @brief TX-ring element size in bytes (issue #51 step-c-prime).
 /// Fixed 8: {uint8 len, char data[7]}. Multiple of 8 per the SPSC
@@ -163,8 +167,9 @@ struct RowBounds {
 ///        reservation, is what F10 owes).
 inline constexpr uint32_t kRowReservedSlots = 0;
 
-/// @brief Demand bounds for @p role (values-only over the 14 existing
+/// @brief Demand bounds for @p role (values-only over the existing
 ///        rows: max_caps = kMaxCapsPerRole, object_budget =
+///        CONFIG_MAX_PER_TASK_OBJECTS, quotas 0; the mem-mgr/supervisor
 ///        CONFIG_MAX_PER_TASK_OBJECTS, quotas 0; the mem-mgr/supervisor
 ///        256 / Untyped-quota tuning lands with the M5/M12 rows that need
 ///        them). F11 (#564): PROC_MGR reads the same defaults (hold

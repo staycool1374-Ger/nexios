@@ -5,7 +5,8 @@
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
     CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
-    CONFIG_PROCFS_SRV || CONFIG_PROC_MGR || CONFIG_SERIAL_TX_SHM
+    CONFIG_PROCFS_SRV || CONFIG_PROC_MGR || CONFIG_SERIAL_TX_SHM ||            \
+    CONFIG_TIMER_SRV
 
 #include <kernel/task/task.hpp>
 #include <kernel/arch/hal/device_regions.hpp>
@@ -573,29 +574,35 @@ uint64_t sdf_row(PdRole role, CapSpec *out) {
         // the row is the empty set by structural rule (Stage B wires
         // the verdict path).
         return 0;
+    case PdRole::TIMER_SRV:
+        // Message-only policy (issue #194): no device caps ever (the
+        // RTC device stays owned by drv-rtc via its own row); the row
+        // is the empty set by structural rule (see sdf_policy_only).
+        return 0;
     }
     return 0;
 }
 
 bool sdf_zero_caps_allowed(PdRole role) {
     // Explicit allowlist: VFS_SRV + TERM_SRV + LOG_SRV + CAP_BROKER +
-    // WDOG_MON + PROCFS_SRV + PROC_MGR (empty sets by design) and degraded
-    // BLOCK_SRV (no controller/IOMMU captured) may start capless.
-    // Every other zero-cap row is a compose failure.
+    // WDOG_MON + PROCFS_SRV + PROC_MGR + TIMER_SRV (empty sets by design)
+    // and degraded BLOCK_SRV (no controller/IOMMU captured) may start
+    // capless. Every other zero-cap row is a compose failure.
     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
            role == PdRole::LOG_SRV || role == PdRole::BLOCK_SRV ||
            role == PdRole::CAP_BROKER || role == PdRole::WDOG_MON ||
-           role == PdRole::PROCFS_SRV || role == PdRole::PROC_MGR;
+           role == PdRole::PROCFS_SRV || role == PdRole::PROC_MGR ||
+           role == PdRole::TIMER_SRV;
 }
 
 bool sdf_policy_only(PdRole role) {
     // Structural no-double-ownership rule (issues #47/#51, #240, #390,
-    // #54, #564): policy-only roles must never hold device caps. The #48
-    // SDF boundary test consumes this predicate directly.
+    // #54, #564, #194): policy-only roles must never hold device caps.
+    // The #48 SDF boundary test consumes this predicate directly.
     return role == PdRole::VFS_SRV || role == PdRole::TERM_SRV ||
            role == PdRole::LOG_SRV || role == PdRole::CAP_BROKER ||
            role == PdRole::WDOG_MON || role == PdRole::PROCFS_SRV ||
-           role == PdRole::PROC_MGR;
+           role == PdRole::PROC_MGR || role == PdRole::TIMER_SRV;
 }
 
 bool capture_block_topology() {
@@ -704,7 +711,7 @@ namespace kernel {
 namespace sdf {
 
 RowBounds sdf_role_bounds(PdRole role) {
-    // Values-only over the existing 14 rows (F10 mechanism; the per-row
+    // Values-only over the existing rows (F10 mechanism; the per-row
     // 256 / Untyped-quota tuning lands with the M5/M12 rows that need
     // them). Unknown roles read zero bounds (fail closed downstream).
     RowBounds row{};
@@ -761,7 +768,8 @@ bool sdf_check_bounds(PdRole role, const CapSpec *specs, uint64_t count,
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
     CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
-    CONFIG_PROCFS_SRV || CONFIG_PROC_MGR || CONFIG_SERIAL_TX_SHM
+    CONFIG_PROCFS_SRV || CONFIG_PROC_MGR || CONFIG_SERIAL_TX_SHM ||            \
+    CONFIG_TIMER_SRV
 // (server-PD compose block reopened; see above for the unconditional
 // pure-bound helpers. Issue #564 F11 Stage B: the unconditional section
 // closed `kernel::sdf`, so reopen it here for the gated compose path.)
@@ -906,6 +914,7 @@ bool pd_owns_device(PdRole role) {
     case PdRole::WDOG_MON:
     case PdRole::PROCFS_SRV:
     case PdRole::PROC_MGR:
+    case PdRole::TIMER_SRV:
         // Policy-only PDs never own devices (structural rule).
         return false;
     }

@@ -92,7 +92,7 @@ tracking issue; it is never presented as already true.
 | IPC | per-task `MessageQueue`; `send` / `recv` (optional arg3 timeout, 0 = forever) / `send_sync`; FAST register path (48 B); SHM SPSC rings; Notify | keep core; add reply object + `REPLY_RECV`, direct switch on Call/ReplyRecv, death wake of reply waiters | #190, F3, F7 |
 | Memory | PMM + `MemPool` (hard-coded table `memory/mempool.cpp:MemPool::init`) + `BufferPool`; Untyped carve (`CAP_RETYPE`, single fixed target); `FRAME_CREATE` allocates from PMM | kernel allocation-free after handover; frame/region manager PD owns Untyped; creation by retype only | #193 |
 | IRQ | `IrqDelivery` slots; modes WAIT / NOTIFY / WAIT_ACK; MSI-X; storm limiter on aarch64 + riscv64 only | kernel routes direct to the owning PD; irq-mux owns configuration, sharing and IRTE only | #192, F8 |
-| Time | 80–83 live in-kernel (`sys_clock_gettime`, `sys_nanosleep`, `sys_timer_create`, `sys_timerfd_create`); optional proxy `time/timer_srv.cpp` behind `CONFIG_TIMER_SRV` (default 0) | kernel keeps tick + replenishment + timeout faults; POSIX time is timer-srv RPC | #194 |
+| Time | 80–83 live in-kernel (`sys_clock_gettime`, `sys_nanosleep`, `sys_timer_create`, `sys_timerfd_create`); timer-srv PD + real proxy behind `CONFIG_TIMER_SRV` (default 0, increment 1: proxy + PD land, OFF leg retained, QE port gates increment 2) | kernel keeps tick + replenishment + timeout faults; POSIX time is timer-srv RPC | #194 |
 | VFS / FS | `vfs.cpp` core + 7 backends + fd table; vfs-srv shadows the kernel path (`vfs/vfs_srv.cpp`) | capability-mediated split with per-open channels; backends in PD | #517 (supersedes #47) |
 | Block | in-kernel AHCI / ATA / virtio; block-srv live path (`driver/block_srv.cpp`) | block PD owns device via SDF caps + IOMMU domain | #517 |
 | Drivers | PD sources `userspace/{serial,kbd,rtc,fb,block,net}-pd.c`; kernel probing retained | PDs own devices; kernel keeps routing slots only | #476 |
@@ -143,7 +143,7 @@ number retired · **RETIRE** number retired without replacement ·
 | 30 | EVENT_WAIT | live | MOVE → sync-srv |
 | 31 | SIGNAL | live | MOVE → proc-mgr (#164) |
 | 32 | SIGRETURN | live | MOVE → proc-mgr (#164) |
-| 33 | ALARM | live | MOVE → timer-srv |
+| 33 | ALARM | live | KEEP (per-task tick-counter signal delivery stays kernel-internal; #194 decided STAYS, sleeper-wake leg dead under ON) |
 | 34 | GETTOD | live | MOVE → timer-srv |
 | 35 | UNAME | live | MOVE → supervisor RPC (static data) |
 | 36 | PAUSE | live, FAST member | RETIRE; replaced by NOTIFY_WAIT or bounded RECEIVE (libc check F20) |
@@ -606,17 +606,22 @@ Each subsection gives: (1) current vs end state and syscall mapping,
 
 ### 8.4 Timer service and timekeeping (#194)
 
-1. **State.** 80–83 are live in-kernel; `time/timer_srv.cpp` is an optional
-   proxy (`CONFIG_TIMER_SRV`, default 0) with a 16-entry tombstone ring
-   (`timer-srv.md`). End state: kernel keeps tick, budget replenishment and
-   timeout faults; timer-srv multiplexes all POSIX time. Syscalls: moves
-   33, 34, 80–83; keeps 5.
+1. **State.** Increment 1 (landed, default 0): the timer-srv PD serves the
+   full deadline engine and `time/timer_srv.cpp` proxies it (wire v2,
+   `CONFIG_TIMER_SRV`); the in-kernel POSIX registries stay compiled
+   (OFF leg) until QE ports `test_posix_time` (increment 2 deletes).
+   End state: kernel keeps tick, budget replenishment and timeout
+   faults; timer-srv multiplexes all POSIX time. Syscalls: moves 34,
+   80–83; keeps 5 and 33 (ALARM stays — per-task tick-counter signal
+   delivery is kernel-internal; the sleeper-wake leg is dead under ON).
 2. **Invariants.** timer-srv state is fixed-size; the client table size is an
    SDF parameter. Sleeping clients block in bounded `RECEIVE` or
    `NOTIFY_WAIT`, never in a kernel timer wheel after the flip.
 3. **Protocol.** 48 B `TimerRpc`; replies validated on server pid, epoch,
    owner id + generation, timer id + slot generation (`timer-srv.md`).
-   timer-srv's own wake source is a tick Notify from the kernel.
+   timer-srv's own wake source is a tick Notify from the kernel —
+   satisfied BY the wheel-expiry message wake (`ipc_recv_timeout`
+   returns on it; no per-tick broadcast exists or is added).
 4. **Failure.** Epoch bump on restart; clients re-arm. Tombstone overflow
    SHALL be counted and reported, not silently dropped (§10 D6).
 5. **Verification.** `srv_timer`: no kernel blocking for sleep after flip;
@@ -944,7 +949,7 @@ before every kernel deletion.
 | M3 | Direct switch on Call / REPLY_RECV; reply token (F3, #398, Q2, Q3) | M2 | `ipc`, `bench` |
 | M4 | mem-mgr bootstrap: root task Untyped handover, frozen pools, BufferPool fallback removed, user-page budget (F10) | M3 | `core_memory`, `capability` |
 | M5 | Supervisor skeleton: watches all PDs, interim restart (dispose own slots + `sdf_rebind`, §8.7 item 3), epoch publish; cap-broker policy serving (#515); `daemon_mgr` interim. Full revoke-then-retype restart and N2/N3 follow at M12 | M1 | `servers`, `cap_broker` |
-| M6 | timer-srv flip | M3, M5 | `deadline` |
+| M6 | timer-srv flip (increment 1 landed: proxy real, PD serves, default 0; increment 2 deletes OFF leg after the QE `test_posix_time` port; close needs `srv_timer` 3/3 + 2×3 matrix) | M3, M5 | `deadline` |
 | M7 | log-srv flip | M3, M5 | `logging_debug` |
 | M8 | IRQ hardening (x86 limiter, level mask, `pending` saturation, single waiter), then irq-mux config role (F8, #192) | M2 | `capability`, `drivers` |
 | M9 | Driver PDs → block-srv → VFS (#476, #517) | M4, M8 | `drivers`, `storage`, `block_srv_live`, `vfs_srv_live` |

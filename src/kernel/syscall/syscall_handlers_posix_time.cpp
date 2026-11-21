@@ -86,11 +86,18 @@ void timerfd_close(vfs::Vnode &self) {
     const uint64_t tag = timerfd_tag(&self);
     const uint32_t index = timerfd_tag_index(tag);
     const uint32_t gen = timerfd_tag_gen(tag);
+#if CONFIG_TIMER_SRV
+    // Issue #194 flip: disarm the server arm (bounded, fail-closed),
+    // then free the vnode locally — the slot residual drains via the
+    // owner-death tombstone path (INV-T2: no kernel slot table).
+    time::timer_srv::timerfd_disarm(index, gen);
+#else
     auto *cur = Scheduler::current_task();
     if (cur != nullptr) {
         time::PosixTime::timerfd_slot_free(index, gen, cur->id,
                                            cur->generation);
     }
+#endif
     self.private_data = nullptr;
     test::ResourceTracker::instance().track_vnode_remove();
     MemPool::free(&self);
@@ -173,10 +180,13 @@ bool is_timerfd_vnode(const vfs::Vnode *node) {
 uint64_t Syscall::sys_clock_gettime(uint64_t arg0, uint64_t arg1, uint64_t,
                                     uint64_t, uint64_t *) {
 #if CONFIG_TIMER_SRV
-    // Issue #241 (strangler step a): server path serves the read; the
-    // in-kernel wheel below stays the OFF/fallback path. Not flipped.
-    return static_cast<uint64_t>(
-        time::timer_srv::sys_clock_gettime_srv(arg0, arg1));
+    // Issue #194 flip: server path serves the read unconditionally
+    // (INV-T7: no runtime fallback — double-serve would double-fire).
+    const int64_t proxied = time::timer_srv::sys_clock_gettime_srv(arg0, arg1);
+    if (proxied < 0) {
+        return kNeg(-proxied);
+    }
+    return static_cast<uint64_t>(proxied);
 #else
     const uint64_t clock_id = arg0;
     if (clock_id != static_cast<uint64_t>(time::PosixClock::REALTIME) &&
@@ -209,10 +219,14 @@ uint64_t Syscall::sys_clock_gettime(uint64_t arg0, uint64_t arg1, uint64_t,
 uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
                                 uint64_t, uint64_t *) {
 #if CONFIG_TIMER_SRV
-    // Issue #241 (strangler step a): bounded server wait; no EINTR path
-    // yet (documented pre-flip limitation, ON not shipped).
-    return static_cast<uint64_t>(
-        time::timer_srv::sys_nanosleep_srv(arg0, arg1));
+    // Issue #194 flip: bounded server wait, unconditional (INV-T7).
+    // Carried limitation: no EINTR path for signal delivery to
+    // recv-parked sleepers (documented, QE-pinned).
+    const int64_t proxied = time::timer_srv::sys_nanosleep_srv(arg0, arg1);
+    if (proxied < 0) {
+        return kNeg(-proxied);
+    }
+    return static_cast<uint64_t>(proxied);
 #else
     auto *cur = syscall_task();
     if (cur == nullptr) {
@@ -312,11 +326,15 @@ uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
 uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
                                    uint64_t arg3, uint64_t *) {
 #if CONFIG_TIMER_SRV
-    // Issue #241 (strangler step a): full op multiplex proxies to the
-    // server; user-pointer copy/validation stays in-kernel there.
-    (void)arg3;
-    return static_cast<uint64_t>(
-        time::timer_srv::sys_timer_create_srv(arg0, arg1, arg2));
+    // Issue #194 flip: full op multiplex proxies to the server;
+    // user-pointer copy/validation stays in-kernel there (INV-T7:
+    // unconditional under CONFIG_TIMER_SRV, no runtime fallback).
+    const int64_t proxied =
+        time::timer_srv::sys_timer_create_srv(arg0, arg1, arg2, arg3);
+    if (proxied < 0) {
+        return kNeg(-proxied);
+    }
+    return static_cast<uint64_t>(proxied);
 #else
     auto *cur = syscall_task();
     if (cur == nullptr) {
@@ -444,10 +462,50 @@ uint64_t Syscall::sys_timer_create(uint64_t arg0, uint64_t arg1, uint64_t arg2,
 uint64_t Syscall::sys_timerfd_create(uint64_t arg0, uint64_t arg1, uint64_t,
                                      uint64_t, uint64_t *) {
 #if CONFIG_TIMER_SRV
-    // Issue #241 (strangler step a): slot alloc + vnode wiring proxy to
-    // the server; the -ENOSYS stub shape proves the seam pre-flip.
-    return static_cast<uint64_t>(
-        time::timer_srv::sys_timerfd_create_srv(arg0, arg1));
+    // Issue #194 flip: RPC alloc, then vnode wiring (no in-kernel slot;
+    // the tag is the server-issued (slot, slot_gen) token, INV-T5).
+    const int64_t packed = time::timer_srv::sys_timerfd_create_srv(arg0, arg1);
+    if (packed < 0) {
+        return kNeg(-packed);
+    }
+    auto *create_cur = syscall_task();
+    if (create_cur == nullptr) {
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+    const uint32_t created_index =
+        static_cast<uint32_t>(packed & 0xFFFFFFFFULL);
+    const uint32_t created_gen =
+        static_cast<uint32_t>((packed >> 32) & 0xFFFFFFFFULL);
+    auto *created_node =
+        static_cast<vfs::Vnode *>(MemPool::alloc(sizeof(vfs::Vnode)));
+    if (created_node == nullptr) {
+        // No arm exists yet (fresh slot): disarm is a defensive no-op;
+        // the bare slot drains via the owner-death tombstone path
+        // (bounded residual, fail-closed — same class as an -EAGAIN
+        // create that never armed).
+        time::timer_srv::timerfd_disarm(created_index, created_gen);
+        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    }
+    created_node->ops = &timerfd_ops;
+    created_node->ino = static_cast<uint64_t>(created_index);
+    created_node->size = 0;
+    created_node->mode = vfs::S_IFCHR;
+    created_node->private_data =
+        reinterpret_cast<void *>(make_timerfd_tag(created_index, created_gen));
+    created_node->refcount = 1;
+    created_node->parent = nullptr;
+    test::ResourceTracker::instance().track_vnode_add();
+    const int created_fd = syscall_task_open(created_node, arg1);
+    if (created_fd < 0) {
+        created_node->private_data = nullptr;
+        test::ResourceTracker::instance().track_vnode_remove();
+        MemPool::free(created_node);
+        // Fresh slot, never armed: disarm is defensive; the residual
+        // drains via owner-death tombstones (see above).
+        time::timer_srv::timerfd_disarm(created_index, created_gen);
+        return kNeg(time::kPosixErrAgain);
+    }
+    return static_cast<uint64_t>(created_fd);
 #else
     auto *cur = syscall_task();
     if (cur == nullptr) {
@@ -518,6 +576,37 @@ uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
     const uint32_t index = timerfd_tag_index(tag);
     const uint32_t slot_gen = timerfd_tag_gen(tag);
     const bool is_user = syscall_is_user_task();
+#if CONFIG_TIMER_SRV
+    // Issue #194 flip (INV-T5 drop site): the vnode tag IS the token
+    // expectation — the fire event must echo (slot, slot_gen) before
+    // anybody wakes. Stale reuse and post-delete in-flight events die
+    // in wait_for_fire's compare, not in a race. No waiter state, no
+    // kernel slot table (INV-T2 holds: the tag is opaque VFS data).
+    {
+        uint64_t expiries = 0;
+        const int64_t fired = nonblock
+            ? time::timer_srv::timerfd_try_consume(index, slot_gen,
+                                                   expiries)
+            : time::timer_srv::timerfd_deliver(index, slot_gen, expiries);
+        if (fired != 0) {
+            return kNeg(-fired);
+        }
+        if (is_user) {
+            auto checked_ptr = checked(reinterpret_cast<uint64_t *>(buffer));
+            if (!checked_ptr.valid()) {
+                return kNeg(time::kPosixErrFault);
+            }
+            checked_ptr.write(expiries, 0);
+        } else {
+            if (buffer == nullptr) {
+                return kNeg(time::kPosixErrFault);
+            }
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            *reinterpret_cast<uint64_t *>(buffer) = expiries;
+        }
+        return 8;
+    }
+#else
     // Fast path: data already available — no wait, no waiter state.
     uint64_t expiries = 0;
     int64_t consumed = time::PosixTime::timerfd_consume(
@@ -642,6 +731,7 @@ uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
         *reinterpret_cast<uint64_t *>(buffer) = expiries;
     }
     return 8;
+#endif
 }
 
 } // namespace kernel

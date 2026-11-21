@@ -636,6 +636,18 @@
 #define CONFIG_WATCHDOG_GRACE_TICKS 500
 #endif
 
+/// Timer-srv table bounds (issue #194): kernel-side mirror of the
+/// userspace wire table (`userspace/timer-srv.c` TIMER_SRV_MAX_*). The two
+/// sides must match — a mismatched BIND is rejected with -EPROTO.
+#ifndef CONFIG_TIMER_SRV_MAX_TIMERS
+#define CONFIG_TIMER_SRV_MAX_TIMERS 50
+#endif
+
+/// Timer-srv timerfd table bound (issue #194, mirrors the server).
+#ifndef CONFIG_TIMER_SRV_MAX_TIMERFDS
+#define CONFIG_TIMER_SRV_MAX_TIMERFDS 32
+#endif
+
 /// Timer/Event externalization master switch (issue #241, strangler step a).
 /// 0 = today's in-kernel wheel (shipped default; bit-identical behavior).
 /// 1 = timer-srv PD serves async timeouts; kernel keeps tick + budget only.
@@ -1522,6 +1534,12 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_TIMER_SRV_RTC_DEGRADE != 0 && CONFIG_TIMER_SRV_RTC_DEGRADE != 1
 #error "CONFIG_TIMER_SRV_RTC_DEGRADE must be 0 or 1 (default 0)"
+#endif
+#if CONFIG_TIMER_SRV_MAX_TIMERS < 1
+#error "CONFIG_TIMER_SRV_MAX_TIMERS must be >= 1 (default 50)"
+#endif
+#if CONFIG_TIMER_SRV_MAX_TIMERFDS < 1
+#error "CONFIG_TIMER_SRV_MAX_TIMERFDS must be >= 1 (default 32)"
 #endif
 #if CONFIG_DRIVER_PD_SERIAL != 0 && CONFIG_DRIVER_PD_SERIAL != 1
 #error "CONFIG_DRIVER_PD_SERIAL must be 0 or 1 (default 0)"

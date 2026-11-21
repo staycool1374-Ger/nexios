@@ -530,6 +530,14 @@ void PosixTime::drain_owner(TaskControlBlock &task) noexcept {
 }
 
 void PosixTime::reapply_wakes(uint32_t sched_cpu) noexcept {
+#if CONFIG_TIMER_SRV
+    // Issue #194 (INV-T3): no-op under ON by construction — no sleeper
+    // ever sets sleep_armed there (park happens in IPC::recv) and no
+    // timerfd waiter is ever armed (OFF-leg only), so the scan below
+    // would provably find nothing. The scheduler_tick.cpp call site is
+    // fenced (issue #600) and stays untouched; the stub lives here.
+    (void)sched_cpu;
+#else
     sync::IrqSpinLockGuard guard(lock_);
     for (uint32_t i = 0; i < kMaxTimerfds; ++i) {
         TimerFdSlot &slot = timerfds_[i];
@@ -571,6 +579,7 @@ void PosixTime::reapply_wakes(uint32_t sched_cpu) noexcept {
         slot.waiter_done = false;
         slot.waiter_dead = false;
     }
+#endif
 }
 
 void PosixTime::sleep_fire(void *context) noexcept {

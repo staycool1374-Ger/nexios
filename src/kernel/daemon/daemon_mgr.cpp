@@ -21,7 +21,6 @@
 
 #include <kernel/daemon/daemon_mgr.hpp>
 #include <kernel/ramdisk/ramdiskd.hpp>
-#include <kernel/time/timer_srv.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/elf/elf.hpp>
@@ -268,14 +267,11 @@ void restart_stale_daemons() {
             uint64_t bg = 0;
             // Entry budget wins when set (register_daemon_ex); legacy
             // name-based defaults preserved otherwise (unchanged behavior).
+            // Issue #194: no per-PD name ternary — the budget comes from
+            // the TaskDef row/entry (timer-srv SS(1,10,0)) only.
             uint64_t budget = entries_[i].ss_budget;
             if (budget == 0) {
-                budget =
-                    (strcmp(entries_[i].name, "iocd") == 0)
-                        ? 3ULL
-                        : ((strcmp(entries_[i].name, "timer-srv") == 0)
-                               ? 1ULL
-                               : 2ULL);
+                budget = (strcmp(entries_[i].name, "iocd") == 0) ? 3ULL : 2ULL;
             }
             task->init_sporadic_server(budget, 10, bg, 1);
         }
@@ -295,12 +291,9 @@ void restart_stale_daemons() {
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
         }
-#if CONFIG_TIMER_SRV
-        if (entries_[i].name != nullptr &&
-            strcmp(entries_[i].name, "timer-srv") == 0) {
-            kernel::time::timer_srv::on_restart(task->id);
-        }
-#endif
+        // Issue #194: restart comes from the TaskDef row/entry hook
+        // (on_restart_fn) only — no per-name special case (the timer-srv
+        // epoch bump lives in pd_restart_timer_srv).
         if (entries_[i].on_restart_fn != nullptr) {
             entries_[i].on_restart_fn(task->id);
         }
@@ -393,11 +386,7 @@ void ensure_running(const char *name) {
             uint64_t budget = entries_[i].ss_budget;
             if (budget == 0) {
                 budget =
-                    (strcmp(entries_[i].name, "iocd") == 0)
-                        ? 3ULL
-                        : ((strcmp(entries_[i].name, "timer-srv") == 0)
-                               ? 1ULL
-                               : 2ULL);
+                    (strcmp(entries_[i].name, "iocd") == 0) ? 3ULL : 2ULL;
             }
             task->init_sporadic_server(budget, 10, bg, 1);
         }
@@ -414,12 +403,8 @@ void ensure_running(const char *name) {
         if (entries_[i].set_pid_fn) {
             entries_[i].set_pid_fn(task->id);
         }
-#if CONFIG_TIMER_SRV
-        if (entries_[i].name != nullptr &&
-            strcmp(entries_[i].name, "timer-srv") == 0) {
-            kernel::time::timer_srv::on_restart(task->id);
-        }
-#endif
+        // Issue #194: same row-hook-only restart as restart_stale_daemons
+        // above (pd_restart_timer_srv owns the timer-srv epoch bump).
         if (entries_[i].on_restart_fn != nullptr) {
             entries_[i].on_restart_fn(task->id);
         }

@@ -37,13 +37,17 @@ namespace kernel::tcb_control {
 // Untyped possession, no SUPERVISOR scope), adds no new exclusion, and
 // its CREATOR holds are lifecycle tracking, not stop power (INV-PROC-6:
 // the PD never calls this gate as caller).
+// #194 revisit, recorded here: TIMER_SRV is message-only (zero-cap SDF
+// row, no Untyped possession, no SUPERVISOR scope) and adds no new
+// exclusion either — the gate stays property-based (pid cell + Untyped
+// possession), never a role list.
 static_assert(
-    static_cast<uint64_t>(sdf::PdRole::PROC_MGR) + 1 == sdf::kPdRoleCount,
+    static_cast<uint64_t>(sdf::PdRole::TIMER_SRV) + 1 == sdf::kPdRoleCount,
     "INV-ADM-15(c): PdRole grew — revisit tcb_control_role_protected");
 
-// INV-ADM-15(c), second anchor: the count literal itself (14 today).
+// INV-ADM-15(c), second anchor: the count literal itself (15 today).
 // A row addition moves this number and breaks the build here too.
-static_assert(sdf::kPdRoleCount == 14,
+static_assert(sdf::kPdRoleCount == 15,
               "INV-ADM-15(c): kPdRoleCount moved — revisit the gate");
 
 // File-static mem-mgr pid cell (M4/F10 hook).  0 today: no user-space

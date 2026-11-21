@@ -688,6 +688,12 @@ void init_task_main() {
         // PD just means the tests take the degraded path.
         (void)kernel::driver_pds::pd_bind_console();
 #endif
+#if CONFIG_TIMER_SRV
+        // Issue #194: rendezvous rtc-pd with timer-srv (epoch feed, PD to
+        // PD). Best-effort like the console bind above: a dead or absent
+        // rtc-pd leaves the server (and the anchor cell) DEGRADED.
+        (void)kernel::driver_pds::pd_bind_rtc();
+#endif
         kernel::test::run_registered(0);
 #else
         kernel::test::set_class_auto_shutdown(false);
