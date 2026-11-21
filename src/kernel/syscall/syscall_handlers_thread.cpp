@@ -243,10 +243,13 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                 }
                 if (p->state != TaskState::TERMINATED) {
                     Scheduler::set_task_ready(*p);
+                    // Issue #597: the a0/RAX override below is valid only
+                    // for a trap-frame (is_user_) parent — see
+                    // wake_waiting_parent for the full rationale.
                     // NOLINTNEXTLINE(performance-no-int-to-ptr)
                     uint64_t *frame = reinterpret_cast<uint64_t *>(
                         THREAD_JOIN_STACK_PTR(p));
-                    if (frame) {
+                    if (p->is_user_ && frame) {
 #if defined(CONFIG_ARCH_RISCV64)
                         frame[9] = t->id;
 #else

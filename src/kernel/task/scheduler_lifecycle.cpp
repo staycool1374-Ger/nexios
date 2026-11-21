@@ -687,15 +687,21 @@ Scheduler::WakeResult Scheduler::wake_waiting_parent(
         // deferral + stale arms; set_task_ready routes EDF-aware).
         Scheduler::dequeue_ready(*p);
         Scheduler::set_task_ready(*p);
-        if (task_stack_ptr(p)) {
+        if (p->is_user_ && task_stack_ptr(p)) {
             // NOLINTNEXTLINE(performance-no-int-to-ptr)
             auto *stack = reinterpret_cast<uint64_t *>(task_stack_ptr(p));
-            // Issue #221: override the saved RETURN VALUE (a0) with the
-            // child's PID — the "saved RAX" slot on x86 is frame[0], but
-            // the riscv64 trap frame returns via idx9 (OFF_A0==72 in
-            // syscall_entry.S; cf. exec_into_current regs[9]).  frame[0]
-            // is x1/ra: writing the PID there corrupts the return address
-            // while the parent observes the unpatched -1 (WAITPID-FAILED).
+            // Issue #221 keeps the override for a parent that resumes
+            // through a real trap frame; issue #597 gates it on
+            // is_user_ (task.hpp:669-674, authoritative since MP-1):
+            // a kernel-task parent returns from waitpid by direct C++
+            // return (proc_svc.cpp:390-391) and observes the cleared
+            // publication + delivered status, so no patch is needed —
+            // and its task_stack_ptr is the LIVE kernel stack, where
+            // the store planted child.id on a live return address
+            // (GDB: slot held 0x403c7e, fault fetch pc=0xa).
+            // INV-597-1: write frame[0] (riscv64 frame[9], OFF_A0==72
+            // in syscall_entry.S) for user parents only; riscv64
+            // frame[0] is x1/ra, not the return-value slot.
             uint64_t *frame = stack;
 #if defined(CONFIG_ARCH_RISCV64)
             frame[9] = child.id;

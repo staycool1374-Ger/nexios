@@ -861,6 +861,11 @@ class Scheduler {
     ///        it runs the trap funnel above (dequeue + release before the
     ///        wake), so a waitpid parent is readied via wake_waiting_parent
     ///        and collects through the second residence.
+    ///        Issue #597 / INV-597-1: the a0/RAX override is written only
+    ///        for an is_user_ parent (it resumes through a trap frame).
+    ///        A kernel-task parent never does — its waitpid return is a
+    ///        direct C++ return and its task_stack_ptr is its live kernel
+    ///        stack — so the store is skipped there (all arches).
     /// @param child The just-terminated child task.
     /// @return WakeResult telling a KILL arm whether the corpse now has
     ///         a collecting parent (PARENT_COLLECTS: keep parented, skip
