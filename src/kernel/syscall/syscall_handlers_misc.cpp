@@ -42,6 +42,7 @@
 #endif
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/rtc.hpp>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/memory/checked_ptr.hpp>
@@ -234,7 +235,14 @@ uint64_t Syscall::sys_gettod(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     if (syscall_is_user_task() && !tv_ptr.valid())
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
 
-    uint64_t secs = arch::RTC::read_seconds();
+    uint64_t secs = 0;
+#if CONFIG_TIMER_SRV
+    // Issue #194 flip: RTC is PD-owned; the wall value comes from the
+    // published anchor cell (boot fallback retained inside the cell).
+    secs = time::timer_srv::anchor_realtime_ns() / 1000000000ULL;
+#else
+    secs = arch::RTC::read_seconds();
+#endif
     Timeval tv = {};
     tv.tv_sec = static_cast<int64_t>(secs);
     tv.tv_usec = 0;

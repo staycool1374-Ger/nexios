@@ -35,6 +35,16 @@ using sched_queue::edf_ready_;
 namespace {
 // One-shot latch for the restore-drop ERROR (issue #582 §5.5).
 bool s_restore_drop_warned = false;
+
+// Issue #600 Part 2: bitmap-absence proof for the restore rebuild —
+// true when no level queue of @p cpu physically contains @p task.
+bool restore_bitmap_absent(const TaskControlBlock &t, uint64_t cpu) noexcept {
+    for (uint64_t lvl = 0; lvl <= CONFIG_PRIORITY_CEILING; ++lvl) {
+        if (Scheduler::rq_for(cpu).queue(lvl).contains(t))
+            return false;
+    }
+    return true;
+}
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -93,14 +103,20 @@ void Scheduler::restore_rqpod(const ReadyQueuePOD &src, uint64_t cpu) noexcept {
             continue;
         if (queue_target(*t) != cpu)
             continue;
-        if (edf_eligible(*t))
+        if (edf_eligible(*t)) {
+            // Issue #600 Part 2 (INV-RQ-4): no blind skip — chain-flagged
+            // tasks are owned by the EDF rebuild in restore_task_fields,
+            // but a doubly-unlinked EDF-eligible READY task is rescued
+            // here (counter only; the sweep stays the loud detector).
+            if (t->in_edf_queue_)
+                continue;
+            if (!restore_bitmap_absent(*t, cpu))
+                continue;
+            ++edf_orphan_rescue_count_;
+            enqueue_ready(*t);
             continue;
-        bool phys = false;
-        for (uint64_t p = 0; p <= CONFIG_PRIORITY_CEILING && !phys; ++p) {
-            if (rq_for(cpu).queue(p).contains(*t))
-                phys = true;
         }
-        if (phys)
+        if (!restore_bitmap_absent(*t, cpu))
             continue;
         rq_task(*t).detach(*t);
         enqueue_ready(*t);

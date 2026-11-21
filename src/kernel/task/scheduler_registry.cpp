@@ -72,9 +72,10 @@ constinit uint64_t Scheduler::sporadic_task_count_ = 0;
 constinit bool Scheduler::preempt_enabled_ = false;
 constinit bool Scheduler::suppress_terminated_log_ = false;
 
-// Issue #242: breaker observation starts unwatched (STARVABLE_NONE) with a
-// zero count on every CPU; reset_starvation_breaker() re-establishes this on
-// init and snapshot restore (policy-runtime, never preserved across tests).
+// Issue #598: breaker observation is the victim band under watch
+// (STARVABLE_NONE = none) plus consecutive denied ticks on every CPU;
+// reset_starvation_breaker() re-establishes this on init and snapshot
+// restore (policy-runtime, never preserved across tests).
 uint64_t Scheduler::starve_level_[CONFIG_MAX_CPUS];
 uint32_t Scheduler::starve_ticks_[CONFIG_MAX_CPUS];
     constinit TaskControlBlock *Scheduler::idle_task_ = nullptr;
@@ -86,6 +87,11 @@ TaskControlBlock *Scheduler::idle_tasks_[CONFIG_MAX_CPUS] = {};
 uint64_t Scheduler::migration_count_[CONFIG_MAX_CPUS] = {};
 uint64_t Scheduler::stuck_rescue_count_ = {};
 uint64_t Scheduler::orphan_rescue_count_ = {};
+// Issue #600 Parts 1-3 oracles (see hpp): corrected-reporter observations,
+// EDF-orphan rescues, EDF chain drops. Same discipline as above.
+uint64_t Scheduler::runq_nowhere_linked_count_ = {};
+uint64_t Scheduler::edf_orphan_rescue_count_ = {};
+uint64_t Scheduler::edf_chain_drop_count_ = {};
 // Issue #582 INV-RQ-3 oracles + §5.5 miss-path counters (see hpp).
 uint64_t Scheduler::runq_link_flag_desync_count_ = {};
 uint64_t Scheduler::runq_desync_forced_clear_ = {};
@@ -355,6 +361,30 @@ uint64_t Scheduler::orphan_rescue_count() noexcept {
 
 void Scheduler::reset_orphan_rescue_count_for_test() noexcept {
     __atomic_store_n(&orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::runq_nowhere_linked_count() noexcept {
+    return __atomic_load_n(&runq_nowhere_linked_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_runq_nowhere_linked_count_for_test() noexcept {
+    __atomic_store_n(&runq_nowhere_linked_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::edf_orphan_rescue_count() noexcept {
+    return __atomic_load_n(&edf_orphan_rescue_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_edf_orphan_rescue_count_for_test() noexcept {
+    __atomic_store_n(&edf_orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
+uint64_t Scheduler::edf_chain_drop_count() noexcept {
+    return __atomic_load_n(&edf_chain_drop_count_, __ATOMIC_RELAXED);
+}
+
+void Scheduler::reset_edf_chain_drop_count_for_test() noexcept {
+    __atomic_store_n(&edf_chain_drop_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
 uint64_t Scheduler::runq_link_flag_desync_count() noexcept {

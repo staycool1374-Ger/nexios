@@ -56,14 +56,21 @@ class PriorityMap {
         return IDLE_BAND;
     }
 
-    /// @brief Highest set level in [1, prio) — the starvation-breaker
-    ///        window (issue #242).  Level 0 is the idle band (forcing the
-    ///        idle task can never relieve a starved supervisor), so it is
-    ///        excluded by construction.  O(1): two masked word ops.
+    /// @brief Lowest set level in [1, prio) — the starvation-breaker
+    ///        victim window (issue #598; was highest-first, issue #242).
+    ///        The forced slot goes to the maximally-waiting (lowest) ready
+    ///        band, so a transient higher-priority waker can neither reset
+    ///        the observation nor divert the forced pick.  Level 0 is the
+    ///        idle band (forcing the idle task can never relieve a starved
+    ///        supervisor), so it is excluded by construction
+    ///        (specs/microkernel-transition.md:519,780).  O(1): two masked
+    ///        word ops, low word first with find_lowest_bit (each word is
+    ///        tested non-zero before the call: find_lowest_bit(0) == 0
+    ///        would alias band 0).
     /// @return Level in [1, prio), or STARVABLE_NONE when no such level
     ///         is set.
     static constexpr uint64_t STARVABLE_NONE = ~0ULL;
-    uint64_t highest_starvable_below(uint64_t prio) const noexcept {
+    uint64_t lowest_starvable_below(uint64_t prio) const noexcept {
         if (prio <= 1) {
             return STARVABLE_NONE;
         }
@@ -72,13 +79,13 @@ class PriorityMap {
                                : (((1ULL << prio) - 1ULL) & ~1ULL);
         uint64_t hi_mask =
             (prio <= 64) ? 0ULL : ((1ULL << (prio - 64)) - 1ULL);
-        uint64_t masked_hi = bitmap_hi_ & hi_mask;
-        if (masked_hi) {
-            return 64 + hal::bits::find_highest_bit(masked_hi);
-        }
         uint64_t masked_lo = bitmap_lo_ & lo_mask;
         if (masked_lo) {
-            return hal::bits::find_highest_bit(masked_lo);
+            return hal::bits::find_lowest_bit(masked_lo);
+        }
+        uint64_t masked_hi = bitmap_hi_ & hi_mask;
+        if (masked_hi) {
+            return 64 + hal::bits::find_lowest_bit(masked_hi);
         }
         return STARVABLE_NONE;
     }

@@ -84,7 +84,7 @@ uint64_t g_debugd_pid_cell = 0;
 namespace {
 #if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                            \
-    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET
+    CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET || CONFIG_TIMER_SRV
 void pd_rebind_role(kernel::sdf::PdRole role, uint64_t pid) {
     auto *t = kernel::Scheduler::find_task(pid);
     if (t == nullptr || t->magic != TaskControlBlock::TCB_MAGIC) {
@@ -123,12 +123,26 @@ void pd_set_kbd(uint64_t pid) {
 #if CONFIG_DRIVER_PD_RTC
 void pd_restart_rtc(uint64_t pid) {
     pd_rebind_role(kernel::sdf::PdRole::RTC, pid);
+#if CONFIG_TIMER_SRV
+    // Issue #194 (S2-A): drop the cached wall anchor; the next task-context
+    // refresh re-rendezvouses (pd_bind_rtc + pd_rtc_push_epoch in
+    // refresh_anchor) before polling the server, so the respawned rtc-pd
+    // re-feeds and the cell resyncs forward. No RPC here: this hook runs on
+    // the tick path (restart_stale_daemons), which cannot park on IPC.
+    kernel::time::timer_srv::anchor_invalidate();
+#endif
 }
 uint64_t pd_pid_rtc() {
     return kernel::driver_pds::get_pd_pid(kernel::sdf::PdRole::RTC);
 }
 void pd_set_rtc(uint64_t pid) {
     kernel::driver_pds::set_pd_pid(kernel::sdf::PdRole::RTC, pid);
+}
+#endif
+#if CONFIG_TIMER_SRV
+void pd_restart_timer_srv(uint64_t pid) {
+    pd_rebind_role(kernel::sdf::PdRole::TIMER_SRV, pid);
+    kernel::time::timer_srv::on_restart(pid);
 }
 #endif
 #if CONFIG_DRIVER_PD_FB
@@ -390,13 +404,16 @@ constexpr TaskDef g_task_defs[] = {
      ServerMode::SPORADIC, pd_restart_net, 5},
 #endif
 #if CONFIG_TIMER_SRV
-    // timer-srv: Timer/Event externalization PD (issue #241, strangler a).
-    // Sporadic server, cheapest share SS(1,10,0). Guarded row: absent at
-    // OFF (shipped default), so the boot table is unchanged when 0.
+    // timer-srv: Timer/Event externalization PD (issue #241, strangler a;
+    // #194 flip). Sporadic server, cheapest share SS(1,10,0). Guarded row:
+    // absent at OFF (shipped default), so the boot table is unchanged when 0.
+    // Message-only server: role row carries zero caps (sdf_zero_caps_allowed).
     {"timer-srv", TaskType::SPORADIC_SERVER, true, nullptr,
      "bin/timer-srv.c.elf", 20, 10, 0, 1, 10, 0, "timer-srv",
      time::timer_srv::set_timer_srv_pid,
-     time::timer_srv::get_timer_srv_pid, 1, 0, false},
+     time::timer_srv::get_timer_srv_pid, 1, 0, false,
+     ServerMode::SPORADIC, pd_restart_timer_srv,
+     static_cast<uint64_t>(sdf::PdRole::TIMER_SRV)},
 #endif
 #if CONFIG_VFS_SRV
     // vfs-srv: VFS backend server PD (issue #47, strangler step a).
@@ -531,13 +548,14 @@ constexpr bool server_params_valid(const TaskDef &d) {
         return false;
     if (d.set_pid_fn == nullptr || d.get_pid_fn == nullptr)
         return false;
-    // Issue #48/#51/#240/#390/#54/#564: an SDF row needs its supervisor
-    // hook (re-derive on restart, never inherit) and a valid role index.
+    // Issue #48/#51/#240/#390/#54/#564/#194: an SDF row needs its
+    // supervisor hook (re-derive on restart, never inherit) and a valid
+    // role index.
     if (d.sdf_role != 0xFF) {
         if (d.on_restart_fn == nullptr)
             return false;
         if (d.sdf_role >
-            static_cast<uint64_t>(sdf::PdRole::PROC_MGR))
+            static_cast<uint64_t>(sdf::PdRole::TIMER_SRV))
             return false;
     }
     return true;
@@ -847,7 +865,7 @@ void reboot_from_table() {
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                         \
     CONFIG_VFS_SRV || CONFIG_BLOCK_SRV || CONFIG_TERM_SRV ||                  \
     CONFIG_LOG_SRV || CONFIG_CAP_BROKER || CONFIG_WDOG_MON ||                 \
-    CONFIG_PROCFS_SRV || CONFIG_PROC_MGR
+    CONFIG_PROCFS_SRV || CONFIG_PROC_MGR || CONFIG_TIMER_SRV
             if (def.sdf_role != 0xFF) {
                 // SDF compose (issues #47/#48/#51/#240/#390/#54): mint the
                 // role caps into the fresh task. Fail-closed: compose failure

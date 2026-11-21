@@ -93,16 +93,17 @@ TaskControlBlock *Scheduler::next_task() noexcept {
 }
 
 TaskControlBlock *Scheduler::next_task_below(uint64_t top) noexcept {
-    // Issue #242 starvation-breaker pick.  Mirrors next_task() eligibility
-    // exactly (READY/RUNNING, affine to this CPU, never the current task);
-    // ineligible heads are dequeued-dropped like next_task().  Each iteration
-    // unlinks at least one node or clears at least one stale bitmap bit
-    // (dequeue_level clears the bit when its queue is empty), both finite,
-    // so the loop always terminates; the caller additionally only invokes
-    // this once per tick.
+    // Issue #598 starvation-breaker pick: the LOWEST eligible non-idle
+    // READY level under top (the maximally-waiting victim).  Mirrors
+    // next_task() eligibility exactly (READY/RUNNING, affine to this CPU,
+    // never the current task); ineligible heads are dequeued-dropped like
+    // next_task().  Each iteration unlinks at least one node or clears at
+    // least one stale bitmap bit (dequeue_level clears the bit when its
+    // queue is empty), both finite, so the loop always terminates; the
+    // caller additionally only invokes this once per tick.
     while (rq_own().has_ready()) {
         uint64_t lvl =
-            rq_own().bitmap().highest_starvable_below(top);
+            rq_own().bitmap().lowest_starvable_below(top);
         if (lvl == PriorityMap::STARVABLE_NONE) {
             return nullptr;
         }

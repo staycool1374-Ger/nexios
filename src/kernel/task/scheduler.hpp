@@ -393,6 +393,17 @@ class Scheduler {
     static void note_restore_drop_rebuilt() noexcept;
     /// @brief Count one ready link/flag desync observation (INV-RQ-3).
     static void note_runq_link_flag_desync() noexcept;
+    /// @brief Count one EDF stale-head force-drop (issue #600 Part 3,
+    ///        INV-RQ-5). Called from the dispatch/peek path (lock state
+    ///        varies — atomic increment); throttled warn + op-ring dump
+    ///        on the first, like the stranded-READY rescues.
+    /// @param id Best-effort head id for the diagnostic line (untrusted
+    ///        when the head failed magic; the (n=) counter is the oracle).
+    static void note_edf_chain_drop(uint64_t id) noexcept;
+    /// @brief Count one EDF chain-cycle fail-closed nuke (issue #600
+    ///        Part 3, INV-RQ-5). Unconditional ERROR + op-ring dump:
+    ///        a cycle is never healthy.
+    static void note_edf_chain_cycle() noexcept;
     /// @brief Typed enqueue-refusal handling (issue #582 INV-RQ-2): the TCB
     ///        is byte-identical (API guarantee).  Counts + one-shot ERROR
     ///        with caller ra; the tick sweep rescues + counts.  No-op when
@@ -513,6 +524,28 @@ class Scheduler {
     static uint64_t orphan_rescue_count() noexcept;
     /// @brief Reset the flagged-orphan rescue counter (test isolation).
     static void reset_orphan_rescue_count_for_test() noexcept;
+    /// @brief Nowhere-linked AlreadyQueued observations since boot (issue #600
+    ///        Part 1). The corrected two-loop scan (every CPU x every level)
+    ///        proved absence: a duplicate wake refused on a task linked
+    ///        nowhere. Detection-first telemetry like orphan_rescue_count_:
+    ///        must stay 0 in a healthy run. Monotonic (never rewound).
+    static uint64_t runq_nowhere_linked_count() noexcept;
+    /// @brief Reset the nowhere-linked counter (test isolation).
+    static void reset_runq_nowhere_linked_count_for_test() noexcept;
+    /// @brief EDF-eligible stranded-READY rescues since boot (issue #600
+    ///        Part 2 tick sweep + restore rebuild). Like stuck_rescue_count_
+    ///        but for the EDF blind spot (INV-RQ-4). Must stay 0 in a
+    ///        healthy run. Monotonic (never rewound).
+    static uint64_t edf_orphan_rescue_count() noexcept;
+    /// @brief Reset the EDF-orphan rescue counter (test isolation).
+    static void reset_edf_orphan_rescue_count_for_test() noexcept;
+    /// @brief EDF chain drops since boot (issue #600 Part 3): stale
+    ///        non-membership-marked heads force-dropped plus cycle
+    ///        fail-closed nukes. Detection-first, must stay 0 in a healthy
+    ///        run. Monotonic (never rewound).
+    static uint64_t edf_chain_drop_count() noexcept;
+    /// @brief Reset the EDF chain-drop counter (test isolation).
+    static void reset_edf_chain_drop_count_for_test() noexcept;
     /// @brief Clear every task's #578 park-test membership (seam teardown).
     ///        Bounded validity-guarded walk under scheduler_lock_.
     static void clear_park_test_members() noexcept;
@@ -1574,6 +1607,20 @@ struct SwSlots {
     ///        ownership/discipline as stuck_rescue_count_; reset by
     ///        reset_orphan_rescue_count_for_test().
     static uint64_t orphan_rescue_count_;
+    /// @brief Nowhere-linked AlreadyQueued observations since boot (issue
+    ///        #600 Part 1). Same ownership/discipline as
+    ///        stuck_rescue_count_; reset by
+    ///        reset_runq_nowhere_linked_count_for_test().
+    static uint64_t runq_nowhere_linked_count_;
+    /// @brief EDF-eligible stranded-READY rescues since boot (issue #600
+    ///        Part 2, INV-RQ-4). Same ownership/discipline as
+    ///        stuck_rescue_count_; reset by
+    ///        reset_edf_orphan_rescue_count_for_test().
+    static uint64_t edf_orphan_rescue_count_;
+    /// @brief EDF chain drops since boot (issue #600 Part 3, INV-RQ-5).
+    ///        Same ownership/discipline as stuck_rescue_count_; reset by
+    ///        reset_edf_chain_drop_count_for_test().
+    static uint64_t edf_chain_drop_count_;
     /// @brief Ready link/flag desync observations since boot (issue #582
     ///        INV-RQ-3 oracle: link/flag mismatches seen by the typed API).
     ///        Same ownership/discipline as stuck_rescue_count_; reset by
@@ -1623,24 +1670,29 @@ struct SwSlots {
     static void reset_ipc_wake_rescue_count_for_test() noexcept;
     /// @brief IPC-wake rescues since reset (QE diagnostic).
     static uint64_t ipc_wake_rescue_count() noexcept;
-    /// @brief Starvation-breaker trigger (issue #242): consecutive ticks the
-    ///        top READY level may be picked while lower non-idle READY levels
-    ///        wait before exactly one dispatch below the top is forced.  Fixed
+    /// @brief Starvation-breaker trigger (issue #598; was top-identity,
+    ///        issue #242): consecutive ticks the victim band was denied
+    ///        while lower non-idle READY levels wait before exactly one
+    ///        dispatch of the lowest eligible band is forced.  Fixed
     ///        constant, deadline-agnostic, so worst-case interference stays
-    ///        exactly 1 forced tick per N = 20 backlogged ticks (20 ms delay
-    ///        ceiling at 1 kHz) in both builds.
+    ///        one forced tick per N = 20 denied ticks (20 ms delay ceiling
+    ///        at 1 kHz) in both builds.
     static constexpr uint32_t kStarvationBreakerTicks = 20;
-    /// @brief Breaker observation per CPU: top level under watch
-    ///        (STARVABLE_NONE = no level watched), consecutive ticks seen.
+    /// @brief Breaker observation per CPU: victim band under watch
+    ///        (STARVABLE_NONE = no victim watched; diagnostic mirror of the
+    ///        lowest ready band below top), consecutive denied ticks.
     ///        Tick-owned writes under scheduler_lock_; policy-runtime only —
     ///        reset by reset_starvation_breaker() on init and snapshot
     ///        restore, never preserved across tests.  Counter-only: task
     ///        priorities are never mutated (PI/admission untouched).
     static uint64_t starve_level_[CONFIG_MAX_CPUS];
     static uint32_t starve_ticks_[CONFIG_MAX_CPUS];
-    /// @brief Forced pick below @p top for the breaker: highest non-idle
-    ///        READY level under top, eligibility-filtered exactly like
-    ///        next_task() (READY/RUNNING, affine here, never current).
+    /// @brief Forced pick below @p top for the breaker: lowest eligible
+    ///        non-idle READY level under top (the maximally-waiting victim),
+    ///        eligibility-filtered exactly like next_task() (READY/RUNNING,
+    ///        affine here, never current).  Per-band-fairness escalation is
+    ///        tracked in issue #599; until then middle backlogged bands keep
+    ///        strict service whenever the top drains.
     ///        Ineligible heads are dequeued-dropped like next_task(); the
     ///        drop loop is bounded (each iteration unlinks >= 1 node or
     ///        clears >= 1 stale bit, both finite).

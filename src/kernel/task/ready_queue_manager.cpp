@@ -190,6 +190,14 @@ void ReadyQueueManager::detach(TaskControlBlock &tcb) noexcept {
 
 void ReadyQueueManager::move_priority(TaskControlBlock &tcb, uint64_t old_prio,
                                       uint64_t new_prio) noexcept {
+    // Issue #600 Part 4: one IrqGuard unit for the remove→enqueue
+    // composite (INV-RQ-1 extension). Without it the task is published
+    // READY + unlinked for one window, and a tick-sweep interleave can
+    // re-enqueue at the pre-move level (stale bucket, missed
+    // preemption). Nesting inside callers that already hold IrqGuard or
+    // scheduler_lock_ is legal (no new lock, no lock-order change —
+    // T2b constrains scheduler_lock_ only).
+    arch::IrqGuard irq_guard{};
     if (old_prio == new_prio)
         return;
     remove(tcb, old_prio);

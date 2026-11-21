@@ -3,12 +3,13 @@
 #if CONFIG_DRIVER_PD_SERIAL || CONFIG_DRIVER_PD_KBD ||                        \
     CONFIG_DRIVER_PD_RTC || CONFIG_DRIVER_PD_FB ||                             \
     CONFIG_DRIVER_PD_BLOCK || CONFIG_DRIVER_PD_NET ||                          \
-    CONFIG_SERIAL_TX_SHM
+    CONFIG_SERIAL_TX_SHM || CONFIG_TIMER_SRV
 
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/task/boot_sdf.hpp>
+#include <kernel/time/timer_srv.hpp>
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/memory/address.hpp>
@@ -168,6 +169,78 @@ bool pd_bind(sdf::PdRole role) {
     req.arg2 = specs[0].size;
     DriverRpc reply{};
     return pd_rpc(role, req, reply);
+}
+
+bool pd_bind_rtc() {
+    const uint64_t pid = get_pd_pid(sdf::PdRole::RTC);
+    if (pid == 0 || !pd_alive(sdf::PdRole::RTC)) {
+        return false;
+    }
+    auto *srv = Scheduler::find_task(pid);
+    if (srv == nullptr) {
+        return false;
+    }
+    auto *space = srv->get_cspace();
+    if (space == nullptr) {
+        return false;
+    }
+    auto *cur = Scheduler::current_task();
+    if (cur == nullptr) {
+        return false;
+    }
+    // Convey the composed row (index 0: RTC MMIO/IO-port cap) plus the
+    // timer-srv rendezvous: arg1 = server PID (0 = absent, PD degrades),
+    // arg2 = timer wire version (S2-4 gate, same as TimerRpc BIND).
+    sdf::CapSpec specs[sdf::kMaxCapsPerRole] = {};
+    const uint64_t count = sdf::sdf_row(sdf::PdRole::RTC, specs);
+    if (count < 1) {
+        return false;
+    }
+    // The window itself is spec-fixed (see below); only the count rides.
+    (void)specs;
+    int slot = -1;
+    uint32_t cap_gen = 0;
+    if (!sdf::sdf_role_cap(sdf::PdRole::RTC, 0, slot, cap_gen)) {
+        return false;
+    }
+    uint64_t server_pid = 0;
+#if CONFIG_TIMER_SRV
+    server_pid = kernel::time::timer_srv::get_timer_srv_pid();
+#endif
+    DriverRpc req{};
+    req.op = static_cast<uint8_t>(DrvOp::BIND);
+    req.owner_id = static_cast<uint32_t>(cur->id);
+    req.owner_gen = cur->generation;
+    req.epoch = pd_epoch();
+    req.flags = static_cast<uint8_t>(count);
+    req.arg0 = cap::encode_user_handle(space->cspace_id, slot, cap_gen);
+    // Rendezvous override (issue #194 step 29/31): arg1 carries the
+    // timer-srv PID (0 = server absent, PD stays degraded) and arg2 the
+    // timer wire version. The MMIO window itself is spec-fixed per arch
+    // (rtc-pd.c mirrors device_regions.hpp; same precedent as the
+    // serial-pd port literals), so no phys/size args are needed.
+    req.arg1 = server_pid;
+    req.arg2 = 2; // timer wire version (mirrors kSrvWireVersion)
+    DriverRpc reply{};
+    return pd_rpc(sdf::PdRole::RTC, req, reply);
+}
+
+bool pd_rtc_push_epoch() {
+#if CONFIG_DRIVER_PD_RTC
+    auto *cur = Scheduler::current_task();
+    if (cur == nullptr) {
+        return false;
+    }
+    DriverRpc req{};
+    req.op = static_cast<uint8_t>(DrvOp::RTC_EPOCH);
+    req.owner_id = static_cast<uint32_t>(cur->id);
+    req.owner_gen = cur->generation;
+    req.epoch = pd_epoch();
+    DriverRpc reply{};
+    return pd_rpc(sdf::PdRole::RTC, req, reply) && reply.status == 0;
+#else
+    return false;
+#endif
 }
 
 bool pd_bind_shm(sdf::PdRole role) {
@@ -653,4 +726,4 @@ bool console_test_pump() {
 } // namespace driver_pds
 } // namespace kernel
 
-#endif // any CONFIG_DRIVER_PD_*
+#endif // any CONFIG_DRIVER_PD_* / CONFIG_TIMER_SRV

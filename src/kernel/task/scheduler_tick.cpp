@@ -67,6 +67,21 @@ using sched_debug::g_diag_rms_count;
 using sched_debug::g_diag_tick_count;
 #endif
 
+namespace {
+// Issue #600 Part 2: single bitmap-absence proof shared by the sweep's
+// EDF and FIXED branches (one implementation, no duplicated loops).
+// True when no level queue of the task's affinity target physically
+// contains it. Caller holds scheduler_lock_, so absence is proven.
+bool sweep_bitmap_absent(const TaskControlBlock &task) noexcept {
+    for (uint64_t prio_idx = 0; prio_idx <= CONFIG_PRIORITY_CEILING;
+         ++prio_idx) {
+        if (Scheduler::rq_task(task).queue(prio_idx).contains(task))
+            return false;
+    }
+    return true;
+}
+} // namespace
+
 void Scheduler::on_tick() noexcept {
 #if defined(CONFIG_DEBUG)
     __atomic_fetch_add(&g_diag_tick_count, 1ULL, __ATOMIC_RELAXED);
@@ -575,8 +590,12 @@ void Scheduler::on_tick() noexcept {
         // not recur, so re-apply level-triggered every tick until the
         // task dispatches or dies. Detection-first: count + warn per
         // rescue (H2-ENQDEAD precedent) so a recurring wake-loss can never
-        // hide behind the heal. EDF-eligible tasks are owned by
-        // edf_peek_valid_own — never touch them here. Bounded by
+        // hide behind the heal. Issue #600 Part 2 (INV-RQ-4): the EDF
+        // gate no longer blinds the sweep — EDF-eligible READY tasks
+        // with neither chain nor bitmap membership are rescued via
+        // enqueue_ready (which routes them to edf_insert), so every
+        // READY task owned by this CPU and member of neither list is
+        // rescued within one tick. Bounded by
         // STRANDED_RESCUE_SCAN_MAX; no foreign locks, no allocation,
         // never clobbers a non-READY state (H2 guard, copied from #18).
         uint64_t sweep_count = 0;
@@ -590,19 +609,40 @@ void Scheduler::on_tick() noexcept {
                 continue;
             if (queue_target(*task) != sched_cpu())
                 continue; // issue #25 C1: own-CPU tasks only
-            if (edf_eligible(*task))
-                continue; // EDF path owns these (edf_peek_valid_own)
             if (task->state != TaskState::READY)
                 continue; // never clobber RUNNING/BLOCKED/etc (H2)
+            // Issue #600 Part 2: EDF-eligible tasks are chain members —
+            // prove bitmap absence (they must be in neither list) and
+            // rescue through the single routing point. Chain-flagged
+            // tasks stay owned by edf_peek_valid_own (chain-only view).
+            if (edf_eligible(*task)) {
+                if (task->in_edf_queue_)
+                    continue;
+                if (!sweep_bitmap_absent(*task))
+                    continue; // bitmap-linked — nothing to rescue
+                // Non-current + flagged is a lost-consume bug, never a
+                // valid deferral (same mirror as the FIXED branch below).
+                task->ready_deferred_ = false;
+                const uint64_t edf_rescue_no = ++edf_orphan_rescue_count_;
+                if (edf_rescue_no == 1 ||
+                    (edf_rescue_no % STRANDED_RESCUE_WARN_EVERY) == 0) {
+                    Logger::warn(
+                        "sched: EDF-eligible stranded READY rescued "
+                        "#%lx id=%lx eff=%lx",
+                        edf_rescue_no, task->id,
+                        effective_priority(task));
+                    if (edf_rescue_no == 1) {
+                        sched_debug::sched_runq_trace_dump(task->id, 8);
+                    }
+                }
+                enqueue_ready(*task);
+                __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                                 __ATOMIC_RELEASE);
+                continue;
+            }
             if (task->in_edf_queue_)
                 continue; // EDF path owns these (edf_peek_valid_own)
-            bool phys = false;
-            for (uint64_t prio_idx = 0;
-                 prio_idx <= CONFIG_PRIORITY_CEILING && !phys; ++prio_idx) {
-                if (rq_task(*task).queue(prio_idx).contains(*task))
-                    phys = true;
-            }
-            if (phys)
+            if (!sweep_bitmap_absent(*task))
                 continue; // physically queued — nothing to rescue
             // Issue #250: a legitimately-deferred task is always current
             // while flagged (wake-side mirror), and the sweep already
@@ -1223,32 +1263,41 @@ void Scheduler::rate_monotonic_schedule() noexcept {
         restore_preempted_current(current, armed);
     }
 
-    // Issue #242: bounded starvation-breaker.  Strict RMS above starves
+    // Issue #598: victim-keyed starvation-breaker.  Strict RMS above starves
     // every lower level forever when the top READY level never drains
     // (convicted: two prio-11 never-blocking spinners alternate and the
-    // prio-10 harness gets zero CPU over 3001 ticks).  When the top level H
-    // is picked while lower non-idle READY levels wait for
-    // kStarvationBreakerTicks consecutive ticks, force exactly one dispatch
-    // below H, then reset to strict RMS.  Counter-only (task priorities are
-    // never mutated: PI/admission untouched); O(1) bitmap ops; identical
-    // debug/release flow; EDF keeps precedence (next_task checks EDF first,
-    // and the breaker only overrides a strict bitmap pick, never an EDF one
-    // — see below).  Worst-case interference is exactly one forced tick per
-    // N = 20 backlogged ticks (docs/specs/scheduler.md).
+    // prio-10 harness gets zero CPU over 3001 ticks; then #598: a periodic
+    // prio-20 waker with READY window < 20 ticks made 20 identical tops
+    // unreachable, so the old top-identity counter sawtoothed 2→5 and never
+    // fired, and the old highest-below pick spent the slot on the
+    // non-starved prio-11 band).  The observation is keyed to the victim
+    // band, not the top level: reset only when NO ready level exists
+    // strictly below the current highest ready level (nothing can be
+    // denied); otherwise increment, independent of top identity, so a
+    // transient upper-level waker can neither reset the count nor divert
+    // the forced pick.  A newly-appearing victim inherits starve_ticks_
+    // from its predecessor and may fire after only a few ticks of its own
+    // waiting — fail direction is strictly early relief (same 1-in-20
+    // ceiling, no priority/order mutation), never later denial; do NOT
+    // "fix" this into a reset-on-victim-change, which would reintroduce
+    // top-identity-style timing sensitivity through the back door.
+    // Counter-only (task priorities are never mutated: PI/admission
+    // untouched); O(1) bitmap ops; identical debug/release flow; EDF keeps
+    // precedence (next_task checks EDF first, and the breaker only overrides
+    // a strict bitmap pick, never an EDF one — see below).  Worst-case
+    // interference is one forced tick per N = 20 denied ticks
+    // (docs/specs/scheduler.md).
     TaskControlBlock *breaker_next = nullptr;
     {
-        uint64_t cpu = sched_cpu();
+        uint64_t cpu = sched_cpu() % CONFIG_MAX_CPUS;
         uint64_t top = rq_own().highest_ready_priority();
-        if (top == 0 ||
-            rq_own().bitmap().highest_starvable_below(top) ==
-                PriorityMap::STARVABLE_NONE) {
-            starve_level_[cpu] = top;
+        uint64_t victim = rq_own().bitmap().lowest_starvable_below(top);
+        if (victim == PriorityMap::STARVABLE_NONE) {
+            starve_level_[cpu] = PriorityMap::STARVABLE_NONE;
             starve_ticks_[cpu] = 0;
-        } else if (top == starve_level_[cpu]) {
-            ++starve_ticks_[cpu];
         } else {
-            starve_level_[cpu] = top;
-            starve_ticks_[cpu] = 1;
+            starve_level_[cpu] = victim;
+            ++starve_ticks_[cpu];
         }
         if (starve_ticks_[cpu] >= kStarvationBreakerTicks) {
             // EDF keeps precedence: an EDF-pending tick is a non-strict

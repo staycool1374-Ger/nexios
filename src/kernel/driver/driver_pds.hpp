@@ -70,6 +70,8 @@ enum class DrvOp : uint8_t {
     MAP_STATUS = 7,
     CONSOLE_MODE = 8,
     BIND_FRAME = 9,
+    RTC_EPOCH = 10, ///< rtc-pd→timer-srv epoch feed rendezvous (issue #194)
+    RTC_READ = 11,  ///< polled wall-clock read (rtc-pd serves, issue #194)
 };
 
 /// @brief Per-pass render budget enforced by the console PD (mirrors
@@ -132,6 +134,22 @@ void pd_note_dead_owner(uint32_t owner_id, uint32_t owner_gen);
 /// @return true on a validated BIND reply, false fail-closed (PD keeps
 ///         BIND-only behavior; kernel keeps the raw path).
 [[nodiscard]] bool pd_bind(sdf::PdRole role);
+
+/// @brief BIND the RTC PD, conveying the timer-srv rendezvous (issue #194):
+/// BIND args carry the composed cap handle (arg0), the timer-srv PID
+/// (arg1, 0 = server absent — PD stays in RTC_NEVER degrade), and the
+/// timer wire version (arg2). After BIND, rtc-pd pushes DRV_OP_RTC_EPOCH
+/// to the server PID and serves DRV_OP_RTC_READ; idempotent per epoch,
+/// fail-closed false when the role is dead (kernel keeps its RTC path).
+/// @return true on a validated BIND reply.
+[[nodiscard]] bool pd_bind_rtc();
+/// @brief Command the RTC PD to (re-)push its epoch feed (issue #194):
+/// sends DRV_OP_RTC_EPOCH to the rtc-pd role (bounded, fail-closed).
+/// The PD answers by pushing a TimerRpc ANCHOR_PUSH feed to the timer-srv
+/// PID from its last BIND. Task context only (never the tick path —
+/// restart_stale_daemons runs in scheduler_tick).
+/// @return true when the PD acknowledged.
+[[nodiscard]] bool pd_rtc_push_epoch();
 
 /// @brief Convey the SDF-composed SHM TX-ring FrameCap to a driver PD
 /// (issue #51 step-c-prime): MAP_SHM request args carry the ring handle
