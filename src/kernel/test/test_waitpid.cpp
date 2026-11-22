@@ -923,6 +923,17 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
 // Depends: waitpid publication order
 // Pseudocode: arm observer; waitpid; assert seam snapshot;
 // teardown (child exits via trampoline after the observation).
+// Runmode: kernel
+// Testidea: #590 publish-order observation — the seam records BLOCKED,
+// dequeue and pid at the publication window while a gated child exits
+// through the trampoline and wakes the parent via the classic path.
+// Input: Parent prio 20 + child gated on parent-BLOCKED + observe-only
+// seam; waitpid.
+// Expect: Seam saw blocked+unqueued+pid; result==1.
+// Depends: observe-only seam, classic wake path
+// Note: the child gate and the dispatch wait are tick-bounded (hlt
+// body); the former bare pause-spins starved TCG ticks under host
+// load and wedged the suite with no FAIL line.
 JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
     static WaitContext g_ctx;
     static uint64_t g_blocked = 0;
@@ -939,17 +950,34 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
     parent->user_data = &g_ctx;
 
     // Trampoline-exiting child, gated on the parent being BLOCKED
-    // first: spins until the parent blocks (hook observation window
+    // first: waits until the parent blocks (hook observation window
     // guaranteed), then returns and exits through the trampoline,
-    // waking the parent through the classic path.
+    // waking the parent through the classic path. Tick-bounded hlt
+    // wait: a bare pause-spin here starves TCG ticks under host load
+    // (child RUNNING while the parent needs a tick to dispatch), so
+    // the bound counts ticks and the child exits on expiry — the
+    // harness asserts below then fail loud instead of wedging.
     auto *child = TaskControlBlock::create(
         []() {
             auto *self = Scheduler::current_task();
             auto *p = Scheduler::find_task(self->parent_id);
-            while (p != nullptr &&
-                   p->state != TaskState::BLOCKED &&
-                   p->state != TaskState::TERMINATED)
-                arch::pause();
+            auto done = [&p]() {
+                if (p == nullptr)
+                    return true;
+                const uint8_t raw = __atomic_load_n(
+                    reinterpret_cast<const uint8_t *>(&p->state),
+                    __ATOMIC_ACQUIRE);
+                const TaskState st = static_cast<TaskState>(raw);
+                return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            };
+            const uint64_t ticks0 = arch::Timer::ticks();
+            constexpr uint64_t CHILD_WAIT_TICKS = 4000ULL;
+            while (!done() &&
+                   arch::Timer::ticks() - ticks0 < CHILD_WAIT_TICKS) {
+                __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                                 __ATOMIC_RELEASE);
+                arch::hlt();
+            }
         },
         11, 10);
     JARVIS_ASSERT(child != nullptr);
@@ -968,9 +996,51 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
             Scheduler::set_task_ready(*parent);
     });
     Scheduler::reschedule();
-    while (parent->state != TaskState::BLOCKED &&
-           parent->state != TaskState::TERMINATED)
-        arch::pause();
+    // Tick-bounded dispatch wait (same contract as tests 2/4): the
+    // deferred dispatch completes only on a timer tick, so a bare
+    // pause-spin here starves TCG ticks under host load.
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    {
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 4000ULL;
+        constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
+        constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        const uint64_t ns0 = arch::Timer::ns_monotonic();
+        uint64_t spins = 0;
+        auto dispatched = [&parent]() {
+            const uint8_t raw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const TaskState st = static_cast<TaskState>(raw);
+            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+        };
+        while (!dispatched()) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+            arch::hlt();
+            ++spins;
+            if (arch::Timer::ticks() - ticks0 >= DISPATCH_WAIT_TICKS)
+                break;
+            if (ns0 != 0) {
+                if (arch::Timer::ns_monotonic() - ns0 >= DISPATCH_WAIT_NS)
+                    break;
+            } else if (spins >= DISPATCH_WAIT_SPINS) {
+                break;
+            }
+        }
+        if (!dispatched()) {
+            JARVIS_ASSERT_FMT(false,
+                              "dispatch wait expired: state=0x%lx valid=%lu "
+                              "ticks=%lu ns=%lu spins=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - ticks0,
+                              (ns0 != 0)
+                                  ? (arch::Timer::ns_monotonic() - ns0)
+                                  : 0ULL,
+                              spins);
+        }
+    }
     kernel::test::wait_for_termination_safe(parent);
     g_blocked = g_seam_saw_blocked;
     g_unqueued = g_seam_saw_unqueued;
