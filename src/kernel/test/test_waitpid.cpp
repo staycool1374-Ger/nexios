@@ -1224,12 +1224,15 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
                 reinterpret_cast<const uint8_t *>(&child->state),
                 __ATOMIC_ACQUIRE);
             JARVIS_ASSERT_FMT(false,
-                              "termination wait expired: parent=0x%lx "
-                              "racer=0x%lx child=0x%lx valid=%lu/%lu/%lu "
-                              "ticks=%lu",
+                              "termination wait expired: parent=0x%lx/%lu "
+                              "racer=0x%lx/%lu child=0x%lx/%lu "
+                              "valid=%lu/%lu/%lu ticks=%lu",
                               static_cast<uint64_t>(parent->state),
+                              parent->in_ready_queue_ ? 1ULL : 0ULL,
                               static_cast<uint64_t>(racer->state),
+                              racer->in_ready_queue_ ? 1ULL : 0ULL,
                               static_cast<uint64_t>(craw),
+                              child->in_ready_queue_ ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(racer) ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(child) ? 1ULL : 0ULL,
