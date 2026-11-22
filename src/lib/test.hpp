@@ -228,6 +228,22 @@ void dump_class_counts();
 //      (v0.3.9 teardown gap closed).  Verify teardown with
 //      `semaphore_waiter_teardown_on_terminate` — do not re-add the old
 //      workaround (avoiding the scenario instead of testing it).
+//   7. PIN the dispatch policy for rendezvous choreography (issue #610):
+//      `TCB::create()` stamps `deadline_ticks = ticks()+period` AT CREATE,
+//      and creates run OUTSIDE the Rule-2 IrqGuard — so a timer tick between
+//      two creates can invert the EDF order the test assumes (observed: a
+//      2-tick gap flipped child/racer deadlines, 2/5 flake, the racer
+//      starved forever while every pick stayed EDF-correct).  Rule 2's
+//      guard covers add_task, NOT deadline assignment.  If the test needs
+//      priority order (e.g. a killer must run before the victim's waiter
+//      scans), pin `SchedPolicy::FIXED` on every choreographed task
+//      (precedent: #593 waitpid_wakes_parent pin); under FIXED, dispatch
+//      is priority-ordered and creation-tick-independent.  Keep AUTO/EDF
+//      only when no task's liveness depends on beating another's deadline.
+//      Note: hlt-suspension is unmodeled in EDF — a RUNNING hlt-looping
+//      task keeps its earlier deadline and is never preempted by a
+//      later-deadline waiter, so never choreograph killer-must-preempt-
+//      victim under AUTO.
 // ============================================================================
 
 /// @brief Reference skeleton for a REAL parent-WAITPID / child-exit pattern.
