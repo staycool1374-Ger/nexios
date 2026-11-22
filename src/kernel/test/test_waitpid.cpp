@@ -410,7 +410,10 @@ JARVIS_TEST(waitpid_cr3_switch_on_status_write, "PRE: none | POST: none") {
 // 4000 ticks = 4 s at CONFIG_TICK_HZ 1000) with a TSC ns backstop (8 s)
 // and a spin cap for freq_hz()==0, because the former 100k pure-pause
 // bound could expire with zero guest ticks under QEMU TCG + host load
-// (false FAIL).
+// (false FAIL). A timer tick may also preempt the parent between
+// pid-publish and hook-fire; the test then takes the missed-fire leg
+// (neuter victim + public terminate + real-wake collect) instead of
+// hanging on the starved hook.
 // Pseudocode: arm seam (full-funnel hook); waitpid (collects);
 // assert all; disarm via ScopeGuard; resume parent; teardown.
 JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
@@ -515,9 +518,41 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
                               spins);
         }
     }
+    // Missed-fire leg (issue #590 window preemption): a timer tick may
+    // preempt the parent between pid-publish and hook-fire. The hook then
+    // starves (only it kills the hlt-looping child) while the parent sits
+    // BLOCKED with the pid published. Detect armed-but-unfired over 100
+    // ticks; on a miss, neuter the seam victim (a late resume must not
+    // double-release) and drive the child via the public terminate path,
+    // so the parent is woken by the REAL wake_waiting_parent and collects
+    // through the production INV-WAIT-6 path. Either leg ends with
+    // result==1/status==42; only the hook leg runs the seam funnel.
+    bool hook_leg = true;
+    {
+        constexpr uint64_t MISSED_FIRE_TICKS = 100ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        while (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0 &&
+               arch::Timer::ticks() - ticks0 < MISSED_FIRE_TICKS)
+            arch::hlt();
+        if (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0) {
+            const uint64_t published = __atomic_load_n(
+                &parent->waiting_child_pid, __ATOMIC_ACQUIRE);
+            if (published == 0) {
+                JARVIS_ASSERT_FMT(false,
+                                  "blocked pre-publish: state=0x%lx valid=%lu",
+                                  static_cast<uint64_t>(parent->state),
+                                  TaskControlBlock::is_valid(parent) ? 1ULL
+                                                                     : 0ULL);
+            }
+            hook_leg = false;
+            g_seam_victim = nullptr;
+            Scheduler::terminate(*child, 42);
+        }
+    }
     // Tick-bounded termination wait: ticks advance regardless of
-    // dispatch (proven by the gate above), so expiry fails loudly
-    // instead of hanging the suite.
+    // dispatch, so expiry fails loudly instead of hanging the suite.
+    // Reached via the hook leg (seam funnel) or the missed-fire leg
+    // (public terminate + real wake); both end with parent TERMINATED.
     {
         const uint64_t t0 = arch::Timer::ticks();
         while (parent->state != TaskState::TERMINATED &&
@@ -560,7 +595,15 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(1ULL, g_notblocked);
     JARVIS_ASSERT_EQ(1ULL, g_nofind);
     JARVIS_ASSERT_EQ(1ULL, g_nozombie);
-    JARVIS_ASSERT_EQ(1ULL, g_hook_released);
+    if (hook_leg) {
+        JARVIS_ASSERT_EQ(1ULL, g_hook_released);
+    } else {
+        // Missed-fire leg: the seam never fired (neutered before driving,
+        // so no late double-release); collection came purely through the
+        // production wake path.
+        JARVIS_ASSERT_EQ(0ULL, g_hook_entered);
+        JARVIS_ASSERT_EQ(0ULL, g_hook_released);
+    }
     JARVIS_TEST_PASS();
 }
 
