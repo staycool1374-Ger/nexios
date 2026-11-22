@@ -36,6 +36,14 @@ namespace arch {
 // may be retried.
 bool g_early_irq_done = false;
 
+// BOOT_ONLY capability latch (issue #606): CPUID leaf 7 EBX[20] (SMAP).
+// Written once by the boot CPUID probe in kernel.cpp while the system is
+// single-CPU; read-only thereafter.  The explicit `false` initializer is
+// what makes a CONFIG_SMAP=0 / SMEP-only build fail closed: stac()/clac()
+// degrade to no-ops instead of emitting an illegal instruction (#UD).
+// Never written from any other TU — no setter is exported.
+bool g_smap_supported = false;
+
 EarlyIrqResult early_irq_init(uint32_t frequency_hz) {
     if (frequency_hz == 0) {
         return EarlyIrqResult::BAD_FREQ;

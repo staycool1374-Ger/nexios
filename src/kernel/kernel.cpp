@@ -1147,6 +1147,12 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         (void)max_leaf;
         (void)ecx;
         (void)edx;
+        // Issue #606: single writer of the stac/clac emission latch.  Placed
+        // outside the nested CONFIG_SMAP arm so an SMEP-only build still
+        // latches the CPU fact (fail-closed `false` otherwise).  BSP-only,
+        // before Scheduler::init / SMP bring-up / daemon spawn — no user
+        // copy can run before this store.
+        arch::g_smap_supported = (ebx & arch::CPUID_EBX7_SMAP) != 0;
 #if CONFIG_SMEP
         if (ebx & (1u << 7)) {
             cr4 |= (1ULL << 20); // CR4.SMEP
@@ -1157,8 +1163,10 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
 #if CONFIG_SMAP
         if (ebx & (1u << 20)) {
             cr4 |= (1ULL << 21); // CR4.SMAP
+            debug_write("[BOOT] SMAP enabled (stac/clac active)\n");
         } else {
-            debug_write("[BOOT] SMAP not supported by CPU — leaving off\n");
+            debug_write("[BOOT] SMAP not supported by CPU — leaving off "
+                        "(stac/clac emission gated, #606)\n");
         }
 #endif
     }
