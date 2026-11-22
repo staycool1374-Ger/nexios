@@ -1072,6 +1072,12 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
 // 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
 // heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
 // pause-spin could starve TCG ticks under host load and wedge the suite
+// with no FAIL line. The termination wait for parent+racer is likewise
+// tick-bounded with a loud all-TCB diagnostic.
+// Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
+// pause-spin could starve TCG ticks under host load and wedge the suite
 // with no FAIL line.
 JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
     static WaitContext g_ctx;
@@ -1177,8 +1183,45 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
                               spins);
         }
     }
-    kernel::test::wait_for_termination_safe(parent);
-    kernel::test::wait_for_termination_safe(racer);
+    // Tick-bounded termination wait for both waiter and racer: expiry
+    // fails loudly with all three TCB states instead of hanging the
+    // suite when the wake/collect chain stalls under TCG dilation.
+    {
+        const uint64_t t0 = arch::Timer::ticks();
+        auto both_done = [&]() {
+            const uint8_t praw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const uint8_t rraw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&racer->state),
+                __ATOMIC_ACQUIRE);
+            return static_cast<TaskState>(praw) == TaskState::TERMINATED &&
+                   (!TaskControlBlock::is_valid(racer) ||
+                    static_cast<TaskState>(rraw) == TaskState::TERMINATED);
+        };
+        while (!both_done() &&
+               arch::Timer::ticks() - t0 < 400ULL) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+            arch::hlt();
+        }
+        if (!both_done()) {
+            const uint8_t craw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&child->state),
+                __ATOMIC_ACQUIRE);
+            JARVIS_ASSERT_FMT(false,
+                              "termination wait expired: parent=0x%lx "
+                              "racer=0x%lx child=0x%lx valid=%lu/%lu/%lu "
+                              "ticks=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              static_cast<uint64_t>(racer->state),
+                              static_cast<uint64_t>(craw),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              TaskControlBlock::is_valid(racer) ? 1ULL : 0ULL,
+                              TaskControlBlock::is_valid(child) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - t0);
+        }
+    }
     g_ret = g_ctx.result_;
     g_norow = (sched_row_count(kSched23) == rows0) ? 1ULL : 0ULL;
     disarm.dismiss();
@@ -1199,17 +1242,6 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
 // Depends: waitpid publication order
 // Pseudocode: arm observer; waitpid; assert seam snapshot;
 // teardown (child exits via trampoline after the observation).
-// Runmode: kernel
-// Testidea: #590 publish-order observation — the seam records BLOCKED,
-// dequeue and pid at the publication window while a gated child exits
-// through the trampoline and wakes the parent via the classic path.
-// Input: Parent prio 20 + child gated on parent-BLOCKED + observe-only
-// seam; waitpid.
-// Expect: Seam saw blocked+unqueued+pid; result==1.
-// Depends: observe-only seam, classic wake path
-// Note: the child gate and the dispatch wait are tick-bounded (hlt
-// body); the former bare pause-spins starved TCG ticks under host
-// load and wedged the suite with no FAIL line.
 JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
     static WaitContext g_ctx;
     static uint64_t g_blocked = 0;
