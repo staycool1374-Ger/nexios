@@ -825,6 +825,68 @@ JARVIS_TEST(scheduler_breaker_lower_progress, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: #609 stub (BLOCKED-BY #604 C4): the oracle family has ONE readout
+// and ONE reset: read_sched_oracles() returns the eleven scheduler counters,
+// reset_sched_oracles_for_test() zeroes all eleven, and a production-path
+// rescue firing lands in exactly the field named for it (no cross-talk).
+// Input: (stub) none. Assertion phase: stranded-READY fixture driven through
+// Scheduler::on_tick() — the scheduler_stranded_ready_rescued shape above.
+// Expect: (stub) JARVIS_TEST_PASS. Assertion phase: after the reset all eleven
+// fields read 0; after the sweep fires, stuck_rescue == 1 and the other ten
+// stay 0.
+// Depends: (stub) NOTHING — blocked on Scheduler::read_sched_oracles() /
+// reset_sched_oracles_for_test(), absent on testbed tip 98b043b75.
+JARVIS_TEST(sched_oracle_family_single_reset, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   Scheduler::reset_sched_oracles_for_test();
+     *   o = Scheduler::read_sched_oracles();          // 11-field POD by name
+     *   assert all eleven fields == 0;
+     *   rescued = create_test_task(5, 0);             // BLOCKED, unqueued
+     *   { IrqGuard; rescued->state = READY;
+     *     assert !in_ready_queue_ && !in_edf_queue_;
+     *     assert rq_own().peek_highest() != rescued;  // blindness proof
+     *     Scheduler::on_tick(); }                     // stranded-READY sweep
+     *   assert dispatchable(rescued);                 // queued/next, no flags
+     *   f = Scheduler::read_sched_oracles();
+     *   assert f.stuck_rescue == 1;                   // exactly this field
+     *   assert the other ten fields == 0;             // isolation
+     *   cleanup: Scheduler::dequeue_ready(*rescued); TaskPtr RAII frees.
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: #609 stub (BLOCKED-BY #604 C4) — aggregate must-read-0 gate: over
+// a bench-shaped relay/soak window on a healthy scheduler every one of the
+// eleven oracle counters must be delta-zero. Landing this unblocks #604 item
+// 4b (per-counter accessor/reset removal + call-site ports).
+// Input: (stub) none. Assertion phase: baseline read_sched_oracles(); a
+// scheduler-only relay window (two FOREVER fixtures one/two bands above the
+// harness, FIXED policy, yield + on_tick per trip, K=16) then M=32
+// register/unregister churn cycles; second readout.
+// Expect: (stub) JARVIS_TEST_PASS. Assertion phase: all eleven
+// (after - before) == 0 — DELTA, never absolute: counters are monotonic,
+// never rewound by snapshot restore, and the stranded-ready test above
+// deliberately fires stuck_rescue.
+// Depends: (stub) NOTHING — blocked on Scheduler::read_sched_oracles()
+// (#604 C4). Scheduler-only window on purpose (no IPC coupling).
+JARVIS_TEST(sched_oracle_must_read_zero, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   before = Scheduler::read_sched_oracles();
+     *   relay: a = create_forever_task(prio+1), b = create_forever_task(prio+2)
+     *          FIXED policy both; add under IrqGuard;
+     *          for i in 0..16: yield_to_task(*a); yield_to_task(*b);
+     *                          Scheduler::on_tick();
+     *   soak : for j in 0..32: t = create_test_task(5, 10);
+     *                          TaskPtr dtor unregisters; Scheduler::on_tick();
+     *   after = Scheduler::read_sched_oracles();
+     *   assert after.X - before.X == 0 for all eleven X;   // delta gate
+     *   cleanup BEFORE the final assert: terminate_and_drain2(a, b);
+     */
+    JARVIS_TEST_PASS();
+}
+
 void register_scheduler_tests() {
     Logger::info("Registering scheduler tests");
     JARVIS_REGISTER_TEST(scheduler_task_count);
@@ -848,4 +910,6 @@ void register_scheduler_tests() {
     JARVIS_REGISTER_TEST(scheduler_evict_current_then_rescued); // issue #249
     JARVIS_REGISTER_TEST(scheduler_evict_queued_current_drops_safely); // #250
     JARVIS_REGISTER_TEST(scheduler_breaker_lower_progress); // issue #242
+    JARVIS_REGISTER_TEST(sched_oracle_family_single_reset); // #609 stub
+    JARVIS_REGISTER_TEST(sched_oracle_must_read_zero); // #609 stub
 }

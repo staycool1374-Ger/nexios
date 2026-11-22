@@ -282,6 +282,31 @@ JARVIS_TEST(ipc_kernel_block_skips_sti, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
+// Testidea: #609 stub (BLOCKED-BY #604 C4) — the level-triggered IPC-wake
+// sweep (scheduler_tick.cpp:692-740, CONFIG_IPC_WAKE_SWEEP_ENABLE) is
+// detection-first: over the ipc + ipc_blocking classes the cumulative rescue
+// counter must read 0. Any firing proves a lost wakeup on a plain-recv
+// channel (BLOCKED + blocked_in_recv + own inbox non-empty at tick).
+// Landing this unblocks retirement of the sweep leg (#604 item 2).
+// Input: (stub) none. Assertion phase: no reset — cumulative readout after
+// every other ipc group has run in the same boot (gate registered LAST in
+// both the ipc_blocking class and the ipc aggregate).
+// Expect: (stub) JARVIS_TEST_PASS. Assertion phase:
+// read_sched_oracles().ipc_wake_rescue == 0.
+// Depends: (stub) NOTHING — Scheduler::ipc_wake_rescue_count() is private
+// (scheduler.hpp:1507 -> :1672, no friend); the reachable readout is the C4
+// family field read_sched_oracles().ipc_wake_rescue.
+JARVIS_TEST(ipc_wake_rescue_must_be_zero, "PRE: none | POST: none") {
+    /* Pseudocode:
+     *   // NO reset: the gate is the cumulative class soak. Each class run is
+     *   // its own QEMU boot, so the counter reflects only this class.
+     *   o = Scheduler::read_sched_oracles();
+     *   assert o.ipc_wake_rescue == 0;   // 11-field POD (C4)
+     */
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
 // Testidea: Registers all IPC blocking tests with the test framework.
 // Input: None
 // Expect: All ipc_* blocking tests registered via JARVIS_REGISTER_TEST
@@ -292,6 +317,10 @@ void register_ipc_blocking_tests() {
     JARVIS_REGISTER_TEST(ipc_send_sync_was_blocked_restores_state);
     JARVIS_REGISTER_TEST(ipc_userspace_block_uses_sti_hlt_cli);
     JARVIS_REGISTER_TEST(ipc_kernel_block_skips_sti);
+}
+void register_ipc_oracle_gate_tests() {
+    Logger::info("Registering #609 IPC oracle gate");
+    JARVIS_REGISTER_TEST(ipc_wake_rescue_must_be_zero);
 }
 #ifndef __clang__
 #pragma GCC diagnostic pop

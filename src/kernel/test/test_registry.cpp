@@ -127,6 +127,7 @@ void register_vfs_srv_tests();
 void register_fat32_tests();
 void register_vfs_fat32_tests();
 void register_ipc_blocking_tests();
+void register_ipc_oracle_gate_tests();
 void register_ipc_timeout_tests();
 void register_vfsd_authorization_tests();
 void register_textutils_tests();
@@ -470,6 +471,7 @@ static void run_ipc_pipe_blocking_group() {
 }
 static void run_ipc_core_group() { register_ipc_tests(); register_ipc_inv4b_tests(); register_ipc_reply_tests(); } // #545 Cycle D INV-4b + M3
 static void run_ipc_blocking_group() { register_ipc_blocking_tests(); }
+static void run_ipc_oracle_gate_group() { register_ipc_oracle_gate_tests(); }
 static void run_ipc_timeout_group() { register_ipc_timeout_tests(); }
 static void run_ipc_extended_group() { register_ipc_extended_tests(); }
 static void run_ipc_lock_free_group() { register_ipc_lock_free_tests(); }
@@ -861,7 +863,11 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
 
     // -- ipc: messages, events, notifications, pipes --
     {"ipc_core", []() { run_ipc_core_group(); }},
-    {"ipc_blocking", []() { run_ipc_blocking_group(); }},
+    {"ipc_blocking",
+     []() {
+         run_ipc_blocking_group();
+         run_ipc_oracle_gate_group();
+     }},
     {"ipc_timeout", []() { run_ipc_timeout_group(); }},
     {"ipc_extended", []() { run_ipc_extended_group(); }},
     {"ipc_lock_free", []() { run_ipc_lock_free_group(); }},
@@ -1219,6 +1225,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
          run_ipc_pipe_group();
          run_ipc_fastpath_group();
          run_ipc_pipe_blocking_group();
+         run_ipc_oracle_gate_group(); // #609 soak gate, LAST
      }},
     {"capability",
      []() {

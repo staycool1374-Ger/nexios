@@ -50,7 +50,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex + semaphore
 
     // scheduler
-    {"scheduler_core",       39,    39,      39     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3
+    {"scheduler_core",       41,    41,      41     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3 + oracle family/must-zero stubs x2
     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server policy
@@ -149,7 +149,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
 
     // ipc
     {"ipc_core",             37,    0,       0      },  // queue, priority, notify, event group, sync roundtrip + #545 INV-4b x4 + M3 reply x10
-    {"ipc_blocking",          4,    0,       0      },  // blocking send_sync/handshake
+    {"ipc_blocking",          5,    0,       0      },  // blocking send_sync/handshake + wake-rescue gate
     {"ipc_timeout",           7,    7,       7      },  // wheel-armed bounded receive
     {"ipc_extended",          13,   0,       0      },  // size limits, removal, wake gates, quiescence, reply
     {"ipc_lock_free",         3,    0,       0      },  // lock-free queue
@@ -303,12 +303,12 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // measured `dump-counts` output; 0 disables validation.
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
     {"core_sync",           105,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8 + #545 Cycle C inv x2 + #578 depth-0 park x2
-    {"core_sched",          130,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3
+    {"core_sched",          133,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3 + oracle stubs x2
     {"core_task",           66,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu + F4 #557 x13 + F10 #563 x1 stubs
     {"core_memory",         136,  0,       0      },  // memory_* incl. NX/W^X pins + F10 #563 x7 stubs (row was stale at 125 vs 129 measured)
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
-    {"ipc",                106,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10
+    {"ipc",                107,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10 + wake-rescue gate
     {"capability",          200,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9 + F5 #558 x13 + F4 #557 x6 + F10 #563 x1 + F8 #561 x2)
     {"proc_elf",            135,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM) + F2 cap-smoke migration
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
