@@ -804,25 +804,24 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
     // Rescue + termination wait (integrated): the no-wake funnel leaves
     // the parent BLOCKED with no waker whenever it is descheduled after
     // the hook ran — not just inside the first 100 ticks. Each iteration
-    // re-checks the stuck shape (hook fired + child dead + parent
+    // re-checks the stuck shape (hook fired + funnel released + parent
     // BLOCKED) and re-readies the parent once; the waitpid loop then
-    // re-scans and collects. Expiry fails loudly with full state.
+    // re-scans and collects. The shape keys off the file-static hook
+    // counters, never the child TCB: release_zombie unlinks the TCB and
+    // a periodic drain may free/reuse the block, so a child->state read
+    // is flaky post-release (convicted on nexios-qe TCG: hook=1/1/0/1
+    // with rescue blind for 400 ticks). Expiry fails loudly.
     {
         constexpr uint64_t TERM_WAIT_TICKS = 400ULL;
         const uint64_t t0 = arch::Timer::ticks();
         bool rescued = false;
         auto rescue_needed = [&]() {
+            const uint8_t praw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
             return __atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) > 0 &&
-                   [&]() {
-                const uint8_t craw = __atomic_load_n(
-                    reinterpret_cast<const uint8_t *>(&child->state),
-                    __ATOMIC_ACQUIRE);
-                const uint8_t praw = __atomic_load_n(
-                    reinterpret_cast<const uint8_t *>(&parent->state),
-                    __ATOMIC_ACQUIRE);
-                return static_cast<TaskState>(craw) == TaskState::TERMINATED &&
-                       static_cast<TaskState>(praw) == TaskState::BLOCKED;
-            }();
+                   __atomic_load_n(&g_hook_released, __ATOMIC_ACQUIRE) > 0 &&
+                   static_cast<TaskState>(praw) == TaskState::BLOCKED;
         };
         auto parent_gone = [&]() {
             const uint8_t praw = __atomic_load_n(
