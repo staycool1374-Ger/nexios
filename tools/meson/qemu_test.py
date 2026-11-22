@@ -121,6 +121,21 @@ def _fb_devices():
     return args
 
 
+def _kvm_usable():
+    """True when KVM will actually work (present AND accessible).
+
+    /dev/kvm merely existing is not enough (kvm-group membership);
+    probing open-access keeps the harness on TCG instead of a loud
+    KVM failure.  macOS has no /dev/kvm at all (hvf/TCG path untouched).
+    """
+    try:
+        return os.path.exists("/dev/kvm") and os.access(
+            "/dev/kvm", os.R_OK | os.W_OK
+        )
+    except OSError:
+        return False
+
+
 def qemu_argv(arch, build, cls, paths, tag):
     """Assemble the QEMU command (mirrors per-arch QEMU_FLAGS blocks)."""
     serial_log = paths["serial"]
@@ -128,6 +143,20 @@ def qemu_argv(arch, build, cls, paths, tag):
     args = [QEMU_SYSTEM[arch]]
     if arch == "x86_64":
         ovmf = find_ovmf()
+        # KVM-first with TCG fallback (QE remote station): /dev/kvm
+        # present+accessible => -accel kvm:tcg -cpu host.  Otherwise
+        # today's TCG path byte-identical (default accel, -cpu max),
+        # so macOS (hvf) and kvm-less stations are untouched.  -cpu max
+        # is TCG-only; KVM requires -cpu host (fresh baselines on the
+        # new box, no skew vs anything).
+        kvm = _kvm_usable()
+        cpu_model = "host" if kvm else "max"
+        if kvm:
+            args += ["-accel", "kvm:tcg"]
+            print("  [qemu] KVM active (/dev/kvm) cpu=host", flush=True)
+        elif os.path.exists("/dev/kvm"):
+            print("  [qemu] /dev/kvm present but not accessible"
+                  " (kvm group?) — staying on TCG", flush=True)
         # NOTE: the file backend cannot multiplex: unlike the stdio mux,
         # one chardev cannot serve both serial and debugcon. Mirror the
         # Make FILE transform exactly — serial goes direct to its file,
@@ -145,7 +174,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                      "-device", "isa-debugcon,chardev=dbg",
                      "-monitor", "none",
                      "-display", "none",
-                     "-machine", "q35", "-cpu", "max",
+                     "-machine", "q35", "-cpu", cpu_model,
                      "-drive", "if=pflash,format=raw,readonly=on,file=%s" % ovmf,
                      "-device", "intel-iommu,intremap=off,dma-translation=on"]
         elif cls == "ahci_live":
@@ -161,7 +190,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                     "-device", "isa-debugcon,chardev=dbg",
                     "-monitor", "none",
                     "-display", "none",
-                    "-machine", "q35,sata=off", "-cpu", "max",
+                    "-machine", "q35,sata=off", "-cpu", cpu_model,
                      "-drive", "if=pflash,format=raw,readonly=on,file=%s" % ovmf,
                      "-device", "ich9-ahci,id=ahci0",
                      "-drive", "file=%s,if=none,id=ahci_cd,media=cdrom,readonly=on" % paths["iso"],
@@ -183,7 +212,7 @@ def qemu_argv(arch, build, cls, paths, tag):
                      "-device", "virtio-net-pci,netdev=net0,disable-legacy=on",
                      "-boot", "order=d",
                      "-drive", "if=pflash,format=raw,readonly=on,file=%s" % ovmf,
-                     "-cpu", "max",
+                     "-cpu", cpu_model,
                      "-drive", "file=%s,format=raw,if=ide,index=1,media=disk" % paths["fat32"],
                      "-device", "virtio-rng-pci,disable-legacy=on",
                      "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04"]

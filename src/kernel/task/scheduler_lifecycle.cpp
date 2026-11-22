@@ -547,6 +547,24 @@ void arm_wait_publish(void (*hook)(TaskControlBlock &)) noexcept {
 }
 
 void fire_wait_publish(TaskControlBlock &publisher) noexcept {
+    // Issue #590 follow-up: run the seam hook under the same IRQ
+    // discipline as the real terminate funnels — arch::IrqGuard spans
+    // dequeue -> TERMINATED -> wake -> release in
+    // Scheduler::terminate_err (scheduler_terminate.cpp:96, wake :152,
+    // release :165) and Scheduler::terminate_err_from_trap (:254,
+    // parent wake at :293).  Without it a timer tick lands mid-hook
+    // and parks the BLOCKED, dequeued publisher with the wake
+    // unfinished and no other waker (observed partials 1/0/0/0 and
+    // 1/1/0/0).  Guard taken at entry as defense in depth: the true
+    // hazard is a tick mid-hook, and entry gives the simpler
+    // no-tick-from-fire-entry invariant.
+    // Boundedness: leaf zombie_lock_ only; scheduler_lock_
+    // unreachable on the UP arm gate via the set_affinity_err mask
+    // clamp (scheduler_registry.cpp:172-180) + queue_target ctz;
+    // id-table probes <= ID_TABLE_SIZE (128); the remove_child
+    // sibling walk is MAX_TASKS-bounded and skipped on this path;
+    // no alloc, log, IPC, or reschedule on the success path.
+    arch::IrqGuard irq_guard{};
     auto *hook = __atomic_exchange_n(&s_wait_publish_hook, nullptr,
                                      __ATOMIC_ACQ_REL);
     if (hook != nullptr)
