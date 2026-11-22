@@ -8553,3 +8553,5 @@ SUMMARY: total=35 ok=34 fail=1 ARCH=riscv64
 2026-11-22 10:15:24 process_waitpid PASSED: 11 FAILED: 0 TIME: 395ms
 2026-11-22 10:15:38 process_waitpid PASSED: 11 FAILED: 0 TIME: 430ms
 2026-11-22 10:16:14 process_waitpid PASSED: 1 FAILED: 0 TIME: 4ms
+2026-11-22 12:22:32 process_waitpid PASSED: 11 FAILED: 0 TIME: 832ms
+2026-11-22 13:31:55 process_waitpid PASSED: 11 FAILED: 0 TIME: 860ms

@@ -144,15 +144,16 @@ def qemu_argv(arch, build, cls, paths, tag):
     if arch == "x86_64":
         ovmf = find_ovmf()
         # KVM-first with TCG fallback (QE remote station): /dev/kvm
-        # present+accessible => -accel kvm:tcg -cpu host.  Otherwise
-        # today's TCG path byte-identical (default accel, -cpu max),
-        # so macOS (hvf) and kvm-less stations are untouched.  -cpu max
-        # is TCG-only; KVM requires -cpu host (fresh baselines on the
+        # present+accessible => -accel kvm -accel tcg (fallback list:
+        # first initializable wins) + -cpu host.  Otherwise today's
+        # TCG path byte-identical (default accel, -cpu max), so macOS
+        # (hvf) and kvm-less stations are untouched.  -cpu max is
+        # TCG-only; KVM requires -cpu host (fresh baselines on the
         # new box, no skew vs anything).
         kvm = _kvm_usable()
         cpu_model = "host" if kvm else "max"
         if kvm:
-            args += ["-accel", "kvm:tcg"]
+            args += ["-accel", "kvm", "-accel", "tcg"]
             print("  [qemu] KVM active (/dev/kvm) cpu=host", flush=True)
         elif os.path.exists("/dev/kvm"):
             print("  [qemu] /dev/kvm present but not accessible"
