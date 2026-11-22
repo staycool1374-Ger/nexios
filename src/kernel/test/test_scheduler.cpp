@@ -310,10 +310,16 @@ JARVIS_TEST(scheduler_waitpid_wakes_parent,
         TaskControlBlock::create(scheduler_waitpid_parent_entry, 20, 10);
     JARVIS_ASSERT(parent != nullptr);
     parent->user_data = &context;
+    // Pinned FIXED (issue #19): the rendezvous choreography below assumes
+    // priority order (parent prio 20 dispatches before child prio 12); the
+    // default AUTO policy would dispatch both EDF by deadline and the
+    // child could terminate before the parent ever blocks (blocked_==0).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
 
     auto *child =
         TaskControlBlock::create(scheduler_waitpid_child_entry, 12, 10);
     JARVIS_ASSERT(child != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
     parent->add_child(child);
     context.child_id_ = child->id;
 
