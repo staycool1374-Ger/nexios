@@ -616,7 +616,11 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
 // Depends: miss-branch collect (step 9)
 // Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
 // 4000 ticks) with a TSC ns backstop (8 s); the former bare pause-spin
-// could starve TCG ticks under host load and wedge the suite.
+// could starve TCG ticks under host load and wedge the suite. The
+// termination wait is likewise tick-bounded with a loud diagnostic.
+// A preempted publish (hook starved, 0/0/0/0) takes the missed-fire
+// leg: neuter the victim and drive the child via public terminate;
+// the no-wake funnel itself runs whenever the hook fires normally.
 // Pseudocode: arm hook (no wake); waitpid (collects via miss
 // leg); assert all; teardown.
 JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
@@ -703,7 +707,62 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
                               spins);
         }
     }
-    kernel::test::wait_for_termination_safe(parent);
+    // Missed-fire leg (same gap as test 4, no-wake funnel variant): a
+    // timer tick may preempt the parent between pid-publish and
+    // hook-fire, starving the hook while the parent sits BLOCKED with
+    // the pid published. Detect armed-but-unfired over 100 ticks; on
+    // a miss, neuter the victim (a late resume must not double-release)
+    // and drive the child via the public terminate path. The parent is
+    // woken by the real wake_waiting_parent and collects; the miss
+    // branch itself is covered whenever the hook fires normally.
+    bool hook_leg5 = true;
+    {
+        constexpr uint64_t MISSED_FIRE_TICKS = 100ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        while (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0 &&
+               arch::Timer::ticks() - ticks0 < MISSED_FIRE_TICKS)
+            arch::hlt();
+        if (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0) {
+            const uint64_t published = __atomic_load_n(
+                &parent->waiting_child_pid, __ATOMIC_ACQUIRE);
+            if (published == 0) {
+                JARVIS_ASSERT_FMT(false,
+                                  "blocked pre-publish: state=0x%lx valid=%lu",
+                                  static_cast<uint64_t>(parent->state),
+                                  TaskControlBlock::is_valid(parent) ? 1ULL
+                                                                     : 0ULL);
+            }
+            hook_leg5 = false;
+            g_seam_victim = nullptr;
+            Scheduler::terminate(*child, 42);
+            Logger::info("[WAITPID] test5 missed-fire leg");
+        }
+    }
+    // Tick-bounded termination wait: expiry fails loudly instead of
+    // hanging the suite when the parent never gets woken.
+    {
+        const uint64_t t0 = arch::Timer::ticks();
+        while (parent->state != TaskState::TERMINATED &&
+               arch::Timer::ticks() - t0 < 4000ULL)
+            arch::hlt();
+        if (parent->state != TaskState::TERMINATED) {
+            JARVIS_ASSERT_FMT(false,
+                              "termination wait expired: state=0x%lx valid=%lu "
+                              "ticks=%lu result=%lu hook=%lu/%lu/%lu/%lu "
+                              "wcpid=%lu hook_leg=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - t0,
+                              g_ctx.result_,
+                              g_hook_entered,
+                              g_hook_marked,
+                              g_hook_woke,
+                              g_hook_released,
+                              __atomic_load_n(&parent->waiting_child_pid,
+                                              __ATOMIC_ACQUIRE),
+                              hook_leg5 ? 1ULL : 0ULL);
+        }
+    }
     const uint64_t cid5 = g_ctx.child_id_;
     g_ret = g_ctx.result_;
     g_nofind = (Scheduler::find_task(cid5) == nullptr) ? 1ULL : 0ULL;
