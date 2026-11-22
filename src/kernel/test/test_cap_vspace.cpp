@@ -1366,10 +1366,10 @@ JARVIS_TEST(mk_vspace_map_ownership_mismatch, "PRE: none | POST: none") {
 // Runmode: kernel
 // Testidea: F5 syscall face end-to-end — a user-flagged task with a
 //        VSpace+PageTable pair observes 0 from 102; the surface test
-//        pins MAX_SYSCALL == 103 with VSPACE_MAP.
+//        pins MAX_SYSCALL == 105 with F11 Stage C additions.
 // Input: Synthetic-user task (is_user_ set, mirroring the tls tests)
 //        with a retyped pair; Syscall::handle(102, len 1).
-// Expect: Return 0 in-task; live_count 1 after; MAX == 103.
+// Expect: Return 0 in-task; live_count 1 after; MAX == 105.
 // Depends: syscall 102 dispatch, cap::retype, ABI table
 // Note (deviation from plan): the plan's int 0x80 needs an arch-specific
 // trap stub per arch (x86-only precedent: run_user_probe); the trap
@@ -1377,7 +1377,7 @@ JARVIS_TEST(mk_vspace_map_ownership_mismatch, "PRE: none | POST: none") {
 // the bridge encoding is pinned by arch tests. A synthetic-user task
 // keeps this test arch-neutral for the gate classes.
 // Pseudocode: spawn synthetic-user task with pair; task calls 102
-// (assert 0 in task); harness asserts live_count 1 + MAX 103;
+// (assert 0 in task); harness asserts live_count 1 + MAX 105;
 // teardown.
 JARVIS_TEST(sys_vspace_map_dispatch_end_to_end, "PRE: none | POST: none") {
     static uint64_t g_ret = 0;
@@ -1437,7 +1437,7 @@ JARVIS_TEST(sys_vspace_map_dispatch_end_to_end, "PRE: none | POST: none") {
     JARVIS_ASSERT(t != nullptr);
     JARVIS_ASSERT_EQ(0ULL, g_ret);
     JARVIS_ASSERT_EQ(1ULL, g_live);
-    JARVIS_ASSERT_EQ(103ULL,
+    JARVIS_ASSERT_EQ(105ULL,
                      static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL));
     JARVIS_TEST_PASS();
 }

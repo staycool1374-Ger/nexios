@@ -2112,14 +2112,15 @@ JARVIS_TEST(tcb_config_unsupported_and_bad_mask, "PRE: none | POST: none") {
 
 // Runmode: kernel
 // Testidea: F4 syscall surface — 99/100/101 dispatch through
-//        Syscall::handle; MAX_SYSCALL == 103 with F5 VSPACE_MAP (was
-//        102 at F4 landing); 103 rejected past-MAX; ABI unchanged.
-// Input: handle(99/100/101, ...) reachable; MAX pin; 103 probe.
-// Expect: Dispatch works with typed codes; MAX == 103; 103 ->
+//        Syscall::handle; MAX_SYSCALL == 105 with F11 Stage C
+//        VSPACE_FRAME_MAP (103) + VSPACE_ACTIVATE (104); 105
+//        rejected past-MAX; ABI unchanged.
+// Input: handle(99/100/101, ...) reachable; MAX pin; 105 probe.
+// Expect: Dispatch works with typed codes; MAX == 105; 105 ->
 //        GENERIC_FAIL; ABI 0x10000.
 // Depends: syscall table wiring, ABI_VERSION stability
 // Pseudocode: call 99/100/101 (typed outcomes, no crash); assert
-// MAX == 103; call 103 (GENERIC_FAIL); ABI_VERSION == 0x10000.
+// MAX == 105; call 105 (GENERIC_FAIL); ABI_VERSION == 0x10000.
 JARVIS_TEST(sys_tcb_surface_and_numbering, "PRE: none | POST: none") {
     static uint64_t g_99 = 0;
     static uint64_t g_100 = 0;
@@ -2141,8 +2142,10 @@ JARVIS_TEST(sys_tcb_surface_and_numbering, "PRE: none | POST: none") {
         g_101 = Syscall::handle(
             static_cast<uint64_t>(SyscallNumber::TCB_RESUME), 0xDEADBEEFULL,
             0, 0, 0, nullptr);
-        // 102 is VSPACE_MAP now; 103 is past MAX -> GENERIC_FAIL.
-        g_102 = Syscall::handle(103, 0, 0, 0, 0, nullptr);
+        // 102 is VSPACE_MAP now; 105 is past MAX -> GENERIC_FAIL
+        // (handle rejects nr >= MAX before touching args/table/regs,
+        // syscall.cpp:139-142, so all-zero args fail closed).
+        g_102 = Syscall::handle(105, 0, 0, 0, 0, nullptr);
         g_abi = Syscall::handle(
             static_cast<uint64_t>(SyscallNumber::ABI_VERSION), 0, 0, 0, 0,
             nullptr);
@@ -2153,7 +2156,7 @@ JARVIS_TEST(sys_tcb_surface_and_numbering, "PRE: none | POST: none") {
     JARVIS_ASSERT_EQ(tcb_err(2), g_101);
     JARVIS_ASSERT_EQ(static_cast<uint64_t>(-1), g_102);
     JARVIS_ASSERT_EQ(0x10000ULL, g_abi);
-    JARVIS_ASSERT_EQ(103ULL,
+    JARVIS_ASSERT_EQ(105ULL,
                      static_cast<uint64_t>(SyscallNumber::MAX_SYSCALL));
     JARVIS_TEST_PASS();
 }
