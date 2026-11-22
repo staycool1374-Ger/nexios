@@ -1091,7 +1091,10 @@
 /// v0.4.0 MP-4: SMAP (supervisor-mode access prevention) — CR4 bit 21.
 /// On x86_64 the boot path sets it when CPUID leaf 7 EBX[20] is supported.
 /// Every kernel->user deref is stac/clac-wrapped (checked_ptr.hpp + syscall
-/// handlers) so enabling this is safe.
+/// handlers) so enabling this is safe.  The stac/clac emission itself is
+/// gated on the same CPUID capability via arch::g_smap_supported (issue
+/// #606): a CPU without SMAP runs the copy paths unlocked rather than
+/// faulting (#UD), while CR4.SMAP stays off.
 #ifndef CONFIG_SMAP
 #if defined(CONFIG_ARCH_X86_64)
 #define CONFIG_SMAP 1

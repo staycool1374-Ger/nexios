@@ -143,11 +143,35 @@ inline void invpcid_emit(InvpcidType type, const InvpcidDesc &desc) {
                  : "memory");
 }
 
+/// @brief Whether the CPU supports SMAP (CPUID leaf 7 EBX bit 20).
+/// Written once by the boot CPUID probe (kernel.cpp SMEP/SMAP block) while
+/// the system is single-CPU with IRQs off; read-only thereafter from any
+/// context (task, ISR, fault handler) — plain read is safe.  It gates
+/// instruction *emission* (stac/clac are #UD without CPUID.SMAP), not the
+/// CR4.SMAP bit (issue #606).
+extern bool g_smap_supported;
+
 /// @brief Set AC (alignment check / SMAP enable) — allows kernel access to
 ///        user pages while SMAP is active.  Must be paired with clac().
-inline void stac() { asm volatile("stac" ::: "cc"); }
+///        No-op when the CPU lacks CPUID.SMAP — stac/clac are #UD on such
+///        CPUs, and CR4.SMAP off does not make them legal (issue #606).
+///        The AC window therefore exists only where the hardware defines it.
+inline void stac() {
+    if (!g_smap_supported) {
+        return;
+    }
+    asm volatile("stac" ::: "cc");
+}
 /// @brief Clear AC — SMAP faults on any further kernel deref of user pages.
-inline void clac() { asm volatile("clac" ::: "cc"); }
+///        No-op when the CPU lacks CPUID.SMAP, symmetric with stac() — both
+///        instructions are #UD without SMAP, so the predicate is identical
+///        (issue #606).
+inline void clac() {
+    if (!g_smap_supported) {
+        return;
+    }
+    asm volatile("clac" ::: "cc");
+}
 /// @brief Read RFLAGS (AC = bit 18).
 /// @return Current RFLAGS value.
 inline uint64_t read_rflags() {

@@ -72,6 +72,10 @@ inline constexpr uint32_t CPUID_ECX1_PCID = 1u << 17;
 inline constexpr uint32_t CPUID_EBX7_RDSEED = 1u << 18;
 /// @brief INVPCID feature bit (EBX, leaf 7, subleaf 0).
 inline constexpr uint32_t CPUID_EBX7_INVPCID = 1u << 10;
+/// @brief SMAP feature bit (EBX, leaf 7, subleaf 0): gates instruction
+/// *legality* of stac/clac — CR4.SMAP being off does not make them legal
+/// (issue #606).
+inline constexpr uint32_t CPUID_EBX7_SMAP = 1u << 20;
 /// @brief FSGSBASE feature bit (EBX, leaf 7, subleaf 0): userspace
 /// RDFSBASE/WRFSBASE (issue #338 — thread-local errno reads its TP).
 inline constexpr uint32_t CPUID_EBX7_FSGSBASE = 1u << 0;
@@ -105,6 +109,14 @@ inline bool has_pcid() {
 /// @return true if the INVPCID feature bit is set.
 inline bool has_invpcid() {
     return (cpuid(7, 0).ebx & CPUID_EBX7_INVPCID) != 0;
+}
+/// @brief Check if the CPU supports SMAP (stac/clac instructions).
+/// Boot-path use only: hot paths must read the cached
+/// arch::g_smap_supported latch instead — CPUID costs ~100+ cycles and
+/// stac/clac sit on the per-copy path (issue #606).
+/// @return true if the SMAP feature bit (leaf 7, subleaf 0, EBX[20]) is set.
+inline bool has_smap() {
+    return (cpuid(7, 0).ebx & CPUID_EBX7_SMAP) != 0;
 }
 /// @brief Check if the CPU supports the RDSEED instruction.
 /// @return true if the RDSEED feature bit (leaf 7, subleaf 0) is set.
