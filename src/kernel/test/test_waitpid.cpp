@@ -178,6 +178,11 @@ void seam_noop(TaskControlBlock &publisher) {
 //        terminates with exit code 42; the real wake path runs.
 // Expect: The parent's waiting_child_status receives 42; the child is
 //         removed from the scheduler; the parent's wait is cleared.
+// Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
+// pause-spin could starve TCG ticks under host load and wedge the suite
+// with no FAIL line.
 JARVIS_TEST(waitpid_zombie_over_new_child, "PRE: none | POST: none") {
     WaitContext ctx{};
     // Create BOTH TCBs first (cookbook Rule 1) so a timer tick cannot
@@ -205,9 +210,51 @@ JARVIS_TEST(waitpid_zombie_over_new_child, "PRE: none | POST: none") {
     // The parent blocks in the real WAITPID handler; the child then runs and
     // exits through the trampoline.
     Scheduler::reschedule();
-    while (parent->state != TaskState::BLOCKED &&
-           parent->state != TaskState::TERMINATED)
-        arch::pause();
+    // Tick-bounded dispatch wait: the deferred dispatch completes only
+    // on a timer tick, so a bare pause-spin here starves TCG ticks under
+    // host load and wedges the suite with no FAIL line.
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    {
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
+        constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        const uint64_t ns0 = arch::Timer::ns_monotonic();
+        uint64_t spins = 0;
+        auto dispatched = [&parent]() {
+            const uint8_t raw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const TaskState st = static_cast<TaskState>(raw);
+            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+        };
+        while (!dispatched()) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+            arch::hlt();
+            ++spins;
+            if (arch::Timer::ticks() - ticks0 >= DISPATCH_WAIT_TICKS)
+                break;
+            if (ns0 != 0) {
+                if (arch::Timer::ns_monotonic() - ns0 >= DISPATCH_WAIT_NS)
+                    break;
+            } else if (spins >= DISPATCH_WAIT_SPINS) {
+                break;
+            }
+        }
+        if (!dispatched()) {
+            JARVIS_ASSERT_FMT(false,
+                              "dispatch wait expired: state=0x%lx valid=%lu "
+                              "ticks=%lu ns=%lu spins=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - ticks0,
+                              (ns0 != 0)
+                                  ? (arch::Timer::ns_monotonic() - ns0)
+                                  : 0ULL,
+                              spins);
+        }
+    }
     kernel::test::wait_for_termination_safe(parent);
     JARVIS_ASSERT(Scheduler::find_task(ctx.child_id_) == nullptr);
 
@@ -228,7 +275,8 @@ JARVIS_TEST(waitpid_zombie_over_new_child, "PRE: none | POST: none") {
 // Expect: Each child's status is delivered to the parent and reaped; no
 // zombies remain in the scheduler.
 // Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
-// 4000 ticks) with a TSC ns backstop (8 s); the former unbounded
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s); the former unbounded
 // pause-spin could starve TCG ticks under host load and wedge the suite
 // with no FAIL line.
 JARVIS_TEST(waitpid_two_children_sequential_reap, "PRE: none | POST: none") {
@@ -264,7 +312,7 @@ JARVIS_TEST(waitpid_two_children_sequential_reap, "PRE: none | POST: none") {
     // the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 4000ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
@@ -407,10 +455,11 @@ JARVIS_TEST(waitpid_cr3_switch_on_status_write, "PRE: none | POST: none") {
 // Depends: WaitPublishSeamScope, wake path, second-residence collect,
 //          tick+ns-bounded dispatch wait
 // Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
-// 4000 ticks = 4 s at CONFIG_TICK_HZ 1000) with a TSC ns backstop (8 s)
-// and a spin cap for freq_hz()==0, because the former 100k pure-pause
-// bound could expire with zero guest ticks under QEMU TCG + host load
-// (false FAIL). A timer tick may also preempt the parent between
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s) and a spin cap for
+// freq_hz()==0, because the former 100k pure-pause bound could expire
+// with zero guest ticks under QEMU TCG + host load (false FAIL). A timer
+// tick may also preempt the parent between
 // pid-publish and hook-fire; the test then takes the missed-fire leg
 // (neuter victim + public terminate + real-wake collect) instead of
 // hanging on the starved hook.
@@ -478,7 +527,7 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
     // still distinguishes wedged-BLOCKED from garbage.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 4000ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
@@ -556,7 +605,7 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
     {
         const uint64_t t0 = arch::Timer::ticks();
         while (parent->state != TaskState::TERMINATED &&
-               arch::Timer::ticks() < t0 + 4000ULL)
+               arch::Timer::ticks() - t0 < 400ULL)
             arch::hlt();
         if (parent->state != TaskState::TERMINATED) {
             JARVIS_ASSERT_FMT(false,
@@ -615,9 +664,10 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
 // Expect: Same outcome as primary via the miss leg.
 // Depends: miss-branch collect (step 9)
 // Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
-// 4000 ticks) with a TSC ns backstop (8 s); the former bare pause-spin
-// could starve TCG ticks under host load and wedge the suite. The
-// termination wait is likewise tick-bounded with a loud diagnostic.
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
+// pause-spin could starve TCG ticks under host load and wedge the suite.
+// The termination wait is likewise tick-bounded with a loud diagnostic.
 // A preempted publish (hook starved, 0/0/0/0) takes the missed-fire
 // leg: neuter the victim and drive the child via public terminate;
 // the no-wake funnel itself runs whenever the hook fires normally.
@@ -667,7 +717,7 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
     // wedges the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 4000ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
@@ -738,12 +788,39 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
             Logger::info("[WAITPID] test5 missed-fire leg");
         }
     }
+    // Rescue leg (post-hook stall): the no-wake funnel leaves the parent
+    // BLOCKED with no waker when a tick deschedules it mid-window after
+    // the hook ran. Detect hook-fired + child-dead + parent-BLOCKED
+    // sustained over 100 ticks and re-ready the parent (mirrors the
+    // teardown disarm); the waitpid loop then re-scans and collects.
+    {
+        constexpr uint64_t RESCUE_TICKS = 100ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        auto stuck = [&]() {
+            const uint8_t praw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const uint8_t craw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&child->state),
+                __ATOMIC_ACQUIRE);
+            return __atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) > 0 &&
+                   static_cast<TaskState>(craw) == TaskState::TERMINATED &&
+                   static_cast<TaskState>(praw) == TaskState::BLOCKED;
+        };
+        while (!stuck() &&
+               arch::Timer::ticks() - ticks0 < RESCUE_TICKS)
+            arch::hlt();
+        if (stuck()) {
+            Scheduler::set_task_ready(*parent);
+            Logger::info("[WAITPID] test5 rescue leg");
+        }
+    }
     // Tick-bounded termination wait: expiry fails loudly instead of
     // hanging the suite when the parent never gets woken.
     {
         const uint64_t t0 = arch::Timer::ticks();
         while (parent->state != TaskState::TERMINATED &&
-               arch::Timer::ticks() - t0 < 4000ULL)
+               arch::Timer::ticks() - t0 < 400ULL)
             arch::hlt();
         if (parent->state != TaskState::TERMINATED) {
             JARVIS_ASSERT_FMT(false,
@@ -867,6 +944,11 @@ JARVIS_TEST(waitpid_retained_corpse_survives_drain, "PRE: none | POST: none") {
 // Expect: Collects with status 42.
 // Depends: wildcard path + consumption precedence
 // Pseudocode: arm; waitpid(-1) (collects); assert; teardown.
+// Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
+// pause-spin could starve TCG ticks under host load and wedge the suite
+// with no FAIL line.
 JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
     static WaitContext g_ctx;
     static uint64_t g_status = 0;
@@ -920,9 +1002,51 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
             Scheduler::set_task_ready(*parent);
     });
     Scheduler::reschedule();
-    while (parent->state != TaskState::BLOCKED &&
-           parent->state != TaskState::TERMINATED)
-        arch::pause();
+    // Tick-bounded dispatch wait: the deferred dispatch completes only
+    // on a timer tick, so a bare pause-spin here starves TCG ticks under
+    // host load and wedges the suite with no FAIL line.
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    {
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
+        constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        const uint64_t ns0 = arch::Timer::ns_monotonic();
+        uint64_t spins = 0;
+        auto dispatched = [&parent]() {
+            const uint8_t raw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const TaskState st = static_cast<TaskState>(raw);
+            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+        };
+        while (!dispatched()) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+            arch::hlt();
+            ++spins;
+            if (arch::Timer::ticks() - ticks0 >= DISPATCH_WAIT_TICKS)
+                break;
+            if (ns0 != 0) {
+                if (arch::Timer::ns_monotonic() - ns0 >= DISPATCH_WAIT_NS)
+                    break;
+            } else if (spins >= DISPATCH_WAIT_SPINS) {
+                break;
+            }
+        }
+        if (!dispatched()) {
+            JARVIS_ASSERT_FMT(false,
+                              "dispatch wait expired: state=0x%lx valid=%lu "
+                              "ticks=%lu ns=%lu spins=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - ticks0,
+                              (ns0 != 0)
+                                  ? (arch::Timer::ns_monotonic() - ns0)
+                                  : 0ULL,
+                              spins);
+        }
+    }
     kernel::test::wait_for_termination_safe(parent);
     g_status = g_ctx.status_;
     g_nofind = (Scheduler::find_task(real_id) == nullptr) ? 1ULL : 0ULL;
@@ -944,6 +1068,11 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
 // Depends: classic wake path, dmesg ring scan
 // Pseudocode: arm no-op; racer terminates; waitpid (once);
 // assert no +23 row; teardown.
+// Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
+// pause-spin could starve TCG ticks under host load and wedge the suite
+// with no FAIL line.
 JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
     static WaitContext g_ctx;
     static uint64_t g_ret = 0;
@@ -1003,9 +1132,51 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
             Scheduler::set_task_ready(*parent);
     });
     Scheduler::reschedule();
-    while (parent->state != TaskState::BLOCKED &&
-           parent->state != TaskState::TERMINATED)
-        arch::pause();
+    // Tick-bounded dispatch wait: the deferred dispatch completes only
+    // on a timer tick, so a bare pause-spin here starves TCG ticks under
+    // host load and wedges the suite with no FAIL line.
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    {
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
+        constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        const uint64_t ns0 = arch::Timer::ns_monotonic();
+        uint64_t spins = 0;
+        auto dispatched = [&parent]() {
+            const uint8_t raw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const TaskState st = static_cast<TaskState>(raw);
+            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+        };
+        while (!dispatched()) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+            arch::hlt();
+            ++spins;
+            if (arch::Timer::ticks() - ticks0 >= DISPATCH_WAIT_TICKS)
+                break;
+            if (ns0 != 0) {
+                if (arch::Timer::ns_monotonic() - ns0 >= DISPATCH_WAIT_NS)
+                    break;
+            } else if (spins >= DISPATCH_WAIT_SPINS) {
+                break;
+            }
+        }
+        if (!dispatched()) {
+            JARVIS_ASSERT_FMT(false,
+                              "dispatch wait expired: state=0x%lx valid=%lu "
+                              "ticks=%lu ns=%lu spins=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - ticks0,
+                              (ns0 != 0)
+                                  ? (arch::Timer::ns_monotonic() - ns0)
+                                  : 0ULL,
+                              spins);
+        }
+    }
     kernel::test::wait_for_termination_safe(parent);
     kernel::test::wait_for_termination_safe(racer);
     g_ret = g_ctx.result_;
@@ -1076,7 +1247,7 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
                 return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
             };
             const uint64_t ticks0 = arch::Timer::ticks();
-            constexpr uint64_t CHILD_WAIT_TICKS = 4000ULL;
+            constexpr uint64_t CHILD_WAIT_TICKS = 400ULL;
             while (!done() &&
                    arch::Timer::ticks() - ticks0 < CHILD_WAIT_TICKS) {
                 __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -1106,7 +1277,7 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
     // pause-spin here starves TCG ticks under host load.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 4000ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
@@ -1227,6 +1398,11 @@ JARVIS_TEST(waitpid_zombie_claim_is_atomic, "PRE: none | POST: none") {
 // Depends: sys_kill self-fatal funnel, waitpid collect
 // Pseudocode: spawn pair; child kills self; parent collects;
 // assert all; teardown.
+// Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
+// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
+// heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
+// pause-spin could starve TCG ticks under host load and wedge the suite
+// with no FAIL line.
 JARVIS_TEST(waitpid_kill_self_wakes_parent, "PRE: none | POST: none") {
     static WaitContext g_ctx;
     g_ctx.child_id_ = 0;
@@ -1258,9 +1434,51 @@ JARVIS_TEST(waitpid_kill_self_wakes_parent, "PRE: none | POST: none") {
         Scheduler::add_task(*child);
     }
     Scheduler::reschedule();
-    while (parent->state != TaskState::BLOCKED &&
-           parent->state != TaskState::TERMINATED)
-        arch::pause();
+    // Tick-bounded dispatch wait: the deferred dispatch completes only
+    // on a timer tick, so a bare pause-spin here starves TCG ticks under
+    // host load and wedges the suite with no FAIL line.
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    {
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
+        constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        const uint64_t ns0 = arch::Timer::ns_monotonic();
+        uint64_t spins = 0;
+        auto dispatched = [&parent]() {
+            const uint8_t raw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const TaskState st = static_cast<TaskState>(raw);
+            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+        };
+        while (!dispatched()) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+            arch::hlt();
+            ++spins;
+            if (arch::Timer::ticks() - ticks0 >= DISPATCH_WAIT_TICKS)
+                break;
+            if (ns0 != 0) {
+                if (arch::Timer::ns_monotonic() - ns0 >= DISPATCH_WAIT_NS)
+                    break;
+            } else if (spins >= DISPATCH_WAIT_SPINS) {
+                break;
+            }
+        }
+        if (!dispatched()) {
+            JARVIS_ASSERT_FMT(false,
+                              "dispatch wait expired: state=0x%lx valid=%lu "
+                              "ticks=%lu ns=%lu spins=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - ticks0,
+                              (ns0 != 0)
+                                  ? (arch::Timer::ns_monotonic() - ns0)
+                                  : 0ULL,
+                              spins);
+        }
+    }
     kernel::test::wait_for_termination_safe(parent);
     JARVIS_ASSERT(Scheduler::find_task(g_ctx.child_id_) == nullptr);
     Scheduler::drain_zombie_list();
