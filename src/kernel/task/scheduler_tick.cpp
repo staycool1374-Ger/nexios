@@ -1331,11 +1331,49 @@ void Scheduler::rate_monotonic_schedule() noexcept {
     bool harness_current =
         (is_test_active() && harness_task_ptr_ != nullptr &&
          current == harness_task_ptr_);
+    bool dbg610_switched = false;
     if (next && next != current &&
         !(next == own_idle() &&
           (current->state == TaskState::RUNNING || harness_current))) {
         switch_to_task(current, *next, nullptr);
+        dbg610_switched = true;
     }
+#if defined(CONFIG_DEBUG)
+    // Issue #610 Phase A TEMP-DIAG (revert verbatim after conviction): one
+    // line per RMS dispatch-section pass while tests run. Pure reads (head
+    // id only — never call peek here, it drops stale heads as a side
+    // effect) + bounded print; no state change.
+    if (is_test_active()) {
+        uint64_t dcpu = Scheduler::sched_cpu() % CONFIG_MAX_CPUS;
+        TaskControlBlock *dhead = sched_queue::edf_ready_[dcpu].head_;
+        char dbuf[160];
+        int dp = 0;
+        kernel::debug::fmt_str(dbuf, dp, "[610] t=");
+        dp = kernel::debug::fmt_u64(dbuf, dp, arch::Timer::ticks());
+        kernel::debug::fmt_str(dbuf, dp, " cur=");
+        dp = kernel::debug::fmt_u64(dbuf, dp, current ? current->id : 0u);
+        kernel::debug::fmt_str(dbuf, dp, " nr=");
+        dp = kernel::debug::fmt_u64(
+            dbuf, dp,
+            __atomic_load_n(&Scheduler::SwSlots::need_resched(),
+                            __ATOMIC_ACQUIRE)
+                ? 1u
+                : 0u);
+        kernel::debug::fmt_str(dbuf, dp, " head=");
+        dp = kernel::debug::fmt_u64(dbuf, dp, dhead ? dhead->id : 0u);
+        kernel::debug::fmt_str(dbuf, dp, " brk=");
+        dp = kernel::debug::fmt_u64(dbuf, dp,
+                                    breaker_next ? breaker_next->id : 0u);
+        kernel::debug::fmt_str(dbuf, dp, " next=");
+        dp = kernel::debug::fmt_u64(dbuf, dp, next ? next->id : 0u);
+        kernel::debug::fmt_str(dbuf, dp, " sw=");
+        dp = kernel::debug::fmt_u64(dbuf, dp, dbg610_switched ? 1u : 0u);
+        kernel::debug::fmt_str(dbuf, dp, " starve=");
+        dp = kernel::debug::fmt_u64(dbuf, dp, starve_ticks_[dcpu]);
+        dbuf[dp] = 0;
+        kernel::debug::trace(dbuf);
+    }
+#endif
 
     __atomic_store_n(&Scheduler::SwSlots::need_resched(), false, __ATOMIC_RELEASE);
 }
