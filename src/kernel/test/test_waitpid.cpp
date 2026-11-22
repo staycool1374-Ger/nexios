@@ -1096,7 +1096,8 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
 // heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
 // pause-spin could starve TCG ticks under host load and wedge the suite
 // with no FAIL line. The termination wait for parent+racer is likewise
-// tick-bounded with a loud all-TCB diagnostic.
+// tick-bounded with a loud all-TCB diagnostic (state/in_rq/in_edf per
+// TCB — the in_edf fields split #610 C1-shape from C2-shape).
 // Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
 // 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
 // heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
@@ -1110,6 +1111,10 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
     g_ctx.status_ = 0;
     g_ctx.result_ = 0;
     g_ret = g_norow = 0;
+    // Hook hygiene (#610): the noop seam below never bumps the file-static
+    // counters, so without this reset a test-8 FAIL line would show test 7s
+    // residue (1/1/1/1) instead of this tests all-zero observation.
+    g_hook_entered = g_hook_marked = g_hook_woke = g_hook_released = 0;
 
     auto *parent = TaskControlBlock::create(waitpid_parent_entry, 20, 10);
     JARVIS_ASSERT(parent != nullptr);
@@ -1233,15 +1238,18 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
                 reinterpret_cast<const uint8_t *>(&child->state),
                 __ATOMIC_ACQUIRE);
             JARVIS_ASSERT_FMT(false,
-                              "termination wait expired: parent=0x%lx/%lu "
-                              "racer=0x%lx/%lu child=0x%lx/%lu "
+                              "termination wait expired: parent=0x%lx/%lu/%lu "
+                              "racer=0x%lx/%lu/%lu child=0x%lx/%lu/%lu "
                               "valid=%lu/%lu/%lu ticks=%lu",
                               static_cast<uint64_t>(parent->state),
                               parent->in_ready_queue_ ? 1ULL : 0ULL,
+                              parent->in_edf_queue_ ? 1ULL : 0ULL,
                               static_cast<uint64_t>(racer->state),
                               racer->in_ready_queue_ ? 1ULL : 0ULL,
+                              racer->in_edf_queue_ ? 1ULL : 0ULL,
                               static_cast<uint64_t>(craw),
                               child->in_ready_queue_ ? 1ULL : 0ULL,
+                              child->in_edf_queue_ ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(racer) ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(child) ? 1ULL : 0ULL,
