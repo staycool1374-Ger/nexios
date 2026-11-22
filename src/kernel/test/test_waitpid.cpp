@@ -614,6 +614,9 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
 // Input: Seam hook without wake_waiting_parent; waitpid.
 // Expect: Same outcome as primary via the miss leg.
 // Depends: miss-branch collect (step 9)
+// Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
+// 4000 ticks) with a TSC ns backstop (8 s); the former bare pause-spin
+// could starve TCG ticks under host load and wedge the suite.
 // Pseudocode: arm hook (no wake); waitpid (collects via miss
 // leg); assert all; teardown.
 JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
@@ -654,9 +657,52 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
             Scheduler::set_task_ready(*parent);
     });
     Scheduler::reschedule();
-    while (parent->state != TaskState::BLOCKED &&
-           parent->state != TaskState::TERMINATED)
-        arch::pause();
+    // Tick-bounded dispatch wait (same contract as the other waitpid
+    // tests): the deferred dispatch completes only on a timer tick, so
+    // a bare pause-spin here starves TCG ticks under host load and
+    // wedges the suite with no FAIL line.
+    JARVIS_ASSERT(arch::interrupts_enabled());
+    {
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 4000ULL;
+        constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
+        constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
+        const uint64_t ticks0 = arch::Timer::ticks();
+        const uint64_t ns0 = arch::Timer::ns_monotonic();
+        uint64_t spins = 0;
+        auto dispatched = [&parent]() {
+            const uint8_t raw = __atomic_load_n(
+                reinterpret_cast<const uint8_t *>(&parent->state),
+                __ATOMIC_ACQUIRE);
+            const TaskState st = static_cast<TaskState>(raw);
+            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+        };
+        while (!dispatched()) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
+            arch::hlt();
+            ++spins;
+            if (arch::Timer::ticks() - ticks0 >= DISPATCH_WAIT_TICKS)
+                break;
+            if (ns0 != 0) {
+                if (arch::Timer::ns_monotonic() - ns0 >= DISPATCH_WAIT_NS)
+                    break;
+            } else if (spins >= DISPATCH_WAIT_SPINS) {
+                break;
+            }
+        }
+        if (!dispatched()) {
+            JARVIS_ASSERT_FMT(false,
+                              "dispatch wait expired: state=0x%lx valid=%lu "
+                              "ticks=%lu ns=%lu spins=%lu",
+                              static_cast<uint64_t>(parent->state),
+                              TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
+                              arch::Timer::ticks() - ticks0,
+                              (ns0 != 0)
+                                  ? (arch::Timer::ns_monotonic() - ns0)
+                                  : 0ULL,
+                              spins);
+        }
+    }
     kernel::test::wait_for_termination_safe(parent);
     const uint64_t cid5 = g_ctx.child_id_;
     g_ret = g_ctx.result_;
