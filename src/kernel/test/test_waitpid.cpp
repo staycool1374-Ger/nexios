@@ -140,15 +140,21 @@ void seam_full_funnel(TaskControlBlock &publisher) {
 }
 
 // Miss leg: same funnel minus the wake — the absent branch (step 9).
+// Still bumps entered/marked/released (never woke: no wake is
+// delivered) so the harness can tell a fired hook from a preempted
+// publication gap; the missed-fire leg keys off entered.
 void seam_funnel_no_wake(TaskControlBlock &publisher) {
     (void)publisher;
     auto *child = g_seam_victim;
     if (!child)
         return;
+    ++g_hook_entered;
     Scheduler::dequeue_ready(*child);
     child->state = TaskState::TERMINATED;
     child->exit_code = 42;
+    ++g_hook_marked;
     Scheduler::release_zombie(*child);
+    ++g_hook_released;
 }
 
 // Read-only observer: records the publication state, mutates nothing.
@@ -681,6 +687,10 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
     g_ctx.status_ = 0;
     g_ctx.result_ = 0;
     g_ret = g_nofind = 0;
+    // Hooks are file-static single-shot state: a previous test's funnel
+    // leaves them set. Reset so the missed-fire detector below observes
+    // THIS test's hook only (test 4 does the same at its setup).
+    g_hook_entered = g_hook_marked = g_hook_woke = g_hook_released = 0;
 
     auto *parent = TaskControlBlock::create(waitpid_parent_entry, 20, 10);
     JARVIS_ASSERT(parent != nullptr);
@@ -957,6 +967,10 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
     g_ctx.status_ = 0;
     g_ctx.result_ = 0;
     g_status = g_nofind = 0;
+    // Same file-static hook hygiene as test 4: a previous funnel leaves
+    // the single-shot counters set, which would blind this test's
+    // hook observation.
+    g_hook_entered = g_hook_marked = g_hook_woke = g_hook_released = 0;
 
     auto *parent = TaskControlBlock::create(waitpid_parent_entry, 20, 10);
     JARVIS_ASSERT(parent != nullptr);
