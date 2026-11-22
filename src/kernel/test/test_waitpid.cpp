@@ -677,6 +677,9 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
 // A preempted publish (hook starved, 0/0/0/0) takes the missed-fire
 // leg: neuter the victim and drive the child via public terminate;
 // the no-wake funnel itself runs whenever the hook fires normally.
+// A parent descheduled after a fired hook (no waker by design) is
+// re-readied inside the termination wait (rescue); expiry then proves
+// a deeper stall instead of hanging the suite.
 // Pseudocode: arm hook (no wake); waitpid (collects via miss
 // leg); assert all; teardown.
 JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
@@ -798,45 +801,51 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
             Logger::info("[WAITPID] test5 missed-fire leg");
         }
     }
-    // Rescue leg (post-hook stall): the no-wake funnel leaves the parent
-    // BLOCKED with no waker when a tick deschedules it mid-window after
-    // the hook ran. Detect hook-fired + child-dead + parent-BLOCKED
-    // sustained over 100 ticks and re-ready the parent (mirrors the
-    // teardown disarm); the waitpid loop then re-scans and collects.
+    // Rescue + termination wait (integrated): the no-wake funnel leaves
+    // the parent BLOCKED with no waker whenever it is descheduled after
+    // the hook ran — not just inside the first 100 ticks. Each iteration
+    // re-checks the stuck shape (hook fired + child dead + parent
+    // BLOCKED) and re-readies the parent once; the waitpid loop then
+    // re-scans and collects. Expiry fails loudly with full state.
     {
-        constexpr uint64_t RESCUE_TICKS = 100ULL;
-        const uint64_t ticks0 = arch::Timer::ticks();
-        auto stuck = [&]() {
+        constexpr uint64_t TERM_WAIT_TICKS = 400ULL;
+        const uint64_t t0 = arch::Timer::ticks();
+        bool rescued = false;
+        auto rescue_needed = [&]() {
+            return __atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) > 0 &&
+                   [&]() {
+                const uint8_t craw = __atomic_load_n(
+                    reinterpret_cast<const uint8_t *>(&child->state),
+                    __ATOMIC_ACQUIRE);
+                const uint8_t praw = __atomic_load_n(
+                    reinterpret_cast<const uint8_t *>(&parent->state),
+                    __ATOMIC_ACQUIRE);
+                return static_cast<TaskState>(craw) == TaskState::TERMINATED &&
+                       static_cast<TaskState>(praw) == TaskState::BLOCKED;
+            }();
+        };
+        auto parent_gone = [&]() {
             const uint8_t praw = __atomic_load_n(
                 reinterpret_cast<const uint8_t *>(&parent->state),
                 __ATOMIC_ACQUIRE);
-            const uint8_t craw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&child->state),
-                __ATOMIC_ACQUIRE);
-            return __atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) > 0 &&
-                   static_cast<TaskState>(craw) == TaskState::TERMINATED &&
-                   static_cast<TaskState>(praw) == TaskState::BLOCKED;
+            return static_cast<TaskState>(praw) == TaskState::TERMINATED;
         };
-        while (!stuck() &&
-               arch::Timer::ticks() - ticks0 < RESCUE_TICKS)
+        while (!parent_gone() &&
+               arch::Timer::ticks() - t0 < TERM_WAIT_TICKS) {
+            __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                             __ATOMIC_RELEASE);
             arch::hlt();
-        if (stuck()) {
-            Scheduler::set_task_ready(*parent);
-            Logger::info("[WAITPID] test5 rescue leg");
+            if (!rescued && rescue_needed()) {
+                Scheduler::set_task_ready(*parent);
+                rescued = true;
+                Logger::info("[WAITPID] test5 rescue leg");
+            }
         }
-    }
-    // Tick-bounded termination wait: expiry fails loudly instead of
-    // hanging the suite when the parent never gets woken.
-    {
-        const uint64_t t0 = arch::Timer::ticks();
-        while (parent->state != TaskState::TERMINATED &&
-               arch::Timer::ticks() - t0 < 400ULL)
-            arch::hlt();
-        if (parent->state != TaskState::TERMINATED) {
+        if (!parent_gone()) {
             JARVIS_ASSERT_FMT(false,
                               "termination wait expired: state=0x%lx valid=%lu "
                               "ticks=%lu result=%lu hook=%lu/%lu/%lu/%lu "
-                              "wcpid=%lu hook_leg=%lu",
+                              "wcpid=%lu hook_leg=%lu rescued=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - t0,
@@ -847,7 +856,8 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
                               g_hook_released,
                               __atomic_load_n(&parent->waiting_child_pid,
                                               __ATOMIC_ACQUIRE),
-                              hook_leg5 ? 1ULL : 0ULL);
+                              hook_leg5 ? 1ULL : 0ULL,
+                              rescued ? 1ULL : 0ULL);
         }
     }
     const uint64_t cid5 = g_ctx.child_id_;
