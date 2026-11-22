@@ -32,5 +32,13 @@ tail -c +1 -F "$SERIAL" &
 TP=$!
 wait "$QP"
 EC=$?
+# Drain: QEMU exits via isa-debug-exit the instant the guest prints TEST
+# SUMMARY, but tail -F may still hold the last kilobytes (final S-lines +
+# summary) in flight. Killing it immediately delivers EOF to expect before
+# the summary arrives -> spurious QEMU_EXIT verdicts (observed on the
+# nexios-qe TCG station: serial.log shows 11/11 + summary while the
+# harness reports QEMU_EXIT). A short grace lets tail flush; it only
+# delays the verdict path, never the guest.
+sleep 2
 kill "$TP" 2>/dev/null
 exit "$EC"
