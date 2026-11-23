@@ -1,0 +1,30 @@
+# AUDIT REPORT 2026-11-22 — issue #610 (DESIGN review r2)
+PATCH: none (plan-only re-review; no code diff exists. Base verified: `git log --oneline -1` = `92378b817`, branch `main`. Tree carries STAGED uncommitted #604 work — plan only audited, nothing touched, nothing committed.)
+FILES: audits/plan-610.md; src/kernel/task/scheduler_queue.cpp, scheduler_tick.cpp, scheduler_snapshot.cpp, scheduler_lifecycle.cpp; tools/meson/list_tests.py; gh issues #610/#601 (normative)
+
+## R1 FINDINGS — DISPOSITION (verified against sources, not prose)
+- R1-S2 #601/H1: CLOSED. Plan lines 11-15 cite #601 verbatim-correct ("corruption-premise-only: all EDF writers are typed IRQ-atomic units" — matches gh issue 601 body word-for-word) and adopt its shape conditionally only. Hypotheses header (line 3) demotes to "two co-equal — r1 demotion; no single leading candidate". C1 row (lines 153-157) gates H1 conviction on "a timing-only producer from validation" and states explicitly: "WITHOUT a named timing-only producer this row is #601's residue, not a #610 conviction — H1 then demotes and H2 becomes the fix target." Coherent.
+- R1-S2 trigger legs: CLOSED. edf_detach correction verified in-tree: scheduler_queue.cpp:140-149 clears flag+links as one IrqGuard unit (early-return when already fully detached). The three wholesale head-null sites each pair with per-node handling — rebuild_ready_queue (:602-624: head-null then per-task rq detach + edf_detach + re-enqueue), snapshot restore (:210-213 head-null, per-node flag-based rebuild/rescue at :100-124 verified, incl. the same flag-skip shape), lifecycle teardown (:1041-1044 head-null where queued tasks are dead by construction). No timing-only producer is claimed without evidence: the two remaining legs (magic-bad-head :201-207, INV-RQ-5 nuke :222-241) are presented as legs validation must tie to a producer, not as established fact.
+- R1-S2 TEMP-DIAG: CLOSED. Step 4 now throttles every site: sweep print once-per-100-ticks per id + test-ids-only (>=3 ids); insert/remove/pick sites restricted to rare branches (flag-gated no-op remove, drop/nuke legs, nullptr-return preempt candidate, pick-change-only next_task); preempt_enabled_/try_lock/ticks on the same line. CONTROL RULE present (lines 142-144: every DIAG red followed by a clean rerun; DIAG-green-vs-clean-red discards the transcript). GDB hang-capture (step 5) declared PRIMARY for TIMEOUT legs; TIMEOUT never convicted on DIAG alone. Sufficient against self-defeat.
+- R1-S2 green bar + #604 ordering: CLOSED. Bar is now x10 consecutive (lines 247-250) with the 0.6^10 ≈ 0.6% false-pass math stated and host load recorded per run; cascade legs kept single-run (honestly non-statistical). ORDERING rule (lines 289-301) is binding: Phase A any time; Phase B ONLY after #604 lands with anchors re-verified; no new oracle field (doc-comment-only SchedOracles touch, avoiding the staged accessor conflict); no parallel hunks; C3-conviction exits the lane to #590/#593. OPEN-QUESTIONS-section concern folded in: the station prescription survives as Phase A step 3 (nexios-qe container, never Mac alone, uptime per run) + Phase D step 2 (load average in history row, identical-binary rerun on stall, Mac-green-never-exonerates rule).
+- R1-S3 aarch64: CLOSED. aarch64 legs are task_core/process_lifecycle (no core_sched); rv64 legs scheduler_zombie/task_core — both verified present in RISCV64_CLASSES (list_tests.py:34-39); core_sched confirmed gate-excluded on aa64 (list_tests.py comment).
+- R1-S3 edf_contains contract: CLOSED. "Lock-free" phrasing withdrawn (lines 109-112: "runs ONLY under the caller's held scheduler_lock_ … NOT independently lock-free/ISR-safe"); bound named as STRANDED_RESCUE_SCAN_MAX = CONFIG_MAX_TASKS with per-tick product bound stated (lines 113-114, 186-187).
+- R1-S3 C5 DIAG caveat: CLOSED. C5 row (lines 173-177) carries the perturbation caveat explicitly (seam verdict valid only on DIAG-free runs).
+- No new contradictions: H1/H2 co-equal labeling consistent across hypotheses header, C1/C2/H2 decision-table rows, and Phase B scoping. The single residual wording wrinkle ("(leading = C1)", line 181, against "no single leading candidate", line 3) is defused by C1's own conditional-demotion sentence — recorded as S3 below, non-blocking.
+
+## FINDINGS
+- [S3] audits/plan-610.md:181 — "(leading = C1)" parenthetical sits uneasily against the line-3 "no single leading candidate" demotion
+  WHY: Read literally it re-promotes C1; only the C1 row's own conditional sentence prevents misdirection, so the parenthetical should read "(Phase-B-shaped = C1; only if convicted)".
+- [S3] audits/plan-610.md:19 — "edf_detach … clears flag+links+prio" overstates by one field
+  WHY: scheduler_queue.cpp:140-149 clears in_edf_queue_/edf_next_/edf_prev_ only — EDF has no prio field (prio clearing belongs to the runq detach); the safety-relevant claim (one IRQ-guarded unit) is accurate, so this is prose precision only.
+
+## VERIFIED SOUND (no finding)
+- Decision-table ordering (C1-conditional → C2-gate → C3-STOP-at-#590/#593-fence → C4 → C5-observe-only) with revert discipline (Phase D: one variable per experiment, max 3 attempts then HALT) and test sanctity (dev zero test edits, QE owns both new tests + FAIL-line hardening + history rows).
+- SIL 3 risk block names the ISR-liveness (current-never-queued/INV-2), WCET (bounded walk, no healthy-path logging), and wrong-structure (#590/#593 fence) hazards with matching mitigations; S2 stale-flag-clear ordering (edf_contains gates edf_detach, mirroring sweep_bitmap_absent) is correctly reasoned.
+
+## CARRIED IMPLEMENTATION NOTES (binding on the dev lane)
+1. Phase B fires ONLY on a C1 conviction with a named timing-only producer in hand; otherwise H2 is the fix target and Phase B as written does not land.
+2. Phase B waits for staged #604 to commit; re-verify tick/registry line anchors and accessor bodies before implementing.
+3. TEMP-DIAG is reverted verbatim (`git checkout -- <files>` + `git diff` proof) before any fix hunk; no DIAG survives the session.
+
+DECISION: APPROVED
