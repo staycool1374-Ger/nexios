@@ -1096,12 +1096,15 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
 // heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
 // pause-spin could starve TCG ticks under host load and wedge the suite
 // with no FAIL line. The termination wait for parent+racer is likewise
-// tick-bounded with a loud all-TCB diagnostic.
-// Note: the post-reschedule() dispatch wait is tick-bounded (hlt body,
-// 400 ticks: ~0.4 s nominal, inside the 30 s guest watchdog even under
-// heavy TCG dilation) with a TSC ns backstop (8 s); the former bare
-// pause-spin could starve TCG ticks under host load and wedge the suite
-// with no FAIL line.
+// tick-bounded with a loud all-TCB diagnostic (state/in_rq/in_edf per
+// TCB — the in_edf fields split #610 C1-shape from C2-shape).
+// Note (Cookbook Rule 7, #610): rendezvous order pinned FIXED —
+// TCB::create stamps deadline_ticks at CREATE outside the Rule-2
+// IrqGuard, so a tick between creates can invert the assumed EDF
+// order (convicted: child/racer deadline flip, racer starved while
+// every pick stayed EDF-correct). Priority order (racer 30 first,
+// then parent 20) guarantees the racer terminates before the
+// parent's first waitpid scan, independent of creation ticks.
 JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
     static WaitContext g_ctx;
     static uint64_t g_ret = 0;
@@ -1110,10 +1113,17 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
     g_ctx.status_ = 0;
     g_ctx.result_ = 0;
     g_ret = g_norow = 0;
+    // Hook hygiene (#610): the noop seam below never bumps the file-static
+    // counters, so without this reset a test-8 FAIL line would show test 7s
+    // residue (1/1/1/1) instead of this tests all-zero observation.
+    g_hook_entered = g_hook_marked = g_hook_woke = g_hook_released = 0;
 
     auto *parent = TaskControlBlock::create(waitpid_parent_entry, 20, 10);
     JARVIS_ASSERT(parent != nullptr);
     parent->user_data = &g_ctx;
+    // Cookbook Rule 7 (#610): pin FIXED — rendezvous order must not rely
+    // on EDF deadlines stamped at create (see Note above).
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*parent, SchedPolicy::FIXED));
 
     auto *child = TaskControlBlock::create(
         []() {
@@ -1122,15 +1132,16 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
         },
         11, 10);
     JARVIS_ASSERT(child != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*child, SchedPolicy::FIXED));
     parent->add_child(child);
     g_ctx.child_id_ = child->id;
     // Racer: terminates the victim, then exits. It must run to
-    // completion BEFORE the parent's first waitpid scan (see above).
-    // Its strictly earlier deadline (period 9 vs 10) forces it first
-    // regardless of tick phase: same tick → earlier deadline wins;
-    // tick between creates → deadline tie broken by higher priority
-    // (30 > 20). The parent then collects the released corpse via the
-    // second residence exactly once, with no reverify-cap SCHED+23 row.
+    // completion BEFORE the parent's first waitpid scan. Order is
+    // priority-enforced (FIXED pin above; 30 > 20), independent of
+    // creation-tick phase — the former deadline rationale (period 9
+    // vs 10) was convicted by #610 and removed. The parent then
+    // collects the released corpse via the second residence exactly
+    // once, with no reverify-cap SCHED+23 row.
     auto *racer = TaskControlBlock::create(
         []() {
             auto *self = Scheduler::current_task();
@@ -1143,6 +1154,7 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
         },
         30, 9);
     JARVIS_ASSERT(racer != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*racer, SchedPolicy::FIXED));
     racer->user_data = child;
     static constexpr uint64_t kSched23 =
         static_cast<uint64_t>(log::kDmesgBase_SCHED) + 23;
@@ -1233,15 +1245,18 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
                 reinterpret_cast<const uint8_t *>(&child->state),
                 __ATOMIC_ACQUIRE);
             JARVIS_ASSERT_FMT(false,
-                              "termination wait expired: parent=0x%lx/%lu "
-                              "racer=0x%lx/%lu child=0x%lx/%lu "
+                              "termination wait expired: parent=0x%lx/%lu/%lu "
+                              "racer=0x%lx/%lu/%lu child=0x%lx/%lu/%lu "
                               "valid=%lu/%lu/%lu ticks=%lu",
                               static_cast<uint64_t>(parent->state),
                               parent->in_ready_queue_ ? 1ULL : 0ULL,
+                              parent->in_edf_queue_ ? 1ULL : 0ULL,
                               static_cast<uint64_t>(racer->state),
                               racer->in_ready_queue_ ? 1ULL : 0ULL,
+                              racer->in_edf_queue_ ? 1ULL : 0ULL,
                               static_cast<uint64_t>(craw),
                               child->in_ready_queue_ ? 1ULL : 0ULL,
+                              child->in_edf_queue_ ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(racer) ? 1ULL : 0ULL,
                               TaskControlBlock::is_valid(child) ? 1ULL : 0ULL,

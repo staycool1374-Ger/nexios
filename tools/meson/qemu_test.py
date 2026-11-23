@@ -151,7 +151,10 @@ def qemu_argv(arch, build, cls, paths, tag):
         # TCG-only; KVM requires -cpu host (fresh baselines on the
         # new box, no skew vs anything).
         kvm = _kvm_usable()
-        cpu_model = "host" if kvm else "max"
+        # NEXIOS_QEMU_CPU overrides the model (QE negative legs, e.g.
+        # #606 SMAP-hidden boot: NEXIOS_QEMU_CPU=max,smap=off on TCG).
+        cpu_model = os.environ.get("NEXIOS_QEMU_CPU",
+                                   "host" if kvm else "max")
         if kvm:
             args += ["-accel", "kvm", "-accel", "tcg"]
             print("  [qemu] KVM active (/dev/kvm) cpu=host", flush=True)
