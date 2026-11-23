@@ -55,7 +55,31 @@ void scheduler_waitpid_parent_entry() {
 }
 
 void scheduler_waitpid_child_entry() {
-    Scheduler::terminate(*Scheduler::current_task(), 42);
+    // Gate on parent-BLOCKED (#605 verdict): without this, a tick between
+    // dispatch and the parent's in-syscall scan lets the child die first
+    // and the parent collects without ever blocking (FIXED orders
+    // selection, never preemption). Tick-bounded hlt wait, same contract
+    // as the waitpid gated-child precedent; starvation exits 99 so the
+    // status assert fails loud instead of passing vacuous.
+    auto *self = Scheduler::current_task();
+    auto *p = Scheduler::find_task(self->parent_id);
+    auto parent_blocked = [&p]() {
+        if (p == nullptr)
+            return true;
+        const uint8_t raw = __atomic_load_n(
+            reinterpret_cast<const uint8_t *>(&p->state), __ATOMIC_ACQUIRE);
+        return static_cast<TaskState>(raw) == TaskState::BLOCKED;
+    };
+    const uint64_t ticks0 = arch::Timer::ticks();
+    constexpr uint64_t CHILD_WAIT_TICKS = 400ULL;
+    while (!parent_blocked() &&
+           arch::Timer::ticks() - ticks0 < CHILD_WAIT_TICKS) {
+        __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+    Scheduler::terminate(*Scheduler::current_task(),
+                         parent_blocked() ? 42 : 99);
     for (;;) {
         arch::hlt();
     }
@@ -303,6 +327,8 @@ JARVIS_TEST(scheduler_quantum_exhaustion, "PRE: none | POST: none") {
 // Expect: Parent receives status 42, child leaves the live task table, and
 //         both TCBs are reclaimed by the real zombie drain.
 // Depends: kernel::task::Scheduler, kernel::task::TaskControlBlock
+// Note: child gated on parent-BLOCKED (see child entry); a starved gate
+//         exits 99 and fails the status assert loud — never vacuous.
 JARVIS_TEST(scheduler_waitpid_wakes_parent,
             "PRE: none | POST: none") {
     WaitpidTestContext context;
