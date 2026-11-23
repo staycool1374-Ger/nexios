@@ -94,84 +94,6 @@ void Scheduler::on_tick() noexcept {
         return;
     }
     uint64_t current_tick = arch::Timer::ticks();
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    if (all_tasks_.size() >= 6) {
-        const bool lk_held = scheduler_lock_.try_lock();
-        if (lk_held) {
-            SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
-            IPC_SCHED_TRACE("[TICK]", "t=", current_tick, "lk=",
-                            (uint64_t)lk_held, "h=",
-                            (uint64_t)scheduler_lock_.holder(), "nt=",
-                            (uint64_t)all_tasks_.size());
-        }
-    }
-    // ==== Lock-contention detector (diagnostic only) ====
-    // NOTE: on_tick may be called from task context (e.g. tests calling
-    // Scheduler::on_tick() in a loop).  In that case the lock is legitimately
-    // held by the *caller's* on_tick body, not by the ISR.  The timer ISR's
-    // on_tick then repeatedly finds lk=0 until the caller's on_tick returns.
-    // This is NOT a stuck lock — it is temporary contention.  Track the holder
-    // address across invocations: if the holder changes, the lock was released
-    // and re-acquired — not stuck.
-    {
-        bool held = scheduler_lock_.try_lock();
-        const void *curr_holder = scheduler_lock_.holder();
-        if (held) {
-            SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
-            current_cpu().lk0_count = 0;
-            current_cpu().last_holder = nullptr;
-        } else {
-            if (curr_holder != current_cpu().last_holder) {
-                // Holder changed — lock was released and re-acquired
-                current_cpu().lk0_count = 1;
-                current_cpu().last_holder = curr_holder;
-            } else {
-                ++current_cpu().lk0_count;
-            }
-            if (current_cpu().lk0_count >= 200) {
-                char buf[128];
-                int p = 0;
-                kernel::debug::fmt_str(buf, p, "[LK-CONTEND] h=");
-                p = kernel::debug::fmt_u64(buf, p,
-                    (uint64_t)curr_holder);
-                kernel::debug::fmt_str(buf, p, " cur=");
-                p = kernel::debug::fmt_u64(buf, p,
-                    current_task() ? (uint64_t)current_task()->id : 0u);
-                kernel::debug::fmt_str(buf, p, " st=");
-                p = kernel::debug::fmt_u64(buf, p,
-                    current_task()
-                        ? (uint64_t)current_task()->state
-                        : 99u);
-                kernel::debug::fmt_str(buf, p, " sched=");
-                p = kernel::debug::fmt_u64(buf, p,
-                    (uint64_t)Scheduler::SwSlots::need_resched());
-                buf[p] = 0;
-                kernel::debug::trace(buf);
-                for (auto *t = all_tasks_.first_ptr(); t;
-                     t = all_tasks_.next_ptr(t)) {
-                    if (t->magic != TaskControlBlock::TCB_MAGIC) continue;
-                    char tb[96];
-                    int tp = 0;
-                    kernel::debug::fmt_str(tb, tp, "  T");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->id);
-                    kernel::debug::fmt_str(tb, tp, " st=");
-                    tp = kernel::debug::fmt_u64(tb, tp,
-                        (uint64_t)t->state);
-                    kernel::debug::fmt_str(tb, tp, " inrq=");
-                    tp = kernel::debug::fmt_u64(tb, tp,
-                        t->in_ready_queue_ ? 1u : 0u);
-                    tb[tp] = 0;
-                    kernel::debug::trace(tb);
-                }
-                // Log warning but do NOT halt — high contention is not
-                // necessarily a stuck lock (e.g. task-context on_tick).
-                kernel::debug::trace("[LK-CONTEND] possible lock contention");
-                current_cpu().lk0_count = 0;
-                current_cpu().last_holder = nullptr;
-            }
-        }
-    }
-#endif
 
     if (!preempt_enabled_) {
         return;
@@ -180,223 +102,6 @@ void Scheduler::on_tick() noexcept {
     bool lock_acquired = scheduler_lock_.try_lock();
     if (lock_acquired) {
         SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-        // Universal hang detector: if no actual context switch has occurred for
-        // STALL_LIMIT ticks while a non-idle task is still runnable, the
-        // scheduler is frozen (any of: deferred-switch CR3 race, blocked-in-runq
-        // live-lock, stale-trigger self-deadlock).  Dump full state and halt so
-        // ONE run yields complete evidence.
-        {
-            const uint64_t now = arch::Timer::ticks();
-            if (current_cpu().last_switch_tick == 0)
-                current_cpu().last_switch_tick = now; // prime on first tick
-            // A stall is only real if a context switch is actually REQUIRED
-            // (needs_switch()) but none has occurred.  The previous predicate
-            // ("any non-idle task READY/RUNNING") fired during legitimate
-            // long-running kernel tests (e.g. PmmExhaustion's 100k-iteration
-            // allocation loop) where the current RUNNING task is the highest
-            // effective priority and no preemption is due — that is correct
-            // scheduler behavior, not a freeze.  Use needs_switch() so only a
-            // genuine failure to dispatch a due task is reported.
-            bool runnable = needs_switch();
-            const uint64_t since_switch =
-                (now > current_cpu().last_switch_tick) ? (now - current_cpu().last_switch_tick) : 0;
-            if (runnable && since_switch > 300 && current_cpu().wedge_emitted < 8) {
-                ++current_cpu().wedge_emitted;
-                char wb[128];
-                int wp = 0;
-                 kernel::debug::fmt_str(wb, wp, "[STALL] ticks_since_switch=");
-                 wp = kernel::debug::fmt_u64(wb, wp, since_switch);
-                 kernel::debug::fmt_str(wb, wp, " cur=");
-                 wp = kernel::debug::fmt_u64(
-                     wb, wp,
-                     (current_task()
-                          ? static_cast<uint64_t>(current_task()->id)
-                          : 0u));
-                kernel::debug::fmt_str(wb, wp, " bm_lo=");
-                wp = kernel::debug::fmt_u64(
-                    wb, wp, rq_own().bitmap().raw_lo());
-                kernel::debug::fmt_str(wb, wp, " bm_hi=");
-                wp = kernel::debug::fmt_u64(
-                    wb, wp, rq_own().bitmap().raw_hi());
-                wb[wp] = 0;
-                kernel::debug::trace(wb);
-                for (auto *t = all_tasks_.first_ptr(); t;
-                     t = all_tasks_.next_ptr(t)) {
-                    if (t->magic != TaskControlBlock::TCB_MAGIC)
-                        continue;
-                    char tb[128];
-                    int tp = 0;
-                    kernel::debug::fmt_str(tb, tp, "  T");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->id);
-                    kernel::debug::fmt_str(tb, tp, " st=");
-                    tp = kernel::debug::fmt_u64(
-                        tb, tp, static_cast<uint64_t>(t->state));
-                    kernel::debug::fmt_str(tb, tp, " inrq=");
-                    tp = kernel::debug::fmt_u64(
-                        tb, tp, t->in_ready_queue_ ? 1u : 0u);
-                    kernel::debug::fmt_str(tb, tp, " rq=");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->rq_priority_);
-                    kernel::debug::fmt_str(tb, tp, " eff=");
-                    tp = kernel::debug::fmt_u64(
-                        tb, tp, effective_priority(t));
-                    kernel::debug::fmt_str(tb, tp, " pg=");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->get_page_table());
-                    tb[tp] = 0;
-                    kernel::debug::trace(tb);
-                }
-                kernel::debug::trace("[STALL] HALT");
-                arch::cli();
-                for (;;)
-                    arch::hlt();
-            }
-        }
-        // H2 diagnostic detectors.  Both halt the CPU on catch so a SINGLE run
-        // freezes QEMU with the full serial evidence (no brute-forcing).
-        {
-            uint64_t phys_rsp{};
-            phys_rsp = current_sp();
-            const uint64_t save_to = reinterpret_cast<uint64_t>(
-                __atomic_load_n(&Scheduler::SwSlots::save_rsp_to(), __ATOMIC_ACQUIRE));
-
-            // --- (C) INV-2 desync: a BLOCKED/WAITING task still in the runq
-            //     (in_ready_queue_==1).  next_task() will keep selecting it,
-            //     producing the live-lock (constant RSP, next=X repeated).
-            bool blocked_in_runq = false;
-            for (auto *t = all_tasks_.first_ptr(); t;
-                 t = all_tasks_.next_ptr(t)) {
-                if (t->magic != TaskControlBlock::TCB_MAGIC)
-                    continue;
-                if (is_idle_task(t))
-                    continue;
-                if (queue_target(*t) != sched_cpu())
-                    continue; // issue #25 C1: own-CPU tasks only (no remote
-                              // queue reads — torn metadata false-alarms)
-                if (t->state == TaskState::BLOCKED ||
-                    t->state == TaskState::WAITING) {
-                    if (t->in_ready_queue_) {
-                        blocked_in_runq = true;
-                        if (current_cpu().wedge_emitted < 8) {
-                            char wb[128];
-                            int wp = 0;
-                            kernel::debug::fmt_str(wb, wp,
-                                                  "[WEDGE] blocked-in-runq id=");
-                            wp = kernel::debug::fmt_u64(wb, wp, t->id);
-                            kernel::debug::fmt_str(wb, wp, " st=");
-                            wp = kernel::debug::fmt_u64(
-                                wb, wp,
-                                static_cast<uint64_t>(t->state));
-                            kernel::debug::fmt_str(wb, wp, " inrq=1 phys=");
-                            bool phys = false;
-                            for (uint64_t p = 0;
-                                 p <= CONFIG_PRIORITY_CEILING && !phys; ++p) {
-                                if (rq_task(*t).queue(p).contains(*t))
-                                    phys = true;
-                            }
-                            wp = kernel::debug::fmt_u64(wb, wp,
-                                                        phys ? 1u : 0u);
-                            wb[wp] = 0;
-                            kernel::debug::trace(wb);
-                        }
-                    }
-                }
-            }
-
-            // --- orphan: READY/RUNNING task flagged in_ready_queue_ but not
-            //     physically linked in any priority queue.
-            bool orphan_found = false;
-            for (auto *t = all_tasks_.first_ptr(); t;
-                 t = all_tasks_.next_ptr(t)) {
-                if (t->magic != TaskControlBlock::TCB_MAGIC)
-                    continue;
-                if (is_idle_task(t) || t == current_task())
-                    continue;
-                if (queue_target(*t) != sched_cpu())
-                    continue; // issue #25 C1: own-CPU tasks only
-                if (t->state != TaskState::READY &&
-                    t->state != TaskState::RUNNING)
-                    continue;
-                if (!t->in_ready_queue_)
-                    continue;
-                bool phys = false;
-                for (uint64_t p = 0;
-                     p <= CONFIG_PRIORITY_CEILING && !phys; ++p) {
-                    if (rq_task(*t).queue(p).contains(*t))
-                        phys = true;
-                }
-                if (!phys) {
-                    orphan_found = true;
-                    if (current_cpu().wedge_emitted < 8) {
-                        IPC_SCHED_TRACE(
-                            "[WEDGE]", "orphan=", t->id, "st=",
-                            static_cast<uint64_t>(t->state), "inrq=",
-                            t->in_ready_queue_ ? 1u : 0u, "phys=", 0u);
-                    }
-                }
-            }
-
-            if ((orphan_found || blocked_in_runq) && current_cpu().wedge_emitted < 8) {
-                ++current_cpu().wedge_emitted;
-                // Full dump then halt so this ONE run is sufficient evidence.
-                char wb[128];
-                int wp = 0;
-                kernel::debug::fmt_str(wb, wp, "[WEDGE] save_to=");
-                wp = kernel::debug::fmt_u64(wb, wp, save_to);
-                kernel::debug::fmt_str(wb, wp, " cur=");
-                wp = kernel::debug::fmt_u64(
-                    wb, wp,
-                    (current_task()
-                         ? static_cast<uint64_t>(current_task()->id)
-                         : 0u));
-                kernel::debug::fmt_str(wb, wp, " bm_lo=");
-                wp = kernel::debug::fmt_u64(
-                    wb, wp, rq_own().bitmap().raw_lo());
-                kernel::debug::fmt_str(wb, wp, " bm_hi=");
-                wp = kernel::debug::fmt_u64(
-                    wb, wp, rq_own().bitmap().raw_hi());
-                kernel::debug::fmt_str(wb, wp, " physrsp=");
-                wp = kernel::debug::fmt_u64(wb, wp, phys_rsp);
-                wb[wp] = 0;
-                kernel::debug::trace(wb);
-                // Per-task summary.
-                for (auto *t = all_tasks_.first_ptr(); t;
-                     t = all_tasks_.next_ptr(t)) {
-                    if (t->magic != TaskControlBlock::TCB_MAGIC)
-                        continue;
-                    char tb[128];
-                    int tp = 0;
-                    kernel::debug::fmt_str(tb, tp, "  T");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->id);
-                    kernel::debug::fmt_str(tb, tp, " st=");
-                    tp = kernel::debug::fmt_u64(
-                        tb, tp, static_cast<uint64_t>(t->state));
-                    kernel::debug::fmt_str(tb, tp, " inrq=");
-                    tp = kernel::debug::fmt_u64(
-                        tb, tp, t->in_ready_queue_ ? 1u : 0u);
-                    kernel::debug::fmt_str(tb, tp, " rq=");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->rq_priority_);
-                    kernel::debug::fmt_str(tb, tp, " eff=");
-                    tp = kernel::debug::fmt_u64(
-                        tb, tp, effective_priority(t));
-                    kernel::debug::fmt_str(tb, tp, " pg=");
-                    tp = kernel::debug::fmt_u64(tb, tp, t->get_page_table());
-                    tb[tp] = 0;
-                    kernel::debug::trace(tb);
-                }
-                // Only halt for orphans (INV-2 violation: READY/RUNNING task
-                // not physically linked).  BLOCKED+inrq is benign — the
-                // scheduler handles it via next_task()'s while loop.
-                if (!orphan_found) {
-                    kernel::debug::trace("[WEDGE] block-in-runq skipped (benign)");
-                } else {
-                    kernel::debug::trace("[WEDGE] HALT");
-                    arch::cli();
-                    for (;;)
-                        arch::hlt();
-                }
-            }
-        }
-#endif
 #if CONFIG_DEADLINE_MONITOR_TASK
         // Harness owns lifecycle (see harness_owns_lifecycle): the reaper
         // must not race test ScopeGuards (double-free UAF otherwise).
@@ -1313,15 +1018,6 @@ void Scheduler::rate_monotonic_schedule() noexcept {
         }
     }
     auto *next = breaker_next ? breaker_next : next_task();
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    if (all_tasks_.size() == 7) {
-        auto *r6 = Scheduler::find_task(6);
-        IPC_SCHED_TRACE("[RMS]", "cur=", current->id, "next=",
-                        next ? next->id : 0u, "t6=",
-                        r6 ? (uint64_t)r6->state : 9u, "q6=",
-                        r6 ? (uint64_t)r6->in_ready_queue_ : 9u);
-    }
-#endif
     // Defense-in-depth (H2 residual): never iretq the physically-running test
     // harness into the idle loop.  If the harness were left READY (INV-4) and
     // skipped by next_task(), the guard below would fall through to idle and
@@ -1462,9 +1158,6 @@ bool resched_park_gate_task(TaskControlBlock *cur,
 // declaration — can park through it.
 void resched_park_until_dispatched(TaskControlBlock &t,
                                    bool entry_if) noexcept {
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    IPC_SCHED_TRACE("[RPARK]", "id=", t.id);
-#endif
 #if defined(CONFIG_DEBUG)
     __atomic_fetch_add(&g_resched_park_entries, 1, __ATOMIC_RELAXED);
     // #578 seam accounting. A marked task parking under an armed seam is
@@ -1614,14 +1307,6 @@ void Scheduler::reschedule() noexcept {
     // head) must never swallow EDF urgency.  A spurious arm is harmless —
     // next_task() re-validates on the tick.
     bool edf_preempt = (edf_preempt_candidate() != nullptr);
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    {
-        IPC_SCHED_TRACE("[RS]", "cur=", current->id, "next=",
-                        next ? next->id : 0u, "hi=",
-                        (uint64_t)rq_own().highest_ready_priority(),
-                        "nt=", (uint64_t)all_tasks_.size());
-    }
-#endif
     if (edf_preempt) {
         __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);

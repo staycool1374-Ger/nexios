@@ -175,9 +175,9 @@ detection only**; there is no deadline-aware *pre-emptive* scheduling
 (rush-preemption design retained as `specs/rms-rework.md` Phase 4, deferred).
 - **SS exhaustion as deadline** (`CONFIG_SPORADIC_SERVER_EXHAUSTION_IS_DEADLINE`)
   is off by default.
-- **`CONFIG_DEBUG_IPC_SCHED`** (`ipc_sched_trace.hpp`) must be **undefined** for
-  release gates: the `[TICK]`/`[SW]`/`[APPLY]`/`[RMS]` traces perturb
-  timing-sensitive tests.
+- **Retired trace kit (#604):** the scheduler/IPC diagnostic trace kit
+  (`ipc_sched_trace.hpp`) is deleted — there is no trace to disable for
+  release gates anymore.  History lives in `specs/scheduler.md` §13.
 - **TCG wall-time truth (issue #359, decided DOCUMENT, 2026-10-18):**
   no in-guest wall reference finer than the 1 s RTC exists, and the TCG
   TSC rate is workload-dependent (PIO exits retard it, pause-spins yield

@@ -317,6 +317,11 @@ def validate(cfg: dict[str, int]):
     # single-source rule must not silently fork.
     if cfg.get("CONFIG_MEMPOOL_NUM_POOLS") is not None:
         E("CONFIG_MEMPOOL_NUM_POOLS is dead (F21); size the table in mempool.cpp")
+    # The CONFIG_DEBUG_IPC_SCHED trace kit was retired by #604 (all gated call
+    # sites deleted, macro + gated arms removed, writer H2_REC an unconditional
+    # no-op). Flag a resurrection as an error — see docs/specs/scheduler.md §13.
+    if cfg.get("CONFIG_DEBUG_IPC_SCHED") is not None:
+        E("CONFIG_DEBUG_IPC_SCHED is retired (#604); the trace kit is gone — use docs/specs/scheduler.md §13 history")
 
     # ── Mem-mgr bootstrap M4 (#563) ──
     check_bool("CONFIG_MEM_MGR_BOOTSTRAP",

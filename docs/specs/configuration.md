@@ -239,9 +239,9 @@ and the handover-caps-cover-free-pool asserts on the bootstrap1 leg
 
 - **Fix `scripts/run_config_matrix.sh` path** (`jarvis_config.h` → `nexios_config.h` /
   `CONFIG_DEFS`).
-- **A release-gate constraint applies to every row:** `CONFIG_DEBUG_IPC_SCHED`
-  must stay **undefined** for release gates (see `specs/deadline.md` §7); the
-  matrix runs `debug` with the trace OFF.
+- **A release-gate constraint applies to every row:** the scheduler/IPC
+  diagnostic trace kit is retired (#604 — see `specs/scheduler.md` §13);
+  the matrix runs `debug` with no trace gate.
 - **`CONFIG_DEADLINE_ACTION=1 (PANIC)` is the only expected-fail row** — the
   other 47 must pass.
 - **Compile-time guard block** (`nexios_config.h`, issue #407 item 5):

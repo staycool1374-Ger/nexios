@@ -66,11 +66,9 @@ struct Nic;
 // cross-TU ISR diagnostic hooks).
 inline constexpr uint64_t H2_EV_SKIP     = 3;
 inline constexpr uint64_t H2_EV_REENQ    = 8;
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-#define H2_REC(ev, a, b, c) kernel::debug::h2_record((ev), (a), (b), (c))
-#else
+// #604 §13: ring writer retired with its gate; the H2 event ring has no
+// writer in any build, so the live arm stays the unconditional no-op.
 #define H2_REC(ev, a, b, c) ((void)0)
-#endif
 
 // Boot stack bounds (linker symbols) — C linkage for assembly.
 extern "C" {

@@ -106,11 +106,6 @@ extern char _stack_end[];
 #include <signal.hpp>
 #include <logger.hpp>
 
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-// Wedge diagnostics for deferred-switch / ready-queue desync analysis.
-// PfA-B: folded into per-CPU CpuContext debug state (design §4.A VAR-13).
-#endif
-
 namespace kernel {
 
 // Issue #323: the kernel-stack pointer accessor and the context-switch

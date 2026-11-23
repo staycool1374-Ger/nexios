@@ -562,7 +562,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
   3. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_syscall` → 8/8
   4. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class cap_ipc` → 6/6
   5. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class all` → **918/918** (trace ON per debug-gate rule)
-  6. `python3 tools/meson/qemu_test.py --arch x86_64 --build release --class all` → 84/84 (trace OFF — verify `CONFIG_DEBUG_IPC_SCHED` undefined first)
+  6. `python3 tools/meson/qemu_test.py --arch x86_64 --build release --class all` → 84/84 (trace kit retired by #604 — no gate to verify)
   7. `python3 tools/meson/qemu_test.py --arch x86_64 --build debug --class selftest` → 132/132 (cap classes stay TF_KERNEL; safe class unchanged unless release-marked tests are deliberately added)
 - **Regression:** re-run the touched subsystem classes (`ipc_core`, `memory_vmm`, `process_pml4_clone`, `syscall_core`) to prove no collateral.
 
@@ -593,7 +593,7 @@ Each phase ends with a green class gate. Fix classes one at a time; per-class di
 
 - [ ] `tools/meson/build.sh` green (style gate: 0 errors).
 - [ ] Debug class gates: `cap_core` 10/10, `cap_lifecycle` 8/8, `cap_syscall` 8/8, `cap_ipc` 6/6 — all with zero ResourceTracker delta.
-- [ ] Debug `all` **918/918** (trace ON), release `all` **84/84** (trace OFF — verify `CONFIG_DEBUG_IPC_SCHED` undefined), `selftest` 132/132.
+- [ ] Debug `all` **918/918** (trace ON), release `all` **84/84** (trace kit retired by #604 — no gate to verify), `selftest` 132/132.
 - [ ] `test-history.txt` rows appended for every gate run.
 - [ ] `docs/specs/configuration.md` §1.8 documents the new tunables; `docs/specs/cspace.md` updated to "IMPLEMENTED" with the final structure/fields and any deviations.
 - [ ] ROADMAP §0.4.1 items 1–2 checked; item 3 (Untyped) explicitly deferred to v0.4.2+ with the design sketch in §2.6 (no silent drop).

@@ -25,7 +25,6 @@
 #include <kernel/task/scheduler_integrity.hpp>   // issue #369 T1b validate_task_ptr
 #include <kernel/task/scheduler_debug_internal.hpp> // issue #582 A1 op-ring
 #include <assert.hpp>                              // issue #369 T1b ENSURE
-#include <kernel/debug/ipc_sched_trace.hpp> // CONFIG_DEBUG_IPC_SCHED
 #include <kernel/arch/timer.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -380,24 +379,6 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
     {
         auto *t = Scheduler::find_task(task.id);
         if (!t || t != &task) {
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-            // H2 enqueue liveness audit (cold): dump the orphan source so the
-            // stale-resume path that triggered it is traceable in the log.
-            kernel::Logger::raw_write("[H2-ENQDEAD] id=");
-            kernel::Logger::print_dec(task.id);
-            kernel::Logger::raw_write(" st=");
-            kernel::Logger::print_dec(static_cast<uint64_t>(task.state));
-            kernel::Logger::raw_write(" inrq=");
-            kernel::Logger::print_dec(task.in_ready_queue_ ? 1u : 0u);
-            kernel::Logger::raw_write(" ra=0x");
-            kernel::Logger::print_hex(
-                reinterpret_cast<uint64_t>(__builtin_return_address(0)));
-            kernel::Logger::raw_write(" tcb=0x");
-            kernel::Logger::print_hex(reinterpret_cast<uint64_t>(&task));
-            kernel::Logger::raw_write(" tick=");
-            kernel::Logger::print_dec(arch::Timer::ticks());
-            kernel::Logger::raw_write("\n");
-#endif
             // Refuse the enqueue: the scheduler no longer owns this TCB.
             // INV-RQ-2: the refusal leaves the TCB byte-identical (no
             // defensive flag write — the TCB is not owned here).

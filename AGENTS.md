@@ -235,13 +235,10 @@ evidence-backed. Do not stack changes across steps.
 - **UART FIFO overflow:** 16-byte FIFO capacity; drain between write bursts; release tests use external expect scripting so only affects kernel self-test loopback
 
 ## Release Procedure
-- **`CONFIG_DEBUG_IPC_SCHED` is DEBUGGING ONLY** and MUST be deactivated
-  (undefined — `#define` commented out in `src/kernel/debug/ipc_sched_trace.hpp`)
-  before the release gate.  When enabled, the `[RS]`/`[TICK]`/`[SW]`/
-  `[APPLY]` serial traces fire inside `reschedule()`/`on_tick()`/the
-  context-switch epilogue on every invocation, polluting timing-sensitive
-  tests and perturbing the scheduler.
-  **VERIFIED STATE:** the *release* gate
+- **Retired trace kit (#604):** the scheduler/IPC diagnostic trace kit is
+  deleted (macro, gated call sites, gated arms all gone); its history now lives
+  in `docs/specs/scheduler.md` §13.  There is no trace to disable anymore.
+- **VERIFIED STATE:** the *release* gate
   (`python3 tools/meson/qemu_test.py --arch x86_64 --build release --class all`, 84/84) passes with the trace OFF.
   The H2 deferred-switch race (`docs/specs/ipc.md` §4) is **RESOLVED**
   (2026-08-13/15, commits `71b3a088` + `4bf751b4` + `b85ba27d` — stale-resume
@@ -249,14 +246,9 @@ evidence-backed. Do not stack changes across steps.
   lock-across-preemption; see BUGS.md); the *debug* `all` gate passes with the
   trace OFF (873/873 ×2 on 2026-08-15, later 932/932 and 942/942).
 - Before running the release-version gate (the 2×3 matrix: `bash scripts/run_all_classes.sh {x86_64,aarch64,riscv64} {debug,release}` — 6 runs, 0 failures everywhere before `git tag`),
-  verify the macro is undefined:
-  `grep -n CONFIG_DEBUG_IPC_SCHED src/kernel/debug/ipc_sched_trace.hpp`
-  must show it commented out.  Re-enable only for targeted debug analysis,
-  then disable again before any release gate run.
-- **Interactive release shell:** boot the release ISO with QEMU directly (`-serial mon:stdio`, UEFI pflash boot) — no `run-*` target survives cutover; see `docs/clion-setup.md` §4 for the exact frozen-QEMU recipe. It MUST run with the
-  trace OFF.  With it ON, the `[TICK]`/`[SW]`/`[APPLY]` serial spam on every
-  timer tick and context switch makes the shell appear input-dead.  Verified
-  2026-08-02: with the trace off, release boots clean and the shell accepts
+  no trace-gate verification is needed (the kit is retired — see above).
+- **Interactive release shell:** boot the release ISO with QEMU directly (`-serial mon:stdio`, UEFI pflash boot) — no `run-*` target survives cutover; see `docs/clion-setup.md` §4 for the exact frozen-QEMU recipe.  Verified
+  2026-08-02: release boots clean and the shell accepts
   `version`/`help` input via serial (`-serial mon:stdio`, UEFI pflash boot).
   The `[DIAG-TABLE]`/`[TCB]`/`[WCET]`/`[DIAG]` boot messages are normal
   release output (not gated by CONFIG_DEBUG).

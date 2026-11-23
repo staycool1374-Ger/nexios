@@ -652,33 +652,6 @@ extern "C" void scheduler_on_context_switch() noexcept {
 
     }
 
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-
-    if (id == 1) {
-
-        uint64_t nsp = sched_verify::task_stack_ptr(t);
-
-        const uint64_t *f = reinterpret_cast<const uint64_t *>(nsp);
-
-        kernel::Logger::raw_write("[H2-APPLY] id=1 ctx.rsp=0x");
-
-    kernel::Logger::print_hex(nsp);
-
-    kernel::Logger::print_hex(f[136 / 8]);
-
-    kernel::Logger::print_hex(f[144 / 8]);
-
-    kernel::Logger::print_hex(f[152 / 8]);
-
-    kernel::Logger::print_hex(f[160 / 8]);
-
-    kernel::Logger::print_hex(f[168 / 8]);
-
-    kernel::Logger::raw_write("\n");
-
-    }
-
-#endif
 
 #if defined(CONFIG_SNAPSHOT_CANARY_WATCH)
 
@@ -700,25 +673,7 @@ extern "C" void scheduler_on_context_switch() noexcept {
 
 #endif
 
-#if defined(CONFIG_DEBUG_IPC_SCHED)
 
-    {
-
-        auto *c = kernel::Scheduler::current_task();
-
-        IPC_SCHED_TRACE("[APPLY]", "id=", id, "cur=", c ? c->id : 0u,
-
-                        "x=", 0u, "y=", 0u);
-
-    }
-
-#endif
-
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-
-    current_cpu().last_switch_tick = arch::Timer::ticks();
-
-#endif
 
 
 } // namespace gs
@@ -733,20 +688,6 @@ extern "C" void scheduler_on_context_switch() noexcept {
 ///        generation captured at ISR entry.  Cold path (debug only).
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_diag_pre_save() noexcept {
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    uint64_t gen = __atomic_load_n(&Scheduler::SwSlots::generation(),
-                                   __ATOMIC_ACQUIRE);
-    kernel::Logger::raw_write("[H2-PRE] gen=0x");
-    kernel::Logger::print_hex(gen);
-    kernel::Logger::raw_write(" depth=");
-    kernel::Logger::print_dec(
-        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
-    kernel::Logger::raw_write(" tick=");
-    kernel::Logger::print_dec(arch::Timer::ticks());
-    kernel::Logger::raw_write("\n");
-#else
-    (void)0;
-#endif
 }
 
 /// @brief ISR-epilogue depth-skip hook (isr_stubs.asm:133-134).  Fires when a
@@ -755,28 +696,6 @@ extern "C" void scheduler_diag_pre_save() noexcept {
 /// interrupted task will return to (H2 IF=0 freeze hypothesis).
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_diag_depth_skip() noexcept {
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    uint64_t id = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
-                                  __ATOMIC_ACQUIRE);
-    uint64_t rfl = 0;
-#if defined(CONFIG_ARCH_X86_64)
-    asm volatile("pushfq; pop %0" : "=r"(rfl));
-#endif
-    kernel::Logger::raw_write("[H2-DEPTH] id=");
-    kernel::Logger::print_dec(id);
-    kernel::Logger::raw_write(" depth=");
-    kernel::Logger::print_dec(
-        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
-    kernel::Logger::raw_write(" rfl=0x");
-    kernel::Logger::print_hex(rfl);
-    kernel::Logger::raw_write(" if=");
-    kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
-    kernel::Logger::raw_write(" tick=");
-    kernel::Logger::print_dec(arch::Timer::ticks());
-    kernel::Logger::raw_write("\n");
-#else
-    (void)0;
-#endif
 }
 
 /// @brief ISR-epilogue RSP-owner abort hook (isr_stubs.asm:270-275).  Fires
@@ -787,40 +706,6 @@ extern "C" void scheduler_diag_depth_skip() noexcept {
 /// will return to (H2 IF=0 freeze hypothesis).
 /// @note Runs with IF=0 (interrupt gate); must not re-enable IRQs.
 extern "C" void scheduler_diag_rsp_abort() noexcept {
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    uint64_t id = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
-                                  __ATOMIC_ACQUIRE);
-    uint64_t rsp = __atomic_load_n(&Scheduler::SwSlots::load_rsp_from(),
-                                   __ATOMIC_ACQUIRE);
-    uint64_t base = __atomic_load_n(&Scheduler::SwSlots::load_kstack_base(),
-                                    __ATOMIC_ACQUIRE);
-    uint64_t top = __atomic_load_n(&Scheduler::SwSlots::load_kstack_top(),
-                                   __ATOMIC_ACQUIRE);
-    uint64_t rfl = 0;
-#if defined(CONFIG_ARCH_X86_64)
-    asm volatile("pushfq; pop %0" : "=r"(rfl));
-#endif
-    kernel::Logger::raw_write("[H2-RSPABORT] id=");
-    kernel::Logger::print_dec(id);
-    kernel::Logger::raw_write(" rsp=0x");
-    kernel::Logger::print_hex(rsp);
-    kernel::Logger::raw_write(" base=0x");
-    kernel::Logger::print_hex(base);
-    kernel::Logger::raw_write(" top=0x");
-    kernel::Logger::print_hex(top);
-    kernel::Logger::raw_write(" depth=");
-    kernel::Logger::print_dec(
-        __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
-    kernel::Logger::raw_write(" rfl=0x");
-    kernel::Logger::print_hex(rfl);
-    kernel::Logger::raw_write(" if=");
-    kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
-    kernel::Logger::raw_write(" tick=");
-    kernel::Logger::print_dec(arch::Timer::ticks());
-    kernel::Logger::raw_write("\n");
-#else
-    (void)0;
-#endif
 }
 
 /// @brief ISR-epilogue generation-skip hook (isr_stubs.asm): an ISR that
@@ -831,36 +716,6 @@ extern "C" void scheduler_diag_rsp_abort() noexcept {
 extern "C" void scheduler_record_skip([[maybe_unused]] uint64_t captured_gen,
                                       [[maybe_unused]] uint64_t current_gen) noexcept {
     H2_REC(H2_EV_SKIP, captured_gen, current_gen, 0);
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    // H2 apply-skip audit (cold: fires only when the generation re-check
-    // rejects a deferred-switch apply).  Dump the arm target, ISR depth and
-    // the RFLAGS the interrupted task will return to (tests the IF=0
-    // hypothesis for the freeze: the harness's hlt() must not run with IF off).
-    {
-        uint64_t id = __atomic_load_n(&Scheduler::SwSlots::next_task_id(),
-                                      __ATOMIC_ACQUIRE);
-        uint64_t rfl = 0;
-#if defined(CONFIG_ARCH_X86_64)
-        asm volatile("pushfq; pop %0" : "=r"(rfl));
-#endif
-        kernel::Logger::raw_write("[H2-SKIP] cap=0x");
-        kernel::Logger::print_hex(captured_gen);
-        kernel::Logger::raw_write(" cur=0x");
-        kernel::Logger::print_hex(current_gen);
-        kernel::Logger::raw_write(" id=");
-        kernel::Logger::print_dec(id);
-        kernel::Logger::raw_write(" depth=");
-        kernel::Logger::print_dec(
-            __atomic_load_n(&kernel::isr_nesting_own(), __ATOMIC_RELAXED));
-        kernel::Logger::raw_write(" rfl=0x");
-        kernel::Logger::print_hex(rfl);
-        kernel::Logger::raw_write(" if=");
-        kernel::Logger::print_dec((rfl & 0x200) ? 1u : 0u);
-        kernel::Logger::raw_write(" tick=");
-        kernel::Logger::print_dec(arch::Timer::ticks());
-        kernel::Logger::raw_write("\n");
-    }
-#endif
 }
 
 /// @brief Apply-side liveness + ownership re-check for the deferred switch
@@ -1062,16 +917,6 @@ extern "C" int scheduler_validate_pending_switch() noexcept {
     auto *t = kernel::Scheduler::find_task(id);
     if (!t || t->magic != kernel::TaskControlBlock::TCB_MAGIC) {
         // Target removed/freed — a stale arm to a dead task.  Drop it.
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-        kernel::Logger::raw_write("[H2-DEAD] id=");
-        kernel::Logger::print_dec(id);
-        kernel::Logger::raw_write(" t=");
-        kernel::Logger::raw_write(" t=");
-        kernel::Logger::raw_write(" t=");
-        kernel::Logger::raw_write(" tick=");
-        kernel::Logger::print_dec(arch::Timer::ticks());
-        kernel::Logger::raw_write("\n");
-#endif
         drop_arm(nullptr);
         return 0;
     }

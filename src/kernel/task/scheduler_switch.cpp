@@ -759,13 +759,6 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         // kernel/harness tasks publish via the else branch below).
         __atomic_store_n(&Scheduler::SwSlots::load_tls_from(),
                          next.is_user_ ? next.tls_base_ : 0, __ATOMIC_RELEASE);
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-        {
-            auto *c = Scheduler::current_task();
-            IPC_SCHED_TRACE("[SW]", "cur=", c ? c->id : 0u, "next=", next.id,
-                            "rsp=", (uint64_t)task_stack_ptr(&next), "x=", 0u);
-        }
-#endif
 #if defined(CONFIG_ARCH_X86_64)
         // Issue #25 C1: CPU0-gated (shared TSS; AP runs kernel tasks only).
         // (File-static context: arch::cpu_index() directly.)
@@ -783,13 +776,6 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
         // nothing); publish 0 so no stale user base survives.
         __atomic_store_n(&Scheduler::SwSlots::load_tls_from(), (uint64_t)0,
                          __ATOMIC_RELEASE);
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-        {
-            auto *c = Scheduler::current_task();
-            IPC_SCHED_TRACE("[SW]", "cur=", c ? c->id : 0u, "next=", next.id,
-                            "rsp=", (uint64_t)task_stack_ptr(&next), "x=", 0u);
-        }
-#endif
     }
 
     // Apply the target task's I/O permission bitmap (issue #3).  No-op for
@@ -874,28 +860,6 @@ void switch_to_task(TaskControlBlock *current, TaskControlBlock &next,
             H2_REC(H2_EV_IDLE_ARM, current->id, 0, 0);
         }
         __atomic_store_n(&Scheduler::SwSlots::next_task_id(), next.id, __ATOMIC_RELEASE);
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-        // H2 arm-time liveness audit (cold): dump when a deferred-switch arm
-        // is published to a target that is NOT a live id_table member — i.e.
-        // the arm is stale at publish time (task already removed).
-        {
-            auto *tgt = Scheduler::find_task(next.id);
-            if (!tgt || tgt != &next) {
-                kernel::Logger::raw_write("[H2-ARMDEAD] cur=");
-                kernel::Logger::print_dec(current->id);
-                kernel::Logger::raw_write(" next=");
-                kernel::Logger::print_dec(next.id);
-                kernel::Logger::raw_write(" tgt=");
-                kernel::Logger::print_hex(reinterpret_cast<uint64_t>(tgt));
-                kernel::Logger::raw_write(" st=");
-                kernel::Logger::print_dec(
-                    static_cast<uint64_t>(next.state));
-                kernel::Logger::raw_write(" tick=");
-                kernel::Logger::print_dec(arch::Timer::ticks());
-                kernel::Logger::raw_write("\n");
-            }
-        }
-#endif
         // Generation-lock: commit the deferred-switch pair.  The generation is
         // bumped only after load_rsp_from / load_cr3_from / next_task_id are
         // visible (all written before this IRQ-guarded block), and the arm

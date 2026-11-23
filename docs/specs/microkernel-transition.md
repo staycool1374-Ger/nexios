@@ -990,6 +990,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F19 | done (file deleted) | Retire `docs/specs/microkernel-transition-udpate.md` (superseded; owner approval required to delete) | doc |
 | F20 | #572 | libc dependency audit for PAUSE and 80–83 retirement | `src/libc/syscall.h` |
 | F21 | #573 | Remove or wire dead `CONFIG_MEMPOOL_*`; TCB size `static_assert`; extend the `CONFIG_STATIC_POOLS_ONLY` assert to `alloc_user_page`, `alloc_user_contiguous`, `alloc_page_table` | `nexios_config.h`, `mempool.cpp`, `pmm.cpp` |
+| F22 | #604 | Scheduler simplification pre-F11-flip: retire dead scheduler/IPC trace kit (+ paper trail), disqualify OFF-legs (zero eligible), pin tripwire→oracle tags (zero downgrades), land additive `SchedOracles` family (4b blocked by QE #609), file special-case register (`specs/scheduler.md` §13) | `task/`, `sync/` scope (F21 precedent); M-table and §8.8 untouched (zero behaviour change; flip ordering unchanged) |
 
 ## 16. Owner decisions (Q1–Q12 DECIDED per #512)
 
@@ -1007,6 +1008,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | Q10 | DECIDED gated follow-up (owner, #512): #577 tracks RISC-V IOMMU (criteria-gated: QEMU virt emulation + stable programming interface + in-tree test gate; v0.8.0 family with #168/#525); interim riscv64 DMA PDs stay fail-closed. Permanent fail-closed REJECTED (two-tier drivers vs INV-MK-10) |
 | Q11 | DECIDED single-core scope (owner, #512): IPC + donation semantics are single-core in v0.6.1; cross-core wake stays tick-deferred via mailbox/IPI; SDF carries a core-affinity field (needed by #167) but cross-core donation transfer is out of scope. Accepted as an explicit fidelity gap (unprovable on single-hart QEMU); follow-up #576 filed (depends on #525 SMP coverage) so the gap cannot fossilize |
 | Q12 | DECIDED uniform two-phase (owner, #512): critical-server death (supervisor, mem-mgr) drives the system into an SDF-declared fail-safe state FIRST (R-FAILSAFE), THEN reboots (MINIX-RS/seL4-init precedent). Reboot-loop guard required (consecutive-early-death counter → fail-stop, mechanism TBD with watchdog work). Redundant supervisor filed as post-v0.6 follow-up only if availability analysis demands it; never for mem-mgr (revoke-cascade makes survival incoherent). Kernel recovery path REJECTED (violates INV-MK-1, reintroduces kernel omnipotence) |
+| Q13 | DECIDED complexity-budget rule (owner, #604): no new scheduler-path special case without removing or subsuming an old one (register in `specs/scheduler.md` §13 is the ledger; §13.2/§13.3 zero-eligible tables are the standing proof) |
 
 ## Appendix A — Implementation record (non-normative)
 

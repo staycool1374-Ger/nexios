@@ -2,17 +2,15 @@
 /// @brief Reusable diagnostic harness for IPC reply-loss (H1) and deferred-
 ///        switch self-deadlock (H2) analysis in the scheduler/IPC subsystem.
 ///
-/// Everything here is gated behind CONFIG_DEBUG_IPC_SCHED.  Flip the #define
-/// in kernel/nexios_config.h (or uncomment below) to re-enable the whole proof
-/// kit for future analysis iterations without re-deriving the instrumentation.
+/// #604 RETIRED the scheduler/IPC trace kit (all gated call sites deleted,
+/// and both gated arms removed).  What remains is the ungated formatting kit
+/// (trace/fmt_u64/fmt_str, reused by tcb_write_log.cpp) plus the H2 event-ring
+/// declaration (h2_record/h2_dump_ring, defined in task/scheduler_debug.cpp).
+/// History (tag semantics, retirement proof, resurrection recipe) now lives in
+/// docs/specs/scheduler.md §13.  Resurrection: tag archive/ipc-sched-trace-kit
+/// @ 16c040705 holds the intact kit (header + all gated blocks, macro OFF).
 ///
-/// DEBUGGING ONLY — MUST be deactivated (undefined) for the release procedure.
-/// When enabled, the [RS]/[TICK]/[SW]/[APPLY] serial traces fire inside
-/// reschedule()/on_tick()/context-switch epilogue on every invocation,
-/// polluting timing-sensitive tests (e.g. the `all` class and jitter) and
-/// perturbing the scheduler.  See AGENTS.md "Release Procedure".
-///
-/// Proven signatures (what each trace tag proves):
+/// Proven signatures (what each retired trace tag proved):
 ///   [SYNC]        entered IPC::send_sync for (cur -> dest)
 ///   [SEND]/[WAKE] a message was pushed into dest's queue and dest was woken
 ///   [SYNC-FAIL] dest-gone-empty  -> genuine peer death, reply never arrived (OK)
@@ -30,13 +28,8 @@
 #include <kernel/arch/serial.hpp>
 #include <lib/types.hpp>
 
-// DEBUGGING ONLY — comment out to deactivate (release procedure requires this).
-// #define CONFIG_DEBUG_IPC_SCHED 1
-
 // The formatting helpers (fmt_u64/fmt_str/trace) are ALWAYS available: they are
-// tiny, side-effect-free buffer formatters reused by tcb_write_log.cpp.  Only
-// the IPC_SCHED_TRACE macro (which writes to the serial console) is gated
-// behind CONFIG_DEBUG_IPC_SCHED below.
+// tiny, side-effect-free buffer formatters reused by tcb_write_log.cpp.
 
 namespace kernel::debug {
 
@@ -74,49 +67,8 @@ inline void fmt_str(char *buf, int &pos, const char *s) {
 
 } // namespace kernel::debug
 
-#if defined(CONFIG_DEBUG_IPC_SCHED)
 
-// Minimal printf-free formatters: build a fixed buffer from integers.
-#define IPC_SCHED_TRACE_BUF(tag, n)                                            \
-    char _ipc_sched_buf[128];                                                  \
-    int _ipc_sched_len = 0;                                                    \
-    do {                                                                       \
-        const char *_t = (tag);                                                \
-        while (*_t)                                                            \
-            _ipc_sched_buf[_ipc_sched_len++] = *_t++;                          \
-    } while (0)
 
-/// @brief One-shot trace: tag + up to 4 unsigned integers with labels.
-#define IPC_SCHED_TRACE(tag, a0, v0, a1, v1, a2, v2, a3, v3)                    \
-    do {                                                                       \
-        char _b[128];                                                          \
-        int _p = 0;                                                            \
-        kernel::debug::fmt_str(_b, _p, (tag));                                 \
-        kernel::debug::fmt_str(_b, _p, " ");                                   \
-        kernel::debug::fmt_str(_b, _p, (a0));                                  \
-        _p = kernel::debug::fmt_u64(_b, _p, (v0));                             \
-        kernel::debug::fmt_str(_b, _p, " ");                                   \
-        kernel::debug::fmt_str(_b, _p, (a1));                                  \
-        _p = kernel::debug::fmt_u64(_b, _p, (v1));                             \
-        kernel::debug::fmt_str(_b, _p, " ");                                   \
-        kernel::debug::fmt_str(_b, _p, (a2));                                  \
-        _p = kernel::debug::fmt_u64(_b, _p, (v2));                             \
-        kernel::debug::fmt_str(_b, _p, " ");                                   \
-        kernel::debug::fmt_str(_b, _p, (a3));                                  \
-        _p = kernel::debug::fmt_u64(_b, _p, (v3));                             \
-        _b[_p] = 0;                                                            \
-        kernel::debug::trace(_b);                                              \
-    } while (0)
-
-#else // !CONFIG_DEBUG_IPC_SCHED
-
-#define IPC_SCHED_TRACE(tag, a0, v0, a1, v1, a2, v2, a3, v3)                   \
-    do {                                                                       \
-    } while (0)
-
-#endif // CONFIG_DEBUG_IPC_SCHED
-
-#if defined(CONFIG_DEBUG_IPC_SCHED)
 // Deferred-switch H2 event ring (issue #368): the single definition of
 // h2_record/h2_dump_ring lives in task/scheduler_debug.cpp (TU-local ring
 // storage, external-linkage functions).  Declared here so every H2_REC user
@@ -129,4 +81,3 @@ void h2_record(uint64_t ev, uint64_t a, uint64_t b, uint64_t c) noexcept;
 /// @brief Dump the H2 ring to the debug console (GDB/post-hang use).
 void h2_dump_ring() noexcept;
 } // namespace kernel::debug
-#endif // CONFIG_DEBUG_IPC_SCHED

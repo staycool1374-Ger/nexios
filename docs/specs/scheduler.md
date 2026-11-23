@@ -239,11 +239,12 @@ counts a covered instant with rearm; a `:165` try_lock miss counts
 lock-free. Covered >= 8 fails closed (SCHED+17); pending >= 1 tick warns
 once (SCHED+18). Monotonic clock: rearm can never restart it.
 
-Holder-bounds recount (main at implementation time): **35** static
-`SchedulerLockGuard` constructions (**33** in release;
-`tick.cpp:86,:105` are `CONFIG_DEBUG_IPC_SCHED`-gated), **7** adopting a
-preceding `try_lock` (**5** in release), `registry.cpp:354` excluded
-(test helper). The audited 26-row table's row 21
+Holder-bounds recount (#604, at implementation time): **33** static
+`SchedulerLockGuard` constructions (**33** in release — the retired
+trace-kit pair in `on_tick` is gone, and release never
+contained it), **5** adopting a preceding `try_lock` (**5** in release),
+`registry.cpp` test-helper construction excluded (unchanged convention:
+only `guard`-named static constructions counted; the audited table's row 21
 (`scheduler_lifecycle.cpp:816`) names an `ENSURE`, not a guard
 construction — folded into the grouped rows; IF=1 task-context rows are
 #1 (`try_direct_switch`) and #3 (queue setters), each O(1)+O(MAX_TASKS),
@@ -425,6 +426,9 @@ priorities, orphaned flags, dangling pointers).
   stopgap. Priority changes must still call `move_priority()` (INV-6).
 - **SCHED-007:** non-nullable APIs `TaskControlBlock*` → `TaskControlBlock&`
   (incremental UAF hardening) — not yet landed.
+- **Special-case register (#604, §13):** the scheduler-path inventory
+  (guards, OFF-leg eligibility, tripwire tags, retired-kit history) lives
+  in §13; QE follow-ups in #609. Zero behaviour change by contract.
 
 ## 9. Observability — cpuinfo/top (issue #172)
 
@@ -606,3 +610,112 @@ transient TCB fields (`task.hpp`: `admin_parked`, `admin_wake_pending`,
   parked, `scan_deadlines` skips the task; resume's shift makes
   `deadline_ticks` future-consistent. Removing the deadline node alone
   is insufficient because the scan walks `all_tasks_`.
+
+## 13. Special-case register (#604 — pre-#564-flip simplification increment)
+
+Inventory of every intentional special case in the scheduler path
+(`src/kernel/task/` + `src/kernel/sync/` + scheduler-owned `core/` +
+IPC wake path), with the deliverable per #604 item. Item 1 (dead trace
+kit) is deleted; items 2 and 3 qualify **zero** legs/tags for change
+(the disqualification tables ARE the deliverable); item 4a landed the
+`SchedOracles` family (item 4b blocked by QE #609); item 5 is this
+register. Frozen fences (#582 rev-6: `park_lock.cpp:147-198`,
+`global_state.cpp:889-989/1152-1250/1354-1404`,
+`ready_queue_manager.cpp:121-174`) are untouched by every row below.
+
+### 13.1 Guard register (item 5)
+
+Columns: guard · file:line · owning issue · owning test (class::name) ·
+disposition (KEEP / FOLLOW-UP #n / DELETE / ACCEPT-INERT / POINTER).
+Line anchors are tip-at-writing; the grep pattern is authoritative.
+Every row has an owning issue or a filed follow-up; every row has an
+owning test, a filed follow-up, or a recorded accept.
+
+| guard | file:line | owning issue | owning test | disposition |
+|---|---|---|---|---|
+| INV-2 runq membership (live task physically queued) | `core/global_state.cpp:903` | #368 | `core_sched::scheduler_stranded_ready_rescued` | KEEP |
+| INV-4 deferred-switch arm/apply pairing | `task/scheduler_switch.cpp:215` | #368 | `core_sched::scheduler_evict_current_then_rescued` | KEEP |
+| INV-C1 no spinlock across context switch (§11.1) | `task/scheduler_switch.cpp:1131` | #582 | FOLLOW-UP #609 (covered by `core_sync` lock-validator aggregate) | FOLLOW-UP #609 |
+| INV-RQ-1/2 typed runq API (all flag/link writes) | `task/ready_queue_manager.cpp:194` | #582 | `cap_tcb::tcb_suspend_absorb_backstop_refuses_link` | KEEP |
+| INV-RQ-2 byte-identical refusal | `task/scheduler_queue.cpp:348` | #582 | `cap_tcb::tcb_suspend_absorb_backstop_refuses_link` | KEEP |
+| INV-RQ-3 link/flag desync oracle | `task/scheduler.hpp:367` | #582 | FOLLOW-UP #609 (oracle family asserts) | FOLLOW-UP #609 |
+| INV-RQ-4 EDF blind-spot sweep | `task/scheduler_snapshot.cpp:107` | #600 P2 | FOLLOW-UP #609 (#600 P1/P2/P3 asserts) | FOLLOW-UP #609 |
+| INV-RQ-5 chain-drop fail-closed | `task/scheduler_queue.cpp:174` | #600 P3 | FOLLOW-UP #609 (#600 P1/P2/P3 asserts) | FOLLOW-UP #609 |
+| INV-APPLY-1/2/3 apply gate (defer, deny-and-rearm) | `core/global_state.cpp:997` | #582 | FOLLOW-UP #609 (gate-row asserts) | FOLLOW-UP #609 |
+| INV-PARK-2 park latch (no take while parked) | `sync/park_lock.cpp:184` | #582 | `core_sched::resched_park_at0_woken_return` + `core_sync::lock_park_at0_arm_block_wake_retry` | KEEP |
+| INV-4a BLOCKED park-until-woken | `sync/mutex.cpp:330` | #545 | `core_sched::resched_park_at0_woken_return` | KEEP |
+| INV-ADM-1..16 F4 admin-stop set | `task/scheduler.hpp:598` (`reap_orphans`) | #557 | `cap_tcb::tcb_suspend_absorb_backstop_refuses_link` | KEEP |
+| §11.2 BLOCKED leaves runq | `task/scheduler_terminate.cpp:118` (`dequeue_ready`) | #369 | `core_sched::scheduler_evict_queued_current_drops_safely` | KEEP |
+| §11.3 bounded/scheduler-mediated waits | `task/scheduler_tick.cpp:1159` (`resched_park_until_dispatched`) | #545 | `core_sched::resched_park_at0_gate_negative` | KEEP |
+| §11.4 priority via helper (INV-6) | `task/scheduler_tick.cpp:732` (explicit `move_priority` call site) | #600 | FOLLOW-UP #609 (helper-path asserts) | FOLLOW-UP #609 |
+| §11.5 PI boost revertible/symmetric | `sync/` pi_donation paths | #582 | FOLLOW-UP #609 (PI-symmetry asserts) | FOLLOW-UP #609 |
+| §11.6 atomics all-or-nothing per index | `task/scheduler_registry.cpp:350` (oracle cluster) | #582 | FOLLOW-UP #609 (atomic-discipline asserts) | FOLLOW-UP #609 |
+| §11.7 apply gate + park latch | `core/global_state.cpp:404` (thresholds) | #582 | `core_sync::lock_park_at0_contention` | KEEP |
+| Starvation breaker (#598) | `task/scheduler_tick.cpp:995` (`breaker_next`) | #598 | `core_sched::scheduler_breaker_lower_progress` | KEEP |
+| #249 stranded-READY sweep | `task/scheduler_tick.cpp:381` (`stuck_rescue_count_`) | #249 | `core_sched::scheduler_stranded_ready_rescued` | KEEP |
+| #582 flagged-orphan sweep | `task/scheduler_registry.cpp:358` (`orphan_rescue_count`) | #582 | `core_sched::scheduler_evict_current_then_rescued` | KEEP |
+| #600 P1 nowhere-linked sweep | `task/scheduler_registry.cpp:366` | #600 P1 | FOLLOW-UP #609 (#600 P1/P2/P3 asserts) | FOLLOW-UP #609 |
+| IPC-wake sweep (silent) | `task/scheduler_registry.cpp:479` (`ipc_wake_rescue_count`) | #545 | FOLLOW-UP #609 (`ipc_wake_rescue_must_be_zero`) | FOLLOW-UP #609 |
+| Death-funnel hooks (zombie reap/drain) | `task/scheduler.hpp:598` (`reap_orphans`) | #557 | `core_sched::zombie_cleanup_step_frees_resources` + `core_sched::test_release_zombie_self` | KEEP |
+| Release-visible boot tables (`[DIAG-TABLE]`/`[TCB]`/`[WCET]`/`[DIAG]`) | `task/taskdefs.cpp:975` | — (intended output) | — (inspection-only, release-boot recipe) | KEEP (ACCEPT-INERT per #609 comment: no assert planned) |
+| Test-owned retired-macro guards | `test/test_jitter.cpp:25,99`, `test/test_kernel_top.cpp:837` | — (test-owned) | — (guards inert: macro undefined, always-false) | ACCEPT-INERT (QE may delete at leisure; zero safety impact) |
+| Cross-spec INV pointers (INV-MK-*, INV-P, INV-L*, INV-WAIT-5, INV-PROC-13) | owning specs | owning specs | FOLLOW-UP #609 (name issue+test per pointer) | POINTER |
+
+### 13.2 OFF-leg eligibility (item 2)
+
+Criterion: a leg is deletable only when its macro is defined
+unconditionally (or not defined at all), the leg is unreachable in every
+build, AND its QE port has landed. Result: **zero eligible legs; zero
+deletions in item 2**.
+
+| leg | disposition | rationale |
+|---|---|---|
+| `task/scheduler_tick.cpp:588` profile switch | KEEP | 0-leg reachable via `-D`; QE port absent |
+| `task/scheduler_tick.cpp:397` IPC-wake sweep gate | KEEP / WITHHELD — disqualified on the item's own criterion | No test asserts `ipc_wake_rescue_count()`; QE hand-off filed (#609 `ipc_wake_rescue_must_be_zero`); leg stays until that lands |
+| `sync/park_lock.cpp:148` certification kill-switch | KEEP | Kill-switch inside fence region (1); certification-owned |
+| `task/idle_monitor.cpp:283` | KEEP | Release profile switch; QE port absent |
+| `core/global_state.cpp:923` safety knob (`CONFIG_LOCK_PARK_SELFHEAL`) | KEEP | Safety knob, always-live |
+| `task/scheduler_debug.cpp:130` safety switch | KEEP | Safety switch, always-live |
+| `task/scheduler_watchdog.cpp:282-332` policy extraction | KEEP | F15/#568 owns policy extraction |
+| `nexios_config.h:1205` stale comment (says Default 0, value 1) | NOTE-ONLY in this table | Any `nexios_config.h` edit is an explicit carve-out, not covered by any docs-only commit; recorded, not changed |
+
+### 13.3 Tripwire → oracle tags (item 3)
+
+Cadence, escalation, qualification per tag. Pinned N = 3 consecutive
+full 2×3 matrices on the identical tree with zero *escalating* firings
+of that tag, AND a landed QE assert on the replacement counter — plus,
+for tags whose firing is legal and expected (`APPLY-DEFER`), the parity
+rule: N=1 gate with before/after counter equality. Result: **zero tags
+qualify for downgrade; zero code change in item 3.**
+
+| tag | cadence | disposition |
+|---|---|---|
+| `[S582-APPLY-DEFER]` | one-shot | KEEP — already compliant |
+| `[S582-APPLY-DEFER-STUCK]` | once per streak | KEEP |
+| `[S582-APPLY-FAILCLOSED]` / `[S582-LOCKPARK-FAILCLOSED]` | fail-closed | KEEP — never downgraded (fence 3) |
+| `[S582-LOCKPARK-FAILCLOSED]` false-positive record | — | RED / NOT ELIGIBLE with conviction evidence; defect filed as #608 (owner decision D2); do not silence, do not weaken the bound |
+| `[S582-TERM-HOLD]` | one-shot | KEEP |
+| `[S582-CENSUS]`/`[LOCK]`/`[HELD]` | live only inside the single fail-closed dump | KEEP — that IS the one loud path per class |
+| `[RUNQ] already-queued but nowhere linked` | `CONFIG_DEBUG`-only + 1/N cadenced | KEEP |
+| `[RUNQ] enqueue refused` / `[RUNQ] hint-miss forced clear` | one-shot | KEEP |
+| `[RUNQ] restore_pod dropped` | per-restore | KEEP |
+
+### 13.4 Retired kit history (item 1)
+
+The `CONFIG_DEBUG_IPC_SCHED` trace kit (`[SYNC]`/`[SEND]`/`[WAKE]`/
+`[SYNC-FAIL]`/`[WEDGE]` semantics; `[STALL]` HALT; `[TICK]`/`[RMS]`/
+`[RPARK]`/`[RS]`/`[SW]`/`[APPLY]`/`[H2-*]` dumps) was retired by #604:
+all gated call sites deleted (scheduler TUs + `ipc.cpp`), macro and
+both gated arms removed from `ipc_sched_trace.hpp`, `H2_REC` replaced
+with the unconditional no-op (ring has no writer in any build —
+unchanged behaviour), `check-config.py` tombstone added, five doc
+paper-trail edits landed in the same commit, release objdump identity
+proven per-function (`Scheduler::on_tick`, `Scheduler::reschedule`,
+`switch_to_task` — identical before/after).
+
+| artifact | pointer |
+|---|---|
+| Retirement commit | #604 working tree (this increment; `16c040705` base) |
+| Resurrection | tag `archive/ipc-sched-trace-kit` @ `16c040705` (pushed to origin, owner decision D1): intact kit (header + all gated blocks, macro OFF, all gates green at tag time) |
+| Recipe | `git show 16c040705:src/kernel/debug/ipc_sched_trace.hpp` + sibling gated blocks per the §13.1 guard rows |
+| Proof table | step-12 grep gate (zero non-exempt hits) + 6-build matrix + release objdump identity, all recorded on #604 |

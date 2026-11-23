@@ -435,6 +435,34 @@ void Scheduler::runq_desync_reset_for_test() noexcept {
     __atomic_store_n(&rqm_enqueue_refused_invalid_, 0ULL, __ATOMIC_RELAXED);
 }
 
+// #604 item 4a: rescue-oracle family (additive only — composed from the
+// existing accessors/resets; no new storage, lock, or order change).
+Scheduler::SchedOracles Scheduler::read_sched_oracles() noexcept {
+    SchedOracles o{};
+    o.stuck_rescue = stuck_rescue_count();
+    o.flagged_orphan_rescue = orphan_rescue_count();
+    o.edf_orphan_rescue = edf_orphan_rescue_count();
+    o.runq_nowhere_linked = runq_nowhere_linked_count();
+    o.edf_chain_drop = edf_chain_drop_count();
+    o.link_flag_desync = runq_link_flag_desync_count();
+    o.desync_forced_clear = runq_desync_forced_clear_count();
+    o.restore_drop_rebuilt = restore_drop_rebuilt_count();
+    o.enqueue_refused_already = rqm_enqueue_refused_already_count();
+    o.enqueue_refused_invalid = rqm_enqueue_refused_invalid_count();
+    o.ipc_wake_rescue = ipc_wake_rescue_count();
+    return o;
+}
+
+void Scheduler::reset_sched_oracles_for_test() noexcept {
+    reset_stuck_rescue_count_for_test();
+    reset_orphan_rescue_count_for_test();
+    reset_runq_nowhere_linked_count_for_test();
+    reset_edf_orphan_rescue_count_for_test();
+    reset_edf_chain_drop_count_for_test();
+    runq_desync_reset_for_test();
+    reset_ipc_wake_rescue_count_for_test();
+}
+
 void Scheduler::clear_park_test_members() noexcept {
     SchedulerLockGuard guard(scheduler_lock_);
     uint64_t scanned = 0;

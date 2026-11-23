@@ -27,7 +27,6 @@
 #include <kernel/arch/hal/sched_trigger.hpp>
 #include <kernel/cap/endpoint.hpp>
 #include <kernel/task/scheduler.hpp>
-#include <kernel/debug/ipc_sched_trace.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
@@ -684,11 +683,6 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     }
     const bool ok = true;
 
-    IPC_SCHED_TRACE(
-        "[SEND]", "to=", dest_id, "from=",
-        (Scheduler::current_task() ? Scheduler::current_task()->id : 0),
-        "ty=", m.type, "q=", tcb->msg_queue.count);
-
     // Wake a task blocked in send_sync() waiting for a reply on its own queue.
     // send_sync sets reply_wait and blocks; without this, the reply would sit
     // in the queue and the sender would hang forever (only rescued by a
@@ -697,10 +691,6 @@ bool IPC::send(uint64_t dest_id, const Message &msg, IpcFlags flags) noexcept {
     if (__atomic_load_n(&tcb->reply_wait, __ATOMIC_ACQUIRE)) {
         __atomic_store_n(&tcb->reply_wait, false, __ATOMIC_RELEASE);
         if (tcb->state == TaskState::BLOCKED) {
-            IPC_SCHED_TRACE("[WAKE]", "dest=", dest_id,
-                            "st=", static_cast<uint64_t>(tcb->state),
-                            "inrq=", tcb->in_ready_queue_ ? 1u : 0u,
-                            "q=", tcb->msg_queue.count);
             Scheduler::set_task_ready(*tcb);
             tcb->remaining_ticks = tcb->period_ticks;
         }
@@ -901,8 +891,6 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
         return errors::IPC_ERR_NO_REPLY;
 
     bool was_blocked = false;
-    IPC_SCHED_TRACE("[SYNC]", "cur=", cur->id, "dest=", dest_id,
-                    "ty=", msg.type, "q=", cur->msg_queue.count);
     // M3 audit (S2): the direct-switch cap is per wait — reset the
     // attempt counter on wait entry.  Nothing else clears it, so
     // without this the fast path dies after three lifetime waits.
@@ -991,9 +979,6 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
                 cur->msg_queue.has_reply_from(dest_id, token)) {
                 continue; // unclamped match present: consume next iteration
             }
-            IPC_SCHED_TRACE("[SYNC-FAIL]", "dest-gone cur=", cur->id,
-                            "dest=", dest_id, "q=", cur->msg_queue.count,
-                            "x=", 0u);
             // Wait is over: never return with a stale BLOCKED marking or a
             // latched reply channel — the caller resumes running now, and a
             // leftover BLOCKED/reply_wait would mislead the next scheduler

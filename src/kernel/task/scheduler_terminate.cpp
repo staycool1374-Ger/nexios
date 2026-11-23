@@ -115,22 +115,6 @@ Scheduler::terminate_err(TaskControlBlock &task,
     {
         SchedulerLockGuard guard(scheduler_lock_);
         charge_exec(task); // issue #21: bill the final partial quantum (no loss)
-#if defined(CONFIG_DEBUG_IPC_SCHED)
-    if (task.id == 6) {
-        auto *cur = current_task();
-        kernel::Logger::raw_write("[H2-TERM6] cur=");
-        kernel::Logger::print_dec(cur ? cur->id : 0u);
-        kernel::Logger::raw_write(" st=");
-        kernel::Logger::print_dec(static_cast<uint64_t>(task.state));
-        kernel::Logger::raw_write(" inrq=");
-        kernel::Logger::print_dec(task.in_ready_queue_ ? 1u : 0u);
-        kernel::Logger::raw_write(" rq_prio=");
-        kernel::Logger::print_dec(task.rq_priority_);
-        kernel::Logger::raw_write(" tick=");
-        kernel::Logger::print_dec(arch::Timer::ticks());
-        kernel::Logger::raw_write("\n");
-    }
-#endif
     dequeue_ready(task);
     task.state = TaskState::TERMINATED;
     task.exit_code = exit_code;

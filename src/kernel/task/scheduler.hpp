@@ -546,6 +546,40 @@ class Scheduler {
     static uint64_t edf_chain_drop_count() noexcept;
     /// @brief Reset the EDF chain-drop counter (test isolation).
     static void reset_edf_chain_drop_count_for_test() noexcept;
+    /// @brief Rescue-oracle family snapshot (#604 item 4a, additive-only).
+    ///        One POD readout over the eleven rescue/tripwire counters, for
+    ///        diagnostic and QE use only — never called from the tick or any
+    ///        real-time path (eleven relaxed loads, no lock).  Field order is
+    ///        the readout order; resets apply in the fixed order listed on
+    ///        reset_sched_oracles_for_test().  Owning issue per field:
+    ///        stuck_rescue #249; flagged_orphan_rescue #582;
+    ///        edf_orphan_rescue #600 P2; runq_nowhere_linked #600 P1;
+    ///        edf_chain_drop #600 P3; link_flag_desync #582 INV-RQ-3;
+    ///        desync_forced_clear #582 §5.5; restore_drop_rebuilt #582 §5.5;
+    ///        enqueue_refused_already/invalid #582 §5.5;
+    ///        ipc_wake_rescue #545 (silent sweep).
+    ///        Discipline (verbatim): monotonic, never rewound by snapshot
+    ///        restore, must-read-0 in a healthy run.
+    struct SchedOracles {
+        uint64_t stuck_rescue;
+        uint64_t flagged_orphan_rescue;
+        uint64_t edf_orphan_rescue;
+        uint64_t runq_nowhere_linked;
+        uint64_t edf_chain_drop;
+        uint64_t link_flag_desync;
+        uint64_t desync_forced_clear;
+        uint64_t restore_drop_rebuilt;
+        uint64_t enqueue_refused_already;
+        uint64_t enqueue_refused_invalid;
+        uint64_t ipc_wake_rescue;
+    };
+    /// @brief Read all eleven oracle counters (test/diagnostic only).
+    static SchedOracles read_sched_oracles() noexcept;
+    /// @brief Zero all eleven oracle counters (test isolation only).
+    ///        Fixed order: stuck, flagged-orphan, EDF-orphan, nowhere-linked,
+    ///        chain-drop, desync (5-counter reset), IPC-wake.  Never callable
+    ///        from the tick.
+    static void reset_sched_oracles_for_test() noexcept;
     /// @brief Clear every task's #578 park-test membership (seam teardown).
     ///        Bounded validity-guarded walk under scheduler_lock_.
     static void clear_park_test_members() noexcept;
@@ -1599,44 +1633,20 @@ struct SwSlots {
     ///        (issue #61).  Own-CPU writes under scheduler_lock_;
     ///        readers use atomics; reset by reset_migration_counts().
     static uint64_t migration_count_[CONFIG_MAX_CPUS];
-    /// @brief Stranded-READY rescues since boot (issue #249).  Tick-owned
-    ///        write under scheduler_lock_; readers use atomics; reset by
-    ///        reset_stuck_rescue_count_for_test().
+    /// @brief Rescue-oracle counters (#604 item 4a family: SchedOracles).
+    ///        Tick-owned writes under scheduler_lock_; readers use atomics.
+    ///        Resets: per-counter reset_*_for_test() or the family
+    ///        reset_sched_oracles_for_test() (fixed order).  Monotonic, never
+    ///        rewound by snapshot restore, must-read-0 in a healthy run.
     static uint64_t stuck_rescue_count_;
-    /// @brief Flagged-orphan READY rescues since boot (issue #582).  Same
-    ///        ownership/discipline as stuck_rescue_count_; reset by
-    ///        reset_orphan_rescue_count_for_test().
     static uint64_t orphan_rescue_count_;
-    /// @brief Nowhere-linked AlreadyQueued observations since boot (issue
-    ///        #600 Part 1). Same ownership/discipline as
-    ///        stuck_rescue_count_; reset by
-    ///        reset_runq_nowhere_linked_count_for_test().
     static uint64_t runq_nowhere_linked_count_;
-    /// @brief EDF-eligible stranded-READY rescues since boot (issue #600
-    ///        Part 2, INV-RQ-4). Same ownership/discipline as
-    ///        stuck_rescue_count_; reset by
-    ///        reset_edf_orphan_rescue_count_for_test().
     static uint64_t edf_orphan_rescue_count_;
-    /// @brief EDF chain drops since boot (issue #600 Part 3, INV-RQ-5).
-    ///        Same ownership/discipline as stuck_rescue_count_; reset by
-    ///        reset_edf_chain_drop_count_for_test().
     static uint64_t edf_chain_drop_count_;
-    /// @brief Ready link/flag desync observations since boot (issue #582
-    ///        INV-RQ-3 oracle: link/flag mismatches seen by the typed API).
-    ///        Same ownership/discipline as stuck_rescue_count_; reset by
-    ///        runq_desync_reset_for_test().
     static uint64_t runq_link_flag_desync_count_;
-    /// @brief Hint-miss forced clears (issue #582 §5.5: flag+prio reset on
-    ///        a provably unlinked node).  Same discipline; same reset.
     static uint64_t runq_desync_forced_clear_;
-    /// @brief restore_level failures rebuilt from all_tasks_ (#582 §5.5).
-    ///        Same ownership/discipline; same reset.
     static uint64_t restore_drop_rebuilt_;
-    /// @brief Enqueue refusals: already-queued (issue #582 §5.5, no-op +
-    ///        DEBUG membership assert).  Same discipline; same reset.
     static uint64_t rqm_enqueue_refused_already_;
-    /// @brief Enqueue refusals: invalid TCB (issue #582 §5.5, byte-identical
-    ///        + one-shot ERROR + sweep rescue).  Same discipline; same reset.
     static uint64_t rqm_enqueue_refused_invalid_;
     /// @brief F4 admin-stop counters (issue #557, INV-ADM-1/9/11/16).
     ///        Same ownership/discipline as stuck_rescue_count_; reset by
