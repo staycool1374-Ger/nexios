@@ -854,9 +854,13 @@ class Scheduler {
     ///        path; a fault skips delivery and records dmesg SCHED+20.
     /// @param parent Waiting parent whose status slot is written and cleared.
     /// @param code Child exit code to store.
+     /// @param pid Child PID for the parent's saved return-value slot
+     ///        (issue #614: written via the shared wait_pid_slot proof;
+     ///        skipped when the parent frame is not provably safe).
     /// @return false when the store faulted (delivery skipped), true otherwise.
     [[nodiscard]] static bool deliver_wait_status(TaskControlBlock &parent,
-                                                 uint64_t code) noexcept;
+                                                 uint64_t code,
+                                                  uint64_t pid) noexcept;
     /// @brief Wake-result discriminator (issue #590, INV-WAIT-5).  Lets a
     ///        KILL arm keep a corpse parented/in-table for its collecting
     ///        parent instead of arming a deferred kill that would free it.
@@ -895,10 +899,12 @@ class Scheduler {
     ///        wake), so a waitpid parent is readied via wake_waiting_parent
     ///        and collects through the second residence.
     ///        Issue #597 / INV-597-1: the a0/RAX override is written only
-    ///        for an is_user_ parent (it resumes through a trap frame).
-    ///        A kernel-task parent never does — its waitpid return is a
-    ///        direct C++ return and its task_stack_ptr is its live kernel
-    ///        stack — so the store is skipped there (all arches).
+    ///        via the shared wait_pid_slot proof (issue #614), which
+    ///        supersedes the is_user_ gate: the slot is written exactly
+    ///        when the parent is provably switched-out with a valid save
+    ///        frame — aarch64 kernel-task parents included (full save
+    ///        area); x86_64/riscv64 kernel parents refused (no return
+    ///        slot in their switch frame).
     /// @param child The just-terminated child task.
     /// @return WakeResult telling a KILL arm whether the corpse now has
     ///         a collecting parent (PARENT_COLLECTS: keep parented, skip

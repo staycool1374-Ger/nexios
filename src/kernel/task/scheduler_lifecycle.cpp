@@ -95,12 +95,31 @@ void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
     // is co-located with id_table removal (here + reap arm); remove_task
     // /unregister_task clear all four switch atoms instead.
 
-    task.zombie_next_ = nullptr;
-    // Issue #25 C1: list linkage under the zombie leaf lock (caller holds
-    // the global lock (terminate) or runs IF=0 pre-gate (reboot teardown);
-    // leaf-last order everywhere, never leaf→global).
+    // Issue #614: idempotent re-release.  A corpse can legitimately reach
+    // release_zombie twice — the test harness cleanup (`is_valid() &&
+    // terminate_err()` on a task a fault kill already released) and any
+    // deferred-kill replay land here.  The pre-#614 shape nulled
+    // zombie_next_ unconditionally and re-linked the node at the tail,
+    // which SEVERED the chain behind it and orphaned every node between
+    // the re-released corpse and the old tail (GDB #614: child 0x9
+    // re-released while head, next→parent 0xa; the parent was then
+    // reachable from no list and never popped — leaked TCB + kernel
+    // stack + IPC objects).
+    // Membership is tested against the list itself, under the leaf: a
+    // listed node is the head, the tail, or carries a successor.  (A
+    // per-TCB flag is not affordable: the x86_64 TCB has zero spare
+    // bytes — task.hpp F21 static_assert against the 8192 pool class.)
+    // The table removals above stay idempotent by contract.
     {
+        // Leaf scope (issue #25 C1: caller holds the global lock
+        // (terminate) or runs IF=0 pre-gate (reboot teardown); leaf-last
+        // order everywhere, never leaf→global).
         SpinLockGuard<sync::SpinLock> zguard(zombie_lock_);
+        if (zombie_head_ == &task || zombie_tail_ == &task ||
+            task.zombie_next_ != nullptr) {
+            return;
+        }
+        task.zombie_next_ = nullptr;
         if (zombie_tail_) {
             zombie_tail_->zombie_next_ = &task;
             zombie_tail_ = &task;
@@ -140,6 +159,13 @@ bool wait_collect_spared(const TaskControlBlock &t) noexcept {
     if (!t.wait_collect_pending_)
         return false;
     auto *p = Scheduler::find_task(t.parent_id);
+    // NOTE (issue #614): this resolves the owner through the id table, so
+    // a recycled parent slot carrying the same id reads as "owner alive".
+    // A generation snapshot on the TCB would close that alias, but the
+    // 8 bytes it costs overflow the x86_64 TCB pool class (task.hpp F21
+    // static_assert) — left as a documented residual, not the observed
+    // leak (the #614 leak was the zombie-list re-link severing the tail,
+    // see release_zombie).
     return p != nullptr && p->state != TaskState::TERMINATED;
 }
 } // namespace
@@ -604,7 +630,31 @@ WaitPublishSeamScope::~WaitPublishSeamScope() noexcept {
 ///        No lock, no allocation, lock-free dmesg only (safe from the
 ///        timer-tick watchdog KILL arm and IRQ-masked fault context).
 bool Scheduler::deliver_wait_status(TaskControlBlock &parent,
-                                    uint64_t code) noexcept {
+                                    uint64_t code,
+                                    uint64_t pid) noexcept {
+    // Issue #614: deliver the child PID into the parent's saved
+    // return-value slot (x0 on aarch64, RAX on x86_64, a0 on riscv64).
+    // The shared frame proof fails closed — it is the only gate that may
+    // write a saved context frame:
+    //   * the parent must not be current on any CPU (INV-APPLY/#597: a
+    //     BLOCKED state does not imply switched-out; writing a live
+    //     kernel frame planted a return value on a live return address),
+    //   * its saved SP must lie in its own kernel stack (harness
+    //     boot-stack exemption mirrors switch_to_task),
+    //   * the frame must be a provable trap/save frame per arch.
+    // Kernel-task parents are covered on aarch64 only (full-register save
+    // area, x0 at slot 0); x86_64/riscv64 refuse them — their kernel
+    // switch frame carries no return-value slot, and writing one corrupts
+    // a live register (x86_64 core_sched regression, see wait_pid_slot).
+    // On aarch64 the pre-#614 is_user_ gate skipped them, which is the
+    // #614 defect itself.
+    // Single 8-byte store, no lock, no allocation, no logging (wake-path
+    // safe: runs under the scheduler lock, possibly IRQ-masked).
+    if (pid != 0) {
+        uint64_t *pid_slot = sched_verify::wait_pid_slot(parent);
+        if (pid_slot != nullptr)
+            *pid_slot = pid;
+    }
     uint64_t *status_slot = parent.waiting_child_status;
     if (status_slot == nullptr)
         return true;
@@ -681,9 +731,11 @@ Scheduler::WakeResult Scheduler::wake_waiting_parent(
     // mapped AND writable at waitpid entry, but kernel-task parents skip
     // the pre-cert and the mapping can change while the parent is BLOCKED,
     // so the store stays armed; AC cleared on both paths, slot cleared
-    // inside the helper).
-    if (p->waiting_child_status)
-        (void)Scheduler::deliver_wait_status(*p, child.exit_code);
+    // inside the helper).  Issue #614: the helper also delivers the PID
+    // into the parent's saved return-value slot, so the call is
+    // unconditional (a waitpid without a status pointer still returns
+    // the PID).
+    (void)Scheduler::deliver_wait_status(*p, child.exit_code, child.id);
 
     // Clear the parent's wait and orphan the child for ANY waiting parent.
     // This lets reap_orphans collect the zombie even when the parent is a
@@ -705,28 +757,12 @@ Scheduler::WakeResult Scheduler::wake_waiting_parent(
         // deferral + stale arms; set_task_ready routes EDF-aware).
         Scheduler::dequeue_ready(*p);
         Scheduler::set_task_ready(*p);
-        if (p->is_user_ && task_stack_ptr(p)) {
-            // NOLINTNEXTLINE(performance-no-int-to-ptr)
-            auto *stack = reinterpret_cast<uint64_t *>(task_stack_ptr(p));
-            // Issue #221 keeps the override for a parent that resumes
-            // through a real trap frame; issue #597 gates it on
-            // is_user_ (task.hpp:669-674, authoritative since MP-1):
-            // a kernel-task parent returns from waitpid by direct C++
-            // return (proc_svc.cpp:390-391) and observes the cleared
-            // publication + delivered status, so no patch is needed —
-            // and its task_stack_ptr is the LIVE kernel stack, where
-            // the store planted child.id on a live return address
-            // (GDB: slot held 0x403c7e, fault fetch pc=0xa).
-            // INV-597-1: write frame[0] (riscv64 frame[9], OFF_A0==72
-            // in syscall_entry.S) for user parents only; riscv64
-            // frame[0] is x1/ra, not the return-value slot.
-            uint64_t *frame = stack;
-#if defined(CONFIG_ARCH_RISCV64)
-            frame[9] = child.id;
-#else
-            frame[0] = child.id;
-#endif
-        }
+        // Issue #614: the saved-return-slot PID write lives in
+        // deliver_wait_status (shared wait_pid_slot proof, above).  The
+        // old inline store was gated on is_user_ and wrote an
+        // unvalidated frame; the shared proof covers kernel-task parents
+        // too and refuses a live or non-trap frame (INV-597-1 keeps the
+        // riscv64 a0 slot, OFF_A0 == 72).
     }
     p->waiting_child_pid = 0;
     // Issue #53: joinable threads stay parented so a later JOIN can

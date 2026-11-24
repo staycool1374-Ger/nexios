@@ -192,6 +192,27 @@ TrapOwnerDisposition trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
                          uint64_t rsp, uint64_t ss) noexcept;
 #endif
 
+/// @brief Saved return-value slot for waitpid PID delivery (issue #614).
+///        Returns the address of the parent's saved return-value slot
+///        (frame[0] on aarch64/x86_64, frame[9] on riscv64) ONLY when the
+///        parent is provably switched-out and the frame is provably a
+///        trap/save frame; nullptr otherwise (fail closed, never a
+///        partially-validated write — INV-APPLY/#597 class).
+///        Gates, in order: (a) the parent is not current on any CPU;
+///        (b) its saved SP lies inside its own kernel-stack range
+///        (harness boot-stack exemption mirrors switch_to_task); (c) the
+///        arch frame proof holds (aarch64: ELR != 0 and SPSR mode in
+///        {EL0t, EL1h}; riscv64: user parent + SEPC != 0; x86_64: user
+///        parent + dual-ordering validate_iret_frame).  Never logs,
+///        locks, or allocates (wake-path safe); callers own the store.
+///        Arch reach (issue #614): aarch64 saves the full register file
+///        on every switch, so a KERNEL-task parent has a defined saved-x0
+///        slot and gets the PID; x86_64 (callee-saved-only switch frame)
+///        and riscv64 (interrupted caller-saved a0, no ABI return slot)
+///        refuse kernel parents — their kernel waitpid returns by direct
+///        C++ return, and writing the slot would corrupt a live register.
+[[nodiscard]] uint64_t *wait_pid_slot(TaskControlBlock &parent) noexcept;
+
 } // namespace sched_verify
 
 } // namespace kernel
