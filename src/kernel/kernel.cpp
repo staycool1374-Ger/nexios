@@ -1154,15 +1154,15 @@ extern "C" void higherhalf_entry(uint64_t magic, uint64_t mb_info) {
         // copy can run before this store.
         arch::g_smap_supported = (ebx & arch::CPUID_EBX7_SMAP) != 0;
 #if CONFIG_SMEP
-        if (ebx & (1u << 7)) {
-            cr4 |= (1ULL << 20); // CR4.SMEP
+        if ((ebx & arch::CPUID_EBX7_SMEP) != 0) {
+            cr4 |= arch::CR4_SMEP; // CR4.SMEP
         } else {
             debug_write("[BOOT] SMEP not supported by CPU — leaving off\n");
         }
 #endif
 #if CONFIG_SMAP
-        if (ebx & (1u << 20)) {
-            cr4 |= (1ULL << 21); // CR4.SMAP
+        if ((ebx & arch::CPUID_EBX7_SMAP) != 0) {
+            cr4 |= arch::CR4_SMAP; // CR4.SMAP
             debug_write("[BOOT] SMAP enabled (stac/clac active)\n");
         } else {
             debug_write("[BOOT] SMAP not supported by CPU — leaving off "
