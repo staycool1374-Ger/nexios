@@ -216,22 +216,14 @@ JARVIS_TEST(shell_write_with_newline, "PRE: vfsd, iocd | POST: none") {
         JARVIS_TEST_PASS();
         return;
     }
-    arch::QemuDebugcon::write("[DBG] 113 MCR read\n");
     uint8_t mcr = arch::inb(arch::COM1 + 4);
-    arch::QemuDebugcon::write("[DBG] 113 MCR write loopback\n");
     arch::outb(arch::COM1 + 4, mcr | 0x10);
-    arch::QemuDebugcon::write("[DBG] 113 flush enter\n");
     serial_flush_rx();
-    arch::QemuDebugcon::write("[DBG] 113 flush done\n");
 
-    arch::QemuDebugcon::write("[DBG] 113 write LINE1\n");
     service::Terminal::write("LINE1\nLINE2\n");
-    arch::QemuDebugcon::write("[DBG] 113 write done\n");
 
     char buf[512];
-    arch::QemuDebugcon::write("[DBG] 113 read_all enter\n");
     bool ok = serial_read_all(buf, sizeof(buf), 500000);
-    arch::QemuDebugcon::write("[DBG] 113 read_all done\n");
     arch::outb(arch::COM1 + 4, mcr);
 
     JARVIS_ASSERT(ok);
@@ -244,24 +236,15 @@ JARVIS_TEST(shell_echo_and_write, "PRE: vfsd, iocd | POST: none") {
         JARVIS_TEST_PASS();
         return;
     }
-    arch::QemuDebugcon::write("[DBG] 114 MCR read\n");
     uint8_t mcr = arch::inb(arch::COM1 + 4);
-    arch::QemuDebugcon::write("[DBG] 114 MCR write loopback\n");
     arch::outb(arch::COM1 + 4, mcr | 0x10);
-    arch::QemuDebugcon::write("[DBG] 114 flush enter\n");
     serial_flush_rx();
-    arch::QemuDebugcon::write("[DBG] 114 flush done\n");
 
-    arch::QemuDebugcon::write("[DBG] 114 write ALPHA\n");
     service::Terminal::write("ALPHA");
-    arch::QemuDebugcon::write("[DBG] 114 write ALPHA done\n");
     service::Terminal::write("BETA");
-    arch::QemuDebugcon::write("[DBG] 114 write BETA done\n");
 
     char buf[512];
-    arch::QemuDebugcon::write("[DBG] 114 read_all enter\n");
     bool ok = serial_read_all(buf, sizeof(buf), 500000);
-    arch::QemuDebugcon::write("[DBG] 114 read_all done\n");
     arch::outb(arch::COM1 + 4, mcr);
 
     JARVIS_ASSERT(ok);
