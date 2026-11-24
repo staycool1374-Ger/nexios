@@ -288,9 +288,10 @@ constexpr DmesgRecord kDmesgCatalog_TEST[] = {
 ///        #582): the apply-gate / park-latch / reschedule diagnostics.
 ///        Collision-checked: +1 (lifecycle ERROR), +14 (terminate WARN) and
 ///        +15 (reschedule WARN) predate this table and stay uncatalogued;
-///        +16..+23 are taken (see below; +21/+22 are the F4 #557
+///        +16..+24 are taken (see below; +21/+22 are the F4 #557
 ///        supervision pause/resume records, +23 is the #590 waitpid
-///        re-verify record).  NOTE: no static_assert below — the
+///        re-verify record, +24 is the #608 free-lock non-delivery
+///        record).  NOTE: no static_assert below — the
 ///        catalog_table_valid() requires error_nr in [7000, 19000), which
 ///        excludes the whole 4000-window SCHED base, so a SCHED table can
 ///        never satisfy it.  Registration here feeds catalog_text(); the
@@ -312,6 +313,8 @@ constexpr DmesgRecord kDmesgCatalog_SCHED[] = {
      "Sched: supervision resumed (admin park)"},
     {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 23, LogSeverity::WARN,
      "Sched: waitpid re-verify exhausted (issue #590)"},
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 24, LogSeverity::WARN,
+     "Sched: lock-park latch undelivered (lock free)"},
 };
 
 /// @brief Resolve a canonical (subsystem, error-nr) pair to its record.
@@ -440,7 +443,7 @@ inline LogSeverity lookup_severity(ErrorSubsystem subsys,
             return LogSeverity::ERROR;
         }
     case ErrorSubsystem::SCHED:
-        // Issues #582/#557/#590: +16..+23 registered severities (see
+        // Issues #582/#557/#590/#608: +16..+24 registered severities (see
         // kDmesgCatalog_SCHED); raw 12 keeps its historic WARN.
         switch (raw) {
         case 12:
@@ -451,6 +454,7 @@ inline LogSeverity lookup_severity(ErrorSubsystem subsys,
         case 21:
         case 22:
         case 23:
+        case 24:
             return LogSeverity::WARN;
         case 17:
             return LogSeverity::FATAL;

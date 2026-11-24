@@ -432,7 +432,11 @@ bool s_apply_term_hold_announced = false;
 
 // Per-CPU lock-park latch (issue #582 §4.3).  task_id == UINT64_MAX means
 // unarmed.  covered_ticks is monotonic per latch lifetime; a same-task
-// re-arm preserves it (rearm can never restart the clock, §4.5).
+// re-arm preserves it (rearm can never restart the clock, §4.5).  Issue
+// #608 R4': the unit is lock-evidenced ticks — last_cover_tick dedupes
+// to one increment per distinct tick value, and only an observed free
+// lock resets the clock (free_warned is the one-shot for the SCHED+24
+// free-nondelivery WARN, independent of the rule-6 warned flag).
 struct LockParkLatch {
     uint64_t task_id = UINT64_MAX;
     uint64_t generation = 0;
@@ -440,6 +444,8 @@ struct LockParkLatch {
     uint64_t since_tick = 0;
     uint32_t covered_ticks = 0;
     bool warned = false;
+    uint64_t last_cover_tick = 0;
+    bool free_warned = false;
 };
 
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
@@ -464,9 +470,14 @@ uint64_t s_lockpark_warn_count = 0;
 uint64_t s_lockpark_rearm_count = 0;
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
 uint64_t s_lockpark_pending = 0;
+// NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
+uint64_t s_lockpark_free_nodeliver = 0;
 
 // Pre-RMS delivery watch (issue #582 §4.4 S2): the pre-RMS clear stashes
 // the record; the post-RMS check confirms dispatch or restores it.
+// Issue #608: last_cover_tick rides along so the post-RMS restore keeps
+// the per-tick dedupe, and free_warned rides along so the SCHED+24
+// one-shot survives the clear/restore round trip.
 struct LockParkWatch {
     bool armed = false;
     uint64_t task_id = UINT64_MAX;
@@ -474,6 +485,8 @@ struct LockParkWatch {
     uint8_t latch_class = 0;
     uint32_t covered_ticks = 0;
     bool warned = false;
+    uint64_t last_cover_tick = 0;
+    bool free_warned = false;
 };
 
 // NOLINTNEXTLINE(bugprone-dynamic-static-initializers)
@@ -1359,22 +1372,57 @@ void s582_latch_clear(uint64_t cpu) noexcept {
     latch.since_tick = 0;
     latch.covered_ticks = 0;
     latch.warned = false;
+    latch.last_cover_tick = 0;
+    latch.free_warned = false;
 }
 
-// Rule 4/5/6 accounting for one unserviced instant (§4.5): covered++ with
-// the max witness, rearm (since = now, clock preserved), then the
-// escalation pair — FailClosed at the limit (rule 5, SCHED+17 + dump +
-// panic) or the one-shot stuck Warn (rule 6, SCHED+18).  Warn reads the
-// pre-rearm since so a latch pending >= 1 tick warns on its first
-// unserviced instant.
+// Rule R4'/5/6 accounting for one serviced tick (§4.5, issue #608):
+// at most one increment per distinct tick value (last_cover_tick
+// dedupe), and only lock-evidenced instants accrue.  A serviced-but-free
+// tick (no scheduler_lock_ held, no own depth outstanding) resets the
+// covered clock, counts one free-nondelivery and warns once per latch
+// lifetime (SCHED+24) — the latch is retained, rules 1/2 keep lifecycle
+// ownership.  On lock evidence the existing covered++/max/rearm/escalate
+// path runs unchanged: FailClosed at the limit (rule 5, SCHED+17 + dump
+// + panic) or the one-shot stuck Warn (rule 6, SCHED+18).  Rule 6 reads
+// the pre-rearm since so a latch pending >= 1 tick warns on its first
+// lock-evidenced instant.
 void s582_cover_instant(uint64_t cpu) noexcept {
     LockParkLatch &latch = s_lockpark_latch[cpu % CONFIG_MAX_CPUS];
-    const uint32_t covered = latch.covered_ticks + 1;
-    latch.covered_ticks = covered;
     const uint64_t now = arch::Timer::ticks();
-    const uint64_t since = latch.since_tick;
+    if (now == __atomic_load_n(&latch.last_cover_tick, __ATOMIC_RELAXED)) {
+        return;
+    }
+    __atomic_store_n(&latch.last_cover_tick, now, __ATOMIC_RELAXED);
+    // Lock evidence E, read at the instant of the increment (issue #608:
+    // guard discipline is mark-AFTER-take / unmark-BEFORE-release, so E is
+    // true throughout both transitions; only a post-clear remote release
+    // landing inside the load-accrue window miscounts, one instant).
+    const bool lock_evidence = kernel::Scheduler::scheduler_lock_held() ||
+        (kernel::scheduler_lock_depth_own() != 0);
     const uint64_t pending =
         (latch.task_id == UINT64_MAX) ? 0 : latch.task_id;
+    if (!lock_evidence) {
+        latch.covered_ticks = 0;
+        latch.since_tick = now;
+        __atomic_fetch_add(&s_lockpark_free_nodeliver, 1ULL,
+                           __ATOMIC_RELAXED);
+        if (!latch.free_warned) {
+            latch.free_warned = true;
+            kernel::log::dmesg_push_sev(
+                kernel::log::ErrorSubsystem::SCHED,
+                kernel::log::kDmesgBase_SCHED + 24,
+                kernel::log::LogSeverity::WARN,
+                "sched: lock-park latch undelivered (lock free)", pending);
+            kernel::Logger::warn(
+                "sched: lock-park latch undelivered (lock free) id=%lu",
+                pending);
+        }
+        return;
+    }
+    const uint32_t covered = latch.covered_ticks + 1;
+    latch.covered_ticks = covered;
+    const uint64_t since = latch.since_tick;
     const uint64_t covered64 = covered;
     const uint64_t mx =
         __atomic_load_n(&s_lockpark_covered_max, __ATOMIC_RELAXED);
@@ -1483,18 +1531,25 @@ void lockpark_latch_arm(uint64_t task_id, uint64_t generation,
         return;
     const uint64_t cpu = arch::cpu_index() % CONFIG_MAX_CPUS;
     s582::LockParkLatch &latch = s582::s_lockpark_latch[cpu];
-    // Same-task re-arm preserves the monotonic clock (rearm can never
-    // restart it, §4.5); a new task starts a fresh lifetime.
+    // Same-task re-arm preserves the monotonic clock and the SCHED+24
+    // one-shot (rearm can never restart either, §4.5 / issue #608 R4');
+    // a new task starts a fresh lifetime.
     const bool same = (latch.task_id == task_id &&
                        latch.generation == generation);
     const uint32_t covered = same ? latch.covered_ticks : 0;
     const bool warned = same ? latch.warned : false;
+    const uint64_t last_cover =
+        same ? __atomic_load_n(&latch.last_cover_tick, __ATOMIC_RELAXED)
+             : 0;
+    const bool free_warned = same ? latch.free_warned : false;
     latch.task_id = task_id;
     latch.generation = generation;
     latch.latch_class = cls;
     latch.since_tick = arch::Timer::ticks();
     latch.covered_ticks = covered;
     latch.warned = warned;
+    __atomic_store_n(&latch.last_cover_tick, last_cover, __ATOMIC_RELAXED);
+    latch.free_warned = free_warned;
     __atomic_fetch_add(&s582::s_lockpark_arm_count, 1ULL, __ATOMIC_RELAXED);
 }
 
@@ -1540,6 +1595,11 @@ uint64_t lockpark_rearm_count() noexcept {
 
 uint64_t lockpark_pending_count() noexcept {
     return __atomic_load_n(&s582::s_lockpark_pending, __ATOMIC_RELAXED);
+}
+
+uint64_t lockpark_free_nodeliver_count() noexcept {
+    return __atomic_load_n(&s582::s_lockpark_free_nodeliver,
+                           __ATOMIC_RELAXED);
 }
 
 uint64_t lockpark_class_of(uint64_t cpu) noexcept {
@@ -1636,7 +1696,7 @@ void lockpark_service_tick_pre() noexcept {
         s582::s_lockpark_watch[cpu].armed = false;
         return;
     }
-    // Rule 3 vs 4: deliverable when the lock looks free enough for the
+    // Rule 3 vs R4': deliverable when the lock looks free enough for the
     // immediately following RMS to take it and dispatch (word free and
     // no own take outstanding).
     const bool deliverable =
@@ -1651,6 +1711,9 @@ void lockpark_service_tick_pre() noexcept {
         watch.latch_class = latch.latch_class;
         watch.covered_ticks = latch.covered_ticks;
         watch.warned = latch.warned;
+        watch.last_cover_tick =
+            __atomic_load_n(&latch.last_cover_tick, __ATOMIC_RELAXED);
+        watch.free_warned = latch.free_warned;
         s582::s582_latch_clear(cpu);
         __atomic_fetch_add(&s582::s_lockpark_serviced_tick, 1ULL,
                            __ATOMIC_RELAXED);
@@ -1682,7 +1745,9 @@ void lockpark_service_tick_post() noexcept {
         return;
     }
     // Not delivered (RMS try_lock skipped after the clear): restore the
-    // record with rules 4/5/6 — unless a newer arm already won the slot.
+    // record with rules R4'/5/6 — the core re-reads lock evidence, so a
+    // free lock resets the clock instead of accruing — unless a newer
+    // arm already won the slot.
     s582::LockParkLatch &latch = s582::s_lockpark_latch[cpu];
     if (latch.task_id != UINT64_MAX)
         return;
@@ -1692,6 +1757,9 @@ void lockpark_service_tick_post() noexcept {
     latch.since_tick = arch::Timer::ticks();
     latch.covered_ticks = watch.covered_ticks;
     latch.warned = watch.warned;
+    __atomic_store_n(&latch.last_cover_tick, watch.last_cover_tick,
+                     __ATOMIC_RELAXED);
+    latch.free_warned = watch.free_warned;
     s582::s582_cover_instant(cpu);
 }
 
@@ -1734,7 +1802,9 @@ void lockpark_service_tick_miss() noexcept {
         }
         return;
     }
-    // No delivery from the miss path (rule 3 unreachable): rules 4/5/6.
+    // No delivery from the miss path (rule 3 unreachable): rules R4'/5/6.
+    // The core re-reads lock evidence instead of trusting the :165-fail
+    // observation (issue #608: a miss is not evidence by itself).
     s582::s582_cover_instant(cpu);
 }
 
@@ -1742,6 +1812,8 @@ void lockpark_reset_for_test() noexcept {
     for (uint64_t c = 0; c < CONFIG_MAX_CPUS; ++c) {
         s582::s582_latch_clear(c);
         s582::s_lockpark_watch[c].armed = false;
+        s582::s_lockpark_watch[c].last_cover_tick = 0;
+        s582::s_lockpark_watch[c].free_warned = false;
     }
     __atomic_store_n(&s582::s_lockpark_arm_count, (uint64_t)0,
                      __ATOMIC_RELAXED);
@@ -1762,6 +1834,8 @@ void lockpark_reset_for_test() noexcept {
     __atomic_store_n(&s582::s_lockpark_rearm_count, (uint64_t)0,
                      __ATOMIC_RELAXED);
     __atomic_store_n(&s582::s_lockpark_pending, (uint64_t)0,
+                     __ATOMIC_RELAXED);
+    __atomic_store_n(&s582::s_lockpark_free_nodeliver, (uint64_t)0,
                      __ATOMIC_RELAXED);
 }
 
