@@ -123,6 +123,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"acpi_parse",             5,   0,       0      },  // ACPI/DMAR discovery
     {"smp_madt",               3,   0,       0      },  // ACPI MADT discovery
     {"smp_ipi",                2,   0,       0      },  // APIC IPI path
+    {"s582_park",              2,   0,       0      },  // s582 lock-park free-lock + unit (issue #608)
+    {"lockpark_tripwire",      1,   0,       0      },  // s582 tripwire must-panic (issue #608, expected_panic)
     {"smp_bringup",            5,   0,       0      },  // AP bring-up
     {"sched_affinity",         7,   0,       0      },  // CPU affinity
     {"smp_sched",              13,   0,       0      },  // AP scheduling, admission, drain

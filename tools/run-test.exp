@@ -11,12 +11,13 @@
 #   The TEST SUMMARY block is authoritative whenever present, even if a
 #   KERNEL PANIC: line appeared earlier in the same run (passing tests may
 #   log benign FATAL lines). Ordinary panic text is therefore only
-#   RECORDED, never terminal. The one exception is the exact
-#   `exhausted PCP retry budget` signature (ASIL-D safety panic: the
-#   kernel halts, no summary can follow) — on sighting it the verdict is
-#   PASS immediately (no waiting for eof/timeout, which previously burned
-#   the 220 s watchdog + full outer timeout for a decided verdict).
-#   Recorded flags still decide at eof/timeout when no summary arrived.
+#   RECORDED, never terminal. The exceptions are the exact
+#   `exhausted PCP retry budget` signature (ASIL-D safety panic) and the
+#   `sched: scheduler_lock_ unreleased` tripwire (issue #608) — the kernel
+#   halts, no summary can follow — on sighting either the verdict is PASS
+#   immediately (no waiting for eof/timeout, which previously burned the
+#   220 s watchdog + full outer timeout for a decided verdict). Recorded
+#   flags still decide at eof/timeout when no summary arrived.
 #
 # Robust by design:
 #   - The verdict is written to a dedicated file (never lost to pipe buffering).
@@ -58,15 +59,20 @@ expect {
         set fh [open $verdict_log w]; puts $fh $verdict; close $fh
         exit $rc
     }
-    # ── Expected panic signature seen — PASS promptly, do not wait.
-    #    The `exhausted PCP retry budget` signature is terminal by design
-    #    (ASIL-D safety panic: kernel halts, NO summary ever follows — see
-    #    header). Waiting for summary/eof/timeout after it only burns the
-    #    220 s watchdog + the full outer timeout (observed: 234 s x86_64,
-    #    600 s aarch64) for a verdict that is already decided. The summary
-    #    arm above stays authoritative whenever a summary IS present.
+    # ── Expected panic signatures seen — PASS promptly, do not wait.
+    #    Both signatures are terminal by design (kernel halts, NO summary
+    #    ever follows — see header). Waiting for summary/eof/timeout after
+    #    either only burns the 220 s watchdog + full outer timeout.
+    #    The summary arm above stays authoritative whenever a summary IS
+    #    present.
     -re {exhausted PCP retry budget} {
         set verdict "RESULT: PASS (expected panic: PCP retry budget exhausted)"
+        puts $verdict; flush stdout
+        set fh [open $verdict_log w]; puts $fh $verdict; close $fh
+        exit 0
+    }
+    -re {sched: scheduler_lock_ unreleased} {
+        set verdict "RESULT: PASS (expected panic: lockpark tripwire)"
         puts $verdict; flush stdout
         set fh [open $verdict_log w]; puts $fh $verdict; close $fh
         exit 0
