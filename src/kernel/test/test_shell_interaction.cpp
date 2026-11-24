@@ -42,11 +42,18 @@ static void serial_flush_rx() {
     // Cap the spin generously (healthy drains are a handful of bytes) and
     // fail loud carrying IF/LSR/ticks so any future red arrives
     // pre-diagnosed; green runs drain on empty exactly as before.
+    // On cap, FCR FIFO reset (0xC7) recovers a stuck KVM file-backend FIFO
+    // — keeps the failure diagnostic but leaves the UART usable for the
+    // next test instead of wedging the suite at 114.
     constexpr int kFlushCap = 10000000;
     int i = 0;
     while ((arch::inb(arch::COM1_LSR) & 1) != 0) {
         arch::inb(arch::COM1);
         if (++i >= kFlushCap) {
+            // FIFO reset before the FAIL so the next test does not inherit
+            // the stuck KVM state; 0xC7 = FIFO enable + clear RX/TX + 14B.
+            arch::outb(arch::COM1 + 2, 0xC7);
+            arch::pause();
             JARVIS_ASSERT_FMT(false,
                               "serial_flush_rx stuck: IF=%d LSR=0x%x ticks=%lu",
                               arch::interrupts_enabled() ? 1 : 0,
@@ -128,8 +135,18 @@ JARVIS_TEST(shell_loopback_manual_string, "PRE: vfsd, iocd | POST: none") {
 
     const char *test_str = "HelloWorld";
     for (const char *p = test_str; *p; ++p) {
-        while ((arch::inb(arch::COM1_LSR) & 0x20) == 0)
-            ;
+        bool ready = false;
+        for (int w = 0; w < arch::kSerialTxWaitIters; ++w) {
+            if ((arch::inb(arch::COM1_LSR) & 0x20) != 0) {
+                ready = true;
+                break;
+            }
+            arch::pause();
+        }
+        if (!ready) {
+            JARVIS_ASSERT_FMT(false, "THRE stuck LSR=0x%x", arch::inb(arch::COM1_LSR));
+            break;
+        }
         arch::outb(arch::COM1, *p);
     }
 
