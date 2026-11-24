@@ -55,7 +55,7 @@ SPSC shared-memory channels), MINIX 3 (reincarnation of failed servers).
 | Spec | Binds |
 |---|---|
 | `ipc.md`, `ipc-fastpath.md`, `syscall-fastpath.md` | message queues, deferred switch, FAST tier |
-| `scheduler.md`, `rms-rework.md`, `deadline.md`, `wcet-reaudit-v0.4.5.md` | scheduler, breaker, budgets, WCET |
+| `scheduler.md`, `schedoracles.md`, `rms-rework.md`, `deadline.md`, `wcet-reaudit-v0.4.5.md` | scheduler, oracles, breaker, budgets, WCET |
 | `memory.md`, `oom-rt.md`, `configuration.md` | PMM/MemPool/VMM, budgets, CONFIG_* |
 | `cspace.md`, `shm.md`, `iommu.md`, `external-pager.md` | capabilities, frames, DMA, pager |
 | `death-notify.md`, `zombie-list.md`, `idle_monitor.md`, `watchdog.md` | death, teardown, supervision inputs |
