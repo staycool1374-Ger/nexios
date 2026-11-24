@@ -26,8 +26,9 @@
 
 // Bounded-wait bounds (FLAW-08): a dead/hung COM1 must never hang the core.
 // A working 16550 sets THRE/LSR within microseconds, so these are bounds,
-// not spin targets.
-static constexpr int SERIAL_TX_WAIT_ITERS = 1000000;
+// not spin targets. TX bound is the shared arch::kSerialTxWaitIters
+// (single source of truth, see src/kernel/arch/serial.hpp).
+static constexpr int SERIAL_TX_WAIT_ITERS = arch::kSerialTxWaitIters;
 static constexpr int SERIAL_RX_WAIT_ITERS = 1000000;
 
 namespace arch {
