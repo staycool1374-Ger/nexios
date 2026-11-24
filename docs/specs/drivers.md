@@ -396,7 +396,7 @@ an in-flight DMA target can be handed to the producer.  Same fix pattern;
 | FLAW-04 AHCI GHC_IE w/o ISR + teardown UAF | ahci.cpp | **RESOLVED (2026-09-17, issue #64)** — MSI ISR + PORT_IE/GHC_IE ordering; teardown drains waiters under port locks before freeing |
 | FLAW-05 AHCI 5s busy-poll | ahci.cpp wait_cmd | **RESOLVED (2026-09-17, issue #64)** — scheduler-blocked bounded wait on the event-timer wheel; bounded poll fallback |
 | FLAW-06 virtio-blk 1M spin | virtio_blk.cpp | **RESOLVED (2026-09-17, issue #65)** — MSI-X/MSI used-ring ISR + single embedded record + scheduler-blocked bounded wait (100ms); 1M bounded poll fallback |
-| FLAW-08 serial unbounded polling | serial.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — bounded TX/RX polls (1M iters + pause); drop/'\0' failure semantics; aarch64 PL011 bounded likewise (2026-09-17, issue #66) |
+| FLAW-08 serial unbounded polling | serial.cpp + services/terminal/terminal.cpp | **RESOLVED (2026-08-16, `357c62a1`; 2026-11-24, #612)** — bounded TX/RX polls (1M iters + pause, `arch::kSerialTxWaitIters` single source); drop/'\0' failure semantics; aarch64 PL011 bounded likewise (2026-09-17, issue #66); Terminal raw TX fallback (x86 COM1) was second unbounded writer missed by `357c62a1` — now bounded via shared `kSerialTxWaitIters` with fail-open drop + one-shot `QemuDebugcon` diagnostic (harness TX/TEMT waits in `src/lib/test.cpp` remain QE-owned follow-up) |
 | FLAW-10 keyboard unbounded drain | keyboard.cpp | **RESOLVED (2026-08-16, `357c62a1`)** — first drain capped at 16 (i8042 depth) |
 
 # §9 FLAW Fix Plan (v0.4.1)

@@ -20,6 +20,7 @@
 #include <services/terminal/framebuffer.hpp>
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/serial.hpp>
+#include <kernel/arch/qemu_debugcon.hpp>
 #include <kernel/arch/keyboard.hpp>
 #include <services/terminal/font.hpp>
 #include <version.hpp>
@@ -159,6 +160,61 @@ void Terminal::init() {
 #endif
 }
 
+#if defined(CONFIG_ARCH_X86_64)
+// Bounded THRE poll (FLAW-08, single source arch::kSerialTxWaitIters).
+// Returns true when THRE is set within the bound, false on expiry.
+// Every iteration contains arch::pause() (bus-hammer hygiene).
+static bool serial_tx_ready() noexcept {
+    for (int i = 0; i < arch::kSerialTxWaitIters; ++i) {
+        if ((arch::inb(arch::COM1 + 5) & 0x20) != 0)
+            return true;
+        arch::pause();
+    }
+    return false;
+}
+
+static void serial_tx_trip_diag(uint8_t lsr, uint8_t ier, uint8_t mcr,
+                                uint64_t if_bit, uint64_t ticks) noexcept {
+    // Lock-free single outb via QemuDebugcon only (ISR/panic safe).
+    // Keep formatter tiny and local — no Logger, no allocation.
+    char buf[96];
+    int pos = 0;
+    auto append = [&](const char *s) {
+        while (*s && pos < 94) buf[pos++] = *s++;
+    };
+    auto append_hex8 = [&](uint8_t v) {
+        const char *hex = "0123456789abcdef";
+        if (pos < 94) buf[pos++] = hex[(v >> 4) & 0xF];
+        if (pos < 94) buf[pos++] = hex[v & 0xF];
+    };
+    auto append_dec = [&](uint64_t v) {
+        char tmp[20];
+        int len = 0;
+        if (v == 0) tmp[len++] = '0';
+        else {
+            char rev[20];
+            int rlen = 0;
+            while (v > 0 && rlen < 19) { rev[rlen++] = '0' + (v % 10); v /= 10; }
+            while (rlen > 0) tmp[len++] = rev[--rlen];
+        }
+        for (int i = 0; i < len && pos < 94; ++i) buf[pos++] = tmp[i];
+    };
+    append("[TERM] UART TX THRE bound hit lsr=0x");
+    append_hex8(lsr);
+    append(" ier=0x");
+    append_hex8(ier);
+    append(" mcr=0x");
+    append_hex8(mcr);
+    append(" if=");
+    append_dec(if_bit);
+    append(" ticks=");
+    append_dec(ticks);
+    append("\n");
+    buf[pos] = '\0';
+    for (int i = 0; i < pos; ++i) arch::QemuDebugcon::putc(buf[i]);
+}
+#endif
+
 static void serial_putchar(char c) {
 #if CONFIG_SERIAL_TX_SHM
     // Issue #51 step-c-prime: SHM-ring bulk TX first (lock-free push,
@@ -179,12 +235,42 @@ static void serial_putchar(char c) {
     }
 #endif
 #if defined(CONFIG_ARCH_X86_64)
+    // Bounded THRE poll (FLAW-08). Fail-open: drop byte on expiry,
+    // one-shot diagnostic via debugcon. NOT rerouted to
+    // arch::Serial::putchar — write_count semantics (#248) must stay
+    // frozen for Terminal writes (shell async-output detector).
     if (c == '\n') {
-        while ((arch::inb(arch::COM1_LSR) & 0x20) == 0);
-        arch::outb(arch::COM1, '\r');
+        if (serial_tx_ready()) {
+            arch::outb(arch::COM1, '\r');
+        } else {
+            static bool s_tx_trip_reported_cr = false;
+            if (!s_tx_trip_reported_cr) {
+                s_tx_trip_reported_cr = true;
+                uint8_t lsr = arch::inb(arch::COM1 + 5);
+                uint8_t ier = arch::inb(arch::COM1 + 1);
+                uint8_t mcr = arch::inb(arch::COM1 + 4);
+                uint64_t rflags = 0;
+                __asm__ volatile("pushfq; pop %0" : "=r"(rflags));
+                uint64_t if_bit = (rflags & 0x200) ? 1 : 0;
+                serial_tx_trip_diag(lsr, ier, mcr, if_bit, 0);
+            }
+        }
     }
-    while ((arch::inb(arch::COM1_LSR) & 0x20) == 0);
-    arch::outb(arch::COM1, c);
+    if (serial_tx_ready()) {
+        arch::outb(arch::COM1, c);
+    } else {
+        static bool s_tx_trip_reported = false;
+        if (!s_tx_trip_reported) {
+            s_tx_trip_reported = true;
+            uint8_t lsr = arch::inb(arch::COM1 + 5);
+            uint8_t ier = arch::inb(arch::COM1 + 1);
+            uint8_t mcr = arch::inb(arch::COM1 + 4);
+            uint64_t rflags = 0;
+            __asm__ volatile("pushfq; pop %0" : "=r"(rflags));
+            uint64_t if_bit = (rflags & 0x200) ? 1 : 0;
+            serial_tx_trip_diag(lsr, ier, mcr, if_bit, 0);
+        }
+    }
 #else
     arch::Serial::putchar(c);
 #endif
@@ -290,6 +376,8 @@ bool Terminal::readline(char* buf, size_t max_len) {
 
     while (true) {
 #if defined(CONFIG_ARCH_X86_64)
+        // intentional blocking read (not a FLAW-08 poll); bounded only
+        // if a production caller appears — keep byte-identical for now.
         while (!(arch::inb(arch::COM1_LSR) & 1)) {
             arch::pause();
         }
