@@ -366,6 +366,30 @@ extern "C" void ap_main(uint64_t logical_id, uint32_t lapic_id) {
         arch::write_cr4(cr4b | arch::CR4_FSGSBASE);
     }
 #endif
+#if defined(CONFIG_ARCH_X86_64) && (CONFIG_SMEP || CONFIG_SMAP)
+    // Issue #611: mirror the BSP SMEP/SMAP arms so this AP enforces
+    // supervisor execution/access prevention identically (the #156 PCIDE
+    // and #338 FSGSBASE mirrors above cover the other probed bits).
+    // Both probes are pure CPUID — no locks, no globals, safe before
+    // the start gate. Bits accumulate into ONE write; nothing is written
+    // when the CPU does not advertise the feature (fail-closed, matches
+    // the BSP).
+    uint64_t guard_bits = 0;
+#if CONFIG_SMEP
+    if (arch::has_smep()) {
+        guard_bits |= arch::CR4_SMEP;
+    }
+#endif
+#if CONFIG_SMAP
+    if (arch::has_smap()) {
+        guard_bits |= arch::CR4_SMAP;
+    }
+#endif
+    if (guard_bits != 0) {
+        uint64_t cr4_guard = arch::read_cr4();
+        arch::write_cr4(cr4_guard | guard_bits);
+    }
+#endif
 
     // Start-gate: spin parked (IF=0, Phase-B behavior) until the BSP
     // publishes scheduler_ready after reboot_from_table() finishes

@@ -30,6 +30,7 @@
 ///        mechanism move.
 
 #include <kernel/proc/proc_svc.hpp>
+#include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
@@ -305,20 +306,40 @@ uint64_t ProcSvc::waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         // BLOCKED → pid, pid LAST.  The wake gate is state==BLOCKED +
         // pid, and the fence below pairs them — a terminator that
         // observes the pid also observes BLOCKED.
+        //
+        // Issue #607: the whole publication is ONE IRQ-atomic unit.
+        // It used to inherit whatever IF the caller held — 0 for an
+        // int $0x80 user trap (interrupt gate 0xEE), but 1 for a
+        // kernel-task caller (:390 leg) and for a CONFIG_PROC_MGR=1
+        // build (ask_proc_verdict's blocking IPC returns with sti,
+        // ipc.cpp:1475/1507).  A tick landing mid-sequence there
+        // dequeues the parent before the pid is published, the
+        // terminator's wake_waiting_parent reads waited != child.id,
+        // returns NO_WAITER, and the parent blocks with no waker.
+        // Closing it also removes the undeclared dependence on
+        // trap-entry IF that irq-preemption-contract.md:13 forbids.
+        // Boundedness: no lock (dequeue_ready is lock-free); fixed-
+        // bound loops only (128 ready levels, 8 CPU arms); no
+        // alloc/log/IPC and no reschedule/park in this scope.  The
+        // #590 seam guard inside fire_wait_publish nests (depth 2)
+        // and cannot emit a stray sti (irq_was_=false there).
         const uint64_t child_id = child->id;
-        cur->waiting_child_status = status_ptr;
-        Scheduler::dequeue_ready(*cur);
-        cur->state = TaskState::BLOCKED;
-        cur->waiting_child_pid = target_pid;
-        // Issue #590 INV-WAIT-3: pair the terminator-side fence.  Both
-        // fences are required — release/acquire is not sufficient here
-        // (store buffering would let both sides miss on weak models).
-        // Placed before the kernel-caller return so the kernel-caller
-        // path is fenced as well.
-        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        {
+            arch::IrqGuard publish_guard{};
+            cur->waiting_child_status = status_ptr;
+            Scheduler::dequeue_ready(*cur);
+            cur->state = TaskState::BLOCKED;
+            cur->waiting_child_pid = target_pid;
+            // Issue #590 INV-WAIT-3: pair the terminator-side fence.
+            // Both fences are required — release/acquire is not
+            // sufficient here (store buffering would let both sides
+            // miss on weak models).  Placed before the kernel-caller
+            // return so the kernel-caller path is fenced as well.
+            __atomic_thread_fence(__ATOMIC_SEQ_CST);
 #if defined(CONFIG_DEBUG)
-        kernel::test::fire_wait_publish(*cur);
+            kernel::test::fire_wait_publish(*cur);
 #endif
+        }
         // Issue #590 INV-WAIT-6 (consumption precedence): after the
         // fence, a pid that no longer matches what was just published
         // proves a wake consumed the publication (the wake's clear is

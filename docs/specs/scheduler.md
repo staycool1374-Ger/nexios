@@ -179,7 +179,9 @@ publish):
   `terminate_err`, `terminate_err_from_trap`, the deadline KILL arm and
   the watchdog KILL arm), `sys_exit`, `sys_thread_exit`, `sys_waitpid`.
 - INV-WAIT-4 (publish order): `waiting_child_status → dequeue_ready →
-  state=BLOCKED → waiting_child_pid`, pid last.  Only
+  state=BLOCKED → waiting_child_pid`, pid last.  The whole sequence is
+  one `arch::IrqGuard` unit (issue #607) — the publication is atomic
+  for every caller class, independent of the entry-IF policy.  Only
   `wake_waiting_parent` re-queues on `state==BLOCKED`; `sys_exit` readies
   on `state != TERMINATED` and `sys_thread_exit` has no BLOCKED gate —
   but pid-last makes every pid observation imply BLOCKED, so the reorder
@@ -198,9 +200,13 @@ publish):
 
 Deliberate divergence from the locked post-publish rechecks at lines
 131-135 (`send_sync[_bounded]`, `sys_receive`/`recv_clamped` run their
-rechecks inside the publish `IrqGuard`, before the BLOCKED marking): the
-waitpid publish is lock-free (no guard exists on that path), so the
-re-verify runs after the fence instead of under a lock.  The second
+rechecks inside the publish `IrqGuard`, before the BLOCKED marking):
+the waitpid publish runs under its own `arch::IrqGuard` in both builds
+(issue #607), but the re-verify still runs after the fence instead of
+under the guard.  The post-fence re-verify is retained because it
+repairs the *cross-CPU* miss — a per-CPU mask cannot — and it must stay
+outside the guard (no lock/park/log/reschedule under a live
+`IrqGuard`).  The second
 residence is `Scheduler::collect_zombie_child` (pop+claim under the
 zombie leaf, owner tail outside).  Residual R-1 (terminator missed the
 publication AND a concurrent drainer reclaimed the corpse first) denies
@@ -230,14 +236,22 @@ closed (SCHED+17 + §4.9 dump + panic), >=8 ticks with the lock free
 re-arms (SCHED+19, arm retained).
 
 Park latch (INV-PARK-2): a BLOCKED runner that `reschedule()` does not
-park latches `{task_id, generation, class, since_tick, covered_ticks}`
-(class is diagnostic-only — no decision predicate reads it). Service:
-release hook (`SchedulerLockGuard` dtor/`unlock`, post-unlock at depth 0,
-five-term discriminator) parks in place for SelfLock in plain task
-context; the pre-RMS tick point clears (RMS dispatches right after) or
-counts a covered instant with rearm; a `:165` try_lock miss counts
-lock-free. Covered >= 8 fails closed (SCHED+17); pending >= 1 tick warns
-once (SCHED+18). Monotonic clock: rearm can never restart it.
+park latches `{task_id, generation, class, since_tick, covered_ticks,
+last_cover_tick}` (class is diagnostic-only — no decision predicate
+reads it). Service: release hook (`SchedulerLockGuard` dtor/`unlock`,
+post-unlock at depth 0, five-term discriminator) parks in place for
+SelfLock in plain task context; the pre-RMS tick point clears (RMS
+dispatches right after) or applies rule R4'; the post-RMS point restores
+an undelivered record and applies R4'; a `:165` try_lock miss applies
+R4'. Rule R4' (issue #608): a covered instant accrues iff the tick
+observes lock evidence (`scheduler_lock_held()` or own depth != 0) and
+no instant was already counted for this tick value (at most one
+increment per distinct tick — the miss+post double count is gone); a
+serviced-but-free tick resets `covered_ticks` to 0, counts one
+free-nondelivery, warns once per latch lifetime (SCHED+24), and retains
+the latch. Covered >= 8 fails closed (SCHED+17); pending >= 1 tick warns
+once (SCHED+18). Monotonic clock across re-arm: rearm can never restart
+it — only an observed free lock resets it.
 
 Holder-bounds recount (main at implementation time): **35** static
 `SchedulerLockGuard` constructions (**33** in release;
@@ -248,7 +262,8 @@ preceding `try_lock` (**5** in release), `registry.cpp:354` excluded
 construction — folded into the grouped rows; IF=1 task-context rows are
 #1 (`try_direct_switch`) and #3 (queue setters), each O(1)+O(MAX_TASKS),
 >=80x under the 8-tick deadline. Chained holders across 8 instants are
-covered by the monotonic aggregate rule (fail-safe, availability-only).
+covered by the monotonic aggregate rule (fail-safe, availability-only);
+a free gap between holders resets the count (dispatch was possible).
 
 ### INV-6 — `move_priority()` call sites [IMPLEMENTED]
 

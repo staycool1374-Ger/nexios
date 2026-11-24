@@ -76,6 +76,9 @@ inline constexpr uint32_t CPUID_EBX7_INVPCID = 1u << 10;
 /// *legality* of stac/clac — CR4.SMAP being off does not make them legal
 /// (issue #606).
 inline constexpr uint32_t CPUID_EBX7_SMAP = 1u << 20;
+/// @brief SMEP feature bit (EBX, leaf 7, subleaf 0): gates CR4.SMEP arming
+/// on the BSP and every AP (issue #611).
+inline constexpr uint32_t CPUID_EBX7_SMEP = 1u << 7;
 /// @brief FSGSBASE feature bit (EBX, leaf 7, subleaf 0): userspace
 /// RDFSBASE/WRFSBASE (issue #338 — thread-local errno reads its TP).
 inline constexpr uint32_t CPUID_EBX7_FSGSBASE = 1u << 0;
@@ -117,6 +120,13 @@ inline bool has_invpcid() {
 /// @return true if the SMAP feature bit (leaf 7, subleaf 0, EBX[20]) is set.
 inline bool has_smap() {
     return (cpuid(7, 0).ebx & CPUID_EBX7_SMAP) != 0;
+}
+/// @brief Check if the CPU supports SMEP (supervisor-mode execution prevention).
+/// Boot-path use only: same contract as has_smap() — pure CPUID, safe before
+/// the AP start-gate (issue #611).
+/// @return true if the SMEP feature bit (leaf 7, subleaf 0, EBX[7]) is set.
+inline bool has_smep() {
+    return (cpuid(7, 0).ebx & CPUID_EBX7_SMEP) != 0;
 }
 /// @brief Check if the CPU supports the RDSEED instruction.
 /// @return true if the RDSEED feature bit (leaf 7, subleaf 0) is set.

@@ -84,6 +84,12 @@ inline constexpr uint64_t CR4_PCIDE = 1ULL << 17;
 /// @brief CR4.FSGSBASE bit (16): userspace RDFSBASE/WRFSBASE
 /// (issue #338 — thread-local errno reads its TP from Ring 3).
 inline constexpr uint64_t CR4_FSGSBASE = 1ULL << 16;
+/// @brief CR4.SMEP bit (20): gated by the CPUID.EBX[7] SMEP probe, armed on
+/// both the BSP and every AP (issue #611).
+inline constexpr uint64_t CR4_SMEP = 1ULL << 20;
+/// @brief CR4.SMAP bit (21): gated by the CPUID.EBX[20] SMAP probe, armed on
+/// both the BSP and every AP (issue #611).
+inline constexpr uint64_t CR4_SMAP = 1ULL << 21;
 
 /// @brief INVPCID invalidation types (issue #157, Intel SDM Vol 2B).
 enum class InvpcidType : uint32_t {

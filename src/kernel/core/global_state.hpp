@@ -323,7 +323,9 @@ bool apply_term_hold_announced_swap() noexcept;
 void apply_gate_reset_for_test() noexcept;
 /// @brief Latch a BLOCKED runner that was not parked (issue #582 §4.2).
 ///        Always overwrites; a same-{id,generation} re-arm preserves the
-///        monotonic covered clock (rearm can never restart it).
+///        monotonic covered clock and the free-lock one-shot (rearm can
+///        never restart either).  Only an observed free lock resets the
+///        clock (issue #608 R4'); a fresh lifetime starts at zero.
 /// @param task_id Task id + generation of the latched runner.
 /// @param cls Arming-time class (diagnostic-only, never decided upon).
 void lockpark_latch_arm(uint64_t task_id, uint64_t generation,
@@ -340,7 +342,9 @@ uint64_t lockpark_arm_count() noexcept;
 /// @param generation Latch generation to look for.
 /// @return true when a latch names the pair.
 bool lockpark_is_latched(uint64_t task_id, uint64_t generation) noexcept;
-/// @brief Live covered-tick count on @p cpu (monotonic per latch).
+/// @brief Live covered-tick count on @p cpu: distinct ticks with the
+///        scheduler lock observed held/owned (issue #608 R4'; serviced
+///        lock-free ticks reset the clock, never accrue).
 uint64_t lockpark_covered_ticks(uint64_t cpu) noexcept;
 /// @brief Max observed covered-ticks (issue #582 §4.6 witness).
 uint64_t lockpark_covered_ticks_max() noexcept;
@@ -352,14 +356,22 @@ uint64_t lockpark_serviced_tick_count() noexcept;
 uint64_t lockpark_stale_cleared_count() noexcept;
 /// @brief Silent woke clears (rule 2: target left BLOCKED).
 uint64_t lockpark_woke_cleared_count() noexcept;
-/// @brief FailClosed trips (rule 5: covered >= limit, SCHED+17).
+/// @brief FailClosed trips (rule 5: covered >= limit over lock-evidenced
+///        ticks, SCHED+17).
 uint64_t lockpark_escalated_count() noexcept;
 /// @brief Stuck warnings (rule 6: SCHED+18, one-shot per latch).
 uint64_t lockpark_warn_count() noexcept;
-/// @brief Tick re-arms (rule 4: retained, clock preserved).
+/// @brief Tick re-arms (rule R4': retained on lock evidence with the
+///        clock preserved; serviced lock-free ticks reset the clock
+///        instead, counted by lockpark_free_nodeliver_count()).
 uint64_t lockpark_rearm_count() noexcept;
 /// @brief Hook retains (discriminator failed, latch kept for the tick).
 uint64_t lockpark_pending_count() noexcept;
+/// @brief Serviced-but-free ticks (issue #608 R4'): tick services that
+///        found a latched-but-undelivered runner while the scheduler
+///        lock was free.  Each one resets the covered clock (the latch
+///        is retained) and the first per latch lifetime warns (SCHED+24).
+uint64_t lockpark_free_nodeliver_count() noexcept;
 /// @brief Latch class on @p cpu (diagnostic-only, QE getter).
 uint64_t lockpark_class_of(uint64_t cpu) noexcept;
 /// @brief S1 release-hook service core (issue #582 §4.4).  Runs rules 1-2
@@ -369,14 +381,17 @@ uint64_t lockpark_class_of(uint64_t cpu) noexcept;
 LockParkAction lockpark_service_hook() noexcept;
 /// @brief S2 pre-RMS service core (issue #582 §4.4).  Runs rules 1-2, then
 ///        rule 3 (clear + stash for the post-RMS check) when deliverable,
-///        else rules 4/5/6.  Lock-free-safe (atomics only).
+///        else rules R4'/5/6 (issue #608: accrue only on lock evidence,
+///        at most one increment per tick).  Lock-free-safe (atomics only).
 void lockpark_service_tick_pre() noexcept;
 /// @brief S2 post-RMS resolution (issue #582 §4.4).  Confirms or restores
 ///        the stashed pre-RMS clear: a still-BLOCKED, never-dispatched
-///        target is restored with rule 4/5/6 accounting.
+///        target is restored with R4'/5/6 accounting (a free lock resets
+///        the clock instead of accruing).
 void lockpark_service_tick_post() noexcept;
 /// @brief S2b :165-fail service (issue #582 §4.4).  Double-read latch;
-///        rules 1-2 when readable, else rules 4/5/6 (no delivery here).
+///        rules 1-2 when readable, else R4'/5/6 (the lock is re-read at
+///        the increment — the miss alone is not evidence).  No delivery.
 void lockpark_service_tick_miss() noexcept;
 /// @brief Reset the park latch array + all §4 counters.  Production
 ///        definition; QE wires the call in test_isolate.cpp.
