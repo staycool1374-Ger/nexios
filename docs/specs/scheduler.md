@@ -179,7 +179,9 @@ publish):
   `terminate_err`, `terminate_err_from_trap`, the deadline KILL arm and
   the watchdog KILL arm), `sys_exit`, `sys_thread_exit`, `sys_waitpid`.
 - INV-WAIT-4 (publish order): `waiting_child_status → dequeue_ready →
-  state=BLOCKED → waiting_child_pid`, pid last.  Only
+  state=BLOCKED → waiting_child_pid`, pid last.  The whole sequence is
+  one `arch::IrqGuard` unit (issue #607) — the publication is atomic
+  for every caller class, independent of the entry-IF policy.  Only
   `wake_waiting_parent` re-queues on `state==BLOCKED`; `sys_exit` readies
   on `state != TERMINATED` and `sys_thread_exit` has no BLOCKED gate —
   but pid-last makes every pid observation imply BLOCKED, so the reorder
@@ -198,9 +200,13 @@ publish):
 
 Deliberate divergence from the locked post-publish rechecks at lines
 131-135 (`send_sync[_bounded]`, `sys_receive`/`recv_clamped` run their
-rechecks inside the publish `IrqGuard`, before the BLOCKED marking): the
-waitpid publish is lock-free (no guard exists on that path), so the
-re-verify runs after the fence instead of under a lock.  The second
+rechecks inside the publish `IrqGuard`, before the BLOCKED marking):
+the waitpid publish runs under its own `arch::IrqGuard` in both builds
+(issue #607), but the re-verify still runs after the fence instead of
+under the guard.  The post-fence re-verify is retained because it
+repairs the *cross-CPU* miss — a per-CPU mask cannot — and it must stay
+outside the guard (no lock/park/log/reschedule under a live
+`IrqGuard`).  The second
 residence is `Scheduler::collect_zombie_child` (pop+claim under the
 zombie leaf, owner tail outside).  Residual R-1 (terminator missed the
 publication AND a concurrent drainer reclaimed the corpse first) denies

@@ -14,6 +14,11 @@ kernel, as of commit `55fde391` (v0.3.12 milestone definition).
   sites are short critical sections with an ISR accessor).
 - **9** comment-only mentions refreshed/re-verified (see Comment-Refresh list).
 
+> Note (issue #607): the "20 sites, as of `55fde391`" summary above is
+> stale against the tree — row P1 was added after that count and further
+> production sites may exist. A separate sweep should re-enumerate the
+> production sites and refresh the summary.
+
 ## Classification rules
 
 - **Class A (KEEP):** the critical section genuinely excludes the timer ISR
@@ -51,6 +56,7 @@ kernel, as of commit `55fde391` (v0.3.12 milestone definition).
 | T1 | task.cpp:391 | `alloc_kslot` free-list scope | First-fit scan of `s_kslot_list`/`s_kslot_pool` + free-head update | Timer ISR (on_tick → reap_orphans → idle recreate) | IrqGuard | ISR-reachable: `Scheduler::on_tick` (timer ISR) calls `reap_orphans()` every 100 ticks, which re-creates the idle task via `TaskControlBlock::create()` → `alloc_kslot()`. A plain SpinLock deadlocks: a task-context holder preempted by the timer ISR can never release it. IRQ masking is REQUIRED (SIL-3 finding G1-B-01; the original "no ISR accessor" claim was wrong). |
 | T2 | task.cpp:411 | `alloc_kslot` bump scope | `s_kslot_bump` bump-allocate | Timer ISR (same chain as T1) | IrqGuard | Same as T1 — ISR-reachable, IRQ masking required |
 | T3 | task.cpp:421 | `free_kslot` | Free-head push of `s_kslot_pool` entry | Timer ISR (task exit via reap_orphans) | IrqGuard | Same as T1 — ISR-reachable via the same reap chain, IRQ masking required |
+| P1 | proc/proc_svc.cpp | `ProcSvc::waitpid` publication block (issue #607) | `waiting_child_status → dequeue_ready → BLOCKED → waiting_child_pid → SEQ_CST fence` | Timer ISR terminator (`on_tick` watchdog KILL, deadline KILL) and any concurrent task | IrqGuard | The wake gate (`state==BLOCKED` + pid) must never observe a partial publication; no lock is taken or needed (`dequeue_ready` is lock-free); bounded (128 ready levels, 8 CPU arms) |
 
 ## Migration outcome
 
