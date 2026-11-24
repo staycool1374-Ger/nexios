@@ -67,13 +67,18 @@ static void serial_flush_rx() {
 }
 
 static bool serial_read_all(char *buf, size_t max, int iterations) {
+    arch::QemuDebugcon::write("[DBG] read_all inner enter\n");
     size_t pos = 0;
     for (int i = 0; i < iterations && pos < max - 1; ++i) {
+        if ((i % 100000) == 0) {
+            arch::QemuDebugcon::write("[DBG] read_all loop 100k\n");
+        }
         if (arch::inb(arch::COM1_LSR) & 1) {
             buf[pos++] = arch::inb(arch::COM1);
         }
         arch::pause();
     }
+    arch::QemuDebugcon::write("[DBG] read_all inner done\n");
     buf[pos] = '\0';
     return pos > 0;
 }
