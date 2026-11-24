@@ -414,5 +414,105 @@ TrapOwnerDisposition trap_owner_trip(const SchedTrapOwner &o, uint64_t sepc,
     return repair();
 }
 
+uint64_t *wait_pid_slot(TaskControlBlock &parent) noexcept {
+    // INV-APPLY/#597: never touch the frame of a task that may still be
+    // physically running. BLOCKED does not imply switched-out (a
+    // deferred switch may be pending) — this gate is load-bearing.
+    if (Scheduler::is_current_on_any_cpu(&parent)) {
+        return nullptr;
+    }
+    const uint64_t saved_sp = task_stack_ptr(&parent);
+    if (saved_sp == 0) {
+        return nullptr;
+    }
+    const uint64_t stack_base =
+        reinterpret_cast<uint64_t>(parent.kernel_stack);
+    const uint64_t stack_top = parent.kernel_stack_top;
+    // Harness boot-stack exemption mirrors switch_to_task: the
+    // physically-running harness keeps a live boot-stack RSP.
+    const bool harness_boot_ctx =
+        (&parent == Scheduler::get_harness_task() && saved_sp != 0 &&
+         saved_sp >= reinterpret_cast<uint64_t>(_stack_start) &&
+         saved_sp < reinterpret_cast<uint64_t>(_stack_end));
+    if (!harness_boot_ctx &&
+        (saved_sp < stack_base || saved_sp >= stack_top)) {
+        return nullptr;
+    }
+    // No logging on any refusal below: wake-path safe (runs under the
+    // scheduler lock, possibly IRQ-masked). Single 8-byte stores only.
+    const volatile uint64_t *frame =
+        reinterpret_cast<const volatile uint64_t *>(saved_sp);
+#if defined(CONFIG_ARCH_AARCH64)
+    // vectors.S save area: x0-x30 (+0..240), sp_el0 (+248), ELR (+256),
+    // SPSR (+264).  Unlike x86_64, EVERY aarch64 switch goes through this
+    // full save area (el0_sync/el1_irq share the save_all macro), so
+    // offset 0 is the saved x0 for user and kernel tasks alike — this is
+    // the slot issue #614's EL0-fault waitpid contract (and its arch test
+    // in test_aarch64.cpp) expects the PID in.  The ELR/SPSR proof
+    // mirrors switch_to_task's dispatch guard: nonzero ELR plus a sane
+    // exception-return mode (EL0t/EL1h).
+    const uint64_t elr = frame[256 / 8];
+    const uint64_t spsr = frame[264 / 8];
+    const uint64_t mode = spsr & 0xFULL;
+    if (elr == 0 || (mode != 0x0 && mode != 0x5)) {
+        return nullptr;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    return reinterpret_cast<uint64_t *>(saved_sp);
+#elif defined(CONFIG_ARCH_RISCV64)
+    // Kernel-task parents are REFUSED (pre-#614 behavior kept): a
+    // kernel task resumes from its waitpid by direct C++ return, and its
+    // saved a0 is an interrupted caller-saved argument slot, not a
+    // defined return slot — only a user ECALL frame carries the ABI
+    // return at OFF_A0.
+    if (!parent.is_user_) {
+        return nullptr;
+    }
+    // syscall_entry.S layout: a0 at OFF_A0 (72, idx 9), SEPC at
+    // OFF_SEPC (248, idx 31). A nonzero SEPC proves a real trap frame.
+    if (frame[248 / 8] == 0) {
+        return nullptr;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    return reinterpret_cast<uint64_t *>(saved_sp + 72);
+#elif defined(CONFIG_ARCH_X86_64)
+    // Kernel-task parents are REFUSED (issue #614 regression evidence):
+    // a kernel task's saved context is switch_to_task's callee-saved
+    // save area (rbx/rbp/r12-r15), so offset 0 is a LIVE register, not a
+    // return-value slot.  The iret-frame proof alone can be satisfied by
+    // stale stack words there, and writing it corrupts the blocked
+    // parent's restored register (observed: x86_64 core_sched flipped
+    // scheduler_add_duplicate_id to FAIL — find_task returned null after
+    // the corrupted resume).  Only a user task's syscall/ISR frame has
+    // saved RAX at slot 0.
+    if (!parent.is_user_) {
+        return nullptr;
+    }
+    // Dual-ordering iret proof mirrors switch_to_task (created order vs
+    // isr_common/CPU order). Slot 0 is the saved-RAX return slot the
+    // wake twins have always written for user parents.
+    const uint64_t f_rflags = frame[sched_switch::IRET_RFLAGS_IDX];
+    const uint64_t rip_a = frame[sched_switch::IRET_RIP_IDX];
+    const uint64_t cs_a = frame[sched_switch::IRET_CS_IDX];
+    const uint64_t rsp_a = frame[sched_switch::IRET_RSP_IDX];
+    const uint64_t ss_a = frame[sched_switch::IRET_SS_IDX];
+    const uint64_t rip_b = frame[sched_switch::IRET_SS_IDX];
+    const uint64_t cs_b = frame[sched_switch::IRET_RSP_IDX];
+    const uint64_t rsp_b = frame[sched_switch::IRET_CS_IDX];
+    const uint64_t ss_b = frame[sched_switch::IRET_RIP_IDX];
+    if (!validate_iret_frame(parent, stack_base, f_rflags, rip_a, cs_a,
+                             rsp_a, ss_a) &&
+        !validate_iret_frame(parent, stack_base, f_rflags, rip_b, cs_b,
+                             rsp_b, ss_b)) {
+        return nullptr;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    return reinterpret_cast<uint64_t *>(saved_sp);
+#else
+    (void)frame;
+    return nullptr;
+#endif
+}
+
 } // namespace sched_verify
 } // namespace kernel

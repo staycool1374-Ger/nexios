@@ -33,13 +33,9 @@
 #include <kernel/arch/timer.hpp>
 #include <string.hpp>
 
-#if defined(CONFIG_ARCH_X86_64)
-#define TASK_STACK_PTR(t) ((t)->context.rsp)
-#elif defined(CONFIG_ARCH_AARCH64)
-#define TASK_STACK_PTR(t) ((t)->context.sp_el0)
-#elif defined(CONFIG_ARCH_RISCV64)
-#define TASK_STACK_PTR(t) ((t)->context.sp)
-#endif
+// (The saved-stack accessor that fed the waitpid RAX override is gone:
+// issue #614 moved that store into Scheduler::deliver_wait_status, whose
+// shared wait_pid_slot proof owns the per-arch frame offsets.)
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/rtc.hpp>
 #include <kernel/time/timer_srv.hpp>
@@ -171,8 +167,12 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                     // as wake_waiting_parent; the slot was certified mapped
                     // AND writable at waitpid entry but the store stays armed
                     // against remap races and uncertified kernel-task slots).
-                    if (p->waiting_child_status)
-                        (void)Scheduler::deliver_wait_status(*p, t->exit_code);
+                    // Issue #614: the helper also delivers the child PID into
+                    // the parent's saved return-value slot (shared frame
+                    // proof, kernel-task parents included), so the call is
+                    // unconditional.
+                    (void)Scheduler::deliver_wait_status(*p, t->exit_code,
+                                                         t->id);
                     // Issue #590 INV-WAIT-5: the parent owns this corpse;
                     // no zombie path and no deferred kill may free it
                     // while the owner lives.
@@ -197,28 +197,12 @@ uint64_t Syscall::sys_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                         p->remove_child(t);
                         t->parent_id = 0;
                     }
-                    // Wake the parent and override its saved RAX to return
-                    // the child's PID instead of -1 (the value set when
-                    // waitpid blocked).
-                    // Issue #597: the override below is valid only for a
-                    // trap-frame (is_user_) parent — see
-                    // wake_waiting_parent for the full rationale.
+                    // Wake the parent.  Issue #614: the PID override of
+                    // its saved return slot is done by deliver_wait_status
+                    // above (shared wait_pid_slot proof); the old inline
+                    // is_user_ store is gone.
                     if (p->state != TaskState::TERMINATED) {
                         Scheduler::set_task_ready(*p);
-                    if (p->is_user_ && TASK_STACK_PTR(p)) {
-                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                        auto *stack =
-                            reinterpret_cast<uint64_t *>(TASK_STACK_PTR(p));
-                        // Issue #221: riscv64 returns via frame idx9
-                        // (OFF_A0==72); frame[0] is x1/ra (see
-                        // wake_waiting_parent for the same fix).
-                        uint64_t *frame = stack;
-#if defined(CONFIG_ARCH_RISCV64)
-                        frame[9] = t->id;
-#else
-                        frame[0] = t->id;
-#endif
-                    }
                     }
                     break;
                 }

@@ -44,16 +44,9 @@
 #include <kernel/memory/vmm.hpp>
 #include <kernel/arch/timer.hpp>
 
-// Saved user-stack pointer accessor (mirrors syscall_handlers_misc.cpp:
-// x86_64 kernel_stack_top is the trap frame base; aarch64 sp_el0;
-// riscv64 sp).  Used only for the waitpid-style RAX override on wake.
-#if defined(CONFIG_ARCH_X86_64)
-#define THREAD_JOIN_STACK_PTR(t) ((t)->context.rsp)
-#elif defined(CONFIG_ARCH_AARCH64)
-#define THREAD_JOIN_STACK_PTR(t) ((t)->context.sp_el0)
-#elif defined(CONFIG_ARCH_RISCV64)
-#define THREAD_JOIN_STACK_PTR(t) ((t)->context.sp)
-#endif
+// (The waitpid-style saved-slot RAX override that used a per-file stack
+// accessor now lives in Scheduler::deliver_wait_status — issue #614's
+// shared wait_pid_slot proof — so this file carries no arch macro.)
 
 namespace kernel {
 
@@ -218,9 +211,11 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                 // Issue #588: fault-armed shared helper — same contract as
                 // wake_waiting_parent/sys_exit (certified mapped AND writable
                 // at waitpid entry, store stays armed; AC cleared on both
-                // paths, slot cleared inside the helper).
-                if (p->waiting_child_status)
-                    (void)Scheduler::deliver_wait_status(*p, t->exit_code);
+                // paths, slot cleared inside the helper).  Issue #614: the
+                // helper also delivers the thread PID into the parent's
+                // saved return slot (shared frame proof), so the call is
+                // unconditional.
+                (void)Scheduler::deliver_wait_status(*p, t->exit_code, t->id);
                 // Issue #590 INV-WAIT-5: the parent owns this corpse; no
                 // zombie path and no deferred kill may free it while the
                 // owner lives.
@@ -243,19 +238,9 @@ uint64_t Syscall::sys_thread_exit(uint64_t arg0, uint64_t, uint64_t, uint64_t,
                 }
                 if (p->state != TaskState::TERMINATED) {
                     Scheduler::set_task_ready(*p);
-                    // Issue #597: the a0/RAX override below is valid only
-                    // for a trap-frame (is_user_) parent — see
-                    // wake_waiting_parent for the full rationale.
-                    // NOLINTNEXTLINE(performance-no-int-to-ptr)
-                    uint64_t *frame = reinterpret_cast<uint64_t *>(
-                        THREAD_JOIN_STACK_PTR(p));
-                    if (p->is_user_ && frame) {
-#if defined(CONFIG_ARCH_RISCV64)
-                        frame[9] = t->id;
-#else
-                        frame[0] = t->id;
-#endif
-                    }
+                    // Issue #614: the saved-return-slot PID write is done
+                    // by deliver_wait_status above (shared wait_pid_slot
+                    // proof) — the old inline is_user_ store is gone.
                 }
                 break;
             }
