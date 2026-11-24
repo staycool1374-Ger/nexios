@@ -305,11 +305,28 @@ void dc_server_entry() {
     (void)self;
     Message msg;
     bool ok = false;
-    for (int i = 0; i < 100000 && !ok; ++i)
+    // Tick-bounded request wait (was a bare 100000-attempt recv spin):
+    // under a server-first dispatch interleaving that spin could exhaust
+    // before the client (prio 12) ever ran, exiting the server with
+    // done=0 while the client's send_sync parked forever (observed:
+    // "[DC-DIAG] recv-spin exhausted", ~40% of TCG runs post-merge).
+    // Yielding (hlt) each attempt lets the client dispatch; 400 ticks is
+    // ~0.4 s nominal, inside the 30 s watchdog even dilated, and the
+    // caller's asserts fail loud on expiry.
+    const uint64_t recv_ticks0 = arch::Timer::ticks();
+    while (!ok && arch::Timer::ticks() - recv_ticks0 < 400ULL) {
         ok = IPC::recv(msg);
+        if (!ok) {
+            Scheduler::reschedule();
+            arch::hlt();
+        }
+    }
     if (!ok)
         return;
-    for (uint64_t i = 0; i < 200000ULL && !g_dc_kill_seen; ++i) {
+    // Same tick-bounded contract for the kill rendezvous.
+    const uint64_t kill_ticks0 = arch::Timer::ticks();
+    while (!g_dc_kill_seen &&
+           arch::Timer::ticks() - kill_ticks0 < 400ULL) {
         Scheduler::reschedule();
         arch::hlt();
     }
@@ -808,11 +825,14 @@ JARVIS_TEST(ipc_call_death_token_cleanup, "PRE: none | POST: none") {
                  static_cast<uint64_t>(
                      ipc_rep::g_dc_late_send_dropped),
                  static_cast<uint64_t>(ipc_rep::g_dc_server_done));
-    JARVIS_ASSERT(ipc_rep::g_dc_server_done);
-    JARVIS_ASSERT(ipc_rep::g_dc_late_send_dropped);
+    // Drain BEFORE asserting: an early return from a failed assert would
+    // leave both TCBs (and their IPC objects) live and surface as a
+    // ResourceTracker delta that hides the real failure.
     test::terminate_and_drain2(server, client);
     ipc_rep::g_dc_server = nullptr;
     ipc_rep::g_dc_client = nullptr;
+    JARVIS_ASSERT(ipc_rep::g_dc_server_done);
+    JARVIS_ASSERT(ipc_rep::g_dc_late_send_dropped);
     JARVIS_TEST_PASS();
 }
 

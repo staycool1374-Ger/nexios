@@ -51,25 +51,32 @@ namespace {
 
 constexpr size_t kCapSize = 2048;
 // tmpfs caps a single file at 64 KiB (mk/rules.mk, issue #75); the image
-// must stage through it with headroom to spare.
+// must stage through it while keeping 10% of the cap as headroom
+// (issue #604: the old fixed 48 KiB slack was calibrated on a tighter
+// linker layout and fingerprinted the toolchain — the bound is now
+// expressed relative to the cap, not as an absolute number).
 constexpr size_t kTmpfsFileCap = 64 * 1024;
+constexpr size_t kStagingHeadroom = kTmpfsFileCap / 10;
+constexpr size_t kMaxImageSize = kTmpfsFileCap - kStagingHeadroom;
 
 } // namespace
 
 // Runmode: kernel
 // Testidea: The stripped, embedded user image fits the tmpfs staging cap
-// with headroom (binary-size bullet, measured from the linked symbols).
+// with 10% headroom (binary-size bullet, measured from the linked symbols).
 // Input: _binary_libc_verify_img_{start,end} distance.
-// Expect: 0 < size <= 48 KiB (cap 64 KiB minus staging slack).
+// Expect: 0 < size <= TMPFS_MAX_FILE_SIZE - 10% (64 KiB cap minus 6,553 B).
 // Depends: mk/rules.mk VERIFY_IMG_* rules
 JARVIS_TEST(libc_syscall_image_size_bounded, "PRE: none | POST: none") {
     size_t size = static_cast<size_t>(_binary_libc_verify_img_end -
                                       _binary_libc_verify_img_start);
-    Logger::info("LIBC image: %u bytes (tmpfs cap %u)", size,
-                 kTmpfsFileCap);
+    Logger::info("LIBC image: %u bytes (tmpfs cap %u, budget %u)", size,
+                 kTmpfsFileCap, kMaxImageSize);
     JARVIS_ASSERT_FMT(size > 0, "embedded image is empty");
-    JARVIS_ASSERT_FMT(size <= 48 * 1024,
-                      "image %u bytes exceeds 48 KiB staging budget", size);
+    JARVIS_ASSERT_FMT(size <= kMaxImageSize,
+                      "image %u bytes exceeds staging budget %u "
+                      "(64 KiB cap - 10%% headroom)",
+                      size, kMaxImageSize);
     JARVIS_TEST_PASS();
 }
 

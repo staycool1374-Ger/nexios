@@ -200,8 +200,15 @@ JARVIS_TEST(ipc_send_sync_probe_hit, "PRE: none | POST: none") {
                  IPC::ipc_block_with_pending_inbox_count() - pend0);
     JARVIS_ASSERT(ipc_inv4b::g_probe_sender_ok);
     JARVIS_ASSERT_EQ(77ULL, ipc_inv4b::g_probe_sender_reply_type);
-    // Never blocked: the wait was satisfied without arming.
-    JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
+    // Never blocked: the wait was satisfied without arming.  The
+    // attributable counter is the token-scoped pending-inbox publish
+    // (reply already queued when the wait armed).  The GLOBAL park-entries
+    // delta cannot carry this assertion: daemons park inside the same
+    // window, so it measured the system, not the sender (observed
+    // entries=3/5 with the fast path green).
+    JARVIS_ASSERT_EQ(pend0, IPC::ipc_block_with_pending_inbox_count());
+    // Drain before the remaining asserts so a failure cannot leave both
+    // TCBs live and surface as a ResourceTracker delta.
     test::terminate_and_drain2(sender, receiver);
     ipc_inv4b::g_probe_receiver = nullptr;
     JARVIS_TEST_PASS();

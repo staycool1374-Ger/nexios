@@ -1331,7 +1331,12 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
         11, 10);
     JARVIS_ASSERT(child != nullptr);
     parent->add_child(child);
-    g_ctx.child_id_ = child->id;
+    // Capture the id BEFORE dispatch: the parent's waitpid collect path
+    // deletes the child TCB, so reading child->id after the wake is a
+    // use-after-free (intermittent g_pidok mismatch once the frame is
+    // reused).
+    const uint64_t child_id = child->id;
+    g_ctx.child_id_ = child_id;
     // #590 RACE FIX (see test 4): arm before add_task.
     kernel::test::WaitPublishSeamScope seam(seam_observe_only);
     JARVIS_ASSERT(seam.armed());
@@ -1393,7 +1398,7 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
     kernel::test::wait_for_termination_safe(parent);
     g_blocked = g_seam_saw_blocked;
     g_unqueued = g_seam_saw_unqueued;
-    g_pidok = (g_seam_saw_pid == child->id) ? 1ULL : 0ULL;
+    g_pidok = (g_seam_saw_pid == child_id) ? 1ULL : 0ULL;
     disarm.dismiss();
     Scheduler::drain_zombie_list();
 

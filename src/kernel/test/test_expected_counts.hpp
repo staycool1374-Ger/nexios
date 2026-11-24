@@ -268,7 +268,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"debug_gcov",            4,    0,       0      },  // GCOV metadata
 
     // arch
-    {"arch_cross",           25,    0,       0      },  // cross-architecture tests (x86_64 only)
+    {"arch_cross",           27,    0,       0      },  // cross-architecture tests (x86_64 only)
 #if defined(CONFIG_ARCH_AARCH64)
     {"arch_aarch64",          0,   38,       0      },  // EL0/EL1 faults, frames, fork, PL011, barriers (aarch64 only)
 #endif

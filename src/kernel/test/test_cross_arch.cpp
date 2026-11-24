@@ -673,21 +673,26 @@ JARVIS_TEST(smep_user_exec_kernel_va_pf, "PRE: none | POST: none") {
 #if defined(CONFIG_ARCH_X86_64) && CONFIG_SMAP
 
 // Runmode: kernel
-// Testidea: v0.4.0 MP-4.2 — CR4.SMAP (bit 21) is set when CONFIG_SMAP and the
-// CPU supports it.
+// Testidea: v0.4.0 MP-4.2 — CR4.SMAP (bit 21) is set exactly when the CPU
+// advertises CPUID.SMAP.  Issue #606: the CR4 decision and the stac/clac
+// emission latch derive from the same boot CPUID read, so the bit and
+// arch::g_smap_supported must agree on both legs (SMAP host: both set;
+// -cpu max,smap=off: both clear — silent degrade, no #UD).
 JARVIS_TEST(smap_cr4_bit_set, "PRE: none | POST: none") {
-    JARVIS_ASSERT(arch::read_cr4() & (1ULL << 21));
+    const bool cr4_smap = (arch::read_cr4() & (1ULL << 21)) != 0;
+    JARVIS_ASSERT(cr4_smap == arch::g_smap_supported);
     JARVIS_TEST_PASS();
 }
 
-// Runmode: kernel
-// Testidea: v0.4.0 MP-4.5 — a kernel-context deref of a PRESENT user page with
-// AC=0 must #PF and be redirected by g_user_access_recover_ip (not panic).
-// A dispatched kernel task maps a user page into its own private PML4 and
-// deliberately derefs it with AC=0; the fault handler redirects to the
-// recover label inside the task, the task self-terminates cleanly, and
-// cleanup() reclaims the page + tables (zero PMM delta).
-JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
+namespace {
+
+// Shared SMAP probe (issue #606): dispatch a kernel task that maps a present
+// U/S=1 page into its own private PML4 and derefs it with AC=0.  With SMAP
+// live the #PF is redirected to the recover label (returns true; the task
+// self-terminates and cleanup() reclaims the page + tables, zero PMM
+// delta).  Without SMAP the deref is architecturally legal, the store
+// completes and the probe returns false.
+bool smap_deref_user_va_probe() {
     static volatile int g_recovered = 0;
     g_recovered = 0;
 
@@ -718,14 +723,48 @@ JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
             // user page + its PT pages and free_page reclaims the PML4.
         },
         11, 10);
-    JARVIS_ASSERT(t != nullptr);
+    if (t == nullptr)
+        return false;
 
     Scheduler::add_task(*t);
     Scheduler::reschedule();
     kernel::test::wait_for_termination_safe(t);
     kernel::test::terminate_and_drain(*t);
+    return g_recovered == 1;
+}
 
-    JARVIS_ASSERT(g_recovered == 1);
+} // namespace
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4.5 — a kernel-context deref of a PRESENT user page with
+// AC=0 must #PF and be redirected by g_user_access_recover_ip (not panic).
+// Issue #606: capability-aware — on a SMAP-less CPU (-cpu max,smap=off) the
+// deref is legal and no AC window exists, so the documented degrade passes;
+// the SMAP-host assertion below must stay (no blanket skip).
+JARVIS_TEST(smap_kernel_deref_user_va_without_ac_pf, "PRE: none | POST: none") {
+    if (!arch::g_smap_supported) {
+        // Documented degrade: no SMAP hardware -> no #PF to redirect.
+        JARVIS_TEST_PASS();
+        return;
+    }
+    JARVIS_ASSERT(smap_deref_user_va_probe());
+    JARVIS_ASSERT((arch::read_rflags() & (1ULL << 18)) == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4.2 / issue #606 — with SMAP live (normal TCG/KVM
+// boot) clac must still bite: a kernel deref of a U/S=1 page with AC=0 #PFs
+// and is redirected, proving the emission gate did not weaken the SMAP-host
+// path.  On a SMAP-hidden boot this test documents the degrade (the gated
+// leg below carries the negative side).
+JARVIS_TEST(smap_emission_live_when_cpu_has_smap, "PRE: none | POST: none") {
+    if (!arch::g_smap_supported) {
+        JARVIS_TEST_PASS();
+        return;
+    }
+    JARVIS_ASSERT((arch::read_cr4() & (1ULL << 21)) != 0);
+    JARVIS_ASSERT(smap_deref_user_va_probe());
     JARVIS_ASSERT((arch::read_rflags() & (1ULL << 18)) == 0);
     JARVIS_TEST_PASS();
 }
@@ -771,6 +810,57 @@ JARVIS_TEST(smap_stac_clac_roundtrip_ok, "PRE: none | POST: none") {
 
     JARVIS_ASSERT(g_val_readback == 0x1122334455667788ULL);
     JARVIS_ASSERT((arch::read_rflags() & (1ULL << 18)) == 0);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: v0.4.0 MP-4.5 / issue #606 — the stac/clac emission gate is
+// exactly the CPUID latch: CR4.SMAP and arch::g_smap_supported must agree,
+// and a safe_copy_to_user roundtrip must complete on BOTH legs.  On a
+// SMAP-hidden boot (NEXIOS_QEMU_CPU=max,smap=off) the wrappers no-op
+// instead of #UD — the pre-fix S1 signature was #UD inside
+// safe_copy_to_user — and AC stays 0 (no window where none exists).  On a
+// SMAP host the same roundtrip runs through the emitted stac/clac.
+JARVIS_TEST(smap_emission_gated_when_cpu_lacks_smap,
+            "PRE: none | POST: none") {
+    const bool cr4_smap = (arch::read_cr4() & (1ULL << 21)) != 0;
+    JARVIS_ASSERT(cr4_smap == arch::g_smap_supported);
+
+    static volatile uint64_t g_roundtrip_readback = 0;
+    static volatile uint64_t g_roundtrip_ac_after = 1;
+    auto *t = TaskControlBlock::create(
+        []() {
+            auto *self = Scheduler::current_task();
+            uint64_t phys = PMM::alloc_user_page();
+            if (!phys)
+                return;
+            uint64_t user_va = 0x70000000ULL;
+            VMM::map_page_in_pml4(user_va, phys, true, true,
+                                  self->get_page_table());
+            uint64_t val = 0xA5A5C3C35A5A9696ULL;
+            // Only the wrappers emit stac/clac here: they must no-op on a
+            // SMAP-less CPU (issue #606) instead of raising #UD.
+            bool ok = kernel::safe_copy_to_user(
+                reinterpret_cast<uint64_t *>(user_va), &val, 1);
+            g_roundtrip_ac_after = arch::read_rflags() & (1ULL << 18);
+            if (!ok)
+                return;
+            // Verify via HHDM (kernel mapping of the same frame).
+            // NOLINTNEXTLINE(performance-no-int-to-ptr)
+            g_roundtrip_readback =
+                *reinterpret_cast<volatile uint64_t *>(arch::HHDM_OFFSET +
+                                                       phys);
+        },
+        11, 10);
+    JARVIS_ASSERT(t != nullptr);
+
+    Scheduler::add_task(*t);
+    Scheduler::reschedule();
+    kernel::test::wait_for_termination_safe(t);
+    kernel::test::terminate_and_drain(*t);
+
+    JARVIS_ASSERT(g_roundtrip_readback == 0xA5A5C3C35A5A9696ULL);
+    JARVIS_ASSERT(g_roundtrip_ac_after == 0);
     JARVIS_TEST_PASS();
 }
 
@@ -1114,5 +1204,7 @@ void register_cross_arch_tests() {
     JARVIS_REGISTER_TEST(smap_cr4_bit_set);
     JARVIS_REGISTER_TEST(smap_kernel_deref_user_va_without_ac_pf);
     JARVIS_REGISTER_TEST(smap_stac_clac_roundtrip_ok);
+    JARVIS_REGISTER_TEST(smap_emission_live_when_cpu_has_smap);
+    JARVIS_REGISTER_TEST(smap_emission_gated_when_cpu_lacks_smap);
 #endif
 }
