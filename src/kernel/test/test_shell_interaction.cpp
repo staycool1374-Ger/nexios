@@ -36,8 +36,25 @@
 using namespace kernel;
 
 static void serial_flush_rx() {
-    while (arch::inb(arch::COM1_LSR) & 1) {
+    // #612: bounded drain — an unbounded while(LSR & DR) here wedged the
+    // KVM selftest at shell test 113 with zero output forever (Data-Ready
+    // stuck on the KVM UART/file-backend path; TCG never trips it).
+    // Cap the spin generously (healthy drains are a handful of bytes) and
+    // fail loud carrying IF/LSR/ticks so any future red arrives
+    // pre-diagnosed; green runs drain on empty exactly as before.
+    constexpr int kFlushCap = 10000000;
+    int i = 0;
+    while ((arch::inb(arch::COM1_LSR) & 1) != 0) {
         arch::inb(arch::COM1);
+        if (++i >= kFlushCap) {
+            JARVIS_ASSERT_FMT(false,
+                              "serial_flush_rx stuck: IF=%d LSR=0x%x ticks=%lu",
+                              arch::interrupts_enabled() ? 1 : 0,
+                              arch::inb(arch::COM1_LSR),
+                              arch::Timer::ticks());
+            return;
+        }
+        arch::pause();
     }
 }
 
