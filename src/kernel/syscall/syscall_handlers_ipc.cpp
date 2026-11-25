@@ -576,7 +576,7 @@ uint64_t Syscall::sys_reply_recv(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         reply_out, static_cast<uint32_t>(arg1),
         static_cast<uint32_t>(reply_len), next_req, next_cap);
     if (err != errors::IPC_ERR_OK)
-        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+        return static_cast<uint64_t>(errors::from_ipc_error(err));
     uint64_t copy_size = next_req.data_size;
     if (copy_size > IPC_MAX_MSG_SIZE)
         copy_size = IPC_MAX_MSG_SIZE;

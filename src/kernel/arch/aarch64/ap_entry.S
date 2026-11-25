@@ -66,7 +66,17 @@ aa64_ap_entry:
     isb
 
     // Enable MMU (M=1, I=1 — mirrors boot.S; C stays off like the BSP).
+    // PAN parity with BSP pan_init() (issue #613, twin of #611): probe
+    // ID_AA64MMFR1_EL1.PAN and set/clear SCTLR_EL1.PAN (bit 23) same as
+    // arch::pan_init(). Pre-existing gap, no UP change.
     mrs     x13, sctlr_el1
+    mrs     x10, id_aa64mmfr1_el1
+    ubfx    x10, x10, #20, #4
+    cbz     x10, 8f
+    orr     x13, x13, #(1 << 23)
+    b       10f
+8:  bic     x13, x13, #(1 << 23)
+10:
     mov     x10, #0x1001
     orr     x13, x13, x10
     dsb     sy
@@ -74,6 +84,16 @@ aa64_ap_entry:
     isb
     dsb     sy
     isb
+    // Default-deny PSTATE.PAN (bit 22 of S3_0_C4_C2_4) when FEAT_PAN present,
+    // mirroring pan_init() clac(). No-op on non-PAN CPUs.
+    mrs     x10, id_aa64mmfr1_el1
+    ubfx    x10, x10, #20, #4
+    cbz     x10, 11f
+    mrs     x10, S3_0_C4_C2_4
+    orr     x10, x10, #(1 << 22)
+    msr     S3_0_C4_C2_4, x10
+    isb
+11:
 
     // Higher half: stack, TPIDR, FPEN, then C.
     mov     sp, x18
