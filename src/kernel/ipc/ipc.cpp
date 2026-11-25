@@ -45,8 +45,8 @@ uint64_t g_ipc_block_with_pending_inbox = 0;
 // F1 (#545, INV-4b): in-guard try-once probe outcomes (diagnostic only).
 uint64_t g_ipc_probe_hit = 0;
 uint64_t g_ipc_probe_contended = 0;
-#endif
 uint64_t g_ipc_reply_dropped = 0;
+#endif
 } // namespace
 
 // ---------------------------------------------------------------------------
