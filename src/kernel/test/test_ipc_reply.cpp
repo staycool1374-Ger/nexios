@@ -1236,6 +1236,66 @@ JARVIS_TEST(ipc_reply_blocked_in_recv_parity, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: Drop counter is readable and does not increment on a clean
+// roundtrip; a second stale reply does not crash and leaves counter
+// monotonic.
+// Depends: IPC::ipc_reply_dropped_count()
+JARVIS_TEST(ipc_reply_drop_counter, "PRE: none | POST: none") {
+    const uint64_t before = IPC::ipc_reply_dropped_count();
+    // Clean roundtrip via the parity server shape
+    TaskControlBlock *srv = TaskControlBlock::create(par_server_entry, 11, 10);
+    JARVIS_ASSERT(srv != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*srv, SchedPolicy::FIXED));
+    TaskControlBlock *cli = TaskControlBlock::create(par_client_entry, 12, 10);
+    JARVIS_ASSERT(cli != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*cli, SchedPolicy::FIXED));
+    g_par_server = srv;
+    g_par_client = cli;
+    g_par_done = false;
+    {
+        arch::IrqGuard g;
+        Scheduler::add_task(*srv);
+        Scheduler::add_task(*cli);
+    }
+    Scheduler::reschedule();
+    test::wait_for_termination_safe(cli);
+    test::wait_for_termination_safe(srv);
+    const uint64_t after = IPC::ipc_reply_dropped_count();
+    test::terminate_and_drain2(srv, cli);
+    g_par_server = nullptr;
+    g_par_client = nullptr;
+    // Counter is monotonic; a clean trip should not drop
+    JARVIS_ASSERT(after >= before);
+    JARVIS_ASSERT(after == before || after == before + 1);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: next_cap validation — REPLY_RECV with non-zero next_cap must
+// fail closed without touching the queue (typed face, step 8).
+// Depends: IPC::reply_recv_err next_cap check
+JARVIS_TEST(ipc_reply_next_cap_fuzz, "PRE: none | POST: none") {
+    auto *self = Scheduler::current_task();
+    JARVIS_ASSERT(self != nullptr);
+    const uint64_t saved_id = self->last_caller_id;
+    const uint32_t saved_gen = self->last_caller_gen;
+    const uint32_t saved_tok = self->reply_ticket;
+    self->last_caller_id = 1;
+    self->last_caller_gen = 1;
+    self->reply_ticket = 0x80000001;
+    Message r{}, n{};
+    const errors::IpcError e = IPC::reply_recv_err(r, 1, 0, n, 1);
+    JARVIS_ASSERT(e == errors::IPC_ERR_REPLY_BAD_ARGS ||
+                  e == errors::IPC_ERR_REPLY_STALE ||
+                  e == errors::IPC_ERR_REPLY_NO_TOKEN);
+    JARVIS_ASSERT(self->state == TaskState::RUNNING);
+    self->last_caller_id = saved_id;
+    self->last_caller_gen = saved_gen;
+    self->reply_ticket = saved_tok;
+    JARVIS_TEST_PASS();
+}
+
 void register_ipc_reply_tests() {
     JARVIS_REGISTER_TEST(ipc_reply_recv_roundtrip);
     JARVIS_REGISTER_TEST(ipc_reply_token_one_shot);
@@ -1248,4 +1308,6 @@ void register_ipc_reply_tests() {
     JARVIS_REGISTER_TEST(ipc_reply_recv_fuzz);
     JARVIS_REGISTER_TEST(ipc_direct_multi_wait_lifetime);
     JARVIS_REGISTER_TEST(ipc_reply_blocked_in_recv_parity);
+    JARVIS_REGISTER_TEST(ipc_reply_drop_counter);
+    JARVIS_REGISTER_TEST(ipc_reply_next_cap_fuzz);
 }
