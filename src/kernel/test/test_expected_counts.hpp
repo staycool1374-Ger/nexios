@@ -50,7 +50,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"synchronization_pi_donation",  5, 0,   0      },  // PI donation mutex + semaphore
 
     // scheduler
-    {"scheduler_core",       41,    41,      41     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3 + 12-oracle family/must-zero gates x2
+    {"scheduler_core",       43,    43,      43     },  // reschedule/remove/reap/quantum/waitpid/FIFO/loadavg/rescue/evict/breaker + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3 + 12-oracle family/must-zero gates x2 + validate_switch x2 (#623/#624)
     {"scheduler_o1",         13,    0,       0      },  // O(1) priority map / ready queue
     {"scheduler_atomic",      6,    0,       0      },  // atomic context-switch invariants
     {"scheduler_sporadic",   25,    0,       0      },  // sporadic server policy
@@ -306,7 +306,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     // measured `dump-counts` output; 0 disables validation.
     {"core_basic",          98,   0,       0      },  // basic + data_structures + stack_cookie + pointer_isolation
     {"core_sync",           105,  0,       0      },  // synchronization_* incl. pip/pcp/donation/err_api + M2 park/order x8 + #545 Cycle C inv x2 + #578 depth-0 park x2
-    {"core_sched",          133,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3 + 12-oracle family/must-zero gates x2
+    {"core_sched",          135,  0,       0      },  // scheduler_* + #513 slot-safety x2 + M2 tick-watchdog x5 + #545 Cycle D resched-park x8 + #578 depth-0 park x3 + 12-oracle family/must-zero gates x2 + validate_switch x2
     {"core_task",           66,   0,       0      },  // task_*, fpu_invariants, kernel_top, per_cpu + F4 #557 x13 + F10 #563 x1 stubs
     {"core_memory",         136,  0,       0      },  // memory_* incl. NX/W^X pins + F10 #563 x7 stubs (row was stale at 125 vs 129 measured)
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
