@@ -1622,7 +1622,11 @@ extern "C" void panic(const char *msg);
 /// CONFIG_PROC_MGR_CARVE_FORK`-guarded (empty TU when 0); no runtime `if`
 /// on this knob. Default: 0.
 #ifndef CONFIG_PROC_MGR_CARVE_FORK
+#if defined(CONFIG_DEBUG)
+#define CONFIG_PROC_MGR_CARVE_FORK 1
+#else
 #define CONFIG_PROC_MGR_CARVE_FORK 0
+#endif
 #endif
 
 /// Maximum live VSpace table links kernel-wide (issue #564, F11 Stage C).
@@ -1735,7 +1739,7 @@ extern "C" void panic(const char *msg);
 /// 1 = cap-broker PD serves delegation policy; kernel enforces a cached
 /// per-CNode policy word. All cap-broker kernel code is `#if
 /// CONFIG_CAP_BROKER`-guarded (empty TU when 0); no runtime `if` on this
-/// knob. Default: 0.
+/// knob. Default: 1 on DEBUG, 0 on release (since M14/F11 Stage D b4d5ac153, 2x3 matrix 2026-11-25).
 #ifndef CONFIG_CAP_BROKER
 #define CONFIG_CAP_BROKER 0
 #endif
@@ -1745,7 +1749,7 @@ extern "C" void panic(const char *msg);
 /// 1 = wdog-mon PD serves supervision policy; kernel keeps tick-scan +
 /// death pulses + watchdogd mechanism. All wdog-mon kernel code is `#if
 /// CONFIG_WDOG_MON`-guarded (empty TU when 0); no runtime `if` on this
-/// knob. Default: 0.
+/// knob. Default: 1 on DEBUG, 0 on release (since M14/F11 Stage D b4d5ac153, 2x3 matrix 2026-11-25).
 #ifndef CONFIG_WDOG_MON
 #define CONFIG_WDOG_MON 0
 #endif
@@ -1755,7 +1759,7 @@ extern "C" void panic(const char *msg);
 /// 1 = procfs-srv PD serves node renders; kernel keeps fd-table +
 /// authorize + readdir_merged listing. All procfs-srv kernel code is `#if
 /// CONFIG_PROCFS_SRV`-guarded (empty TU when 0); no runtime `if` on this
-/// knob. Default: 0.
+/// knob. Default: 1 on DEBUG, 0 on release (since M14/F11 Stage D b4d5ac153, 2x3 matrix 2026-11-25).
 #ifndef CONFIG_PROCFS_SRV
 #define CONFIG_PROCFS_SRV 0
 #endif
@@ -1766,9 +1770,13 @@ extern "C" void panic(const char *msg);
 /// 1 = proc-mgr PD serves process policy; mechanism stays in caller
 /// context (Stage B). All proc-mgr kernel code is `#if
 /// CONFIG_PROC_MGR`-guarded (empty TU when 0); no runtime `if` on this
-/// knob. Default: 0.
+/// knob. Default: 1 on DEBUG, 0 on release (since M14/F11 Stage D b4d5ac153, 2x3 matrix 2026-11-25).
 #ifndef CONFIG_PROC_MGR
+#if defined(CONFIG_DEBUG)
+#define CONFIG_PROC_MGR 1
+#else
 #define CONFIG_PROC_MGR 0
+#endif
 #endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
