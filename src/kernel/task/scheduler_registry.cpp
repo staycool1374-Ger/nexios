@@ -456,6 +456,36 @@ void Scheduler::reset_ipc_wake_rescue_count_for_test() noexcept {
     __atomic_store_n(&ipc_wake_rescue_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
+Scheduler::SchedOracles Scheduler::read_sched_oracles() noexcept {
+    SchedOracles o{};
+    o.stuck_rescue = __atomic_load_n(&stuck_rescue_count_, __ATOMIC_RELAXED);
+    o.flagged_orphan_rescue = __atomic_load_n(&orphan_rescue_count_, __ATOMIC_RELAXED);
+    o.edf_orphan_rescue = __atomic_load_n(&edf_orphan_rescue_count_, __ATOMIC_RELAXED);
+    o.runq_nowhere_linked = __atomic_load_n(&runq_nowhere_linked_count_, __ATOMIC_RELAXED);
+    o.edf_chain_drop = __atomic_load_n(&edf_chain_drop_count_, __ATOMIC_RELAXED);
+    o.link_flag_desync = __atomic_load_n(&runq_link_flag_desync_count_, __ATOMIC_RELAXED);
+    o.desync_forced_clear = __atomic_load_n(&runq_desync_forced_clear_, __ATOMIC_RELAXED);
+    o.restore_drop_rebuilt = __atomic_load_n(&restore_drop_rebuilt_, __ATOMIC_RELAXED);
+    o.enqueue_refused_already = __atomic_load_n(&rqm_enqueue_refused_already_, __ATOMIC_RELAXED);
+    o.enqueue_refused_invalid = __atomic_load_n(&rqm_enqueue_refused_invalid_, __ATOMIC_RELAXED);
+    o.ipc_wake_rescue = __atomic_load_n(&ipc_wake_rescue_count_, __ATOMIC_RELAXED);
+    return o;
+}
+
+void Scheduler::reset_sched_oracles_for_test() noexcept {
+    __atomic_store_n(&stuck_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&edf_orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&runq_nowhere_linked_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&edf_chain_drop_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&runq_link_flag_desync_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&runq_desync_forced_clear_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&restore_drop_rebuilt_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&rqm_enqueue_refused_already_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&rqm_enqueue_refused_invalid_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&ipc_wake_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+}
+
 void Scheduler::balancer_tick() noexcept {
     // BSP-only cadence point (AP ticks are dispatch-only, spec §3.4.4).
     if (sched_cpu() != 0)

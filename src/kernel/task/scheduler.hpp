@@ -546,6 +546,27 @@ class Scheduler {
     static uint64_t edf_chain_drop_count() noexcept;
     /// @brief Reset the EDF chain-drop counter (test isolation).
     static void reset_edf_chain_drop_count_for_test() noexcept;
+
+    /// @brief Consolidated oracles snapshot (issue #609, C4 addendum).
+    ///        Single-family readout for the eleven violation oracles.
+    struct SchedOracles {
+        uint64_t stuck_rescue;
+        uint64_t flagged_orphan_rescue;
+        uint64_t edf_orphan_rescue;
+        uint64_t runq_nowhere_linked;
+        uint64_t edf_chain_drop;
+        uint64_t link_flag_desync;
+        uint64_t desync_forced_clear;
+        uint64_t restore_drop_rebuilt;
+        uint64_t enqueue_refused_already;
+        uint64_t enqueue_refused_invalid;
+        uint64_t ipc_wake_rescue;
+    };
+    /// @brief Lock-free snapshot of all eleven oracles (test/diagnostic only).
+    static SchedOracles read_sched_oracles() noexcept;
+    /// @brief Test-only reset of all eleven oracles (single rewind).
+    static void reset_sched_oracles_for_test() noexcept;
+
     /// @brief Clear every task's #578 park-test membership (seam teardown).
     ///        Bounded validity-guarded walk under scheduler_lock_.
     static void clear_park_test_members() noexcept;
