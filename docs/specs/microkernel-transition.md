@@ -735,11 +735,7 @@ Each subsection gives: (1) current vs end state and syscall mapping,
    `pid_reuse_safe_carved`, `carve_tcb_storage` (testbed lane). §8.10 ordering (literal): the SDF zero-cap row plus the
    taskdefs restart row land BEFORE the dispatch MOVE takes effect —
    the knob-gated flip is the last step, policy-gated on parity green.
-   ON-world test rule (Stage B evidence, #564): a verdict RPC parks the
-   caller visibly BLOCKED (bounded Call, INV-PROC-2), so tests must not
-   spin on `state == BLOCKED` to mean "reached its wait point", nor spin
-   above PD priority across a verdict RPC (the PD starves and the bound
-   fails the op closed — by design, never a hang).
+   ON-world test rule (Stage D evidence, #564): (a) `state == BLOCKED` is not a wait point under `CONFIG_PROC_MGR=1` — use the INV-WAIT-4 publication (`waiting_child_pid != 0` via `wait_point_reached()`) or an explicit caller-published flag (`g_reached_wait`); (b) any harness wait spanning a verdict RPC must set `Scheduler::SwSlots::need_resched()` before `hlt` (via `wait_until_yielding()`) because the PD (prio 4, SS bg 0) lies below the harness (prio 10, BUGS#021 non-preempt band, higher numeric = higher priority); (c) a deny surfaces as `SYS_ERR_GENERIC_FAIL` and is diagnosable only via the `TASK + 21` dmesg row (`kDmesgBase_TASK + 21` "Proc-mgr RPC bound expired"), so tests must surface that counter in FAIL messages.
 
 ### 8.9 Log server
 

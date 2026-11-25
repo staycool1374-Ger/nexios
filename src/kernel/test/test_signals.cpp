@@ -187,6 +187,8 @@ JARVIS_TEST(signal_kill_delivers, "PRE: none | POST: none") {
     static uint64_t g_sender_ret = 0;
     static uint64_t g_receiver_id = 0;
     static uint64_t g_registered = 0;
+    static uint64_t g_signal_ret = 0;
+    static uint64_t g_reached_wait = 0;
 
     sync::Semaphore gate;
     gate.init(0, 1);
@@ -201,8 +203,9 @@ JARVIS_TEST(signal_kill_delivers, "PRE: none | POST: none") {
                 static_cast<uint64_t>(Signal::SIGUSR1),
                 reinterpret_cast<uint64_t>(test_signal_handler), 0, 0,
                 nullptr);
-            if (ret == 0)
-                g_registered = 1;
+            g_signal_ret = ret;
+            g_registered = (ret == 0) ? 1ULL : 0ULL;
+            __atomic_store_n(&g_reached_wait, 1, __ATOMIC_RELEASE);
             sync::Semaphore *g = reinterpret_cast<sync::Semaphore *>(
                 self->user_data);
             g->wait();
@@ -217,9 +220,16 @@ JARVIS_TEST(signal_kill_delivers, "PRE: none | POST: none") {
     receiver->user_data = &gate;
     Scheduler::add_task(*receiver);
     Scheduler::reschedule();
-    while (receiver->state != TaskState::BLOCKED)
-        arch::pause();
-    JARVIS_ASSERT_EQ(1ULL, g_registered);
+    {
+        const bool reached = kernel::test::wait_until_yielding(
+            [&]{ return __atomic_load_n(&g_reached_wait, __ATOMIC_ACQUIRE) != 0 && receiver->state == TaskState::BLOCKED; }, 400);
+        JARVIS_ASSERT_FMT(reached,
+                          "signal_kill_delivers wait-point timeout: state=0x%lx reached=%lu ret=%lu",
+                          static_cast<uint64_t>(receiver->state),
+                          __atomic_load_n(&g_reached_wait, __ATOMIC_ACQUIRE),
+                          g_signal_ret);
+    }
+    JARVIS_ASSERT_FMT(g_registered == 1ULL, "signal ret=%lu (0 = installed)", g_signal_ret);
     g_receiver_id = receiver->id;
 
     // Sender: dispatches and calls KILL on the receiver.

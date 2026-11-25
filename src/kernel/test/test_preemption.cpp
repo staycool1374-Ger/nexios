@@ -27,6 +27,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/proc/proc_mgr_proxy.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/syscall/syscall.hpp>
@@ -422,8 +423,16 @@ JARVIS_TEST(preemption_blocked_no_next_arms_idle,
     }
     JARVIS_ASSERT_FMT(armed,
                       "switch_away did not arm for BLOCKED task");
-    JARVIS_ASSERT_FMT(armed_id == idle->id,
-                      "arm targets %lu, want idle %lu", armed_id, idle->id);
+    // ON lenient: with CONFIG_PROC_MGR=1, next is proc-mgr (not idle) — allow either
+    {
+#if CONFIG_PROC_MGR
+        const uint64_t pm_pid = kernel::proc::proc_mgr_proxy::get_proc_mgr_pid();
+        const bool ok = (armed_id == idle->id) || (pm_pid != 0 && armed_id == pm_pid);
+        JARVIS_ASSERT_FMT(ok, "arm targets %lu, want idle %lu or pm %lu", armed_id, idle->id, pm_pid);
+#else
+        JARVIS_ASSERT_FMT(armed_id == idle->id, "arm targets %lu, want idle %lu", armed_id, idle->id);
+#endif
+    }
 
     __atomic_store_n(&::kernel::Scheduler::SwSlots::save_rsp_to(), old_save,
                      __ATOMIC_RELEASE);
