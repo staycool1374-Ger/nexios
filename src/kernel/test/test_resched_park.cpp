@@ -465,8 +465,7 @@ constexpr uint64_t WHY_HELD_LOCK = 1ULL << 3;
 //         wait_for_termination
 JARVIS_TEST(resched_park_at0_woken_return, "PRE: none | POST: none") {
     JARVIS_ASSERT(test::park_seam_active());
-    Scheduler::reset_stuck_rescue_count_for_test();
-    Scheduler::reset_orphan_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     resched_park_test::g_a_blocked_seen = false;
     resched_park_test::g_handover = false;
     resched_park_test::g_a_depth = 0;
@@ -503,8 +502,8 @@ JARVIS_TEST(resched_park_at0_woken_return, "PRE: none | POST: none") {
                  Scheduler::resched_park_entries_count() - e0,
                  Scheduler::resched_park_wakeups_count() - w0,
                  Scheduler::resched_park_denied_count() - d0,
-                 Scheduler::stuck_rescue_count(),
-                 Scheduler::orphan_rescue_count(),
+                 Scheduler::read_sched_oracles().stuck_rescue,
+                 Scheduler::read_sched_oracles().flagged_orphan_rescue,
                  gs::park_test_ctx_unexpected_count() - u0,
                  gs::park_test_ctx_waive_count() - waive0);
     JARVIS_ASSERT(resched_park_test::g_handover);
@@ -523,8 +522,8 @@ JARVIS_TEST(resched_park_at0_woken_return, "PRE: none | POST: none") {
         JARVIS_ASSERT(Scheduler::resched_park_denied_count() > d0);
         JARVIS_ASSERT(Scheduler::resched_park_entries_count() == e0);
     }
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::orphan_rescue_count());
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().stuck_rescue);
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().flagged_orphan_rescue);
     JARVIS_ASSERT(gs::park_test_ctx_unexpected_count() == u0);
     test::terminate_and_drain2(task_a, task_b);
     resched_park_test::g_a_tcb = nullptr;
@@ -546,8 +545,7 @@ JARVIS_TEST(resched_park_at0_woken_return, "PRE: none | POST: none") {
 // Depends: reschedule C3 leg, deny bitmap, INV-C1 warn-only, park seam
 JARVIS_TEST(resched_park_at0_gate_negative, "PRE: none | POST: none") {
     JARVIS_ASSERT(test::park_seam_active());
-    Scheduler::reset_stuck_rescue_count_for_test();
-    Scheduler::reset_orphan_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     auto *self = Scheduler::current_task();
     JARVIS_ASSERT(self != nullptr);
     const uint64_t e0 = Scheduler::resched_park_entries_count();
@@ -585,8 +583,8 @@ JARVIS_TEST(resched_park_at0_gate_negative, "PRE: none | POST: none") {
                   0);
     JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
     JARVIS_ASSERT(sync::lock_denied_escape_count() == esc0);
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::orphan_rescue_count());
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().stuck_rescue);
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().flagged_orphan_rescue);
     JARVIS_ASSERT(gs::park_test_ctx_unexpected_count() == u0);
     JARVIS_ASSERT(self->state == TaskState::RUNNING);
     JARVIS_ASSERT_EQ(0ULL, sync::spinlock_held_by_current_count());
@@ -608,8 +606,7 @@ JARVIS_TEST(resched_park_at0_gate_negative, "PRE: none | POST: none") {
 // Depends: reschedule C3 leg, gate bitmap premises, park seam
 JARVIS_TEST(resched_park_at0_gate_bits_premise, "PRE: none | POST: none") {
     JARVIS_ASSERT(test::park_seam_active());
-    Scheduler::reset_stuck_rescue_count_for_test();
-    Scheduler::reset_orphan_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     auto *self = Scheduler::current_task();
     JARVIS_ASSERT(self != nullptr);
     // Premises: the single-task topology and the tickless build never hold
@@ -631,8 +628,8 @@ JARVIS_TEST(resched_park_at0_gate_bits_premise, "PRE: none | POST: none") {
                  "denied=%lu stuck=%lu orph=%lu unexp=%lu",
                  why, Scheduler::resched_park_entries_count() - e0,
                  Scheduler::resched_park_denied_count() - d0,
-                 Scheduler::stuck_rescue_count(),
-                 Scheduler::orphan_rescue_count(),
+                 Scheduler::read_sched_oracles().stuck_rescue,
+                 Scheduler::read_sched_oracles().flagged_orphan_rescue,
                  gs::park_test_ctx_unexpected_count() - u0);
     JARVIS_ASSERT(Scheduler::resched_park_denied_count() > d0);
     JARVIS_ASSERT_EQ(e0, Scheduler::resched_park_entries_count());
@@ -641,8 +638,8 @@ JARVIS_TEST(resched_park_at0_gate_bits_premise, "PRE: none | POST: none") {
     JARVIS_ASSERT((why & resched_park_test::WHY_IRQGUARD) != 0);
     JARVIS_ASSERT((why & (1ULL << 10)) == 0);
     JARVIS_ASSERT((why & (1ULL << 1)) == 0);
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::orphan_rescue_count());
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().stuck_rescue);
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().flagged_orphan_rescue);
     JARVIS_ASSERT(gs::park_test_ctx_unexpected_count() == u0);
     JARVIS_ASSERT(self->state == TaskState::RUNNING);
     JARVIS_ASSERT(Scheduler::current_task() == self);

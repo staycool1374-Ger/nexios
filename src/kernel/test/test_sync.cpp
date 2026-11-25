@@ -626,10 +626,10 @@ JARVIS_TEST(sync_notify_latch_no_rescue, "PRE: none | POST: none") {
     sync::Notify note;
     note.init();
     note.notify(1);
-    uint64_t before = Scheduler::stuck_rescue_count();
+    const auto before = Scheduler::read_sched_oracles();
     uint64_t value = note.wait();
     JARVIS_ASSERT_EQ(1ULL, value);
-    JARVIS_ASSERT_EQ(before, Scheduler::stuck_rescue_count());
+    JARVIS_ASSERT_EQ(before.stuck_rescue, Scheduler::read_sched_oracles().stuck_rescue);
     JARVIS_TEST_PASS();
 }
 

@@ -364,24 +364,14 @@ class Scheduler {
     /// @brief Latch class on @p cpu (diagnostic-only, issue #582 §4.3:
     ///        never read by any gate/service/escalation/panic path).
     static uint64_t lockpark_latch_class(uint64_t cpu) noexcept;
-    /// @brief Ready link/flag desync observations (issue #582 INV-RQ-3).
-    static uint64_t runq_link_flag_desync_count() noexcept;
-    /// @brief Hint-miss forced clears (issue #582 §5.5, flag+prio reset).
-    static uint64_t runq_desync_forced_clear_count() noexcept;
-    /// @brief restore_level failures rebuilt from all_tasks_ (#582 §5.5).
-    static uint64_t restore_drop_rebuilt_count() noexcept;
-    /// @brief Enqueue refusals: already-queued (issue #582 §5.5).
-    static uint64_t rqm_enqueue_refused_already_count() noexcept;
-    /// @brief Enqueue refusals: invalid TCB (issue #582 §5.5).
-    static uint64_t rqm_enqueue_refused_invalid_count() noexcept;
+    // Per-counter oracles removed — use read_sched_oracles() (SchedOracles family, #609).
     /// @brief Test-isolation reset for the apply-gate state (issue #582
     ///        B.2: defer windows, warned latches, all §B counters).
     ///        QE-owned wiring in test_isolate.cpp; defined here (production).
     static void scheduler_apply_gate_reset_for_test() noexcept;
     /// @brief Test-isolation reset for the park latch + counters (#582 §4).
     static void lockpark_reset_for_test() noexcept;
-    /// @brief Test-isolation reset for the runq desync counters (#582 §5).
-    static void runq_desync_reset_for_test() noexcept;
+    // runq_desync_reset_for_test removed — use reset_sched_oracles_for_test() (#609).
     /// @brief Count one already-queued enqueue refusal (issue #582 §5.5).
     ///        Called from the typed enqueue refusal path (RQM or Scheduler).
     static void note_rqm_enqueue_refused_already() noexcept;
@@ -404,6 +394,10 @@ class Scheduler {
     ///        Part 3, INV-RQ-5). Unconditional ERROR + op-ring dump:
     ///        a cycle is never healthy.
     static void note_edf_chain_cycle() noexcept;
+    /// @brief Count one EDF unreachable-from-head observation (issue #601,
+    ///        INV-RQ-6). Twice-confirmed, detection-only. Throttled warn
+    ///        1st/STRANDED_RESCUE_WARN_EVERY + op-ring dump on first.
+    static void note_edf_unreachable(uint64_t id, uint64_t cpu) noexcept;
     /// @brief Typed enqueue-refusal handling (issue #582 INV-RQ-2): the TCB
     ///        is byte-identical (API guarantee).  Counts + one-shot ERROR
     ///        with caller ra; the tick sweep rescues + counts.  No-op when
@@ -509,43 +503,35 @@ class Scheduler {
     static uint64_t up_cpu_count() noexcept;
     /// @brief Reset balancer migration counters (test isolation).
     static void reset_migration_counts() noexcept;
-    /// @brief Stranded-READY rescues since boot (issue #249 tick sweep).
-    ///        Detection-first telemetry: incremented only on an actual
-    ///        re-queue so a recurring wake-loss stays observable.
-    static uint64_t stuck_rescue_count() noexcept;
-    /// @brief Reset the rescue counter (test isolation).
-    static void reset_stuck_rescue_count_for_test() noexcept;
-    /// @brief Flagged-orphan READY rescues since boot (issue #582 tick
-    ///        sweep). READY + in_ready_queue_==1 + physically queued
-    ///        nowhere (refused re-enqueue on a stale flag). Detection-first
-    ///        telemetry like stuck_rescue_count_: must stay 0 in a healthy
-    ///        run — every firing proves a lost-consume on a wake path.
-    ///        Monotonic (never rewound by snapshot restore).
-    static uint64_t orphan_rescue_count() noexcept;
-    /// @brief Reset the flagged-orphan rescue counter (test isolation).
-    static void reset_orphan_rescue_count_for_test() noexcept;
-    /// @brief Nowhere-linked AlreadyQueued observations since boot (issue #600
-    ///        Part 1). The corrected two-loop scan (every CPU x every level)
-    ///        proved absence: a duplicate wake refused on a task linked
-    ///        nowhere. Detection-first telemetry like orphan_rescue_count_:
-    ///        must stay 0 in a healthy run. Monotonic (never rewound).
-    static uint64_t runq_nowhere_linked_count() noexcept;
-    /// @brief Reset the nowhere-linked counter (test isolation).
-    static void reset_runq_nowhere_linked_count_for_test() noexcept;
-    /// @brief EDF-eligible stranded-READY rescues since boot (issue #600
-    ///        Part 2 tick sweep + restore rebuild). Like stuck_rescue_count_
-    ///        but for the EDF blind spot (INV-RQ-4). Must stay 0 in a
-    ///        healthy run. Monotonic (never rewound).
-    static uint64_t edf_orphan_rescue_count() noexcept;
-    /// @brief Reset the EDF-orphan rescue counter (test isolation).
-    static void reset_edf_orphan_rescue_count_for_test() noexcept;
-    /// @brief EDF chain drops since boot (issue #600 Part 3): stale
-    ///        non-membership-marked heads force-dropped plus cycle
-    ///        fail-closed nukes. Detection-first, must stay 0 in a healthy
-    ///        run. Monotonic (never rewound).
-    static uint64_t edf_chain_drop_count() noexcept;
-    /// @brief Reset the EDF chain-drop counter (test isolation).
-    static void reset_edf_chain_drop_count_for_test() noexcept;
+    // Per-counter rescue oracles removed — use read_sched_oracles()/reset_sched_oracles_for_test() (SchedOracles family, #609).
+
+    /// @brief Consolidated oracles snapshot (issue #609, C4 addendum).
+    ///        Single-family readout for the twelve violation oracles (#601).
+    struct SchedOracles {
+        uint64_t stuck_rescue;
+        uint64_t flagged_orphan_rescue;
+        uint64_t edf_orphan_rescue;
+        uint64_t runq_nowhere_linked;
+        uint64_t edf_chain_drop;
+        uint64_t link_flag_desync;
+        uint64_t desync_forced_clear;
+        uint64_t restore_drop_rebuilt;
+        uint64_t enqueue_refused_already;
+        uint64_t enqueue_refused_invalid;
+        uint64_t ipc_wake_rescue;
+        uint64_t edf_unreachable;
+    };
+    /// @brief Lock-free snapshot of all twelve oracles (test/diagnostic only).
+    static SchedOracles read_sched_oracles() noexcept;
+    /// @brief Test-only reset of all twelve oracles (single rewind).
+    static void reset_sched_oracles_for_test() noexcept;
+    /// @brief EDF membership audit (issue #601, INV-AUDIT-1..5): read-only
+    ///        full-registry walk proving every in_edf_queue_ task is
+    ///        reachable from its CPU head; twice-confirmed residue counts
+    ///        via note_edf_unreachable. Detection-only, never mutates.
+    ///        Cadence: EDF_MEMBERSHIP_AUDIT_PERIOD ticks (~0.64 s at 100 Hz).
+    static void edf_membership_audit() noexcept;
+
     /// @brief Clear every task's #578 park-test membership (seam teardown).
     ///        Bounded validity-guarded walk under scheduler_lock_.
     static void clear_park_test_members() noexcept;
@@ -1607,30 +1593,34 @@ struct SwSlots {
     static uint64_t migration_count_[CONFIG_MAX_CPUS];
     /// @brief Stranded-READY rescues since boot (issue #249).  Tick-owned
     ///        write under scheduler_lock_; readers use atomics; reset by
-    ///        reset_stuck_rescue_count_for_test().
+    ///        reset_sched_oracles_for_test().
     static uint64_t stuck_rescue_count_;
     /// @brief Flagged-orphan READY rescues since boot (issue #582).  Same
     ///        ownership/discipline as stuck_rescue_count_; reset by
-    ///        reset_orphan_rescue_count_for_test().
+    ///        reset_sched_oracles_for_test().
     static uint64_t orphan_rescue_count_;
     /// @brief Nowhere-linked AlreadyQueued observations since boot (issue
     ///        #600 Part 1). Same ownership/discipline as
     ///        stuck_rescue_count_; reset by
-    ///        reset_runq_nowhere_linked_count_for_test().
+    ///        reset_sched_oracles_for_test().
     static uint64_t runq_nowhere_linked_count_;
     /// @brief EDF-eligible stranded-READY rescues since boot (issue #600
     ///        Part 2, INV-RQ-4). Same ownership/discipline as
     ///        stuck_rescue_count_; reset by
-    ///        reset_edf_orphan_rescue_count_for_test().
+    ///        reset_sched_oracles_for_test().
     static uint64_t edf_orphan_rescue_count_;
     /// @brief EDF chain drops since boot (issue #600 Part 3, INV-RQ-5).
     ///        Same ownership/discipline as stuck_rescue_count_; reset by
-    ///        reset_edf_chain_drop_count_for_test().
+    ///        reset_sched_oracles_for_test().
     static uint64_t edf_chain_drop_count_;
+    /// @brief EDF unreachable-from-head observations since boot (issue #601,
+    ///        INV-RQ-6). Same discipline; reset by
+    ///        reset_sched_oracles_for_test().
+    static uint64_t edf_unreachable_count_;
     /// @brief Ready link/flag desync observations since boot (issue #582
     ///        INV-RQ-3 oracle: link/flag mismatches seen by the typed API).
     ///        Same ownership/discipline as stuck_rescue_count_; reset by
-    ///        runq_desync_reset_for_test().
+    ///        reset_sched_oracles_for_test().
     static uint64_t runq_link_flag_desync_count_;
     /// @brief Hint-miss forced clears (issue #582 §5.5: flag+prio reset on
     ///        a provably unlinked node).  Same discipline; same reset.
@@ -1670,12 +1660,9 @@ struct SwSlots {
     ///        Detection-first: must stay 0 in a healthy run — every firing
     ///        proves a lost wakeup on an IPC wait channel.  Monotonic like
     ///        stuck_rescue_count_ (never rewound by snapshot restore);
-    ///        reset_ipc_wake_rescue_count_for_test() re-establishes 0.
+    ///        reset via SchedOracles family (reset_sched_oracles_for_test()).
     static uint64_t ipc_wake_rescue_count_;
-    /// @brief For-test reset of the IPC-wake rescue detector.
-    static void reset_ipc_wake_rescue_count_for_test() noexcept;
-    /// @brief IPC-wake rescues since reset (QE diagnostic).
-    static uint64_t ipc_wake_rescue_count() noexcept;
+    // Per-counter ipc_wake_rescue removed — use SchedOracles family (#609).
     /// @brief Starvation-breaker trigger (issue #598; was top-identity,
     ///        issue #242): consecutive ticks the victim band was denied
     ///        while lower non-idle READY levels wait before exactly one
@@ -1713,6 +1700,9 @@ struct SwSlots {
     ///        (observed self-sustaining flood). Log the 1st rescue and
     ///        every Nth; the exact counter stays the detector.
     static constexpr uint64_t STRANDED_RESCUE_WARN_EVERY = 64;
+    /// @brief EDF membership audit cadence (issue #601, INV-AUDIT-4):
+    ///        amortized walk once per 64 ticks (~0.64 s at 100 Hz).
+    static constexpr uint64_t EDF_MEMBERSHIP_AUDIT_PERIOD = 64;
     /// @brief Decayed load averages (issue #172, top loadavg triplet).
     ///        Integer EMA of the per-tick non-idle sample, updated on the
     ///        BSP on_tick() tail under scheduler_lock_; readers use

@@ -1100,6 +1100,11 @@ void Scheduler::on_tick() noexcept {
         (balancer_cadence % BALANCER_TICK_PERIOD) == 0) {
         balancer_tick();
     }
+    static constinit uint64_t edf_audit_cadence = 0;
+    ++edf_audit_cadence;
+    if ((edf_audit_cadence % EDF_MEMBERSHIP_AUDIT_PERIOD) == 0) {
+        edf_membership_audit();
+    }
 
     // Issue #158: quarantine timeout poll (BSP tick; internally
     // try-locked + bounded, safe to call every tick; no-op when empty).

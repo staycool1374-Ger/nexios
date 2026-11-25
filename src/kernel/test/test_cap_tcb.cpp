@@ -384,11 +384,11 @@ JARVIS_TEST(tcb_suspend_absorb_backstop_refuses_link, "PRE: none | POST: none") 
             errors::TCBCTL_ERR_OK)
             return;
         g_back0 = Scheduler::adm_wake_backstop_count();
-        g_orp0 = Scheduler::orphan_rescue_count();
+        g_orp0 = Scheduler::read_sched_oracles().flagged_orphan_rescue;
         // Direct enqueue of a parked task: refused, stays BLOCKED.
         Scheduler::enqueue_ready(*target);
         g_back1 = Scheduler::adm_wake_backstop_count();
-        g_orp1 = Scheduler::orphan_rescue_count();
+        g_orp1 = Scheduler::read_sched_oracles().flagged_orphan_rescue;
         g_blocked =
             (target->state == TaskState::BLOCKED) ? 1ULL : 0ULL;
         g_parked = Scheduler::admin_parked_of(*target) ? 1ULL : 0ULL;
