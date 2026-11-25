@@ -34,9 +34,10 @@
 ///        stack and kslot window keep their PMM/kslot allocation: they
 ///        are not address-space objects (INV-CARVE-2).
 
-#if CONFIG_PROC_MGR_CARVE_FORK
-
+#include <kernel/nexios_config.h>
 #include <kernel/proc/proc_fork_carve.hpp>
+
+#if CONFIG_PROC_MGR_CARVE_FORK
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/carve_binding.hpp>
 #include <kernel/cap/carved_object.hpp>
