@@ -29,6 +29,7 @@
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/arch/timer.hpp>
 #include <lib/scope_guard.hpp>
+#include <kernel/task/scheduler_integrity.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -1045,6 +1046,46 @@ JARVIS_TEST(sched_oracle_must_read_zero, "PRE: none | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: validate_switch must fail when next's RSP is under base (overflow)
+// Input: Create a test task, set its saved RSP to base-8 (underflow)
+// Expect: validate_switch returns false (currently true is bug #623)
+// Depends: sched_verify::validate_switch, task_stack_ptr
+JARVIS_TEST(scheduler_validate_switch_rsp_under_base, "PRE: none | POST: none") {
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    TaskPtr nxt = create_test_task(5, 10);
+    JARVIS_ASSERT(nxt.get() != nullptr);
+    uint64_t base = reinterpret_cast<uint64_t>(nxt->kernel_stack);
+    uint64_t &rsp_ref = sched_verify::task_stack_ptr(nxt.get());
+    uint64_t saved = rsp_ref;
+    rsp_ref = base - 8;
+    bool ok = sched_verify::validate_switch(cur, nxt.get(), "test_under");
+    rsp_ref = saved;
+    JARVIS_ASSERT(!ok);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: double magic check is redundant but should not affect correctness
+// Input: Valid tasks pass, corrupted magic fails
+// Expect: valid passes, bad magic fails
+// Depends: validate_switch
+JARVIS_TEST(scheduler_validate_switch_double_magic, "PRE: none | POST: none") {
+    auto *cur = Scheduler::current_task();
+    JARVIS_ASSERT(cur != nullptr);
+    TaskPtr nxt = create_test_task(5, 10);
+    JARVIS_ASSERT(nxt.get() != nullptr);
+    bool ok_valid = sched_verify::validate_switch(cur, nxt.get(), "test_valid");
+    JARVIS_ASSERT(ok_valid);
+    uint32_t saved_magic = nxt->magic;
+    nxt->magic = 0xDEADBEEF;
+    bool ok_bad = sched_verify::validate_switch(cur, nxt.get(), "test_bad");
+    nxt->magic = saved_magic;
+    JARVIS_ASSERT(!ok_bad);
+    JARVIS_TEST_PASS();
+}
+
 void register_scheduler_tests() {
     Logger::info("Registering scheduler tests");
     JARVIS_REGISTER_TEST(scheduler_task_count);
@@ -1070,4 +1111,6 @@ void register_scheduler_tests() {
     JARVIS_REGISTER_TEST(scheduler_breaker_lower_progress); // issue #242
     JARVIS_REGISTER_TEST(sched_oracle_family_single_reset); // #609 12-oracle gate
     JARVIS_REGISTER_TEST(sched_oracle_must_read_zero); // #609 12-oracle gate
+    JARVIS_REGISTER_TEST(scheduler_validate_switch_rsp_under_base);
+    JARVIS_REGISTER_TEST(scheduler_validate_switch_double_magic);
 }
