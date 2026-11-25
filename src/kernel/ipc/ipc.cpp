@@ -45,8 +45,8 @@ uint64_t g_ipc_block_with_pending_inbox = 0;
 // F1 (#545, INV-4b): in-guard try-once probe outcomes (diagnostic only).
 uint64_t g_ipc_probe_hit = 0;
 uint64_t g_ipc_probe_contended = 0;
-uint64_t g_ipc_reply_dropped = 0;
 #endif
+uint64_t g_ipc_reply_dropped = 0;
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -568,7 +568,9 @@ DeliverRule deliver_with_reply_rule(TaskControlBlock &dest,
         __atomic_load_n(&dest.reply_ticket, __ATOMIC_ACQUIRE);
     if (seen != 0) {
         if (expected_ticket != 0 && seen != expected_ticket) {
+#if defined(CONFIG_DEBUG)
             __atomic_fetch_add(&g_ipc_reply_dropped, 1, __ATOMIC_RELAXED);
+#endif
             return DeliverRule::Full;
         }
         const uint64_t cur_id = m.sender_id;
@@ -1788,7 +1790,11 @@ uint64_t IPC::ipc_probe_contended_count() noexcept {
 }
 
 uint64_t IPC::ipc_reply_dropped_count() noexcept {
+#if defined(CONFIG_DEBUG)
     return __atomic_load_n(&g_ipc_reply_dropped, __ATOMIC_RELAXED);
+#else
+    return 0;
+#endif
 }
 
 #if defined(CONFIG_DEBUG)
