@@ -652,11 +652,11 @@ JARVIS_TEST(scheduler_loadavg_step_math, "PRE: none | POST: none") {
 // Scheduler::on_tick().
 // Expect: Blind peek finds nothing dispatchable; after the tick the task
 // is re-queued, state still READY, rescue counter +1.
-// Depends: Scheduler::on_tick, stuck_rescue_count
+// Depends: Scheduler::on_tick, read_sched_oracles().stuck_rescue
 JARVIS_TEST(scheduler_stranded_ready_rescued, "PRE: none | POST: none") {
     TaskPtr rescued = create_test_task(5, 0);
     JARVIS_ASSERT(rescued.get() != nullptr);
-    Scheduler::reset_stuck_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     {
         arch::IrqGuard irq_guard;
         rescued->state = TaskState::READY;
@@ -670,7 +670,7 @@ JARVIS_TEST(scheduler_stranded_ready_rescued, "PRE: none | POST: none") {
             JARVIS_ASSERT_FMT(
                 peeked != rescued.get(), "peek returned the stranded task");
         }
-        uint64_t before = Scheduler::stuck_rescue_count();
+        uint64_t before = Scheduler::read_sched_oracles().stuck_rescue;
         Scheduler::on_tick();
         // Rescue + dispatchability: the sweep re-queued (counter +1) and
         // the task is either still queued or was already selected for
@@ -682,7 +682,7 @@ JARVIS_TEST(scheduler_stranded_ready_rescued, "PRE: none | POST: none") {
                           static_cast<uint64_t>(rescued->state),
                           rescued->in_ready_queue_ ? 1ULL : 0ULL,
                           Scheduler::SwSlots::next_task_id());
-        JARVIS_ASSERT_EQ(before + 1, Scheduler::stuck_rescue_count());
+        JARVIS_ASSERT_EQ(before + 1, Scheduler::read_sched_oracles().stuck_rescue);
         bool dispatchable = rescued->in_ready_queue_ ||
                             Scheduler::SwSlots::next_task_id() ==
                                 rescued->id;
@@ -705,13 +705,13 @@ JARVIS_TEST(scheduler_stranded_ready_rescued, "PRE: none | POST: none") {
 // dispatchable, rescue counter unchanged throughout (sweep never
 // fires — nothing stranded).
 // Depends: enqueue_ready deferral, next_task evict branch,
-// set_current consume, stuck_rescue_count
+// set_current consume, read_sched_oracles().stuck_rescue
 JARVIS_TEST(scheduler_evict_current_then_rescued, "PRE: none | POST: none") {
     TaskPtr evicted = create_test_task(5, 0);
     JARVIS_ASSERT(evicted.get() != nullptr);
     auto *harness = Scheduler::current_task();
     JARVIS_ASSERT(harness != nullptr);
-    Scheduler::reset_stuck_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     {
         arch::IrqGuard irq_guard;
         evicted->state = TaskState::READY;
@@ -736,7 +736,7 @@ JARVIS_TEST(scheduler_evict_current_then_rescued, "PRE: none | POST: none") {
         JARVIS_ASSERT(evicted->in_ready_queue_);
         JARVIS_ASSERT(evicted->state == TaskState::READY ||
                       evicted->state == TaskState::RUNNING);
-        JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
+        JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().stuck_rescue);
         Scheduler::dequeue_ready(*evicted);
     }
     JARVIS_TEST_PASS();
@@ -751,14 +751,14 @@ JARVIS_TEST(scheduler_evict_current_then_rescued, "PRE: none | POST: none") {
 // Expect: next_task evicts the victim (unlinked, flags false) and returns
 // another task; restore re-queues via consume; rescue counter stays zero
 // (evict-while-current is handled, never stranded).
-// Depends: next_task evict branch, set_current consume, stuck_rescue_count
+// Depends: next_task evict branch, set_current consume, read_sched_oracles().stuck_rescue
 JARVIS_TEST(scheduler_evict_queued_current_drops_safely,
             "PRE: none | POST: none") {
     TaskPtr victim = create_test_task(5, 0);
     JARVIS_ASSERT(victim.get() != nullptr);
     auto *harness = Scheduler::current_task();
     JARVIS_ASSERT(harness != nullptr);
-    Scheduler::reset_stuck_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     {
         arch::IrqGuard irq_guard;
         victim->state = TaskState::READY;
@@ -778,7 +778,7 @@ JARVIS_TEST(scheduler_evict_queued_current_drops_safely,
         JARVIS_ASSERT(victim->in_ready_queue_);
         JARVIS_ASSERT(victim->state == TaskState::READY ||
                       victim->state == TaskState::RUNNING);
-        JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
+        JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().stuck_rescue);
         Scheduler::dequeue_ready(*victim);
     }
     JARVIS_TEST_PASS();

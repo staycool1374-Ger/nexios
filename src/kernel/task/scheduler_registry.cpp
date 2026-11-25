@@ -347,66 +347,6 @@ void Scheduler::reset_starvation_breaker() noexcept {
     }
 }
 
-uint64_t Scheduler::stuck_rescue_count() noexcept {
-    return __atomic_load_n(&stuck_rescue_count_, __ATOMIC_RELAXED);
-}
-
-void Scheduler::reset_stuck_rescue_count_for_test() noexcept {
-    __atomic_store_n(&stuck_rescue_count_, 0ULL, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::orphan_rescue_count() noexcept {
-    return __atomic_load_n(&orphan_rescue_count_, __ATOMIC_RELAXED);
-}
-
-void Scheduler::reset_orphan_rescue_count_for_test() noexcept {
-    __atomic_store_n(&orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::runq_nowhere_linked_count() noexcept {
-    return __atomic_load_n(&runq_nowhere_linked_count_, __ATOMIC_RELAXED);
-}
-
-void Scheduler::reset_runq_nowhere_linked_count_for_test() noexcept {
-    __atomic_store_n(&runq_nowhere_linked_count_, 0ULL, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::edf_orphan_rescue_count() noexcept {
-    return __atomic_load_n(&edf_orphan_rescue_count_, __ATOMIC_RELAXED);
-}
-
-void Scheduler::reset_edf_orphan_rescue_count_for_test() noexcept {
-    __atomic_store_n(&edf_orphan_rescue_count_, 0ULL, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::edf_chain_drop_count() noexcept {
-    return __atomic_load_n(&edf_chain_drop_count_, __ATOMIC_RELAXED);
-}
-
-void Scheduler::reset_edf_chain_drop_count_for_test() noexcept {
-    __atomic_store_n(&edf_chain_drop_count_, 0ULL, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::runq_link_flag_desync_count() noexcept {
-    return __atomic_load_n(&runq_link_flag_desync_count_, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::runq_desync_forced_clear_count() noexcept {
-    return __atomic_load_n(&runq_desync_forced_clear_, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::restore_drop_rebuilt_count() noexcept {
-    return __atomic_load_n(&restore_drop_rebuilt_, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::rqm_enqueue_refused_already_count() noexcept {
-    return __atomic_load_n(&rqm_enqueue_refused_already_, __ATOMIC_RELAXED);
-}
-
-uint64_t Scheduler::rqm_enqueue_refused_invalid_count() noexcept {
-    return __atomic_load_n(&rqm_enqueue_refused_invalid_, __ATOMIC_RELAXED);
-}
-
 void Scheduler::note_rqm_enqueue_refused_already() noexcept {
     __atomic_fetch_add(&rqm_enqueue_refused_already_, 1ULL, __ATOMIC_RELAXED);
 }
@@ -427,14 +367,6 @@ void Scheduler::note_runq_link_flag_desync() noexcept {
     __atomic_fetch_add(&runq_link_flag_desync_count_, 1ULL, __ATOMIC_RELAXED);
 }
 
-void Scheduler::runq_desync_reset_for_test() noexcept {
-    __atomic_store_n(&runq_link_flag_desync_count_, 0ULL, __ATOMIC_RELAXED);
-    __atomic_store_n(&runq_desync_forced_clear_, 0ULL, __ATOMIC_RELAXED);
-    __atomic_store_n(&restore_drop_rebuilt_, 0ULL, __ATOMIC_RELAXED);
-    __atomic_store_n(&rqm_enqueue_refused_already_, 0ULL, __ATOMIC_RELAXED);
-    __atomic_store_n(&rqm_enqueue_refused_invalid_, 0ULL, __ATOMIC_RELAXED);
-}
-
 void Scheduler::clear_park_test_members() noexcept {
     SchedulerLockGuard guard(scheduler_lock_);
     uint64_t scanned = 0;
@@ -446,14 +378,6 @@ void Scheduler::clear_park_test_members() noexcept {
             continue;
         t->park_test_member = false;
     }
-}
-
-uint64_t Scheduler::ipc_wake_rescue_count() noexcept {
-    return __atomic_load_n(&ipc_wake_rescue_count_, __ATOMIC_RELAXED);
-}
-
-void Scheduler::reset_ipc_wake_rescue_count_for_test() noexcept {
-    __atomic_store_n(&ipc_wake_rescue_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
 Scheduler::SchedOracles Scheduler::read_sched_oracles() noexcept {

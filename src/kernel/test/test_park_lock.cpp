@@ -659,8 +659,7 @@ JARVIS_TEST(lock_park_at0_contention, "PRE: none | POST: none") {
     JARVIS_ASSERT(test::park_seam_active());
     sync::park_lock_reset_for_test();
     sync::spinlock_order_reset_for_test();
-    Scheduler::reset_stuck_rescue_count_for_test();
-    Scheduler::reset_orphan_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     const uint64_t park0 = sync::lock_park_count();
     const uint64_t exh0 = sync::lock_park_exhausted_count();
     const uint64_t fb0 = sync::lock_spin_fallback_count();
@@ -699,8 +698,8 @@ JARVIS_TEST(lock_park_at0_contention, "PRE: none | POST: none") {
                  sync::lock_denied_escape_count() - esc0,
                  sync::lock_foreign_depth_count() - for0,
                  sync::lock_park_if_clobber_count() - clob0,
-                 Scheduler::stuck_rescue_count(),
-                 Scheduler::orphan_rescue_count(),
+                 Scheduler::read_sched_oracles().stuck_rescue,
+                 Scheduler::read_sched_oracles().flagged_orphan_rescue,
                  gs::park_test_ctx_unexpected_count() - u0);
     JARVIS_ASSERT(park_test::g_holder_has_lock);
     JARVIS_ASSERT(park_test::g_contender_acquired);
@@ -724,8 +723,8 @@ JARVIS_TEST(lock_park_at0_contention, "PRE: none | POST: none") {
         JARVIS_ASSERT(sync::lock_denied_escape_count() == esc0);
         JARVIS_ASSERT(sync::lock_foreign_depth_count() == for0);
     }
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::orphan_rescue_count());
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().stuck_rescue);
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().flagged_orphan_rescue);
     JARVIS_ASSERT(gs::park_test_ctx_unexpected_count() == u0);
     test::terminate_and_drain2(holder, contender);
     sync::park_lock_reset_for_test();
@@ -751,8 +750,7 @@ JARVIS_TEST(lock_park_at0_arm_block_wake_retry, "PRE: none | POST: none") {
     JARVIS_ASSERT(test::park_seam_active());
     sync::park_lock_reset_for_test();
     sync::spinlock_order_reset_for_test();
-    Scheduler::reset_stuck_rescue_count_for_test();
-    Scheduler::reset_orphan_rescue_count_for_test();
+    Scheduler::reset_sched_oracles_for_test();
     const uint64_t park0 = sync::lock_park_count();
     const uint64_t exh0 = sync::lock_park_exhausted_count();
     const uint64_t fb0 = sync::lock_spin_fallback_count();
@@ -795,8 +793,8 @@ JARVIS_TEST(lock_park_at0_arm_block_wake_retry, "PRE: none | POST: none") {
                  sync::lock_park_exhausted_count() - exh0,
                  sync::lock_denied_escape_count() - esc0,
                  sync::lock_foreign_depth_count() - for0,
-                 Scheduler::stuck_rescue_count(),
-                 Scheduler::orphan_rescue_count(),
+                 Scheduler::read_sched_oracles().stuck_rescue,
+                 Scheduler::read_sched_oracles().flagged_orphan_rescue,
                  gs::park_test_ctx_unexpected_count() - u0);
     // BLOCKED observed by the holder, woken by the wheel, retry owns.
     JARVIS_ASSERT(park_d0::g_retry_holder_has_lock);
@@ -813,8 +811,8 @@ JARVIS_TEST(lock_park_at0_arm_block_wake_retry, "PRE: none | POST: none") {
     JARVIS_ASSERT(sync::lock_spin_fallback_count() == fb0);
     JARVIS_ASSERT(sync::lock_denied_escape_count() == esc0);
     JARVIS_ASSERT(sync::lock_foreign_depth_count() == for0);
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::stuck_rescue_count());
-    JARVIS_ASSERT_EQ(0ULL, Scheduler::orphan_rescue_count());
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().stuck_rescue);
+    JARVIS_ASSERT_EQ(0ULL, Scheduler::read_sched_oracles().flagged_orphan_rescue);
     JARVIS_ASSERT(gs::park_test_ctx_unexpected_count() == u0);
     park_d0::g_retry_contender_tcb = nullptr;
     test::terminate_and_drain2(holder, contender);
