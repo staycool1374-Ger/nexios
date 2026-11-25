@@ -438,12 +438,7 @@ static void run_syscall_affinity_group() {
 }
 static void run_tls_group() { register_tls_tests(); }
 static void run_process_lifecycle_group() { register_process_tests(); }
-static void run_process_elf_group() {
-#if CONFIG_PROC_MGR && !defined(CONFIG_DEBUG)
-    return;
-#endif
-    register_elf_tests();
-}
+static void run_process_elf_group() { register_elf_tests(); }
 static void run_elf_loader_group() { register_elf_loader_tests(); }
 static void run_libc_verify_group() { register_libc_verify_tests(); }
 static void run_elf_shared_group() { register_elf_shared_tests(); }
@@ -1274,9 +1269,6 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     // resolves the FIRST table match, so the names must differ.
     {"proc_elf",
      []() {
-#if CONFIG_PROC_MGR && !defined(CONFIG_DEBUG)
-         return;
-#endif
          run_process_lifecycle_group();
          run_process_elf_group();
          run_elf_loader_group();
