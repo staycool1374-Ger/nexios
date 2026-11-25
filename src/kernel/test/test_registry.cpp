@@ -71,6 +71,8 @@ void register_idle_cleanup_tests();
 void register_idle_monitor_tests();
 void register_testrunner_tests();
 void register_expected_panic_tests();
+void register_s582_park_tests();
+void register_s582_park_tripwire_tests();
 void register_freelist_consistency_tests();
 void register_infra_tests();
 void register_config_checks_tests();
@@ -338,6 +340,10 @@ static void run_basic_atomic_group() { register_atomic_tests(); }
 static void run_configuration_build_group() {
     register_buildsystem_tests();
     register_config_checks_tests();
+}
+static void run_s582_park_group() { register_s582_park_tests(); }
+static void run_lockpark_tripwire_group() {
+    register_s582_park_tripwire_tests();
 }
 static void run_data_structures_spsc_group() { register_spsc_tests(); }
 static void run_data_structures_buffer_pool_group() {
@@ -873,6 +879,10 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"ipc_lock_free", []() { run_ipc_lock_free_group(); }},
     {"ipc_robustness", []() { run_ipc_robustness_group(); }},
     {"ipc_pipe", []() { run_ipc_pipe_group(); }},
+
+    // -- s582 lock-park latch (issue #608) --
+    {"s582_park", []() { run_s582_park_group(); }},
+    {"lockpark_tripwire", []() { run_lockpark_tripwire_group(); }},
 
     // -- vfs: filesystem core and backends --
     {"vfs_core", []() { run_vfs_core_group(); }},

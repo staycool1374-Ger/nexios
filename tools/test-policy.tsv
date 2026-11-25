@@ -37,6 +37,7 @@ arch|riscv64|outer_timeout|1200
 group|heavy|members|core_basic core_sync core_sched core_task core_memory core_syscall core_tracing smp_multicpu ahci_live iommu_live deadline
 group|heavy|expect_timeout|250
 class|testrunner|expected_panic|1
+class|lockpark_tripwire|expected_panic|1
 class|task_fpu|expected_empty|1
 class|smp|arch_scope|x86_64
 class|smp_multicpu|arch_scope|x86_64

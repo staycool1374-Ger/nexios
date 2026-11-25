@@ -32,6 +32,7 @@
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/task/task_errors.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/hal/timer.hpp>
 #include "test_sched_helpers.hpp"
 
 using namespace kernel;
@@ -86,13 +87,22 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
     auto *receiver = TaskControlBlock::create(
         []() {
             Message msg;
-            // Receiver waits for the sender's message.  IPC::recv is
-            // non-blocking, so retry until it arrives (the sender always
-            // delivers before blocking in send_sync).
+            // Tick-bounded hlt poll (was bare 100k spin): under the M3 S1
+            // early-ticket + ordered publish the sender's path is now longer
+            // and a tight spin can exhaust before the sender (prio 12) is
+            // dispatched, starving the handshake. 800 ticks ~0.8s with hlt
+            // lets the tick-driven dispatch progress, matching the
+            // dc_server fix for the same race.
             bool ok = false;
-            for (int i = 0; i < 100000 && !ok; ++i)
+            const uint64_t ticks0 = arch::Timer::ticks();
+            while (!ok && arch::Timer::ticks() - ticks0 < 2000ULL) {
                 ok = IPC::recv(msg);
-            JARVIS_ASSERT(ok);
+                if (!ok) {
+                    Scheduler::reschedule();
+                    arch::hlt();
+                }
+            }
+            JARVIS_ASSERT_FMT(ok, "recv never ok after 2000 ticks");
             JARVIS_ASSERT_EQ(42ULL, msg.type);
             // Send reply
             Message reply;
@@ -101,10 +111,11 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
             reply.priority = 0;
             reply.data_size = 0;
             bool ok2 = IPC::send(msg.sender_id, reply);
-            JARVIS_ASSERT(ok2);
+            JARVIS_ASSERT_FMT(ok2, "reply send failed");
         },
         11, 10);
     JARVIS_ASSERT(receiver != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*receiver, SchedPolicy::FIXED));
     g_receiver_id = receiver->id;
 
     auto *sender = TaskControlBlock::create(
@@ -116,8 +127,10 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
             msg.data_size = 0;
 
             Message reply;
-            bool ok = IPC::send_sync(g_receiver_id, msg, reply);
-            JARVIS_ASSERT(ok);
+            const errors::IpcError err =
+                IPC::send_sync_err(g_receiver_id, msg, reply);
+            JARVIS_ASSERT_FMT(err == errors::IPC_ERR_OK,
+                              "send_sync err=%lu", static_cast<uint64_t>(err));
             JARVIS_ASSERT_EQ(99ULL, reply.type);
         },
         // Shorter period than the receiver (10): the sender runs first
@@ -126,6 +139,7 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
         // order by creation-tick phase under EDF and flake the handshake.
         12, 5);
     JARVIS_ASSERT(sender != nullptr);
+    JARVIS_ASSERT(Scheduler::set_sched_policy(*sender, SchedPolicy::FIXED));
 
     // Register both cooperating tasks under one IrqGuard so a timer tick
     // cannot split the registration (cookbook Rule 2).
@@ -136,19 +150,12 @@ JARVIS_TEST(ipc_send_sync_was_blocked_restores_state,
     }
 
     auto *original = Scheduler::current_task();
-    // Yield to the *receiver* (not the sender): next_task() skips whatever is
-    // current_task_ptr_, so yielding to the receiver makes next_task() return
-    // the sender first — by priority (12 > 11) and by deadline (period 5 < 10,
-    // issue #19).  The sender sends and blocks; the receiver then runs and
-    // replies.  Yielding to the sender would set it current and get it
-    // skipped+discarded, deadlocking the handshake.
-    kernel::test::yield_as(*receiver);
-
-    // Drive the sender→receiver→sender handshake to completion.  A single
-    // reschedule() defers the context switch; the timer ISR dispatches the
-    // peer tasks on subsequent ticks.  Busy-wait WITHOUT reschedule()
-    // so the timer ISR can acquire the scheduler lock without contention.
+    // Let the scheduler pick the highest priority (sender 12 > receiver 11)
+    // without yield_as — the early-ticket path now holds the scheduler lock
+    // longer and yield_as's set_current can race the ticket publish.
+    // A plain reschedule lets the tick dispatch the sender first deterministically.
     Scheduler::reschedule();
+    arch::hlt();
     kernel::test::wait_for_termination_safe(sender);
     kernel::test::wait_for_termination_safe(receiver);
 
@@ -282,27 +289,31 @@ JARVIS_TEST(ipc_kernel_block_skips_sti, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: #609 stub (BLOCKED-BY #604 C4) — the level-triggered IPC-wake
-// sweep (scheduler_tick.cpp:692-740, CONFIG_IPC_WAKE_SWEEP_ENABLE) is
-// detection-first: over the ipc + ipc_blocking classes the cumulative rescue
-// counter must read 0. Any firing proves a lost wakeup on a plain-recv
-// channel (BLOCKED + blocked_in_recv + own inbox non-empty at tick).
-// Landing this unblocks retirement of the sweep leg (#604 item 2).
-// Input: (stub) none. Assertion phase: no reset — cumulative readout after
-// every other ipc group has run in the same boot (gate registered LAST in
-// both the ipc_blocking class and the ipc aggregate).
-// Expect: (stub) JARVIS_TEST_PASS. Assertion phase:
-// read_sched_oracles().ipc_wake_rescue == 0.
-// Depends: (stub) NOTHING — Scheduler::ipc_wake_rescue_count() is private
-// (scheduler.hpp:1507 -> :1672, no friend); the reachable readout is the C4
-// family field read_sched_oracles().ipc_wake_rescue.
+// Testidea: The level-triggered IPC-wake sweep (scheduler_tick.cpp:692-740,
+// CONFIG_IPC_WAKE_SWEEP_ENABLE) is detection-first: over the ipc +
+// ipc_blocking classes the cumulative rescue counter must read 0. Any firing
+// proves a lost wakeup on a plain-recv channel (BLOCKED + blocked_in_recv +
+// own inbox non-empty at tick). This is the cumulative gate for #604 item 2.
+// Input: No reset — cumulative readout after every other ipc group has run
+// in the same boot (gate registered LAST in both the ipc_blocking class and
+// the ipc aggregate). Each QEMU class run is its own boot, so the counter
+// reflects only this class.
+// Expect: read_sched_oracles().ipc_wake_rescue == 0 and the 12-field family
+// remains structurally 12 x uint64_t.
+// Depends: Scheduler::read_sched_oracles().ipc_wake_rescue (12-field family)
 JARVIS_TEST(ipc_wake_rescue_must_be_zero, "PRE: none | POST: none") {
     /* Pseudocode:
-     *   // NO reset: the gate is the cumulative class soak. Each class run is
-     *   // its own QEMU boot, so the counter reflects only this class.
+     *   // NO reset: the gate is the cumulative class soak.
+     *   static_assert(sizeof(SchedOracles) == 12 * 8);
      *   o = Scheduler::read_sched_oracles();
-     *   assert o.ipc_wake_rescue == 0;   // 11-field POD (C4)
+     *   assert o.ipc_wake_rescue == 0;
      */
+    static_assert(sizeof(kernel::Scheduler::SchedOracles) ==
+                      12 * sizeof(uint64_t),
+                  "SchedOracles must stay 12 x uint64_t (#601)");
+    const kernel::Scheduler::SchedOracles family =
+        kernel::Scheduler::read_sched_oracles();
+    JARVIS_ASSERT_EQ(0ULL, family.ipc_wake_rescue);
     JARVIS_TEST_PASS();
 }
 
