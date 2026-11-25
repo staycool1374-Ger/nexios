@@ -283,6 +283,7 @@ class IPC {
     ///        run (proves the Dekker path is live).
     static uint64_t ipc_probe_hit_count() noexcept;
     static uint64_t ipc_probe_contended_count() noexcept;
+    static uint64_t ipc_reply_dropped_count() noexcept;
 #if defined(CONFIG_DEBUG)
     /// @brief Record a try-once probe outcome (CONFIG_DEBUG only).
     static void ipc_probe_hit_mark() noexcept;

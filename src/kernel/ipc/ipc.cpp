@@ -45,6 +45,7 @@ uint64_t g_ipc_block_with_pending_inbox = 0;
 // F1 (#545, INV-4b): in-guard try-once probe outcomes (diagnostic only).
 uint64_t g_ipc_probe_hit = 0;
 uint64_t g_ipc_probe_contended = 0;
+uint64_t g_ipc_reply_dropped = 0;
 #endif
 } // namespace
 
@@ -560,11 +561,16 @@ enum class DeliverRule : uint8_t {
 /// @return Pushed (pushed untokened), PushedReply (pushed + stamped) or
 ///         Full (queue full — nothing pushed).
 DeliverRule deliver_with_reply_rule(TaskControlBlock &dest,
-                                    Message &m) noexcept {
+                                     Message &m,
+                                     uint32_t expected_ticket = 0) noexcept {
     sync::ParkLockGuard guard(dest.msg_queue.lock_, "mq:deliver");
     const uint32_t seen =
         __atomic_load_n(&dest.reply_ticket, __ATOMIC_ACQUIRE);
     if (seen != 0) {
+        if (expected_ticket != 0 && seen != expected_ticket) {
+            __atomic_fetch_add(&g_ipc_reply_dropped, 1, __ATOMIC_RELAXED);
+            return DeliverRule::Full;
+        }
         const uint64_t cur_id = m.sender_id;
         const uint64_t want_id =
             __atomic_load_n(&dest.reply_wait_dest_id, __ATOMIC_ACQUIRE);
@@ -882,10 +888,24 @@ bool IPC::recv_via_cap(cap::Endpoint *ep, Message &msg) noexcept {
 errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
                                      Message &reply,
                                      uint32_t reply_max_size) noexcept {
-    // M3 (F3/Q2): mint the one-shot reply token.  It is armed on the
-    // publish below; the request itself carries no token (the token
-    // lives only in tickets and sidecar stamps).
+    // M3 (F3/Q2): mint the one-shot reply token.  It is armed before the
+    // request publish so a server dequeueing the request never observes
+    // tag+flag with ticket==0 (transient STALE window); the early ticket
+    // is live for the deliver's expected-ticket check.
     const uint32_t token = mint_reply_token();
+    // Early ticket arm: publish tag/flag/ticket order before send so the
+    // request arrival always sees a live ticket (see step 5 publish block
+    // for the second store that re-publishes after tag).
+    {
+        auto *early_cur = Scheduler::current_task();
+        if (early_cur) {
+            __atomic_store_n(&early_cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_ticket, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_ticket, token | kReplyTicketLive, __ATOMIC_RELEASE);
+        }
+    }
     // Send the request message
     if (!send(dest_id, msg)) {
         auto *fail_cur = Scheduler::current_task();
@@ -1168,6 +1188,16 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
     // one, even when the send itself fails closed early.  The request
     // carries no token (the token lives only in tickets and stamps).
     const uint32_t token = mint_reply_token();
+    {
+        auto *early_cur = Scheduler::current_task();
+        if (early_cur) {
+            __atomic_store_n(&early_cur->reply_wait_dest_id, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_wait_dest_gen, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_wait, false, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_ticket, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&early_cur->reply_ticket, token | kReplyTicketLive, __ATOMIC_RELEASE);
+        }
+    }
     if (!send(dest_id, msg)) {
         auto *fail_cur = Scheduler::current_task();
         if (fail_cur) {
@@ -1384,6 +1414,8 @@ errors::IpcError IPC::reply_recv_err(Message &reply, uint32_t reply_type,
         __atomic_load_n(&caller->reply_ticket, __ATOMIC_ACQUIRE) == 0) {
         return errors::IPC_ERR_REPLY_STALE;
     }
+    // Defensive: reply path never leaves blocked_in_recv true on a RUNNING return
+    cur->blocked_in_recv = false;
     // Build the outbound reply and deliver through the token rule (which
     // atomically consumes the ticket, stamps, and pushes; the wake gates
     // run inside deliver's caller path as for a plain send).
@@ -1394,7 +1426,8 @@ errors::IpcError IPC::reply_recv_err(Message &reply, uint32_t reply_type,
         out.data[i] = reply.data[i];
     out.sender_id = cur->id;
     {
-        const DeliverRule rule = deliver_with_reply_rule(*caller, out);
+        const uint32_t expected = __atomic_load_n(&caller->reply_ticket, __ATOMIC_ACQUIRE);
+        const DeliverRule rule = deliver_with_reply_rule(*caller, out, expected);
         if (rule != DeliverRule::PushedReply)
             return errors::IPC_ERR_REPLY_STALE;
     }
@@ -1443,6 +1476,7 @@ errors::IpcError IPC::reply_recv_err(Message &reply, uint32_t reply_type,
                     cur->remaining_ticks = cur->period_ticks;
                     arch::sti();
                 }
+                cur->blocked_in_recv = false;
                 cur->state = TaskState::RUNNING;
                 return errors::IPC_ERR_OK;
             }
@@ -1474,6 +1508,7 @@ errors::IpcError IPC::reply_recv_err(Message &reply, uint32_t reply_type,
                 cur->remaining_ticks = cur->period_ticks;
                 arch::sti();
             }
+            cur->blocked_in_recv = false;
             cur->state = TaskState::RUNNING;
             return errors::IPC_ERR_OK;
         }
@@ -1505,6 +1540,7 @@ errors::IpcError IPC::reply_recv_err(Message &reply, uint32_t reply_type,
                     wake_sender(cur->msg_queue, *cur);
                 cur->remaining_ticks = cur->period_ticks;
                 arch::sti();
+                cur->blocked_in_recv = false;
                 cur->state = TaskState::RUNNING;
                 return errors::IPC_ERR_OK;
             }
@@ -1749,6 +1785,10 @@ uint64_t IPC::ipc_probe_contended_count() noexcept {
 #else
     return 0;
 #endif
+}
+
+uint64_t IPC::ipc_reply_dropped_count() noexcept {
+    return __atomic_load_n(&g_ipc_reply_dropped, __ATOMIC_RELAXED);
 }
 
 #if defined(CONFIG_DEBUG)
