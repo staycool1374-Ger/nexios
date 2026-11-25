@@ -298,6 +298,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"sched_admission",       11,   0,       0      },  // enforced admission + fork guards
     {"sched_admission_verify", 7,   0,       0      },  // admission journeys
     {"aperiodic_servers",     7,    0,       0      },  // DS/BG server modes
+    {"srv_timer",             3,    0,       0      },  // timer-srv stubs for #194
 
     // Structural/semantic aggregates. Values are filled from measured
     // `dump-counts` output; 0 disables validation.

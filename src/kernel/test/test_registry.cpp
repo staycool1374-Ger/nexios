@@ -245,7 +245,7 @@ void register_sched_edf_tests();
 void register_sched_admission_tests();
 void register_sched_admission_verify_tests();
 void register_aperiodic_servers_tests();
-void register_syscall_fastpath_tests();
+void register_srv_timer_tests();void register_syscall_fastpath_tests();
 void register_fpu_inv_tests();
 void register_cap_shm_tests();
 void register_cap_death_tests();
@@ -698,6 +698,8 @@ static void run_aperiodic_servers_group() {
     register_aperiodic_servers_tests();
 }
 
+static void run_srv_timer_group() { register_srv_timer_tests(); }
+
 // ---- Test class table ----
 // Each class maps to a helper above (one definition site per
 // register_*_tests() call).  The "safe" class is the curated TF_RELEASE
@@ -1116,6 +1118,7 @@ static constexpr kernel::test::TestClass g_test_classes[] = {
     {"sched_admission_verify",
      []() { run_sched_admission_verify_group(); }},
     {"aperiodic_servers", []() { run_aperiodic_servers_group(); }},
+    {"srv_timer", []() { run_srv_timer_group(); }},
 
     // -- safe: curated subset with TF_RELEASE tests --
     {"safe",
