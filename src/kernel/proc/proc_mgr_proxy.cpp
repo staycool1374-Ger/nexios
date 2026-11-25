@@ -180,11 +180,14 @@ void proc_mgr_on_restart(uint64_t pid) {
 
 errors::ProcError proc_mgr_call(const ProcMgrRpc &req,
                                ProcMgrRpc &reply_out) noexcept {
+    auto *cur = Scheduler::current_task();
+    if (cur && cur->id == get_proc_mgr_pid()) {
+        return errors::PROC_ERR_SELF_REFUSED;
+    }
     const uint64_t pid = get_proc_mgr_pid();
     if (pid == 0 || !proc_mgr_alive()) {
         return errors::PROC_ERR_NO_SERVER;
     }
-    auto *cur = Scheduler::current_task();
     if (cur == nullptr) {
         return errors::PROC_ERR_NO_SERVER;
     }

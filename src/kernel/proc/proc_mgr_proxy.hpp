@@ -76,9 +76,11 @@ void proc_mgr_on_restart(uint64_t pid);
 /// @brief Bounded verdict Call: validate server, bounded wait, validated
 ///        reply (sender + epoch + owner + op echo). No lock is held across
 ///        the Call (INV-PROC-3); expiry fails closed with RPC_BOUND, a dead
-///        or missing server with NO_SERVER (INV-PROC-2).
+///        or missing server with NO_SERVER (INV-PROC-2). Self-call from the
+///        proc-mgr PD itself is refused as SELF_REFUSED before any IPC
+///        (INV-PROC-14, bounded no-block, never starves the PD).
 /// @return OK with *reply_out filled on a validated reply, else the typed
-///         refusal (NO_SERVER / RPC_BOUND / BAD_REQUEST) with no block held.
+///         refusal (NO_SERVER / RPC_BOUND / BAD_REQUEST / SELF_REFUSED) with no block held.
 [[nodiscard]] errors::ProcError proc_mgr_call(const ProcMgrRpc &req,
                                              ProcMgrRpc &reply_out) noexcept;
 /// @brief QE probe seam (procfs_srv shape): BIND round-trip status.

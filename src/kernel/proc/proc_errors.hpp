@@ -42,7 +42,8 @@ namespace kernel::errors {
     X(CAP_TABLE_FULL, 4, "Proc-mgr hold table full (child refused)")            \
     X(HOLD_INSTALL_FAILED, 5, "Proc-mgr hold install rolled back")              \
     X(BAD_REQUEST, 6, "Proc-mgr malformed verdict or request")                  \
-    X(STOP_REFUSED, 7, "Proc-mgr stop refused (no PD policy yet)")
+    X(STOP_REFUSED, 7, "Proc-mgr stop refused (no PD policy yet)")                             \
+    X(SELF_REFUSED, 8, "Proc-mgr self-call refused (no self-RPC)")
 
 /// @brief Proc-mgr boundary errors.
 // NOLINTNEXTLINE(performance-enum-size)

@@ -594,19 +594,28 @@ uint64_t ProcSvc::kill(uint64_t arg0, uint64_t arg1, uint64_t, uint64_t,
     auto *t = Scheduler::find_task(target_pid);
     if (!t)
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+    // Issue #564 F11 Stage D D3 (INV-PROC-15): self-fatal kill bypasses
+    // any proc-mgr verdict/RPC and terminates via the trap funnel; all
+    // other kill paths (self non-fatal, other-target) consult the verdict.
+    // Verdict never blocks suicide; fatal classification stays kernel-owned.
+    const bool self_fatal =
+        (t == syscall_task() &&
+         (signal_is_fatal(sig) || !t->has_signal_handler(sig)));
+    if (!self_fatal) {
 #if CONFIG_PROC_MGR
-    // Issue #564 F11 Stage B (Q-B2 deny-only, INV-PROC-11): the proxy
-    // supplies deny vs allow only — it never reclassifies fatal vs
-    // handler. Delivery stays pending_signals + the #593 trap-funnel leg
-    // in the invoking client's context below, and the gate is called as
-    // the client (the unchanged parent_id branch decides).
-    if (proc_verdict_denied(
-            ask_proc_verdict(ProcMgrOp::KILL, target_pid, sig, 0))) {
-        return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
-    }
+        // Issue #564 F11 Stage B (Q-B2 deny-only, INV-PROC-11): the proxy
+        // supplies deny vs allow only — it never reclassifies fatal vs
+        // handler. Delivery stays pending_signals + the #593 trap-funnel leg
+        // in the invoking client's context below, and the gate is called as
+        // the client (the unchanged parent_id branch decides).
+        if (proc_verdict_denied(
+                ask_proc_verdict(ProcMgrOp::KILL, target_pid, sig, 0))) {
+            return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
+        }
 #endif
+    }
     if (t == syscall_task()) {
-        if (signal_is_fatal(sig) || !t->has_signal_handler(sig)) {
+        if (self_fatal) {
             // Issue #593: the self-fatal leg runs the trap funnel
             // (terminate_err_from_trap) instead of marking TERMINATED
             // inline — the funnel dequeues, marks, zombie-lists, then wakes
