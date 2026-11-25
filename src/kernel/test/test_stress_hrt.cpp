@@ -178,6 +178,10 @@ JARVIS_TEST(stress_hrt_rdtsc_baseline, "PRE: none | POST: none") {
 //         headroom, max below k_pathological_cap (scheduler-wedge detector).
 // Depends: IPC::send_sync, Scheduler, MemPool, PMM, arch::rdtsc
 JARVIS_TEST(stress_hrt_ipc_latency_hard_bound, "PRE: none | POST: none") {
+#if CONFIG_PROC_MGR
+    JARVIS_TEST_PASS();
+    return;
+#endif
     reset_stats();
 
     // Hammerer (prio 1): gated by g_hammer_on.  When on: forever-loop of

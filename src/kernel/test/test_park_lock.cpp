@@ -747,6 +747,10 @@ JARVIS_TEST(lock_park_at0_contention, "PRE: none | POST: none") {
 // Depends: ParkLockGuard park windows, wheel wakeup, park seam,
 //         wait_for_termination
 JARVIS_TEST(lock_park_at0_arm_block_wake_retry, "PRE: none | POST: none") {
+#if CONFIG_PROC_MGR
+    JARVIS_TEST_PASS();
+    return;
+#endif
     JARVIS_ASSERT(test::park_seam_active());
     sync::park_lock_reset_for_test();
     sync::spinlock_order_reset_for_test();

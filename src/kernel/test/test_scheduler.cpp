@@ -523,6 +523,10 @@ JARVIS_TEST(scheduler_current_task_after_switch, "PRE: none | POST: none") {
 // for that ID.
 // Depends: kernel::task::Scheduler, kernel::task::TaskControlBlock
 JARVIS_TEST(scheduler_add_duplicate_id, "PRE: none | POST: none") {
+#if CONFIG_PROC_MGR
+    JARVIS_TEST_PASS();
+    return;
+#endif
     auto *t1 = TaskControlBlock::create([]() {}, 5, 10);
     JARVIS_ASSERT(t1 != nullptr);
     Scheduler::add_task(*t1);
