@@ -33,6 +33,7 @@
 
 #include <test.hpp>
 #include <kernel/arch/irq_guard.hpp>
+#include <kernel/arch/timer.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/task.hpp>
 #include "task_ptr.hpp"
@@ -221,6 +222,45 @@ inline void wait_for_termination_safe(TaskControlBlock *task) {
         return;
     while (TaskControlBlock::is_valid(task) &&
            task->state != TaskState::TERMINATED) {
+        __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
+                         __ATOMIC_RELEASE);
+        arch::hlt();
+    }
+}
+
+/// @brief Publication-aware wait-point predicate for ON-world waitpid.
+///        Under CONFIG_PROC_MGR=1 the caller parks BLOCKED for the verdict
+///        RPC before publishing waiting_child_pid, so BLOCKED alone is not
+///        a wait-point. INV-WAIT-4 publishes waiting_child_pid last inside
+///        one IrqGuard after BLOCKED, so BLOCKED && waiting_child_pid !=0
+///        proves the wait point was reached. TERMINATED/REAPED also satisfy.
+inline bool wait_point_reached(const TaskControlBlock *task) noexcept {
+    if (!TaskControlBlock::is_valid(task)) {
+        return true;
+    }
+    if (task->state == TaskState::TERMINATED ||
+        task->state == TaskState::REAPED) {
+        return true;
+    }
+    if (task->state == TaskState::BLOCKED) {
+        return __atomic_load_n(&task->waiting_child_pid, __ATOMIC_ACQUIRE) != 0;
+    }
+    return false;
+}
+
+/// @brief Tick-bounded yielding wait for harness-band dispatch.
+///        Sets need_resched before hlt so the proc-mgr PD (prio 4, inside
+///        harness band prio 10 per BUGS#021) can run during the wait.
+///        Bounded by tick_budget ticks, no allocation, no pause spin.
+template <typename Pred> inline bool wait_until_yielding(Pred pred, uint64_t tick_budget) noexcept {
+    const uint64_t ticks0 = arch::Timer::ticks();
+    while (true) {
+        if (pred()) {
+            return true;
+        }
+        if (arch::Timer::ticks() - ticks0 >= tick_budget) {
+            return false;
+        }
         __atomic_store_n(&::kernel::Scheduler::SwSlots::need_resched(), true,
                          __ATOMIC_RELEASE);
         arch::hlt();

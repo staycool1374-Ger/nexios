@@ -120,6 +120,17 @@ uint64_t sched_row_count(uint64_t code) {
     return n;
 }
 
+uint64_t task_row_count(uint64_t code) {
+    uint64_t n = 0;
+    log::DmesgService::instance().for_each(
+        [&](const log::LogEntry &e) {
+            if (e.subsystem == log::ErrorSubsystem::TASK &&
+                e.error_code == code)
+                ++n;
+        });
+    return n;
+}
+
 // Full funnel: dequeue + TERMINATED + exit 42 + wake + release.
 // Exercises steps 4b/5 (consumption precedence) + 8/9 (released-
 // corpse collect) together.
@@ -221,18 +232,14 @@ JARVIS_TEST(waitpid_zombie_over_new_child, "PRE: none | POST: none") {
     // host load and wedges the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -251,14 +258,16 @@ JARVIS_TEST(waitpid_zombie_over_new_child, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     kernel::test::wait_for_termination_safe(parent);
@@ -318,18 +327,14 @@ JARVIS_TEST(waitpid_two_children_sequential_reap, "PRE: none | POST: none") {
     // the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -348,14 +353,16 @@ JARVIS_TEST(waitpid_two_children_sequential_reap, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     kernel::test::wait_for_termination_safe(parent);
@@ -533,18 +540,14 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
     // still distinguishes wedged-BLOCKED from garbage.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -563,14 +566,16 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     // Missed-fire leg (issue #590 window preemption): a timer tick may
@@ -584,12 +589,10 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
     // result==1/status==42; only the hook leg runs the seam funnel.
     bool hook_leg = true;
     {
-        constexpr uint64_t MISSED_FIRE_TICKS = 100ULL;
-        const uint64_t ticks0 = arch::Timer::ticks();
-        while (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0 &&
-               arch::Timer::ticks() - ticks0 < MISSED_FIRE_TICKS)
-            arch::hlt();
-        if (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0) {
+        constexpr uint64_t MISSED_FIRE_TICKS = 5000ULL;
+        const bool hook_arrived = kernel::test::wait_until_yielding(
+            [&]{ return __atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) != 0; }, MISSED_FIRE_TICKS);
+        if (!hook_arrived) {
             const uint64_t published = __atomic_load_n(
                 &parent->waiting_child_pid, __ATOMIC_ACQUIRE);
             if (published == 0) {
@@ -617,7 +620,7 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
             JARVIS_ASSERT_FMT(false,
                               "termination wait expired: state=0x%lx valid=%lu "
                               "ticks=%lu result=%lu hook=%lu/%lu/%lu/%lu "
-                              "wcpid=%lu",
+                              "wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - t0,
@@ -627,7 +630,8 @@ JARVIS_TEST(waitpid_missed_wake_consumed_collects, "PRE: none | POST: none") {
                               g_hook_woke,
                               g_hook_released,
                               __atomic_load_n(&parent->waiting_child_pid,
-                                              __ATOMIC_ACQUIRE));
+                                              __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     // The parent task has exited (TERMINATED) by construction; its own
@@ -730,18 +734,14 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
     // wedges the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -760,14 +760,16 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     // Missed-fire leg (same gap as test 4, no-wake funnel variant): a
@@ -780,12 +782,10 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
     // branch itself is covered whenever the hook fires normally.
     bool hook_leg5 = true;
     {
-        constexpr uint64_t MISSED_FIRE_TICKS = 100ULL;
-        const uint64_t ticks0 = arch::Timer::ticks();
-        while (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0 &&
-               arch::Timer::ticks() - ticks0 < MISSED_FIRE_TICKS)
-            arch::hlt();
-        if (__atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) == 0) {
+        constexpr uint64_t MISSED_FIRE_TICKS = 5000ULL;
+        const bool hook_arrived = kernel::test::wait_until_yielding(
+            [&]{ return __atomic_load_n(&g_hook_entered, __ATOMIC_ACQUIRE) != 0; }, MISSED_FIRE_TICKS);
+        if (!hook_arrived) {
             const uint64_t published = __atomic_load_n(
                 &parent->waiting_child_pid, __ATOMIC_ACQUIRE);
             if (published == 0) {
@@ -844,7 +844,7 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
             JARVIS_ASSERT_FMT(false,
                               "termination wait expired: state=0x%lx valid=%lu "
                               "ticks=%lu result=%lu hook=%lu/%lu/%lu/%lu "
-                              "wcpid=%lu hook_leg=%lu rescued=%lu",
+                              "wcpid=%lu hook_leg=%lu rescued=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - t0,
@@ -856,7 +856,8 @@ JARVIS_TEST(waitpid_released_corpse_collects, "PRE: none | POST: none") {
                               __atomic_load_n(&parent->waiting_child_pid,
                                               __ATOMIC_ACQUIRE),
                               hook_leg5 ? 1ULL : 0ULL,
-                              rescued ? 1ULL : 0ULL);
+                              rescued ? 1ULL : 0ULL,
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     const uint64_t cid5 = g_ctx.child_id_;
@@ -1030,18 +1031,14 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
     // host load and wedges the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -1060,14 +1057,16 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     kernel::test::wait_for_termination_safe(parent);
@@ -1077,7 +1076,14 @@ JARVIS_TEST(waitpid_reverify_wildcard_collects, "PRE: none | POST: none") {
     g_seam_victim = nullptr;
     Scheduler::drain_zombie_list();
 
-    JARVIS_ASSERT_EQ(42ULL, g_status);
+    JARVIS_ASSERT_FMT(g_status == 42ULL,
+                      "waitpid_reverify_wildcard: g_status=%lu state=0x%lx wcpid=%lu hook=%lu/%lu/%lu/%lu result=%lu task21=%lu",
+                      g_status,
+                      static_cast<uint64_t>(parent->state),
+                      __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                      g_hook_entered, g_hook_marked, g_hook_woke, g_hook_released,
+                      g_ctx.result_,
+                      task_row_count(log::kDmesgBase_TASK + 21));
     JARVIS_ASSERT_EQ(1ULL, g_nofind);
     JARVIS_TEST_PASS();
 }
@@ -1178,18 +1184,14 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
     // host load and wedges the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -1208,14 +1210,16 @@ JARVIS_TEST(waitpid_reverify_never_fights_the_wake, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     // Tick-bounded termination wait for both waiter and racer: expiry
@@ -1313,14 +1317,10 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
             auto done = [&p]() {
                 if (p == nullptr)
                     return true;
-                const uint8_t raw = __atomic_load_n(
-                    reinterpret_cast<const uint8_t *>(&p->state),
-                    __ATOMIC_ACQUIRE);
-                const TaskState st = static_cast<TaskState>(raw);
-                return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+                return kernel::test::wait_point_reached(p);
             };
             const uint64_t ticks0 = arch::Timer::ticks();
-            constexpr uint64_t CHILD_WAIT_TICKS = 400ULL;
+            constexpr uint64_t CHILD_WAIT_TICKS = 5000ULL;
             while (!done() &&
                    arch::Timer::ticks() - ticks0 < CHILD_WAIT_TICKS) {
                 __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -1355,18 +1355,14 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
     // pause-spin here starves TCG ticks under host load.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -1385,14 +1381,16 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     kernel::test::wait_for_termination_safe(parent);
@@ -1402,7 +1400,14 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
     disarm.dismiss();
     Scheduler::drain_zombie_list();
 
-    JARVIS_ASSERT_EQ(1ULL, g_blocked);
+    JARVIS_ASSERT_FMT(g_blocked == 1ULL,
+                      "publish_order: g_blocked=%lu g_unqueued=%lu g_pidok=%lu state=0x%lx wcpid=%lu hook=%lu/%lu/%lu/%lu result=%lu task21=%lu",
+                      g_blocked, g_unqueued, g_pidok,
+                      static_cast<uint64_t>(parent->state),
+                      __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                      g_hook_entered, g_hook_marked, g_hook_woke, g_hook_released,
+                      g_ctx.result_,
+                      task_row_count(log::kDmesgBase_TASK + 21));
     JARVIS_ASSERT_EQ(1ULL, g_unqueued);
     JARVIS_ASSERT_EQ(1ULL, g_pidok);
     JARVIS_ASSERT_EQ(1ULL, g_ctx.result_);
@@ -1517,18 +1522,14 @@ JARVIS_TEST(waitpid_kill_self_wakes_parent, "PRE: none | POST: none") {
     // host load and wedges the suite with no FAIL line.
     JARVIS_ASSERT(arch::interrupts_enabled());
     {
-        constexpr uint64_t DISPATCH_WAIT_TICKS = 400ULL;
+        constexpr uint64_t DISPATCH_WAIT_TICKS = 5000ULL;
         constexpr uint64_t DISPATCH_WAIT_NS = 8000000000ULL;
         constexpr uint64_t DISPATCH_WAIT_SPINS = 200000000ULL;
         const uint64_t ticks0 = arch::Timer::ticks();
         const uint64_t ns0 = arch::Timer::ns_monotonic();
         uint64_t spins = 0;
         auto dispatched = [&parent]() {
-            const uint8_t raw = __atomic_load_n(
-                reinterpret_cast<const uint8_t *>(&parent->state),
-                __ATOMIC_ACQUIRE);
-            const TaskState st = static_cast<TaskState>(raw);
-            return st == TaskState::BLOCKED || st == TaskState::TERMINATED;
+            return kernel::test::wait_point_reached(parent);
         };
         while (!dispatched()) {
             __atomic_store_n(&Scheduler::SwSlots::need_resched(), true,
@@ -1547,14 +1548,16 @@ JARVIS_TEST(waitpid_kill_self_wakes_parent, "PRE: none | POST: none") {
         if (!dispatched()) {
             JARVIS_ASSERT_FMT(false,
                               "dispatch wait expired: state=0x%lx valid=%lu "
-                              "ticks=%lu ns=%lu spins=%lu",
+                              "ticks=%lu ns=%lu spins=%lu wcpid=%lu task21=%lu",
                               static_cast<uint64_t>(parent->state),
                               TaskControlBlock::is_valid(parent) ? 1ULL : 0ULL,
                               arch::Timer::ticks() - ticks0,
                               (ns0 != 0)
                                   ? (arch::Timer::ns_monotonic() - ns0)
                                   : 0ULL,
-                              spins);
+                              spins,
+                              __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE),
+                              task_row_count(log::kDmesgBase_TASK + 21));
         }
     }
     kernel::test::wait_for_termination_safe(parent);
