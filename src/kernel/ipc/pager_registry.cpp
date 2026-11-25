@@ -320,7 +320,7 @@ void PagerRegistry::drain_task(kernel::TaskControlBlock &t) {
     // kMaxClients * CONFIG_PAGER_MAX_COMMITTED_PAGES could overflow by up to
     // kMaxClients entries when every matched slot had a full committed table
     // AND a pending fault — 8 * 17 = 136 > 128).
-    Work work[kMaxClients * (CONFIG_PAGER_MAX_COMMITTED_PAGES + 1)];
+    Work work[kMaxClients * (CONFIG_PAGER_MAX_COMMITTED_PAGES + 1)] = {};
     size_t n = 0;
     {
         SpinLockGuard<sync::SpinLock> guard(s_lock_);
@@ -381,7 +381,7 @@ void PagerRegistry::snapshot_reset() {
         cap::FrameCap *pin;
         uint64_t va;
     };
-    Work work[kMaxClients * CONFIG_PAGER_MAX_COMMITTED_PAGES];
+    Work work[kMaxClients * CONFIG_PAGER_MAX_COMMITTED_PAGES] = {};
     size_t n = 0;
     {
         SpinLockGuard<sync::SpinLock> guard(s_lock_);
@@ -751,7 +751,7 @@ void PagerRegistry::watchdog_scan(uint64_t now) {
         uint64_t client_id;
         uint32_t client_gen;
     };
-    Work work[kMaxClients];
+    Work work[kMaxClients] = {};
     size_t n = 0;
     {
         for (size_t i = 0; i < kMaxClients; ++i) {
