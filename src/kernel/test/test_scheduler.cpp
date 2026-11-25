@@ -390,9 +390,13 @@ JARVIS_TEST(scheduler_waitpid_wakes_parent,
     }
 
     Scheduler::reschedule();
-    while (parent->state != TaskState::BLOCKED &&
-           parent->state != TaskState::TERMINATED)
-        arch::pause();
+    {
+        const bool reached = kernel::test::wait_until_yielding(
+            [&]{ return kernel::test::wait_point_reached(parent); }, 5000);
+        JARVIS_ASSERT_FMT(reached, "scheduler_waitpid_wakes_parent: wait_point not reached state=0x%lx wcpid=%lu",
+                          static_cast<uint64_t>(parent->state),
+                          __atomic_load_n(&parent->waiting_child_pid, __ATOMIC_ACQUIRE));
+    }
     kernel::test::wait_for_termination_safe(parent);
     bool child_removed = Scheduler::find_task(context.child_id_) == nullptr;
     if (!child_removed) {
