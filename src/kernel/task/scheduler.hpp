@@ -394,6 +394,10 @@ class Scheduler {
     ///        Part 3, INV-RQ-5). Unconditional ERROR + op-ring dump:
     ///        a cycle is never healthy.
     static void note_edf_chain_cycle() noexcept;
+    /// @brief Count one EDF unreachable-from-head observation (issue #601,
+    ///        INV-RQ-6). Twice-confirmed, detection-only. Throttled warn
+    ///        1st/STRANDED_RESCUE_WARN_EVERY + op-ring dump on first.
+    static void note_edf_unreachable(uint64_t id, uint64_t cpu) noexcept;
     /// @brief Typed enqueue-refusal handling (issue #582 INV-RQ-2): the TCB
     ///        is byte-identical (API guarantee).  Counts + one-shot ERROR
     ///        with caller ra; the tick sweep rescues + counts.  No-op when
@@ -502,7 +506,7 @@ class Scheduler {
     // Per-counter rescue oracles removed — use read_sched_oracles()/reset_sched_oracles_for_test() (SchedOracles family, #609).
 
     /// @brief Consolidated oracles snapshot (issue #609, C4 addendum).
-    ///        Single-family readout for the eleven violation oracles.
+    ///        Single-family readout for the twelve violation oracles (#601).
     struct SchedOracles {
         uint64_t stuck_rescue;
         uint64_t flagged_orphan_rescue;
@@ -515,11 +519,18 @@ class Scheduler {
         uint64_t enqueue_refused_already;
         uint64_t enqueue_refused_invalid;
         uint64_t ipc_wake_rescue;
+        uint64_t edf_unreachable;
     };
-    /// @brief Lock-free snapshot of all eleven oracles (test/diagnostic only).
+    /// @brief Lock-free snapshot of all twelve oracles (test/diagnostic only).
     static SchedOracles read_sched_oracles() noexcept;
-    /// @brief Test-only reset of all eleven oracles (single rewind).
+    /// @brief Test-only reset of all twelve oracles (single rewind).
     static void reset_sched_oracles_for_test() noexcept;
+    /// @brief EDF membership audit (issue #601, INV-AUDIT-1..5): read-only
+    ///        full-registry walk proving every in_edf_queue_ task is
+    ///        reachable from its CPU head; twice-confirmed residue counts
+    ///        via note_edf_unreachable. Detection-only, never mutates.
+    ///        Cadence: EDF_MEMBERSHIP_AUDIT_PERIOD ticks (~0.64 s at 100 Hz).
+    static void edf_membership_audit() noexcept;
 
     /// @brief Clear every task's #578 park-test membership (seam teardown).
     ///        Bounded validity-guarded walk under scheduler_lock_.
@@ -1602,6 +1613,10 @@ struct SwSlots {
     ///        Same ownership/discipline as stuck_rescue_count_; reset by
     ///        reset_sched_oracles_for_test().
     static uint64_t edf_chain_drop_count_;
+    /// @brief EDF unreachable-from-head observations since boot (issue #601,
+    ///        INV-RQ-6). Same discipline; reset by
+    ///        reset_sched_oracles_for_test().
+    static uint64_t edf_unreachable_count_;
     /// @brief Ready link/flag desync observations since boot (issue #582
     ///        INV-RQ-3 oracle: link/flag mismatches seen by the typed API).
     ///        Same ownership/discipline as stuck_rescue_count_; reset by
@@ -1685,6 +1700,9 @@ struct SwSlots {
     ///        (observed self-sustaining flood). Log the 1st rescue and
     ///        every Nth; the exact counter stays the detector.
     static constexpr uint64_t STRANDED_RESCUE_WARN_EVERY = 64;
+    /// @brief EDF membership audit cadence (issue #601, INV-AUDIT-4):
+    ///        amortized walk once per 64 ticks (~0.64 s at 100 Hz).
+    static constexpr uint64_t EDF_MEMBERSHIP_AUDIT_PERIOD = 64;
     /// @brief Decayed load averages (issue #172, top loadavg triplet).
     ///        Integer EMA of the per-tick non-idle sample, updated on the
     ///        BSP on_tick() tail under scheduler_lock_; readers use

@@ -92,6 +92,7 @@ uint64_t Scheduler::orphan_rescue_count_ = {};
 uint64_t Scheduler::runq_nowhere_linked_count_ = {};
 uint64_t Scheduler::edf_orphan_rescue_count_ = {};
 uint64_t Scheduler::edf_chain_drop_count_ = {};
+uint64_t Scheduler::edf_unreachable_count_ = {};
 // Issue #582 INV-RQ-3 oracles + §5.5 miss-path counters (see hpp).
 uint64_t Scheduler::runq_link_flag_desync_count_ = {};
 uint64_t Scheduler::runq_desync_forced_clear_ = {};
@@ -393,6 +394,7 @@ Scheduler::SchedOracles Scheduler::read_sched_oracles() noexcept {
     o.enqueue_refused_already = __atomic_load_n(&rqm_enqueue_refused_already_, __ATOMIC_RELAXED);
     o.enqueue_refused_invalid = __atomic_load_n(&rqm_enqueue_refused_invalid_, __ATOMIC_RELAXED);
     o.ipc_wake_rescue = __atomic_load_n(&ipc_wake_rescue_count_, __ATOMIC_RELAXED);
+    o.edf_unreachable = __atomic_load_n(&edf_unreachable_count_, __ATOMIC_RELAXED);
     return o;
 }
 
@@ -408,6 +410,7 @@ void Scheduler::reset_sched_oracles_for_test() noexcept {
     __atomic_store_n(&rqm_enqueue_refused_already_, 0ULL, __ATOMIC_RELAXED);
     __atomic_store_n(&rqm_enqueue_refused_invalid_, 0ULL, __ATOMIC_RELAXED);
     __atomic_store_n(&ipc_wake_rescue_count_, 0ULL, __ATOMIC_RELAXED);
+    __atomic_store_n(&edf_unreachable_count_, 0ULL, __ATOMIC_RELAXED);
 }
 
 void Scheduler::balancer_tick() noexcept {

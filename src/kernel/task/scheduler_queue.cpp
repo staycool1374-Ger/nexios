@@ -74,12 +74,12 @@ bool edf_earlier(const TaskControlBlock &a,
     return a.id < b.id;
 }
 
-/// @brief Ordered insert into CPU c's EDF list.  Caller guarantees the task
-///        is not already queued (guarded anyway — never double-link).
-///        Issue #582: own op tags + IRQ-atomic body (the EDF list is separate
-///        from the ready queue with its own discipline; no cross-list claim).
-void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept {
-    arch::IrqGuard irq_guard{};
+/// @brief Guard-free EDF insert body (issue #602): caller holds IrqGuard.
+///        No cross-list claim; internal linkage only.
+static void edf_insert_irq_off(TaskControlBlock &t, uint64_t cpu) noexcept {
+#if defined(CONFIG_DEBUG)
+    ENSURE(!arch::interrupts_enabled());
+#endif
     if (t.in_edf_queue_)
         return;
     EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
@@ -101,12 +101,14 @@ void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept {
         t.edf_next_->edf_prev_ = &t;
     t.in_edf_queue_ = true;
     sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfInsert, t.id,
-                                  0, 1, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
+                                   0, 1, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
 }
 
-/// @brief Unlink from CPU c's EDF list (no-op when not queued).
-void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept {
-    arch::IrqGuard irq_guard{};
+/// @brief Guard-free EDF remove body (issue #602): caller holds IrqGuard.
+static void edf_remove_irq_off(TaskControlBlock &t, uint64_t cpu) noexcept {
+#if defined(CONFIG_DEBUG)
+    ENSURE(!arch::interrupts_enabled());
+#endif
     if (!t.in_edf_queue_)
         return;
     EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
@@ -120,20 +122,63 @@ void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept {
     t.edf_prev_ = nullptr;
     t.in_edf_queue_ = false;
     sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfRemove, t.id,
-                                  1, 0, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
+                                   1, 0, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
+}
+
+/// @brief Ordered insert into CPU c's EDF list.  Caller guarantees the task
+///        is not already queued (guarded anyway — never double-link).
+///        Issue #582: own op tags + IRQ-atomic body (the EDF list is separate
+///        from the ready queue with its own discipline; no cross-list claim).
+///        Guard-free body lives in edf_insert_irq_off for composites (#602).
+void edf_insert(TaskControlBlock &t, uint64_t cpu) noexcept {
+    arch::IrqGuard irq_guard{};
+    edf_insert_irq_off(t, cpu);
+}
+
+/// @brief Unlink from CPU c's EDF list (no-op when not queued).
+///        Guard-free body lives in edf_remove_irq_off for composites (#602).
+void edf_remove(TaskControlBlock &t, uint64_t cpu) noexcept {
+    arch::IrqGuard irq_guard{};
+    edf_remove_irq_off(t, cpu);
 }
 
 /// @brief Re-sort a queued EDF task after its key changed (deadline re-arm,
-///        priority move).  No-op when not queued.
+///        priority move).  No-op when not queued.  One IrqGuard unit for the
+///        unlink→relink composite (issue #602, mirror of RQM::move_priority
+///        #600 Part 4).  Pre-fix window let a same-CPU tick observe
+///        flag-false/unlinked and force-drop it.
 void edf_resort(TaskControlBlock &t) noexcept {
+    arch::IrqGuard irq_guard{};
     if (!t.in_edf_queue_)
         return;
     uint64_t cpu = Scheduler::queue_target(t);
-    edf_remove(t, cpu);
-    edf_insert(t, cpu);
+    edf_remove_irq_off(t, cpu);
+    edf_insert_irq_off(t, cpu);
     sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfResort, t.id,
-                                  1, 1, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
+                                   1, 1, 0, 0, 0, cpu % CONFIG_MAX_CPUS);
 }
+
+/// @brief Bounded chain membership probe (issue #601, INV-AUDIT-4).
+static bool edf_chain_contains(uint64_t cpu,
+                               const TaskControlBlock &needle) noexcept {
+    const EdfReadyList &l = edf_ready_[cpu % CONFIG_MAX_CPUS];
+    uint64_t n = 0;
+    for (TaskControlBlock *c = l.head_; c != nullptr && n < CONFIG_MAX_TASKS;
+         c = c->edf_next_) {
+        ++n;
+        if (c->magic != TaskControlBlock::TCB_MAGIC)
+            break;
+        if (c == &needle)
+            return true;
+    }
+    return false;
+}
+
+/// @brief Pending confirm slot per CPU for the two-pass audit (issue #601,
+///        INV-AUDIT-3).  Written only under scheduler_lock_.
+static constinit uint64_t s_edf_audit_pending_id_[CONFIG_MAX_CPUS] = {
+    UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX,
+    UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX};
 
 /// @brief Forced EDF membership detach (issue #582): clears flag+links as
 ///        one IRQ-atomic unit WITHOUT splicing — for the documented
@@ -146,7 +191,7 @@ void edf_detach(TaskControlBlock &t) noexcept {
     t.edf_next_ = nullptr;
     t.edf_prev_ = nullptr;
     sched_debug::sched_runq_trace(sched_debug::RunqTraceTag::EdfRemove, t.id,
-                                  1, 0, 0, 0, 0, UINT64_MAX);
+                                   1, 0, 0, 0, 0, UINT64_MAX);
 }
 
 /// @brief Re-home a queued task after an eligibility change
@@ -727,6 +772,53 @@ void Scheduler::note_edf_chain_cycle() noexcept {
         1ULL;
     kernel::Logger::error("sched: EDF chain cycle, nuked (n=%lu)", drop_no);
     sched_debug::sched_runq_trace_dump(UINT64_MAX, 8);
+}
+
+void Scheduler::note_edf_unreachable(uint64_t id, uint64_t cpu) noexcept {
+    const uint64_t n =
+        __atomic_fetch_add(&edf_unreachable_count_, 1ULL, __ATOMIC_RELAXED) +
+        1ULL;
+    if (n == 1 || (n % STRANDED_RESCUE_WARN_EVERY) == 0) {
+        kernel::Logger::warn(
+            "sched: EDF member unreachable from CPU%lu head id=%lu (n=%lu)",
+            cpu, id, n);
+        if (n == 1) {
+            sched_debug::sched_runq_trace_dump(id, 8);
+        }
+    }
+}
+
+void Scheduler::edf_membership_audit() noexcept {
+    arch::IrqGuard irq_guard{};
+    if (scheduler_lock_depth_own() != 0) {
+        return;
+    }
+    if (!scheduler_lock_.try_lock()) {
+        return;
+    }
+    SchedulerLockGuard guard(scheduler_lock_, adopt_lock);
+    uint64_t scanned = 0;
+    for (auto *t = all_tasks_.first_ptr(); t != nullptr && scanned < STRANDED_RESCUE_SCAN_MAX;
+         t = all_tasks_.next_ptr(t)) {
+        ++scanned;
+        if (t->magic != TaskControlBlock::TCB_MAGIC)
+            continue;
+        if (!t->in_edf_queue_)
+            continue;
+        uint64_t cpu = Scheduler::queue_target(*t);
+        if (cpu >= CONFIG_MAX_CPUS)
+            continue;
+        if (sched_queue::edf_chain_contains(cpu, *t) ||
+            sched_queue::edf_chain_contains(cpu, *t)) {
+            sched_queue::s_edf_audit_pending_id_[cpu] = UINT64_MAX;
+            continue;
+        }
+        if (sched_queue::s_edf_audit_pending_id_[cpu] == t->id) {
+            note_edf_unreachable(t->id, cpu);
+        } else {
+            sched_queue::s_edf_audit_pending_id_[cpu] = t->id;
+        }
+    }
 }
 
 }  // namespace kernel
