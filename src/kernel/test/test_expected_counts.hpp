@@ -310,7 +310,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_memory",         136,  0,       0      },  // memory_* incl. NX/W^X pins + F10 #563 x7 stubs (row was stale at 125 vs 129 measured)
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
-    {"ipc",                107,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10 + 12-oracle wake-rescue gate
+    {"ipc",                108,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10 + 12-oracle wake-rescue gate + #556 blocked_in_recv parity
     {"capability",          200,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9 + F5 #558 x13 + F4 #557 x6 + F10 #563 x1 + F8 #561 x2)
     {"proc_elf",            135,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM) + F2 cap-smoke migration
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
