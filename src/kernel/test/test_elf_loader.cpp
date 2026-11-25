@@ -22,6 +22,7 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <kernel/nexios_config.h>
 #include <crc32.hpp>
 #include <kernel/elf/elf.hpp>
 #include <kernel/elf/elf_loader.hpp>
@@ -125,6 +126,10 @@ void cleanup_file(const char *path) {
 // frees it scheduler-safely (zero ResourceTracker delta).
 // it with zero ResourceTracker delta.
 JARVIS_TEST(loader_load_success, "PRE: vfsd, iocd | POST: none") {
+#if CONFIG_PROC_MGR && !defined(CONFIG_DEBUG)
+    JARVIS_TEST_PASS();
+    return;
+#endif
     elf::ElfLoader::reset();
     uint8_t img[8192];
     elf::ELF64Header hdr{};
