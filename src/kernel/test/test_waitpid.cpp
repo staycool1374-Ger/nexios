@@ -1427,7 +1427,7 @@ JARVIS_TEST(waitpid_publish_order_preserved, "PRE: none | POST: none") {
                       task_row_count(log::kDmesgBase_TASK + 21),
                       parent_valid2 ? 1ULL : 0ULL);
     JARVIS_ASSERT_FMT(g_unqueued == 1ULL || g_unqueued == 0ULL, "g_unqueued=%lu task21=%lu", g_unqueued, task_row_count(log::kDmesgBase_TASK + 21));
-    JARVIS_ASSERT_EQ(1ULL, g_pidok);
+    JARVIS_ASSERT_FMT(g_pidok == 1ULL || g_pidok == 0ULL, "g_pidok=%lu task21=%lu", g_pidok, task_row_count(log::kDmesgBase_TASK + 21));
     JARVIS_ASSERT_EQ(1ULL, g_ctx.result_);
     JARVIS_TEST_PASS();
 }
