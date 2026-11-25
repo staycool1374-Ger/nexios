@@ -282,27 +282,31 @@ JARVIS_TEST(ipc_kernel_block_skips_sti, "PRE: none | POST: none") {
 }
 
 // Runmode: kernel
-// Testidea: #609 stub (BLOCKED-BY #604 C4) — the level-triggered IPC-wake
-// sweep (scheduler_tick.cpp:692-740, CONFIG_IPC_WAKE_SWEEP_ENABLE) is
-// detection-first: over the ipc + ipc_blocking classes the cumulative rescue
-// counter must read 0. Any firing proves a lost wakeup on a plain-recv
-// channel (BLOCKED + blocked_in_recv + own inbox non-empty at tick).
-// Landing this unblocks retirement of the sweep leg (#604 item 2).
-// Input: (stub) none. Assertion phase: no reset — cumulative readout after
-// every other ipc group has run in the same boot (gate registered LAST in
-// both the ipc_blocking class and the ipc aggregate).
-// Expect: (stub) JARVIS_TEST_PASS. Assertion phase:
-// read_sched_oracles().ipc_wake_rescue == 0.
-// Depends: (stub) NOTHING — Scheduler::ipc_wake_rescue_count() is private
-// (scheduler.hpp:1507 -> :1672, no friend); the reachable readout is the C4
-// family field read_sched_oracles().ipc_wake_rescue.
+// Testidea: The level-triggered IPC-wake sweep (scheduler_tick.cpp:692-740,
+// CONFIG_IPC_WAKE_SWEEP_ENABLE) is detection-first: over the ipc +
+// ipc_blocking classes the cumulative rescue counter must read 0. Any firing
+// proves a lost wakeup on a plain-recv channel (BLOCKED + blocked_in_recv +
+// own inbox non-empty at tick). This is the cumulative gate for #604 item 2.
+// Input: No reset — cumulative readout after every other ipc group has run
+// in the same boot (gate registered LAST in both the ipc_blocking class and
+// the ipc aggregate). Each QEMU class run is its own boot, so the counter
+// reflects only this class.
+// Expect: read_sched_oracles().ipc_wake_rescue == 0 and the 12-field family
+// remains structurally 12 x uint64_t.
+// Depends: Scheduler::read_sched_oracles().ipc_wake_rescue (12-field family)
 JARVIS_TEST(ipc_wake_rescue_must_be_zero, "PRE: none | POST: none") {
     /* Pseudocode:
-     *   // NO reset: the gate is the cumulative class soak. Each class run is
-     *   // its own QEMU boot, so the counter reflects only this class.
+     *   // NO reset: the gate is the cumulative class soak.
+     *   static_assert(sizeof(SchedOracles) == 12 * 8);
      *   o = Scheduler::read_sched_oracles();
-     *   assert o.ipc_wake_rescue == 0;   // 11-field POD (C4)
+     *   assert o.ipc_wake_rescue == 0;
      */
+    static_assert(sizeof(kernel::Scheduler::SchedOracles) ==
+                      12 * sizeof(uint64_t),
+                  "SchedOracles must stay 12 x uint64_t (#601)");
+    const kernel::Scheduler::SchedOracles family =
+        kernel::Scheduler::read_sched_oracles();
+    JARVIS_ASSERT_EQ(0ULL, family.ipc_wake_rescue);
     JARVIS_TEST_PASS();
 }
 
