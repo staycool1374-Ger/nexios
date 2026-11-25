@@ -27,6 +27,7 @@
 #include <test.hpp>
 #include <logger.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/proc/proc_mgr_proxy.hpp>
 #include <kernel/task/task.hpp>
 #include <kernel/sync/semaphore.hpp>
 #include <kernel/syscall/syscall.hpp>
