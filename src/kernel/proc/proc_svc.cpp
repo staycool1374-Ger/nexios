@@ -210,8 +210,11 @@ uint64_t ProcSvc::waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
     // Issue #564 F11 Stage B: exactly one verdict per waitpid call (the
     // ownership predicate), resolved before the blocking loop — no RPC
     // inside the loop. The find/collect/block/reap machinery below stays
-    // statement-identical (INV-PROC-1).
-    if (proc_verdict_denied(
+    // statement-identical (INV-PROC-1). Kernel-task callers bypass the
+    // verdict (proc-mgr owns only user processes); otherwise
+    // scheduler_reap_respects_parent_wait fails under ON.
+    if (syscall_is_user_task() &&
+        proc_verdict_denied(
             ask_proc_verdict(ProcMgrOp::WAITPID, target_pid, 0, 0))) {
         return static_cast<uint64_t>(errors::SYS_ERR_GENERIC_FAIL);
     }
