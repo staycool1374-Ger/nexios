@@ -1689,9 +1689,6 @@ extern "C" void panic(const char *msg);
 #if CONFIG_CARVE_MAX_TABLES < 1
 #error "CONFIG_CARVE_MAX_TABLES must be >= 1 (default 24)"
 #endif
-#if CONFIG_PROC_MGR_CARVE_FORK && !CONFIG_PROC_MGR
-#error "CONFIG_PROC_MGR_CARVE_FORK requires CONFIG_PROC_MGR=1"
-#endif
 #if CONFIG_TERM_SRV_FAULT_INJECT != 0 && CONFIG_TERM_SRV_FAULT_INJECT != 1
 #error "CONFIG_TERM_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
 #endif
@@ -1777,6 +1774,9 @@ extern "C" void panic(const char *msg);
 #else
 #define CONFIG_PROC_MGR 0
 #endif
+#endif
+#if CONFIG_PROC_MGR_CARVE_FORK && !CONFIG_PROC_MGR
+#error "CONFIG_PROC_MGR_CARVE_FORK requires CONFIG_PROC_MGR=1"
 #endif
 #if CONFIG_VFS_SRV_FAULT_INJECT != 0 && CONFIG_VFS_SRV_FAULT_INJECT != 1
 #error "CONFIG_VFS_SRV_FAULT_INJECT must be 0 or 1 (default 0)"
