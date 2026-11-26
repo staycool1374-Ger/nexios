@@ -112,19 +112,69 @@ S1: grace auto-shrink false fire (mitigate: monotone high-water, floor, 10×, AC
 
 Non-goals: no NMI/probes; no SMP tick flow; no frozen-counter detection.
 
-## 4. INCREMENT D — Liveness as positive guarantee (last; consumes A+B+C)
+## 4. INCREMENT D — Liveness as positive guarantee (last; consumes A+B) — REVISION R2
 
-New liveness_ledger.{hpp,cpp} (per-task ready age, per-band denial age, wait ceilings, readout + reset; NO TCB growth — per-CPU side table, owner decision OD-7). Age accounting inside existing on_tick walk (749-854). EDF breaker extension (relief tick 1-in-N, same #598 ceiling). Wait-ceiling escalation (count/log/panic by config; wait continues). Escalation single function, identical both builds. Reset/restore wiring. Docs: scheduler.md R5/R6, liveness.md new, contract §4 ceiling.
+Closes audits/report-20261126-546D-plan.md [F1]–[F9]. Retained unchanged: stated EDF trade-off, OD-7 side table (no TCB growth), hot-loop placement, ACTION 0/1 safety direction (never mutates a live wait), selection-only forced pick, A+B sequencing, non-goals. Retrieval: graphify (starve_ticks_/reset_starvation_breaker/ID_TABLE_SIZE/TaskState subgraphs) + docs reads (schedoracles.md, scheduler.md §3.3, irq-preemption-contract.md §9, tick_watchdog.hpp); tree anchors re-verified.
 
-Cross-arch: shared tick-level; forced pick through same switch path all three arches; arch epilogue assumptions covered by arch_aarch64/arch_riscv64/scheduler_preemption/scheduler_core gates.
+### D.1 Durable single family [F5]
 
-QE stubs: ready_age_zero_healthy, two_spinners_lower_progress, edf_hammer_lower_relief (pre-fix: timeout/zero relief), wait_ceiling_reached, holder_blocked_observed, reset_isolation.
+New `src/kernel/task/liveness_ledger.{hpp,cpp}`. Two counter families with two different precedents, both named:
+- **Derived family** (per-task ready age, per-task wait ticks, per-band denial mirror, relief window counters): policy-runtime, **cleared** by the single entry `Scheduler::reset_liveness_ledger()`, wired at `Scheduler::init()` (next to `reset_starvation_breaker()`, scheduler_registry.cpp:601) and `Scheduler::restore_state()` (the `#242` block, scheduler_snapshot.cpp:245-247). Ages/waits/windows are never inherited across tests. `snapshot_restore` reaches it via `restore_state()`; test-isolate needs no extra call.
+- **Monotone family** (`wait_ceiling_count`, `relief_fires`, `relief_deferred`, per-class escalation counts): **never rewound** by `snapshot_restore` (oracles precedent: schedoracles.md:3,56-68, INV-ORA-5), `__atomic` writers / `__ATOMIC_RELAXED` readers, reset only by test seam `kernel::liveness::reset_liveness_counters_for_test()`. Must read 0 in a healthy run. Deliberately NOT merged into `SchedOracles` (12-field mapping INV-ORA-1/6 untouched; `LivenessReadout` mirrors the family shape, INV-LIV-1..4 = one readout/one reset/relaxed-only/test-seam-only).
+- Wire points: `init()` (derived), `restore_state()` (derived), `reset_liveness_counters_for_test()` (monotone, called only where `reset_sched_oracles_for_test()` is called today).
 
-Gates: scheduler_starvation → scheduler_core → core_sched → core_sync → ipc → arch classes → selftest → full 3-arch matrix + soak 0 FIRE on quiet host + check-style.
+### D.2 R-RELIEF — one shared forced-dispatch budget [F1]
 
-S1: forced dispatch violates EDF deadlines (mitigate: 1-in-N ceiling, counted, documented trade-off; OD-5); hot-loop/snapshot cost (no TCB growth, derived-state-only rule, identical-binary timing). S2: ceiling false fire on legitimate long waits (windows not wall time, ACTION default count/log, must-read-0 matrix); counter leaks across cycles (explicit resets + isolation test). S3: relief masking overload (counter names cause).
+Normative rule (replaces the stand-down at `scheduler_tick.cpp:1313-1324`):
+1. **One budget, one counter.** `starve_ticks_[cpu]` (B-owned, sole accumulator, scheduler.hpp:1708-1709) gates **both** paths. EDF relief adds no counter and no second 1-in-N source: at most one forced dispatch per `kStarvationBreakerTicks = 20` denied ticks **total**. Each window's forced pick is a single `breaker_next`, mutually exclusive with the victim pick.
+2. **Arm signal.** Denial tick = `rq_own().bitmap().lowest_starvable_below(top) != STARVABLE_NONE` (unchanged #598 definition). EDF relief is armed at window expiry (`starve_ticks_[cpu] >= 20`) **when** `edf_preempt_candidate() != nullptr`. EDF presence alone never arms, resets, or increments independently.
+3. **Interaction scope (pinned: relief displaces a runnable EDF candidate).** At expiry with an EDF candidate whose effective priority is strictly above the victim band, the forced dispatch targets the victim band head via `next_task_below(top)`, displacing that one EDF candidate (counted `relief_fires++`). If the victim band is not strictly below the EDF candidate's effective priority, the tick behaves as status quo (EDF served, `relief_deferred++`, window reset). With no EDF candidate at expiry the existing `next_task_below(top)` victim pick is unchanged.
+4. **Reset signal.** Identical shape for both paths: on fire (fire or deferred) and on the no-victim branch, `starve_level_[cpu] = STARVABLE_NONE; starve_ticks_[cpu] = 0`. A tick with an EDF candidate but no elapsed window does not reset — the count keeps accumulating (explicit reversal of today's stand-down reset).
+5. **Selection-only, counter-only.** Relief is a return value of the existing selection step, dispatched through the same `switch_to_task`/epilogue path on all three arches: no new arch code, no asm, no per-arch primitive; no priority/deadline write, no queue reordering, no admission change. EDF deadline loss of the displaced candidate is the recorded OD-5 trade-off, bounded by 1/20.
 
-Non-goals: no admission/schedulability change; no killing; no priority mutation; no kStarvationBreakerTicks change; no SMP.
+### D.3 Side table shape — OD-7, no TCB growth [F2]
+
+- **Slots per CPU:** `ID_TABLE_SIZE = 2*CONFIG_MAX_TASKS = 128` slots × `CONFIG_MAX_CPUS = 8` CPUs; slot = `{uint64_t owner_id; uint16_t ready_age; uint16_t wait_ticks; uint32_t rsvd}` = 16 B → 16 KB static BSS. No allocation, no new MemPool class, no new lock.
+- **Index function:** `index = task->id & ID_TABLE_MASK` (id-hash), not the open-addressed id_table_ slot — the tick walk has the TCB, not the slot.
+- **Aliasing/collision/eviction:** each slot carries `owner_id`; a visit increments only when `owner_id == task->id`, otherwise adopts (`owner_id = id; ready_age = 0; wait_ticks = 0`) then proceeds. Colliding live tasks share one index and reset each other's ages: ages can only be under-counted (delayed reporting, never fabricated fire). No LRU, no eviction of a live owner.
+- **Clear-on-terminate/reuse:** the terminate/reap funnel clears the task's slot (`owner_id = 0`, fields 0) under `scheduler_lock_`.
+- **No-growth proof:** no TCB field; `static_assert(sizeof(TaskControlBlock) <= kernel::kMemPoolMaxBlockSize)` (task.hpp:1574) stays the compile-time proof, plus `static_assert(ID_TABLE_SIZE == 2*CONFIG_MAX_TASKS)`.
+- **Per-band denial is not a new array:** read-only mirror of `starve_level_[cpu]`/`starve_ticks_[cpu]` — exactly one denial accumulator in the system.
+
+### D.4 Age increment condition, window semantics, "healthy" [F3]
+
+- **Window-based, never wall time:** ages count consecutive scheduler ticks observed denied; a stalled tick flow freezes all ages, inflates none.
+- **Increments:** `state == TaskState::READY` **and** `in_ready_queue_` (EDF-queued READY included; BLOCKED/sleep excluded; idle/running excluded; TERMINATED/REAPED excluded with slot cleared; admin-parked excluded).
+- **Any dispatch resets to 0**, on every pick path (`next_task`, `next_task_below`, EDF, forced).
+- **"Healthy" (for `ready_age_zero_healthy`):** one runnable task, quiet 100 ticks: every slot 0, `max(ready_age) == 0`. A live READY task's age is `< kStarvationBreakerTicks` in any healthy window.
+- **Placement (unchanged):** inside the existing all-tasks walk (scheduler_tick.cpp:749-854), already holding `scheduler_lock_` with IF=0: one id-mask, one owner compare, one saturating increment, one zeroing store for excluded states. No new walk, no new lock, no allocation, identical debug/release flow.
+
+### D.5 Wait ceiling — covered set, threshold, ACTION, fail-safe direction [F4]
+
+- **Covered wait set (closed list):** W-2 IPC receive/reply wait, W-3 join wait, W-1 lock-park, sync-object waits (mutex/semaphore/eventgroup/notify). **Excluded:** WAITING (sleep/delay — duration is the request), admin park, teardown/kill-adjacent BLOCKED stores, Boot/Isr, idle, zombie/reaped. New rows need plan amendment + auditor sign-off.
+- **Threshold and units:** `kWaitCeilingTicks = 1000` consecutive ticks in the covered state at 1 kHz (a wake-and-re-block restarts the count). Per-task `wait_ticks` saturates at 65535. Test seam `set_wait_ceiling_for_test(uint32_t)` (test-isolation only, reset by `reset_liveness_ledger()`).
+- **ACTION encoding — new key `CONFIG_LIVENESS_ACTION` (0/1/2), identical semantics both builds:** `0` = compiled out; `1` = **default shipped**: count + one dmesg WARN per task per boot (`kDmesgBase_SCHED + 26`), wait continues, no state change; `2` = certification builds only: count + deferred halt via A's atomic halt-request latch (`irq_contract::flush_halt`, safe-point flush), one fire, never re-entered. D ships 1, wires no ACTION=2 gate.
+- **"Panic halts, no partial wait-state change":** at level 2 the tick only records and latches; state, wait-channel link, park latch, deadline fields and ready-queue membership stay byte-identical. "Wait continues" at 0/1 means the wait is never mutated.
+
+### D.6 Cost bar, terms, derived-state-only rule [F6]
+
+Method (A.5/B.7 shape): identical binaries, same config, D-parent vs D, debug + release; `rdtsc` raw_counter around the on_tick accounting block only, n = 10^4 ticks, p99; budget on_tick p99 ≤ +2% vs D-parent and ≤ +0.5 µs absolute. aa64/rv64: inspection (one mask + compare + increment per visited task) + per-class wall-clock non-regression ≤ +5%. Terms: derived state = recomputable from task state + tick counts, never authoritative for dispatch (`next_task`/`next_task_below`/breaker read only pre-existing `starve_level_`/`starve_ticks_`). Ledger readout-only, test/diagnostic context only, never tick/ISR production. Two static per-CPU arrays, BSS only.
+
+### D.7 C→D edge (genuine, named) [F7]
+
+D consumes C: `tick_watchdog::readout()` / `TickWatchdogRecord` is D's only FIRE source, and the `[TICKWD] FIRE where=…` line is the soak signal; D inherits C's §5 coverage-domain caveat and mirrors C's readout/reset_for_test discipline. If C is not landed, D blocks — data dependency, not phasing.
+
+### D.8 QE stubs, gates, soak, revert triggers [F8]
+
+Stubs: `ready_age_zero_healthy` (1 runnable, quiet 100 ticks, all slots 0); `two_spinners_lower_progress` (2000 ticks, lower completed-loops > 0, forced dispatches ≤ 100); `edf_hammer_lower_relief` (pre-fix: timeout/zero progress; post-fix: lower progress > 0, relief_fires ≤ ticks/20, relief+breaker ≤ ticks/20 shared-budget assertion); `wait_ceiling_reached` (covered recv-block, ceiling 50: exactly one count + one WARN, BLOCKED before and after, payload still delivered); `holder_blocked_observed` (needs B probe=1: one probe line, no repeat); `reset_isolation` (ages/waits 0 + denial STARVABLE_NONE/0 after restore; monotone counts preserved). Gates: scheduler_starvation → scheduler_core → core_sched → core_sync → ipc → arch_aarch64 → arch_riscv64 → selftest → full 3-arch debug matrix → check-style 0; 0 FAILED, wait_ceiling/escalations 0 in non-liveness classes, tracker delta 0, pre-existing classes ≤ baseline. Soak: 72h x86_64 debug+release paired + 2h aa64/rv64; FIRE source = [TICKWD] FIRE only; escalation 0, tracker 0, selftest ×5. Revert triggers: non-harness wait_ceiling fire; any [TICKWD] FIRE; on_tick p99 > 2%; forced dispatches > ticks/20; relief with no EDF candidate; relief+breaker over shared count.
+
+### D.9 Docs — R5/R6, liveness.md, contract §9 [F9]
+
+scheduler.md R5 (liveness relief) supersedes §3.3 :336-338 "deadline coupling deliberately absent" for the relief path only; §3.3 :325-326 "EDF keeps precedence" qualified identically. R6 (wait ceilings) + all D semantics in new docs/specs/liveness.md. Failure-policy home is contract §9 (taxonomy + 0/1/2 + catalogued codes kDmesgBase_SCHED +26 wait ceiling, +27 relief).
+
+### D.10 Risks and non-goals
+
+S1 forced dispatch vs EDF deadlines (mitigate: shared 1-in-20 budget D.2, counted, documented OD-5). S1 hot-loop/snapshot cost (mitigate: no TCB growth, derived-state-only, p99 bar). S2 ceiling false fire (windows not wall time, closed list, ACTION 1 default, must-read-0 matrix). S2 counters leaking (D.1 two-family reset). S3 relief masking overload (counter names cause). Non-goals: no admission/schedulability change; no killing; no priority/orientation mutation; no kStarvationBreakerTicks change; no ACTION=2 wiring; no SMP; no second forced-dispatch source.
 
 ## 5. SEQUENCING & SPLIT
 
