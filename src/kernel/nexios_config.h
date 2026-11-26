@@ -1362,6 +1362,15 @@
 #define CONFIG_TICK_WATCHDOG_ACTION 0
 #endif
 
+/// Liveness escalation action (issue #546-D): 0 = compiled out (no
+/// counters, no lines), 1 = count + one dmesg WARN per task per boot, wait
+/// continues unchanged (shipped default, both builds), 2 = certification
+/// builds only: count + deferred halt, one fire, never re-entered.
+/// Default: 1.
+#ifndef CONFIG_LIVENESS_ACTION
+#define CONFIG_LIVENESS_ACTION 1
+#endif
+
 /// Boot-time admission self-test (issue #24): read-only probes of the
 /// frozen LUB/WCET/budget gate math + miss-action range check, run once
 /// after Scheduler::init (zero alloc, zero table mutation, one success
@@ -1955,6 +1964,9 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_TICK_WATCHDOG_ACTION < 0 || CONFIG_TICK_WATCHDOG_ACTION > 2
 #error "CONFIG_TICK_WATCHDOG_ACTION must be in [0..2] (default 0)"
+#endif
+#if CONFIG_LIVENESS_ACTION < 0 || CONFIG_LIVENESS_ACTION > 2
+#error "CONFIG_LIVENESS_ACTION must be in [0..2] (default 1)"
 #endif
 #if CONFIG_OOM_POLICY != 0 && CONFIG_OOM_POLICY != 1
 #error "CONFIG_OOM_POLICY must be 0 or 1 (default 0)"

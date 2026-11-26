@@ -66,6 +66,23 @@ All "[IMPLEMENTED]" markers are code-verified in the current tree.
   The breaker observes the lowest waiting non-idle band and forces one
   dispatch of it per `kStarvationBreakerTicks` (= 20) denied ticks (§3.3);
   worst-case interference is one forced lower tick per 20 denied ticks.
+- **R5 — Liveness relief under EDF (issue #546-D).**  When an EDF candidate
+  is pending at a breaker window expiry and its effective priority is
+  strictly above the victim band, the single shared 1-in-20 budget spends
+  its forced dispatch on the victim band (displacing that EDF candidate;
+  counted as `relief_fires`). This supersedes §3.3's "EDF keeps
+  precedence" and "deadline coupling deliberately absent" for the relief
+  path only: N stays fixed at 20 (the bound remains deadline-agnostic) but
+  one dispatch per elapsed window may displace an EDF candidate. Residual
+  deadline risk stays with the miss handler. If the victim band is not
+  strictly below the EDF candidate, status quo applies (EDF served,
+  counted as `relief_deferred`).
+- **R6 — Wait ceilings (issue #546-D).**  A task BLOCKED in a covered wait
+  (closed list: IPC receive/reply waits, join, lock park, sync-object
+  waits; §4) for `kWaitCeilingTicks` (= 1000) consecutive ticks trips a
+  counted escalation (`wait_ceiling_count` + one dmesg WARN per task per
+  boot, `kDmesgBase_SCHED + 26`); the wait itself is never mutated. Full
+  semantics live in `docs/specs/liveness.md`.
 
 ## 2. Invariants
 
@@ -335,7 +352,13 @@ counter-only observer forces progress:
   #599).
 - Deadline coupling is deliberately absent (fixed N preserves the bound);
   deadline-urgent tasks preempt via EDF first, and the miss handler stays the
-  observer of any residual miss.
+  observer of any residual miss. **Exception (R5, issue #546-D):** when an EDF
+  candidate is pending at a breaker window expiry and its effective priority
+  is strictly above the victim band, the window's single forced dispatch
+  targets the victim band anyway (displacing that EDF candidate). The
+  "EDF keeps precedence" rule above holds for every other tick; only the
+  relief tick may invert it, bounded by the shared 1-in-20 budget and
+  counted (`relief_fires` vs `relief_deferred`).
 
 ### 3.4 EDF-blind-spot closure (issue #600) [IMPLEMENTED]
 

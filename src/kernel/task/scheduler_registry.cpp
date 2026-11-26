@@ -21,6 +21,7 @@
 ///        Pure move out of scheduler.cpp: no logic changes.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/liveness_ledger.hpp> // issue #546-D reset wiring
 #include <kernel/task/scheduler_registry_internal.hpp>
 #include <kernel/task/scheduler_admission_internal.hpp> // issue #323 LIU bounds/exempt
 #include <kernel/task/scheduler_integrity.hpp>         // issue #369 T1a validate_task_ptr
@@ -599,6 +600,8 @@ void Scheduler::init(const SchedulerConfig &cfg) {
     // Issue #242: breaker starts unwatched (zero-init would fake-watch the
     // idle band on every CPU).
     reset_starvation_breaker();
+    // Issue #546-D: liveness ages/waits start cleared (no inherited denial).
+    kernel::liveness::reset_liveness_ledger();
 
     // M2 §6.2 item 6: TSC-domain tick watchdog (fail-closed when the raw
     // counter is not calibrated yet; note_tick() retries enablement).

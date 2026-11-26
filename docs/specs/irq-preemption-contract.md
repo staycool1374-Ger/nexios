@@ -246,3 +246,10 @@ latch, flushed at the next safe point (syscall exit epilogue or
 `reschedule()` with IF==1); exactly one, never re-entered. C6 is
 explicitly exempt (SelfLock is a known self-healing class). New codes
 use `kDmesgBase_SCHED + 25` (catalogued WARN).
+
+Liveness escalation (issue #546-D) lives here as the single failure-policy
+home: wait ceilings count + one dmesg WARN per task per boot
+(`kDmesgBase_SCHED + 26`), relief dispatches are counted
+(`kDmesgBase_SCHED + 27`); both follow the 0/1/2 policy above with the
+same deferred-halt latch. Full semantics (closed wait list, thresholds,
+two-family reset, readout) live in `docs/specs/liveness.md`.

@@ -37,6 +37,8 @@ uint64_t g_foreign_depth_count = 0;
 // attempts that observed a clobbered IRQ state (INV-L1' repairs).
 uint64_t g_park_rearm_count = 0;
 uint64_t g_park_if_clobber_count = 0;
+// Issue #546-B/D: contended-spin probe fires (read-only holder diagnosis).
+uint64_t g_probe_count = 0;
 
 void note_denied(ParkDenyReason reason) noexcept {
     __atomic_fetch_add(&g_spin_fallback_count, 1, __ATOMIC_RELAXED);
@@ -656,10 +658,15 @@ uint64_t lock_park_if_clobber_count() noexcept {
     return __atomic_load_n(&g_park_if_clobber_count, __ATOMIC_RELAXED);
 }
 
+uint64_t lock_probe_count() noexcept {
+    return __atomic_load_n(&g_probe_count, __ATOMIC_RELAXED);
+}
+
 void park_lock_reset_for_test() noexcept {
     g_park_count = 0;
     g_spin_fallback_count = 0;
     g_park_exhausted_count = 0;
+    g_probe_count = 0;
     g_park_denied_reason = static_cast<uint64_t>(ParkDenyReason::None);
     g_denied_escape_count = 0;
     g_foreign_depth_count = 0;
@@ -704,6 +711,7 @@ void note_contend_probe(const SpinLock &lock, const char *site) noexcept {
     if (!probe_latch_fire(&lock, site)) {
         return;
     }
+    __atomic_fetch_add(&g_probe_count, 1ULL, __ATOMIC_RELAXED);
     const void *holder_pc = lock.holder_for_debug();
     uint64_t holder_task = 0;
     uint64_t holder_rank = 0;

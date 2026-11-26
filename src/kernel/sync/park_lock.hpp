@@ -112,6 +112,9 @@ uint64_t lock_foreign_depth_count() noexcept;
 ///        fallback (each re-arm keeps the timer alive; the tick watchdog
 ///        FIRE line reports this so the amplifier is visible in-row).
 uint64_t lock_park_rearm_count() noexcept;
+/// @brief Issue #546-B/D: contended-spin probe fires (read-only holder
+///        diagnosis on the hook deny path, one-shot per lock+site).
+uint64_t lock_probe_count() noexcept;
 /// @brief Wedge hunt (#545): park attempts that observed an IRQ state
 ///        different from the guard-entry state (INV-L1' repairs, DEBUG).
 uint64_t lock_park_if_clobber_count() noexcept;

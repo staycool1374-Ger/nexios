@@ -291,7 +291,7 @@ constexpr DmesgRecord kDmesgCatalog_TEST[] = {
 ///        +16..+24 are taken (see below; +21/+22 are the F4 #557
 ///        supervision pause/resume records, +23 is the #590 waitpid
 ///        re-verify record, +24 is the #608 free-lock non-delivery
-///        record, +25 is the #546-A IRQ-contract violation record).  NOTE: no static_assert below — the
+///        record).  #546-A +25 and #546-D +26/+27 are registered below.  NOTE: no static_assert below — the
 ///        catalog_table_valid() requires error_nr in [7000, 19000), which
 ///        excludes the whole 4000-window SCHED base, so a SCHED table can
 ///        never satisfy it.  Registration here feeds catalog_text(); the
@@ -317,6 +317,10 @@ constexpr DmesgRecord kDmesgCatalog_SCHED[] = {
      "Sched: lock-park latch undelivered (lock free)"},
     {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 25, LogSeverity::WARN,
      "Sched: IRQ-contract violation (issue #546-A)"},
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 26, LogSeverity::WARN,
+     "Sched: liveness wait ceiling (issue #546-D)"},
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 27, LogSeverity::WARN,
+     "Sched: liveness relief dispatch (issue #546-D)"},
 };
 
 /// @brief Resolve a canonical (subsystem, error-nr) pair to its record.
@@ -445,7 +449,8 @@ inline LogSeverity lookup_severity(ErrorSubsystem subsys,
             return LogSeverity::ERROR;
         }
     case ErrorSubsystem::SCHED:
-        // Issues #582/#557/#590/#608: +16..+24 registered severities (see
+        // Issues #582/#557/#590/#608: +16..+24 registered severities;
+        // +25 (#546-A), +26/+27 (#546-D) likewise (see
         // kDmesgCatalog_SCHED); raw 12 keeps its historic WARN.
         // Issue #546-A: +25 IRQ-contract violation (WARN, one-shot latch).
         switch (raw) {
@@ -459,6 +464,8 @@ inline LogSeverity lookup_severity(ErrorSubsystem subsys,
         case 23:
         case 24:
         case 25:
+        case 26:
+        case 27:
             return LogSeverity::WARN;
         case 17:
             return LogSeverity::FATAL;

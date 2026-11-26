@@ -21,6 +21,7 @@
 ///        Pure move out of scheduler.cpp: no logic changes.
 
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/liveness_ledger.hpp> // issue #546-D reset wiring
 #include <kernel/task/scheduler_snapshot_internal.hpp>
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_debug_internal.hpp> // issue #582 A1 op-ring
@@ -245,6 +246,10 @@ void Scheduler::restore_state(TaskControlBlock *const *tasks_in,
     // Issue #242: breaker observation is policy-runtime — a restored test
     // must not inherit the previous test's watch window.
     reset_starvation_breaker();
+    // Issue #546-D: liveness ages/waits are derived runtime state with the
+    // same no-inherit rule (monotone escalation counters are separate and
+    // never rewound here).
+    kernel::liveness::reset_liveness_ledger();
 }
 
 void Scheduler::clear_switch_globals() noexcept {

@@ -42,6 +42,7 @@
 #include <kernel/sync/spinlock_order.hpp> // M2 §6.2 INV-C1 contract check
 #include <kernel/sync/irq_contract.hpp>  // issue #546-A tick lateness + de-gated INV-C1
 #include <kernel/task/tick_watchdog.hpp>  // M2 §6.2 item 6
+#include <kernel/task/liveness_ledger.hpp>  // issue #546-D age accounting
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/memory/tlb_shootdown.hpp>
 #include <kernel/memory/mempool.hpp>
@@ -843,6 +844,24 @@ void Scheduler::on_tick() noexcept {
             }
 #endif
 
+            // Issue #546-D: liveness age accounting (derived state only —
+            // never consulted by dispatch). One increment+branch per
+            // visited task; identical debug/release flow (compiled out
+            // at CONFIG_LIVENESS_ACTION == 0).
+            if (!is_idle_task(task)) {
+                const bool covered_wait =
+                    task->state == TaskState::BLOCKED &&
+                    !task->sleep_armed && !task->admin_parked &&
+                    !task->teardown_claimed_ && !task->teardown_completed_;
+                kernel::liveness::note_task_tick(
+                    task->id, static_cast<uint8_t>(task->state),
+                    task->in_ready_queue_, task->admin_parked,
+                    task->sleep_armed, covered_wait);
+                if (covered_wait) {
+                    (void)kernel::liveness::note_wait_ceiling(task->id);
+                }
+            }
+
             if (task->alarm_armed) {
                 if (task->alarm_ticks > 0)
                     --task->alarm_ticks;
@@ -1311,13 +1330,33 @@ void Scheduler::rate_monotonic_schedule() noexcept {
             ++starve_ticks_[cpu];
         }
         if (starve_ticks_[cpu] >= kStarvationBreakerTicks) {
-            // EDF keeps precedence: an EDF-pending tick is a non-strict
-            // dispatch that breaks the starvation pattern, so the breaker
-            // stands down (counter resets below) and next_task() serves the
-            // EDF candidate as today.  edf_preempt_candidate() is safe here:
-            // next_task() evaluates it in this same lock/IRQ context.
-            if (edf_preempt_candidate() == nullptr) {
+            // R-RELIEF (issue #546-D): single shared forced-dispatch
+            // budget — one forced dispatch per 20 denied ticks TOTAL
+            // across the plain victim pick and the EDF relief pick.
+            // The EDF candidate no longer stands the window down: at
+            // expiry with an EDF candidate strictly above the victim
+            // band, the forced pick targets the victim band (counted);
+            // otherwise status quo applies (counted as deferred). With
+            // no EDF candidate the existing victim pick is unchanged.
+            // edf_preempt_candidate() is safe here: next_task()
+            // evaluates it in this same lock/IRQ context.
+            auto *edf_next = edf_preempt_candidate();
+            if (edf_next != nullptr) {
+                if (effective_priority(edf_next) > victim) {
+                    breaker_next = next_task_below(top);
+                    if (breaker_next != nullptr) {
+                        kernel::liveness::note_relief_fire();
+                    } else {
+                        kernel::liveness::note_relief_deferred();
+                    }
+                } else {
+                    kernel::liveness::note_relief_deferred();
+                }
+            } else {
                 breaker_next = next_task_below(top);
+                if (breaker_next != nullptr) {
+                    kernel::liveness::note_breaker_fire();
+                }
             }
             starve_level_[cpu] = PriorityMap::STARVABLE_NONE;
             starve_ticks_[cpu] = 0;
