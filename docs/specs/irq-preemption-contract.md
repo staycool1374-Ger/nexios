@@ -12,6 +12,8 @@
 
 Rule: no path depends on entry-IF/DAIF/SIE except by declaring it. Interrupts are re-enabled only (a) by `arch::IrqGuard` scoping, or (b) by an explicit `arch::sti()` inside a declared wait loop that owns the IRQ state (syscall/trap entry with no locks held — #513).
 
+Execution contexts are classified by `irq_contract::classify()` into Boot / Task / SyscallTrap / Isr; only Task and SyscallTrap are wait-capable (INV-CTX-1/INV-CTX-2, §9).
+
 ## 2. Lock order and acquisition ranks
 
 Outer → inner: `Sched(1)` → `Queue(2)` → `Leaf(3)`. Unranked locks are invisible to the order check (documented per site; M8 re-audits).
@@ -29,7 +31,8 @@ Enforcement: `sync::spinlock_order` records per-CPU acquire/release (owner-id ma
 
 ## 3. INV-C1: no spinlock across a blocking point
 
-At every `Scheduler::reschedule()` entry (DEBUG, `CONFIG_IRQ_CONTRACT_ASSERT`):
+At every `Scheduler::reschedule()` entry (all builds when
+`CONFIG_IRQ_CONTRACT_ASSERT != 0`, de-gated from CONFIG_DEBUG by #546-A):
 no order-table spinlock may be held by the calling context
 (`scheduler_tick.cpp`, INV-C1). Takes of `scheduler_lock_` itself are
 tracked by the separate per-CPU depth counter with their own
@@ -37,7 +40,9 @@ no-reentrant-take ENSUREs (issue #369 T2b) — the on_tick adopted-guard
 path legitimately calls `reschedule()` with it held. Level: warn +
 dmesg by default (`SCHED+15`), `panic` only with
 `CONFIG_IRQ_CONTRACT_ASSERT=2`. A preempted same-CPU holder is legal and
-does not fire (owner-id, not per-CPU count).
+does not fire (owner-id, not per-CPU count). Land order: de-gate first
+(log-only), default-flip separately only on a green 3-arch matrix + soak
+(A.5 gate).
 
 Consequence: every BLOCKED transition happens lock-free (dequeue first, then
 state, then reschedule — see §4), and every queue acquire that can sleep
@@ -155,3 +160,40 @@ Recording method when `test_wcet_scheduler` lands: max cycles per region
 it with ≥3× headroom. Until then the defaults above stand (conservative
 by construction: park and watchdog both degrade to status-quo spinning,
 never to new failure modes).
+
+#546-A adds the always-on lateness sampler as the WCET-table source:
+every `on_tick` entry records `raw_counter` and updates a saturating
+high-water of (delta − expected period) in cycles (`tick_max` family);
+the sampled `IrqGuard` dwell timestamps feed only evidence lines, never
+the bound. A sampled maximum is explicitly non-normative and must never
+be used as a WCET input.
+
+## 9. Violation taxonomy and failure policy (issue #546-A)
+
+New normative invariants (enforcement: `sync/irq_contract.{hpp,cpp}`):
+
+- INV-CTX-1/INV-CTX-2 (wait-context legality/ownership), INV-BLK-1
+  (post-store note per BLOCKED transition), INV-BLK-2 (SELF/FOREIGN
+  actor attribution from the target pointer).
+- `DeclaredWaitScope`: sti-owning waits in Boot/Isr or with live depth
+  must name a closed-list row (W-1 park window, W-2 recv wait,
+  W-3 join wait, W-4 resched park); nesting/unlisted rows/triple
+  mismatch are defects.
+
+Severity table (policy `CONFIG_IRQ_CONTRACT_ASSERT` 0/1/2, identical
+semantics both builds):
+
+| Class | Violation | `=1` shipped | `=2` certification |
+|---|---|---|---|
+| C1 | wait/block/park in Isr or Boot ctx | count + one dmesg WARN per class per boot, continue | deferred halt |
+| C2 | sti-owning wait with live depth, no scope | count + WARN, continue | deferred halt |
+| C3 | scope misuse (nest/row/triple) | count + WARN, continue | deferred halt |
+| C4 | missed/duplicate block note | ledger audit + QE gate (no runtime assert) | same, no halt |
+| C5 | INV-C1 order-table lock at reschedule (SCHED+15) | count + WARN, continue | deferred halt |
+| C6 | SelfLock latch at reschedule (SCHED+16) | count + WARN, **never halt** | count + WARN, **never halt** |
+
+`=0` compiles the checks out. Halts are deferred via an atomics-only
+latch, flushed at the next safe point (syscall exit epilogue or
+`reschedule()` with IF==1); exactly one, never re-entered. C6 is
+explicitly exempt (SelfLock is a known self-healing class). New codes
+use `kDmesgBase_SCHED + 25` (catalogued WARN).

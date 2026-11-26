@@ -399,6 +399,7 @@ void Scheduler::enqueue_ready(TaskControlBlock &task) noexcept {
         __atomic_store_n(&task.admin_wake_pending, true,
                          __ATOMIC_RELEASE);
         task.state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("sched_queue_adm_refuse", &task);
         if (task.in_ready_queue_) {
             rq_for(queue_target(task)).remove(task, task.rq_priority_);
         }
@@ -493,6 +494,8 @@ void Scheduler::enqueue_ready_inner(TaskControlBlock &task) noexcept {
         __atomic_store_n(&task.admin_wake_pending, true,
                          __ATOMIC_RELEASE);
         task.state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("sched_queue_adm_refuse_inner",
+                                         &task);
         if (task.in_ready_queue_) {
             rq_for(queue_target(task)).remove(task, task.rq_priority_);
         }

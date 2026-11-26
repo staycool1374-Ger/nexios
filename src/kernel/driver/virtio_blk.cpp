@@ -346,6 +346,7 @@ bool VirtioBlkDriver::wait_request(uint16_t used_snapshot,
         compl_.arm_used = used_snapshot;
         compl_.head_idx = head_idx;
         cur->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("virtio_blk_cmd_wait", cur);
     }
 
     Scheduler::dequeue_ready(*cur);

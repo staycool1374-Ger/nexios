@@ -593,6 +593,7 @@ bool PagerRegistry::delegate_fault(kernel::TaskControlBlock &client,
     // the faulting instruction retries.  switch_away_from_terminating only
     // re-enqueues a RUNNING current — a BLOCKED one is left dequeued.
     client.state = TaskState::BLOCKED;
+    Scheduler::note_block_transition("pager_client_wait", &client);
     client.blocked_on_pager_fault = &s_slots_[slot_idx].fault;
     Scheduler::dequeue_ready(client);
     Scheduler::switch_away_from_terminating(client);

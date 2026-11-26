@@ -222,3 +222,56 @@ re-audited by M8. Rank table: `scheduler_lock_` (Sched),
 + `g_iopb_lock` (Leaf). Enforcement is report-only per (outer,inner) pair
 (`sync/spinlock_order.*`); the reschedule-entry INV-C1 assertion is
 warn-by-default (`CONFIG_IRQ_CONTRACT_ASSERT`), panic only at level 2.
+
+## BLOCKED-transition assert coverage (issue #546-A)
+
+Every production `state = TaskState::BLOCKED` store is followed in the
+same non-preemptible region by `Scheduler::note_block_transition(tag,
+target)` (INV-BLK-1). Actor is derived from the target pointer (SELF when
+target == current, else FOREIGN). Counts: per-class C1/C2 latches in
+`sync/irq_contract.cpp`; must-read-0 in healthy runs (A.5 gate).
+
+| Tag | Site | Actor |
+|---|---|---|
+| `queue_send`, `queue_send_err`, `queue_recv`, `queue_recv_err` | sync/queue.cpp (send/recv × plain/err) | SELF |
+| `mutex_lock`, `mutex_lock_err` (+ `_ceiling` variants) | sync/mutex.cpp (lock/lock_err × plain/ceiling) | SELF |
+| `semaphore_wait`, `semaphore_wait_err` | sync/semaphore.cpp | SELF |
+| `notify_wait`, `notify_wait_err` | sync/notify.cpp | SELF |
+| `eventgroup_wait`, `eventgroup_wait_err` | sync/eventgroup.cpp | SELF |
+| `park_window` | sync/park_lock.cpp (under own IrqGuard) | SELF |
+| `ipc_send_sync_wait`, `ipc_send_sync_bnd_wait`, `ipc_recv_probe_wait`, `ipc_queue_send_wait` | ipc/ipc.cpp | SELF |
+| `pager_client_wait` | ipc/pager_registry.cpp (inside #PF ISR) | SELF — known C1 tension, see below |
+| `irq_delivery_wait` | syscall/syscall_handlers_irq.cpp | SELF |
+| `syscall_recv_wait`, `syscall_recv_oversized_wait` (×2 recv shapes) | syscall/syscall_handlers_ipc.cpp | SELF |
+| `posix_nanosleep_wait`, `posix_timerfd_wait` | syscall/syscall_handlers_posix_time.cpp | SELF |
+| `proc_waitpid_wait` | proc/proc_svc.cpp | SELF |
+| `devfs_read_wait` | vfs/devfs.cpp | SELF |
+| `ahci_cmd_wait` | driver/ahci.cpp | SELF |
+| `virtio_blk_cmd_wait` | driver/virtio_blk.cpp | SELF |
+| `timer_srv_recv_wait`, `timer_srv_call_wait` | time/timer_srv.cpp | SELF |
+| `elf_loader_wait` | elf/elf_loader.cpp (store under lock_) | SELF — C2 if the holder check trips; documented deliberate pairing, gate adjudicates |
+| `thread_join_wait` | syscall/syscall_handlers_thread.cpp (W-3) | SELF |
+| `sched_suspend_admin` | task/scheduler_suspend.cpp (admin target) | FOREIGN |
+| `sched_debug_stop` | task/scheduler_debug.cpp (debug target) | FOREIGN |
+| `watchdog_monitor_wait` | task/scheduler_watchdog.cpp (own monitor) | SELF |
+| `watchdog_monitor_spawn` | task/scheduler_watchdog.cpp (fresh TCB) | FOREIGN |
+| `sched_queue_adm_refuse[_inner]` | task/scheduler_queue.cpp (admin refusal) | FOREIGN |
+| `tick_debug_park` | task/scheduler_tick.cpp (debug stop in tick ISR) | SELF — fires C1 by design if reached; gate classes must not reach it (debug tests own it) |
+
+Known tensions (counter-instrumented, gate-adjudicated, not silently waived):
+pager faults block the faulting task inside the #PF ISR by paper-§4.8
+design — a strict INV-CTX-1 reading fires C1 on every pager fault. Either
+the fault path gains an exemption row (auditor sign-off) or the design
+changes. The A.5 matrix decides; this row records the question.
+
+## DeclaredWaitScope rows (issue #546-A, closed list)
+
+| Row | Site | Entry triple shape |
+|---|---|---|
+| `park:window` | sync/park_lock.cpp sti/hlt/cli loop (W-1) | (depth, owner, entry_if) at loop entry; verified at loop exit |
+| `syscall:recv_wait` | syscall_handlers_ipc.cpp recv loops (W-2, both shapes) | same |
+| `syscall:join_wait` | syscall_handlers_thread.cpp join loop (W-3) | same |
+| `tick:resched_park` | scheduler_tick.cpp resched_park_until_dispatched (W-4) | same; dtor runs after entry_if restore at function end |
+
+Adding a row requires a plan amendment + auditor sign-off. A sti-owning
+wait not on this list that trips C2 is a defect, not a marker candidate.

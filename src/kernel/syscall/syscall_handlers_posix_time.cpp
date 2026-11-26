@@ -267,6 +267,7 @@ uint64_t Syscall::sys_nanosleep(uint64_t arg0, uint64_t arg1, uint64_t,
             skip_park = true;
         } else {
             cur->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("posix_nanosleep_wait", cur);
             Scheduler::dequeue_ready(*cur);
         }
     }
@@ -663,6 +664,7 @@ uint64_t timerfd_read_entry(vfs::Vnode &node, uint8_t *buffer, uint64_t count,
         return kNeg(-consumed);
     }
     cur->state = TaskState::BLOCKED;
+    Scheduler::note_block_transition("posix_timerfd_wait", cur);
     Scheduler::dequeue_ready(*cur);
     Scheduler::reschedule();
     if (cur->is_user_) {

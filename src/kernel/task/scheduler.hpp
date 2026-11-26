@@ -1373,6 +1373,16 @@ class Scheduler {
     /// @brief Process all deferred kills: remove_task, cleanup, free.
     ///        Called from on_tick() after the deadline scan lock is released.
     static void process_deferred_kills() noexcept;
+    /// @brief Post-store BLOCKED-transition note (issue #546-A INV-BLK-1).
+    ///        Call immediately after each `state = BLOCKED` store, in the
+    ///        same non-preemptible region (before any reschedule()/sti()/
+    ///        unlock). Atomics only: no lock, no alloc, no scheduler
+    ///        service, no serial. Actor is derived from the target pointer
+    ///        (SELF when target == current, else FOREIGN).
+    /// @param site   Short caller tag for the row/disposition.
+    /// @param target The task whose state was stored.
+    static void note_block_transition(const char *site,
+                                      TaskControlBlock *target) noexcept;
     /// @brief Cross-CPU wake handler (issue #25 C1): drains the calling
     ///        CPU's mailbox (validated entries → own queue) and arms its
     ///        reschedule flag.  Runs in the SCHED-IPI ISR (IF=0); takes

@@ -159,6 +159,7 @@ void Scheduler::monitor_task_entry() noexcept {
             // (the [WEDGE] INV-5 violation).  dequeue + state change must be
             // atomic with respect to the wake handshake.
             me->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("watchdog_monitor_wait", me);
         }
         Scheduler::reschedule();
 
@@ -190,6 +191,7 @@ void Scheduler::ensure_monitor() noexcept {
         add_task(*tcb);
         SchedulerLockGuard guard(scheduler_lock_);
         tcb->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("watchdog_monitor_spawn", tcb);
         dequeue_ready(*tcb);
     }
 }

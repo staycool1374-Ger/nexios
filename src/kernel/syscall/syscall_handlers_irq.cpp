@@ -245,6 +245,7 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t timeout_ticks,
         r->waiter = t;
         r->waiter_gen = t->generation;
         t->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("irq_delivery_wait", t);
     }
 
     Scheduler::dequeue_ready(*t);

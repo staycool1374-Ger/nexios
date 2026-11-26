@@ -40,6 +40,7 @@
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
 #include <kernel/sync/spinlock_order.hpp> // M2 §6.2 INV-C1 contract check
+#include <kernel/sync/irq_contract.hpp>  // issue #546-A tick lateness + de-gated INV-C1
 #include <kernel/task/tick_watchdog.hpp>  // M2 §6.2 item 6
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/memory/tlb_shootdown.hpp>
@@ -86,6 +87,10 @@ void Scheduler::on_tick() noexcept {
 #if defined(CONFIG_DEBUG)
     __atomic_fetch_add(&g_diag_tick_count, 1ULL, __ATOMIC_RELAXED);
 #endif
+    // Issue #546-A: always-on tick-arrival lateness sample (INV-IRQOFF-1).
+    // One raw_counter read + saturating high-water; identical in both
+    // builds. Runs before the AP branch so late AP ticks are visible too.
+    irq_contract::note_tick_arrival();
     // Issue #25 C1: APs run dispatch-only ticks (spec §3.4.4).  The full
     // body below is BSP-only (unchanged); the AP skips accounting,
     // deadlines, watchdogs, zombies and sporadic (non-real-time in C1).
@@ -1180,6 +1185,7 @@ void Scheduler::rate_monotonic_schedule() noexcept {
             __atomic_store_n(&current->debug_parked, true, __ATOMIC_RELEASE);
             __atomic_store_n(&current->has_utrap_frame, true, __ATOMIC_RELEASE);
             current->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("tick_debug_park", current);
             dequeue_ready(*current);
             kernel::debug::debug_note_requested_park(*current, tick_pc);
         }
@@ -1482,6 +1488,11 @@ void resched_park_until_dispatched(TaskControlBlock &t,
     else if (!t.park_test_member && test::park_ctx_window_open())
         gs::note_park_test_ctx_unexpected();
 #endif
+    // Issue #546-A W-4: sti/hlt loop below intentionally manipulates IF;
+    // declare it so the IRQ contract verifies scope restore. Function
+    // scope (not loop scope): the dtor runs after the entry_if restore
+    // below, so the triple verifies against the restored state.
+    irq_contract::DeclaredWaitScope park_scope("tick:resched_park");
     for (;;) {
         if (t.state != TaskState::BLOCKED)
             break; // Woken (possibly after dispatches): return to caller.
@@ -1518,8 +1529,18 @@ void scheduler_park_service_latch() noexcept {
     resched_park_until_dispatched(*cur, arch::interrupts_enabled());
 }
 
+void Scheduler::note_block_transition(const char *site,
+                                       TaskControlBlock *target) noexcept {
+    // Actor derived from the target pointer (INV-BLK-2): SELF when the
+    // store hit the current task, FOREIGN otherwise. Runs in the same
+    // non-preemptible region as the store by caller contract.
+    const bool self =
+        target != nullptr && target == current_task();
+    irq_contract::check_block_store(site, target, self);
+}
+
 void Scheduler::reschedule() noexcept {
-#if defined(CONFIG_DEBUG) && CONFIG_IRQ_CONTRACT_ASSERT != 0
+#if CONFIG_IRQ_CONTRACT_ASSERT != 0
     // M2 §6.2 item 2 (INV-C1): no tracked spinlock may be held across
     // reschedule() or a BLOCKED transition.  Owner-id matched: a task
     // preempted on this CPU while holding a lock is legal (its waiter
@@ -1530,6 +1551,8 @@ void Scheduler::reschedule() noexcept {
     // on_tick adopted-guard path, which legitimately calls reschedule()
     // with scheduler_lock_ held and must not trip this check.
     // Lock-free check (per-CPU depth reads only) — safe at entry.
+    // Issue #546-A: de-gated from CONFIG_DEBUG — identical policy in
+    // both builds (log-only at 1, panic at 2); release no longer no-ops.
     if (!sync::spinlock_contract_check_clean("reschedule")) {
 #if CONFIG_IRQ_CONTRACT_ASSERT >= 2
         panic("sched: spinlock held across reschedule()");

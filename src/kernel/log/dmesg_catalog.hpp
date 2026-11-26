@@ -291,7 +291,7 @@ constexpr DmesgRecord kDmesgCatalog_TEST[] = {
 ///        +16..+24 are taken (see below; +21/+22 are the F4 #557
 ///        supervision pause/resume records, +23 is the #590 waitpid
 ///        re-verify record, +24 is the #608 free-lock non-delivery
-///        record).  NOTE: no static_assert below — the
+///        record, +25 is the #546-A IRQ-contract violation record).  NOTE: no static_assert below — the
 ///        catalog_table_valid() requires error_nr in [7000, 19000), which
 ///        excludes the whole 4000-window SCHED base, so a SCHED table can
 ///        never satisfy it.  Registration here feeds catalog_text(); the
@@ -315,6 +315,8 @@ constexpr DmesgRecord kDmesgCatalog_SCHED[] = {
      "Sched: waitpid re-verify exhausted (issue #590)"},
     {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 24, LogSeverity::WARN,
      "Sched: lock-park latch undelivered (lock free)"},
+    {ErrorSubsystem::SCHED, kDmesgBase_SCHED + 25, LogSeverity::WARN,
+     "Sched: IRQ-contract violation (issue #546-A)"},
 };
 
 /// @brief Resolve a canonical (subsystem, error-nr) pair to its record.
@@ -445,6 +447,7 @@ inline LogSeverity lookup_severity(ErrorSubsystem subsys,
     case ErrorSubsystem::SCHED:
         // Issues #582/#557/#590/#608: +16..+24 registered severities (see
         // kDmesgCatalog_SCHED); raw 12 keeps its historic WARN.
+        // Issue #546-A: +25 IRQ-contract violation (WARN, one-shot latch).
         switch (raw) {
         case 12:
         case 16:
@@ -455,6 +458,7 @@ inline LogSeverity lookup_severity(ErrorSubsystem subsys,
         case 22:
         case 23:
         case 24:
+        case 25:
             return LogSeverity::WARN;
         case 17:
             return LogSeverity::FATAL;

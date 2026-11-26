@@ -587,6 +587,7 @@ bool AhciDriver::wait_cmd(uint8_t port, uint8_t slot, uint64_t timeout_us) {
         compl_[port][slot].waiter = cur;
         compl_[port][slot].waiter_gen = cur->generation;
         cur->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("ahci_cmd_wait", cur);
     }
 
     Scheduler::dequeue_ready(*cur);

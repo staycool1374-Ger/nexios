@@ -1114,6 +1114,7 @@ errors::IpcError IPC::send_sync_err(uint64_t dest_id, const Message &msg,
                     late_oversized = true;
             } else {
                 cur->state = TaskState::BLOCKED;
+                Scheduler::note_block_transition("ipc_send_sync_wait", cur);
                 Scheduler::dequeue_ready(*cur);
             }
         }
@@ -1341,6 +1342,8 @@ errors::IpcError IPC::send_sync_bounded_err(uint64_t dest_id,
                     late_hit = true;
             } else {
                 cur->state = TaskState::BLOCKED;
+                Scheduler::note_block_transition("ipc_send_sync_bnd_wait",
+                                                 cur);
                 Scheduler::dequeue_ready(*cur);
             }
         }
@@ -1497,6 +1500,7 @@ errors::IpcError IPC::reply_recv_err(Message &reply, uint32_t reply_type,
                 if (probe == QP::Contended)
                     IPC::ipc_probe_contended_mark();
                 cur->state = TaskState::BLOCKED;
+                Scheduler::note_block_transition("ipc_recv_probe_wait", cur);
                 Scheduler::dequeue_ready(*cur);
             }
         }
@@ -1642,6 +1646,7 @@ bool IPC::block_sender(MessageQueue &q, TaskControlBlock &task) {
             q.blocked_senders_tail = &task;
 
         task.state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("ipc_queue_send_wait", &task);
         kernel::Scheduler::dequeue_ready(task);
 
         // Priority inheritance — boost owner when higher-priority sender

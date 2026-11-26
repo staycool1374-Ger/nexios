@@ -85,6 +85,7 @@ bool Scheduler::debug_park_stop(TaskControlBlock &tgt, uint64_t kind,
         __atomic_store_n(&tgt.debug_rearm_va, 0, __ATOMIC_RELEASE);
     tgt.debug_parked = true;
     tgt.state = TaskState::BLOCKED;
+    Scheduler::note_block_transition("sched_debug_stop", &tgt);
     dequeue_ready(tgt);
     tgt.has_utrap_frame = true; // the trap wrote the U-frame slot
     return true;

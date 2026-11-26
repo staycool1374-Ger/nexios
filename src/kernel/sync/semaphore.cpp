@@ -213,8 +213,10 @@ void Semaphore::wait() {
             }
             inherit_priority(*task);
             added = add_waiter(*task);
-            if (added)
+            if (added) {
                 task->state = TaskState::BLOCKED;
+                Scheduler::note_block_transition("semaphore_wait", task);
+            }
         }
 
         if (!added) {
@@ -269,8 +271,10 @@ errors::SyncError Semaphore::wait_err() {
         inherit_priority(*task);
 
         added = add_waiter(*task);
-        if (added)
+        if (added) {
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("semaphore_wait_err", task);
+        }
     }
 
     if (!added) {

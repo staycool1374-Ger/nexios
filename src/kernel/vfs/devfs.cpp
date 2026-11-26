@@ -282,6 +282,7 @@ static int64_t kbd_read(Vnode &self, uint8_t *buffer, uint64_t count,
         if (!cur)
             return VFS_INVALID;
         cur->state = TaskState::BLOCKED;
+        kernel::Scheduler::note_block_transition("devfs_read_wait", cur);
         kernel::Scheduler::reschedule();
         // v0.4.0 MP-1: sti/hlt/cli is the USER-task blocked-wait pattern.
         if (cur->is_user_) {

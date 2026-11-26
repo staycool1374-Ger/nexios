@@ -376,10 +376,13 @@ int64_t wait_for_fire(uint64_t server_pid, TimerSrvOp expect_op,
                 } else {
                     (void)cur->msg_queue.push(probe_raw);
                     cur->state = TaskState::BLOCKED;
+                    Scheduler::note_block_transition("timer_srv_recv_wait",
+                                                     cur);
                     Scheduler::dequeue_ready(*cur);
                 }
             } else {
                 cur->state = TaskState::BLOCKED;
+                Scheduler::note_block_transition("timer_srv_call_wait", cur);
                 Scheduler::dequeue_ready(*cur);
             }
         }

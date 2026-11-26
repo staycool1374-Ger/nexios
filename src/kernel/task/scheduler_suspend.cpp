@@ -177,6 +177,7 @@ void Scheduler::admin_park_locked(TaskControlBlock &target,
     admin_bump_wdog_gen(target);
     Scheduler::dequeue_ready(target);
     target.state = TaskState::BLOCKED;
+    Scheduler::note_block_transition("sched_suspend_admin", &target);
     deadline_list_.remove(target);
     if (target.period_ticks > 0 && target.admin_deadline_ticks != 0) {
         __atomic_fetch_add(&adm_deadline_paused_count_, 1ULL,

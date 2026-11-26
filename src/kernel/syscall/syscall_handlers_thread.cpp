@@ -35,6 +35,7 @@
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/sync/irq_contract.hpp> // issue #546-A DeclaredWaitScope (W-3)
 #include <kernel/task/task.hpp>
 #include <kernel/kernel.hpp>
 #include <kernel/cap/cap.hpp>
@@ -584,8 +585,12 @@ uint64_t Syscall::sys_thread_join(uint64_t arg0, uint64_t arg1, uint64_t arg2,
         }
         // Block in-trap until woken (mirror waitpid's hlt loop: ticks and
         // the handoff wake rescan; loss-wakeup-free by re-check).
+        // Issue #546-A: sti/hlt loop below intentionally manipulates IF;
+        // declare it so the IRQ contract verifies scope restore.
+        irq_contract::DeclaredWaitScope join_scope("syscall:join_wait");
         Scheduler::dequeue_ready(*cur);
         cur->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("thread_join_wait", cur);
         Scheduler::reschedule();
         while (cur->state == TaskState::BLOCKED &&
                __atomic_load_n(&cur->join_target_id_, __ATOMIC_ACQUIRE) !=

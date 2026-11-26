@@ -223,6 +223,7 @@ bool Queue::send(const uint8_t *data, size_t size) {
             // a half-transitioned state between the unlocked store and the
             // deferred switch.
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("queue_send", task);
         }
 
         // Block OUTSIDE the queue lock so the receiver can drain the queue and
@@ -283,6 +284,7 @@ errors::SyncError Queue::send_err(const uint8_t *data, size_t size,
             add_send_waiter(*task);
             // H-7: BLOCKED transition inside the lock (see send()).
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("queue_send_err", task);
         }
 
         Scheduler::dequeue_ready(*task);
@@ -375,6 +377,7 @@ bool Queue::receive(uint8_t *buf, size_t *size) {
                 return false;
             // H-7: BLOCKED transition inside the lock (see send()).
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("queue_recv", task);
         }
 
         // Block OUTSIDE the queue lock so a sender can enqueue and wake us.
@@ -439,6 +442,7 @@ errors::SyncError Queue::receive_err(uint8_t *buf, size_t *size,
             add_recv_waiter(*task);
             // H-7: BLOCKED transition inside the lock (see send()).
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("queue_recv_err", task);
         }
 
         Scheduler::dequeue_ready(*task);

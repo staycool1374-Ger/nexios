@@ -169,8 +169,10 @@ uint64_t EventGroup::wait_bits(uint64_t wanted, bool clear_on_exit) {
                 return bits_;
             }
             added = add_waiter(*task, wanted, clear_on_exit);
-            if (added)
+            if (added) {
                 task->state = TaskState::BLOCKED;
+                Scheduler::note_block_transition("eventgroup_wait", task);
+            }
         }
 
         if (!added) {
@@ -221,8 +223,10 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t wanted, bool clear_on_exit,
         }
 
         added = add_waiter(*task, wanted, clear_on_exit);
-        if (added)
+        if (added) {
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("eventgroup_wait_err", task);
+        }
     }
 
     if (!added) {

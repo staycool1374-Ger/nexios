@@ -1169,6 +1169,8 @@ void ElfLoader::task_main() {
                     auto *self = Scheduler::current_task();
                     if (self) {
                         self->state = TaskState::BLOCKED;
+                        Scheduler::note_block_transition("elf_loader_wait",
+                                                         self);
                         Scheduler::dequeue_ready(*self);
                         should_block = true;
                     }

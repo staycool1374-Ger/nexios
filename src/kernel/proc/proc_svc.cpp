@@ -332,6 +332,7 @@ uint64_t ProcSvc::waitpid(uint64_t arg0, uint64_t arg1, uint64_t arg2,
             cur->waiting_child_status = status_ptr;
             Scheduler::dequeue_ready(*cur);
             cur->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("proc_waitpid_wait", cur);
             cur->waiting_child_pid = target_pid;
             // Issue #590 INV-WAIT-3: pair the terminator-side fence.
             // Both fences are required — release/acquire is not

@@ -30,6 +30,7 @@
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/ipc/buffer_pool.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
+#include <kernel/sync/irq_contract.hpp> // issue #546-A DeclaredWaitScope (W-2)
 #include <kernel/memory/checked_ptr.hpp>
 #include <kernel/arch/io.hpp>
 
@@ -83,6 +84,9 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
     bool was_blocked = false;
     if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
         // Wheel-armed bounded wait (or 0 = forever, never armed).
+        // Issue #546-A W-2: sti/hlt loop below intentionally manipulates
+        // IF; declare it so the IRQ contract verifies scope restore.
+        irq_contract::DeclaredWaitScope recv_scope("syscall:recv_wait");
         while (!(ok = (cur->state != TaskState::BLOCKED)
                            ? IPC::recv(msg)
                            : false)) {
@@ -132,6 +136,8 @@ uint64_t Syscall::sys_receive(uint64_t, uint64_t arg1, uint64_t arg2,
                     if (probe == QP::Contended)
                         IPC::ipc_probe_contended_mark();
                     cur->state = TaskState::BLOCKED;
+                    Scheduler::note_block_transition("syscall_recv_wait",
+                                                     cur);
                     Scheduler::dequeue_ready(*cur);
                 }
             }
@@ -332,6 +338,9 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
     bool was_blocked = false;
     if (IPC::recv_wait_arm(*cur, timeout_ticks)) {
         // Wheel-armed bounded wait (or 0 = forever, never armed).
+        // Issue #546-A W-2: sti/hlt loop below intentionally manipulates
+        // IF; declare it so the IRQ contract verifies scope restore.
+        irq_contract::DeclaredWaitScope recv_scope("syscall:recv_wait");
         while (!(ok = (cur->state != TaskState::BLOCKED)
                            ? cur->msg_queue.pop_clamped(msg, clamp)
                            : false)) {
@@ -397,6 +406,8 @@ uint64_t Syscall::sys_recv_fast(uint64_t, uint64_t, uint64_t arg2,
                     if (probe == QP::Contended)
                         IPC::ipc_probe_contended_mark();
                     cur->state = TaskState::BLOCKED;
+                    Scheduler::note_block_transition(
+                        "syscall_recv_oversized_wait", cur);
                     Scheduler::dequeue_ready(*cur);
                 }
             }

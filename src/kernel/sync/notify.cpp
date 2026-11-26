@@ -117,6 +117,7 @@ uint64_t Notify::wait() {
                 waiter_ = task;
                 waiter_gen_ = task->generation;
                 task->state = TaskState::BLOCKED;
+                Scheduler::note_block_transition("notify_wait", task);
                 break;
             }
             // A waiter is already registered (re-entered wait while still
@@ -187,6 +188,7 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
         waiter_ = task;
         waiter_gen_ = task->generation;
         task->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("notify_wait_err", task);
     } // lock released BEFORE reschedule (see wait())
 
     // Same lock-scope / dequeue discipline as wait().

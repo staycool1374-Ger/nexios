@@ -280,6 +280,7 @@ void Mutex::lock() {
             task->waiting_on_mutex = this;
             lock_.unlock();
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("mutex_lock_ceiling", task);
             Scheduler::reschedule();
             // INV-4 wait for the deferred switch (see the non-ceiling path
             // below) — never burn the retry budget spinning for it.
@@ -326,6 +327,7 @@ void Mutex::lock() {
         lock_.unlock();
 
         task->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("mutex_lock", task);
         Scheduler::reschedule();
         // INV-4a: reschedule() parks a BLOCKED caller until woken and
         // returns immediately otherwise.  Do NOT re-enter
@@ -380,6 +382,7 @@ errors::SyncError Mutex::lock_err() {
             task->waiting_on_mutex = this;
             lock_.unlock();
             task->state = TaskState::BLOCKED;
+            Scheduler::note_block_transition("mutex_lock_err_ceiling", task);
             Scheduler::reschedule();
             // INV-4 wait for the deferred switch (see the non-ceiling path
             // below) — never burn the retry budget spinning for it.
@@ -424,6 +427,7 @@ errors::SyncError Mutex::lock_err() {
         lock_.unlock();
 
         task->state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("mutex_lock_err", task);
         Scheduler::reschedule();
         // INV-4a: reschedule() parks a BLOCKED caller until woken and
         // returns immediately otherwise.  Do NOT re-enter

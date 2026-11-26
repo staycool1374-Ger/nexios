@@ -2,6 +2,7 @@
 /// @brief Bounded spin → timed park acquisition (M2, issues #545/#546).
 
 #include <kernel/sync/park_lock.hpp>
+#include <kernel/sync/irq_contract.hpp> // issue #546-A DeclaredWaitScope (W-1)
 #include <kernel/test/park_seam.hpp>
 #include <kernel/sync/spinlock.hpp>
 #include <kernel/sync/spinlock_order.hpp>
@@ -109,11 +110,17 @@ ParkWindowResult park_window(SpinLock &lock, const char *site,
         arch::IrqGuard irq_guard{};
         Scheduler::dequeue_ready(task);
         task.state = TaskState::BLOCKED;
+        Scheduler::note_block_transition("park_window", &task);
     }
     Scheduler::reschedule();
     // sys_receive shape (unconditional sti/hlt/cli): trap entry owns the
     // IRQ state, so sti is safe here — and mandatory, since IF=0 sleeps
     // through the wheel timeout.
+    //
+    // Issue #546-A W-1: the sti/hlt loop below intentionally manipulates
+    // IF; declare it so the IRQ contract can verify the scope restores
+    // the entry triple (depth, owner, entry_if) on exit.
+    irq_contract::DeclaredWaitScope park_wait_scope("park:window");
     for (;;) {
         arch::sti();
         arch::hlt();

@@ -83,6 +83,7 @@ tracking issue; it is never presented as already true.
 | INV-MK-10 | Every mechanism SHALL exist on x86_64, aarch64 and riscv64, or carry a documented arch-equivalent and a tracked issue (§11). | per-arch matrix | PARTIAL (§11) |
 | INV-MK-11 | A server death SHALL wake or error-reply every client blocked on it, including reply waiters. | death funnel + IPC teardown | SATISFIED for reply waiters (M1: `IPC::wake_reply_waiters_of` READY-marks at the funnel; waiter exits with typed PEER_DIED; queue-full senders intentionally left to the queue-destructor drain, bounded by the zombie-starvation trigger, §9.2) |
 | INV-MK-12 | Priority boosts and donations SHALL be revertible and symmetric, mutated only through scheduler helpers, and bounded in chain depth. | `Scheduler::move_priority` | PARTIAL: single-level boost in `IPC::block_sender` only; not transitive (§8.1) |
+| INV-CTX-1/INV-CTX-2/INV-BLK-1/INV-BLK-2 | Wait-context legality, sti-owning-wait ownership, post-store BLOCKED notes, SELF/FOREIGN actor attribution (issue #546-A; taxonomy + failure policy in `irq-preemption-contract.md` §9). | `sync/irq_contract.{hpp,cpp}`, `Scheduler::note_block_transition`, `DeclaredWaitScope` (W-1..W-4) | PARTIAL: asserted at all BLOCKED stores + syscall exits; de-gated INV-C1 log-only matrix pending (A.5); certification-halt path wired but not default |
 
 ## 2. Kernel mechanism boundary (current vs end state)
 
@@ -867,6 +868,11 @@ Every rule is verified by a kill/restart cycle under `test_isolate` with
 | Cross-core IPC / donation | out of scope unless Q11 decides otherwise | same | same | #167 |
 
 ## 12. Configuration and build modes
+
+- `CONFIG_IRQ_CONTRACT_ASSERT` (0 = checks compiled out, 1 = count + one
+  dmesg WARN per class per boot, shipped default both builds, 2 =
+  certification-only deferred halt): the IRQ-contract failure policy
+  (issue #546-A, taxonomy in `irq-preemption-contract.md` §9).
 
 - Each server lands behind `CONFIG_<X>_SRV`, default 0, following
   `CONFIG_TIMER_SRV`.
