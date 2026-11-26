@@ -13,19 +13,48 @@
 
 Census holes: (1) INV-C1 debug-only → release never checks; no IF/context asserts at block points or syscall exit; no IRQ-off duration measurement. (2) SpinLock::lock() unbounded; holder-never-blocks unenforced; rank table covers 5 locks, scheduler_lock_ invisible. (3) EDF stand-down disables breaker; guarantee is band-level; lock waits unbounded/undetectable. (4) Watchdog needs checkpoints for coverage; ACTION 0 forever; grace 500 guessed; domain overclaimed off-x86; AP tick path never calls note_tick().
 
-## 1. INCREMENT A — IRQ contract: stated → enforced (no new locks, no new ABI)
+## 1. INCREMENT A — IRQ contract: stated → enforced (no new locks, no new ABI) — REVISION R2
 
-New `src/kernel/sync/irq_contract.{hpp,cpp}` (ExecCtx classifier, check entry points, violation counters, IRQ-off lateness high-water, test-isolation reset). `irq_guard.hpp` outer-transition timestamps (sampled). `on_tick` entry lateness sampling (always-on, 1 counter read). INV-C1 de-gated from CONFIG_DEBUG (policy `CONFIG_IRQ_CONTRACT_ASSERT` 0/1/2, identical both builds). `Scheduler::note_block_transition(site, self)` after each of 40 BLOCKED stores (post-store). `syscall.cpp` real exit assertion + rename mislabeled entry checkpoints. `park_lock.cpp` park-entry context assertion + escalation bookkeeping (no bound introduced). Docs: contract §1/§3/§8 + ledger assert-coverage column. New config keys with `#ifndef` + value `#error` pairs.
+Closes audits/report-20261126-546A-plan.md ([F1]–[F7] markers). Retrieval verified (graphify node + obsidian/docs reads; tree facts confirmed).
 
-Cross-arch: shared C++ on `arch::interrupts_enabled/irq_guard_depth_own/isr_nesting_own/in_syscall_trap_level` + `arch::Timer::raw_counter/raw_counter_freq_hz` (all three arches). x86 gates sampling on `calibrate_tsc` having run. Doc caveat (not deferral): aa64/rv64 sample duration, not independent-domain (increment C owns independence).
+### A.1 New module and surface
 
-QE stubs (testbed): ctx_classify, block_self_clean/guard_live, syscall_exit_restores_if, lateness_highwater, policy_parity (release build asserts compiled), reset_isolation.
+New `src/kernel/sync/irq_contract.{hpp,cpp}`: `ExecCtx::classify()`, check entry points (`check_wait_ctx`, `check_block_store`, `check_park_entry`, `syscall_exit_epilogue`, `flush_halt`), violation counters per class, IRQ-off lateness high-water, deferred halt-request latch, test-isolation reset. `irq_guard.hpp` outer-transition dwell timestamps. `on_tick` entry lateness sample. INV-C1 de-gated from `CONFIG_DEBUG` under policy `CONFIG_IRQ_CONTRACT_ASSERT` (0/1/2, identical semantics both builds). `Scheduler::note_block_transition(row, actor)` after each of the 40 BLOCKED stores (table verified exact, not re-derived). `syscall.cpp` real exit assertion + six checkpoint renames. `park_lock.cpp` park-entry context assertion + escalation bookkeeping (no bound). `kernel::sync::DeclaredWaitScope` marker (internal-only, no ABI, no lock). Docs: contract §1/§3/§8 + new §9 failure policy + ledger assert-coverage column.
 
-Gates: synchronization_irq_guard → synchronization_spinlock → synchronization_lock_order → scheduler_core → core_sync → core_sched → ipc → core_syscall → selftest; aarch64/riscv64 link + arch classes; debug+release x86_64; check-style 0; test-history rows.
+### A.2 Normative invariants (new IDs, defined here)
 
-S1 risks: INV-C1 de-gate changes release failure policy (mitigate: land de-gate first, log-only matrix with zero SCHED+15 hits before default flip); false-positive context assert on legal sti-owning waits (mitigate: ExecCtx classification + DeclaredWaitScope exemption). S2: sampled dwell cost (default off release, factor 64 debug, identical-binary timing); 40-site self/foreign misclassification (reviewable ledger table first). S3: checkpoint tag renames.
+INV-CTX-1 (wait-context legality): BLOCKED store, park arm, or sti-owning wait only in wait-capable contexts {Task, SyscallTrap} as classified from `isr_nesting_own()`, `in_syscall_trap_level()`, `irq_guard_depth_own()/owner`; Isr/Boot ⇒ class C1. Live self-owned IrqGuard depth is recorded, never asserted.
+INV-CTX-2 (wait IRQ ownership): sti-owning wait enters with depth==0 or inside a `DeclaredWaitScope` naming a closed-list ledger row; restores the exact (depth, owner, entry_if) triple; re-enable with depth!=0 and no scope ⇒ C2.
+INV-BLK-1 (one post-store note per transition): every BLOCKED store followed in the same non-preemptible region by exactly one `note_block_transition(row, actor)`; duplicates and misses ⇒ C4 (ledger-audit/QE, no runtime assert).
+INV-BLK-2 (actor attribution): actor computed once from the target pointer — SELF if `target == current`, else FOREIGN (incl. scheduler_suspend.cpp:179, scheduler_debug.cpp:87, scheduler_watchdog.cpp:192, sys_kill-adjacent paths). INV-CTX-1/2 evaluate the ACTOR; INV-BLK-1's duty evaluates the TARGET. Counters attribute to target->id (or 0); actor ExecCtx recorded in the same row. [F1]
 
-Non-goals: no new block rules, no independent probe, no SpinLock conversions, no WCET ratchet.
+### A.3 DeclaredWaitScope — bounded exemption [F2]
+
+RAII marker (`kernel::sync`, internal, non-copyable/non-movable): ctor takes a non-null literal matching a closed-list ledger row, stores entry triple in one per-CPU slot, saturating depth 0..1 (nesting forbidden — second construction is C3, keeps outermost row); dtor verifies exit triple (mismatch ⇒ C3); must not outlive its function, span a syscall return, or span another scope. Suppresses ONLY C2 for its own frame. Closed list (fixed at approval): W-1 park_lock.cpp:117-123, W-2 syscall_handlers_ipc.cpp:86-99 (+409-416, 445-463 variants), W-3 syscall_handlers_thread.cpp:590-596, W-4 scheduler_tick.cpp:1485-1495. New rows need plan amendment + auditor sign-off. Ledger records every use with measured triple; QE `declared_wait_ledger_complete` asserts tree count == ledger rows.
+
+### A.4 Violation taxonomy + degraded/halt boundary [F3 — closes Q2/OD-8 for A]
+
+New contract §9 + microkernel-transition §9 cross-ref + §12 config row. Classes: C1 (Isr/Boot wait), C2 (undeclared depth!=0 sti wait), C3 (scope misuse), C4 (missed/duplicate note — ledger/QE only), C5 (INV-C1 SCHED+15), C6 (SelfLock SCHED+16 — never panics, exempt). Policy: 0 = compiled out; 1 = default shipped both builds (classify + count + one dmesg WARN per class per boot, always continue, no panic); 2 = certification builds only (count + deferred halt via atomic halt-request latch, flushed at next safe point — syscall exit epilogue or reschedule entry with IF==1; one fire, never re-entered; C6 exempt in both profiles).
+
+### A.5 INV-C1 de-gate gate [F4]
+
+De-gate commit (default stays 1) then separate default-flip commit only when green. Matrix: 3 arches × 2 builds × classes synchronization_irq_guard, spinlock, lock_order, scheduler_core, core_sync, core_sched, core_syscall, ipc, ipc_core, ipc_blocking, drivers_core, selftest (+ arch_aarch64/riscv64 on-arch). Debug full registry, release TF_RELEASE subset; SCHED+15 family zero everywhere; C1/C2/C3 zero; C6 ≤ baseline. SCHED+16 stays CONFIG_DEBUG-gated WARN-only, never panics. Cost: +1 per-CPU load + compare per reschedule (measured via §8 method). Soak: 72h x86_64 debug+release paired, 0 C1/C2/C3/C5, no watchdog FIRE, no tracker delta, C6 ≤ baseline. Owner: QE runs matrix + soak + rows; dev owns flip decision. Rollback: any non-harness C5 hit or release reschedule p99 lateness regression > 5% ⇒ revert de-gate commit, file site issue.
+
+### A.6 Measurement cost, honestly [F5]
+
+Every IrqGuard outer transition + every on_tick entry, per build: release = one raw_counter read + saturating compare + conditional store (no shift/mask/log/ring); debug = same triple + (counter & 63)==0 debug-only sample line. "1 counter read" is the always-on cost in both builds; "factor 64" is debug-only logging, not the high-water mechanism. High-water updates on EVERY transition (true maximum, not sampled); 1-in-64 feeds only the evidence line. A sampled maximum is non-normative by rule (never a WCET input).
+
+### A.7 Syscall exit placement [F6]
+
+Check logic in one place — `irq_contract::syscall_exit_epilogue(tag)`, inlined, invoked at all 6 return paths of handle/handle_fast (4 + 2: bounds-fail, fast/full dispatch, canary-fail). Rename mapping: 140→syscall_entry:handle:bounds, 168→handle:fast_pre_dispatch, 180→handle:canary_fail, 184→handle:full_pre_dispatch, 191→handle_fast:bounds, 201→handle_fast:pre_dispatch; new exit tags handle:fast/full_post_dispatch, handle_fast:post_dispatch, bounds_fail, canary_fail. Epilogue asserts SyscallTrap ctx, depth 0, spinlock clean, IF 0; effects atomics-only + interrupts_enabled read + retained checkpoint.
+
+### A.8 Entry-point constraint [F7]
+
+note_block_transition + all irq_contract entries + DeclaredWaitScope ctor/dtor + park-entry assert: lock-free, allocation-free, no scheduler services, atomics only (precedent: tick_watchdog::checkpoint, schedoracles counters). Prohibited: any SpinLock/ParkLock take, scheduler_lock_ take, PMM/MemPool/new/delete, direct serial write, reschedule()/scheduler services. Evidence deferred to flush_halt/rate-limited latch. Safe at any ISR nesting by construction.
+
+### A.9–A.16 (unchanged from R1)
+
+40-site ledger with actor/assert-coverage/ctx-reachability columns (exact at audit time); shared-arch seams + x86 TSC gate + aa64/rv64 duration caveat; no new sampling key (CONFIG_DEBUG discriminator; CONTRACT_ASSERT 0/1/2 documented); docs deliverables (transition §1 rows, contract §1/§3/§8/§9, ledger columns + scope rows); QE stubs incl. violation_class_matrix, halt_latch_single_fire, declared_wait_ledger_complete; gates incl. A.5 3×2 matrix; risks S1/S2/S3 as R1; non-goals unchanged (no block rules, no probe, no conversions, no ratchet, no cert target, no SMP).
 
 ## 2. INCREMENT B — Spinlock discipline: one story, enforced, complete (no new locks on kill/IRQ paths)
 
