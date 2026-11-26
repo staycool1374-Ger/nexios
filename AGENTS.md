@@ -3,51 +3,59 @@
 Mandatory reading for every role and session: `prompts/CODING_STYLE.md` — all coding,
 safety, and error-handling rules defined there apply unconditionally.
 
-## MANDATORY PIPELINE WORKFLOW
+## MANDATORY PIPELINE WORKFLOW (developer lane only)
 
-For any non-trivial code modification or user request, you MUST adhere strictly to the following 3-step execution pipeline:
+For any non-trivial code modification or user request, the developer MUST
+adhere strictly to the following execution pipeline:
 
-Scope: Phase 3 (SIL 3 audit) covers production kernel code only. A change is
+Scope: SIL 3 audit covers production kernel code only. A change is
 test-only iff every changed file is under `src/kernel/test/`, is
 `src/lib/test.hpp` / `src/lib/test.cpp`, is `initrd` test config, or is a
-`test_expected_counts` row. Test-only changes run Phases 1–2 only (plan +
-implement + gates) with no auditor call. Any change touching production
+`test_expected_counts` row. Test-only changes skip every audit (plan green
+still required — see Phase 1b). Any change touching production
 paths (`src/kernel/**` outside `test/`, `src/services/`, `src/lib` outside
 `test.*`, `src/userspace/`, or build/tooling that affects the kernel binary)
-runs the full chain including Phase 3. Prior audit reports (including on
+runs the full chain including the code audit. Prior audit reports (including on
 test-only diffs) remain valid evidence; this scoping applies going forward.
 
-1. **PHASE 1: PLANNING (Implicit Mandatory Step)**
-   - Do NOT write or edit code directly.
+1. **PHASE 1: PLANNING (Implicit Mandatory Step — no code)**
+   - Do NOT write or edit code.
    - Every non-trivial task corresponds to a GitHub Issue (see "GitHub Issue
      Tracking" below). If the user prompt has no issue yet, the developer files
      one FIRST (via `.github/ISSUE_TEMPLATE/` schema) — the issue number anchors
      all subsequent work.
-   - Delegate the request first to the `planner` subagent (see `PROMPT-planning.md`).
-   - Wait for the plan and analyze the architecture requirements.
+   - 1a. Developer delegates the task to the `planner` subagent
+     (see `PROMPT-planning.md`) and waits for the plan.
+   - 1b. Developer sends the plan to the `auditor` for a PLAN AUDIT
+     (artifact: `audits/plan-<issue>.md`, verdict: `audits/report-<ts>-plan[-rN].md`).
+     On REJECTED, the findings go back to the planner — iterate
+     planner → auditor until the plan lands APPROVED (green). No code
+     is written until the plan is green.
 
-2. **PHASE 2: IMPLEMENTATION**
-   - Execute the code changes strictly adhering to the plan generated in Phase 1.
+2. **PHASE 2: IMPLEMENTATION (only on a green plan)**
+   - Execute the code changes strictly adhering to the approved plan.
 
-3. **PHASE 3: SIL 3 AUDIT (Implicit Mandatory Step, production changes only)**
-   - Invoke the `auditor` subagent (see `PROMPT-audit.md`) to review the modified files against safety rules.
-   - Fix any rejected code immediately if the auditor finds flaws.
+3. **PHASE 3: SIL 3 CODE AUDIT (Implicit Mandatory Step, production changes only)**
+   - Developer sends the resulting diff to the `auditor` (see `PROMPT-audit.md`).
+   - Fix any rejected code immediately; re-verify and re-audit until APPROVED.
    - **Diff-patch protocol (minimize exchange):** hand the auditor `git diff main -- <files> > audits/pending_patch.diff` (NOT pasted contents); on REJECT the auditor writes a `git apply`-able `audits/rejected_patch.diff` which you apply verbatim, then re-verify and re-audit. See PROMPT-dev.md §PARALLEL AUDIT TRIGGER RULE.
    - After the final decision, post the audit evidence on the issue: report file
      path (`audits/report-<ts>.md`) + `DECISION: APPROVED|REJECTED` as a comment.
 
-### Role Model (who triggers what)
+Chain shape: `planner → auditor → … → (plan green) → developer → auditor`.
+The planner and auditor are pure subagents: they never call each other and
+never call the developer; they return their result to the developer only.
+The developer is the sole orchestrator and the only lane that writes
+production code.
 
-After `AGENTS.md` routes a session to a role, that role drives the pipeline:
+### QE lane: no pipeline
 
-- The **developer** is the ORCHESTRATOR of the pipeline.
-  After loading `PROMPT-dev.md`, the developer triggers the full chain:
-  `planner → developer → auditor`.
-  1. Developer calls the `planner` subagent with the task (Phase 1).
-  2. Developer implements the plan itself (Phase 2).
-  3. Developer calls the `auditor` subagent on the resulting diff (Phase 3, production changes; test-only changes end at Phase 2).
-- The planner and auditor are pure subagents: they never call each other and
-  never call the developer; they return their result to the developer only.
+The quality-engineer lane (`testbed` branch, see `PROMPT-testdev.md`) has
+NO pipeline: no planner, no auditor, no phases. QE writes and runs tests
+directly. Developer test files are read-only to the dev lane; QE owns them.
+A dev-lane plan may specify stub tests for QE to implement, but QE takes
+no audit and files no plan — verification results (class counts) are the
+deliverable, posted on the issue.
 
 ## Branch Safeguard
 Before writing or modifying kernel tests, run `git branch --show-current`:
