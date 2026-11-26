@@ -20,12 +20,14 @@
 
 /// @file tick_watchdog.hpp
 /// @brief TSC-domain tick watchdog (M2, issue #546 §6.2 item 6).
-/// Fires when the raw TSC advances past grace while the timer tick count is
-/// frozen and the CPU is out of idle.  Independent clock domain from the
-/// tick it watches (raw_counter never rewinds, unlike snapshot-rewound
-/// ticks_).  Fire policy is log/latch only (CONFIG_TICK_WATCHDOG_ACTION,
-/// default 0); a panic arm exists for the Q12-A reboot hook but M2 never
-/// wires it.  No allocation, no locks, no scheduler services on any path.
+/// Fires when the raw counter advances past grace while the timer tick count is
+/// frozen and the CPU is out of idle. Domain honesty (#546-C): on x86_64 the
+/// TSC is independent of the APIC/PIT tick source; on aarch64/riscv64 the
+/// sampled counter is the same system counter the tick comparator uses, so
+/// there it supervises tick *flow*, not an independent clock. Fire policy is
+/// log/latch only (CONFIG_TICK_WATCHDOG_ACTION, default 0); a panic arm exists
+/// for the Q12-A reboot hook but is not wired by default. No allocation, no
+/// locks, no scheduler services on any path.
 
 #include <types.hpp>
 
@@ -57,6 +59,22 @@ uint64_t fire_count() noexcept;
 
 /// @brief Raw TSC value at the last fire (0 if never fired).
 uint64_t last_evidence() noexcept;
+
+/// @brief Snapshot readout (schedoracles shape, issue #546-C). Single
+///        struct, read-only, no locks.
+struct TickWatchdogRecord {
+    uint64_t grace_cycles = 0;
+    uint64_t grace_source = 0; ///< 0 = floor default, 1 = measured auto-derive
+    bool enabled = false;
+    bool fired = false;
+    uint64_t fire_count = 0;
+    uint64_t overrun_cycles = 0;
+    const char *where_tag = nullptr; ///< fire site, null if never fired
+    uint64_t per_cpu_last_stale = 0; ///< max (ticks - snapshot) in ticks
+};
+
+/// @brief Read the current watchdog record (see TickWatchdogRecord).
+TickWatchdogRecord read_tick_watchdog() noexcept;
 
 /// @brief Test-isolation reset (clears snapshots, latch, counters).
 void reset_for_test() noexcept;

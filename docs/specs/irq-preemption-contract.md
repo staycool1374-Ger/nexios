@@ -141,18 +141,38 @@ pop + PI-restore sections, endpoint `bound_receiver` read. Explicitly NOT
 converted: `unblock_sender_rollback` (fail-fast path must stay instant;
 parking there would turn a bounded rollback into a multi-tick sleep).
 
-## 5. Tick watchdog (TSC domain)
+## 5. Tick watchdog (TSC domain) — #546-C closure
 
-`task/tick_watchdog.{hpp,cpp}`: fires iff raw TSC advances past
-`grace = CONFIG_TICK_WATCHDOG_GRACE_TICKS (500)` timer-ticks while the tick
-count `Timer::ticks()` is frozen and the CPU is out of idle. Independent
-clock domain (`raw_counter`, never snapshot-rewound). Disabled when either
-frequency is 0, before the first tick, and while the test harness owns the
-clock. Fire = dmesg ERROR (TIMING+8) + serial evidence + one-shot latch +
-`fire_count`; action 2 (`panic`) exists for the Q12-A fail-safe hook but M2
-never wires it. `note_tick()` at the end of the BSP `on_tick` body;
-`checkpoint()` on park spins/resumes and syscall exits; `idle_checkpoint()`
-resyncs only (idle-current implies no stranded work).
+`task/tick_watchdog.{hpp,cpp}`: fires iff the raw counter advances past
+grace while the timer tick count `Timer::ticks()` is frozen and the CPU is
+out of idle. Domain honesty: x86_64 TSC is independent of the APIC/PIT
+tick source; on aarch64/riscv64 the sampled counter is the same system
+counter the tick comparator uses, so there it supervises tick *flow*,
+not an independent clock. Disabled when either frequency is 0, before
+the first tick, and while the test harness owns the clock. Fire = dmesg
+ERROR (TIMING+8) + serial evidence + one-shot latch + `fire_count`;
+action 2 (`panic`) exists for the Q12-A fail-safe hook but is not wired
+by default. `note_tick()` at the end of the BSP `on_tick` body (UP-only;
+AP ticks never move the BSP snapshot — fail closed, SMP tracked
+separately); `checkpoint()` on park spins/resumes and syscall exits;
+`idle_checkpoint()` resyncs only (idle-current implies no stranded work).
+
+Grace derivation (auto, monotone): `grace = max(floor, 10 × measured)`,
+where `measured` is Increment A's `tick_late_max_cycles` converted to
+ticks and `floor = CONFIG_TICK_WATCHDOG_GRACE_TICKS` (500). The grace
+never shrinks; its source (floor vs measured) is published in the
+readout. The floor stands until a measurement exists.
+
+Coverage ledger: every unbounded wait/spin loop carries a `checkpoint()`
+at a cadence of at most one tick-equivalent of wall time (hlt loops:
+per iteration; bounded pause spins: every 256 rounds; service loops:
+per dispatch cycle). Sites: park windows (`lock:contend` checkpoints),
+resched_park resume, syscall entries/exits, lock spin/exhaustion paths,
+devfs kbd wait, timer_srv call wait, irq trap wait spin, irq_thread
+dispatch. A loop with no row is a defect. Readout:
+`TickWatchdogRecord` (grace, source, enabled, fired, fire_count,
+overrun, where_tag, per_cpu_last_stale) + `read_tick_watchdog()`; the
+older scalar accessors remain as thin wrappers.
 
 Grace derivation for tuning: `grace = max(10 × largest measured IRQ-off
 WCET tick-equivalent, 500 ticks)`. No measured WCET exists in-tree yet;

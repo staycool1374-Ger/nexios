@@ -22,6 +22,7 @@
 #include <kernel/vfs/devfs.hpp>
 #include <kernel/random.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/tick_watchdog.hpp> // issue #546-C wait-loop coverage
 #include <kernel/task/task.hpp>
 #include <services/terminal/terminal.hpp>
 #include <kernel/arch/io.hpp>
@@ -270,6 +271,7 @@ static int64_t kbd_read(Vnode &self, uint8_t *buffer, uint64_t count,
     char key_char = 0;
     // VULN-W2: cooperative blocking (see tty_read) instead of UINT64_MAX spin.
     while (true) {
+        kernel::tick_watchdog::checkpoint("devfs:kbd_wait");
         if (arch::Keyboard::getchar(key_char)) {
             buffer[0] = static_cast<uint8_t>(key_char);
             return 1;

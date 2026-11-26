@@ -24,6 +24,7 @@
 
 #include <kernel/ipc/ipc.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/tick_watchdog.hpp> // issue #546-C wait-loop coverage
 #include <kernel/task/task.hpp>
 #include <kernel/driver/driver_pds.hpp>
 #include <kernel/arch/hal/timer.hpp>
@@ -288,6 +289,7 @@ int64_t wait_for_fire(uint64_t server_pid, TimerSrvOp expect_op,
             arch::sti();
             arch::hlt();
             arch::cli();
+            kernel::tick_watchdog::checkpoint("timer_srv:call_wait");
             continue;
         }
         // Bounded drain: at most one queue-full of pops per wakeup; a

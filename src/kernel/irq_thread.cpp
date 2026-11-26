@@ -8,6 +8,7 @@
 #include <kernel/arch/io.hpp>
 #include <constants.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/tick_watchdog.hpp> // issue #546-C wait-loop coverage
 #include <logger.hpp>
 
 namespace kernel {
@@ -237,6 +238,9 @@ void IrqThread::task_entry() {
                   self->id, irqt->vector_);
 
     for (;;) {
+        // Issue #546-C: service-loop liveness proof (one checkpoint per
+        // dispatch cycle; the notify wait itself parks scheduler-mediated).
+        tick_watchdog::checkpoint("irq_thread:dispatch");
         // Wait for the ISR to notify us
         uint64_t val = irqt->notify_->wait();
         (void)val;

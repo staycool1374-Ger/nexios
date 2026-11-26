@@ -36,6 +36,7 @@
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
+#include <kernel/task/tick_watchdog.hpp> // issue #546-C wait-loop coverage
 #include <kernel/task/task.hpp>
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_types.hpp>
@@ -267,8 +268,16 @@ uint64_t Syscall::sys_irq_wait(uint64_t cap_handle, uint64_t timeout_ticks,
     // genuinely-IRQ-off kernel callers.  Mirrors IPC send_sync.
     arch::sti();
     if (arch::interrupts_enabled()) {
+        uint64_t spin_round = 0;
         while (t->state == TaskState::BLOCKED) {
             arch::pause();
+            // Issue #546-C: gate-denied spin must still prove the tick
+            // alive (every 256 rounds); a wedged tick here is otherwise
+            // invisible to the watchdog (no checkpoint on this path).
+            ++spin_round;
+            if ((spin_round & 255U) == 0) {
+                kernel::tick_watchdog::checkpoint("irq_delivery:wait_spin");
+            }
         }
     } else {
         // Interrupts disabled: roll back to a consistent RUNNING state.
