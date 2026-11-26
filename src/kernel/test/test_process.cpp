@@ -31,6 +31,11 @@
 #include <kernel/arch/irq_guard.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/memory/vmm.hpp>
+#include <kernel/cap/carve_binding.hpp>
+#include <kernel/cap/frame_foreign_map.hpp>
+#include <kernel/cap/vspace_map.hpp>
+#include <kernel/proc/proc_fork_carve.hpp>
+#include <kernel/proc/proc_tcb_caps.hpp>
 #include <scope_guard.hpp>
 #include <constants.hpp>
 #include <kernel/test/test_sched_helpers.hpp>
@@ -666,6 +671,373 @@ JARVIS_TEST(process_clone_pipe_fd_refcount, "PRE: vfsd, iocd | POST: none") {
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: F11 carve-composed fork parity (spec 8.8.5/M14) — the Stage C
+//        composer builds a fork child with identical observable semantics
+//        to the kernel clone, from retype + VSpace map + foreign-frame
+//        map + carved-root activation, with no kernel deep copy.
+// Input: Real user parent (create_user, never dispatched) impersonated
+//        via ScopedCurrentTask; proc::carve_fork() on a synthetic frame
+//        (the #399 shape); the unpublished child is compared then
+//        destroyed via the composer-rollback path.
+// Expect: Child non-null, distinct id, parent-linked, distinct private
+//        root, tcb_storage_ CARVED + vspace_kind_ CARVED (also pins the
+//        carve_tcb_storage half: teardown returns carved pages exactly
+//        once), identical region shapes + permissions + page bytes over
+//        every enumerated user region, and live 0 on all three F11
+//        registries after destroy. Zero tracker delta.
+// Depends: proc::carve_fork, VMM::enumerate_user_regions,
+//        TaskControlBlock::destroy CARVED arm, CarveBinding/
+//        ForeignFrameMap/VSpaceMap live_count
+// Note (knob split): the knob-OFF leg is the statement-identical
+//        kernel clone (INV-CARVE-10), pinned by process_clone_*;
+//        this test pins the ON leg. The verdict+hold+publish tail
+//        (ProcSvc::fork) is Stage B, covered by the ON-world
+//        waitpid/signal legs + the hold-table unit test below.
+// Pseudocode: create_user parent; scope; carve_fork; assert child
+// identity/link/root/storage/kind; enumerate both roots; assert same
+// shapes+flags; memcmp every page via HHDM; destroy; assert all
+// live 0; park parent; teardown; assert all.
+JARVIS_TEST(carve_fork_parity, "PRE: none | POST: none") {
+#if !CONFIG_PROC_MGR_CARVE_FORK
+    // Knob-OFF leg is the kernel clone — covered by process_clone_*.
+    JARVIS_TEST_PASS();
+#else
+    static uint64_t g_null = 0;
+    static uint64_t g_child_id = 0;
+    static uint64_t g_parent_link = 0;
+    static uint64_t g_pt_distinct = 0;
+    static uint64_t g_storage = 0;
+    static uint64_t g_kind = 0;
+    static uint64_t g_regions = 0;
+    static uint64_t g_region_match = 0;
+    static uint64_t g_content_match = 0;
+    static uint64_t g_bind_live = 0;
+    static uint64_t g_foreign_live = 0;
+    static uint64_t g_vs_live = 0;
+    g_null = 0;
+    g_child_id = 0;
+    g_parent_link = 0;
+    g_pt_distinct = 0;
+    g_storage = 0;
+    g_kind = 0;
+    g_regions = 0;
+    g_region_match = 0;
+    g_content_match = 0;
+    g_bind_live = 0;
+    g_foreign_live = 0;
+    g_vs_live = 0;
+
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
+    JARVIS_ASSERT(parent != nullptr);
+    JARVIS_ASSERT(parent->is_user_);
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
+        auto *child = kernel::proc::carve_fork(regs);
+        if (child == nullptr) {
+            g_null = 1;
+        } else {
+            g_child_id = child->id;
+            g_parent_link =
+                (child->parent_id == parent->id &&
+                 parent->find_child(child->id) == child)
+                    ? 1ULL
+                    : 0ULL;
+            g_pt_distinct =
+                (child->get_page_table() != 0 &&
+                 child->get_page_table() != parent->get_page_table())
+                    ? 1ULL
+                    : 0ULL;
+            g_storage =
+                (child->tcb_storage_ ==
+                 TaskControlBlock::TcbStorage::CARVED)
+                    ? 1ULL
+                    : 0ULL;
+            g_kind =
+                (child->vspace_kind_ == TaskControlBlock::VspaceKind::CARVED)
+                    ? 1ULL
+                    : 0ULL;
+            VMM::UserRegion parent_regions[CONFIG_CARVE_MAX_REGIONS];
+            VMM::UserRegion child_regions[CONFIG_CARVE_MAX_REGIONS];
+            const size_t parent_total = VMM::enumerate_user_regions(
+                parent->get_page_table(), parent_regions,
+                CONFIG_CARVE_MAX_REGIONS);
+            const size_t child_total = VMM::enumerate_user_regions(
+                child->get_page_table(), child_regions,
+                CONFIG_CARVE_MAX_REGIONS);
+            if (parent_total == 0 || parent_total != child_total ||
+                parent_total > CONFIG_CARVE_MAX_REGIONS) {
+                g_regions = 0;
+            } else {
+                g_regions = 1;
+                g_region_match = 1;
+                for (size_t ri = 0;
+                     ri < parent_total && g_region_match != 0; ++ri) {
+                    if (parent_regions[ri].va != child_regions[ri].va ||
+                        parent_regions[ri].bytes !=
+                            child_regions[ri].bytes ||
+                        parent_regions[ri].executable !=
+                            child_regions[ri].executable ||
+                        parent_regions[ri].writable !=
+                            child_regions[ri].writable) {
+                        g_region_match = 0;
+                    }
+                }
+                g_content_match = 1;
+                for (size_t ri = 0;
+                     ri < parent_total && g_content_match != 0; ++ri) {
+                    const uint64_t pages =
+                        parent_regions[ri].bytes / arch::PAGE_SIZE;
+                    for (uint64_t pi = 0;
+                         pi < pages && g_content_match != 0; ++pi) {
+                        const uint64_t va =
+                            parent_regions[ri].va + pi * arch::PAGE_SIZE;
+                        const uint64_t parent_phys =
+                            VMM::virt_to_phys_in_pml4(
+                                va, parent->get_page_table());
+                        const uint64_t child_phys =
+                            VMM::virt_to_phys_in_pml4(
+                                va, child->get_page_table());
+                        if (parent_phys == 0 || child_phys == 0) {
+                            g_content_match = 0;
+                            break;
+                        }
+                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                        auto *parent_page =
+                            reinterpret_cast<volatile const uint64_t *>(
+                                CONFIG_HHDM_OFFSET + parent_phys);
+                        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                        auto *child_page =
+                            reinterpret_cast<volatile const uint64_t *>(
+                                CONFIG_HHDM_OFFSET + child_phys);
+                        for (size_t w = 0;
+                             w < arch::PAGE_SIZE / sizeof(uint64_t); ++w) {
+                            if (parent_page[w] != child_page[w]) {
+                                g_content_match = 0;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            // The child is never published; destroy() takes the
+            // composer-rollback path (CARVED drain, no MemPool free).
+            TaskControlBlock::destroy(child);
+            g_bind_live = cap::CarveBinding::live_count();
+            g_foreign_live = cap::ForeignFrameMap::live_count();
+            g_vs_live = cap::VSpaceMap::live_count();
+        }
+        // Park the never-dispatched fixture BEFORE scope exit (see
+        // process_clone_adds_child): BLOCKED currents are left alone.
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
+
+    JARVIS_ASSERT_EQ(0ULL, g_null);
+    JARVIS_ASSERT(g_child_id != 0ULL);
+    JARVIS_ASSERT_EQ(1ULL, g_parent_link);
+    JARVIS_ASSERT_EQ(1ULL, g_pt_distinct);
+    JARVIS_ASSERT_EQ(1ULL, g_storage);
+    JARVIS_ASSERT_EQ(1ULL, g_kind);
+    JARVIS_ASSERT_EQ(1ULL, g_regions);
+    JARVIS_ASSERT_EQ(1ULL, g_region_match);
+    JARVIS_ASSERT_EQ(1ULL, g_content_match);
+    JARVIS_ASSERT_EQ(0ULL, g_bind_live);
+    JARVIS_ASSERT_EQ(0ULL, g_foreign_live);
+    JARVIS_ASSERT_EQ(0ULL, g_vs_live);
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: F11 hold-table reuse guard (spec 8.8.5 pid_reuse_safe
+//        mechanism) — holds are generation-keyed: a recycled pid with
+//        a new generation never matches a stale hold, and the death
+//        funnel + release legs are idempotent.
+// Input: Kernel holder fixture + the LIVE current task as the hold
+//        target (a create()'d fixture is never id_table_insert'ed —
+//        insertion happens at add_task — so an unpublished fixture
+//        is unresolvable by design and the hold must refuse it);
+//        hold, stale-generation/stale-pid lookups, release, re-hold,
+//        funnel release_on_death, idempotent re-release.
+// Expect: hold -> slot; live 1; lookup(live id, live gen) resolves;
+//        lookup(id, gen+1) and (id+1, gen) refuse; release -> OK,
+//        lookup refuses, live 0; re-hold -> slot; funnel drop ->
+//        lookup refuses; re-release -> OK, live 0. Zero delta.
+// Depends: proc_tcb_caps hold/lookup/release/release_on_death/
+//        live_hold_count, generation ABA guard
+// Note: The target is the live current task (never torn down here);
+//        the hold is released before the holder is, so no index entry
+//        can dangle (funnel coverage belongs to the published path,
+//        exercised by the ON-world suites).
+// Pseudocode: fixtures; hold->slot/err 0/live 1; lookup live ok;
+// stale lookups null; release ok/live 0; re-hold; funnel; lookup
+// null; release ok/live 0; teardown both; assert all (err statics
+// name the failing leg: 3 STALE_PID, 4 FULL, 5 INSTALL_FAILED).
+JARVIS_TEST(proc_hold_generation_guards_reuse, "PRE: none | POST: none") {
+    static int64_t g_hold_slot = -1;
+    static uint64_t g_hold_err = 0;
+    static uint64_t g_live_after_hold = 0;
+    static uint64_t g_lookup_live = 0;
+    static uint64_t g_lookup_stale_gen = 0;
+    static uint64_t g_lookup_stale_pid = 0;
+    static uint64_t g_release_ok = 0;
+    static uint64_t g_live_after_release = 0;
+    static uint64_t g_lookup_after_release = 0;
+    static int64_t g_rehold_slot = -1;
+    static uint64_t g_rehold_err = 0;
+    static uint64_t g_lookup_after_funnel = 0;
+    static uint64_t g_rerelease_ok = 0;
+    static uint64_t g_live_end = 0;
+    g_hold_slot = -1;
+    g_hold_err = 0;
+    g_live_after_hold = 0;
+    g_lookup_live = 0;
+    g_lookup_stale_gen = 0;
+    g_lookup_stale_pid = 0;
+    g_release_ok = 0;
+    g_live_after_release = 0;
+    g_lookup_after_release = 0;
+    g_rehold_slot = -1;
+    g_rehold_err = 0;
+    g_lookup_after_funnel = 0;
+    g_rerelease_ok = 0;
+    g_live_end = 0;
+
+    auto *holder = TaskControlBlock::create(test::forever_entry, 5, 10);
+    JARVIS_ASSERT(holder != nullptr);
+    // The hold target must be resolvable via the id table: the live
+    // current task is (an undispatched create()'d fixture is not —
+    // id_table_insert runs at add_task, so hold() on such a fixture
+    // fails closed with STALE_PID by design).
+    auto *target = Scheduler::current_task();
+    JARVIS_ASSERT(target != nullptr);
+    const uint64_t target_id = target->id;
+    const uint32_t target_gen = target->generation;
+    {
+        errors::ProcError hold_err = errors::PROC_ERR_OK;
+        const int slot = kernel::proc::proc_tcb_caps::hold(
+            *holder, target_id, target_gen, &hold_err);
+        g_hold_slot = slot;
+        g_hold_err = static_cast<uint64_t>(hold_err);
+        g_live_after_hold =
+            kernel::proc::proc_tcb_caps::live_hold_count();
+        g_lookup_live =
+            (kernel::proc::proc_tcb_caps::lookup(*holder, target_id,
+                                                 target_gen) == target)
+                ? 1ULL
+                : 0ULL;
+        g_lookup_stale_gen =
+            (kernel::proc::proc_tcb_caps::lookup(*holder, target_id,
+                                                 target_gen + 1) == nullptr)
+                ? 1ULL
+                : 0ULL;
+        g_lookup_stale_pid =
+            (kernel::proc::proc_tcb_caps::lookup(*holder, target_id + 1,
+                                                 target_gen) == nullptr)
+                ? 1ULL
+                : 0ULL;
+        const errors::ProcError rel =
+            kernel::proc::proc_tcb_caps::release(*holder, target_id,
+                                                 target_gen);
+        g_release_ok = (rel == errors::PROC_ERR_OK) ? 1ULL : 0ULL;
+        g_live_after_release =
+            kernel::proc::proc_tcb_caps::live_hold_count();
+        g_lookup_after_release =
+            (kernel::proc::proc_tcb_caps::lookup(*holder, target_id,
+                                                 target_gen) == nullptr)
+                ? 1ULL
+                : 0ULL;
+        errors::ProcError rehold_err = errors::PROC_ERR_OK;
+        const int reslot = kernel::proc::proc_tcb_caps::hold(
+            *holder, target_id, target_gen, &rehold_err);
+        g_rehold_slot = reslot;
+        g_rehold_err = static_cast<uint64_t>(rehold_err);
+        kernel::proc::proc_tcb_caps::release_on_death(target_id, target_gen);
+        g_lookup_after_funnel =
+            (kernel::proc::proc_tcb_caps::lookup(*holder, target_id,
+                                                 target_gen) == nullptr)
+                ? 1ULL
+                : 0ULL;
+        const errors::ProcError rerelease =
+            kernel::proc::proc_tcb_caps::release(*holder, target_id,
+                                                 target_gen);
+        g_rerelease_ok = (rerelease == errors::PROC_ERR_OK) ? 1ULL : 0ULL;
+        g_live_end = kernel::proc::proc_tcb_caps::live_hold_count();
+    }
+    // The holder was never published and never current: plain teardown
+    // (the process_add_child shape). The target is the live current
+    // task and is not ours to tear down.
+    holder->cleanup();
+    delete holder;
+
+    JARVIS_ASSERT(g_hold_slot >= 0);
+    JARVIS_ASSERT_EQ(0ULL, g_hold_err);
+    JARVIS_ASSERT_EQ(1ULL, g_live_after_hold);
+    JARVIS_ASSERT_EQ(1ULL, g_lookup_live);
+    JARVIS_ASSERT_EQ(1ULL, g_lookup_stale_gen);
+    JARVIS_ASSERT_EQ(1ULL, g_lookup_stale_pid);
+    JARVIS_ASSERT_EQ(1ULL, g_release_ok);
+    JARVIS_ASSERT_EQ(0ULL, g_live_after_release);
+    JARVIS_ASSERT_EQ(1ULL, g_lookup_after_release);
+    JARVIS_ASSERT(g_rehold_slot >= 0);
+    JARVIS_ASSERT_EQ(0ULL, g_rehold_err);
+    JARVIS_ASSERT_EQ(1ULL, g_lookup_after_funnel);
+    JARVIS_ASSERT_EQ(1ULL, g_rerelease_ok);
+    JARVIS_ASSERT_EQ(0ULL, g_live_end);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: F11 pid-reuse safety end-to-end (spec 8.8.5
+//        pid_reuse_safe_carved) — kill + reap a CARVED child, force a
+//        pid recycle, and prove the stale (pid, gen) hold refuses
+//        while the recycled identity serves fresh.
+// Input: Published carved child via ProcSvc::fork (PD verdict path)
+//        + kill + waitpid reap + forced pid recycle.
+// Expect: proc_tcb_caps::lookup(stale pid, stale gen) fails typed;
+//        CarveBinding::drain_task replay on the stale key is a
+//        generation-mismatch no-op; tracker delta 0.
+// Depends: ProcSvc::fork/kill/waitpid (PD verdict), pid recycle,
+//        proc_tcb_caps::lookup, CarveBinding::drain_task
+// Pseudocode: STUB — fork carved child via ProcSvc::fork (needs live
+// PD verdict in-harness); record (pid, gen); kill + reap via
+// waitpid; force recycle (next_task_generation/id reuse); assert
+// lookup(stale) == nullptr with typed STALE_PID; assert drain_task
+// replay no-op (live 0); assert tracker 0; teardown.
+// The table-level half is pinned by proc_hold_generation_guards_reuse
+// (real asserts); this stub tracks the published-path E2E.
+JARVIS_TEST(pid_reuse_safe_carved, "PRE: proc-mgr PD | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: F11 composer-level rollback (spec 8.8.5 carve_fork_rollback)
+//        — a mid-compose PMM/MemPool exhaustion fails the fork closed
+//        with no child, no death record, no waiter wake, and empty
+//        registries.
+// Input: Countdown injector armed before each PMM::alloc_contiguous /
+//        MemPool::alloc on the carve path (dev-lane gates); fork for
+//        k = 1..N.
+// Expect: Fork fails; no child in all_tasks_; no death record; no
+//        waiter wake; CarveBinding/VSpaceMap/ForeignFrameMap live 0;
+//        PMM + cap-object deltas 0 post-teardown.
+// Depends: Dev-lane injector gates on the carve path (production
+//        code — QE lane cannot add them), proc::carve_fork
+// Pseudocode: STUB — for k in 1..N: arm injector at attempt k;
+// carve_fork -> nullptr; assert no child registered, no death
+// record, no wake; assert all three live 0; assert deltas 0;
+// disarm. The registry half is pinned by
+// carve_binding_exhaustion_fails_closed (real asserts); this stub
+// tracks the injector-driven composer half.
+JARVIS_TEST(carve_fork_rollback, "PRE: none | POST: none") {
+    JARVIS_TEST_PASS();
+}
+
 void register_process_tests() {
     Logger::info("Registering process tests");
     JARVIS_REGISTER_TEST(process_add_child);
@@ -685,5 +1057,9 @@ void register_process_tests() {
     JARVIS_REGISTER_TEST(process_clone_teardown_zero_delta);
     JARVIS_REGISTER_TEST(process_kernel_half_private);
     JARVIS_REGISTER_TEST(process_clone_pipe_fd_refcount);
+    JARVIS_REGISTER_TEST(carve_fork_parity);
+    JARVIS_REGISTER_TEST(proc_hold_generation_guards_reuse);
+    JARVIS_REGISTER_TEST(pid_reuse_safe_carved);
+    JARVIS_REGISTER_TEST(carve_fork_rollback);
 }
 #endif

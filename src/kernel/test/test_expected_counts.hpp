@@ -21,8 +21,8 @@ struct ExpectedCounts {
 
 static constexpr ExpectedCounts k_expected_counts[] = {
     // Class name           x86_64  aarch64  riscv64
-    {"safe",                157,    0,       0      },  // curated debug/release smoke subset
-    {"selftest",            157,    0,       0      },  // same as safe
+    {"safe",                165,    0,       0      },  // curated debug/release smoke subset (lag fixed to dump-counts: +8 shared waitpid group)
+    {"selftest",            165,    0,       0      },  // same as safe
     {"testrunner",           16,    0,       0      },  // harness, freelist, infra, expected-panic
 
     // basic
@@ -78,7 +78,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"debug_syscall",         29,   29,      29     },  // debugger syscalls: attach/codec/park/mem/grants/launch/traps
 
     // process
-    {"process_lifecycle",    16,   16,      16     },  // process lifecycle, child table, clone with real user parents
+    {"process_lifecycle",    20,   20,      20     },  // process lifecycle, child table, clone with real user parents + F11 carve parity/hold (2 real + 2 stubs)
     {"process_elf",           9,    0,       0      },  // ELF validation, segments
     {"elf_loader",            29,   29,      29     },  // chunked background loader + #455 initarray (measured x86+aa64; rv64 UNMEASURED: boot-bound, needs CI)
     {"elf_shared",            9,    0,       0      },  // DT_NEEDED shared-object support
@@ -93,7 +93,7 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"cap_core",             10,    0,       0      },  // CSpace engine: CNode/CSlot lifecycle, decode, revoke
     {"cap_lifecycle",        13,    0,       0      },  // grant, copy, revoke, mint, endpoints, frames + F2 #555 x5
     {"cap_syscall",          15,    0,       0      },  // cap syscall dispatch + handle roundtrip + F2 #555 x3 (row was stale at 9 since #171 P3/P4)
-    {"cap_vspace",           13,    0,       0      },  // F5 #558 N4 VSPACE_MAP link/validate/teardown (stub-first QE)
+    {"cap_vspace",           16,    0,       0      },  // F5 N4 link/validate/teardown + F11 103/104 guards + carve registry contract
     {"cap_tcb",               6,    0,       0      },  // F4 #557 cap-side TCB authority/config/surface (stubs)
     {"cap_sdf",               1,    0,       0      },  // F10 #563 sdf_check_bounds negatives + 13-row sweep (stubs)
     {"cap_ipc",               6,    0,       0      },  // cap-gated IPC + frame mapping
@@ -312,8 +312,8 @@ static constexpr ExpectedCounts k_expected_counts[] = {
     {"core_syscall",        89,   0,       0      },  // syscall_*, debug_syscall, tls (x86 bridge pins via user probe + synthetic-frame rejection)
     {"core_tracing",        25,   0,       0      },  // path_tracer + dispatch/task/vmm segments
     {"ipc",                110,   0,       0      },  // ipc_* incl. fastpath + pipe_blocking + #545 Cycle D INV-4b x4 + M3 reply x10 + 12-oracle wake-rescue gate + #556 parity/drop/next_cap x3
-    {"capability",          200,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9 + F5 #558 x13 + F4 #557 x6 + F10 #563 x1 + F8 #561 x2)
-    {"proc_elf",            135,  81,      81     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM) + F2 cap-smoke migration
+    {"capability",          203,  0,       0      },  // cap_* excl. iommu_live (155 measured + 6 broker + F2 #555 x8 + #171 P3/P4 x9 + F5 #558 x13 + F4 #557 x6 + F10 #563 x1 + F8 #561 x2 + F11 103/104 guards + carve registry x3)
+    {"proc_elf",            147,  85,      85     },  // process_*, elf_*, pt_merge, libc_* (off-x86 native-EM) + F2 cap-smoke migration + F11 carve parity/hold (2 real + 2 stubs) + aggregate lag fixed to dump-counts
     {"libc_verify",          8,    0,       0      },  // hosted Ring-3 verify (x86_64 only)
     {"libc_stdio",            5,   0,       0      },  // fmt/snprintf/sscanf/fprintf-to-fd/full-run (x86_64 only)
     {"libc_malloc",           5,    0,       0      },  // malloc/align/calloc/realloc/cycle (x86_64 only)

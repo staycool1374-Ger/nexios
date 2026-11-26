@@ -56,6 +56,9 @@
 #include <kernel/cap/mmio.hpp>
 #include <kernel/cap/derivation.hpp>
 #include <kernel/cap/vspace_map.hpp>
+#include <kernel/cap/carve_binding.hpp>
+#include <kernel/cap/frame_foreign_map.hpp>
+#include <kernel/proc/proc_tcb_caps.hpp>
 #include <kernel/cap/frame_map.hpp>
 #include <kernel/ipc/death_notify.hpp>
 #include <kernel/debug/debug_stop.hpp>
@@ -1289,6 +1292,18 @@ void snapshot_restore(const char *test_name) {
     // drop the slots HERE so a recycled page is never mistaken for a live
     // link after the rewind.
     cap::VSpaceMap::snapshot_reset();
+    // F11 (#564 Stage C): the carve-binding registry pins every cap keeping
+    // a carved child alive (TCB/VSpace/frames/tables, INV-CARVE-4), and the
+    // foreign-frame registry pins one FrameCap per (vspace, va) mapping.
+    // Both hold phys-keyed slots outside the snapshot, so drop them HERE,
+    // before the MemPool rewind below (same live-first order as #320).
+    cap::CarveBinding::snapshot_reset();
+    cap::ForeignFrameMap::snapshot_reset();
+    // F11 (#564 Stage A): the proc-mgr hold table (INV-PROC-4/8) is a
+    // static (pid, gen) index outside the snapshot.  Holder CNodes are
+    // MemPool objects rewound below, so drop the index HERE with the
+    // other registries (contract: wrappers already gone at rewind).
+    kernel::proc::proc_tcb_caps::snapshot_reset();
 
     // ---- PMM ----
     {

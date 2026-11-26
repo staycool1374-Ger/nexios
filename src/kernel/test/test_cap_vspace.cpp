@@ -26,7 +26,10 @@
 #include <kernel/cap/cap.hpp>
 #include <kernel/cap/cap_types.hpp>
 #include <kernel/cap/untyped.hpp>
+#include <kernel/cap/carve_binding.hpp>
 #include <kernel/cap/carved_object.hpp>
+#include <kernel/cap/frame_foreign_map.hpp>
+#include <kernel/proc/proc_fork_carve.hpp>
 #include <kernel/cap/vspace_map.hpp>
 #include <kernel/cap/vspace_errors.hpp>
 #include <kernel/memory/kernel_object.hpp>
@@ -1610,6 +1613,486 @@ JARVIS_TEST(mk_vspace_map_leaf_population_alloc_free, "PRE: none | POST: none") 
     JARVIS_TEST_PASS();
 }
 
+// Runmode: kernel
+// Testidea: F11 activation guard (spec 4.3b amendment regression) —
+//        VSpaceMap::link refuses an activated root with
+//        VSPACE_ERR_ACTIVATED and zero side effects, and the guard
+//        releases when the carved child drains.
+// Input: Real composer child via proc::carve_fork (its root is born
+//        ACTIVATED); link(child_root, scratch, [4], 1) while alive;
+//        destroy; probe + registry lives after drain.
+// Expect: While alive: probe true, link -> VSPACE_ERR_ACTIVATED with
+//        zero side effects (live unchanged — the composer's own
+//        links stay). After destroy: probe false, all three registry
+//        lives 0. Zero tracker delta.
+// Depends: proc::carve_fork activation publish, carve_root_is_
+//        activated probe, VSpaceMap::link ACTIVATED bar,
+//        TaskControlBlock::destroy CARVED drain
+// Note: The 102/103 syscall faces consult the same probe (link() +
+//        sys_vspace_frame_map ACTIVATED bars); the syscall handle for
+//        a composer child root never exists in a caller CSpace, so the
+//        face is pinned here at link level, with no store and no walk
+//        of freed memory on either leg.
+// Pseudocode: parent fixture; scope; carve_fork; probe true;
+// link->[ACTIVATED]; live unchanged; destroy; probe false; lives 0;
+// park; teardown parent; assert all.
+JARVIS_TEST(carve_activation_guard, "PRE: none | POST: none") {
+#if !CONFIG_PROC_MGR_CARVE_FORK
+    // Knob-OFF has no activated roots — guard vacuous.
+    JARVIS_TEST_PASS();
+#else
+    static uint64_t g_null = 0;
+    static uint64_t g_probe_while_active = 0;
+    static uint64_t g_link_while_active = 0;
+    static uint64_t g_live_before_link = 0;
+    static uint64_t g_live_after_link = 0;
+    static uint64_t g_probe_after_drain = 0;
+    static uint64_t g_bind_live = 0;
+    static uint64_t g_foreign_live = 0;
+    static uint64_t g_vs_live = 0;
+    g_null = 0;
+    g_probe_while_active = 0;
+    g_link_while_active = 0;
+    g_live_before_link = 0;
+    g_live_after_link = 0;
+    g_probe_after_drain = 0;
+    g_bind_live = 0;
+    g_foreign_live = 0;
+    g_vs_live = 0;
+
+    auto *parent = TaskControlBlock::create_user(test::forever_entry, 5, 10,
+                                                 32_KiB);
+    JARVIS_ASSERT(parent != nullptr);
+    JARVIS_ASSERT(parent->is_user_);
+    {
+        test::ScopedCurrentTask scope(*parent);
+        uint64_t regs[37] = {};
+        test::make_synthetic_clone_frame(regs);
+        auto *child = kernel::proc::carve_fork(regs);
+        if (child == nullptr) {
+            g_null = 1;
+        } else {
+            const uint64_t child_root = child->get_page_table();
+            g_probe_while_active =
+                cap::carve_root_is_activated(child_root) ? 1ULL : 0ULL;
+            // The composer's own links are live; the refused link below
+            // must add none (zero side effects on the ACTIVATED bar).
+            g_live_before_link = cap::VSpaceMap::live_count();
+            // Scratch table phys: aligned, distinct, never installed —
+            // the ACTIVATED bar fires before any walk or store.
+            const errors::VspaceError link_err =
+                cap::VSpaceMap::link(child_root, 0x1000ULL, 4, 1);
+            g_link_while_active = static_cast<uint64_t>(link_err);
+            g_live_after_link = cap::VSpaceMap::live_count();
+            TaskControlBlock::destroy(child);
+            g_probe_after_drain =
+                cap::carve_root_is_activated(child_root) ? 1ULL : 0ULL;
+            g_bind_live = cap::CarveBinding::live_count();
+            g_foreign_live = cap::ForeignFrameMap::live_count();
+            g_vs_live = cap::VSpaceMap::live_count();
+        }
+        // Park the never-dispatched fixture BEFORE scope exit (see
+        // process_clone_adds_child): BLOCKED currents are left alone.
+        parent->state = TaskState::BLOCKED;
+    }
+    parent->cleanup();
+    delete parent;
+
+    JARVIS_ASSERT_EQ(0ULL, g_null);
+    JARVIS_ASSERT_EQ(1ULL, g_probe_while_active);
+    JARVIS_ASSERT_EQ(
+        static_cast<uint64_t>(errors::VSPACE_ERR_ACTIVATED),
+        g_link_while_active);
+    JARVIS_ASSERT_EQ(g_live_before_link, g_live_after_link);
+    JARVIS_ASSERT_EQ(0ULL, g_probe_after_drain);
+    JARVIS_ASSERT_EQ(0ULL, g_bind_live);
+    JARVIS_ASSERT_EQ(0ULL, g_foreign_live);
+    JARVIS_ASSERT_EQ(0ULL, g_vs_live);
+#endif
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: F11 foreign-frame surface (103) — a FrameCap maps into a
+//        non-caller VSpace with capability + window + overlap gates, is
+//        visible only under the foreign root, and unmaps exactly.
+// Input: Fresh user VSpace + 3-level (2 on Sv39) linked chain via 102
+//        + user Frame; legs: no-WRITE alias (-1102), unknown flag
+//        bits (-1101), kernel-backed frame (-1103), success (0 +
+//        visibility + live 1), duplicate VA (-1107, mapping intact),
+//        unmap (live 0, window clear).
+// Expect: Each leg returns its typed face; the mapped page reads back
+//        under the foreign root and faults (unmapped) under the caller
+//        root; teardown leaves live 0 and zero tracker delta.
+// Depends: sys_vspace_frame_map (103), ForeignFrameMap, VSPACE_MAP
+//        chain links, virt_to_phys_in_pml4
+// Note: The success VA reuses the leaf-test walk shape (components
+//        [1,2,3]+4 on 4-level arches, [1,2]+3 on Sv39) so the 103 walk
+//        is pre-linked and installs no tables (INV-MK-1).
+// Pseudocode: retype vs+chain+fr; link chain (0 each); no-WRITE
+// alias->-1102; flags 0x4->-1101; kernel frame->-1103; pre==0;
+// 103->0; PMM delta 0; post!=0; caller-root 0; live 1; mapped true;
+// re-103->-1107; live 1; post unchanged; unmap true; live 0;
+// window 0; DELETE tree; live 0.
+JARVIS_TEST(carve_foreign_frame_map, "PRE: none | POST: none") {
+    static uint64_t g_nowrite = 0;
+    static uint64_t g_badflags = 0;
+    static uint64_t g_kframe = 0;
+    static uint64_t g_r1 = 0;
+    static uint64_t g_r2 = 0;
+    static uint64_t g_r3 = 0;
+    static uint64_t g_pre = 0;
+    static uint64_t g_map = 0;
+    static uint64_t g_delta = 0;
+    static uint64_t g_post = 0;
+    static uint64_t g_caller = 0;
+    static uint64_t g_live = 0;
+    static uint64_t g_mapped = 0;
+    static uint64_t g_dup = 0;
+    static uint64_t g_live_dup = 0;
+    static uint64_t g_post_dup = 0;
+    static uint64_t g_unmapped = 0;
+    static uint64_t g_live_end = 0;
+    static uint64_t g_mapped_end = 0;
+    static uint64_t g_post_end = 0;
+    g_nowrite = g_badflags = g_kframe = g_r1 = g_r2 = g_r3 = 0;
+    g_pre = g_map = g_delta = g_post = g_caller = g_live = 0;
+    g_mapped = g_dup = g_live_dup = g_post_dup = 0;
+    g_unmapped = g_live_end = g_mapped_end = g_post_end = 0;
+
+    auto *t = run_vspace_task([]() {
+        auto *cur = Scheduler::current_task();
+        cur->ensure_cspace();
+        cap::CNode *cs = cur->get_cspace();
+        // 5-page user Untyped: VSpace(1) + 3 PT carves + Frame(1).
+        auto *ut =
+            cap::UntypedMem::create(5 * arch::PAGE_SIZE, true);
+        if (!ut)
+            return;
+        int us = cs->install(ut, cap::CapType::Untyped,
+                             cap::CapRights::READ | cap::CapRights::WRITE);
+        if (us < 0) {
+            ut->release();
+            return;
+        }
+        int vs = cap::retype(cs, slot_handle(cs, static_cast<uint32_t>(us)),
+                             cap::CapType::VSpace, arch::PAGE_SIZE,
+                             cap::CapRights::READ | cap::CapRights::WRITE);
+        int l1 = -1;
+        int l2 = -1;
+        int l3 = -1;
+        if (vs >= 0) {
+            l1 = carve_pt_from_live_untyped(cs, ut, nullptr);
+        }
+        if (l1 >= 0) {
+            l2 = carve_pt_from_live_untyped(cs, ut, nullptr);
+        }
+        if (l2 >= 0) {
+            l3 = carve_pt_from_live_untyped(cs, ut, nullptr);
+        }
+        int fr = -1;
+        if (l3 >= 0) {
+            for (uint32_t i = 0;
+                 i < static_cast<uint32_t>(CONFIG_CSLOT_COUNT); ++i) {
+                KernelObject *o = cs->peek(i, cap::CapType::Untyped);
+                if (!o || o == ut)
+                    continue;
+                auto *rem = static_cast<cap::UntypedMem *>(o);
+                if (!rem->owns_region())
+                    continue;
+                fr = cap::retype(cs, slot_handle(cs, i),
+                                 cap::CapType::Frame, arch::PAGE_SIZE,
+                                 cap::CapRights::READ);
+                if (fr >= 0)
+                    break;
+            }
+        }
+        // Kernel-backed frame for the privilege leg (is_user=false).
+        auto *kut =
+            cap::UntypedMem::create(arch::PAGE_SIZE, false);
+        int kus = -1;
+        if (kut) {
+            kus = cs->install(kut, cap::CapType::Untyped,
+                              cap::CapRights::READ | cap::CapRights::WRITE);
+            if (kus < 0) {
+                kut->release();
+                kut = nullptr;
+            }
+        }
+        int kfr = -1;
+        if (kus >= 0) {
+            kfr = cap::retype(cs, slot_handle(cs, static_cast<uint32_t>(kus)),
+                              cap::CapType::Frame, arch::PAGE_SIZE,
+                              cap::CapRights::READ);
+        }
+        const unsigned levels = VMM::page_table_levels();
+        const bool drop_l3 = (levels <= 3);
+        if (vs < 0 || l1 < 0 || l2 < 0 || (!drop_l3 && l3 < 0) || fr < 0) {
+            if (kfr >= 0)
+                cs->remove(static_cast<uint32_t>(kfr));
+            if (kus >= 0) {
+                cs->remove(static_cast<uint32_t>(kus));
+                kut->release();
+            }
+            if (fr >= 0)
+                cs->remove(static_cast<uint32_t>(fr));
+            if (l3 >= 0)
+                cs->remove(static_cast<uint32_t>(l3));
+            cs->remove(static_cast<uint32_t>(l2));
+            if (l1 >= 0)
+                cs->remove(static_cast<uint32_t>(l1));
+            cs->remove(static_cast<uint32_t>(vs));
+            cs->remove(static_cast<uint32_t>(us));
+            ut->release();
+            return;
+        }
+        if (drop_l3) {
+            cs->remove(static_cast<uint32_t>(l3));
+            l3 = -1;
+        }
+        const uint64_t vsh = slot_handle(cs, static_cast<uint32_t>(vs));
+        const uint64_t l1h = slot_handle(cs, static_cast<uint32_t>(l1));
+        const uint64_t l2h = slot_handle(cs, static_cast<uint32_t>(l2));
+        const uint64_t frh = slot_handle(cs, static_cast<uint32_t>(fr));
+        // READ-only alias of the VSpace for the authority leg.
+        auto *vsobj = cap::lookup(cs, vsh, cap::CapType::VSpace,
+                                  cap::CapRights::READ);
+        int vs_ro = -1;
+        if (vsobj) {
+            vs_ro =
+                cs->install(static_cast<cap::CarvedObjectCap *>(vsobj),
+                            cap::CapType::VSpace, cap::CapRights::READ);
+            vsobj->release();
+        }
+        const uint64_t vs_phys = carved_phys(cs, vsh, cap::CapType::VSpace);
+        uint64_t va = 0;
+        if (levels > 3) {
+            va = (1ULL << 39) | (2ULL << 30) | (3ULL << 21) | (4ULL << 12);
+            g_r1 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::VSPACE_MAP), vsh, l1h,
+                1, 1, nullptr);
+            g_r2 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::VSPACE_MAP), vsh, l2h,
+                1 | (2 << 9), 2, nullptr);
+            g_r3 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::VSPACE_MAP), vsh,
+                slot_handle(cs, static_cast<uint32_t>(l3)), 1 | (2 << 9) |
+                    (3 << 18),
+                3, nullptr);
+        } else {
+            va = (1ULL << 30) | (2ULL << 21) | (3ULL << 12);
+            g_r1 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::VSPACE_MAP), vsh, l1h,
+                1, 1, nullptr);
+            g_r2 = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::VSPACE_MAP), vsh, l2h,
+                1 | (2 << 9), 2, nullptr);
+            g_r3 = 0;
+        }
+        if (g_r1 != 0 || g_r2 != 0 || g_r3 != 0 || vs_ro < 0) {
+            if (vs_ro >= 0)
+                cs->remove(static_cast<uint32_t>(vs_ro));
+            if (kfr >= 0)
+                cs->remove(static_cast<uint32_t>(kfr));
+            if (kus >= 0) {
+                cs->remove(static_cast<uint32_t>(kus));
+                kut->release();
+            }
+            cs->remove(static_cast<uint32_t>(fr));
+            if (l3 >= 0)
+                cs->remove(static_cast<uint32_t>(l3));
+            cs->remove(static_cast<uint32_t>(l2));
+            cs->remove(static_cast<uint32_t>(l1));
+            cs->remove(static_cast<uint32_t>(vs));
+            cs->remove(static_cast<uint32_t>(us));
+            ut->release();
+            return;
+        }
+        const uint64_t vroh = slot_handle(cs, static_cast<uint32_t>(vs_ro));
+        // Authority leg: READ-only VSpace alias cannot reshape the tree.
+        g_nowrite = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::VSPACE_FRAME_MAP), vroh,
+            frh, va, 0, nullptr);
+        cs->remove(static_cast<uint32_t>(vs_ro));
+        // Flag leg: unknown bits rejected before any state change.
+        g_badflags = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::VSPACE_FRAME_MAP), vsh,
+            frh, va, 0x4, nullptr);
+        // Privilege leg: kernel-backed frame is never user-mappable.
+        if (kfr >= 0) {
+            g_kframe = Syscall::handle(
+                static_cast<uint64_t>(SyscallNumber::VSPACE_FRAME_MAP), vsh,
+                slot_handle(cs, static_cast<uint32_t>(kfr)), va, 0,
+                nullptr);
+        }
+        g_pre = VMM::virt_to_phys_in_pml4(va, vs_phys);
+        const uint64_t before = PMM::pool_used_pages();
+        g_map = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::VSPACE_FRAME_MAP), vsh,
+            frh, va, 0, nullptr);
+        const uint64_t after = PMM::pool_used_pages();
+        g_delta = (after >= before) ? (after - before) : 999999ULL;
+        g_post = VMM::virt_to_phys_in_pml4(va, vs_phys);
+        g_caller = VMM::virt_to_phys_in_pml4(va, VMM::current_root_phys());
+        g_live = cap::ForeignFrameMap::live_count();
+        g_mapped =
+            cap::ForeignFrameMap::is_mapped(va, vs_phys) ? 1ULL : 0ULL;
+        // Overlap leg: the same window twice fails closed with the first
+        // mapping byte-identical.
+        g_dup = Syscall::handle(
+            static_cast<uint64_t>(SyscallNumber::VSPACE_FRAME_MAP), vsh,
+            frh, va, 0, nullptr);
+        g_live_dup = cap::ForeignFrameMap::live_count();
+        g_post_dup = VMM::virt_to_phys_in_pml4(va, vs_phys);
+        g_unmapped =
+            cap::ForeignFrameMap::unmap(va, vs_phys) ? 1ULL : 0ULL;
+        g_live_end = cap::ForeignFrameMap::live_count();
+        g_mapped_end =
+            cap::ForeignFrameMap::is_mapped(va, vs_phys) ? 1ULL : 0ULL;
+        g_post_end = VMM::virt_to_phys_in_pml4(va, vs_phys);
+        if (kfr >= 0)
+            cs->remove(static_cast<uint32_t>(kfr));
+        if (kus >= 0) {
+            cs->remove(static_cast<uint32_t>(kus));
+            kut->release();
+        }
+        cs->remove(static_cast<uint32_t>(fr));
+        if (l3 >= 0)
+            cs->remove(static_cast<uint32_t>(l3));
+        cs->remove(static_cast<uint32_t>(l2));
+        cs->remove(static_cast<uint32_t>(l1));
+        cs->remove(static_cast<uint32_t>(vs));
+        cs->remove(static_cast<uint32_t>(us));
+        ut->release();
+    });
+    JARVIS_ASSERT(t != nullptr);
+    JARVIS_ASSERT_EQ(0ULL, g_r1);
+    JARVIS_ASSERT_EQ(0ULL, g_r2);
+    JARVIS_ASSERT_EQ(0ULL, g_r3);
+    JARVIS_ASSERT_EQ(vspace_err(2), g_nowrite);
+    JARVIS_ASSERT_EQ(vspace_err(1), g_badflags);
+    JARVIS_ASSERT_EQ(vspace_err(3), g_kframe);
+    JARVIS_ASSERT_EQ(0ULL, g_pre);
+    JARVIS_ASSERT_EQ(0ULL, g_map);
+    JARVIS_ASSERT_EQ(0ULL, g_delta);
+    JARVIS_ASSERT(g_post != 0ULL);
+    JARVIS_ASSERT_EQ(0ULL, g_caller);
+    JARVIS_ASSERT_EQ(1ULL, g_live);
+    JARVIS_ASSERT_EQ(1ULL, g_mapped);
+    JARVIS_ASSERT_EQ(vspace_err(7), g_dup);
+    JARVIS_ASSERT_EQ(1ULL, g_live_dup);
+    JARVIS_ASSERT_EQ(g_post, g_post_dup);
+    JARVIS_ASSERT_EQ(1ULL, g_unmapped);
+    JARVIS_ASSERT_EQ(0ULL, g_live_end);
+    JARVIS_ASSERT_EQ(0ULL, g_mapped_end);
+    JARVIS_ASSERT_EQ(0ULL, g_post_end);
+    JARVIS_TEST_PASS();
+}
+
+// Runmode: kernel
+// Testidea: CarveBinding registry contract (rollback analog at the
+//        registry level) — claim/abandon lifecycle, double-claim and
+//        drain-mismatch refusal, registry-full fail-closed, and the
+//        snapshot backstop. The composer-level rollback (mid-compose
+//        PMM failure) needs the dev-lane injector gates and is NOT
+//        covered here.
+// Input: Direct registry calls with synthetic (pid, gen) keys far from
+//        any live task; fill all CONFIG_CARVE_BINDINGS slots.
+// Expect: begin -> slot; same (pid, gen) again -> -1; abandon ->
+//        FREE (live 0); drain_task on an unknown key is a no-op;
+//        the (N+1)th begin -> -1 with live == N; abandon-all ->
+//        live 0; snapshot_reset() clears a live slot; double-abandon
+//        is a no-op. Zero tracker delta (static storage only).
+// Depends: CarveBinding begin/abandon/drain_task/snapshot_reset/
+//        live_count, CONFIG_CARVE_BINDINGS
+// Note (deviation from plan): the Stage C TEST STRATEGY names this
+//        carve_fork_rollback with a countdown injector before every
+//        PMM/MemPool alloc. Those gates are production code (QE lane
+//        cannot add them); this test pins the registry half of that
+//        contract, which is the half the fork-failure path depends on
+//        (begin -1 -> composer rollback -> destroy + drain).
+// Pseudocode: live 0; s=begin(P,G)->>=0; begin(P,G)->-1;
+// abandon(s)->live 0; drain_task(unknown)->live 0; fill N;
+// begin->-1; live N; abandon all->live 0; begin; snapshot_reset;
+// live 0; abandon again->live 0.
+JARVIS_TEST(carve_binding_exhaustion_fails_closed, "PRE: none | POST: none") {
+    static uint64_t g_entry_live = 0;
+    static int64_t g_first_slot = -1;
+    static int64_t g_double_claim = 0;
+    static uint64_t g_after_abandon = 0;
+    static uint64_t g_after_drain_unknown = 0;
+    static int64_t g_overflow = 0;
+    static uint64_t g_full_live = 0;
+    static uint64_t g_after_release_all = 0;
+    static uint64_t g_after_reset = 0;
+    static uint64_t g_after_double_abandon = 0;
+    g_entry_live = 0;
+    g_first_slot = -1;
+    g_double_claim = 0;
+    g_after_abandon = 0;
+    g_after_drain_unknown = 0;
+    g_overflow = 0;
+    g_full_live = 0;
+    g_after_release_all = 0;
+    g_after_reset = 0;
+    g_after_double_abandon = 0;
+
+    g_entry_live = cap::CarveBinding::live_count();
+    constexpr uint64_t k_base = 0x00C0FFEE00000000ULL;
+    const int first =
+        cap::CarveBinding::begin(k_base, 1);
+    g_first_slot = first;
+    g_double_claim = cap::CarveBinding::begin(k_base, 1);
+    if (first >= 0) {
+        cap::CarveBinding::abandon(first);
+    }
+    g_after_abandon = cap::CarveBinding::live_count();
+    cap::CarveBinding::drain_task(0x00DEAD00000000ULL, 1);
+    g_after_drain_unknown = cap::CarveBinding::live_count();
+    int slots[CONFIG_CARVE_BINDINGS];
+    for (size_t i = 0; i < CONFIG_CARVE_BINDINGS; ++i) {
+        slots[i] = -1;
+    }
+    size_t claimed = 0;
+    for (size_t i = 0; i < CONFIG_CARVE_BINDINGS; ++i) {
+        const int s = cap::CarveBinding::begin(k_base + 1 + i, 1);
+        if (s < 0) {
+            break;
+        }
+        slots[claimed] = s;
+        ++claimed;
+    }
+    g_overflow = cap::CarveBinding::begin(
+        k_base + 1 + CONFIG_CARVE_BINDINGS, 1);
+    g_full_live = cap::CarveBinding::live_count();
+    for (size_t i = 0; i < claimed; ++i) {
+        cap::CarveBinding::abandon(slots[i]);
+    }
+    g_after_release_all = cap::CarveBinding::live_count();
+    const int seam = cap::CarveBinding::begin(k_base + 0xFF, 7);
+    if (seam >= 0) {
+        cap::CarveBinding::snapshot_reset();
+    }
+    g_after_reset = cap::CarveBinding::live_count();
+    if (seam >= 0) {
+        cap::CarveBinding::abandon(seam);
+    }
+    g_after_double_abandon = cap::CarveBinding::live_count();
+
+    JARVIS_ASSERT_EQ(0ULL, g_entry_live);
+    JARVIS_ASSERT(g_first_slot >= 0);
+    JARVIS_ASSERT(g_double_claim == -1);
+    JARVIS_ASSERT_EQ(0ULL, g_after_abandon);
+    JARVIS_ASSERT_EQ(0ULL, g_after_drain_unknown);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(CONFIG_CARVE_BINDINGS), claimed);
+    JARVIS_ASSERT(g_overflow == -1);
+    JARVIS_ASSERT_EQ(static_cast<uint64_t>(CONFIG_CARVE_BINDINGS), g_full_live);
+    JARVIS_ASSERT_EQ(0ULL, g_after_release_all);
+    JARVIS_ASSERT_EQ(0ULL, g_after_reset);
+    JARVIS_ASSERT_EQ(0ULL, g_after_double_abandon);
+    JARVIS_TEST_PASS();
+}
+
 void register_cap_vspace_tests() {
     Logger::info("Registering cap_vspace tests");
     JARVIS_REGISTER_TEST(mk_vspace_map_links_page_table);
@@ -1625,4 +2108,7 @@ void register_cap_vspace_tests() {
     JARVIS_REGISTER_TEST(mk_vspace_map_ownership_mismatch);
     JARVIS_REGISTER_TEST(sys_vspace_map_dispatch_end_to_end);
     JARVIS_REGISTER_TEST(mk_vspace_map_leaf_population_alloc_free);
+    JARVIS_REGISTER_TEST(carve_activation_guard);
+    JARVIS_REGISTER_TEST(carve_foreign_frame_map);
+    JARVIS_REGISTER_TEST(carve_binding_exhaustion_fails_closed);
 }
