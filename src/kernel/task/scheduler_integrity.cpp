@@ -115,7 +115,17 @@ bool validate_switch(TaskControlBlock *current, TaskControlBlock *next,
         !rsp_in_stack_range(task_stack_ptr(next), next, label)) {
         if (task_stack_ptr(next) <
             reinterpret_cast<uint64_t>(next->kernel_stack)) {
-            return true;
+            Logger::raw_write("[SCHED] ");
+            Logger::raw_write(label);
+            Logger::raw_write(": task id=");
+            Logger::print_dec(next->id);
+            Logger::raw_write(" rsp=0x");
+            Logger::print_hex(task_stack_ptr(next));
+            Logger::raw_write(" below stack base 0x");
+            Logger::print_hex(
+                reinterpret_cast<uint64_t>(next->kernel_stack));
+            Logger::raw_write("\n");
+            return false;
         }
         Logger::raw_write("[SCHED] ");
         Logger::raw_write(label);

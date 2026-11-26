@@ -815,9 +815,13 @@ void Scheduler::edf_membership_audit() noexcept {
         }
         if (sched_queue::s_edf_audit_pending_id_[cpu] == t->id) {
             note_edf_unreachable(t->id, cpu);
-        } else {
+            sched_queue::s_edf_audit_pending_id_[cpu] = UINT64_MAX;
+        } else if (sched_queue::s_edf_audit_pending_id_[cpu] ==
+                   UINT64_MAX) {
             sched_queue::s_edf_audit_pending_id_[cpu] = t->id;
         }
+        // Else: a different id is already staged for this CPU — keep it
+        // until confirmed+cleared; this task stages in a later period.
     }
 }
 
