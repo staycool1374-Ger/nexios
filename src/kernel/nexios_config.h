@@ -1636,13 +1636,14 @@ extern "C" void panic(const char *msg);
 #endif
 
 /// Carve-composed fork master switch (issue #564, F11 Stage C).
-/// 0 = kernel-composed clone (shipped default, bit-identical).
+/// 0 = kernel-composed clone (release default; behaviour-identical).
 /// 1 = carve-composed fork (retype + VSpace map + foreign-frame map +
 /// carved-root activation, no kernel deep copy). Requires
 /// CONFIG_PROC_MGR=1 (build-time #error otherwise — S3-3 cross-knob
 /// validator). All carve code is `#if
 /// CONFIG_PROC_MGR_CARVE_FORK`-guarded (empty TU when 0); no runtime `if`
-/// on this knob. Default: 0.
+/// on this knob. Default: 1 on DEBUG, 0 on release (F11 Stage D, 70ee29440;
+/// release flip awaits a separate matrix decision).
 #ifndef CONFIG_PROC_MGR_CARVE_FORK
 #if defined(CONFIG_DEBUG)
 #define CONFIG_PROC_MGR_CARVE_FORK 1
