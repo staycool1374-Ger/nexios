@@ -42,6 +42,17 @@ namespace kernel {
 using sched_queue::edf_peek_valid_own;
 using sched_verify::validate_task_ptr;
 
+/// @brief First-writer-wins death-cause store (issue #516).
+///        Single CAS on the zero sentinel; recycled TCBs start at 0
+///        (all five memset-zero birth sites + the init-list zero).
+void Scheduler::note_death_cause(TaskControlBlock &dead,
+                                 ipc::DeathCause cause) noexcept {
+    uint64_t expected = 0;
+    const uint64_t wanted = static_cast<uint64_t>(cause);
+    __atomic_compare_exchange_n(&dead.death_cause, &expected, wanted, false,
+                                __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+}
+
 /// @brief Latch a death record + wake the dead task's IPC waiters
 ///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).
 void Scheduler::publish_task_death(TaskControlBlock &dead,
@@ -57,9 +68,7 @@ void Scheduler::publish_task_death(TaskControlBlock &dead,
     // window.  Idempotent (pid==0 after the first clear is a silent
     // no-op); bounded serial emit; needs no lock and no atomicity with
     // the latch below.
-    if (dead.death_cause == 0) {
-        dead.death_cause = static_cast<uint64_t>(cause);
-    }
+    Scheduler::note_death_cause(dead, cause);
     kernel::daemon::notify_death(dead.id);
     arch::IrqGuard irq_guard{};
     // Exactly-once by construction: on_task_death only transitions

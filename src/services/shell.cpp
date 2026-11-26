@@ -51,6 +51,7 @@
 #include <initrd/initrd.hpp>
 #include <version.hpp>
 #include <kernel/driver/driver.hpp>
+#include <kernel/ipc/death_notify.hpp>  // issue #516 wrapper death cause
 #include <kernel/arch/keyboard.hpp>
 #include <kernel/syscall/syscall_helpers.hpp>
 #include <kernel/log/ring_buffer.hpp>
@@ -258,7 +259,19 @@ static void background_task_wrapper() {
     auto* task = kernel::Scheduler::current_task();
     auto* entry = task ? reinterpret_cast<void (*)()>(task->user_data) : nullptr;
     if (entry) entry();
-    if (task) task->state = kernel::TaskState::TERMINATED;
+    // Issue #516: run the canonical self-exit funnel (mirror
+    // _task_trampoline / sys_exit) instead of hand-marking TERMINATED,
+    // so the supervisor death handshake fires for background tasks.
+    if (task != nullptr) {
+        task->state = kernel::TaskState::TERMINATED;
+        task->exit_code = 0;
+        kernel::Scheduler::publish_task_death(
+            *task, kernel::ipc::DeathCause::Exit);
+        kernel::Scheduler::switch_away_from_terminating(*task);
+    }
+    // Parked corpse: never blackout the hart; entry may not be
+    // trampoline-wrapped, so do not return.
+    arch::sti();
     while (true) arch::hlt();
 }
 

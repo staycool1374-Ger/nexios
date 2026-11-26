@@ -51,8 +51,8 @@ enum class DeathCause : uint64_t {
     None = 0,
     Exit = 1,     ///< sys_exit / thread exit / clean self-termination
     Fault = 2,    ///< fault kill (SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGTRAP class)
-    Kill = 3,     ///< signal kill / OOM kill / default terminate funnel
-    Watchdog = 4, ///< reserved: watchdog kill (no producer yet)
+    Kill = 3,     ///< signal kill / OOM kill / default terminate funnel / deadline-budget KILL arm (#516)
+    Watchdog = 4, ///< watchdog-expiry KILL arm (issue #516 producer)
     Admin = 5,    ///< interim supervisor terminate
     Teardown = 6, ///< deferred complete_teardown backstop
 };
@@ -102,6 +102,10 @@ class DeathNotify {
 
     /// @brief Latch the death records for @p dead and poke the supervisors.
     ///        Called exactly once per task death from cleanup().  Never blocks.
+    ///        Sole production driver (issue #516 INV-K1): Scheduler::
+    ///        publish_task_death (all terminate funnels route through it)
+    ///        plus the complete_teardown backstop, which funnels there too.
+    ///        Direct callers are a REJECT (Step-9 gate).
     static void on_task_death(kernel::TaskControlBlock &dead);
 
     /// @brief Frees every slot whose supervisor is @p supervisor (ACTIVE or

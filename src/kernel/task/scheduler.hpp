@@ -371,6 +371,11 @@ class Scheduler {
     static void scheduler_apply_gate_reset_for_test() noexcept;
     /// @brief Test-isolation reset for the park latch + counters (#582 §4).
     static void lockpark_reset_for_test() noexcept;
+    /// @brief Snapshot/quiesce reset for deferred-kill intents (issue #516
+    ///        INV-K8a).  Drops count + all three record slots, never
+    ///        publishes.  QE-owned wiring in test_isolate.cpp; defined in
+    ///        scheduler_lifecycle.cpp (production).
+    static void reset_deferred_kills_for_test() noexcept;
     // runq_desync_reset_for_test removed — use reset_sched_oracles_for_test() (#609).
     /// @brief Count one already-queued enqueue refusal (issue #582 §5.5).
     ///        Called from the typed enqueue refusal path (RQM or Scheduler).
@@ -1230,9 +1235,17 @@ class Scheduler {
     ///        Precondition: task.state == TERMINATED, task NOT in ready queue.
     static void release_zombie(TaskControlBlock &task) noexcept;
 
+    /// @brief First-writer-wins death-cause store (issue #516 INV-K3).
+    ///        Single CAS on the zero sentinel; no-op when a cause is
+    ///        already latched.  Safe in any IRQ/lock context (one atomic).
+    static void note_death_cause(TaskControlBlock &dead,
+                                 ipc::DeathCause cause) noexcept;
     /// @brief Latch a death record + wake the dead task's IPC waiters
-    ///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).  Runs
-    ///        DeathNotify::on_task_death (exactly-once via the ACTIVE→
+    ///        (M1/F6/F7, issues #559/#560, INV-MK-6/INV-MK-11).
+    ///        The single record-latch choke point (INV-K1): the only
+    ///        production driver of the DeathNotify record latch other
+    ///        than the complete_teardown backstop (which funnels here).  Runs
+    ///        the DeathNotify record latch (exactly-once via the ACTIVE→
     ///        PENDING slot transition) and IPC::wake_reply_waiters_of.
     ///        Wake-only: never arms a deferred
     ///        switch, never calls reschedule(), never changes a BLOCKED
@@ -1350,9 +1363,13 @@ class Scheduler {
         zombie_count_ = 0;
     }
 
-    /// @brief Deferred-kill: add a task to the deferred kill list for
-    ///        safe cleanup outside the try_lock critical section.
-    static void defer_kill(TaskControlBlock *task) noexcept;
+    /// @brief Deferred-kill: queue a death-publish intent for safe cleanup
+    ///        outside the try_lock critical section.  Queues one record
+    ///        (task, generation, cause); process_deferred_kills publishes
+    ///        after the AP-live retention check and before the drop/destroy
+    ///        legs (issue #516).  Callers pass the kill cause explicitly.
+    static void defer_kill(TaskControlBlock *task,
+                           ipc::DeathCause cause) noexcept;
     /// @brief Process all deferred kills: remove_task, cleanup, free.
     ///        Called from on_tick() after the deadline scan lock is released.
     static void process_deferred_kills() noexcept;
@@ -1898,7 +1915,9 @@ extern TaskControlBlock *fpu_owner;
 #if CONFIG_DEADLINE_MISS_DETECTION
 /// @brief Weak callback invoked when a task misses its deadline.
 /// Called from ISR context (on_tick) or task context (deadline-monitor).
-/// In ISR context: must not block; KILL action defers via defer_kill().
+/// In ISR context: must not block; KILL action queues the death-publish
+/// intent via the deferred-kill queue with cause DeathCause::Kill
+/// (issue #516).
 /// In task context (CONFIG_DEADLINE_MONITOR_TASK): may hold scheduler_lock_
 /// and perform inline cleanup.
 __attribute__((weak)) void
@@ -1916,8 +1935,10 @@ wcet_overrun_handler(TaskControlBlock *task,
 
 /// @brief Weak callback invoked when a task's watchdog expires.
 /// Called from ISR context (on_tick) under scheduler_lock_ — must not
-/// block; KILL action defers via defer_kill() (deadline ACTION==3
-/// precedent). Always enters the ring (TIMING+6 ERROR, fail-closed).
+/// block; KILL action queues the death-publish intent via the
+/// deferred-kill queue with cause DeathCause::Watchdog (issue #516;
+/// deadline ACTION==3 precedent uses DeathCause::Kill). Always enters
+/// the ring (TIMING+6 ERROR, fail-closed).
 __attribute__((weak)) void
 watchdog_expiry_handler(TaskControlBlock &task,
                         uint64_t overdue_by_ticks) noexcept;

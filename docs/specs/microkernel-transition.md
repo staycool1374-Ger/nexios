@@ -795,9 +795,19 @@ IMPLEMENTED (M1): `Scheduler::publish_task_death(dead, cause)` runs at every
 terminate funnel (kill/fault/signal paths, trap prefix, self-exit, thread
 exit, self-fatal kill, daemon terminate, arch post-syscall stubs) plus the
 `complete_teardown` backstop; first-writer-wins `death_cause` (Exit/Fault/
-Kill/Admin/Teardown) + generation + tick in the record; daemon PID cell
-cleared at the same funnel with a stale-cell self-heal in
+Kill/Admin/Teardown, plus Watchdog for the watchdog-expiry KILL arm —
+first in-tree producer, #516) + generation + tick in the record; daemon
+PID cell cleared at the same funnel with a stale-cell self-heal in
 `restart_stale_daemons` (+12 dmesg row).
+IMPLEMENTED (#516): deferred watchdog/deadline kills queue a (task,
+generation, cause) intent and publish at the kill decision in the `on_tick`
+lock-free tail — AP-live retention first (never announce a still-executing
+corpse), publish only for non-AP-live `TERMINATED` corpses (Q1 DECIDED,
+owner: deadline arm latches `Kill`, watchdog arm latches `Watchdog`; Q2b
+DECIDED, owner: parent-retained corpses latch with their true cause at the
+decision, retained AP-live entries announce on the pass after deschedule).
+Bound: announce ≤ 2 ticks after deschedule given the supervisor is
+runnable at highest priority (extends the Q4 bound to the retained path).
 
 ### 9.2 DEATH-2 — reply waiters
 

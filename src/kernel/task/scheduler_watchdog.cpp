@@ -22,6 +22,7 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_watchdog_internal.hpp>
+#include <kernel/ipc/death_notify.hpp>  // issue #516 KILL-arm death causes
 #include <kernel/task/scheduler_integrity.hpp>       // issue #369 T1c validate_task_ptr
 #include <kernel/task/scheduler_debug_internal.hpp> // issue #323 g_diag_* (STALLDUMP beacon)
 #include <kernel/task/sporadic_server.hpp>      // issue #323 State::EXHAUSTED
@@ -317,18 +318,23 @@ deadline_miss_handler(TaskControlBlock &task,
     task.state = TaskState::TERMINATED;
     task.exit_code =
         static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGKILL));
+    // Issue #516: queue the death-publish intent (cause Kill: a
+    // budget/deadline overrun is a policy kill) BEFORE the wake, so no
+    // branch escapes the queue.  The publish happens in the on_tick
+    // lock-free gated tail (INV-K5); the deferred destroy is declined by
+    // kill_declined() while the parent retains the corpse
+    // (wait_collect_pending_).
+    Scheduler::note_death_cause(task, kernel::ipc::DeathCause::Kill);
+    Scheduler::defer_kill(&task, kernel::ipc::DeathCause::Kill);
     if (Scheduler::wake_waiting_parent(task) ==
         Scheduler::WakeResult::PARENT_COLLECTS) {
         // Issue #590 INV-WAIT-5: the corpse stays parented/in-table for
         // the parent's rescan (no TERMINATED node may remain in a ready
-        // queue: INV-2), and the deferred kill is not armed.  C4:
-        // dequeue_ready takes no lock (lock-agnostic by precedent:
-        // sys_waitpid calls it lock-free, terminate_err under the
-        // global lock), so no guard is needed on either arm.
+        // queue: INV-2).  C4: dequeue_ready takes no lock (lock-agnostic
+        // by precedent: sys_waitpid calls it lock-free, terminate_err
+        // under the global lock), so no guard is needed on this arm.
         Scheduler::dequeue_ready(task);
-        return;
     }
-    Scheduler::defer_kill(&task);
 #elif CONFIG_DEADLINE_ACTION == 4
     if (budget_exhausted)
         Logger::info("[DMD] Task %lu (%s) budget exhausted (state=EXHAUSTED, "
@@ -475,18 +481,22 @@ watchdog_expiry_handler(TaskControlBlock &task,
     task.state = TaskState::TERMINATED;
     task.exit_code =
         static_cast<uint64_t>(-static_cast<int64_t>(Signal::SIGKILL));
+    // Issue #516: queue the death-publish intent (cause Watchdog: first
+    // in-tree producer) BEFORE the wake, so no branch escapes the queue.
+    // The publish happens in the on_tick lock-free gated tail (INV-K5);
+    // the deferred destroy is declined by kill_declined() while the
+    // parent retains the corpse (wait_collect_pending_).
+    Scheduler::note_death_cause(task, kernel::ipc::DeathCause::Watchdog);
+    Scheduler::defer_kill(&task, kernel::ipc::DeathCause::Watchdog);
     if (Scheduler::wake_waiting_parent(task) ==
         Scheduler::WakeResult::PARENT_COLLECTS) {
         // Issue #590 INV-WAIT-5: the corpse stays parented/in-table for
         // the parent's rescan (no TERMINATED node may remain in a ready
-        // queue: INV-2), and the deferred kill is not armed.  C4:
-        // dequeue_ready takes no lock (lock-agnostic by precedent:
-        // sys_waitpid calls it lock-free, terminate_err under the
-        // global lock), so no guard is needed on either arm.
+        // queue: INV-2).  C4: dequeue_ready takes no lock (lock-agnostic
+        // by precedent: sys_waitpid calls it lock-free, terminate_err
+        // under the global lock), so no guard is needed on this arm.
         Scheduler::dequeue_ready(task);
-        return;
     }
-    Scheduler::defer_kill(&task);
 #elif CONFIG_WATCHDOG_ACTION == 4
     Logger::info("[WDOG] Task %lu (%s) watchdog expired by %lu ticks "
                  "(action=NOTIFY_MONITOR)",

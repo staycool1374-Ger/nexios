@@ -22,6 +22,7 @@
 
 #include <kernel/task/scheduler.hpp>
 #include <kernel/task/scheduler_lifecycle_internal.hpp>
+#include <kernel/ipc/death_notify.hpp>  // issue #516 deferred-kill cause slot
 #include <kernel/task/scheduler_path.hpp>  // issue #324 Tick 13 teardown trace
 #include <kernel/task/scheduler_queue_internal.hpp>
 #include <kernel/task/scheduler_integrity.hpp>
@@ -54,6 +55,11 @@ constinit uint64_t s_deferred_kill_count = 0;
 // reuse — see process_deferred_kills).  TU-local: only defer_kill and
 // process_deferred_kills below use it.
 static constinit uint32_t s_deferred_kill_gens[MAX_DEFERRED_KILLS] = {};
+// Issue #516: third parallel slot of the deferred-kill record
+// (tasks/gens/causes), same TU-local visibility as gens — no extern,
+// no header change.  Written and compacted in lockstep with the other
+// two; s_deferred_kill_count is the commit word (written last).
+static constinit ipc::DeathCause s_deferred_kill_causes[MAX_DEFERRED_KILLS] = {};
 
 }  // namespace sched_lifecycle
 
@@ -61,11 +67,22 @@ using sched_lifecycle::MAX_DEFERRED_KILLS;
 using sched_lifecycle::s_deferred_kill_count;
 using sched_lifecycle::s_deferred_kill_gens;
 using sched_lifecycle::s_deferred_kill_tasks;
+using sched_lifecycle::s_deferred_kill_causes;
 using sched_queue::edf_ready_;
 using sched_queue::edf_remove;
 using sched_queue::invalidate_pending_switch_to;
 using sched_verify::task_stack_ptr;
 using sched_verify::validate_task_ptr;
+
+void Scheduler::reset_deferred_kills_for_test() noexcept {
+    ENSURE(scheduler_lock_depth_own() == 0);
+    for (uint64_t i = 0; i < MAX_DEFERRED_KILLS; ++i) {
+        s_deferred_kill_tasks[i] = nullptr;
+        s_deferred_kill_gens[i] = 0;
+        s_deferred_kill_causes[i] = ipc::DeathCause(0);
+    }
+    s_deferred_kill_count = 0;
+}
 
 void Scheduler::release_zombie(TaskControlBlock &task) noexcept {
     ENSURE(validate_task_ptr(&task, "release_zombie"));
@@ -1100,7 +1117,8 @@ static bool kill_declined(TaskControlBlock *task) noexcept {
            Scheduler::find_task(task->id) != task;
 }
 
-void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
+void Scheduler::defer_kill(TaskControlBlock *task,
+                             ipc::DeathCause cause) noexcept {
     ENSURE(validate_task_ptr(task, "defer_kill"));
     // Issue #409 (b): do not queue a kill for a task whose teardown is
     // already owned — the owner completes it.
@@ -1110,8 +1128,15 @@ void Scheduler::defer_kill(TaskControlBlock *task) noexcept {
     // which may run without the global lock — append-only, lock-free;
     // global→leaf order is unaffected (no lock taken here).
     if (s_deferred_kill_count < MAX_DEFERRED_KILLS) {
-        s_deferred_kill_gens[s_deferred_kill_count] = task->generation;
-        s_deferred_kill_tasks[s_deferred_kill_count++] = task;
+        // Issue #516 INV-K8: commit-word discipline — task/gen/cause land
+        // first, count last, so no consumer ever reads a half-appended
+        // record.  All three arrays drop in lockstep on the full-list leg
+        // below (which writes nothing).
+        const uint64_t n = s_deferred_kill_count;
+        s_deferred_kill_gens[n] = task->generation;
+        s_deferred_kill_causes[n] = cause;
+        s_deferred_kill_tasks[n] = task;
+        s_deferred_kill_count = n + 1;
     } else {
         Logger::warn("[DMD] deferred-kill list full, task %lu not added",
                      task->id);
@@ -1140,14 +1165,46 @@ void Scheduler::process_deferred_kills() noexcept {
     for (uint64_t i = 0; i < s_deferred_kill_count; ++i) {
         auto *task = s_deferred_kill_tasks[i];
         const uint32_t gen = s_deferred_kill_gens[i];
+        const ipc::DeathCause cause = s_deferred_kill_causes[i];
         // Issue #324 Tick 14: stale-entry leg is cold (freed/recycled slot).
         if (!task || task->magic != TaskControlBlock::TCB_MAGIC ||
             task->generation != gen) [[unlikely]]
             continue;
+        // Issue #516 INV-K9: AP-live retention FIRST — never announce a
+        // still-executing corpse.  The cause rides the retained record
+        // (all three slots copied) and announces on a later pass once
+        // the target deschedules.  Ordering is load-bearing.
+        if (is_current_on_any_cpu(task)) {
+            Scheduler::note_death_cause(*task, cause);
+            s_deferred_kill_tasks[kept] = task;
+            s_deferred_kill_gens[kept] = gen;
+            s_deferred_kill_causes[kept] = cause;
+            ++kept;
+            continue;
+        }
+        // Issue #516: publish at the kill decision for non-AP-live
+        // TERMINATED corpses that teardown has not owned or completed.
+        // Parent-retained (PARENT_COLLECTS, wait_collect_pending_)
+        // corpses latch here with their true cause instead of the late
+        // Teardown backstop; the backstop then loses the first-writer
+        // race and records nothing new (INV-K4).  Retained AP-live
+        // entries reach this leg only after descheduling.  Ordering is
+        // load-bearing: this decision precedes the kill_declined drop
+        // leg below, whose wait_collect_pending_ term would otherwise
+        // swallow the decision record (plan Step 4, Q2b-a).
+        if (task->state == TaskState::TERMINATED &&
+            !task->teardown_completed_ && !task->teardown_claimed_ &&
+            Scheduler::find_task(task->id) == task) {
+            Scheduler::note_death_cause(*task, cause);
+            Scheduler::publish_task_death(*task, cause);
+        }
         // Issue #409 (a): decline kills for tasks whose teardown is owned
         // elsewhere (seam-armed entry overtaken by owner teardown — the
         // scan path cannot hit this: the owner cannot interleave inside
         // the ISR). Dropped, not retained: the owner completes the tail.
+        // Runs after the publish decision (issue #516 Step 4): a
+        // wait_collect_pending_ corpse latches its record above before
+        // the destroy is declined here.
         if (kill_declined(task)) {
             Logger::warn("[SCHED] deferred kill declined for id=%lu "
                          "(claimed=%u done=%u reaped=%u reg=%u)",
@@ -1155,15 +1212,6 @@ void Scheduler::process_deferred_kills() noexcept {
                          task->teardown_completed_ ? 1u : 0u,
                          task->state == TaskState::REAPED ? 1u : 0u,
                          Scheduler::find_task(task->id) == task ? 1u : 0u);
-            continue;
-        }
-        // Issue #197: spare AP-live tasks (never free a live stack) —
-        // retain the entry (compacted); the kill completes once the task
-        // deschedules.
-        if (is_current_on_any_cpu(task)) {
-            s_deferred_kill_tasks[kept] = task;
-            s_deferred_kill_gens[kept] = gen;
-            ++kept;
             continue;
         }
 

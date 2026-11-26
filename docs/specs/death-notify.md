@@ -138,6 +138,36 @@ cleared the dead task's PTEs.  The ring itself is untouched by the death path.
   (`publish_task_death`, funnel-first + teardown backstop) + the atomic
   ACTIVE→PENDING transition under the lock.
 
+## Kill-Site Coverage Matrix (issue #516)
+
+Every production kill path reaches the record through exactly one door:
+the terminate funnel (`Scheduler::publish_task_death`, INV-K1) or the
+`complete_teardown` backstop (which funnels there too). Deferred
+watchdog/deadline kills queue a `(task, generation, cause)` intent and
+publish at the kill decision — AP-live retention first, publish only for
+non-AP-live `TERMINATED` corpses; retained entries announce on the pass
+after deschedule.
+
+| Site | Funnel | Synchronous? |
+|---|---|---|
+| x86 fatal / signal-frame / default-action kills | `terminate_err` | ✅ |
+| aa64/rv64 signal stubs, unattributable-trap, EL0/U-mode kills | `terminate_err[_from_trap]` | ✅ |
+| `sys_kill` self-fatal, OOM, daemon admin | `terminate_err` | ✅ |
+| `sys_exit`, thread exit, trampoline, IRQ-thread | direct publish / `terminate` | ✅ |
+| watchdog / deadline KILL arms | `defer_kill` → decision publish (cause `Watchdog` / `Kill`) | ✅ (decision, tick-bounded) |
+| shell background wrapper | self-exit funnel (cause `Exit`) | ✅ |
+| teardown backstop (incl. factory-reset bulk path) | `publish(Teardown)` | ✅ late |
+
+Cause assignment: `Exit` clean self-termination, `Fault` fault kills,
+`Kill` signal/OOM/default-funnel + deadline-budget kills, `Watchdog`
+watchdog-expiry arm (first producer, #516), `Admin` interim supervisor
+terminate, `Teardown` deferred backstop. First writer wins (CAS-on-zero);
+a recycled TCB starts at 0 (five memset-zero birth sites + init-list).
+
+Non-records (deliberate): trap-owner PARK dispositions (no attributable
+`dead_id`), canary fail-stops (panic policy), pinned-TCB skips and
+test-only cleanup paths.
+
 ## Invariants
 
 1. Every task death produces at most one record per watching supervisor.
