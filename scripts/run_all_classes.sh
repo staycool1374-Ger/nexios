@@ -111,13 +111,37 @@ if [ -n "${NEXIOS_POLICY_DUMP:-}" ]; then
 fi
 
 # Fail fast when the q35 variants cannot boot: clear message instead of a
-# QEMU boot error deep in the loop.  Mirrors the OVMF_CODE guards
-# (which remain the authoritative per-class check inside qemu_test.py).
+# QEMU boot error deep in the loop.  Mirrors qemu_test.py:find_ovmf(),
+# which remains the authoritative per-class check (qemu_test.py raises
+# SystemExit per class when the firmware is absent).
+OVMF_BASES="/opt/homebrew/Cellar/qemu /usr/share/qemu /usr/local/share/qemu"
+# Distro CODE-image fallbacks: Debian/Ubuntu ovmf installs no edk2-*.fd
+# names (QE station: /usr/share/OVMF/OVMF_CODE_4M.fd).  Exact paths, same
+# order as qemu_test.py:find_ovmf().  No _secboot variants: an
+# enforced-secure-boot image would refuse the unsigned test ISO.
+OVMF_ALT="/usr/share/OVMF/OVMF_CODE.fd /usr/share/OVMF/OVMF_CODE_4M.fd"
+OVMF_ALT="$OVMF_ALT /usr/share/ovmf/OVMF.fd /usr/share/qemu/OVMF.fd"
+OVMF_ALT="$OVMF_ALT /usr/share/OVMF/OVMF.fd"
+find_ovmf() { # print firmware path; non-zero when none found
+    local base fw
+    for base in $OVMF_BASES; do
+        [ -d "$base" ] || continue
+        fw=$(find "$base" -name 'edk2-x86_64-code.fd' 2>/dev/null | head -1)
+        if [ -n "$fw" ]; then printf '%s\n' "$fw"; return 0; fi
+    done
+    for fw in $OVMF_ALT; do
+        if [ -f "$fw" ]; then printf '%s\n' "$fw"; return 0; fi
+    done
+    return 1
+}
 for c in $RUN; do
     if [ "$c" = "ahci_live" ] || [ "$c" = "iommu_live" ]; then
-        OVMF_FW=$(find /opt/homebrew/Cellar/qemu /usr/share/qemu /usr/local/share/qemu -name 'edk2-x86_64-code.fd' 2>/dev/null | head -1)
-        if [ -z "$OVMF_FW" ]; then
-            echo "ERROR: $c requires OVMF edk2-x86_64-code.fd, none found under /opt/homebrew/Cellar/qemu, /usr/share/qemu, /usr/local/share/qemu"
+        if ! find_ovmf >/dev/null; then
+            echo "ERROR: $c requires OVMF firmware, none found. Searched:"
+            for base in $OVMF_BASES; do
+                echo "  $base/edk2-x86_64-code.fd"
+            done
+            for fw in $OVMF_ALT; do echo "  $fw"; done
             exit 1
         fi
         break
