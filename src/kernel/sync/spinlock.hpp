@@ -30,6 +30,8 @@
 #include <kernel/arch/io.hpp>
 #include <lib/atomic.hpp>
 #include <kernel/sync/spinlock_order.hpp>
+#include <kernel/sync/spinlock_hook.hpp> // issue #546-B hook seam (weak default)
+#include <kernel/task/tick_watchdog.hpp> // contended-spin checkpoint (atomics only)
 
 namespace kernel {
 namespace sync {
@@ -49,14 +51,69 @@ class SpinLock {
     SpinLock(SpinLock &&) = delete;
     SpinLock &operator=(SpinLock &&) = delete;
 
-    /// @brief Acquire the lock (spin until available).
+    /// @brief Acquire the lock (bounded contended spin + hook decision).
+    ///        Fast path takes the lock with no hook call. On contention,
+    ///        spins at most CONFIG_LOCK_CONTEND_ROUNDS pause rounds (with
+    ///        a tick-watchdog checkpoint every 256) and then invokes
+    ///        spin_contended_hook() exactly once per exhaustion; Retry
+    ///        re-enters the bounded loop, Acquired returns with the take
+    ///        fully published by the hook. try_lock() never calls the hook.
     void lock() noexcept {
-        while (atomic_exchange(&locked_, 1, __ATOMIC_ACQUIRE)) {
-            arch::pause();
+        if (!atomic_exchange(&locked_, 1, __ATOMIC_ACQUIRE)) {
+            __atomic_store_n(&holder_, __builtin_return_address(0),
+                             __ATOMIC_RELAXED);
+            spinlock_note_acquire(this, rank_);
+            return;
         }
-        __atomic_store_n(&holder_, __builtin_return_address(0),
-                         __ATOMIC_RELAXED);
-        spinlock_note_acquire(this, rank_);
+        for (;;) {
+            for (uint64_t round = 0;
+                 round < static_cast<uint64_t>(CONFIG_LOCK_CONTEND_ROUNDS);
+                 ++round) {
+                arch::pause();
+                if ((round & 255U) == 255U) {
+                    kernel::tick_watchdog::checkpoint("lock_contend");
+                }
+                if (!atomic_exchange(&locked_, 1, __ATOMIC_ACQUIRE)) {
+                    __atomic_store_n(&holder_, __builtin_return_address(0),
+                                     __ATOMIC_RELAXED);
+                    spinlock_note_acquire(this, rank_);
+                    return;
+                }
+            }
+            if (spin_contended_hook(*this) ==
+                SpinContendAction::Acquired) {
+                return;
+            }
+        }
+    }
+
+    /// @brief Acquire without ever invoking the contended hook (IRQ-combined
+    ///        paths that must not park: the hook could sti inside a bare-cli
+    ///        atomic region). Same bounded/checkpointed shape, unbounded
+    ///        re-entry like the status-quo spin it replaces.
+    void lock_irq_atomic() noexcept {
+        if (!atomic_exchange(&locked_, 1, __ATOMIC_ACQUIRE)) {
+            __atomic_store_n(&holder_, __builtin_return_address(0),
+                             __ATOMIC_RELAXED);
+            spinlock_note_acquire(this, rank_);
+            return;
+        }
+        for (;;) {
+            for (uint64_t round = 0;
+                 round < static_cast<uint64_t>(CONFIG_LOCK_CONTEND_ROUNDS);
+                 ++round) {
+                arch::pause();
+                if ((round & 255U) == 255U) {
+                    kernel::tick_watchdog::checkpoint("lock_contend");
+                }
+                if (!atomic_exchange(&locked_, 1, __ATOMIC_ACQUIRE)) {
+                    __atomic_store_n(&holder_, __builtin_return_address(0),
+                                     __ATOMIC_RELAXED);
+                    spinlock_note_acquire(this, rank_);
+                    return;
+                }
+            }
+        }
     }
 
     /// @brief Release the lock.

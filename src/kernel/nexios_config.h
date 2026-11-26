@@ -1234,6 +1234,19 @@
 #define CONFIG_LOCK_SPIN_ROUNDS 1024
 #endif
 
+/// Issue #546-B: pause-spin iterations per bounded round inside
+/// SpinLock::lock() before exactly one spin_contended_hook decision.
+/// Default: 1024 (range 64..65536).
+#ifndef CONFIG_LOCK_CONTEND_ROUNDS
+#define CONFIG_LOCK_CONTEND_ROUNDS 1024
+#endif
+
+/// Issue #546-B: exhaustion-path holder probe (0 = compiled out).
+/// Default: 1.
+#ifndef CONFIG_LOCK_HOLDER_PROBE
+#define CONFIG_LOCK_HOLDER_PROBE 1
+#endif
+
 /// Ticks to sleep per park attempt before re-checking the lock.
 /// Default: 2 (bounded added latency per attempt, ≤ MAX_ATTEMPTS).
 #ifndef CONFIG_LOCK_PARK_TICKS
@@ -1894,6 +1907,12 @@ extern "C" void panic(const char *msg);
 #endif
 #if CONFIG_LOCK_SPIN_ROUNDS < 0
 #error "CONFIG_LOCK_SPIN_ROUNDS must be >= 0 (default 1024)"
+#endif
+#if CONFIG_LOCK_CONTEND_ROUNDS < 64 || CONFIG_LOCK_CONTEND_ROUNDS > 65536
+#error "CONFIG_LOCK_CONTEND_ROUNDS must be in [64..65536] (default 1024)"
+#endif
+#if CONFIG_LOCK_HOLDER_PROBE < 0 || CONFIG_LOCK_HOLDER_PROBE > 1
+#error "CONFIG_LOCK_HOLDER_PROBE must be 0 or 1 (default 1)"
 #endif
 #if CONFIG_LOCK_PARK_TICKS < 1
 #error "CONFIG_LOCK_PARK_TICKS must be >= 1 (default 2)"

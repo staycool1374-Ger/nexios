@@ -23,6 +23,7 @@
 #include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/park_lock.hpp> // issue #546-B outermost takes park
 #include <kernel/arch/io.hpp>
 #include <assert.hpp>
 
@@ -109,7 +110,7 @@ bool EventGroup::add_waiter(TaskControlBlock &task, uint64_t wanted,
 ///        never removed.
 /// @return true if the task was found and removed.
 bool EventGroup::remove_waiter(TaskControlBlock &task) {
-    SpinLockGuard<SpinLock> guard(lock_);
+    ParkLockGuard guard(lock_, "eventgroup:remove_waiter");
     for (size_t i = 0; i < wait_count_;) {
         if (same_waiter(waiters_[i].task, waiters_[i].generation, task)) {
             waiters_[i] = waiters_[--wait_count_];
@@ -162,7 +163,7 @@ uint64_t EventGroup::wait_bits(uint64_t wanted, bool clear_on_exit) {
     for (;;) {
         bool added = false;
         {
-            SpinLockGuard<SpinLock> guard(lock_);
+            ParkLockGuard guard(lock_, "eventgroup:wait");
             if ((bits_ & wanted) == wanted) {
                 if (clear_on_exit)
                     bits_ &= ~wanted;
@@ -209,7 +210,7 @@ errors::SyncError EventGroup::wait_bits_err(uint64_t wanted, bool clear_on_exit,
 
     bool added = false;
     {
-        SpinLockGuard<SpinLock> guard(lock_);
+        ParkLockGuard guard(lock_, "eventgroup:wait_err");
         if ((bits_ & wanted) == wanted) {
             if (clear_on_exit)
                 bits_ &= ~wanted;

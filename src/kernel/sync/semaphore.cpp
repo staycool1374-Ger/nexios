@@ -24,6 +24,7 @@
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/park_lock.hpp> // issue #546-B outermost takes park
 #include <kernel/arch/io.hpp>
 #include <assert.hpp>
 
@@ -73,7 +74,7 @@ bool Semaphore::add_waiter(TaskControlBlock &task) {
 ///        pattern of Queue::remove_send_waiter / IPC::unblock_sender_rollback.
 /// @return true if the task was found and removed.
 bool Semaphore::remove_waiter(TaskControlBlock &task) {
-    SpinLockGuard<SpinLock> guard(lock_);
+    ParkLockGuard guard(lock_, "semaphore:remove_waiter");
     for (size_t i = 0; i < waiter_count_;) {
         if (same_waiter(waiters_[i], waiter_gens_[i], task)) {
             waiters_[i] = waiters_[--waiter_count_];
@@ -203,7 +204,7 @@ void Semaphore::wait() {
     for (;;) {
         bool added = false;
         {
-            SpinLockGuard<SpinLock> guard(lock_);
+            ParkLockGuard guard(lock_, "semaphore:wait");
             if (count_ > 0) {
                 --count_;
                 if (count_ == 0) {
@@ -255,7 +256,7 @@ errors::SyncError Semaphore::wait_err() {
 
     bool added = false;
     {
-        SpinLockGuard<SpinLock> guard(lock_);
+        ParkLockGuard guard(lock_, "semaphore:wait_err");
         if (count_ > 0) {
             --count_;
             if (count_ == 0) {

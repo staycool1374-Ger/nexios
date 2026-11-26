@@ -21,6 +21,7 @@
 
 #include <kernel/sync/mutex.hpp>
 #include <kernel/sync/waiter_tag.hpp>
+#include <kernel/sync/park_lock.hpp> // issue #546-B remove_waiter parks
 #include <kernel/task/scheduler.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <assert.hpp>
@@ -103,7 +104,7 @@ bool Mutex::add_waiter(TaskControlBlock &task) {
 ///        never removed.  Mirrors Queue::remove_send_waiter / Semaphore::remove_waiter.
 /// @return true if the task was found and removed.
 bool Mutex::remove_waiter(TaskControlBlock &task) {
-    SpinLockGuard<SpinLock> guard(lock_);
+    ParkLockGuard guard(lock_, "mutex:remove_waiter");
     for (size_t i = 0; i < wait_count_;) {
         if (same_waiter(waiters_[i], waiter_gens_[i], task)) {
             waiters_[i] = waiters_[--wait_count_];
@@ -243,6 +244,14 @@ void Mutex::reevaluate() {
 }
 
 /// @brief Acquire the mutex, blocking until available (supports recursion).
+/// NOTE (issue #546-B): the entry take stays a raw lock_.lock() call
+/// rather than a ParkLockGuard. The function body performs an explicit
+/// unlock/relock dance whose unlock sites pair with different takes per
+/// loop iteration, so a single-shot guard cannot own the take: the first
+/// guard.release() would disown it and every later raw take would leak
+/// its matching unlock (or the dtor would double-unlock). The raw take
+/// still goes through the contended-spin hook (bounded spin + park when
+/// allowed), which is the plan's actual requirement for outermost takes.
 void Mutex::lock() {
     lock_.lock();
     auto *task = Scheduler::current_task();
@@ -349,6 +358,9 @@ void Mutex::lock() {
 }
 
 /// @brief Acquire the mutex (error-returning overload).
+/// NOTE (issue #546-B): same single-shot-guard reasoning as lock() above:
+/// the entry take stays a raw lock_.lock() (hook-covered); the manual
+/// unlock/relock dance cannot be owned by one guard object.
 errors::SyncError Mutex::lock_err() {
     lock_.lock();
     auto *task = Scheduler::current_task();

@@ -19,7 +19,9 @@ class [[nodiscard]] IrqSpinLockGuard {
     explicit IrqSpinLockGuard(SpinLock &lock) noexcept
         : lock_(lock), irq_was_(arch::interrupts_enabled()), held_(true) {
         arch::cli();
-        lock_.lock();
+        // Issue #546-B: IRQ-combined takes never reach the contended hook
+        // (a park inside a bare-cli atomic region would sti mid-section).
+        lock_.lock_irq_atomic();
     }
 
     ~IrqSpinLockGuard() noexcept {
@@ -42,7 +44,7 @@ class [[nodiscard]] IrqSpinLockGuard {
         if (!held_) {
             irq_was_ = arch::interrupts_enabled();
             arch::cli();
-            lock_.lock();
+            lock_.lock_irq_atomic();
             held_ = true;
         }
     }

@@ -24,6 +24,7 @@
 #include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/park_lock.hpp> // issue #546-B outermost takes park
 #include <kernel/arch/io.hpp>
 #include <kernel/arch/hal/irq_guard.hpp>
 #include <string.hpp>
@@ -187,7 +188,7 @@ void Queue::remove_recv_waiter(TaskControlBlock &task) {
 ///        occupies the slot is never removed.
 /// @return true if the task was found and removed.
 bool Queue::remove_waiter(TaskControlBlock &task) {
-    SpinLockGuard<SpinLock> guard(lock_);
+    ParkLockGuard guard(lock_, "queue:remove_waiter");
     size_t before = send_waiters_count_ + recv_waiters_count_;
     remove_send_waiter(task);
     remove_recv_waiter(task);
@@ -203,7 +204,7 @@ bool Queue::send(const uint8_t *data, size_t size) {
 
     for (;;) {
         {
-            SpinLockGuard<SpinLock> guard(lock_);
+            ParkLockGuard guard(lock_, "queue:send");
             last_sender_ = task;
             last_sender_gen_ = task->generation;
             if (!is_full()) {
@@ -261,7 +262,7 @@ errors::SyncError Queue::send_err(const uint8_t *data, size_t size,
 
     for (;;) {
         {
-            SpinLockGuard<SpinLock> guard(lock_);
+            ParkLockGuard guard(lock_, "queue:send_err");
             last_sender_ = task;
             last_sender_gen_ = task->generation;
             if (!is_full()) {
@@ -353,7 +354,7 @@ bool Queue::receive(uint8_t *buf, size_t *size) {
 
     for (;;) {
         {
-            SpinLockGuard<SpinLock> guard(lock_);
+            ParkLockGuard guard(lock_, "queue:receive");
             last_receiver_ = task;
             last_receiver_gen_ = task->generation;
             if (!is_empty()) {
@@ -412,7 +413,7 @@ errors::SyncError Queue::receive_err(uint8_t *buf, size_t *size,
 
     for (;;) {
         {
-            SpinLockGuard<SpinLock> guard(lock_);
+            ParkLockGuard guard(lock_, "queue:receive_err");
             last_receiver_ = task;
             last_receiver_gen_ = task->generation;
             if (!is_empty()) {

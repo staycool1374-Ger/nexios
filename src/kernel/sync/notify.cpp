@@ -23,6 +23,7 @@
 #include <kernel/sync/waiter_tag.hpp>
 #include <kernel/task/scheduler.hpp>
 #include <kernel/sync/spinlock_guard.hpp>
+#include <kernel/sync/park_lock.hpp> // issue #546-B outermost takes park
 #include <kernel/arch/io.hpp>
 
 namespace kernel {
@@ -107,7 +108,7 @@ uint64_t Notify::wait() {
 
     for (;;) {
         {
-            SpinLockGuard<SpinLock> guard(lock_);
+            ParkLockGuard guard(lock_, "notify:wait");
             if (waiter_ == nullptr) {
                 if (notify_value_ != 0) {
                     uint64_t value = notify_value_;
@@ -174,7 +175,7 @@ errors::SyncError Notify::wait_err(uint64_t *out_value) {
         return errors::SYNC_ERR_NO_TASK;
 
     {
-        SpinLockGuard<SpinLock> guard(lock_);
+        ParkLockGuard guard(lock_, "notify:wait_err");
         if (waiter_ != nullptr)
             return errors::SYNC_ERR_ALREADY_WAITING;
 

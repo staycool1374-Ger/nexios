@@ -46,16 +46,25 @@ void note_denied(ParkDenyReason reason) noexcept {
 // Per-site one-shot diagnostic latches (site = string literal, compared
 // by pointer).  Slots cover all ParkLockGuard sites with margin; a full
 // table stays loud (fail-open diagnostics, never silent).
-inline constexpr uint64_t kSiteLatchSlots = 16;
+inline constexpr uint64_t kSiteLatchSlots = 64;
 
 struct SiteLatch {
     const char *site = nullptr;
     bool fired = false;
 };
 
+struct ProbeLatch {
+    const char *site = nullptr;
+    const void *lock_addr = nullptr;
+    bool fired = false;
+};
+
 SiteLatch g_escape_latches[kSiteLatchSlots] = {};
 SiteLatch g_exhaust_latches[kSiteLatchSlots] = {};
 SiteLatch g_budget_latches[kSiteLatchSlots] = {};
+// Issue #546-B: one-shot per (lock, site) probe latches for the
+// contended-spin hook deny path (fail-open: full table ⇒ probe anyway).
+ProbeLatch g_probe_latches[kSiteLatchSlots] = {};
 
 bool site_latch_fire(SiteLatch *latches, const char *site) noexcept {
     for (uint64_t i = 0; i < kSiteLatchSlots; ++i) {
@@ -660,6 +669,88 @@ void park_lock_reset_for_test() noexcept {
         g_escape_latches[i] = SiteLatch{};
         g_exhaust_latches[i] = SiteLatch{};
         g_budget_latches[i] = SiteLatch{};
+        g_probe_latches[i] = ProbeLatch{};
+    }
+}
+
+// Issue #546-B: one-shot per (lock, site) probe latch (fail-open:
+// a full table probes anyway instead of dropping the evidence).
+bool probe_latch_fire(const void *lock_addr, const char *site) noexcept {
+    for (uint64_t i = 0; i < kSiteLatchSlots; ++i) {
+        if (g_probe_latches[i].site == site &&
+            g_probe_latches[i].lock_addr == lock_addr) {
+            if (g_probe_latches[i].fired) {
+                return false;
+            }
+            g_probe_latches[i].fired = true;
+            return true;
+        }
+        if (g_probe_latches[i].site == nullptr) {
+            g_probe_latches[i].site = site;
+            g_probe_latches[i].lock_addr = lock_addr;
+            g_probe_latches[i].fired = true;
+            return true;
+        }
+    }
+    return true;
+}
+
+// Issue #546-B: read-only holder probe for the contended-spin hook deny
+// path (mirrors the note_exhaustion output shape, compact form).
+// Only: order-book reads, find_task snapshot, latch-gated error line.
+// Never: any lock take, allocation, reschedule, or serial write outside
+// the latch.
+void note_contend_probe(const SpinLock &lock, const char *site) noexcept {
+    if (!probe_latch_fire(&lock, site)) {
+        return;
+    }
+    const void *holder_pc = lock.holder_for_debug();
+    uint64_t holder_task = 0;
+    uint64_t holder_rank = 0;
+    if (holder_pc != nullptr) {
+        (void)sync::spinlock_find_holder(&lock, &holder_task, &holder_rank);
+    }
+    uint64_t h_state = 99;
+    if (holder_task != 0) {
+        auto *h = Scheduler::find_task(holder_task);
+        if (h != nullptr && TaskControlBlock::is_valid(h)) {
+            h_state = static_cast<uint64_t>(h->state);
+        }
+    }
+    kernel::Logger::error(
+        "lock: contended-spin denied, holder_task=%lu h_state=%lu "
+        "holder_rank=%lu",
+        holder_task, h_state, holder_rank);
+}
+
+// Issue #546-B: strong definition of the contended-spin decision hook.
+// Parks through the existing park_window machinery iff the predicate
+// allows it; Sched-ranked locks and denied predicates get Retry (+ the
+// read-only probe) with nothing armed.
+SpinContendAction spin_contended_hook(SpinLock &lock) noexcept {
+    auto *task = Scheduler::current_task();
+    if (task == nullptr || task->magic != TaskControlBlock::TCB_MAGIC) {
+        return SpinContendAction::Retry;
+    }
+    if (lock.rank() == sync::LockRank::Sched) {
+        note_denied(ParkDenyReason::SchedLock);
+        return SpinContendAction::Retry;
+    }
+    if (!lock_park_allowed(lock)) {
+#if CONFIG_LOCK_HOLDER_PROBE
+        note_contend_probe(lock, "lock:contend");
+#endif
+        return SpinContendAction::Retry;
+    }
+    const bool entry_if = arch::interrupts_enabled();
+    uint64_t park_ns = static_cast<uint64_t>(CONFIG_LOCK_PARK_TICKS);
+    park_ns *= 1000000000ULL;
+    park_ns /= static_cast<uint64_t>(CONFIG_TICK_HZ);
+    switch (park_window(lock, "lock:contend", *task, park_ns, entry_if)) {
+        case ParkWindowResult::Acquired:
+            return SpinContendAction::Acquired;
+        default:
+            return SpinContendAction::Retry;
     }
 }
 

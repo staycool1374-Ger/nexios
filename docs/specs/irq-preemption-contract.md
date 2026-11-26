@@ -77,6 +77,28 @@ starves the tick that would dispatch the holder (observed:
 A dead timer degrades to an entry-IF-preserving bounded loud spin
 (`ArmFailed` bridge), never to an unbounded IF=0 spin.
 
+## 4b. INV-LOCK-1..4: one spinlock story, enforced (issue #546-B)
+
+- INV-LOCK-1 (bounded acquisition): every failed first exchange spins at
+  most CONFIG_LOCK_CONTEND_ROUNDS pause rounds with a checkpoint every 256,
+  then exactly one `spin_contended_hook()` decision; Retry re-enters the
+  bounded loop, Acquired returns fully published. Never an unbounded silent
+  spin.
+- INV-LOCK-2 (park only when allowed): the hook parks only if
+  `lock_park_allowed()` and rank != Sched; otherwise Retry with counters
+  only. Deny + count; a park with a false predicate is a defect.
+- INV-LOCK-3 (no park in non-wait-capable/lock-holding contexts): the 12
+  ParkDenyReason arms consumed by both gates (divergence = defect, #583).
+- INV-LOCK-4 (rank completeness): every production `sync::SpinLock` has
+  exactly one ledger row in `docs/lock-rank-ledger.md` — ranked or
+  Unranked-with-reason; nesting strictly increasing Sched(1)→Queue(2)→
+  Leaf(3); no hook park targets Sched. Report-only inversions (M8 owns).
+
+`IrqSpinLockGuard` (IRQ-combined sites: allocator, pager, virtio, DMA,
+shootdown, urc, iopb): takes `lock_irq_atomic()` — the same bounded loop
+without the hook, since a park inside a bare-cli atomic region would
+`sti` mid-section. A hook-parked task never holds these locks.
+
 Conviction diagnostics (DEBUG, serial): per-site one-shot `denied-spin
 escape` (order-stack holder task/rank), one-shot `exhausted` dump
 (holder take site/cpu/take-IF + `find_task` snapshot: state, in-rq,
@@ -96,7 +118,14 @@ publish-then-wait loops: the post-publish recheck is a single non-blocking
 `try_lock` inside the publish `IrqGuard` (IF=0 atomic vs tick
 preemption); on Contended the waiter proceeds to block (the holder's
 wake-gate read observes the publish, so no retry is needed and no IF=0
-spin ever happens).
+spin ever happens).  Authoritative rank table: `docs/lock-rank-ledger.md`
+(this file's §2 table is a summary and must match it row for row).
+
+`IrqSpinLockGuard` (IRQ-combined sites: allocator, pager, virtio, DMA,
+shootdown, urc, iopb): takes `lock_irq_atomic()` — the same
+bounded/checkpointed loop without the contended hook — because a park
+inside a bare-cli atomic region would `sti` mid-section.  A hook-parked
+task never holds these locks (INV-LOCK-2 SchedLock/deny arms).
 
 P1 residual follow-ups (same shape, other subsystems — tracked, not fixed
 in this cycle): sync-queue/notify/eventgroup/semaphore take-while-BLOCKED
