@@ -166,7 +166,11 @@ inline void stac() {
     if (!g_smap_supported) {
         return;
     }
-    asm volatile("stac" ::: "cc");
+    // Issue #632: the "memory" clobber is load-bearing — without it GCC
+    // may reorder memory accesses across the AC window (observed: -O2
+    // sank a user-page store below clac, SMAP #PF err=0x3 in release
+    // while debug stayed green). It pins all traffic inside stac/clac.
+    asm volatile("stac" ::: "cc", "memory");
 }
 /// @brief Clear AC — SMAP faults on any further kernel deref of user pages.
 ///        No-op when the CPU lacks CPUID.SMAP, symmetric with stac() — both
@@ -176,7 +180,9 @@ inline void clac() {
     if (!g_smap_supported) {
         return;
     }
-    asm volatile("clac" ::: "cc");
+    // Issue #632: symmetric "memory" clobber — see stac() above. Without
+    // it the window's trailing edge does not order preceding stores.
+    asm volatile("clac" ::: "cc", "memory");
 }
 /// @brief Read RFLAGS (AC = bit 18).
 /// @return Current RFLAGS value.
