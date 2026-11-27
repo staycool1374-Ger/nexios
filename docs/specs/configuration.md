@@ -201,7 +201,9 @@ Each leg's first in-guest assert must be `CONFIG_* == 1`, so a mis-built leg
 fails loudly instead of passing vacuously.  Gate set: the M4 classes
 (`core_memory`, `capability`) plus the freeze-denies sweep on the pools1 leg
 and the handover-caps-cover-free-pool asserts on the bootstrap1 leg
-(see the QE sketch on #563).
+(see the QE sketch on #563). Post-freeze the pools1 leg refuses
+page-table draws too (F21, #573), so it cannot create tasks after
+freeze — it already refused earlier at `alloc_contiguous`.
 
 ## 3. `tools/check-config.py` — Configuration Validation
 

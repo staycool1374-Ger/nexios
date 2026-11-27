@@ -960,6 +960,16 @@ uint64_t PMM::alloc_user_contiguous(size_t count) {
 ///        Falls back to alloc_page() when the pool is exhausted.
 /// @return Physical address, or 0 (asserts on OOM).
 uint64_t PMM::alloc_page_table() {
+#if CONFIG_STATIC_POOLS_ONLY
+    // Issue #573: post-freeze deny — covers the pool fast path and the
+    // alloc_page() fallback alike with one latch emission (see also the
+    // _err twin below; the generic-OOM twins are unchanged, accepted S3).
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        ASSERT(errors::PmmError::PMM_ERR_FROZEN_DENY);
+        return 0;
+    }
+#endif
     if (!is_table_pool_configured()) {
         return alloc_page();
     }
@@ -1383,6 +1393,14 @@ errors::PmmError PMM::alloc_user_contiguous_err(size_t count,
 /// @param[out] out_phys_addr Physical address on success.
 /// @return PmmError code.
 errors::PmmError PMM::alloc_page_table_err(uint64_t &out_phys_addr) {
+#if CONFIG_STATIC_POOLS_ONLY
+    // Issue #573: typed freeze refusal (not TABLE_OOM — the pool is not
+    // exhausted). Deliberate asymmetry with the generic-OOM _err twins.
+    if (g_pmm_frozen) {
+        note_frozen_deny();
+        return errors::PMM_ERR_FROZEN_DENY;
+    }
+#endif
     if (!is_table_pool_configured()) {
         return alloc_page_err(out_phys_addr);
     }

@@ -71,10 +71,11 @@ class PMM {
     /// @brief Freeze kernel pools at end of composition (M4, #563).
     /// Idempotent; refuses a second invocation's state change. Takes
     /// pmm_lock_ internally; never nests with mempool/CNode locks.
-    /// Under CONFIG_STATIC_POOLS_ONLY every post-freeze general-pool
-    /// entry point denies (the §7.2 fixed page-table pool stays
-    /// allocatable post-freeze — its deny placement is F21's, #573);
-    /// handover accounting is live in all builds.
+    /// Under CONFIG_STATIC_POOLS_ONLY every post-freeze PMM entry point
+    /// denies with typed PMM_ERR_FROZEN_DENY on the `_err` paths (ASSERT +
+    /// 0 on the uint64_t paths); the reserved page-table pool is drawable
+    /// only pre-freeze (F21, #573); handover accounting is live in all
+    /// builds.
     static void freeze_pools() noexcept;
     /// @brief True once freeze_pools() has run.
     static bool is_frozen() noexcept;
@@ -129,11 +130,14 @@ class PMM {
                                                       uint64_t &out_phys_addr);
 
     /// @brief Allocates a single 4 KiB page for page tables (KERNEL
-    /// ownership, from reserved low-memory pool).
+    /// ownership, from reserved low-memory pool). Post-freeze: denies
+    /// under CONFIG_STATIC_POOLS_ONLY (PMM_ERR_FROZEN_DENY); pool fast
+    /// path and fallback alike.
     static uint64_t alloc_page_table();
     /// @brief Allocates a single 4 KiB page for page tables with error code.
     /// @param[out] out_phys_addr Physical address of allocated page table page.
-    /// @return PmmError code.
+    /// @return PmmError code (post-freeze: PMM_ERR_FROZEN_DENY under
+    /// CONFIG_STATIC_POOLS_ONLY).
     [[nodiscard]] static errors::PmmError alloc_page_table_err(uint64_t &out_phys_addr);
 
     /// @brief Page color of a physical address (issue #62; delegates

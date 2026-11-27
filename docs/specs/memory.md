@@ -162,8 +162,10 @@ Constraints:
 ### 6.1 Freeze & handover (M4, #563)
 
 - After end-of-composition `PMM::freeze_pools()`, the PMM free pool is
-  closed: post-freeze allocation denies under `CONFIG_STATIC_POOLS_ONLY`
-  (typed errors on the `_err` paths, ASSERT + 0 on the uint64 paths).
+  closed: all 14 alloc entry points deny under `CONFIG_STATIC_POOLS_ONLY`
+  (typed errors on the `_err` paths, ASSERT + 0 on the uint64 paths),
+  page-table pool fast path included — so post-freeze VM growth and task
+  creation fail closed with a typed error, never a panic.
 - Handed-over runs stay marked allocated in the bitmap with the handover
   bit set (see `PMM::handover_owns`); `PMM::free_page` refuses them so a
   stale free can never resurrect a mem-mgr frame (double-ownership guard).

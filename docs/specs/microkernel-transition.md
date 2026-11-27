@@ -71,7 +71,7 @@ tracking issue; it is never presented as already true.
 
 | ID | Invariant | Enforcement point | Status / evidence |
 |---|---|---|---|
-| INV-MK-1 | After boot ownership handover the kernel SHALL NOT allocate physical memory on behalf of a task. Every kernel object SHALL be created by `CAP_RETYPE` from a user-held Untyped, except the fixed boot pool set (§7.2). | `CONFIG_STATIC_POOLS_ONLY` asserts in `memory/pmm.cpp:PMM::alloc_page` / `alloc_contiguous` / `alloc_page_colored`; GAP: `alloc_user_page`, `alloc_user_contiguous`, `alloc_page_table` carry no such assert, and every listed violation site uses them (F21) | VIOLATED (#193): `syscall_handlers_shm.cpp:sys_frame_create` (PMM), `ipc/buffer_pool.cpp:BufferPool::alloc_page` (PMM fallback), `elf/elf_loader.cpp` page allocation, `memory/vmm.cpp` page-table allocation on map |
+| INV-MK-1 | After boot ownership handover the kernel SHALL NOT allocate physical memory on behalf of a task. Every kernel object SHALL be created by `CAP_RETYPE` from a user-held Untyped, except the fixed boot pool set (§7.2). | `CONFIG_STATIC_POOLS_ONLY` asserts in `memory/pmm.cpp` over all 14 alloc entry points (7 primaries + 7 `_err` twins), page-table pool fast path included (closed: M4 + F21/#573) | VIOLATED (#193): `syscall_handlers_shm.cpp:sys_frame_create` (PMM), `ipc/buffer_pool.cpp:BufferPool::alloc_page` (PMM fallback), `elf/elf_loader.cpp` page allocation, `memory/vmm.cpp` page-table allocation on map — each deny-gated post-freeze |
 | INV-MK-2 | Every scarce resource SHALL have a compile-time bound, and the composed system description SHALL be checked against it at compose time. | `task/boot_sdf.hpp:sdf_compose` | PARTIAL: bounds exist (§7.3); demand-vs-bound check absent |
 | INV-MK-3 | Every client-visible server RPC SHALL have a finite, documented bound. Unbounded `send_sync` SHALL NOT appear on any server path. | proxy call sites | PARTIAL: proxies use `kRpcGuardTicks = 5000` (5 s at `CONFIG_TICK_HZ 1000`) in `log/log_srv.cpp`, `time/timer_srv.cpp`, `cap/cap_broker.cpp`, `term/term_srv.cpp`, `vfs/procfs_srv.cpp`, `vfs/vfs_srv.cpp`, `driver/block_srv.cpp`, `driver/driver_pds.hpp`, `watchdog/wdog_mon.cpp`; per-server bounds `TBD at API freeze` (Q5) |
 | INV-MK-4 | Task context runs with IF=1 except inside an explicit `IrqGuard`; syscall entry owns IF=0 until the handler blocks or returns; no spinlock SHALL be held across a blocking point or `reschedule()`; every IRQ-off region SHALL be bounded. | debug assertions (§6) | VIOLATED (#545 S1, #546 S2); contract currently implicit |
@@ -466,11 +466,11 @@ tables, IOPB pool. `sizeof(TaskControlBlock)` SHALL be checked by
 `static_assert` against the largest MemPool class. The dead
 `CONFIG_MEMPOOL_*` macros in `nexios_config.h` SHALL be removed or wired to
 the table (F21). `CONFIG_STATIC_POOLS_ONLY` (default 0) is the certification
-switch. Today it asserts only in `PMM::alloc_page`, `PMM::alloc_contiguous`
-and `PMM::alloc_page_colored`; `PMM::alloc_user_page`,
-`PMM::alloc_user_contiguous` and `PMM::alloc_page_table` are not gated, so
-the switch does not yet forbid PMM allocation after init. REQUIRED (F21,
-before M4's gate): every post-init PMM entry point SHALL be covered.
+switch. All seven PMM entry-point pairs (`alloc_page`, `alloc_contiguous`,
+`alloc_page_colored`, `alloc_user_page`, `alloc_user_contiguous`,
+`alloc_page_table` and their `_err` twins — 14 entry points) deny
+post-freeze, including the reserved page-table pool fast path (F21, #573).
+REQUIRED (F21, before M4's gate): every post-init PMM entry point SHALL be covered.
 
 ### 7.3 Bounds vs demand
 
