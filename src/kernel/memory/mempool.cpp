@@ -17,6 +17,7 @@
  */
 
 #include <kernel/memory/mempool.hpp>
+#include <kernel/memory/mem_pressure.hpp> // issue #575 MEMPOOL_EMPTY latch
 #include <kernel/log/dmesg.hpp>
 #include <kernel/memory/pmm.hpp>
 #include <kernel/test/resource_tracker.hpp>
@@ -101,8 +102,13 @@ void *MemPool::alloc(size_t size) {
         return nullptr;
 
     auto &pool = pools_[idx];
-    if (pool.free_count == 0)
+    if (pool.free_count == 0) {
+        // Issue #575: class exhaustion latches (mempool_lock_ held —
+        // allowed: the latch is lock-free). Too-large requests above stay
+        // unlatched (not exhaustion).
+        mem_pressure::latch(mem_pressure::MemPressureReason::MEMPOOL_EMPTY);
         return nullptr;
+    }
 
     size_t block = pop_block_locked(idx);
 
@@ -392,6 +398,8 @@ MemPoolError MemPool::alloc_err(size_t size, void *&out_ptr) {
 
     auto &pool = pools_[idx];
     if (pool.free_count == 0) {
+        // Issue #575: see alloc() above (same latch, _err twin).
+        mem_pressure::latch(mem_pressure::MemPressureReason::MEMPOOL_EMPTY);
         return MEMPOOL_ERR_OOM;
     }
 

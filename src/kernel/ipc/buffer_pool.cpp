@@ -377,25 +377,32 @@ errors::BufPoolError BufferPool::alloc_err(TaskControlBlock &task,
     if (!phys) {
         // M4 (#563): the pool is the only buffer source — exhaustion is a
         // typed error with a pressure latch, never a PMM allocation.
+        // Issue #575: subsystem row budgeted 1-per-64 sustained events.
         free_entry(idx);
-        mem_pressure::latch(mem_pressure::MemPressureReason::BUFPOOL_EMPTY);
-        log::dmesg_push_sev(log::ErrorSubsystem::BUFPOOL,
-                            log::kDmesgBase_BUFPOOL + 1,
-                            log::LogSeverity::ERROR,
-                            "bufpool: cache exhausted, no PMM fallback", 0);
+        if (mem_pressure::latch_notable(
+                mem_pressure::MemPressureReason::BUFPOOL_EMPTY)) {
+            log::dmesg_push_sev(log::ErrorSubsystem::BUFPOOL,
+                                log::kDmesgBase_BUFPOOL + 1,
+                                log::LogSeverity::ERROR,
+                                "bufpool: cache exhausted, no PMM fallback",
+                                0);
+        }
         return errors::BUF_ERR_OOM;
     }
     if (!PMM::is_user_page(phys)) {
         // M4 (#563): the pre-freeze USER-repair round-trip is gone. A
         // non-USER pool page fails closed: entry freed, page returned to
         // the PMM (freeing is legal post-freeze), typed error + latch.
+        // Issue #575: subsystem row budgeted 1-per-64 sustained events.
         free_entry(idx);
         PMM::free_page(phys);
-        mem_pressure::latch(mem_pressure::MemPressureReason::BUFPOOL_EMPTY);
-        log::dmesg_push_sev(log::ErrorSubsystem::BUFPOOL,
-                            log::kDmesgBase_BUFPOOL + 1,
-                            log::LogSeverity::ERROR,
-                            "bufpool: non-USER page, no PMM repair", 0);
+        if (mem_pressure::latch_notable(
+                mem_pressure::MemPressureReason::BUFPOOL_EMPTY)) {
+            log::dmesg_push_sev(log::ErrorSubsystem::BUFPOOL,
+                                log::kDmesgBase_BUFPOOL + 1,
+                                log::LogSeverity::ERROR,
+                                "bufpool: non-USER page, no PMM repair", 0);
+        }
         return errors::BUF_ERR_OOM;
     }
 

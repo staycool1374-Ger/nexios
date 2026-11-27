@@ -34,6 +34,13 @@ namespace kernel {
 
 static sync::SpinLock pmm_lock_{};
 
+// Issue #575: single funnel for all budget denies (11 call sites route
+// through is_over_budget). Kept TU-static next to note_frozen_deny so
+// the two emit helpers stay adjacent.
+static void note_budget_deny() noexcept {
+    mem_pressure::latch(mem_pressure::MemPressureReason::BUDGET_DENY);
+}
+
 // M4 (#563): post-freeze denial diagnostic. Emits one dmesg row per
 // denial (fixed ring, bounded) + the one-shot pressure latch. Called
 // BEFORE the ASSERT so release builds (ASSERT compiled out) keep the
@@ -41,10 +48,14 @@ static sync::SpinLock pmm_lock_{};
 // from CONFIG_STATIC_POOLS_ONLY deny legs (compiled out otherwise).
 #if CONFIG_STATIC_POOLS_ONLY
 static void note_frozen_deny() noexcept {
-    mem_pressure::latch(mem_pressure::MemPressureReason::PMM_FROZEN_DENY);
-    log::dmesg_push_sev(log::ErrorSubsystem::PMM,
-                        log::kDmesgBase_PMM + 2, log::LogSeverity::ERROR,
-                        "PMM: post-freeze allocation denied", 0);
+    // Issue #575: the PMM+2 row is budgeted 1-per-64 sustained denials;
+    // the deny itself stays unconditional and fail-closed below.
+    if (mem_pressure::latch_notable(
+            mem_pressure::MemPressureReason::PMM_FROZEN_DENY)) {
+        log::dmesg_push_sev(log::ErrorSubsystem::PMM,
+                            log::kDmesgBase_PMM + 2, log::LogSeverity::ERROR,
+                            "PMM: post-freeze allocation denied", 0);
+    }
 }
 #endif
 
@@ -385,6 +396,13 @@ PMM::OomOutcome PMM::run_oom_handler_locked(sync::IrqSpinLockGuard &lock) {
     }
     lock.unlock();
     bool retry = oom_handler_();
+    // Issue #575: latch OOM exhaustion while pmm_lock_ is still released
+    // (INV-1: latch is lock-free, but keep it out of the locked window).
+    // No handler installed (!oom_handler_ above) is not exhaustion.
+    if (!retry) {
+        kernel::mem_pressure::latch(
+            kernel::mem_pressure::MemPressureReason::PMM_OOM);
+    }
     lock.lock();
     return {true, retry};
 }
@@ -423,9 +441,17 @@ bool PMM::is_over_budget(TaskControlBlock *cur, size_t count) {
     uint64_t used =
         __atomic_load_n(&cur->memory_used_pages_, __ATOMIC_ACQUIRE);
     if (count <= 1) {
-        return used >= cur->memory_budget_pages_;
+        bool over = used >= cur->memory_budget_pages_;
+        if (over) {
+            note_budget_deny();
+        }
+        return over;
     }
-    return used + count > cur->memory_budget_pages_;
+    bool over = used + count > cur->memory_budget_pages_;
+    if (over) {
+        note_budget_deny();
+    }
+    return over;
 #else
     (void)cur;
     (void)count;

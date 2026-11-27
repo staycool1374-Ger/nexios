@@ -43,10 +43,13 @@ void rollback_minted(cap::CNode &cs) noexcept {
 ///        outcome with the demanded run count as context.
 void note_handover_failure(errors::MemHandoverError err,
                             uint32_t runs) noexcept {
-    mem_pressure::latch(mem_pressure::MemPressureReason::HANDOVER_CAPPED);
-    log::dmesg_push_sev(log::ErrorSubsystem::PMM,
-                        log::kDmesgBase_PMM + 4, log::LogSeverity::ERROR,
-                        "mem: handover failed", runs);
+    // Issue #575: subsystem row budgeted 1-per-64 sustained events.
+    if (mem_pressure::latch_notable(
+            mem_pressure::MemPressureReason::HANDOVER_CAPPED)) {
+        log::dmesg_push_sev(log::ErrorSubsystem::PMM,
+                            log::kDmesgBase_PMM + 4, log::LogSeverity::ERROR,
+                            "mem: handover failed", runs);
+    }
     g_result = err;
 }
 
