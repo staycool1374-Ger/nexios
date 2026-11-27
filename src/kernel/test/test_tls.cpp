@@ -29,6 +29,7 @@
 
 #include <test.hpp>
 #include <logger.hpp>
+#include <scope_guard.hpp>
 #include <kernel/syscall/syscall.hpp>
 #include <kernel/syscall/syscall_errors.hpp>
 #include <kernel/task/scheduler.hpp>
@@ -142,6 +143,12 @@ void tls_ping_body(uint64_t own, uint64_t &mismatch) {
         tls_yield();
     }
 }
+
+// Part-B dispatch constants: Kk runs above the prio-20 daemon band
+// but below the 121-127 system band; one read then terminate.
+constexpr uint64_t k_partb_kk_priority = 30;
+constexpr uint64_t k_partb_max_attempts = 8;
+constexpr uint64_t k_partb_tick_cap = 100;
 
 } // namespace
 
@@ -338,11 +345,12 @@ JARVIS_TEST(tls_not_fast, "PRE: none | POST: none") {
 //           only sets need_resched; the tick arms via switch_to_task).
 //           Part A: a synthetic-user task observes its live base after
 //           genuine dispatch. Part B: a kernel task carrying a nonzero
-//           field must publish 0 — proven by the live register surviving
-//           a kernel dispatch unchanged (a leaked publish would load it).
+//           field must publish 0 — observed at Kk's own dispatch entry
+//           (daemon activity after the read is noise, retried in budget).
+//           The leak signature is live==k_base_b at Kk entry.
 // Input: Ku (synthetic-user, base B) records live FS on dispatch; then
 //        harness sets live X and dispatches kernel Kk (field B).
-// Expect: Ku observed B; live still X after Kk; x86_64 GS_BASE unchanged.
+// Expect: Ku observed B; Kk entry still X; x86_64 GS_BASE unchanged.
 // Depends: switch_to_task publish via tick path (issue #74)
 JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
     static uint64_t g_user_live = 0;
@@ -364,6 +372,8 @@ JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
 #if defined(CONFIG_ARCH_X86_64)
     uint64_t gs_before = arch::rdmsr(arch::MSR_GS_BASE);
 #endif
+    // JARVIS_ASSERT is a bare return: zero live TLS on every exit.
+    auto tls_hygiene = ScopeGuard([&]() { write_live_tls(0); });
     auto *ku = TaskControlBlock::create(
         []() {
             g_user_live = read_live_tls();
@@ -378,34 +388,69 @@ JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
     ku->is_user_ = false;
     release_tls_task(ku);
 
-    // Harness sets live X, then dispatches a kernel task rigged with a
-    // nonzero field: a correct kernel publish (0) loads nothing.
-    // Flake note (merged F1/F2/#583 tree): a timer tick may schedule a
-    // READY user daemon anywhere in Part B; the daemon publishes its own
-    // TLS base and the switch back to the harness (kernel publish: loads
-    // nothing) leaves it live — observed live=0x403120 (daemon base) with
-    // 4 ticks elapsed. That is legal system activity, not a publish
-    // defect. Retry Part B until the iteration is daemon-free: a genuine
-    // kernel-publish defect loads Kk's field (k_base_b) deterministically
-    // and breaks out immediately; daemon bases (anything else) retry with
-    // X re-established. Persistent noise exhausts the budget and fails
-    // loud (a Part B that never gets a quiet window is itself anomalous).
+    // Higher number wins: daemons at prio 20 outranked Kk at 12, so
+    // the daemon's user dispatch published its base before Kk ran.
+    // Kk now runs at k_partb_kk_priority (above the daemon band)
+    // and the observation is taken at Kk's own dispatch entry;
+    // anything after that read is irrelevant. live==k_base_b is a
+    // deterministic leak; anything else (incl. 0 = never
+    // dispatched) is daemon noise.
+    static uint64_t g_live_at_kk = 0;
     g_live_after = 0;
-    unsigned tls_tries = 0;
-    for (; tls_tries < 4; ++tls_tries) {
+    g_live_at_kk = 0;
+    const uint64_t partb_tick0 = arch::Timer::ticks();
+    unsigned partb_attempts = 0;
+    uint64_t partb_first_noise = 0;
+    unsigned partb_noise_iters = 0;
+    while (partb_attempts < k_partb_max_attempts &&
+           (arch::Timer::ticks() - partb_tick0) < k_partb_tick_cap) {
+        ++partb_attempts;
         JARVIS_ASSERT_EQ(0ULL, tls_call(k_base_x));
-        auto *kk = TaskControlBlock::create([]() {}, 12, 10);
+        if (read_live_tls() != k_base_x) {
+            ++partb_noise_iters;
+            if (partb_first_noise == 0)
+                partb_first_noise = read_live_tls();
+            continue;
+        }
+        g_live_at_kk = 0;
+        auto *kk = TaskControlBlock::create(
+            []() {
+                __atomic_store_n(&g_live_at_kk, read_live_tls(),
+                                 __ATOMIC_RELEASE);
+            },
+            k_partb_kk_priority, 10);
         JARVIS_ASSERT(kk != nullptr);
         kk->tls_base_ = k_base_b;
         Scheduler::add_task(*kk);
         kernel::test::wait_for_termination_safe(kk);
-        g_live_after = read_live_tls();
+        g_live_after =
+            __atomic_load_n(&g_live_at_kk, __ATOMIC_ACQUIRE);
         release_tls_task(kk);
         if (g_live_after == k_base_x || g_live_after == k_base_b)
             break;
+        if (partb_first_noise == 0)
+            partb_first_noise = g_live_after;
+        ++partb_noise_iters;
     }
-    if (tls_tries > 0 && g_live_after == k_base_x)
+    if (partb_noise_iters > 0 && g_live_after == k_base_x)
         Logger::raw_write("[TLS-RETRY] absorbed daemon noise\n");
+    if (g_live_after != k_base_x) {
+        Logger::raw_write("[TLS-PARTB] live=");
+        Logger::print_hex(g_live_after);
+        Logger::raw_write(" want=");
+        Logger::print_hex(k_base_x);
+        Logger::raw_write(" leak=");
+        Logger::print_hex(k_base_b);
+        Logger::raw_write(" first_noise=");
+        Logger::print_hex(partb_first_noise);
+        Logger::raw_write(" attempts=");
+        Logger::print_dec(partb_attempts);
+        Logger::raw_write(" ticks=");
+        Logger::print_dec(arch::Timer::ticks() - partb_tick0);
+        Logger::raw_write(" after=");
+        Logger::print_hex(read_live_tls());
+        Logger::raw_write("\n");
+    }
     JARVIS_ASSERT_EQ(k_base_x, g_live_after);
 #if defined(CONFIG_ARCH_X86_64)
     uint64_t gs_after = arch::rdmsr(arch::MSR_GS_BASE);
@@ -414,7 +459,6 @@ JARVIS_TEST(tls_publish_applies, "PRE: none | POST: none") {
     g_gs_same = 1ULL;
 #endif
     JARVIS_ASSERT_EQ(1ULL, g_gs_same);
-    write_live_tls(0);
     Scheduler::drain_zombie_list();
     JARVIS_TEST_PASS();
 }
