@@ -799,4 +799,20 @@ long nexios_sys_vspace_frame_map(
 /// @return raw success value, or -1 with errno set.
 long nexios_sys_vspace_activate(
     long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_MEM_PRESSURE_WATCH (105).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_mem_pressure_watch(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_MEM_PRESSURE_RECV (106).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_mem_pressure_recv(
+    long arg0, long arg1, long arg2, long arg3);
 

@@ -615,3 +615,15 @@ long nexios_sys_vspace_activate(
         SYS_VSPACE_ACTIVATE, arg0, arg1, arg2, arg3, 0));
 }
 
+long nexios_sys_mem_pressure_watch(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_MEM_PRESSURE_WATCH, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_mem_pressure_recv(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_MEM_PRESSURE_RECV, arg0, arg1, arg2, arg3, 0));
+}
+

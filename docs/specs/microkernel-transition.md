@@ -542,7 +542,10 @@ Each subsection gives: (1) current vs end state and syscall mapping,
    R-MEM (owner, #512, mechanism #575): exhaustion/pressure past the
    threshold latches an explicit unstable-state warning (diagnostic +
    supervisor notify, zero-alloc), never silent coping — the supervisor
-   answers by driving the §9.3 fail-safe rows.
+   answers by driving the §9.3 fail-safe rows. Mechanism LANDED (Increment
+   1+2, #575): trip latches in PMM/MemPool/BufferPool/untyped + waterline
+   (oom-rt.md §6); supervisor observation seam with ≤ 2-tick bound (§9.1);
+   fail-safe drive itself is a follow-up (no SUPERVISOR PdRole yet).
 3. **Protocol.** Clients request memory by RPC (≤ 48 B); mem-mgr retypes from
    its Untyped and grants the resulting cap. The kernel SHALL NOT need memory
    from mem-mgr to deliver mem-mgr's own IPC: every IPC object used by
@@ -809,6 +812,16 @@ DECIDED, owner: parent-retained corpses latch with their true cause at the
 decision, retained AP-live entries announce on the pass after deschedule).
 Bound: announce ≤ 2 ticks after deschedule given the supervisor is
 runnable at highest priority (extends the Q4 bound to the retained path).
+
+WARN-1 — unstable-state warning latency (R-MEM, #575): latch at tick T
+(any context, lock-free) → `service_pending()` at the next tick tail
+(≤ 1 tick) → `Notify::notify` READY-marks the registered supervisor →
+`rate_monotonic_schedule()` in the same tail dispatches it (supervisor
+runnable at highest priority) → supervisor reads the record at T+1,
+worst case T+2. Bound: supervisor-observable ≤ 2 ticks from the latch,
+given a live tick and a supervisor runnable at highest priority; with
+no supervisor registered the bound does not apply and the pending flag
+is retained. Full semantics in `docs/specs/oom-rt.md` §6.
 
 ### 9.2 DEATH-2 — reply waiters
 

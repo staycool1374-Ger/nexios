@@ -145,7 +145,9 @@ enum class SyscallNumber : uint8_t {
     VSPACE_MAP = 102, ///< N4 map a PageTable object into a VSpace (F5, issue #558): arg0 = VSpace handle (WRITE), arg1 = PageTable handle (READ), arg2 = packed 9-bit path, arg3 = path length
     VSPACE_FRAME_MAP = 103, ///< N10 map a FrameCap into a VSpace other than the caller's (F11 Stage C, issue #564): arg0 = VSpace handle (WRITE), arg1 = Frame handle (READ), arg2 = user VA, arg3 = flags (bit0 executable, bit1 read-only; all other bits must be 0)
     VSPACE_ACTIVATE = 104, ///< N11 bind a carved VSpace root to the TcbCap-named target (F11 Stage C, issue #564): arg0 = VSpace handle (WRITE), arg1 = TcbCap handle (READ), arg2 = flags (0), arg3 = reserved (must be 0)
-    MAX_SYSCALL = 105,
+    MEM_PRESSURE_WATCH = 105, ///< R-MEM supervisor registration (issue #575): arg0..3 ignored; registers the caller as pressure supervisor, idempotent, fail-closed taken code
+    MEM_PRESSURE_RECV = 106, ///< R-MEM record read (issue #575): arg0 = user pointer to 32-B record; never blocks, never clears the latch
+    MAX_SYSCALL = 107,
 };
 
 /// @brief Folds a list of FAST syscall numbers into a single bitmask
@@ -484,6 +486,14 @@ class Syscall {
     ///        free refusals.  FULL path — k_syscall_fast is untouched.
     static uint64_t sys_vspace_activate(uint64_t, uint64_t, uint64_t,
                                         uint64_t, uint64_t *);
+    /// @brief R-MEM supervisor registration (issue #575): idempotent
+    ///        self-registration; FULL path — k_syscall_fast is untouched.
+    static uint64_t sys_mem_pressure_watch(uint64_t, uint64_t, uint64_t,
+                                           uint64_t, uint64_t *);
+    /// @brief R-MEM record read (issue #575): copies the 32-B record via
+    ///        safe_copy_to_user; never blocks, never clears. FULL path.
+    static uint64_t sys_mem_pressure_recv(uint64_t, uint64_t, uint64_t,
+                                          uint64_t, uint64_t *);
     static uint64_t sys_clock_gettime(uint64_t, uint64_t, uint64_t, uint64_t,
                                       uint64_t *);
     static uint64_t sys_nanosleep(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -612,7 +622,13 @@ class Syscall {
             &Syscall::sys_vspace_map,      // 102 VSPACE_MAP (M11, F5 #558)
             &Syscall::sys_vspace_frame_map, // 103 VSPACE_FRAME_MAP (N10, F11 Stage C #564)
             &Syscall::sys_vspace_activate, // 104 VSPACE_ACTIVATE (N11, F11 Stage C #564)
+            &Syscall::sys_mem_pressure_watch, // 105 MEM_PRESSURE_WATCH (R-MEM #575)
+            &Syscall::sys_mem_pressure_recv, // 106 MEM_PRESSURE_RECV (R-MEM #575)
     };
+    static_assert(syscall_table_[105] == &Syscall::sys_mem_pressure_watch,
+                  "slot 105 must serve MEM_PRESSURE_WATCH (issue #575)");
+    static_assert(syscall_table_[106] == &Syscall::sys_mem_pressure_recv,
+                  "slot 106 must serve MEM_PRESSURE_RECV (issue #575)");
 };
 
 } // namespace kernel

@@ -151,7 +151,9 @@ namespace kernel::errors {
     X(VSPACE_SUBTREE_INVALID, 1114, "Carved subtree fails re-validation")          \
     X(VSPACE_TARGET_REJECTED, 1115, "Activation target is not an idle task")       \
     /* IRQ slot errors (1200+, F8 #561) */                                       \
-    X(IRQ_ALREADY_WAITING, 1201, "IRQ slot already has a waiter")
+    X(IRQ_ALREADY_WAITING, 1201, "IRQ slot already has a waiter")                 \
+    /* R-MEM supervisor slot (1202, issue #575) */                               \
+    X(MEMPRESSURE_SUPERVISOR_TAKEN, 1202, "Pressure supervisor slot held by a live task")
 
 /// @brief System-call-level error codes (aggregated from all kernel
 /// subsystems).

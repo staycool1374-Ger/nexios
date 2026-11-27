@@ -42,6 +42,7 @@
 #include <kernel/sync/spinlock_order.hpp> // M2 §6.2 INV-C1 contract check
 #include <kernel/sync/irq_contract.hpp>  // issue #546-A tick lateness + de-gated INV-C1
 #include <kernel/task/tick_watchdog.hpp>  // M2 §6.2 item 6
+#include <kernel/memory/mem_pressure_notify.hpp> // issue #575 INV-2 poke site
 #include <kernel/task/liveness_ledger.hpp>  // issue #546-D age accounting
 #include <kernel/time/timer_wheel.hpp>
 #include <kernel/memory/tlb_shootdown.hpp>
@@ -1133,6 +1134,11 @@ void Scheduler::on_tick() noexcept {
     // Issue #158: quarantine timeout poll (BSP tick; internally
     // try-locked + bounded, safe to call every tick; no-op when empty).
     TlbShootdown::on_tick(arch::Timer::ticks());
+
+    // Issue #575 (INV-2): R-MEM supervisor poke service — lock-free tail
+    // (no scheduler lock is held here; the Notify poke reaches
+    // set_task_ready, so it must never run under scheduler_lock_).
+    kernel::mem_pressure::service_pending();
 
     // Issue #582 §4.4 S2: tick service point — immediately before the
     // RMS call below (same tick => same-tick dispatch after the clear).

@@ -313,6 +313,8 @@ static inline long sys_getrandom(void* buf, unsigned long len, unsigned int flag
 #define SYS_VSPACE_MAP      102
 #define SYS_VSPACE_FRAME_MAP 103
 #define SYS_VSPACE_ACTIVATE 104
+#define SYS_MEM_PRESSURE_WATCH 105
+#define SYS_MEM_PRESSURE_RECV 106
 
 static inline long sys_watchdog_create(unsigned long period_ticks) {
     return __syscall5(SYS_WATCHDOG_CREATE, (long)period_ticks, 0, 0, 0);
@@ -410,15 +412,16 @@ static inline long sys_vspace_activate(unsigned long vspace_handle,
 }
 
 // ABI v1.0 version macros (spec §3/§10, issues #69/#70): SYS_MAX ==
-// kernel MAX_SYSCALL (105 — certified set 0–104; closes the pre-existing
+// kernel MAX_SYSCALL (107 — certified set 0–106; closes the pre-existing
 // drift vs the frozen 86, cf. test_syscall.cpp:1052 asserting only > 79);
 // 80–85 appended by #70 (handlers for 80–83 land with #76, TLS_SET with
 // #74 — table slots fail-closed until then); 98 is CAP_DELETE (F2 #555);
 // 99–101 are TCB_CONFIGURE/SUSPEND/RESUME (F4 #557); 102 is VSPACE_MAP
-// (F5 #558); 103/104 are VSPACE_FRAME_MAP/VSPACE_ACTIVATE (F11 #564).
+// (F5 #558); 103/104 are VSPACE_FRAME_MAP/VSPACE_ACTIVATE (F11 #564);
+// 105/106 are MEM_PRESSURE_WATCH/RECV (R-MEM #575).
 #define NEXIOS_ABI_MAJOR 1
 #define NEXIOS_ABI_MINOR 0
-#define SYS_MAX          105
+#define SYS_MAX          107
 
 // SDK internal versioning macros live in sdk_version.h (spec §14,
 // issue #171) so kernel test TUs can consume them without libc types.
