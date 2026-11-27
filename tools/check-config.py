@@ -315,8 +315,11 @@ def validate(cfg: dict[str, int]):
     # the pool table is hard-coded in mempool.cpp and pinned by the TCB
     # static_assert in task.hpp. Flag a resurrection as an error — the
     # single-source rule must not silently fork.
-    if cfg.get("CONFIG_MEMPOOL_NUM_POOLS") is not None:
-        E("CONFIG_MEMPOOL_NUM_POOLS is dead (F21); size the table in mempool.cpp")
+    for dead_name in ("CONFIG_MEMPOOL_NUM_POOLS",
+                        "CONFIG_MEMPOOL_BLOCK_SIZES",
+                        "CONFIG_MEMPOOL_BLOCK_COUNTS"):
+        if cfg.get(dead_name) is not None:
+            E(f"{dead_name} is dead (F21); size the table in mempool.cpp")
 
     # ── Mem-mgr bootstrap M4 (#563) ──
     check_bool("CONFIG_MEM_MGR_BOOTSTRAP",

@@ -1569,8 +1569,6 @@ struct TaskControlBlock {
 // F21 (#573): the TCB must fit the largest MemPool class on every arch
 // (x86_64 8064 B, aarch64 8256 B). A TCB that outgrows the pool cannot be
 // allocated and would fail boot — fail at compile time instead.
-// PROBE-DISABLED static_assert(sizeof(TaskControlBlock) <= kernel::kMemPoolMaxBlockSize,
-// PROBE-DISABLED               "TaskControlBlock exceeds largest MemPool class");
 static_assert(sizeof(TaskControlBlock) <= kernel::kMemPoolMaxBlockSize,
               "TaskControlBlock exceeds largest MemPool class");
 

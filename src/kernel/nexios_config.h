@@ -294,7 +294,8 @@
 // MemPool Configuration (F21, #573)
 // ---------------------------------------------------------------------------
 /// MemPool classes are hard-coded in memory/mempool.cpp (single source of
-/// truth: kMemPoolMaxBlockSize). The CONFIG_MEMPOOL_* macros were dead
+/// truth: kMemPoolMaxBlockSize, proven equal to the table's top class by a
+/// file-scope static_assert). The CONFIG_MEMPOOL_* macros were dead
 /// (referenced nowhere) and are deleted — do not reintroduce them; size
 /// the table in mempool.cpp and pin it with the TCB static_assert in
 /// task.hpp.

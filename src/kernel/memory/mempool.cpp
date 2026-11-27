@@ -37,23 +37,30 @@ static bool has_pool(size_t idx) {
 MemPool::Pool MemPool::pools_[POOL_COUNT] = {};
 constinit bool MemPool::ready_ = false;
 
+namespace {
+// Issue #573: the pool tables live at file scope so the top-class pin
+// below can prove kMemPoolMaxBlockSize is the table's top entry. The three
+// consumers are this table, kMemPoolMaxBlockSize (mempool.hpp) and the TCB
+// size static_assert (task.hpp).
+constexpr size_t kPoolSizes[MemPool::POOL_COUNT] = {
+    16, 32, 64, 128, 256, 512, 1024, 2048, kMemPoolMaxBlockSize};
+constexpr size_t kPoolCounts[MemPool::POOL_COUNT] = {256, 128, 320, 32, 16,
+                                                    8,   16,  64, 64};
+static_assert(kPoolSizes[MemPool::POOL_COUNT - 1] == kMemPoolMaxBlockSize,
+              "MemPool top class must equal kMemPoolMaxBlockSize (F21 #573)");
+} // namespace
+
 /// @brief Initialise all 9 pool classes from page-aligned PMM allocations.
 ///        Each pool carves its region into fixed-size blocks and builds an
 ///        embedded free list.
 void MemPool::init() {
     sync::IrqSpinLockGuard lock(mempool_lock_);
 
-    static const size_t sizes[POOL_COUNT] = {16,  32,   64,   128, 256,
-                                              512, 1024, 2048,
-                                              kMemPoolMaxBlockSize};
-    static const size_t counts[POOL_COUNT] = {256, 128, 320, 32, 16,
-                                              8,   16,  64, 64};
-
     for (size_t i = 0; i < POOL_COUNT; ++i) {
         auto &pool = pools_[i];
-        pool.block_size = sizes[i];
-        pool.block_count = counts[i];
-        pool.free_count = counts[i];
+        pool.block_size = kPoolSizes[i];
+        pool.block_count = kPoolCounts[i];
+        pool.free_count = kPoolCounts[i];
         pool.first_free = 0;
 
         size_t pool_bytes = pool.block_count * pool.block_size;

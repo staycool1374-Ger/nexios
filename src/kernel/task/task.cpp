@@ -1018,16 +1018,7 @@ bool canary_verify_kernel_stack(const TaskControlBlock *t) {
 /// @return  Pointer to the new TCB, or nullptr on OOM.
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 //
-// Issue #104: the TCB must fit pool8 (MemPool::init sizes[] in
-// mempool.cpp) — aarch64 needs 16384 (TCB 8256 B there).  A silent
-// overflow fails at BOOT (idle-task OOM), so pin it at build time.
-#if defined(CONFIG_ARCH_AARCH64)
-static_assert(sizeof(TaskControlBlock) <= 16384,
-              "TCB exceeds pool8 (aarch64)");
-#else
-static_assert(sizeof(TaskControlBlock) <= 8192,
-              "TCB exceeds pool8");
-#endif
+// TCB size pin lives in task.hpp (kMemPoolMaxBlockSize); do not duplicate literals here.
 void TaskControlBlock::install_page_table(uint64_t pml4) noexcept {
     // Issue #377: install-onto-live orphans the factory PML4 (+1 PMM,
     // the #371 shape) — fail loudly instead of leaking silently.
