@@ -66,7 +66,6 @@ struct rlimit {
 #define SYS_ALARM       33
 #define SYS_GETTOD      34
 #define SYS_UNAME       35
-#define SYS_PAUSE       36
 #define SYS_BUF_ALLOC   37
 #define SYS_BUF_FREE    38
 #define SYS_BUF_MAP     39
@@ -234,10 +233,6 @@ static inline long sys_sigreturn(void) {
 
 #define SYS_REBOOT      49
 #define SYS_HALT        50
-
-static inline long sys_pause(void) {
-    return __syscall5(SYS_PAUSE, 0, 0, 0, 0);
-}
 
 static inline long sys_yield(void) {
     return __syscall5(SYS_YIELD, 0, 0, 0, 0);

@@ -255,12 +255,6 @@ long nexios_sys_uname(
         SYS_UNAME, arg0, arg1, arg2, arg3, 0));
 }
 
-long nexios_sys_pause(
-    long arg0, long arg1, long arg2, long arg3) {
-    return nexios_stub_map_err(__syscall5r(
-        SYS_PAUSE, arg0, arg1, arg2, arg3, 0));
-}
-
 long nexios_sys_buf_alloc(
     long arg0, long arg1, long arg2, long arg3) {
     return nexios_stub_map_err(__syscall5r(
@@ -601,5 +595,23 @@ long nexios_sys_tcb_resume(
     long arg0, long arg1, long arg2, long arg3) {
     return nexios_stub_map_err(__syscall5r(
         SYS_TCB_RESUME, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_vspace_map(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_VSPACE_MAP, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_vspace_frame_map(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_VSPACE_FRAME_MAP, arg0, arg1, arg2, arg3, 0));
+}
+
+long nexios_sys_vspace_activate(
+    long arg0, long arg1, long arg2, long arg3) {
+    return nexios_stub_map_err(__syscall5r(
+        SYS_VSPACE_ACTIVATE, arg0, arg1, arg2, arg3, 0));
 }
 

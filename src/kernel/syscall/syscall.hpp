@@ -76,7 +76,7 @@ enum class SyscallNumber : uint8_t {
     ALARM = 33,
     GETTOD = 34,
     UNAME = 35,
-    PAUSE = 36,
+    PAUSE = 36, ///< RETIRED (T-1 :150, F20 #572): slot returns ENOSYS; number SHALL NOT be reused.
     BUF_ALLOC = 37,
     BUF_FREE = 38,
     BUF_MAP = 39,
@@ -229,7 +229,7 @@ class Syscall {
         SyscallNumber::CREATE_MAILBOX,
         SyscallNumber::DESTROY_MAILBOX,
         SyscallNumber::GETPID,
-        SyscallNumber::PAUSE,
+        // 36 PAUSE retired (T-1 / F20 #572): not a FAST member.
         SyscallNumber::REBOOT,
         SyscallNumber::HALT,
         SyscallNumber::ABI_VERSION, // #171 P1: pointer-free constant return;
@@ -328,8 +328,6 @@ class Syscall {
     static uint64_t sys_gettod(uint64_t, uint64_t, uint64_t, uint64_t,
                                uint64_t *);
     static uint64_t sys_uname(uint64_t, uint64_t, uint64_t, uint64_t,
-                              uint64_t *);
-    static uint64_t sys_pause(uint64_t, uint64_t, uint64_t, uint64_t,
                               uint64_t *);
     static uint64_t sys_buf_alloc(uint64_t, uint64_t, uint64_t, uint64_t,
                                   uint64_t *);
@@ -535,7 +533,7 @@ class Syscall {
             &Syscall::sys_alarm,
             &Syscall::sys_gettod,
             &Syscall::sys_uname,
-            &Syscall::sys_pause,
+            &Syscall::sys_unimplemented, // 36 PAUSE RETIRED (F20 #572, ENOSYS)
             &Syscall::sys_buf_alloc,
             &Syscall::sys_buf_free,
             &Syscall::sys_buf_map,

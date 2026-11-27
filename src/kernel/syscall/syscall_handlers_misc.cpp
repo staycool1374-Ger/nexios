@@ -272,12 +272,6 @@ uint64_t Syscall::sys_uname(uint64_t arg0, uint64_t, uint64_t, uint64_t,
     return static_cast<uint64_t>(errors::SYS_ERR_OK);
 }
 
-uint64_t Syscall::sys_pause(uint64_t, uint64_t, uint64_t, uint64_t,
-                            uint64_t *) {
-    arch::hlt();
-    return static_cast<uint64_t>(errors::SYS_ERR_OK);
-}
-
 uint64_t Syscall::sys_reboot(uint64_t, uint64_t, uint64_t, uint64_t,
                              uint64_t *) {
     // PS/2 controller CPU reset: write 0xFE to port 0x64

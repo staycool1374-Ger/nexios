@@ -319,14 +319,6 @@ long nexios_sys_gettod(
 /// @return raw success value, or -1 with errno set.
 long nexios_sys_uname(
     long arg0, long arg1, long arg2, long arg3);
-/// @brief Generated stub for SYS_PAUSE (36).
-/// @param arg0 first syscall argument.
-/// @param arg1 second syscall argument.
-/// @param arg2 third syscall argument.
-/// @param arg3 fourth syscall argument.
-/// @return raw success value, or -1 with errno set.
-long nexios_sys_pause(
-    long arg0, long arg1, long arg2, long arg3);
 /// @brief Generated stub for SYS_BUF_ALLOC (37).
 /// @param arg0 first syscall argument.
 /// @param arg1 second syscall argument.
@@ -782,5 +774,29 @@ long nexios_sys_tcb_suspend(
 /// @param arg3 fourth syscall argument.
 /// @return raw success value, or -1 with errno set.
 long nexios_sys_tcb_resume(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_VSPACE_MAP (102).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_vspace_map(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_VSPACE_FRAME_MAP (103).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_vspace_frame_map(
+    long arg0, long arg1, long arg2, long arg3);
+/// @brief Generated stub for SYS_VSPACE_ACTIVATE (104).
+/// @param arg0 first syscall argument.
+/// @param arg1 second syscall argument.
+/// @param arg2 third syscall argument.
+/// @param arg3 fourth syscall argument.
+/// @return raw success value, or -1 with errno set.
+long nexios_sys_vspace_activate(
     long arg0, long arg1, long arg2, long arg3);
 

@@ -147,7 +147,7 @@ number retired · **RETIRE** number retired without replacement ·
 | 33 | ALARM | live | KEEP (per-task tick-counter signal delivery stays kernel-internal; #194 decided STAYS, sleeper-wake leg dead under ON) |
 | 34 | GETTOD | live | MOVE → timer-srv |
 | 35 | UNAME | live | MOVE → supervisor RPC (static data) |
-| 36 | PAUSE | live, FAST member | RETIRE; replaced by NOTIFY_WAIT or bounded RECEIVE (libc check F20) |
+| 36 | PAUSE | RETIRED (landed, F20 #572: 0 libc callers; slot = sys_unimplemented) | — |
 | 37–40 | BUF_ALLOC, BUF_FREE, BUF_MAP, BUF_UNMAP | live | MOVE → SHM-manager |
 | 41–43 | MKDIR, UNLINK, RMDIR | live | MOVE → vfs-srv |
 | 44–46 | BRK, GETRLIMIT, SETRLIMIT | live | MOVE → mem-mgr |
@@ -1000,7 +1000,7 @@ it lands the §5.5 enforced-priority rule applies to every SDF row.
 | F17 | #570 | IPC baseline and overhead harness | `bench` |
 | F18 | #571 | Reconcile `external-pager.md` B9 with §5.5 | spec |
 | F19 | done (file deleted) | Retire `docs/specs/microkernel-transition-udpate.md` (superseded; owner approval required to delete) | doc |
-| F20 | #572 | libc dependency audit for PAUSE and 80–83 retirement | `src/libc/syscall.h` |
+| F20 | #572 | libc dependency audit for PAUSE and 80–83 retirement | `src/libc/syscall.h` (audit: audits/f20-libc-syscall-audit-572.md; PAUSE retired, 34/80–83 parked on #194) |
 | F21 | #573 | Remove or wire dead `CONFIG_MEMPOOL_*`; TCB size `static_assert`; extend the `CONFIG_STATIC_POOLS_ONLY` assert to `alloc_user_page`, `alloc_user_contiguous`, `alloc_page_table` | `nexios_config.h`, `mempool.cpp`, `pmm.cpp` |
 
 ## 16. Owner decisions (Q1–Q12 DECIDED per #512)

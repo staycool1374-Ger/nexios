@@ -22,7 +22,7 @@ live syscall entry is `int $0x80` → trap-gate ISR → `syscall_handler` (kerne
   SEND/RECEIVE/SEND_SYNC deref user buffers via `checked_ptr` /
   `safe_copy_to_user` (syscall_handlers_ipc.cpp), and NANOSLEEP does not exist
   in the enum. The landed FAST set is the audited pointer-free subset:
-  **{YIELD, GET_TICKS, PRINT, CREATE_MAILBOX, DESTROY_MAILBOX, GETPID, PAUSE,
+  **{YIELD, GET_TICKS, PRINT, CREATE_MAILBOX, DESTROY_MAILBOX, GETPID,
   REBOOT, HALT}** (`Syscall::k_syscall_fast[]`, the single source of truth;
   `SYSCALL_FAST_MASK` derived from it). IPC rejoins FAST only behind a
   follow-up that first lands canary-on-context-switch (done here) + a pointer
@@ -78,7 +78,7 @@ Split syscalls into two classes:
 
 | Class | Members (landed) | Entry validation |
 |---|---|---|
-| FAST | YIELD, GET_TICKS, PRINT, CREATE_MAILBOX, DESTROY_MAILBOX, GETPID, PAUSE, REBOOT, HALT | bounds check + debug AC check |
+| FAST | YIELD, GET_TICKS, PRINT, CREATE_MAILBOX, DESTROY_MAILBOX, GETPID, REBOOT, HALT (PAUSE retired at 36, F20 #572) | bounds check + debug AC check |
 | FULL | everything touching pointers/fds (OPEN, READ, SEND, RECEIVE, SEND_SYNC, …) | canary + AC check |
 
 Implementation (as landed):
@@ -128,8 +128,9 @@ only adds a bitmask test in asm.
 1. `fast_mask_matches_config` — mask == the pointer-free list (popcount), all
    members < MAX_SYSCALL, non-empty (compile-time static_asserts + runtime).
 2. `fast_call_correctness` — call-safe FAST members through both paths (hook
-   off) return identically; out-of-range returns -1 on both.  PAUSE/HALT/
-   REBOOT excluded (they halt the CPU — never return).
+   off) return identically; out-of-range returns -1 on both.  HALT/
+   REBOOT excluded (they halt the CPU — never return); PAUSE retired
+   at 36 (F20 #572).
 3. `full_path_still_validates` — tampered stack canary + FULL syscall trips
    the latch (MP-3 preserved; with the relocation the trip may latch at the
    context-switch/tick sample instead — either way it fires).

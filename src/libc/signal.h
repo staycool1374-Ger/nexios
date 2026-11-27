@@ -55,6 +55,5 @@ sighandler_t signal(int signum, sighandler_t handler);
 int kill(pid_t pid, int sig);
 int raise(int sig);
 unsigned int alarm(unsigned int seconds);
-int pause(void);
 
 #endif // __LIBK_SIGNAL_H
